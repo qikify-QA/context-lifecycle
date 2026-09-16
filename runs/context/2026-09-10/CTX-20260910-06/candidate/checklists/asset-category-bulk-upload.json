@@ -1,0 +1,295 @@
+{
+  "schema_version": "1.0",
+  "artifact_type": "RegressionChecklistCandidate",
+  "artifact_id": "CHKCAND-CTX-20260910-06-asset-category-bulk-upload",
+  "workflow_id": "CTX-20260910-06",
+  "producer": "qa-checklist-builder",
+  "source_refs": [
+    { "type": "code_ref", "path": "runs/context/2026-09-10/CTX-20260910-06/candidate/feature-profiles/asset-category-bulk-upload.json", "act_id": null, "note": "FeatureProfileCandidate FEAT-04-bulk-upload-zip" },
+    { "type": "code_ref", "path": "runs/context/2026-09-10/CTX-20260910-06/candidate/product-kb.json", "act_id": null, "note": "KB-016, KB-018 (shared), CONF-002, STALE-002" }
+  ],
+  "upstream_artifact_ids": ["FPCAND-CTX-20260910-06-asset-category-bulk-upload"],
+  "status": "PARTIAL",
+  "confidence": "LOW",
+  "observations": [
+    "10 check được tạo cho FEAT-04. Chỉ 1 sample end-to-end thành công (KB-016, observed_count=1, confidence LOW) - phần lớn check ngoài happy-path là NEEDS_CONFIRMATION.",
+    "CHK-004 là check trung tâm cho CONF-002 (giới hạn dung lượng/số file zip mâu thuẫn: 512MB/2 file theo KB cũ vs 2GB/10 file theo banner UI hiện tại) - giữ cả 2 khả năng, oracle_strength NONE, cần test thật để lấy error response từ server trước khi coi giá trị nào đúng.",
+    "CHK-010 tái sử dụng KB-018 (bề mặt bảo mật presigned storage URL) trong ngữ cảnh luồng bulk-zip cụ thể - đây là tham chiếu hợp lệ tới cùng kb_id đã xuất hiện ở checklist asset-category-item-management (CHK-011 file đó), không phải trùng lặp: 2 checklist khác feature, mỗi cái test surface riêng của luồng upload tương ứng (single-file PUT step vs bulk-zip PUT step).",
+    "Không có check nào bị tạo trùng ngữ nghĩa để tăng số lượng - mỗi check map 1 capability/gap riêng biệt trong feature profile FEAT-04.",
+    "[ROUND 3 SYNC] Đồng bộ lại với product-kb.json round3: CHK-001/002/003/010 sửa act_id/evidence_refs từ 'ACT-05-01-001' (nay chính thức = Map Style CREATE) sang 'ACT-08-01-001' (đúng, bulk-upload zip), file evidence không đổi. CHK-004 (CONF-002) vốn đã act_ids=[]/evidence_refs=[] - không cần sửa vì check này chưa có evidence bám vào act_id cụ thể; nội dung 2 khả năng + oracle NONE + NEEDS_CONFIRMATION giữ nguyên."
+  ],
+  "assumptions": [],
+  "unknowns": [
+    "Giới hạn thật của dung lượng/số file zip (512MB/2 file hay 2GB/10 file hay giá trị khác) - CHK-004, CHK-005.",
+    "Trạng thái job 'Error'/'Processing' qua API - CHK-008.",
+    "Hành vi khi zip có cấu trúc folder khác (nested, tên trùng category cũ) - CHK-009.",
+    "Hành vi khi upload file không phải zip hoặc zip không chứa ảnh hợp lệ - CHK-006, CHK-007.",
+    "Thời hạn/phạm vi presigned storage URL dùng cho bước PUT của luồng bulk-zip - CHK-010."
+  ],
+  "conflicts": [
+    { "conflict_id": "CONF-002", "topic": "MIS-002: giới hạn dung lượng/số file zip - 512MB/2 file (KB cũ) vs 2GB/10 file (banner UI run này)", "note": "Giữ nguyên UNRESOLVED trong CHK-004, cả 2 khả năng ghi rõ, oracle_strength NONE, cần test thật vượt ngưỡng để lấy error response xác nhận giá trị server-side." }
+  ],
+  "blocking_issues": [],
+  "payload": {
+    "checklists": [
+      {
+        "feature_id": "FEAT-04-bulk-upload-zip",
+        "feature_key": "asset-category-bulk-upload",
+        "checklist_version": "CTX-20260910-06-checklist-1",
+        "checks": [
+          {
+            "check_id": "CHK-001",
+            "dimension": "CORE",
+            "layer": "api",
+            "title": "Upload 1 file zip hợp lệ và job hoàn tất thành công (luồng 5 bước end-to-end)",
+            "applicability": { "role": "owner (sub=273)", "state": "chưa có job/category nào cho zip này", "environment": "staging", "theme_or_device": "n/a" },
+            "precondition": "Đã đăng nhập role owner, ở /cliparts/bulk-upload; có sẵn job cũ từ phiên trước, không đụng vào.",
+            "steps": [
+              "Click 'Upload zip', chọn 1 file zip hợp lệ chứa 1 top-level folder gồm nhiều ảnh clipart.",
+              "Theo dõi network: GET /api/clipart-category-bulk-uploads (list job) -> POST /api/clipart-category-bulk-uploads/users/{userId}/start (xin presigned URL, trả job id) -> PUT binary lên storage presigned URL -> POST /api/clipart-category-bulk-uploads/{jobId}/complete -> GET /api/clipart-category-bulk-uploads/{jobId} (poll).",
+              "Quan sát status cuối cùng của job và category mới được tạo."
+            ],
+            "observation_point": "network 5 bước + trạng thái job + category/item mới tạo",
+            "expected_result": "Toàn bộ 5 bước network thành công; job đạt status.value=3/status.description='Done'; hệ thống tự tạo 1 category mới (tên = tên top-level folder trong zip) chứa các clipart item, log ghi 'N/N Success enqueue'. Đây là baseline từ 1 sample thành công (KB-016, observed_count=1, confidence LOW) - chưa tổng quát hoá cho mọi kích thước/cấu trúc zip.",
+            "oracle": { "kb_ids": ["KB-016"], "oracle_strength": "BASELINE" },
+            "status": "READY", "open_question": null,
+            "risk_refs": [], "priority": "P2",
+            "act_ids": ["ACT-08-01-001"],
+            "evidence_refs": [
+              { "type": "screenshot", "path": "raw/portal/shots/ACT-05-01-001-before.png", "act_id": "ACT-08-01-001", "note": "ROUND 3 SYNC: act_id label sửa từ 'ACT-05-01-001' (collision với Map Style CREATE chính thức) sang 'ACT-08-01-001' (đúng), file không đổi." },
+              { "type": "screenshot", "path": "raw/portal/shots/ACT-05-01-001-after.png", "act_id": "ACT-08-01-001", "note": "" },
+              { "type": "har_entry", "path": "raw/network/ACT-05-01-001.json", "act_id": "ACT-08-01-001", "note": "5 bước" }
+            ],
+            "automation_suitability": "HYBRID"
+          },
+          {
+            "check_id": "CHK-002",
+            "dimension": "CORE",
+            "layer": "api",
+            "title": "Trang bulk-upload hiển thị danh sách job cũ mà không đụng vào job đã có",
+            "applicability": { "role": "owner (sub=273)", "state": "có sẵn job cũ từ phiên trước", "environment": "staging", "theme_or_device": "n/a" },
+            "precondition": "Có sẵn ít nhất 1 job cũ trong danh sách.",
+            "steps": [
+              "Mở /cliparts/bulk-upload.",
+              "Quan sát GET /api/clipart-category-bulk-uploads trả danh sách job.",
+              "Xác nhận job cũ vẫn còn nguyên (status, tên) không bị thay đổi bởi hành động xem trang."
+            ],
+            "observation_point": "response GET list job",
+            "expected_result": "Danh sách job cũ hiển thị đầy đủ, không bị mutate chỉ vì mở trang xem.",
+            "oracle": { "kb_ids": ["KB-016"], "oracle_strength": "BASELINE" },
+            "status": "READY", "open_question": null,
+            "risk_refs": [], "priority": "P3",
+            "act_ids": ["ACT-08-01-001"],
+            "evidence_refs": [
+              { "type": "har_entry", "path": "raw/network/ACT-05-01-001.json", "act_id": "ACT-08-01-001", "note": "ROUND 3 SYNC: act_id label sửa từ 'ACT-05-01-001' sang 'ACT-08-01-001', file không đổi." }
+            ],
+            "automation_suitability": "SUITABLE"
+          },
+          {
+            "check_id": "CHK-003",
+            "dimension": "CORE",
+            "layer": "portal",
+            "title": "Banner giới hạn dung lượng/số file hiển thị trên trang bulk-upload",
+            "applicability": { "role": "owner (sub=273)", "state": "n/a", "environment": "staging", "theme_or_device": "n/a" },
+            "precondition": "Mở /cliparts/bulk-upload.",
+            "steps": [
+              "Quan sát banner text mô tả giới hạn dung lượng/số file cho phép.",
+              "Ghi lại nguyên văn nội dung banner."
+            ],
+            "observation_point": "DOM banner text",
+            "expected_result": "Banner hiển thị đúng nguyên văn nội dung quan sát trong run CTX-20260910-06: 'Limit max 2GB per zip and can only process max 10 files at a time.' Đây chỉ là quan sát TEXT UI hiện tại, KHÔNG phải xác nhận đây là giới hạn thật thi hành phía server (xem CHK-004 cho phần verify server-side).",
+            "oracle": { "kb_ids": ["KB-016"], "oracle_strength": "BASELINE" },
+            "status": "READY", "open_question": null,
+            "risk_refs": ["CONF-002"], "priority": "P3",
+            "act_ids": ["ACT-08-01-001"],
+            "evidence_refs": [
+              { "type": "screenshot", "path": "raw/portal/shots/ACT-05-01-001-before.png", "act_id": "ACT-08-01-001", "note": "ROUND 3 SYNC: act_id label sửa từ 'ACT-05-01-001' (collision với Map Style CREATE chính thức) sang 'ACT-08-01-001' (đúng, file không đổi) - banner UI." }
+            ],
+            "automation_suitability": "SUITABLE"
+          },
+          {
+            "check_id": "CHK-004",
+            "dimension": "BOUNDARY",
+            "layer": "api",
+            "title": "Giới hạn thật (server-side) của dung lượng/số file zip bulk-upload (CONF-002)",
+            "applicability": { "role": "owner (sub=273)", "state": "n/a", "environment": "staging", "theme_or_device": "n/a" },
+            "precondition": "Cần chuẩn bị được zip vượt ngưỡng theo 1 trong 2 nguồn (>512MB hoặc >2 file theo KB cũ; >2GB hoặc >10 file theo banner hiện tại).",
+            "steps": [
+              "Upload 1 zip vượt ngưỡng thấp nhất trong 2 nguồn (vd >2 file nếu muốn kiểm KB cũ, hoặc >10 file nếu muốn kiểm banner hiện tại).",
+              "Quan sát response lỗi thật từ server (bước start/complete/poll) - status code, message.",
+              "Lặp lại (nếu cần) với ngưỡng dung lượng (>512MB hoặc >2GB) nếu có thể chuẩn bị file test phù hợp."
+            ],
+            "observation_point": "response lỗi (4xx/5xx) từ API khi vượt ngưỡng",
+            "expected_result": "GIỮ CẢ HAI khả năng, không tự chọn phía đúng: (a) nếu server reject ở ngưỡng ~512MB/2 file, đây là bằng chứng ủng hộ KB cũ (knowledge/portal-assets.md), banner UI hiện tại ghi sai/lỗi thời; (b) nếu server chấp nhận tới ~2GB/10 file và chỉ reject vượt ngưỡng đó, đây là bằng chứng ủng hộ banner UI hiện tại, KB cũ đã lỗi thời (STALE-002) và cần cập nhật. Cả 2 phía hiện tại đều chỉ là TEXT UI/KB, 0/16 operation trong run CTX-20260910-06 có sample lỗi để đối chứng.",
+            "oracle": { "kb_ids": [], "oracle_strength": "NONE" },
+            "status": "NEEDS_CONFIRMATION",
+            "open_question": "Giới hạn thật của dung lượng/số file zip theo server là bao nhiêu - 512MB/2 file (KB cũ) hay 2GB/10 file (banner UI hiện tại) hay giá trị khác? CONF-002/STALE-002 đang UNRESOLVED vì chưa có sample lỗi (4xx/5xx) nào từ API để xác nhận. Cần chạy test thật vượt ngưỡng hoặc PO/Dev xác nhận giá trị chính thức trước khi coi đây là oracle chính thức cho check BOUNDARY này.",
+            "risk_refs": ["CONF-002", "STALE-002"], "priority": "P2",
+            "act_ids": [],
+            "evidence_refs": [],
+            "automation_suitability": "UNKNOWN"
+          },
+          {
+            "check_id": "CHK-005",
+            "dimension": "BOUNDARY",
+            "layer": "api",
+            "title": "Upload zip đúng tại giá trị biên (ngưỡng tối đa) của giới hạn đã được xác nhận",
+            "applicability": { "role": "owner (sub=273)", "state": "phụ thuộc kết quả CHK-004 xác nhận giới hạn thật", "environment": "staging", "theme_or_device": "n/a" },
+            "precondition": "Đã có giới hạn thật được xác nhận từ CHK-004 (hoặc từ PO/Dev) - hiện chưa có nên check này BLOCKED cho tới khi CONF-002 được resolve.",
+            "steps": [
+              "Chuẩn bị 1 zip đúng bằng ngưỡng tối đa đã xác nhận (vd đúng số file tối đa, đúng dung lượng tối đa).",
+              "Upload và xác nhận job hoàn tất thành công (không bị reject dù ở đúng biên)."
+            ],
+            "observation_point": "response job status khi upload đúng tại biên",
+            "expected_result": "Chưa xác định - phụ thuộc kết quả CHK-004. Không giả định trước ngưỡng nào đúng.",
+            "oracle": { "kb_ids": [], "oracle_strength": "NONE" },
+            "status": "NEEDS_CONFIRMATION",
+            "open_question": "Check này phụ thuộc CHK-004 (xác định giới hạn thật) - chưa thể viết test case biên cụ thể cho tới khi CONF-002 được resolve hoặc PO/Dev xác nhận giá trị chính thức.",
+            "risk_refs": ["CONF-002"], "priority": "P3",
+            "act_ids": [],
+            "evidence_refs": [],
+            "automation_suitability": "UNKNOWN"
+          },
+          {
+            "check_id": "CHK-006",
+            "dimension": "NEGATIVE",
+            "layer": "api",
+            "title": "Upload file không phải zip (vd .rar, .png) vào dropzone bulk-upload",
+            "applicability": { "role": "owner (sub=273)", "state": "n/a", "environment": "staging", "theme_or_device": "n/a" },
+            "precondition": "n/a.",
+            "steps": [
+              "Kéo thả 1 file không phải .zip (vd .rar hoặc .png) vào dropzone bulk-upload.",
+              "Quan sát UI error message và network response (nếu có request được gửi)."
+            ],
+            "observation_point": "UI error state + network response",
+            "expected_result": null,
+            "oracle": { "kb_ids": [], "oracle_strength": "NONE" },
+            "status": "NEEDS_CONFIRMATION",
+            "open_question": "0/16 operation trong run có sample lỗi - hành vi khi upload file không phải zip hoàn toàn chưa được quan sát (client-side reject trước khi gửi request, hay server trả lỗi). Cần chạy sample lỗi hoặc PO/Dev cung cấp spec trước khi viết expected_result khẳng định.",
+            "risk_refs": [], "priority": "P2",
+            "act_ids": [],
+            "evidence_refs": [],
+            "automation_suitability": "UNKNOWN"
+          },
+          {
+            "check_id": "CHK-007",
+            "dimension": "NEGATIVE",
+            "layer": "api",
+            "title": "Upload zip hợp lệ nhưng không chứa ảnh hợp lệ nào (zip rỗng hoặc chỉ chứa file không phải ảnh)",
+            "applicability": { "role": "owner (sub=273)", "state": "n/a", "environment": "staging", "theme_or_device": "n/a" },
+            "precondition": "n/a.",
+            "steps": [
+              "Chuẩn bị 1 file zip hợp lệ về định dạng nhưng rỗng hoặc chỉ chứa file .txt/.doc (không có ảnh).",
+              "Upload qua luồng bulk-upload.",
+              "Quan sát status job cuối cùng (Done/Error) và category/item được tạo (nếu có)."
+            ],
+            "observation_point": "status job cuối cùng qua GET poll",
+            "expected_result": null,
+            "oracle": { "kb_ids": [], "oracle_strength": "NONE" },
+            "status": "NEEDS_CONFIRMATION",
+            "open_question": "KB-016 chỉ có 1 sample zip hợp lệ chứa 5 ảnh, enqueue thành công 5/5 - chưa có sample zip rỗng hoặc không chứa ảnh hợp lệ nào để biết job sẽ báo Error, tạo category rỗng, hay báo lỗi ngay ở bước complete. Cần PO/Dev xác nhận hoặc chạy thêm sample.",
+            "risk_refs": [], "priority": "P2",
+            "act_ids": [],
+            "evidence_refs": [],
+            "automation_suitability": "UNKNOWN"
+          },
+          {
+            "check_id": "CHK-008",
+            "dimension": "STATE_DATA",
+            "layer": "api",
+            "title": "Trạng thái job 'Processing' và 'Error' qua API (khác 'Done')",
+            "applicability": { "role": "owner (sub=273)", "state": "n/a", "environment": "staging", "theme_or_device": "n/a" },
+            "precondition": "n/a.",
+            "steps": [
+              "Upload 1 zip đủ lớn/nhiều item để có khả năng bắt được trạng thái trung gian khi poll GET /api/clipart-category-bulk-uploads/{jobId} sớm.",
+              "Ghi lại giá trị status.value/status.description ở các lần poll khác nhau.",
+              "Nếu có thể tạo được điều kiện lỗi (vd từ CHK-006/CHK-007), ghi lại status khi job Error."
+            ],
+            "observation_point": "response GET poll job qua nhiều thời điểm",
+            "expected_result": null,
+            "oracle": { "kb_ids": [], "oracle_strength": "NONE" },
+            "status": "NEEDS_CONFIRMATION",
+            "open_question": "KB-016 chỉ có 1 sample end-to-end thành công, trả status.value=3/'Done' ngay ở lần GET poll đầu tiên - chưa quan sát được trạng thái 'Processing' (đang chạy) hay 'Error' (thất bại) trông như thế nào qua API. Cần chạy thêm sample để bắt được các trạng thái này, hoặc PO/Dev cung cấp danh sách đầy đủ status.value có thể có.",
+            "risk_refs": [], "priority": "P2",
+            "act_ids": [],
+            "evidence_refs": [],
+            "automation_suitability": "UNKNOWN"
+          },
+          {
+            "check_id": "CHK-009",
+            "dimension": "STATE_DATA",
+            "layer": "api",
+            "title": "Zip có cấu trúc folder khác (nested folder, hoặc tên top-level folder trùng category đã tồn tại)",
+            "applicability": { "role": "owner (sub=273)", "state": "đã có ít nhất 1 category tên trùng với top-level folder sẽ upload", "environment": "staging", "theme_or_device": "n/a" },
+            "precondition": "Chuẩn bị được 1 zip có nhiều folder con lồng nhau, và 1 zip khác có tên top-level folder trùng với category đã tồn tại từ trước.",
+            "steps": [
+              "Upload zip có cấu trúc nested folder (nhiều cấp thư mục con), quan sát category/item được tạo ra sao.",
+              "Upload zip có top-level folder trùng tên với 1 category đã tồn tại, quan sát: tạo category mới trùng tên, gộp vào category cũ, hay báo lỗi."
+            ],
+            "observation_point": "category/item được tạo sau job hoàn tất, so với cấu trúc zip đầu vào",
+            "expected_result": null,
+            "oracle": { "kb_ids": [], "oracle_strength": "NONE" },
+            "status": "NEEDS_CONFIRMATION",
+            "open_question": "Run CTX-20260910-06 chỉ test 1 zip với đúng 1 top-level folder duy nhất ('valid-images 2'), không có folder con lồng nhau và không trùng tên category đã tồn tại. Hành vi với cấu trúc phức tạp hơn hoặc tên trùng lặp hoàn toàn chưa biết. Cần chạy thêm sample hoặc PO/Dev xác nhận business rule.",
+            "risk_refs": [], "priority": "P3",
+            "act_ids": [],
+            "evidence_refs": [],
+            "automation_suitability": "UNKNOWN"
+          },
+          {
+            "check_id": "CHK-010",
+            "dimension": "INTEGRATION",
+            "layer": "api",
+            "title": "Presigned storage URL cho bước PUT của luồng bulk-upload zip - phạm vi/hiệu lực chữ ký",
+            "applicability": { "role": "owner (sub=273)", "state": "n/a", "environment": "staging", "theme_or_device": "n/a" },
+            "precondition": "n/a.",
+            "steps": [
+              "Lấy 1 presigned URL từ bước POST /api/clipart-category-bulk-uploads/users/{userId}/start.",
+              "Quan sát path của URL có chứa user_id dạng rõ hay không (vd 'users/266/...').",
+              "Thử dùng lại URL đó sau một khoảng thời gian dài để kiểm tra expiry (nếu policy cho phép)."
+            ],
+            "observation_point": "path + response PUT khi dùng lại URL sau thời gian",
+            "expected_result": null,
+            "oracle": { "kb_ids": [], "oracle_strength": "NONE" },
+            "status": "NEEDS_CONFIRMATION",
+            "open_question": "KB-018 (dùng chung cho cả luồng upload item đơn lẻ và bulk-zip) quan sát request PUT gửi thẳng tới oe-cdn.sgp1.digitaloceanspaces.com bằng URL có chữ ký (X-Amz-Signature/X-Amz-Credential, đã redact) thay vì header JWT app; path chứa user_id đọc được dạng rõ. Thời hạn hiệu lực chữ ký KHÔNG quan sát được vì query string bị redact hoàn toàn theo policy. Cần PO/Dev xác nhận thời hạn presigned URL và liệu có bị giới hạn theo user/session hay có thể bị replay - bề mặt bảo mật MEDIUM severity, áp dụng riêng cho bước PUT của luồng bulk-zip (khác instance check ở checklist asset-category-item-management cho luồng upload đơn lẻ).",
+            "risk_refs": ["KB-018"], "priority": "P2",
+            "act_ids": ["ACT-08-01-001"],
+            "evidence_refs": [
+              { "type": "har_entry", "path": "raw/network/ACT-05-01-001.json", "act_id": "ACT-08-01-001", "note": "ROUND 3 SYNC: act_id label sửa từ 'ACT-05-01-001' sang 'ACT-08-01-001', file không đổi." }
+            ],
+            "automation_suitability": "UNKNOWN"
+          }
+        ]
+      }
+    ],
+    "coverage_by_feature_and_risk": [
+      { "feature_id": "FEAT-04-bulk-upload-zip", "risk_ref": "CONF-002", "check_ids": ["CHK-003", "CHK-004", "CHK-005"] },
+      { "feature_id": "FEAT-04-bulk-upload-zip", "risk_ref": "STALE-002", "check_ids": ["CHK-004"] },
+      { "feature_id": "FEAT-04-bulk-upload-zip", "risk_ref": "KB-018", "check_ids": ["CHK-010"] },
+      { "feature_id": "FEAT-04-bulk-upload-zip", "risk_ref": "gap-job-error-processing-state", "check_ids": ["CHK-008"] },
+      { "feature_id": "FEAT-04-bulk-upload-zip", "risk_ref": "gap-zip-negative-path", "check_ids": ["CHK-006", "CHK-007"] },
+      { "feature_id": "FEAT-04-bulk-upload-zip", "risk_ref": "gap-zip-structure-variation", "check_ids": ["CHK-009"] }
+    ],
+    "checks_needing_confirmation": ["CHK-004", "CHK-005", "CHK-006", "CHK-007", "CHK-008", "CHK-009", "CHK-010"],
+    "duplicates_removed": [],
+    "excluded_dimensions": [
+      { "dimension": "PERMISSION", "reason": ".env chỉ còn 1 account khả dụng (Linh explorer, sub=273) - không có TIB_USER_B_*/cross-tenant account để test quyền upload/xem job bulk-upload của store khác trong run CTX-20260910-06." },
+      { "dimension": "REGRESSION", "reason": "Zero-doc bootstrap (CTX-20260910-06) là lần chạy đầu tiên cho object Asset Category, chưa có output từ knowledge-diff-analyzer hoặc version checklist trước để so sánh regression cho luồng bulk-upload zip." }
+    ]
+  },
+  "gate": {
+    "decision": "CONDITIONAL_PASS",
+    "blocking_findings": [],
+    "conditions": [
+      "KHÔNG nâng CHK-001/002/003 lên STRONG oracle - KB-016/KB-018 vẫn OBSERVED_CURRENT, observed_count=1 cho KB-016, confirmation_source=null.",
+      "CHK-004/CHK-005 (CONF-002/STALE-002) PHẢI giữ nguyên cả 2 khả năng giới hạn, resolution UNRESOLVED - KHÔNG dùng checklist này để tự chọn 512MB/2 file hay 2GB/10 file là đúng.",
+      "CHK-010 (KB-018) PHẢI được đưa vào checklist như hạng mục cần theo dõi/re-test, không phải kết luận đã an toàn hay không an toàn.",
+      "[ROUND 3 SYNC] Đã đồng bộ lại toàn bộ act_id/evidence_refs theo product-kb.json round3. Tổng số check giữ nguyên 10/10, không thêm/bớt."
+    ],
+    "allowed_next_steps": [
+      "Handoff sang knowledge-diff-analyzer, ưu tiên CONF-002/STALE-002.",
+      "Handoff sang context-quality-reviewer."
+    ]
+  }
+}

@@ -1,0 +1,382 @@
+{
+  "schema_version": "1.0",
+  "artifact_type": "APICapabilityArtifact",
+  "artifact_id": "APICAP-CTX-20260915-01-global-option",
+  "workflow_id": "CTX-20260915-01",
+  "producer": "api-explorer",
+  "source_refs": [
+    { "type": "code_ref", "path": "contracts/qa-context-contract.md", "note": "shared contract v1.3" },
+    { "type": "code_ref", "path": "runs/context/2026-09-15/CTX-20260915-01/input/bootstrap-request.json" },
+    { "type": "code_ref", "path": "runs/context/2026-09-15/CTX-20260915-01/raw/portal/portal-evidence.json", "note": "FeatureDiscoveryArtifact FDA-CTX-20260915-01-global-option, producer portal-explorer, same run" }
+  ],
+  "upstream_artifact_ids": ["FDA-CTX-20260915-01-global-option"],
+  "status": "PARTIAL",
+  "confidence": "MEDIUM",
+  "observations": [
+    "12/12 provided network capture files read and mapped to ACT-ID. No capture is missing for any ACT-ID referenced in portal-evidence.json's scenarios/actions this run — no BLOCKED needed on that basis.",
+    "Global Option CRUD uses TWO different mechanisms depending on operation: CREATE/CLONE/DELETE are REST (POST /api/global-options, POST /api/global-options/{id}/clone, DELETE /api/global-options/{id}); EDIT is a client-constructed Hasura GraphQL table-level mutation (updateGlobalOption -> update_global_options_by_pk) hitting POST /api/graphql, NOT a REST PUT/PATCH. Confirmed directly from request bodies/operationName+query text in ACT-01-01-001..004, not inferred.",
+    "The artwork<->Global Option link is confirmed at the API layer: artwork layer object in the POST /api/artworks response (ACT-06-01-001) contains customization_type='global_option' and global_option=862 (the id created in ACT-01-02-001). This same layer sub-object is echoed again, unchanged, inside the POST /api/campaign-artworks response (ACT-06-02-001), independently re-confirming the link at the campaign-attach step."
+  ],
+  "assumptions": [
+    "api_context.environment/base_url taken from the literal URLs seen in every captured entry (https://staging-api.teeinblue.com) plus bootstrap-request's stated staging environment; not independently re-verified by api-explorer beyond what portal-explorer already confirmed (OBS-target-verify)."
+  ],
+  "unknowns": [
+    "Whether the Global Option 'Category' field (global_option_category_id) has any relation to the type-specific category pickers ('Select additional options category' / 'Select one vector category') seen on Additional Option and Vector Category types, and whether those in turn are the SAME underlying table as the /additional-options and /vectors (asset-category) objects. See documented_observed_mismatches and payload notes below — treated as INFERRED at best, not confirmed.",
+    "Whether 'required: true' observed on the artwork layer using 'Use an existing global option' (ACT-06-01-001) is a default of that personalization_type or is copied from the referenced Global Option's own 'required' field (which was data.required=false on Global Option 862's own create payload, ACT-01-02-001) — the two values (layer required=true vs option data.required=false) do NOT match, which is itself worth flagging as an open question, not concluded either way.",
+    "Full request_body shape for 4/7 create-type samples (ACT-01-04-001, 01-05-001, 01-06-001, 01-07-001) was not captured in the network files provided — only response_body was available for those. Field-presence claims on the REQUEST side are therefore based on only 3/7 samples (001, 002, 003).",
+    "Response-body field completeness varies across the 7 create samples (created_at/updated_at/data/global_option_category_id missing in some captures) — cannot distinguish genuine field-absence from capture truncation without re-capture; not treated as a schema fact."
+  ],
+  "conflicts": [
+    {
+      "topic": "Global Option 'Category' field default value: bootstrap-request statement vs this run's API/DOM observation",
+      "side_a": { "source": "input/bootstrap-request.json, object_target.initial_state/note", "statement": "Field 'Category' trên Global Option instance mặc định 'Uncategorized'." },
+      "side_b": { "source": "this run: raw/network/ACT-01-01-001.json through ACT-01-07-001.json (global_option_category_id: null in every captured create response) + portal-evidence OBS-005 (create-form Category picker shows literal 'No category', zero records) + OBS-001 (list page's per-row Category combobox shows 'Uncategorized' as a display-only fallback, not tied to any global_option_category_id value)", "statement": "No API response this run ever returned a non-null global_option_category_id, and no 'Uncategorized' category record exists — 'Uncategorized' only appears as list-UI display text when global_option_category_id is null, it is not a real category id/name coming from any API payload." },
+      "resolution": "NOT RESOLVED by api-explorer — handed to orchestrator/reviewer per contract §8. Both statements kept."
+    }
+  ],
+  "blocking_issues": [],
+  "payload": {
+    "api_context": {
+      "environment": "staging",
+      "auth_role": "owner (Linh explorer, tenant header x-acting-user-id=266, store linh-explorer.myshopify.com)",
+      "base_url": "https://staging-api.teeinblue.com"
+    },
+    "operations": [
+      {
+        "operation_id": "APIOP-001",
+        "protocol": "REST",
+        "method_or_type": "POST",
+        "path_or_operation": "/api/global-options",
+        "observed_paths": ["/api/global-options"],
+        "business_object": "GlobalOption",
+        "capability": "Create a new Global Option instance (any of the 30 leaf layer types; type-specific fields live inside a polymorphic 'data' JSON blob keyed by the 'type' slug)",
+        "act_ids": ["ACT-01-01-001", "ACT-01-02-001", "ACT-01-03-001", "ACT-01-04-001", "ACT-01-05-001", "ACT-01-06-001", "ACT-01-07-001"],
+        "scn_ids": ["SCN-01-01", "SCN-01-02", "SCN-01-03", "SCN-01-04", "SCN-01-05", "SCN-01-06", "SCN-01-07"],
+        "feature_ids": ["FEAT-01"],
+        "auth": {
+          "mechanism": "cookie-based session (Sanctum SPA) + CSRF header x-xsrf-token (redacted)",
+          "tenant_header": "x-acting-user-id: 266 (client-supplied, observed identical value across all samples)",
+          "role_observed": "owner",
+          "cross_tenant_tested": false
+        },
+        "request_contract": {
+          "shape": "JSON object",
+          "fields": {
+            "name": { "type": "string", "presence": "always_present", "observed_count": 7, "confidence": "MEDIUM", "note": "present in all 3 samples where full request_body was captured (001,002,003); assumed same for 004-007 based on response echo of 'name', but request body itself not captured for those 4" },
+            "type": { "type": "string (slug, distinct from UI label, e.g. 'text', 'text-to-image', 'additional-option', 'vector-category', 'maps', 'word-search', 'qr-code')", "presence": "always_present", "observed_count": 7, "confidence": "MEDIUM" },
+            "data": { "type": "object, polymorphic — inner keys entirely depend on 'type'", "presence": "always_present", "observed_count": 3, "confidence": "LOW", "note": "only 3/7 samples had request_body captured; shape differs completely per type, see per-type notes in observations" },
+            "global_option_category_id": { "type": "null | bigint", "presence": "always_present as key, value observed only as null this run", "observed_count": 3, "confidence": "LOW" }
+          }
+        },
+        "response_contract": {
+          "shape": "JSON object",
+          "fields": {
+            "id": { "type": "bigint", "presence": "always_present", "observed_count": 7, "confidence": "HIGH" },
+            "type": { "type": "string", "presence": "always_present", "observed_count": 7, "confidence": "HIGH" },
+            "name": { "type": "string", "presence": "always_present", "observed_count": 7, "confidence": "HIGH" },
+            "data": { "type": "object", "presence": "present in 6/7 captured responses (missing in ACT-01-02-001's captured response, possibly capture truncation not true absence)", "observed_count": 6, "confidence": "LOW" },
+            "global_option_category_id": { "type": "null | bigint", "presence": "present in 6/7 (same gap as data)", "observed_count": 6, "confidence": "LOW" },
+            "created_at": { "type": "ISO8601 string", "presence": "present in 3/7 captured responses (001,003 full; others show only where explicitly captured)", "observed_count": 3, "confidence": "LOW" },
+            "updated_at": { "type": "ISO8601 string", "presence": "present in 1/7 captured responses (001 only)", "observed_count": 1, "confidence": "LOW" }
+          }
+        },
+        "error_contract": [],
+        "observed_status": [201],
+        "observed_count": 7,
+        "state_delta": [
+          { "field": "existence (id)", "before": "absent", "after": "present, id assigned (860/862/863/864/865/866/867 across the 7 samples)", "confidence": "HIGH" }
+        ],
+        "source_refs": [
+          { "type": "api_response", "path": "raw/network/ACT-01-01-001.json" },
+          { "type": "api_response", "path": "raw/network/ACT-01-02-001.json" },
+          { "type": "api_response", "path": "raw/network/ACT-01-03-001.json" },
+          { "type": "api_response", "path": "raw/network/ACT-01-04-001.json" },
+          { "type": "api_response", "path": "raw/network/ACT-01-05-001.json" },
+          { "type": "api_response", "path": "raw/network/ACT-01-06-001.json" },
+          { "type": "api_response", "path": "raw/network/ACT-01-07-001.json" }
+        ],
+        "observed_request_refs": [
+          { "type": "api_response", "path": "raw/network/ACT-01-01-001.json", "note": "full request_body captured" },
+          { "type": "api_response", "path": "raw/network/ACT-01-02-001.json", "note": "full request_body captured" },
+          { "type": "api_response", "path": "raw/network/ACT-01-03-001.json", "note": "full request_body captured" }
+        ],
+        "knowledge_kind": "OBSERVED_CURRENT"
+      },
+      {
+        "operation_id": "APIOP-002",
+        "protocol": "GRAPHQL",
+        "method_or_type": "POST",
+        "path_or_operation": "/api/graphql (operationName: getData)",
+        "observed_paths": ["/api/graphql"],
+        "business_object": "GlobalOption",
+        "capability": "List/refresh Global Option table (global_options_aggregate + global_options(offset,limit,where,order_by)) — fires after page load and after create/clone/delete to refresh the /global-options list view",
+        "act_ids": ["ACT-01-01-001"],
+        "scn_ids": ["SCN-01-01"],
+        "feature_ids": ["FEAT-01"],
+        "auth": {
+          "mechanism": "cookie-based session (Sanctum SPA) + CSRF header x-xsrf-token (redacted)",
+          "tenant_header": "x-acting-user-id: 266",
+          "role_observed": "owner",
+          "cross_tenant_tested": false
+        },
+        "request_contract": { "shape": "GraphQL POST body {operationName, query, variables}", "fields": { "operationName": { "value_observed": "getData", "observed_count": 1, "confidence": "LOW" } }, "note": "full query/variables text not itemized in capture, only a descriptive note; treat query shape as unknown beyond operationName" },
+        "response_contract": { "shape": "GraphQL response; note-only capture confirms it returns the list including newly-created row and each row's 'type' enum value and global_option_category_id", "observed_count": 1, "confidence": "LOW" },
+        "error_contract": [],
+        "observed_status": [200],
+        "observed_count": 1,
+        "state_delta": [],
+        "source_refs": [{ "type": "api_response", "path": "raw/network/ACT-01-01-001.json" }],
+        "observed_request_refs": [{ "type": "api_response", "path": "raw/network/ACT-01-01-001.json" }],
+        "knowledge_kind": "OBSERVED_CURRENT"
+      },
+      {
+        "operation_id": "APIOP-003",
+        "protocol": "GRAPHQL",
+        "method_or_type": "POST",
+        "path_or_operation": "/api/graphql (operationName: updateGlobalOption -> update_global_options_by_pk)",
+        "observed_paths": ["/api/graphql"],
+        "business_object": "GlobalOption",
+        "capability": "Edit an existing Global Option instance's name/data/category/updated_at",
+        "act_ids": ["ACT-01-01-002"],
+        "scn_ids": ["SCN-01-01"],
+        "feature_ids": ["FEAT-01"],
+        "auth": {
+          "mechanism": "cookie-based session (Sanctum SPA) + CSRF header x-xsrf-token (redacted)",
+          "tenant_header": "x-acting-user-id: 266",
+          "role_observed": "owner",
+          "cross_tenant_tested": false
+        },
+        "request_contract": {
+          "shape": "GraphQL mutation, client-constructed query text: mutation updateGlobalOption($id: bigint!, $data: json, $name: String, $categoryId: bigint, $updatedAt: timestamp) { update_global_options_by_pk(pk_columns: {id: $id} _set: {data: $data, name: $name, global_option_category_id: $categoryId, updated_at: $updatedAt}) { id name data global_option_category_id __typename } }",
+          "fields": {
+            "variables.id": { "type": "string(bigint)", "presence": "observed", "observed_count": 1, "confidence": "LOW" },
+            "variables.name": { "type": "string", "presence": "observed", "observed_count": 1, "confidence": "LOW" },
+            "variables.data": { "type": "object (full 'data' blob resent, not a partial patch)", "presence": "observed", "observed_count": 1, "confidence": "LOW" },
+            "variables.categoryId": { "type": "null | bigint", "presence": "observed as null", "observed_count": 1, "confidence": "LOW" },
+            "variables.updatedAt": { "type": "timestamp string, client-supplied", "presence": "observed", "observed_count": 1, "confidence": "LOW" }
+          }
+        },
+        "response_contract": { "shape": "GraphQL response, data.update_global_options_by_pk: {id,name,data,global_option_category_id,__typename}", "observed_count": 1, "confidence": "LOW" },
+        "error_contract": [],
+        "observed_status": [200],
+        "observed_count": 1,
+        "state_delta": [
+          { "field": "data.form_label", "before": "Enter your name", "after": "Enter your full name (edited)", "confidence": "LOW" }
+        ],
+        "source_refs": [{ "type": "api_response", "path": "raw/network/ACT-01-01-002.json" }],
+        "observed_request_refs": [{ "type": "api_response", "path": "raw/network/ACT-01-01-002.json" }],
+        "knowledge_kind": "OBSERVED_CURRENT"
+      },
+      {
+        "operation_id": "APIOP-004",
+        "protocol": "REST",
+        "method_or_type": "POST",
+        "path_or_operation": "/api/global-options/{id}/clone",
+        "observed_paths": ["/api/global-options/860/clone"],
+        "business_object": "GlobalOption",
+        "capability": "Duplicate an existing Global Option instance (deep-copy 'data' JSON verbatim, auto-name '<original name> (copy)')",
+        "act_ids": ["ACT-01-01-003"],
+        "scn_ids": ["SCN-01-01"],
+        "feature_ids": ["FEAT-01"],
+        "auth": { "mechanism": "cookie-based session + x-xsrf-token (redacted)", "tenant_header": "x-acting-user-id: 266", "role_observed": "owner", "cross_tenant_tested": false },
+        "request_contract": { "shape": "empty body (no request payload needed)", "observed_count": 1, "confidence": "LOW" },
+        "response_contract": {
+          "shape": "JSON object",
+          "fields": {
+            "id": { "type": "bigint", "presence": "observed", "observed_count": 1, "confidence": "LOW" },
+            "type": { "type": "string", "presence": "observed", "observed_count": 1, "confidence": "LOW" },
+            "name": { "type": "string, suffixed '<original> (copy)'", "presence": "observed", "observed_count": 1, "confidence": "LOW" },
+            "data": { "type": "object, deep copy of source", "presence": "observed", "observed_count": 1, "confidence": "LOW" },
+            "global_option_category_id": { "presence": "observed as null (copied from source which was null)", "observed_count": 1, "confidence": "LOW" },
+            "created_at": { "presence": "observed", "observed_count": 1, "confidence": "LOW" },
+            "updated_at": { "presence": "observed", "observed_count": 1, "confidence": "LOW" }
+          }
+        },
+        "error_contract": [],
+        "observed_status": [201],
+        "observed_count": 1,
+        "state_delta": [
+          { "field": "existence (id)", "before": "absent", "after": "present, id=861, name='QA-GO-TEXT-SingleLine-01 (copy)', data deep-copied from id=860's post-edit state", "confidence": "LOW" }
+        ],
+        "source_refs": [{ "type": "api_response", "path": "raw/network/ACT-01-01-003.json" }],
+        "observed_request_refs": [{ "type": "api_response", "path": "raw/network/ACT-01-01-003.json" }],
+        "knowledge_kind": "OBSERVED_CURRENT"
+      },
+      {
+        "operation_id": "APIOP-005",
+        "protocol": "REST",
+        "method_or_type": "DELETE",
+        "path_or_operation": "/api/global-options/{id}",
+        "observed_paths": ["/api/global-options/861"],
+        "business_object": "GlobalOption",
+        "capability": "Delete a Global Option instance",
+        "act_ids": ["ACT-01-01-004"],
+        "scn_ids": ["SCN-01-01"],
+        "feature_ids": ["FEAT-01"],
+        "auth": { "mechanism": "cookie-based session + x-xsrf-token (redacted)", "tenant_header": "x-acting-user-id: 266", "role_observed": "owner", "cross_tenant_tested": false },
+        "request_contract": { "shape": "no body", "observed_count": 1, "confidence": "LOW" },
+        "response_contract": { "shape": "no body (204 No Content)", "observed_count": 1, "confidence": "LOW" },
+        "error_contract": [],
+        "observed_status": [204],
+        "observed_count": 1,
+        "state_delta": [
+          { "field": "existence (id)", "before": "present, id=861", "after": "absent (removed from list)", "confidence": "LOW" }
+        ],
+        "source_refs": [{ "type": "api_response", "path": "raw/network/ACT-01-01-004.json" }],
+        "observed_request_refs": [{ "type": "api_response", "path": "raw/network/ACT-01-01-004.json" }],
+        "knowledge_kind": "OBSERVED_CURRENT"
+      },
+      {
+        "operation_id": "APIOP-006",
+        "protocol": "REST",
+        "method_or_type": "POST",
+        "path_or_operation": "/api/artworks",
+        "observed_paths": ["/api/artworks"],
+        "business_object": "Artwork (cross-object join point with GlobalOption)",
+        "capability": "Create a new artwork; a layer within it can reference an existing Global Option instance via customization_type='global_option' + global_option=<id>",
+        "act_ids": ["ACT-06-01-001"],
+        "scn_ids": ["SCN-06-01"],
+        "feature_ids": ["FEAT-06"],
+        "auth": { "mechanism": "cookie-based session + x-xsrf-token (redacted)", "tenant_header": "x-acting-user-id: 266", "role_observed": "owner", "cross_tenant_tested": false },
+        "request_contract": { "shape": "not captured in this file (only response_body shown); artwork creation payload (name/width/height/design_format/layers[]) not itemized here", "observed_count": 0, "confidence": "LOW" },
+        "response_contract": {
+          "shape": "JSON object: {id, name, width, height, design_format, schema_version, data:[{id,name,layers:[{type,name,id,customization_type,required,global_option}]}]}",
+          "fields": {
+            "data[].layers[].customization_type": { "value_observed": "global_option", "observed_count": 1, "confidence": "LOW" },
+            "data[].layers[].global_option": { "type": "bigint, references GlobalOption.id", "value_observed": 862, "observed_count": 1, "confidence": "LOW" },
+            "data[].layers[].required": { "value_observed": true, "observed_count": 1, "confidence": "LOW", "note": "does NOT match Global Option 862's own data.required=false from its create payload (ACT-01-02-001); relationship between the two 'required' values is unconfirmed, see unknowns" }
+          }
+        },
+        "error_contract": [],
+        "observed_status": [201],
+        "observed_count": 1,
+        "state_delta": [
+          { "field": "layer.customization_type / layer.global_option", "before": "n/a (new artwork, no prior layer)", "after": "customization_type=global_option, global_option=862", "confidence": "LOW" }
+        ],
+        "source_refs": [{ "type": "api_response", "path": "raw/network/ACT-06-01-001.json" }],
+        "observed_request_refs": [],
+        "knowledge_kind": "OBSERVED_CURRENT"
+      },
+      {
+        "operation_id": "APIOP-007",
+        "protocol": "REST",
+        "method_or_type": "POST",
+        "path_or_operation": "/api/campaign-artworks",
+        "observed_paths": ["/api/campaign-artworks"],
+        "business_object": "Campaign / CampaignArtwork (cross-object join point with Artwork and, transitively, GlobalOption)",
+        "capability": "Attach an artwork (whose layer may reference a Global Option) to a printarea within a campaign",
+        "act_ids": ["ACT-06-02-001"],
+        "scn_ids": ["SCN-06-02"],
+        "feature_ids": ["FEAT-06"],
+        "auth": { "mechanism": "cookie-based session + x-xsrf-token (redacted)", "tenant_header": "x-acting-user-id: 266", "role_observed": "owner", "cross_tenant_tested": false },
+        "request_contract": {
+          "shape": "JSON object",
+          "fields": {
+            "campaign_id": { "type": "bigint", "presence": "observed", "observed_count": 1, "confidence": "LOW" },
+            "printarea_id": { "type": "bigint", "presence": "observed", "observed_count": 1, "confidence": "LOW" },
+            "artwork_id": { "type": "bigint", "presence": "observed", "observed_count": 1, "confidence": "LOW" },
+            "top": { "type": "number", "presence": "observed", "observed_count": 1, "confidence": "LOW" },
+            "left": { "type": "number", "presence": "observed", "observed_count": 1, "confidence": "LOW" },
+            "width": { "type": "number", "presence": "observed", "observed_count": 1, "confidence": "LOW" },
+            "height": { "type": "number", "presence": "observed", "observed_count": 1, "confidence": "LOW" }
+          }
+        },
+        "response_contract": {
+          "shape": "JSON object: {id, printarea:{id,product_id,name,width,height}, campaign:{id,name,status,product_display_type}, artwork:{id,name,data:[{layers:[...]}]}}",
+          "fields": {
+            "campaign.status": { "type": "integer", "value_observed": 0, "note": "observed = 0, interpreted as draft/unlaunched by portal-explorer; not confirmed against an enum source (OBSERVED_CURRENT only, not CONFIRMED_EXPECTED)", "observed_count": 1, "confidence": "LOW" },
+            "artwork.data[].layers[].global_option": { "value_observed": 862, "note": "re-confirms the same link as APIOP-006, unchanged, at the campaign-attach step", "observed_count": 1, "confidence": "LOW" }
+          }
+        },
+        "error_contract": [],
+        "observed_status": [201],
+        "observed_count": 1,
+        "state_delta": [
+          { "field": "campaign_artwork existence", "before": "no campaign_artwork linking artwork 4167 to printarea 13959", "after": "campaign_artwork id=7509 created; campaign.status observed=0", "confidence": "LOW" }
+        ],
+        "source_refs": [{ "type": "api_response", "path": "raw/network/ACT-06-02-001.json" }],
+        "observed_request_refs": [{ "type": "api_response", "path": "raw/network/ACT-06-02-001.json" }],
+        "knowledge_kind": "OBSERVED_CURRENT"
+      }
+    ],
+    "documented_observed_mismatches": [
+      {
+        "topic": "Global Option 'Category' field default value",
+        "documented": "bootstrap-request (input/bootstrap-request.json, object_target.note) states the field 'Category' on a Global Option instance defaults to 'Uncategorized'.",
+        "observed": "Every captured create/edit/clone response this run shows global_option_category_id=null (never a non-null value tied to any 'Uncategorized' record); the create form's Category picker itself displays literal 'No category' with zero selectable options (portal-evidence OBS-005). 'Uncategorized' only appears as list-page display-only fallback text (OBS-001) when global_option_category_id is null — it does not correspond to any category id/name returned by any API call this run.",
+        "resolution": "NOT resolved by api-explorer — both statements kept in conflicts[], handed to orchestrator/reviewer.",
+        "source_refs": [
+          { "type": "code_ref", "path": "runs/context/2026-09-15/CTX-20260915-01/input/bootstrap-request.json" },
+          { "type": "api_response", "path": "raw/network/ACT-01-01-001.json" },
+          { "type": "api_response", "path": "raw/network/ACT-01-02-001.json" }
+        ]
+      }
+    ],
+    "background_traffic": [
+      { "normalized_route": "/api/staff", "kind": "unrelated", "note": "baseline page-load call, present before Save in ACT-01-01-001; not triggered by any mutation action" },
+      { "normalized_route": "/api/user", "kind": "unrelated", "note": "baseline page-load call" },
+      { "normalized_route": "/api/global-options/instances (query param trashed=...)", "kind": "unrelated", "note": "baseline page-load call; exact path uncertain, only summarized as 'instances?trashed' in capture note, not itemized" },
+      { "normalized_route": "/api/popup-messages", "kind": "unrelated", "note": "baseline page-load call" },
+      { "normalized_route": "/sanctum/csrf-cookie (approx., referenced as 'csrf-cookie' in capture note)", "kind": "unrelated", "note": "CSRF cookie priming, standard Sanctum SPA pattern" },
+      { "normalized_route": "external analytics beacon (GA)", "kind": "unrelated", "note": "Google Analytics beacon call, not a teeinblue API" },
+      { "normalized_route": "/api/graphql (getData, list refresh)", "kind": "polling", "note": "GraphQL list-refresh calls surrounding the clone action (ACT-01-01-003, seq 22/23/37), same query shape as APIOP-002 but body not itemized in this entry" }
+    ],
+    "security_surfaces": [
+      {
+        "surface": "Client-constructed Hasura GraphQL table-level mutation 'updateGlobalOption' (update_global_options_by_pk) called directly from the browser to POST /api/graphql, with the _set object (data/name/global_option_category_id/updated_at) fully assembled client-side.",
+        "act_ids": ["ACT-01-01-002"],
+        "operation_id": "APIOP-003",
+        "risk_note": "Structurally the same pattern already flagged for asset-category's insert_cliparts (FEAT-03 area). No cross-tenant sample or forged pk_columns.id was attempted this run — cannot conclude whether Hasura permission rules restrict which rows the mutation can target, or whether tenant scoping is enforced server-side vs relying on the client-supplied x-acting-user-id header. Observation only, not a safe/unsafe conclusion.",
+        "knowledge_kind": "OBSERVED_CURRENT"
+      },
+      {
+        "surface": "Client-constructed Hasura GraphQL list/aggregate query 'getData' (global_options_aggregate + global_options(offset,limit,where,order_by)) called directly to POST /api/graphql.",
+        "act_ids": ["ACT-01-01-001"],
+        "operation_id": "APIOP-002",
+        "risk_note": "Client controls where/order_by/offset/limit — typical shape of direct Hasura exposure to the browser. Not tested for cross-tenant data leakage (e.g., manipulating 'where' to read another store's rows) this run.",
+        "knowledge_kind": "OBSERVED_CURRENT"
+      },
+      {
+        "surface": "Tenant/user scoping via client-supplied request header 'x-acting-user-id' (observed value 266, matching Linh explorer's user_id) present on every REST and GraphQL request this run, rather than solely a server-derived value from the session cookie.",
+        "act_ids": ["ACT-01-01-001", "ACT-01-01-002", "ACT-01-01-003", "ACT-01-01-004", "ACT-01-02-001", "ACT-01-03-001", "ACT-01-04-001", "ACT-01-05-001", "ACT-01-06-001", "ACT-01-07-001", "ACT-06-01-001", "ACT-06-02-001"],
+        "risk_note": "Not tested whether the server validates this header against the authenticated session's actual tenant, or trusts it as-is (no forged-header / cross-tenant fixture sample captured this run). Flagged as an open question only, consistent with the same open question already noted for asset-category.",
+        "knowledge_kind": "OBSERVED_CURRENT"
+      }
+    ],
+    "unmapped_endpoints": [],
+    "unexplored_operations": [
+      "2 POST /api/graphql calls fired on /global-options/{id}/edit page load, BEFORE Save (ACT-01-01-002, seq 32/33) — likely an option-by-id fetch + category list, but operationName/query/request+response body were not captured this run; cannot assign a full APIOP entry (insufficient shape evidence). Excluded from `operations` per gate discipline rather than force-fit with unknown fields.",
+      "No REST GET/PUT/PATCH equivalent for Global Option was ever observed (list uses GraphQL 'getData', edit uses GraphQL 'updateGlobalOption'). Unknown whether a REST GET /api/global-options or PUT /api/global-options/{id} endpoint exists at all in parallel.",
+      "Error/negative-path responses for ANY Global Option CRUD operation (create x7 types, edit, clone, delete) — 0 samples this run for invalid input, duplicate name, cross-tenant access, or permission-denied.",
+      "Create-operation request/response shape for the 23/30 leaf layer types not exercised this run (Normal, Custom Shape, Warp Text, Spiral Text, 1 Clipart Category, Group of clipart categories, Single Upload, Vector Upload, Route Maps, Star Maps, Moon Phase, Cross Word, Single-line [scrabble], Word Cloud, Song Search, Calendar, Clock, Toggle Switch, Addon Charge, JSON List, Font, Color) — 'type' slug and 'data' shape unknown for all of these.",
+      "Whether Route Maps / Star Maps / Moon Phase persist as type='maps' (same as Street Maps, the only Maps & Astronomy leaf actually created) or as distinct type strings.",
+      "The 'Update campaign' (rocket) row action's endpoint/method/payload — never invoked this run (explicitly out of scope per bootstrap forbidden_actions), completely unknown.",
+      "Full CRUD (edit/clone/delete) network mechanics for the 6 non-Text fixtures (862-867) — only create was captured for these; edit/clone/delete were only exercised once, on the Text-group fixture (860/861).",
+      "Cross-tenant or cross-role call to updateGlobalOption or DELETE /api/global-options/{id} — not tested; see security_surfaces.",
+      "Storefront-side operations (add-to-cart, localStorage customization data per Global Option) — no storefront network capture files were provided to api-explorer this run; per portal-evidence handoff, campaign 2605 is NOT launched, so storefront reachability itself is unconfirmed."
+    ],
+    "coverage_limitations": [
+      "Only 3/7 Global Option create samples (ACT-01-01-001, 01-02-001, 01-03-001) had a full request_body captured; the other 4 (01-04-001 through 01-07-001) only had response_body captured in the provided network files, limiting request-field 'always_present' claims per the counting rule.",
+      "Response-body field completeness is inconsistent across the 7 create samples (created_at/updated_at/data/global_option_category_id missing in some captures) — treated as a capture-completeness gap, not asserted as a schema fact about field absence.",
+      "Every non-create operation (edit/clone/delete/artwork-create/campaign-artwork-attach) has observed_count=1 → confidence LOW per the counting rule; none of these mechanics have been repeated to confirm consistency.",
+      "No DB/schema access this run (bootstrap-request db_observation.enabled=false) — the Category-field relationship question (this run's task-3 focus) could only be advanced to INFERRED via numeric-id/name correlation in the UI+response, not confirmed at schema/FK level. Handed to db-explorer for schema-level confirmation.",
+      "0 error/negative samples (4xx/5xx) exist for any Global Option CRUD operation this run.",
+      "0 cross-role / cross-tenant samples exist for any operation this run (only owner role, single tenant, tested).",
+      "23/30 leaf layer types were never exercised via CREATE; 6/7 created fixtures never had EDIT/CLONE/DELETE exercised (only the Text-group fixture id 860/861 got full CRUD).",
+      "api-explorer operated in runtime-trace mode only — no browser opened, no new requests issued, strictly limited to analyzing the 12 provided network capture files plus portal-evidence.json."
+    ],
+    "redaction_applied": true
+  },
+  "gate": {
+    "decision": "CONDITIONAL_PASS",
+    "blocking_findings": [],
+    "conditions": [
+      "Every operation entry has a real runtime observation with source_refs, secret scan is clean (x-xsrf-token redacted, no cookie/token/password values present in any captured body) — but 4/7 operations (APIOP-003 through APIOP-007) rest on a single sample each (observed_count=1, confidence LOW per counting rule); do not treat any field on these as required/optional or as full contract.",
+      "Do not treat the Global Option 'Category' relationship to /additional-options or /vectors (data.additional_option=6009, data.clipart=6007) as a confirmed schema/FK fact — it is a numeric-id-range + UI-selection correlation only (2 samples), status INFERRED, not CONFIRMED_EXPECTED. Requires db-explorer schema confirmation.",
+      "documented_observed_mismatches[0] (Category default value) is NOT resolved — do not pick a side.",
+      "security_surfaces entries are observations only, not safe/unsafe conclusions — no cross-tenant or forged-header/forged-pk_columns.id test was performed this run.",
+      "23/30 leaf layer types and all error/negative paths remain unexplored — this artifact must not be read as a complete Global Option API contract."
+    ],
+    "allowed_next_steps": ["qa-knowledge-normalizer", "feature-profile-builder"]
+  }
+}

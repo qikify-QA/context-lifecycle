@@ -1,0 +1,3453 @@
+{
+  "schema_version": "1.0",
+  "artifact_type": "APICapabilityArtifact",
+  "artifact_id": "ARTF-api-explorer-CTX-20260912-02",
+  "workflow_id": "CTX-20260912-02",
+  "producer": "api-explorer",
+  "source_refs": [
+    {
+      "type": "code_ref",
+      "path": "raw/portal/portal-evidence.json",
+      "note": "Feature Discovery Artifact -- ACT/SCN/FEAT-ID source of truth"
+    },
+    {
+      "type": "code_ref",
+      "path": "raw/network/*.json",
+      "note": "18 redacted network capture files, offline analysis only"
+    }
+  ],
+  "upstream_artifact_ids": [
+    "ARTF-portal-explorer-CTX-20260912-02"
+  ],
+  "status": "PARTIAL",
+  "confidence": "MEDIUM",
+  "observations": [
+    "38 API operations identified across 2 protocols: REST (staging-api.teeinblue.com, 24 operations) and GraphQL (staging-graphql.teeinblue.com/v1/graphql, 14 operations).",
+    "No plain REST list endpoint (GET /api/campaigns or GET /api/platform-products) was found anywhere in the 18 captures -- FEAT-03 list/browse is served entirely via GraphQL (APIOP-032, APIOP-034), confirmed by full request/response inspection, not inferred from naming.",
+    "by-product-base flow's core 'add product to campaign' mutation is GraphQL insert_campaign_products (APIOP-027); the REST POST /api/staff-activity-logs/campaign-product observed alongside it is only an activity-log side effect, not the data write itself.",
+    "by-product-base uses a printarea-scoped artwork assignment (POST /api/campaign-artworks/batch-apply-to-printareas, APIOP-008) while by-shopify uses a flat artwork assignment with no printarea concept (POST /api/platform-artworks, APIOP-016) -- matches the print-area vs. no-print-area UI difference already noted by portal-explorer.",
+    "by-shopify's 'No mockup' validation is resolved by a dedicated POST /api/platform-products/{id}/platform-mockups (APIOP-022) call with no equivalent in by-product-base (which derives its mockup readiness from the product-base print-area mockups generated via APIOP-006/007).",
+    "Publish mechanics differ at the request-shape level, not just UI: by-product-base's publish (APIOP-010) requires a body {instance_id} (one store per call, matching the per-row Launch button in the Multi-store launch dialog); by-shopify's publish (APIOP-023) takes no body at all (store is fixed at creation time)."
+  ],
+  "assumptions": [
+    "Where a GraphQL query's `where` filter (e.g. campaign_id, status) is embedded directly in the query text rather than passed as a variable, this is treated as an implementation/codegen detail, not confirmed server-side behavior.",
+    "status:1 for campaigns/platform_products is assumed to correspond to 'archived' (excluded from default list queries) based on UI tab structure (Archived tab exists) -- not confirmed against any enum documentation."
+  ],
+  "unknowns": [
+    "Full validation rules for Campaign name (min/max length, uniqueness, special characters) beyond the single empty-string 422 case.",
+    "Whether POST /api/campaigns/{id}/publish accepts multiple instance_ids in one call for simultaneous multi-store publish, or must be called once per store (only 1-store case observed).",
+    "Behavior of DELETE /api/campaigns/{id}?remove_linked_resources=1 (checked case) -- only 0 observed.",
+    "Behavior of toggle enable_artwork_variant_assignment when set true, and any endpoint(s) involved -- never exercised.",
+    "Exact meaning of numeric enums observed only as raw values with no DB/schema confirmation: campaign.status=0, campaign_instances.status=5, campaign_activities.activities[].type=3.",
+    "Whether GraphQL queries/mutations enforce the same per-store / per-org authorization boundaries as the REST publish endpoint, given the multi-store launch query returns org-wide store data (see security_surfaces).",
+    "Full GraphQL schema (types, all queryable roots, mutation permissions) -- not introspected this run."
+  ],
+  "conflicts": [],
+  "blocking_issues": [
+    "raw/network/ACT-02-01-007-to-011-mockup-upload.json (response to POST /api/users/266/temporary-files/upload-url) contains an un-redacted pre-signed AWS SigV4 URL: meta.signed_url includes X-Amz-Credential (access key id) and X-Amz-Signature query parameters in plain text. The prior redaction-fix retry (per portal-evidence.json assumptions) only covered an 'email' pattern gap and did not check for signature/credential values embedded inside URL-shaped string fields. This value was NOT reproduced anywhere in this artifact. Per contract Sec.6 'Evidence còn secret/PII = block publish' this specific raw file should not be considered safe to publish/reference further until orchestrator triggers another redaction-fix pass on it (and, out of caution, until it is confirmed whether the exposed access key id is long-lived vs. scoped/rotatable)."
+  ],
+  "payload": {
+    "api_context": {
+      "environment": "staging",
+      "auth_role": "owner (Linh explorer, sub=273, user_id=266)",
+      "base_url": "https://staging-api.teeinblue.com (REST) + https://staging-graphql.teeinblue.com/v1/graphql (GraphQL) + https://staging-portal.teeinblue.com (portal app shell, not an API base but origin of all captured requests)"
+    },
+    "operations": [
+      {
+        "operation_id": "APIOP-001",
+        "protocol": "REST",
+        "method_or_type": "POST",
+        "path_or_operation": "/api/campaigns",
+        "observed_paths": [
+          "/api/campaigns"
+        ],
+        "business_object": "Campaign",
+        "capability": "create-campaign-by-product-base",
+        "act_ids": [
+          "ACT-01-01-002",
+          "ACT-01-01-003",
+          "ACT-04-01-001"
+        ],
+        "scn_ids": [
+          "SCN-01-01",
+          "SCN-04-01"
+        ],
+        "feature_ids": [
+          "FEAT-01-create-campaign-by-product-base",
+          "FEAT-04-campaign-delete"
+        ],
+        "auth": {
+          "type": "bearer_jwt",
+          "header": "authorization",
+          "note": "JWT in Authorization header, redacted in all captures ([REDACTED]). Refreshed via POST /api/token/refresh (observed expires_in=900s, matches known 15-minute TTL)."
+        },
+        "request_contract": {
+          "shape": {
+            "name": "string|null"
+          },
+          "notes": "Only field submitted at create time is name. No product/artwork/store selected yet."
+        },
+        "response_contract": {
+          "status_201_shape": {
+            "id": "int",
+            "name": "string",
+            "status": "null (at creation)",
+            "label_available_product": "null",
+            "field_positions": "null",
+            "product_display_type": "null",
+            "enable_artwork_navigation": "null",
+            "artwork_navigation_name": "null",
+            "product_tags": "null",
+            "featured_image_url": "null",
+            "featured_image_thumbnail": "null",
+            "show_first_campaign_mockup_id": "null"
+          }
+        },
+        "error_contract": [
+          {
+            "status": 422,
+            "shape": {
+              "message": "string",
+              "errors": {
+                "name": [
+                  "string"
+                ]
+              }
+            },
+            "observed_message": "The name field is required.",
+            "trigger": "name=null"
+          }
+        ],
+        "observed_status": [
+          201,
+          422
+        ],
+        "observed_count": 3,
+        "state_delta": [
+          {
+            "field": "campaign",
+            "before": "not created",
+            "after": "id assigned, status=null, draft",
+            "confidence": "HIGH"
+          }
+        ],
+        "source_refs": [
+          {
+            "type": "har_entry",
+            "path": "raw/network/ACT-01-01-002.json",
+            "act_id": "ACT-01-01-002"
+          },
+          {
+            "type": "har_entry",
+            "path": "raw/network/ACT-01-01-003.json",
+            "act_id": "ACT-01-01-003"
+          },
+          {
+            "type": "har_entry",
+            "path": "raw/network/ACT-01-01-003b-edit-page-load.json",
+            "act_id": "ACT-01-01-003"
+          },
+          {
+            "type": "har_entry",
+            "path": "raw/network/ACT-03-02-001-create-throwaway-and-list.json",
+            "act_id": "ACT-04-01-001"
+          }
+        ],
+        "observed_request_refs": [
+          {
+            "type": "har_entry",
+            "path": "raw/network/ACT-01-01-002.json",
+            "act_id": "ACT-01-01-002"
+          },
+          {
+            "type": "har_entry",
+            "path": "raw/network/ACT-01-01-003.json",
+            "act_id": "ACT-01-01-003"
+          },
+          {
+            "type": "har_entry",
+            "path": "raw/network/ACT-01-01-003b-edit-page-load.json",
+            "act_id": "ACT-01-01-003"
+          },
+          {
+            "type": "har_entry",
+            "path": "raw/network/ACT-03-02-001-create-throwaway-and-list.json",
+            "act_id": "ACT-04-01-001"
+          }
+        ],
+        "knowledge_kind": "OBSERVED_CURRENT"
+      },
+      {
+        "operation_id": "APIOP-002",
+        "protocol": "REST",
+        "method_or_type": "GET",
+        "path_or_operation": "/api/campaigns/{campaignId}",
+        "observed_paths": [
+          "/api/campaigns/2595",
+          "/api/campaigns/2596"
+        ],
+        "business_object": "Campaign",
+        "capability": "read-campaign-detail-rest",
+        "act_ids": [
+          "ACT-01-01-003",
+          "ACT-01-01-004-to-006",
+          "ACT-04-01-001"
+        ],
+        "scn_ids": [
+          "SCN-01-01",
+          "SCN-01-02",
+          "SCN-04-01"
+        ],
+        "feature_ids": [
+          "FEAT-01-create-campaign-by-product-base",
+          "FEAT-04-campaign-delete"
+        ],
+        "auth": {
+          "type": "bearer_jwt",
+          "header": "authorization",
+          "note": "JWT in Authorization header, redacted in all captures ([REDACTED]). Refreshed via POST /api/token/refresh (observed expires_in=900s, matches known 15-minute TTL)."
+        },
+        "request_contract": {
+          "shape": {}
+        },
+        "response_contract": {
+          "status_200_shape": {
+            "id": "int",
+            "name": "string",
+            "status": "int (0 observed)",
+            "label_available_product": "null",
+            "field_positions": "null",
+            "product_display_type": "string enum-like, observed 'radio'",
+            "enable_artwork_navigation": "bool",
+            "artwork_navigation_name": "null",
+            "product_tags": "null",
+            "featured_image_url": "null",
+            "featured_image_thumbnail": "null",
+            "show_first_campaign_mockup_id": "null",
+            "artworks": "array",
+            "campaign_products": "array",
+            "campaign_artworks": "array",
+            "instance_variants": "array",
+            "global_options": "array"
+          }
+        },
+        "error_contract": [],
+        "observed_status": [
+          200
+        ],
+        "observed_count": 4,
+        "state_delta": [],
+        "source_refs": [
+          {
+            "type": "har_entry",
+            "path": "raw/network/ACT-01-01-003.json",
+            "act_id": "ACT-01-01-003"
+          },
+          {
+            "type": "har_entry",
+            "path": "raw/network/ACT-01-01-004-to-006-add-product-and-artwork.json",
+            "act_id": "ACT-01-01-004-to-006"
+          },
+          {
+            "type": "har_entry",
+            "path": "raw/network/ACT-03-02-001-create-throwaway-and-list.json",
+            "act_id": "ACT-04-01-001"
+          }
+        ],
+        "observed_request_refs": [
+          {
+            "type": "har_entry",
+            "path": "raw/network/ACT-01-01-003.json",
+            "act_id": "ACT-01-01-003"
+          },
+          {
+            "type": "har_entry",
+            "path": "raw/network/ACT-01-01-004-to-006-add-product-and-artwork.json",
+            "act_id": "ACT-01-01-004-to-006"
+          },
+          {
+            "type": "har_entry",
+            "path": "raw/network/ACT-03-02-001-create-throwaway-and-list.json",
+            "act_id": "ACT-04-01-001"
+          }
+        ],
+        "knowledge_kind": "OBSERVED_CURRENT"
+      },
+      {
+        "operation_id": "APIOP-003",
+        "protocol": "REST",
+        "method_or_type": "GET",
+        "path_or_operation": "/api/campaigns/{campaignId}/clipart-categories",
+        "observed_paths": [
+          "/api/campaigns/2595/clipart-categories",
+          "/api/campaigns/2596/clipart-categories"
+        ],
+        "business_object": "Campaign",
+        "capability": "read-campaign-clipart-categories",
+        "act_ids": [
+          "ACT-01-01-003",
+          "ACT-01-01-004-to-006",
+          "ACT-04-01-001"
+        ],
+        "scn_ids": [
+          "SCN-01-01",
+          "SCN-01-02",
+          "SCN-04-01"
+        ],
+        "feature_ids": [
+          "FEAT-01-create-campaign-by-product-base"
+        ],
+        "auth": {
+          "type": "bearer_jwt",
+          "header": "authorization",
+          "note": "JWT in Authorization header, redacted in all captures ([REDACTED]). Refreshed via POST /api/token/refresh (observed expires_in=900s, matches known 15-minute TTL)."
+        },
+        "request_contract": {
+          "shape": {}
+        },
+        "response_contract": {
+          "status_200_shape": {
+            "array_of": {
+              "id": "int",
+              "name": "string",
+              "type": "string ('clipart' observed)",
+              "thumbnail": "string|null",
+              "display_type": "string",
+              "show_clipart_name": "bool",
+              "placeholder": "null",
+              "parent_id": "int|null",
+              "children_display_type": "int",
+              "custom_class": "null",
+              "options": "array"
+            }
+          },
+          "notes": "Belongs conceptually to Artwork clipart feature; kept here only because it fires on every campaign detail load. Empty [] before artwork assigned, populated after."
+        },
+        "error_contract": [],
+        "observed_status": [
+          200
+        ],
+        "observed_count": 4,
+        "state_delta": [],
+        "source_refs": [
+          {
+            "type": "har_entry",
+            "path": "raw/network/ACT-01-01-003.json",
+            "act_id": "ACT-01-01-003"
+          },
+          {
+            "type": "har_entry",
+            "path": "raw/network/ACT-01-01-004-to-006-add-product-and-artwork.json",
+            "act_id": "ACT-01-01-004-to-006"
+          },
+          {
+            "type": "har_entry",
+            "path": "raw/network/ACT-03-02-001-create-throwaway-and-list.json",
+            "act_id": "ACT-04-01-001"
+          }
+        ],
+        "observed_request_refs": [
+          {
+            "type": "har_entry",
+            "path": "raw/network/ACT-01-01-003.json",
+            "act_id": "ACT-01-01-003"
+          },
+          {
+            "type": "har_entry",
+            "path": "raw/network/ACT-01-01-004-to-006-add-product-and-artwork.json",
+            "act_id": "ACT-01-01-004-to-006"
+          },
+          {
+            "type": "har_entry",
+            "path": "raw/network/ACT-03-02-001-create-throwaway-and-list.json",
+            "act_id": "ACT-04-01-001"
+          }
+        ],
+        "knowledge_kind": "OBSERVED_CURRENT"
+      },
+      {
+        "operation_id": "APIOP-004",
+        "protocol": "REST",
+        "method_or_type": "PUT",
+        "path_or_operation": "/api/campaigns/{campaignId}",
+        "observed_paths": [
+          "/api/campaigns/2595"
+        ],
+        "business_object": "Campaign",
+        "capability": "update-campaign-basic-info",
+        "act_ids": [
+          "ACT-01-01-004-to-006"
+        ],
+        "scn_ids": [
+          "SCN-01-02"
+        ],
+        "feature_ids": [
+          "FEAT-01-create-campaign-by-product-base"
+        ],
+        "auth": {
+          "type": "bearer_jwt",
+          "header": "authorization",
+          "note": "JWT in Authorization header, redacted in all captures ([REDACTED]). Refreshed via POST /api/token/refresh (observed expires_in=900s, matches known 15-minute TTL)."
+        },
+        "request_contract": {
+          "shape": {
+            "name": "string"
+          },
+          "notes": "Only 1 sample observed, fired automatically right after adding first product base with same name resubmitted (not a user-visible edit action) -- LOW confidence on when this fires."
+        },
+        "response_contract": {
+          "status_200_shape": {
+            "id": "int",
+            "name": "string",
+            "status": "int",
+            "label_available_product": "null",
+            "field_positions": "null",
+            "product_display_type": "string",
+            "enable_artwork_navigation": "bool",
+            "artwork_navigation_name": "null",
+            "product_tags": "null",
+            "featured_image_url": "null",
+            "featured_image_thumbnail": "null",
+            "show_first_campaign_mockup_id": "null"
+          }
+        },
+        "error_contract": [],
+        "observed_status": [
+          200
+        ],
+        "observed_count": 1,
+        "state_delta": [],
+        "source_refs": [
+          {
+            "type": "har_entry",
+            "path": "raw/network/ACT-01-01-004-to-006-add-product-and-artwork.json",
+            "act_id": "ACT-01-01-004-to-006"
+          }
+        ],
+        "observed_request_refs": [
+          {
+            "type": "har_entry",
+            "path": "raw/network/ACT-01-01-004-to-006-add-product-and-artwork.json",
+            "act_id": "ACT-01-01-004-to-006"
+          }
+        ],
+        "knowledge_kind": "OBSERVED_CURRENT"
+      },
+      {
+        "operation_id": "APIOP-005",
+        "protocol": "REST",
+        "method_or_type": "POST",
+        "path_or_operation": "/api/staff-activity-logs/campaign-product",
+        "observed_paths": [
+          "/api/staff-activity-logs/campaign-product"
+        ],
+        "business_object": "Campaign",
+        "capability": "log-add-product-activity",
+        "act_ids": [
+          "ACT-01-01-004-to-006"
+        ],
+        "scn_ids": [
+          "SCN-01-02"
+        ],
+        "feature_ids": [
+          "FEAT-01-create-campaign-by-product-base"
+        ],
+        "auth": {
+          "type": "bearer_jwt",
+          "header": "authorization",
+          "note": "JWT in Authorization header, redacted in all captures ([REDACTED]). Refreshed via POST /api/token/refresh (observed expires_in=900s, matches known 15-minute TTL)."
+        },
+        "request_contract": {
+          "shape": {
+            "campaign_id": "int",
+            "product_id": "int",
+            "position": "int",
+            "campaign_variants": {
+              "data": [
+                {
+                  "variant_id": "int"
+                }
+              ]
+            },
+            "campaign_mockups": {
+              "data": [
+                {
+                  "mockup_id": "int",
+                  "width": "int",
+                  "height": "int",
+                  "color_as_variant": "bool",
+                  "default_background_color": "null|string",
+                  "position": "int",
+                  "alt": "null|string",
+                  "layers": "array of layer objects",
+                  "type": "string"
+                }
+              ]
+            }
+          }
+        },
+        "response_contract": {
+          "status_201_shape": {
+            "token_id": "[REDACTED]",
+            "action": "string ('add' observed)",
+            "resource_type": "string (Eloquent class path, e.g. App\\Models\\Product)",
+            "resource_id": "int",
+            "resource_name": "string",
+            "parent_resource_type": "string (App\\Models\\Campaign)",
+            "parent_resource_id": "int",
+            "parent_resource_name": "string",
+            "message": "null",
+            "created_at": "ISO8601"
+          }
+        },
+        "error_contract": [],
+        "observed_status": [
+          201
+        ],
+        "observed_count": 1,
+        "state_delta": [],
+        "source_refs": [
+          {
+            "type": "har_entry",
+            "path": "raw/network/ACT-01-01-004-to-006-add-product-and-artwork.json",
+            "act_id": "ACT-01-01-004-to-006"
+          }
+        ],
+        "observed_request_refs": [
+          {
+            "type": "har_entry",
+            "path": "raw/network/ACT-01-01-004-to-006-add-product-and-artwork.json",
+            "act_id": "ACT-01-01-004-to-006"
+          }
+        ],
+        "knowledge_kind": "OBSERVED_CURRENT"
+      },
+      {
+        "operation_id": "APIOP-006",
+        "protocol": "REST",
+        "method_or_type": "POST",
+        "path_or_operation": "/api/campaign-products/{campaignProductId}/campaign-mockups/sync",
+        "observed_paths": [
+          "/api/campaign-products/4056/campaign-mockups/sync"
+        ],
+        "business_object": "Campaign",
+        "capability": "sync-campaign-mockups",
+        "act_ids": [
+          "ACT-01-01-004-to-006"
+        ],
+        "scn_ids": [
+          "SCN-01-02"
+        ],
+        "feature_ids": [
+          "FEAT-01-create-campaign-by-product-base"
+        ],
+        "auth": {
+          "type": "bearer_jwt",
+          "header": "authorization",
+          "note": "JWT in Authorization header, redacted in all captures ([REDACTED]). Refreshed via POST /api/token/refresh (observed expires_in=900s, matches known 15-minute TTL)."
+        },
+        "request_contract": {
+          "shape": {},
+          "notes": "No request body observed; triggered right after product base added."
+        },
+        "response_contract": {
+          "status_204": "empty body"
+        },
+        "error_contract": [],
+        "observed_status": [
+          204
+        ],
+        "observed_count": 1,
+        "state_delta": [],
+        "source_refs": [
+          {
+            "type": "har_entry",
+            "path": "raw/network/ACT-01-01-004-to-006-add-product-and-artwork.json",
+            "act_id": "ACT-01-01-004-to-006"
+          }
+        ],
+        "observed_request_refs": [
+          {
+            "type": "har_entry",
+            "path": "raw/network/ACT-01-01-004-to-006-add-product-and-artwork.json",
+            "act_id": "ACT-01-01-004-to-006"
+          }
+        ],
+        "knowledge_kind": "OBSERVED_CURRENT"
+      },
+      {
+        "operation_id": "APIOP-007",
+        "protocol": "REST",
+        "method_or_type": "POST",
+        "path_or_operation": "/api/campaign-mockups/generate",
+        "observed_paths": [
+          "/api/campaign-mockups/generate"
+        ],
+        "business_object": "Campaign",
+        "capability": "generate-campaign-mockup-preview",
+        "act_ids": [
+          "ACT-01-01-004-to-006"
+        ],
+        "scn_ids": [
+          "SCN-01-02"
+        ],
+        "feature_ids": [
+          "FEAT-01-create-campaign-by-product-base"
+        ],
+        "auth": {
+          "type": "bearer_jwt",
+          "header": "authorization",
+          "note": "JWT in Authorization header, redacted in all captures ([REDACTED]). Refreshed via POST /api/token/refresh (observed expires_in=900s, matches known 15-minute TTL)."
+        },
+        "request_contract": {
+          "shape": {
+            "campaign_mockup_ids": "array of int"
+          }
+        },
+        "response_contract": {
+          "status_204": "empty body"
+        },
+        "error_contract": [],
+        "observed_status": [
+          204
+        ],
+        "observed_count": 1,
+        "state_delta": [],
+        "source_refs": [
+          {
+            "type": "har_entry",
+            "path": "raw/network/ACT-01-01-004-to-006-add-product-and-artwork.json",
+            "act_id": "ACT-01-01-004-to-006"
+          }
+        ],
+        "observed_request_refs": [
+          {
+            "type": "har_entry",
+            "path": "raw/network/ACT-01-01-004-to-006-add-product-and-artwork.json",
+            "act_id": "ACT-01-01-004-to-006"
+          }
+        ],
+        "knowledge_kind": "OBSERVED_CURRENT"
+      },
+      {
+        "operation_id": "APIOP-008",
+        "protocol": "REST",
+        "method_or_type": "POST",
+        "path_or_operation": "/api/campaign-artworks/batch-apply-to-printareas",
+        "observed_paths": [
+          "/api/campaign-artworks/batch-apply-to-printareas"
+        ],
+        "business_object": "Campaign",
+        "capability": "assign-artwork-to-printareas",
+        "act_ids": [
+          "ACT-01-01-004-to-006"
+        ],
+        "scn_ids": [
+          "SCN-01-02"
+        ],
+        "feature_ids": [
+          "FEAT-01-create-campaign-by-product-base"
+        ],
+        "auth": {
+          "type": "bearer_jwt",
+          "header": "authorization",
+          "note": "JWT in Authorization header, redacted in all captures ([REDACTED]). Refreshed via POST /api/token/refresh (observed expires_in=900s, matches known 15-minute TTL)."
+        },
+        "request_contract": {
+          "shape": {
+            "campaign_id": "int",
+            "artwork_id": "int",
+            "printareas": [
+              {
+                "printarea_id": "int",
+                "top": "int",
+                "left": "int",
+                "width": "int",
+                "height": "int"
+              }
+            ]
+          },
+          "notes": "by-product-base ONLY: this print-area/printarea_id concept has no equivalent in by-shopify flow (see documented_observed_mismatches)."
+        },
+        "response_contract": {
+          "status_200_shape": {
+            "data": [
+              {
+                "top": "int",
+                "left": "int",
+                "width": "int",
+                "height": "int",
+                "updated_at": "ISO8601",
+                "created_at": "ISO8601",
+                "id": "int",
+                "printarea": {
+                  "id": "int",
+                  "product_id": "int",
+                  "name": "string",
+                  "width": "int",
+                  "height": "int",
+                  "position": "int",
+                  "display_name": "string"
+                },
+                "campaign": "nested campaign object (same shape as GET /api/campaigns/{id} response)"
+              }
+            ]
+          }
+        },
+        "error_contract": [],
+        "observed_status": [
+          200
+        ],
+        "observed_count": 1,
+        "state_delta": [
+          {
+            "field": "campaign.launch_ready",
+            "before": "false ('unresolved issues')",
+            "after": "true ('valid and ready to launch')",
+            "confidence": "HIGH"
+          }
+        ],
+        "source_refs": [
+          {
+            "type": "har_entry",
+            "path": "raw/network/ACT-01-01-004-to-006-add-product-and-artwork.json",
+            "act_id": "ACT-01-01-004-to-006"
+          }
+        ],
+        "observed_request_refs": [
+          {
+            "type": "har_entry",
+            "path": "raw/network/ACT-01-01-004-to-006-add-product-and-artwork.json",
+            "act_id": "ACT-01-01-004-to-006"
+          }
+        ],
+        "knowledge_kind": "OBSERVED_CURRENT"
+      },
+      {
+        "operation_id": "APIOP-009",
+        "protocol": "REST",
+        "method_or_type": "GET",
+        "path_or_operation": "/api/instances/{instanceId}/themes/app-block-enabled",
+        "observed_paths": [
+          "/api/instances/609/themes/app-block-enabled"
+        ],
+        "business_object": "Campaign",
+        "capability": "check-theme-app-block-enabled",
+        "act_ids": [
+          "ACT-01-01-009",
+          "ACT-02-01-009"
+        ],
+        "scn_ids": [
+          "SCN-01-04",
+          "SCN-02-04"
+        ],
+        "feature_ids": [
+          "FEAT-01-create-campaign-by-product-base",
+          "FEAT-02-create-campaign-by-shopify"
+        ],
+        "auth": {
+          "type": "bearer_jwt",
+          "header": "authorization",
+          "note": "JWT in Authorization header, redacted in all captures ([REDACTED]). Refreshed via POST /api/token/refresh (observed expires_in=900s, matches known 15-minute TTL)."
+        },
+        "request_contract": {
+          "shape": {}
+        },
+        "response_contract": {
+          "status_200_shape": {
+            "enabled": "bool"
+          }
+        },
+        "error_contract": [],
+        "observed_status": [
+          200
+        ],
+        "observed_count": 2,
+        "state_delta": [],
+        "source_refs": [
+          {
+            "type": "har_entry",
+            "path": "raw/network/ACT-01-01-009-launch.json",
+            "act_id": "ACT-01-01-009"
+          },
+          {
+            "type": "har_entry",
+            "path": "raw/network/ACT-02-01-012-launch.json",
+            "act_id": "ACT-02-01-009"
+          }
+        ],
+        "observed_request_refs": [
+          {
+            "type": "har_entry",
+            "path": "raw/network/ACT-01-01-009-launch.json",
+            "act_id": "ACT-01-01-009"
+          },
+          {
+            "type": "har_entry",
+            "path": "raw/network/ACT-02-01-012-launch.json",
+            "act_id": "ACT-02-01-009"
+          }
+        ],
+        "knowledge_kind": "OBSERVED_CURRENT"
+      },
+      {
+        "operation_id": "APIOP-010",
+        "protocol": "REST",
+        "method_or_type": "POST",
+        "path_or_operation": "/api/campaigns/{campaignId}/publish",
+        "observed_paths": [
+          "/api/campaigns/2595/publish"
+        ],
+        "business_object": "Campaign",
+        "capability": "publish-campaign-by-product-base",
+        "act_ids": [
+          "ACT-01-01-009"
+        ],
+        "scn_ids": [
+          "SCN-01-04"
+        ],
+        "feature_ids": [
+          "FEAT-01-create-campaign-by-product-base"
+        ],
+        "auth": {
+          "type": "bearer_jwt",
+          "header": "authorization",
+          "note": "JWT in Authorization header, redacted in all captures ([REDACTED]). Refreshed via POST /api/token/refresh (observed expires_in=900s, matches known 15-minute TTL)."
+        },
+        "request_contract": {
+          "shape": {
+            "instance_id": "int"
+          },
+          "notes": "Body only carries the ONE target instance_id (the store row clicked in Multi-store launch dialog) — per-store publish, not a batch/array."
+        },
+        "response_contract": {
+          "status_200_shape": {
+            "id": "int",
+            "name": "string",
+            "status": "int",
+            "product_type": "string",
+            "vendor": "null|string",
+            "platform_config": "null",
+            "product_display_type": "string",
+            "internal_tags": "null|string",
+            "from_public": "bool",
+            "artworks": "array (populated post-publish)"
+          },
+          "notes": "status field value unchanged (0) in this sample immediately after publish response; publish state is reflected via campaign_instances[].status / need_sync, not top-level campaign.status (see APIOP-025/036)."
+        },
+        "error_contract": [],
+        "observed_status": [
+          200
+        ],
+        "observed_count": 1,
+        "state_delta": [
+          {
+            "field": "campaign_instances[instance=linh-explorer].published_at / status",
+            "before": "no campaign_instance row for linh-explorer",
+            "after": "row created; UI shows 'Content is published. Mockups are still publishing.'",
+            "confidence": "MEDIUM"
+          }
+        ],
+        "source_refs": [
+          {
+            "type": "har_entry",
+            "path": "raw/network/ACT-01-01-009-launch.json",
+            "act_id": "ACT-01-01-009"
+          }
+        ],
+        "observed_request_refs": [
+          {
+            "type": "har_entry",
+            "path": "raw/network/ACT-01-01-009-launch.json",
+            "act_id": "ACT-01-01-009"
+          }
+        ],
+        "knowledge_kind": "OBSERVED_CURRENT"
+      },
+      {
+        "operation_id": "APIOP-011",
+        "protocol": "REST",
+        "method_or_type": "DELETE",
+        "path_or_operation": "/api/campaigns/{campaignId}",
+        "observed_paths": [
+          "/api/campaigns/2596?remove_linked_resources=0"
+        ],
+        "business_object": "Campaign",
+        "capability": "delete-campaign-by-product-base",
+        "act_ids": [
+          "ACT-04-01-003"
+        ],
+        "scn_ids": [
+          "SCN-04-01"
+        ],
+        "feature_ids": [
+          "FEAT-04-campaign-delete"
+        ],
+        "auth": {
+          "type": "bearer_jwt",
+          "header": "authorization",
+          "note": "JWT in Authorization header, redacted in all captures ([REDACTED]). Refreshed via POST /api/token/refresh (observed expires_in=900s, matches known 15-minute TTL)."
+        },
+        "request_contract": {
+          "shape": {
+            "remove_linked_resources": "query param, 0|1 observed=0"
+          },
+          "notes": "Maps to UI checkbox 'Remove artworks & product bases from this campaign' (unchecked -> 0). remove_linked_resources=1 (checked) NOT tested — see unexplored_operations."
+        },
+        "response_contract": {
+          "status_204": "empty body"
+        },
+        "error_contract": [],
+        "observed_status": [
+          204
+        ],
+        "observed_count": 1,
+        "state_delta": [
+          {
+            "field": "campaign.exists",
+            "before": "true (id 2596)",
+            "after": "false (removed from list)",
+            "confidence": "HIGH"
+          }
+        ],
+        "source_refs": [
+          {
+            "type": "har_entry",
+            "path": "raw/network/ACT-03-02-002-004-delete-campaign.json",
+            "act_id": "ACT-04-01-003"
+          }
+        ],
+        "observed_request_refs": [
+          {
+            "type": "har_entry",
+            "path": "raw/network/ACT-03-02-002-004-delete-campaign.json",
+            "act_id": "ACT-04-01-003"
+          }
+        ],
+        "knowledge_kind": "OBSERVED_CURRENT"
+      },
+      {
+        "operation_id": "APIOP-012",
+        "protocol": "REST",
+        "method_or_type": "GET",
+        "path_or_operation": "/api/instances/{instanceId}/shopify/products",
+        "observed_paths": [
+          "/api/instances/609/shopify/products?sort_key=CREATED_AT&sort_type=desc&title="
+        ],
+        "business_object": "Campaign (by-shopify)",
+        "capability": "list-shopify-products-for-selection",
+        "act_ids": [
+          "ACT-02-01-003"
+        ],
+        "scn_ids": [
+          "SCN-02-01"
+        ],
+        "feature_ids": [
+          "FEAT-02-create-campaign-by-shopify"
+        ],
+        "auth": {
+          "type": "bearer_jwt",
+          "header": "authorization",
+          "note": "JWT in Authorization header, redacted in all captures ([REDACTED]). Refreshed via POST /api/token/refresh (observed expires_in=900s, matches known 15-minute TTL)."
+        },
+        "request_contract": {
+          "shape": {
+            "query_params": {
+              "sort_key": "string enum, observed CREATED_AT",
+              "sort_type": "string enum, observed desc",
+              "title": "string, search filter, observed empty"
+            }
+          }
+        },
+        "response_contract": {
+          "status_200_shape": {
+            "data": [
+              {
+                "image": {
+                  "src": "url"
+                },
+                "handle": "string",
+                "id": "string (Shopify GID numeric string)",
+                "productType": "string",
+                "status": "string enum, observed ACTIVE",
+                "title": "string",
+                "origVariants": {
+                  "nodes": [
+                    {
+                      "price": "string",
+                      "sku": "string|absent"
+                    }
+                  ]
+                },
+                "platformProductMetafield": "null|object (non-null => already used as a teeinblue campaign, UI shows status 'Used' and disables selection)",
+                "campaignVersionMetafield": "null|object",
+                "vendor": "string"
+              }
+            ]
+          },
+          "notes": "Confirms cross-flow coupling: a Shopify product created by publishing a by-product-base campaign appears here with platformProductMetafield set and is locked from selection."
+        },
+        "error_contract": [],
+        "observed_status": [
+          200
+        ],
+        "observed_count": 1,
+        "state_delta": [],
+        "source_refs": [
+          {
+            "type": "har_entry",
+            "path": "raw/network/ACT-02-01-003-004-select-shopify-product.json",
+            "act_id": "ACT-02-01-003"
+          }
+        ],
+        "observed_request_refs": [
+          {
+            "type": "har_entry",
+            "path": "raw/network/ACT-02-01-003-004-select-shopify-product.json",
+            "act_id": "ACT-02-01-003"
+          }
+        ],
+        "knowledge_kind": "OBSERVED_CURRENT"
+      },
+      {
+        "operation_id": "APIOP-013",
+        "protocol": "REST",
+        "method_or_type": "POST",
+        "path_or_operation": "/api/platform-products",
+        "observed_paths": [
+          "/api/platform-products"
+        ],
+        "business_object": "Campaign (by-shopify)",
+        "capability": "create-campaign-by-shopify",
+        "act_ids": [
+          "ACT-02-01-004"
+        ],
+        "scn_ids": [
+          "SCN-02-01"
+        ],
+        "feature_ids": [
+          "FEAT-02-create-campaign-by-shopify"
+        ],
+        "auth": {
+          "type": "bearer_jwt",
+          "header": "authorization",
+          "note": "JWT in Authorization header, redacted in all captures ([REDACTED]). Refreshed via POST /api/token/refresh (observed expires_in=900s, matches known 15-minute TTL)."
+        },
+        "request_contract": {
+          "shape": {
+            "instance_id": "int",
+            "name": "string (copied from selected Shopify product title)",
+            "platform_linked_id": "string (Shopify product id)",
+            "internal_tags": "null|string"
+          }
+        },
+        "response_contract": {
+          "status_201_shape": {
+            "id": "int",
+            "uuid": "string",
+            "instance_id": "int",
+            "platform_linked_id": "string",
+            "name": "string",
+            "preview_url": "null",
+            "preview_thumbnail": "null",
+            "version": "null",
+            "enable_artwork_variant_assignment": "null",
+            "enable_artwork_navigation": "null",
+            "artwork_navigation_name": "null",
+            "published_at": "null",
+            "created_at": "ISO8601",
+            "updated_at": "ISO8601",
+            "mockups": "array, empty at creation"
+          }
+        },
+        "error_contract": [],
+        "observed_status": [
+          201
+        ],
+        "observed_count": 1,
+        "state_delta": [
+          {
+            "field": "platform_product",
+            "before": "not created",
+            "after": "id=531 assigned, status=draft/unpublished",
+            "confidence": "HIGH"
+          }
+        ],
+        "source_refs": [
+          {
+            "type": "har_entry",
+            "path": "raw/network/ACT-02-01-005-create-platform-product.json",
+            "act_id": "ACT-02-01-004"
+          }
+        ],
+        "observed_request_refs": [
+          {
+            "type": "har_entry",
+            "path": "raw/network/ACT-02-01-005-create-platform-product.json",
+            "act_id": "ACT-02-01-004"
+          }
+        ],
+        "knowledge_kind": "OBSERVED_CURRENT"
+      },
+      {
+        "operation_id": "APIOP-014",
+        "protocol": "REST",
+        "method_or_type": "GET",
+        "path_or_operation": "/api/platform-products/{platformProductId}",
+        "observed_paths": [
+          "/api/platform-products/531"
+        ],
+        "business_object": "Campaign (by-shopify)",
+        "capability": "read-platform-product-detail",
+        "act_ids": [
+          "ACT-02-01-004",
+          "ACT-02-01-005",
+          "ACT-02-01-008"
+        ],
+        "scn_ids": [
+          "SCN-02-01",
+          "SCN-02-02",
+          "SCN-02-03"
+        ],
+        "feature_ids": [
+          "FEAT-02-create-campaign-by-shopify"
+        ],
+        "auth": {
+          "type": "bearer_jwt",
+          "header": "authorization",
+          "note": "JWT in Authorization header, redacted in all captures ([REDACTED]). Refreshed via POST /api/token/refresh (observed expires_in=900s, matches known 15-minute TTL)."
+        },
+        "request_contract": {
+          "shape": {}
+        },
+        "response_contract": {
+          "status_200_shape": {
+            "id": "int",
+            "uuid": "string",
+            "instance_id": "int",
+            "platform_linked_id": "string",
+            "name": "string",
+            "preview_url": "null|string",
+            "preview_thumbnail": "null|string",
+            "version": "null|int (int after publish, epoch-like)",
+            "enable_artwork_variant_assignment": "bool",
+            "enable_artwork_navigation": "bool",
+            "artwork_navigation_name": "null",
+            "published_at": "null|ISO8601",
+            "created_at": "ISO8601",
+            "updated_at": "ISO8601",
+            "artworks": "array",
+            "mockups": "array",
+            "global_options": "array"
+          }
+        },
+        "error_contract": [],
+        "observed_status": [
+          200
+        ],
+        "observed_count": 4,
+        "state_delta": [],
+        "source_refs": [
+          {
+            "type": "har_entry",
+            "path": "raw/network/ACT-02-01-005-create-platform-product.json",
+            "act_id": "ACT-02-01-004"
+          },
+          {
+            "type": "har_entry",
+            "path": "raw/network/ACT-02-01-006-007-select-artwork.json",
+            "act_id": "ACT-02-01-005"
+          },
+          {
+            "type": "har_entry",
+            "path": "raw/network/ACT-02-01-007-to-011-mockup-upload.json",
+            "act_id": "ACT-02-01-008"
+          }
+        ],
+        "observed_request_refs": [
+          {
+            "type": "har_entry",
+            "path": "raw/network/ACT-02-01-005-create-platform-product.json",
+            "act_id": "ACT-02-01-004"
+          },
+          {
+            "type": "har_entry",
+            "path": "raw/network/ACT-02-01-006-007-select-artwork.json",
+            "act_id": "ACT-02-01-005"
+          },
+          {
+            "type": "har_entry",
+            "path": "raw/network/ACT-02-01-007-to-011-mockup-upload.json",
+            "act_id": "ACT-02-01-008"
+          }
+        ],
+        "knowledge_kind": "OBSERVED_CURRENT"
+      },
+      {
+        "operation_id": "APIOP-015",
+        "protocol": "REST",
+        "method_or_type": "GET",
+        "path_or_operation": "/api/instances/{instanceId}/shopify/products/{shopifyProductId}",
+        "observed_paths": [
+          "/api/instances/609/shopify/products/8135598014563"
+        ],
+        "business_object": "Campaign (by-shopify)",
+        "capability": "read-shopify-product-detail",
+        "act_ids": [
+          "ACT-02-01-004"
+        ],
+        "scn_ids": [
+          "SCN-02-01"
+        ],
+        "feature_ids": [
+          "FEAT-02-create-campaign-by-shopify"
+        ],
+        "auth": {
+          "type": "bearer_jwt",
+          "header": "authorization",
+          "note": "JWT in Authorization header, redacted in all captures ([REDACTED]). Refreshed via POST /api/token/refresh (observed expires_in=900s, matches known 15-minute TTL)."
+        },
+        "request_contract": {
+          "shape": {}
+        },
+        "response_contract": {
+          "status_200_shape": {
+            "data": {
+              "image": {
+                "src": "url"
+              },
+              "handle": "string",
+              "id": "string",
+              "productType": "string",
+              "status": "string enum",
+              "title": "string",
+              "origVariants": {
+                "nodes": [
+                  {
+                    "price": "string"
+                  }
+                ]
+              },
+              "options": [
+                {
+                  "name": "string",
+                  "optionValues": [
+                    {
+                      "name": "string"
+                    }
+                  ],
+                  "position": "int"
+                }
+              ],
+              "platformProductMetafield": "object|null"
+            }
+          }
+        },
+        "error_contract": [],
+        "observed_status": [
+          200
+        ],
+        "observed_count": 1,
+        "state_delta": [],
+        "source_refs": [
+          {
+            "type": "har_entry",
+            "path": "raw/network/ACT-02-01-005-create-platform-product.json",
+            "act_id": "ACT-02-01-004"
+          }
+        ],
+        "observed_request_refs": [
+          {
+            "type": "har_entry",
+            "path": "raw/network/ACT-02-01-005-create-platform-product.json",
+            "act_id": "ACT-02-01-004"
+          }
+        ],
+        "knowledge_kind": "OBSERVED_CURRENT"
+      },
+      {
+        "operation_id": "APIOP-016",
+        "protocol": "REST",
+        "method_or_type": "POST",
+        "path_or_operation": "/api/platform-artworks",
+        "observed_paths": [
+          "/api/platform-artworks"
+        ],
+        "business_object": "Campaign (by-shopify)",
+        "capability": "assign-artwork-to-platform-product",
+        "act_ids": [
+          "ACT-02-01-005"
+        ],
+        "scn_ids": [
+          "SCN-02-02"
+        ],
+        "feature_ids": [
+          "FEAT-02-create-campaign-by-shopify"
+        ],
+        "auth": {
+          "type": "bearer_jwt",
+          "header": "authorization",
+          "note": "JWT in Authorization header, redacted in all captures ([REDACTED]). Refreshed via POST /api/token/refresh (observed expires_in=900s, matches known 15-minute TTL)."
+        },
+        "request_contract": {
+          "shape": {
+            "artwork_id": "int",
+            "platform_product_id": "int",
+            "position": "int"
+          },
+          "notes": "by-shopify equivalent of by-product-base's POST /api/campaign-artworks/batch-apply-to-printareas (APIOP-008), but flat -- no printarea concept, single artwork applies to whole product (see documented_observed_mismatches)."
+        },
+        "response_contract": {
+          "status_201_shape": {
+            "platform_product_id": "int",
+            "artwork_id": "int",
+            "position": "int",
+            "platform_product": "nested platform-product object (partial, e.g. artwork_id null at this nesting level, name/instance_id/etc.)"
+          }
+        },
+        "error_contract": [],
+        "observed_status": [
+          201
+        ],
+        "observed_count": 1,
+        "state_delta": [
+          {
+            "field": "platform_product.artworks",
+            "before": "[]",
+            "after": "[{id:4087,...}]; banner still NOT ready (blocking_error='No mockup')",
+            "confidence": "HIGH"
+          }
+        ],
+        "source_refs": [
+          {
+            "type": "har_entry",
+            "path": "raw/network/ACT-02-01-006-007-select-artwork.json",
+            "act_id": "ACT-02-01-005"
+          }
+        ],
+        "observed_request_refs": [
+          {
+            "type": "har_entry",
+            "path": "raw/network/ACT-02-01-006-007-select-artwork.json",
+            "act_id": "ACT-02-01-005"
+          }
+        ],
+        "knowledge_kind": "OBSERVED_CURRENT"
+      },
+      {
+        "operation_id": "APIOP-017",
+        "protocol": "REST",
+        "method_or_type": "GET",
+        "path_or_operation": "/api/instances/{instanceId}/shopify/products/{shopifyProductId}/variants",
+        "observed_paths": [
+          "/api/instances/609/shopify/products/8135598014563/variants?sort_key=TITLE&sort_type=asc&page_size=250"
+        ],
+        "business_object": "Campaign (by-shopify)",
+        "capability": "list-shopify-product-variants",
+        "act_ids": [
+          "ACT-02-01-007"
+        ],
+        "scn_ids": [
+          "SCN-02-03"
+        ],
+        "feature_ids": [
+          "FEAT-02-create-campaign-by-shopify"
+        ],
+        "auth": {
+          "type": "bearer_jwt",
+          "header": "authorization",
+          "note": "JWT in Authorization header, redacted in all captures ([REDACTED]). Refreshed via POST /api/token/refresh (observed expires_in=900s, matches known 15-minute TTL)."
+        },
+        "request_contract": {
+          "shape": {
+            "query_params": {
+              "sort_key": "string enum, observed TITLE",
+              "sort_type": "string enum, observed asc",
+              "page_size": "int, observed 250"
+            }
+          }
+        },
+        "response_contract": {
+          "status_200_shape": {
+            "data": [
+              {
+                "id": "string",
+                "compareAtPrice": "null|string",
+                "image": "null|object",
+                "price": "string",
+                "title": "string"
+              }
+            ],
+            "page_info": {
+              "hasNextPage": "bool",
+              "hasPreviousPage": "bool",
+              "startCursor": "string",
+              "endCursor": "string"
+            }
+          },
+          "notes": "Store's demo product had only 1 variant ('Default Title') -- per-variant Assign-mockups UI not exercised with a real multi-variant product (unknowns)."
+        },
+        "error_contract": [],
+        "observed_status": [
+          200
+        ],
+        "observed_count": 1,
+        "state_delta": [],
+        "source_refs": [
+          {
+            "type": "har_entry",
+            "path": "raw/network/ACT-02-01-007-to-011-mockup-upload.json",
+            "act_id": "ACT-02-01-007"
+          }
+        ],
+        "observed_request_refs": [
+          {
+            "type": "har_entry",
+            "path": "raw/network/ACT-02-01-007-to-011-mockup-upload.json",
+            "act_id": "ACT-02-01-007"
+          }
+        ],
+        "knowledge_kind": "OBSERVED_CURRENT"
+      },
+      {
+        "operation_id": "APIOP-018",
+        "protocol": "REST",
+        "method_or_type": "GET",
+        "path_or_operation": "/api/mockup-layer-categories",
+        "observed_paths": [
+          "/api/mockup-layer-categories"
+        ],
+        "business_object": "Mockup",
+        "capability": "list-mockup-layer-categories",
+        "act_ids": [
+          "ACT-02-01-007"
+        ],
+        "scn_ids": [
+          "SCN-02-03"
+        ],
+        "feature_ids": [
+          "FEAT-02-create-campaign-by-shopify"
+        ],
+        "auth": {
+          "type": "bearer_jwt",
+          "header": "authorization",
+          "note": "JWT in Authorization header, redacted in all captures ([REDACTED]). Refreshed via POST /api/token/refresh (observed expires_in=900s, matches known 15-minute TTL)."
+        },
+        "request_contract": {
+          "shape": {}
+        },
+        "response_contract": {
+          "status_200_shape": {
+            "array": "empty [] observed"
+          }
+        },
+        "error_contract": [],
+        "observed_status": [
+          200
+        ],
+        "observed_count": 1,
+        "state_delta": [],
+        "source_refs": [
+          {
+            "type": "har_entry",
+            "path": "raw/network/ACT-02-01-007-to-011-mockup-upload.json",
+            "act_id": "ACT-02-01-007"
+          }
+        ],
+        "observed_request_refs": [
+          {
+            "type": "har_entry",
+            "path": "raw/network/ACT-02-01-007-to-011-mockup-upload.json",
+            "act_id": "ACT-02-01-007"
+          }
+        ],
+        "knowledge_kind": "OBSERVED_CURRENT"
+      },
+      {
+        "operation_id": "APIOP-019",
+        "protocol": "REST",
+        "method_or_type": "GET",
+        "path_or_operation": "/api/mockup-layers",
+        "observed_paths": [
+          "/api/mockup-layers?page=1&per_page=20&sort=created_at&sort_type=desc"
+        ],
+        "business_object": "Mockup",
+        "capability": "list-mockup-layers",
+        "act_ids": [
+          "ACT-02-01-007",
+          "ACT-02-01-008"
+        ],
+        "scn_ids": [
+          "SCN-02-03"
+        ],
+        "feature_ids": [
+          "FEAT-02-create-campaign-by-shopify"
+        ],
+        "auth": {
+          "type": "bearer_jwt",
+          "header": "authorization",
+          "note": "JWT in Authorization header, redacted in all captures ([REDACTED]). Refreshed via POST /api/token/refresh (observed expires_in=900s, matches known 15-minute TTL)."
+        },
+        "request_contract": {
+          "shape": {
+            "query_params": {
+              "page": "int",
+              "per_page": "int",
+              "sort": "string",
+              "sort_type": "string"
+            }
+          }
+        },
+        "response_contract": {
+          "status_200_shape": {
+            "data": [
+              {
+                "id": "int",
+                "user_id": "int",
+                "name": "string",
+                "master": "string (storage path)",
+                "url": "string (storage path)",
+                "thumbnail": "string (storage path)",
+                "width": "int",
+                "height": "int",
+                "created_at": "ISO8601",
+                "updated_at": "ISO8601",
+                "ref": "null",
+                "mockup_layer_category_id": "null|int",
+                "platform_imported": "null"
+              }
+            ],
+            "links": "pagination links object (truncated in capture)"
+          },
+          "notes": "This is the user's global mockup-layer library, distinct from platform_mockups (assigned-to-this-product). 'There is no mockup to assign yet' (UI, ACT-02-01-007) refers to the latter being empty even though this library already had 1 pre-existing item."
+        },
+        "error_contract": [],
+        "observed_status": [
+          200
+        ],
+        "observed_count": 2,
+        "state_delta": [],
+        "source_refs": [
+          {
+            "type": "har_entry",
+            "path": "raw/network/ACT-02-01-007-to-011-mockup-upload.json",
+            "act_id": "ACT-02-01-007"
+          }
+        ],
+        "observed_request_refs": [
+          {
+            "type": "har_entry",
+            "path": "raw/network/ACT-02-01-007-to-011-mockup-upload.json",
+            "act_id": "ACT-02-01-007"
+          }
+        ],
+        "knowledge_kind": "OBSERVED_CURRENT"
+      },
+      {
+        "operation_id": "APIOP-020",
+        "protocol": "REST",
+        "method_or_type": "POST",
+        "path_or_operation": "/api/users/{userId}/temporary-files/upload-url",
+        "observed_paths": [
+          "/api/users/266/temporary-files/upload-url"
+        ],
+        "business_object": "Mockup",
+        "capability": "request-signed-upload-url",
+        "act_ids": [
+          "ACT-02-01-008"
+        ],
+        "scn_ids": [
+          "SCN-02-03"
+        ],
+        "feature_ids": [
+          "FEAT-02-create-campaign-by-shopify"
+        ],
+        "auth": {
+          "type": "bearer_jwt",
+          "header": "authorization",
+          "note": "JWT in Authorization header, redacted in all captures ([REDACTED]). Refreshed via POST /api/token/refresh (observed expires_in=900s, matches known 15-minute TTL)."
+        },
+        "request_contract": {
+          "shape": {
+            "filename": "string",
+            "filesize": "int (bytes)",
+            "mimetype": "string"
+          }
+        },
+        "response_contract": {
+          "status_201_shape": {
+            "data": {
+              "disk": "string enum, observed 'spaces'",
+              "filename": "string",
+              "id": "uuid",
+              "path": "string (storage path)",
+              "updated_at": "ISO8601",
+              "created_at": "ISO8601"
+            },
+            "meta": {
+              "signed_url": "string -- PRE-SIGNED AWS SigV4 URL, value NOT reproduced here (see blocking_issues: raw evidence for this operation contains an un-redacted signature/credential and needs a redaction-fix pass)",
+              "headers": "object"
+            }
+          }
+        },
+        "error_contract": [],
+        "observed_status": [
+          201
+        ],
+        "observed_count": 1,
+        "state_delta": [],
+        "source_refs": [
+          {
+            "type": "har_entry",
+            "path": "raw/network/ACT-02-01-007-to-011-mockup-upload.json",
+            "act_id": "ACT-02-01-008"
+          }
+        ],
+        "observed_request_refs": [
+          {
+            "type": "har_entry",
+            "path": "raw/network/ACT-02-01-007-to-011-mockup-upload.json",
+            "act_id": "ACT-02-01-008"
+          }
+        ],
+        "knowledge_kind": "OBSERVED_CURRENT"
+      },
+      {
+        "operation_id": "APIOP-021",
+        "protocol": "REST",
+        "method_or_type": "POST",
+        "path_or_operation": "/api/mockup-layers/by-temporary-file",
+        "observed_paths": [
+          "/api/mockup-layers/by-temporary-file"
+        ],
+        "business_object": "Mockup",
+        "capability": "create-mockup-layer-from-upload",
+        "act_ids": [
+          "ACT-02-01-008"
+        ],
+        "scn_ids": [
+          "SCN-02-03"
+        ],
+        "feature_ids": [
+          "FEAT-02-create-campaign-by-shopify"
+        ],
+        "auth": {
+          "type": "bearer_jwt",
+          "header": "authorization",
+          "note": "JWT in Authorization header, redacted in all captures ([REDACTED]). Refreshed via POST /api/token/refresh (observed expires_in=900s, matches known 15-minute TTL)."
+        },
+        "request_contract": {
+          "shape": {
+            "temporary_file_id": "uuid",
+            "name": "string",
+            "filewidth": "int",
+            "fileheight": "int",
+            "category_id": "null|int"
+          }
+        },
+        "response_contract": {
+          "status_201_shape": {
+            "user_id": "int",
+            "name": "string",
+            "width": "int",
+            "height": "int",
+            "master": "string, empty '' immediately after create",
+            "url": "string, empty '' immediately after create",
+            "thumbnail": "string, empty '' immediately after create",
+            "mockup_layer_category_id": "null",
+            "updated_at": "ISO8601",
+            "created_at": "ISO8601",
+            "id": "int"
+          },
+          "notes": "master/url/thumbnail populated asynchronously (empty strings in the create response, non-empty on subsequent GET /api/mockup-layers)."
+        },
+        "error_contract": [],
+        "observed_status": [
+          201
+        ],
+        "observed_count": 1,
+        "state_delta": [],
+        "source_refs": [
+          {
+            "type": "har_entry",
+            "path": "raw/network/ACT-02-01-007-to-011-mockup-upload.json",
+            "act_id": "ACT-02-01-008"
+          }
+        ],
+        "observed_request_refs": [
+          {
+            "type": "har_entry",
+            "path": "raw/network/ACT-02-01-007-to-011-mockup-upload.json",
+            "act_id": "ACT-02-01-008"
+          }
+        ],
+        "knowledge_kind": "OBSERVED_CURRENT"
+      },
+      {
+        "operation_id": "APIOP-022",
+        "protocol": "REST",
+        "method_or_type": "POST",
+        "path_or_operation": "/api/platform-products/{platformProductId}/platform-mockups",
+        "observed_paths": [
+          "/api/platform-products/531/platform-mockups"
+        ],
+        "business_object": "Campaign (by-shopify)",
+        "capability": "assign-mockup-to-platform-product",
+        "act_ids": [
+          "ACT-02-01-008"
+        ],
+        "scn_ids": [
+          "SCN-02-03"
+        ],
+        "feature_ids": [
+          "FEAT-02-create-campaign-by-shopify"
+        ],
+        "auth": {
+          "type": "bearer_jwt",
+          "header": "authorization",
+          "note": "JWT in Authorization header, redacted in all captures ([REDACTED]). Refreshed via POST /api/token/refresh (observed expires_in=900s, matches known 15-minute TTL)."
+        },
+        "request_contract": {
+          "shape": {
+            "mockup_layer_ids": "array of int"
+          },
+          "notes": "by-shopify-only validation resolver: resolves the 'No mockup' blocking error observed in OBS-020. No equivalent REST call exists in by-product-base flow (which uses print-area mockups generated via APIOP-006/007 instead)."
+        },
+        "response_contract": {
+          "status_204": "empty body"
+        },
+        "error_contract": [],
+        "observed_status": [
+          204
+        ],
+        "observed_count": 1,
+        "state_delta": [
+          {
+            "field": "platform_product.launch_ready",
+            "before": "false ('No mockup')",
+            "after": "true ('Your campaign is valid and ready to launch!')",
+            "confidence": "HIGH"
+          }
+        ],
+        "source_refs": [
+          {
+            "type": "har_entry",
+            "path": "raw/network/ACT-02-01-007-to-011-mockup-upload.json",
+            "act_id": "ACT-02-01-008"
+          }
+        ],
+        "observed_request_refs": [
+          {
+            "type": "har_entry",
+            "path": "raw/network/ACT-02-01-007-to-011-mockup-upload.json",
+            "act_id": "ACT-02-01-008"
+          }
+        ],
+        "knowledge_kind": "OBSERVED_CURRENT"
+      },
+      {
+        "operation_id": "APIOP-023",
+        "protocol": "REST",
+        "method_or_type": "POST",
+        "path_or_operation": "/api/platform-products/{platformProductId}/publish",
+        "observed_paths": [
+          "/api/platform-products/531/publish"
+        ],
+        "business_object": "Campaign (by-shopify)",
+        "capability": "publish-campaign-by-shopify",
+        "act_ids": [
+          "ACT-02-01-009"
+        ],
+        "scn_ids": [
+          "SCN-02-04"
+        ],
+        "feature_ids": [
+          "FEAT-02-create-campaign-by-shopify"
+        ],
+        "auth": {
+          "type": "bearer_jwt",
+          "header": "authorization",
+          "note": "JWT in Authorization header, redacted in all captures ([REDACTED]). Refreshed via POST /api/token/refresh (observed expires_in=900s, matches known 15-minute TTL)."
+        },
+        "request_contract": {
+          "shape": {},
+          "notes": "No request body observed (unlike by-product-base's POST /api/campaigns/{id}/publish which requires instance_id) -- consistent with portal observation that by-shopify publishes directly to the single pre-fixed store, no store selection dialog."
+        },
+        "response_contract": {
+          "status_200_shape": {
+            "id": "int",
+            "uuid": "string",
+            "instance_id": "int",
+            "platform_linked_id": "string",
+            "name": "string",
+            "preview_url": "null",
+            "preview_thumbnail": "null",
+            "version": "int (epoch-like timestamp, was null pre-publish)",
+            "enable_artwork_variant_assignment": "bool",
+            "enable_artwork_navigation": "bool",
+            "artwork_navigation_name": "null",
+            "published_at": "ISO8601 (was null pre-publish)",
+            "created_at": "ISO8601",
+            "updated_at": "ISO8601"
+          }
+        },
+        "error_contract": [],
+        "observed_status": [
+          200
+        ],
+        "observed_count": 1,
+        "state_delta": [
+          {
+            "field": "published_at",
+            "before": "null",
+            "after": "ISO8601 timestamp",
+            "confidence": "HIGH"
+          },
+          {
+            "field": "version",
+            "before": "null",
+            "after": "int (epoch-like)",
+            "confidence": "HIGH"
+          }
+        ],
+        "source_refs": [
+          {
+            "type": "har_entry",
+            "path": "raw/network/ACT-02-01-012-launch.json",
+            "act_id": "ACT-02-01-009"
+          }
+        ],
+        "observed_request_refs": [
+          {
+            "type": "har_entry",
+            "path": "raw/network/ACT-02-01-012-launch.json",
+            "act_id": "ACT-02-01-009"
+          }
+        ],
+        "knowledge_kind": "OBSERVED_CURRENT"
+      },
+      {
+        "operation_id": "APIOP-024",
+        "protocol": "REST",
+        "method_or_type": "POST",
+        "path_or_operation": "/api/platform-products/{platformProductId}/unpublish",
+        "observed_paths": [
+          "/api/platform-products/531/unpublish"
+        ],
+        "business_object": "Campaign (by-shopify)",
+        "capability": "unpublish-campaign-by-shopify",
+        "act_ids": [
+          "ACT-02-01-010"
+        ],
+        "scn_ids": [
+          "SCN-02-05"
+        ],
+        "feature_ids": [
+          "FEAT-02-create-campaign-by-shopify"
+        ],
+        "auth": {
+          "type": "bearer_jwt",
+          "header": "authorization",
+          "note": "JWT in Authorization header, redacted in all captures ([REDACTED]). Refreshed via POST /api/token/refresh (observed expires_in=900s, matches known 15-minute TTL)."
+        },
+        "request_contract": {
+          "shape": {}
+        },
+        "response_contract": {
+          "status_200_shape": {
+            "id": "int",
+            "uuid": "string",
+            "instance_id": "int",
+            "platform_linked_id": "string",
+            "name": "string",
+            "version": "null (reset after unpublish)",
+            "published_at": "null (reset after unpublish)",
+            "updated_at": "ISO8601"
+          }
+        },
+        "error_contract": [],
+        "observed_status": [
+          200
+        ],
+        "observed_count": 1,
+        "state_delta": [
+          {
+            "field": "published_at",
+            "before": "ISO8601 timestamp",
+            "after": "null",
+            "confidence": "HIGH"
+          },
+          {
+            "field": "version",
+            "before": "int",
+            "after": "null",
+            "confidence": "HIGH"
+          }
+        ],
+        "source_refs": [
+          {
+            "type": "har_entry",
+            "path": "raw/network/ACT-03-01-001-unpublish.json",
+            "act_id": "ACT-02-01-010"
+          }
+        ],
+        "observed_request_refs": [
+          {
+            "type": "har_entry",
+            "path": "raw/network/ACT-03-01-001-unpublish.json",
+            "act_id": "ACT-02-01-010"
+          }
+        ],
+        "knowledge_kind": "OBSERVED_CURRENT"
+      },
+      {
+        "operation_id": "APIOP-025",
+        "protocol": "GRAPHQL",
+        "method_or_type": "QUERY",
+        "path_or_operation": "get { campaigns_by_pk }",
+        "observed_paths": [
+          "https://staging-graphql.teeinblue.com/v1/graphql"
+        ],
+        "business_object": "Campaign",
+        "capability": "read-campaign-detail-graphql",
+        "act_ids": [
+          "ACT-01-01-003",
+          "ACT-01-01-004-to-006",
+          "ACT-01-01-007",
+          "ACT-01-01-009",
+          "ACT-04-01-001"
+        ],
+        "scn_ids": [
+          "SCN-01-01",
+          "SCN-01-02",
+          "SCN-01-03",
+          "SCN-01-04",
+          "SCN-04-01"
+        ],
+        "feature_ids": [
+          "FEAT-01-create-campaign-by-product-base"
+        ],
+        "auth": {
+          "type": "bearer_jwt",
+          "header": "authorization",
+          "note": "Same JWT used for GraphQL endpoint (staging-graphql.teeinblue.com/v1/graphql) as for REST staging-api.teeinblue.com; confirmed present and redacted in captures."
+        },
+        "request_contract": {
+          "shape": {
+            "operationName": "get",
+            "variables": {
+              "id": "bigint (observed both as string and as number across samples -- type coercion looks tolerant, not confirmed as contract)"
+            }
+          }
+        },
+        "response_contract": {
+          "shape": {
+            "data": {
+              "campaigns_by_pk": {
+                "id": "int",
+                "name": "string",
+                "status": "int",
+                "field_positions": "null",
+                "label_available_product": "null",
+                "product_display_type": "string",
+                "product_type": "string",
+                "product_tags": "null",
+                "internal_tags": "null|string",
+                "featured_image_url": "null",
+                "featured_image_thumbnail": "null",
+                "vendor": "null|string",
+                "platform_config": "null",
+                "campaign_products": "array (nested product + campaign_id + platform_title)",
+                "campaign_instances": "array (id, instance_id, status, need_sync, platform_linked_handle, platform_linked_id)"
+              }
+            }
+          }
+        },
+        "error_contract": [],
+        "observed_status": [
+          200
+        ],
+        "observed_count": 6,
+        "state_delta": [],
+        "source_refs": [
+          {
+            "type": "har_entry",
+            "path": "raw/network/ACT-01-01-003.json",
+            "act_id": "ACT-01-01-003"
+          },
+          {
+            "type": "har_entry",
+            "path": "raw/network/ACT-01-01-004-to-006-add-product-and-artwork.json",
+            "act_id": "ACT-01-01-004-to-006"
+          },
+          {
+            "type": "har_entry",
+            "path": "raw/network/ACT-01-01-007-listing-info-view.json",
+            "act_id": "ACT-01-01-007"
+          },
+          {
+            "type": "har_entry",
+            "path": "raw/network/ACT-01-01-009-launch.json",
+            "act_id": "ACT-01-01-009"
+          },
+          {
+            "type": "har_entry",
+            "path": "raw/network/ACT-03-02-001-create-throwaway-and-list.json",
+            "act_id": "ACT-04-01-001"
+          }
+        ],
+        "observed_request_refs": [
+          {
+            "type": "har_entry",
+            "path": "raw/network/ACT-01-01-003.json",
+            "act_id": "ACT-01-01-003"
+          },
+          {
+            "type": "har_entry",
+            "path": "raw/network/ACT-01-01-004-to-006-add-product-and-artwork.json",
+            "act_id": "ACT-01-01-004-to-006"
+          },
+          {
+            "type": "har_entry",
+            "path": "raw/network/ACT-01-01-007-listing-info-view.json",
+            "act_id": "ACT-01-01-007"
+          },
+          {
+            "type": "har_entry",
+            "path": "raw/network/ACT-01-01-009-launch.json",
+            "act_id": "ACT-01-01-009"
+          },
+          {
+            "type": "har_entry",
+            "path": "raw/network/ACT-03-02-001-create-throwaway-and-list.json",
+            "act_id": "ACT-04-01-001"
+          }
+        ],
+        "knowledge_kind": "OBSERVED_CURRENT"
+      },
+      {
+        "operation_id": "APIOP-026",
+        "protocol": "GRAPHQL",
+        "method_or_type": "QUERY",
+        "path_or_operation": "get { product_counter, campaign_products, campaign_artworks, variant_counter, campaign_variants }",
+        "observed_paths": [
+          "https://staging-graphql.teeinblue.com/v1/graphql"
+        ],
+        "business_object": "Campaign",
+        "capability": "read-campaign-print-area-summary",
+        "act_ids": [
+          "ACT-01-01-004-to-006",
+          "ACT-01-01-009",
+          "ACT-04-01-001"
+        ],
+        "scn_ids": [
+          "SCN-01-02",
+          "SCN-01-04"
+        ],
+        "feature_ids": [
+          "FEAT-01-create-campaign-by-product-base"
+        ],
+        "auth": {
+          "type": "bearer_jwt",
+          "header": "authorization",
+          "note": "Same JWT used for GraphQL endpoint (staging-graphql.teeinblue.com/v1/graphql) as for REST staging-api.teeinblue.com; confirmed present and redacted in captures."
+        },
+        "request_contract": {
+          "shape": {
+            "operationName": "get",
+            "variables": {
+              "id": "bigint"
+            }
+          }
+        },
+        "response_contract": {
+          "shape": {
+            "data": {
+              "product_counter": {
+                "aggregate": {
+                  "count": "int"
+                }
+              },
+              "campaign_products": [
+                {
+                  "product": {
+                    "id": "int",
+                    "title": "string",
+                    "color_custom_label": "null|string",
+                    "size_custom_label": "null|string",
+                    "enable_custom_printarea": "bool",
+                    "printareas": [
+                      {
+                        "id": "int",
+                        "name": "string",
+                        "display_name": "string",
+                        "width": "int",
+                        "height": "int"
+                      }
+                    ]
+                  },
+                  "campaign_variants_aggregate": {
+                    "aggregate": {
+                      "count": "int"
+                    }
+                  },
+                  "campaign_mockups_aggregate": {
+                    "aggregate": {
+                      "count": "int"
+                    }
+                  },
+                  "campaign_image_mockups_aggregate": {
+                    "aggregate": {
+                      "count": "int"
+                    }
+                  }
+                }
+              ],
+              "campaign_artworks": "array (artwork_id, printarea_id)",
+              "variant_counter": {
+                "aggregate": {
+                  "count": "int"
+                }
+              },
+              "campaign_variants": "array"
+            }
+          },
+          "notes": "This is the data source for STEP 1's per-product-base 'Print Areas of {product}' panel -- by-product-base only, no by-shopify equivalent observed (platform-products has no printareas field anywhere)."
+        },
+        "error_contract": [],
+        "observed_status": [
+          200
+        ],
+        "observed_count": 4,
+        "state_delta": [],
+        "source_refs": [
+          {
+            "type": "har_entry",
+            "path": "raw/network/ACT-01-01-004-to-006-add-product-and-artwork.json",
+            "act_id": "ACT-01-01-004-to-006"
+          },
+          {
+            "type": "har_entry",
+            "path": "raw/network/ACT-01-01-009-launch.json",
+            "act_id": "ACT-01-01-009"
+          },
+          {
+            "type": "har_entry",
+            "path": "raw/network/ACT-03-02-001-create-throwaway-and-list.json",
+            "act_id": "ACT-04-01-001"
+          }
+        ],
+        "observed_request_refs": [
+          {
+            "type": "har_entry",
+            "path": "raw/network/ACT-01-01-004-to-006-add-product-and-artwork.json",
+            "act_id": "ACT-01-01-004-to-006"
+          },
+          {
+            "type": "har_entry",
+            "path": "raw/network/ACT-01-01-009-launch.json",
+            "act_id": "ACT-01-01-009"
+          },
+          {
+            "type": "har_entry",
+            "path": "raw/network/ACT-03-02-001-create-throwaway-and-list.json",
+            "act_id": "ACT-04-01-001"
+          }
+        ],
+        "knowledge_kind": "OBSERVED_CURRENT"
+      },
+      {
+        "operation_id": "APIOP-027",
+        "protocol": "GRAPHQL",
+        "method_or_type": "MUTATION",
+        "path_or_operation": "insert { insert_campaign_products }",
+        "observed_paths": [
+          "https://staging-graphql.teeinblue.com/v1/graphql"
+        ],
+        "business_object": "Campaign",
+        "capability": "add-product-base-to-campaign",
+        "act_ids": [
+          "ACT-01-01-004-to-006"
+        ],
+        "scn_ids": [
+          "SCN-01-02"
+        ],
+        "feature_ids": [
+          "FEAT-01-create-campaign-by-product-base"
+        ],
+        "auth": {
+          "type": "bearer_jwt",
+          "header": "authorization",
+          "note": "Same JWT used for GraphQL endpoint (staging-graphql.teeinblue.com/v1/graphql) as for REST staging-api.teeinblue.com; confirmed present and redacted in captures."
+        },
+        "request_contract": {
+          "shape": {
+            "operationName": "insert",
+            "variables": {
+              "objects": {
+                "campaign_id": "int",
+                "product_id": "int",
+                "position": "int",
+                "campaign_variants": {
+                  "data": [
+                    {
+                      "variant_id": "int"
+                    }
+                  ]
+                },
+                "campaign_mockups": {
+                  "data": [
+                    {
+                      "mockup_id": "int",
+                      "width": "int",
+                      "height": "int",
+                      "color_as_variant": "bool",
+                      "default_background_color": "null",
+                      "position": "int",
+                      "alt": "null",
+                      "layers": "array of layer objects (id, top, left, width, height, name, rotate, visible, locked, opacity, printarea_id|type/url for image layers)",
+                      "type": "string"
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "notes": "THIS is the actual core mutation for 'add product base to campaign' -- the REST POST /api/staff-activity-logs/campaign-product (APIOP-005) fired alongside is only an activity-log side-effect, not the data mutation itself."
+        },
+        "response_contract": {
+          "shape": {
+            "data": {
+              "insert_campaign_products": {
+                "returning": [
+                  {
+                    "id": "int",
+                    "campaign_id": "int",
+                    "product_id": "int",
+                    "position": "int",
+                    "campaign_mockups": [
+                      {
+                        "id": "int",
+                        "mockup_id": "int",
+                        "url": "null",
+                        "thumbnail": "null",
+                        "width": "int",
+                        "height": "int",
+                        "color_as_variant": "bool",
+                        "default_background_color": "null",
+                        "position": "int",
+                        "alt": "null",
+                        "layers": "array",
+                        "type": "string",
+                        "preview_url": "null",
+                        "preview_thumbnail": "null"
+                      }
+                    ]
+                  }
+                ]
+              }
+            }
+          }
+        },
+        "error_contract": [],
+        "observed_status": [
+          200
+        ],
+        "observed_count": 1,
+        "state_delta": [
+          {
+            "field": "campaign.campaign_products",
+            "before": "[]",
+            "after": "[{id:4056, product_id:3181}] (abridged)",
+            "confidence": "HIGH"
+          }
+        ],
+        "source_refs": [
+          {
+            "type": "har_entry",
+            "path": "raw/network/ACT-01-01-004-to-006-add-product-and-artwork.json",
+            "act_id": "ACT-01-01-004-to-006"
+          }
+        ],
+        "observed_request_refs": [
+          {
+            "type": "har_entry",
+            "path": "raw/network/ACT-01-01-004-to-006-add-product-and-artwork.json",
+            "act_id": "ACT-01-01-004-to-006"
+          }
+        ],
+        "knowledge_kind": "OBSERVED_CURRENT"
+      },
+      {
+        "operation_id": "APIOP-028",
+        "protocol": "GRAPHQL",
+        "method_or_type": "MUTATION",
+        "path_or_operation": "update { update_campaign_instances }",
+        "observed_paths": [
+          "https://staging-graphql.teeinblue.com/v1/graphql"
+        ],
+        "business_object": "Campaign",
+        "capability": "flag-campaign-instances-need-sync",
+        "act_ids": [
+          "ACT-01-01-004-to-006"
+        ],
+        "scn_ids": [
+          "SCN-01-02"
+        ],
+        "feature_ids": [
+          "FEAT-01-create-campaign-by-product-base"
+        ],
+        "auth": {
+          "type": "bearer_jwt",
+          "header": "authorization",
+          "note": "Same JWT used for GraphQL endpoint (staging-graphql.teeinblue.com/v1/graphql) as for REST staging-api.teeinblue.com; confirmed present and redacted in captures."
+        },
+        "request_contract": {
+          "shape": {
+            "operationName": "update",
+            "variables": {
+              "objects": {
+                "need_sync": "bool"
+              }
+            }
+          },
+          "notes": "The `where` clause (campaign id + status filter) is embedded directly in the GraphQL query text, not passed as a variable -- INFERRED that this is a codegen/client pattern, not confirmed from server behavior."
+        },
+        "response_contract": {
+          "shape": {
+            "data": {
+              "update_campaign_instances": {
+                "affected_rows": "int (0 observed -- campaign had no published instances yet at this point)"
+              }
+            }
+          }
+        },
+        "error_contract": [],
+        "observed_status": [
+          200
+        ],
+        "observed_count": 1,
+        "state_delta": [],
+        "source_refs": [
+          {
+            "type": "har_entry",
+            "path": "raw/network/ACT-01-01-004-to-006-add-product-and-artwork.json",
+            "act_id": "ACT-01-01-004-to-006"
+          }
+        ],
+        "observed_request_refs": [
+          {
+            "type": "har_entry",
+            "path": "raw/network/ACT-01-01-004-to-006-add-product-and-artwork.json",
+            "act_id": "ACT-01-01-004-to-006"
+          }
+        ],
+        "knowledge_kind": "OBSERVED_CURRENT"
+      },
+      {
+        "operation_id": "APIOP-029",
+        "protocol": "GRAPHQL",
+        "method_or_type": "QUERY",
+        "path_or_operation": "get { campaign_activities }",
+        "observed_paths": [
+          "https://staging-graphql.teeinblue.com/v1/graphql"
+        ],
+        "business_object": "Campaign",
+        "capability": "read-campaign-activity-log",
+        "act_ids": [
+          "ACT-01-01-004-to-006"
+        ],
+        "scn_ids": [
+          "SCN-01-02"
+        ],
+        "feature_ids": [
+          "FEAT-01-create-campaign-by-product-base"
+        ],
+        "auth": {
+          "type": "bearer_jwt",
+          "header": "authorization",
+          "note": "Same JWT used for GraphQL endpoint (staging-graphql.teeinblue.com/v1/graphql) as for REST staging-api.teeinblue.com; confirmed present and redacted in captures."
+        },
+        "request_contract": {
+          "shape": {
+            "operationName": "get",
+            "variables": {}
+          },
+          "notes": "campaign_id filter embedded in query text, not a variable."
+        },
+        "response_contract": {
+          "shape": {
+            "data": {
+              "campaign_activities": "array (id, campaign_id, activities: array of {type:int, message:string, created_at})"
+            }
+          }
+        },
+        "error_contract": [],
+        "observed_status": [
+          200
+        ],
+        "observed_count": 1,
+        "state_delta": [],
+        "source_refs": [
+          {
+            "type": "har_entry",
+            "path": "raw/network/ACT-01-01-004-to-006-add-product-and-artwork.json",
+            "act_id": "ACT-01-01-004-to-006"
+          }
+        ],
+        "observed_request_refs": [
+          {
+            "type": "har_entry",
+            "path": "raw/network/ACT-01-01-004-to-006-add-product-and-artwork.json",
+            "act_id": "ACT-01-01-004-to-006"
+          }
+        ],
+        "knowledge_kind": "OBSERVED_CURRENT"
+      },
+      {
+        "operation_id": "APIOP-030",
+        "protocol": "GRAPHQL",
+        "method_or_type": "QUERY",
+        "path_or_operation": "get { campaign_instances_aggregate }",
+        "observed_paths": [
+          "https://staging-graphql.teeinblue.com/v1/graphql"
+        ],
+        "business_object": "Campaign",
+        "capability": "count-campaign-instances-pending-sync",
+        "act_ids": [
+          "ACT-01-01-004-to-006"
+        ],
+        "scn_ids": [
+          "SCN-01-02"
+        ],
+        "feature_ids": [
+          "FEAT-01-create-campaign-by-product-base"
+        ],
+        "auth": {
+          "type": "bearer_jwt",
+          "header": "authorization",
+          "note": "Same JWT used for GraphQL endpoint (staging-graphql.teeinblue.com/v1/graphql) as for REST staging-api.teeinblue.com; confirmed present and redacted in captures."
+        },
+        "request_contract": {
+          "shape": {
+            "operationName": "get",
+            "variables": {}
+          },
+          "notes": "campaign_id + need_sync filter embedded in query text."
+        },
+        "response_contract": {
+          "shape": {
+            "data": {
+              "campaign_instances_aggregate": {
+                "aggregate": {
+                  "count": "int"
+                }
+              }
+            }
+          }
+        },
+        "error_contract": [],
+        "observed_status": [
+          200
+        ],
+        "observed_count": 1,
+        "state_delta": [],
+        "source_refs": [
+          {
+            "type": "har_entry",
+            "path": "raw/network/ACT-01-01-004-to-006-add-product-and-artwork.json",
+            "act_id": "ACT-01-01-004-to-006"
+          }
+        ],
+        "observed_request_refs": [
+          {
+            "type": "har_entry",
+            "path": "raw/network/ACT-01-01-004-to-006-add-product-and-artwork.json",
+            "act_id": "ACT-01-01-004-to-006"
+          }
+        ],
+        "knowledge_kind": "OBSERVED_CURRENT"
+      },
+      {
+        "operation_id": "APIOP-031",
+        "protocol": "GRAPHQL",
+        "method_or_type": "MUTATION",
+        "path_or_operation": "insert { insert_campaign_activities }",
+        "observed_paths": [
+          "https://staging-graphql.teeinblue.com/v1/graphql"
+        ],
+        "business_object": "Campaign",
+        "capability": "log-campaign-activity",
+        "act_ids": [
+          "ACT-01-01-004-to-006"
+        ],
+        "scn_ids": [
+          "SCN-01-02"
+        ],
+        "feature_ids": [
+          "FEAT-01-create-campaign-by-product-base"
+        ],
+        "auth": {
+          "type": "bearer_jwt",
+          "header": "authorization",
+          "note": "Same JWT used for GraphQL endpoint (staging-graphql.teeinblue.com/v1/graphql) as for REST staging-api.teeinblue.com; confirmed present and redacted in captures."
+        },
+        "request_contract": {
+          "shape": {
+            "operationName": "insert",
+            "variables": {
+              "objects": {
+                "activities": [
+                  {
+                    "type": "int (3 observed)",
+                    "message": "string, e.g. '{ProductTitle} (ID: {id})'",
+                    "created_at": "datetime string"
+                  }
+                ],
+                "updated_at": "datetime string",
+                "campaign_id": "int",
+                "created_at": "datetime string"
+              }
+            }
+          }
+        },
+        "response_contract": {
+          "shape": {
+            "data": {
+              "insert_campaign_activities": {
+                "returning": [
+                  {
+                    "activities": "array",
+                    "id": "int",
+                    "campaign_id": "int"
+                  }
+                ]
+              }
+            }
+          }
+        },
+        "error_contract": [],
+        "observed_status": [
+          200
+        ],
+        "observed_count": 1,
+        "state_delta": [],
+        "source_refs": [
+          {
+            "type": "har_entry",
+            "path": "raw/network/ACT-01-01-004-to-006-add-product-and-artwork.json",
+            "act_id": "ACT-01-01-004-to-006"
+          }
+        ],
+        "observed_request_refs": [
+          {
+            "type": "har_entry",
+            "path": "raw/network/ACT-01-01-004-to-006-add-product-and-artwork.json",
+            "act_id": "ACT-01-01-004-to-006"
+          }
+        ],
+        "knowledge_kind": "OBSERVED_CURRENT"
+      },
+      {
+        "operation_id": "APIOP-032",
+        "protocol": "GRAPHQL",
+        "method_or_type": "QUERY",
+        "path_or_operation": "getData { campaigns_aggregate, campaigns }",
+        "observed_paths": [
+          "https://staging-graphql.teeinblue.com/v1/graphql"
+        ],
+        "business_object": "Campaign",
+        "capability": "list-campaigns-by-product-base",
+        "act_ids": [
+          "ACT-03-01-001",
+          "ACT-04-01-001",
+          "ACT-04-01-003"
+        ],
+        "scn_ids": [
+          "SCN-03-01",
+          "SCN-04-01"
+        ],
+        "feature_ids": [
+          "FEAT-03-campaign-list-browse",
+          "FEAT-04-campaign-delete"
+        ],
+        "auth": {
+          "type": "bearer_jwt",
+          "header": "authorization",
+          "note": "Same JWT used for GraphQL endpoint (staging-graphql.teeinblue.com/v1/graphql) as for REST staging-api.teeinblue.com; confirmed present and redacted in captures."
+        },
+        "request_contract": {
+          "shape": {
+            "operationName": "getData",
+            "variables": {
+              "offset": "int",
+              "limit": "int (20 observed, default page size)"
+            }
+          },
+          "notes": "where clause fixed in query text: deleted_at is_null=true, status != '1' (status=1 presumably = archived, excluded from default list -- INFERRED, not confirmed). No filter/search values were exercised (search box, Type, Vendor, Tags, Published-on-store all untested -- see unexplored_operations)."
+        },
+        "response_contract": {
+          "shape": {
+            "data": {
+              "campaigns_aggregate": {
+                "aggregate": {
+                  "count": "int"
+                }
+              },
+              "campaigns": [
+                {
+                  "id": "int",
+                  "campaign_products": [
+                    {
+                      "campaign_mockups": [
+                        {
+                          "id": "int",
+                          "thumbnail": "null|string",
+                          "preview_thumbnail": "string"
+                        }
+                      ]
+                    }
+                  ],
+                  "campaign_instances": [
+                    {
+                      "id": "int",
+                      "instance_id": "int",
+                      "status": "int",
+                      "need_sync": "bool",
+                      "platform_linked_handle": "string|null"
+                    }
+                  ],
+                  "name": "string",
+                  "internal_tags": "null|string",
+                  "product_type": "string",
+                  "vendor": "null|string",
+                  "product_tags": "null",
+                  "created_at": "datetime string (no timezone suffix, differs from ISO8601-with-Z format used elsewhere -- see documented_observed_mismatches)",
+                  "status": "int"
+                }
+              ]
+            }
+          },
+          "notes": "THIS is the actual list-fetch operation for FEAT-03 /campaigns page -- no plain REST GET /api/campaigns was observed anywhere in the 18 captured network files."
+        },
+        "error_contract": [],
+        "observed_status": [
+          200
+        ],
+        "observed_count": 3,
+        "state_delta": [],
+        "source_refs": [
+          {
+            "type": "har_entry",
+            "path": "raw/network/ACT-03-02-001-create-throwaway-and-list.json",
+            "act_id": "ACT-03-01-001"
+          },
+          {
+            "type": "har_entry",
+            "path": "raw/network/ACT-03-02-002-004-delete-campaign.json",
+            "act_id": "ACT-04-01-003"
+          }
+        ],
+        "observed_request_refs": [
+          {
+            "type": "har_entry",
+            "path": "raw/network/ACT-03-02-001-create-throwaway-and-list.json",
+            "act_id": "ACT-03-01-001"
+          },
+          {
+            "type": "har_entry",
+            "path": "raw/network/ACT-03-02-002-004-delete-campaign.json",
+            "act_id": "ACT-04-01-003"
+          }
+        ],
+        "knowledge_kind": "OBSERVED_CURRENT"
+      },
+      {
+        "operation_id": "APIOP-033",
+        "protocol": "GRAPHQL",
+        "method_or_type": "QUERY",
+        "path_or_operation": "{ campaigns_aggregate }",
+        "observed_paths": [
+          "https://staging-graphql.teeinblue.com/v1/graphql"
+        ],
+        "business_object": "Campaign",
+        "capability": "count-campaigns-pending-sync",
+        "act_ids": [
+          "ACT-03-01-001",
+          "ACT-04-01-003"
+        ],
+        "scn_ids": [
+          "SCN-03-01",
+          "SCN-04-01"
+        ],
+        "feature_ids": [
+          "FEAT-03-campaign-list-browse"
+        ],
+        "auth": {
+          "type": "bearer_jwt",
+          "header": "authorization",
+          "note": "Same JWT used for GraphQL endpoint (staging-graphql.teeinblue.com/v1/graphql) as for REST staging-api.teeinblue.com; confirmed present and redacted in captures."
+        },
+        "request_contract": {
+          "shape": {
+            "operationName": "<anonymous>",
+            "variables": {}
+          },
+          "notes": "where clause: campaign_instances.need_sync=true AND instance not deleted/visible AND campaign not deleted AND status != 1 -- embedded in query text. Powers the '/campaigns' list tab badge 'Update required (N)'."
+        },
+        "response_contract": {
+          "shape": {
+            "data": {
+              "campaigns_aggregate": {
+                "aggregate": {
+                  "count": "int (0 observed both times)"
+                }
+              }
+            }
+          }
+        },
+        "error_contract": [],
+        "observed_status": [
+          200
+        ],
+        "observed_count": 2,
+        "state_delta": [],
+        "source_refs": [
+          {
+            "type": "har_entry",
+            "path": "raw/network/ACT-03-02-001-create-throwaway-and-list.json",
+            "act_id": "ACT-03-01-001"
+          },
+          {
+            "type": "har_entry",
+            "path": "raw/network/ACT-03-02-002-004-delete-campaign.json",
+            "act_id": "ACT-04-01-003"
+          }
+        ],
+        "observed_request_refs": [
+          {
+            "type": "har_entry",
+            "path": "raw/network/ACT-03-02-001-create-throwaway-and-list.json",
+            "act_id": "ACT-03-01-001"
+          },
+          {
+            "type": "har_entry",
+            "path": "raw/network/ACT-03-02-002-004-delete-campaign.json",
+            "act_id": "ACT-04-01-003"
+          }
+        ],
+        "knowledge_kind": "OBSERVED_CURRENT"
+      },
+      {
+        "operation_id": "APIOP-034",
+        "protocol": "GRAPHQL",
+        "method_or_type": "QUERY",
+        "path_or_operation": "getData { platform_products_aggregate, platform_products }",
+        "observed_paths": [
+          "https://staging-graphql.teeinblue.com/v1/graphql"
+        ],
+        "business_object": "Campaign (by-shopify)",
+        "capability": "list-campaigns-by-shopify",
+        "act_ids": [
+          "ACT-02-01-001",
+          "ACT-03-01-002"
+        ],
+        "scn_ids": [
+          "SCN-02-01",
+          "SCN-03-02"
+        ],
+        "feature_ids": [
+          "FEAT-02-create-campaign-by-shopify",
+          "FEAT-03-campaign-list-browse"
+        ],
+        "auth": {
+          "type": "bearer_jwt",
+          "header": "authorization",
+          "note": "Same JWT used for GraphQL endpoint (staging-graphql.teeinblue.com/v1/graphql) as for REST staging-api.teeinblue.com; confirmed present and redacted in captures."
+        },
+        "request_contract": {
+          "shape": {
+            "operationName": "getData",
+            "variables": {
+              "offset": "int",
+              "limit": "int (20 observed)"
+            }
+          },
+          "notes": "where clause fixed: instance.platform_id='1' (Shopify), deleted_at is_null=true. No search/filter values exercised."
+        },
+        "response_contract": {
+          "shape": {
+            "data": {
+              "platform_products_aggregate": {
+                "aggregate": {
+                  "count": "int"
+                }
+              },
+              "platform_products": [
+                {
+                  "id": "int",
+                  "platform_artworks": [
+                    {
+                      "id": "int",
+                      "platform_variant_ids": "null|array"
+                    }
+                  ],
+                  "platform_mockups": [
+                    {
+                      "id": "int",
+                      "preview_thumbnail": "string"
+                    }
+                  ],
+                  "preview_thumbnail": "null|string",
+                  "name": "string",
+                  "internal_tags": "null|string",
+                  "instance_id": "int",
+                  "instance": {
+                    "id": "int",
+                    "deleted_at": "null"
+                  },
+                  "platform_linked_id": "string",
+                  "created_at": "datetime string",
+                  "published_at": "null|datetime string"
+                }
+              ]
+            }
+          },
+          "notes": "THIS is the actual list-fetch for FEAT-03 /platform-products page -- no plain REST GET /api/platform-products was observed."
+        },
+        "error_contract": [],
+        "observed_status": [
+          200
+        ],
+        "observed_count": 2,
+        "state_delta": [],
+        "source_refs": [
+          {
+            "type": "har_entry",
+            "path": "raw/network/ACT-02-01-001-platform-products-list.json",
+            "act_id": "ACT-02-01-001"
+          },
+          {
+            "type": "har_entry",
+            "path": "raw/network/OBS-final-platform-products-list.json",
+            "act_id": "ACT-03-01-002"
+          }
+        ],
+        "observed_request_refs": [
+          {
+            "type": "har_entry",
+            "path": "raw/network/ACT-02-01-001-platform-products-list.json",
+            "act_id": "ACT-02-01-001"
+          },
+          {
+            "type": "har_entry",
+            "path": "raw/network/OBS-final-platform-products-list.json",
+            "act_id": "ACT-03-01-002"
+          }
+        ],
+        "knowledge_kind": "OBSERVED_CURRENT"
+      },
+      {
+        "operation_id": "APIOP-035",
+        "protocol": "GRAPHQL",
+        "method_or_type": "QUERY",
+        "path_or_operation": "{ instances }",
+        "observed_paths": [
+          "https://staging-graphql.teeinblue.com/v1/graphql"
+        ],
+        "business_object": "Campaign",
+        "capability": "read-store-sync-status-preview",
+        "act_ids": [
+          "ACT-01-01-009",
+          "ACT-04-01-002"
+        ],
+        "scn_ids": [
+          "SCN-01-04",
+          "SCN-04-01"
+        ],
+        "feature_ids": [
+          "FEAT-01-create-campaign-by-product-base",
+          "FEAT-04-campaign-delete"
+        ],
+        "auth": {
+          "type": "bearer_jwt",
+          "header": "authorization",
+          "note": "Same JWT used for GraphQL endpoint (staging-graphql.teeinblue.com/v1/graphql) as for REST staging-api.teeinblue.com; confirmed present and redacted in captures."
+        },
+        "request_contract": {
+          "shape": {
+            "operationName": "<anonymous>",
+            "variables": {}
+          },
+          "notes": "where: deleted_at is_null=true (no platform/visible filter, unlike APIOP-036). campaign_id embedded in query text (per-campaign aggregate count of campaign_instances)."
+        },
+        "response_contract": {
+          "shape": {
+            "data": {
+              "instances": [
+                {
+                  "id": "int",
+                  "name": "string",
+                  "platform_domain": "string",
+                  "platform_id": "int",
+                  "campaign_instances_aggregate": {
+                    "aggregate": {
+                      "count": "int"
+                    }
+                  }
+                }
+              ]
+            }
+          },
+          "notes": "For ACT-04-01-002 the co-occurrence with opening the row action menu is OBSERVED but causation is NOT confirmed (could be a hover/rocket-icon prefetch on the row rather than the '...' menu itself) -- do not treat as 'menu open triggers this call'."
+        },
+        "error_contract": [],
+        "observed_status": [
+          200
+        ],
+        "observed_count": 2,
+        "state_delta": [],
+        "source_refs": [
+          {
+            "type": "har_entry",
+            "path": "raw/network/ACT-01-01-009-launch.json",
+            "act_id": "ACT-01-01-009"
+          },
+          {
+            "type": "har_entry",
+            "path": "raw/network/ACT-03-02-002-004-delete-campaign.json",
+            "act_id": "ACT-04-01-002"
+          }
+        ],
+        "observed_request_refs": [
+          {
+            "type": "har_entry",
+            "path": "raw/network/ACT-01-01-009-launch.json",
+            "act_id": "ACT-01-01-009"
+          },
+          {
+            "type": "har_entry",
+            "path": "raw/network/ACT-03-02-002-004-delete-campaign.json",
+            "act_id": "ACT-04-01-002"
+          }
+        ],
+        "knowledge_kind": "INFERRED"
+      },
+      {
+        "operation_id": "APIOP-036",
+        "protocol": "GRAPHQL",
+        "method_or_type": "QUERY",
+        "path_or_operation": "getData { instances_aggregate, instances }",
+        "observed_paths": [
+          "https://staging-graphql.teeinblue.com/v1/graphql"
+        ],
+        "business_object": "Campaign",
+        "capability": "list-org-stores-for-multistore-launch",
+        "act_ids": [
+          "ACT-01-01-009",
+          "ACT-04-01-002"
+        ],
+        "scn_ids": [
+          "SCN-01-04",
+          "SCN-04-01"
+        ],
+        "feature_ids": [
+          "FEAT-01-create-campaign-by-product-base",
+          "FEAT-04-campaign-delete"
+        ],
+        "auth": {
+          "type": "bearer_jwt",
+          "header": "authorization",
+          "note": "Same JWT used for GraphQL endpoint (staging-graphql.teeinblue.com/v1/graphql) as for REST staging-api.teeinblue.com; confirmed present and redacted in captures."
+        },
+        "request_contract": {
+          "shape": {
+            "operationName": "getData",
+            "variables": {
+              "offset": "int",
+              "limit": "int (20 observed)"
+            }
+          },
+          "notes": "where: platform_id in [1] (Shopify), deleted_at is_null, visible=true. Returns ALL stores in the Organization, not scoped to the account used for login -- see security_surfaces."
+        },
+        "response_contract": {
+          "shape": {
+            "data": {
+              "instances_aggregate": {
+                "aggregate": {
+                  "count": "int (2 observed: linh-explorer, linh-explorer-2)"
+                }
+              },
+              "instances": [
+                {
+                  "id": "int",
+                  "name": "string",
+                  "platform_id": "int",
+                  "campaign_instances": [
+                    {
+                      "id": "int",
+                      "instance_id": "int",
+                      "handle": "string|null",
+                      "need_sync": "bool",
+                      "platform_linked_id": "string|null"
+                    }
+                  ],
+                  "domain": "string",
+                  "platform_domain": "string",
+                  "platform": {
+                    "name": "string, observed 'shopify'"
+                  }
+                }
+              ]
+            }
+          },
+          "notes": "This is the data source for the 'Multi-store launch' dialog (OBS-013). Confirms owner-level visibility spans the whole Organization, including 'linh-explorer-2' which is explicitly OUT of this run's allowed account scope -- publish action itself (APIOP-010) was correctly restricted to only 'linh-explorer' per exploration_policy, this is a READ-visibility observation only."
+        },
+        "error_contract": [],
+        "observed_status": [
+          200
+        ],
+        "observed_count": 2,
+        "state_delta": [],
+        "source_refs": [
+          {
+            "type": "har_entry",
+            "path": "raw/network/ACT-01-01-009-launch.json",
+            "act_id": "ACT-01-01-009"
+          },
+          {
+            "type": "har_entry",
+            "path": "raw/network/ACT-03-02-002-004-delete-campaign.json",
+            "act_id": "ACT-04-01-002"
+          }
+        ],
+        "observed_request_refs": [
+          {
+            "type": "har_entry",
+            "path": "raw/network/ACT-01-01-009-launch.json",
+            "act_id": "ACT-01-01-009"
+          },
+          {
+            "type": "har_entry",
+            "path": "raw/network/ACT-03-02-002-004-delete-campaign.json",
+            "act_id": "ACT-04-01-002"
+          }
+        ],
+        "knowledge_kind": "INFERRED"
+      },
+      {
+        "operation_id": "APIOP-037",
+        "protocol": "GRAPHQL",
+        "method_or_type": "QUERY",
+        "path_or_operation": "get { platform_artworks }",
+        "observed_paths": [
+          "https://staging-graphql.teeinblue.com/v1/graphql"
+        ],
+        "business_object": "Campaign (by-shopify)",
+        "capability": "read-platform-product-artwork-assignment",
+        "act_ids": [
+          "ACT-02-01-004",
+          "ACT-02-01-005",
+          "ACT-02-01-008"
+        ],
+        "scn_ids": [
+          "SCN-02-01",
+          "SCN-02-02",
+          "SCN-02-03"
+        ],
+        "feature_ids": [
+          "FEAT-02-create-campaign-by-shopify"
+        ],
+        "auth": {
+          "type": "bearer_jwt",
+          "header": "authorization",
+          "note": "Same JWT used for GraphQL endpoint (staging-graphql.teeinblue.com/v1/graphql) as for REST staging-api.teeinblue.com; confirmed present and redacted in captures."
+        },
+        "request_contract": {
+          "shape": {
+            "operationName": "get",
+            "variables": {
+              "id": "bigint (platform_product_id)"
+            }
+          }
+        },
+        "response_contract": {
+          "shape": {
+            "data": {
+              "platform_artworks": [
+                {
+                  "id": "int",
+                  "platform_variant_ids": "null|array",
+                  "position": "int",
+                  "artwork": {
+                    "id": "int",
+                    "data": "templates array (aliased from `templates` field, full artwork template/layer definition -- Artwork object's own schema, out of scope here)",
+                    "name": "string",
+                    "thumbnail": "null|string",
+                    "width": "int",
+                    "height": "int"
+                  }
+                }
+              ]
+            }
+          },
+          "notes": "Empty array [] before artwork assigned (ACT-02-01-004), populated after (ACT-02-01-005 onward)."
+        },
+        "error_contract": [],
+        "observed_status": [
+          200
+        ],
+        "observed_count": 3,
+        "state_delta": [
+          {
+            "field": "platform_artworks",
+            "before": "[]",
+            "after": "[{id:1075, artwork_id:4087}] (abridged)",
+            "confidence": "HIGH"
+          }
+        ],
+        "source_refs": [
+          {
+            "type": "har_entry",
+            "path": "raw/network/ACT-02-01-005-create-platform-product.json",
+            "act_id": "ACT-02-01-004"
+          },
+          {
+            "type": "har_entry",
+            "path": "raw/network/ACT-02-01-006-007-select-artwork.json",
+            "act_id": "ACT-02-01-005"
+          },
+          {
+            "type": "har_entry",
+            "path": "raw/network/ACT-02-01-007-to-011-mockup-upload.json",
+            "act_id": "ACT-02-01-008"
+          }
+        ],
+        "observed_request_refs": [
+          {
+            "type": "har_entry",
+            "path": "raw/network/ACT-02-01-005-create-platform-product.json",
+            "act_id": "ACT-02-01-004"
+          },
+          {
+            "type": "har_entry",
+            "path": "raw/network/ACT-02-01-006-007-select-artwork.json",
+            "act_id": "ACT-02-01-005"
+          },
+          {
+            "type": "har_entry",
+            "path": "raw/network/ACT-02-01-007-to-011-mockup-upload.json",
+            "act_id": "ACT-02-01-008"
+          }
+        ],
+        "knowledge_kind": "OBSERVED_CURRENT"
+      },
+      {
+        "operation_id": "APIOP-038",
+        "protocol": "GRAPHQL",
+        "method_or_type": "QUERY",
+        "path_or_operation": "get { mockup_layers }",
+        "observed_paths": [
+          "https://staging-graphql.teeinblue.com/v1/graphql"
+        ],
+        "business_object": "Mockup",
+        "capability": "read-mockup-layer-detail-after-upload",
+        "act_ids": [
+          "ACT-02-01-008"
+        ],
+        "scn_ids": [
+          "SCN-02-03"
+        ],
+        "feature_ids": [
+          "FEAT-02-create-campaign-by-shopify"
+        ],
+        "auth": {
+          "type": "bearer_jwt",
+          "header": "authorization",
+          "note": "Same JWT used for GraphQL endpoint (staging-graphql.teeinblue.com/v1/graphql) as for REST staging-api.teeinblue.com; confirmed present and redacted in captures."
+        },
+        "request_contract": {
+          "shape": {
+            "operationName": "get",
+            "variables": {
+              "ids": "array of bigint"
+            }
+          }
+        },
+        "response_contract": {
+          "shape": {
+            "data": {
+              "mockup_layers": [
+                {
+                  "id": "int",
+                  "url": "string (storage path)",
+                  "thumbnail": "string (storage path)"
+                }
+              ]
+            }
+          }
+        },
+        "error_contract": [],
+        "observed_status": [
+          200
+        ],
+        "observed_count": 1,
+        "state_delta": [],
+        "source_refs": [
+          {
+            "type": "har_entry",
+            "path": "raw/network/ACT-02-01-007-to-011-mockup-upload.json",
+            "act_id": "ACT-02-01-008"
+          }
+        ],
+        "observed_request_refs": [
+          {
+            "type": "har_entry",
+            "path": "raw/network/ACT-02-01-007-to-011-mockup-upload.json",
+            "act_id": "ACT-02-01-008"
+          }
+        ],
+        "knowledge_kind": "OBSERVED_CURRENT"
+      }
+    ],
+    "documented_observed_mismatches": [],
+    "background_traffic": [
+      {
+        "normalized_route": "GET /api/user",
+        "kind": "polling",
+        "note": "App-shell bootstrap: current user profile. Fires on nearly every portal page load regardless of Campaign action."
+      },
+      {
+        "normalized_route": "GET /api/instances?trashed",
+        "kind": "polling",
+        "note": "App-shell bootstrap: user's connected store instances (org level). Response includes crisp_token/customer_email/email fields, all redacted."
+      },
+      {
+        "normalized_route": "GET /api/staff",
+        "kind": "polling",
+        "note": "App-shell bootstrap: current staff record + role + granular permissions list. Confirms role='owner' with manage-campaigns permission for this session."
+      },
+      {
+        "normalized_route": "GET /api/user/campaigns/exists",
+        "kind": "polling",
+        "note": "Onboarding guide flag (boolean), fires alongside products/artworks/platform-products/exists on nearly every page load. Not a Campaign list/read operation."
+      },
+      {
+        "normalized_route": "GET /api/user/products/exists",
+        "kind": "polling",
+        "note": "Onboarding guide flag, Product Base object (out of scope)."
+      },
+      {
+        "normalized_route": "GET /api/user/artworks/exists",
+        "kind": "polling",
+        "note": "Onboarding guide flag, Artwork object (out of scope)."
+      },
+      {
+        "normalized_route": "GET /api/user/platform-products/exists",
+        "kind": "polling",
+        "note": "Onboarding guide flag, Campaign-by-shopify object."
+      },
+      {
+        "normalized_route": "GET /api/instances/{instanceId}/popup-messages",
+        "kind": "polling",
+        "note": "App-shell notification/announcement bootstrap, always returned []."
+      },
+      {
+        "normalized_route": "GET /api/settings",
+        "kind": "polling",
+        "note": "App-shell global settings; response body itself marked [REDACTED-NONJSON-BODY] by upstream redaction (non-JSON/binary or blanket-redacted), shape unknown."
+      },
+      {
+        "normalized_route": "GET /api/instances/{instanceId}/translation",
+        "kind": "polling",
+        "note": "i18n string bundle, always observed as empty array []. Fires alongside almost every campaign/platform-product detail load."
+      },
+      {
+        "normalized_route": "POST /api/token/refresh",
+        "kind": "polling",
+        "note": "Session JWT refresh, expires_in=900s observed (matches known 15-minute TTL). Not Campaign-specific."
+      },
+      {
+        "normalized_route": "PUT /api/user/guide-config",
+        "kind": "unrelated",
+        "note": "Persists onboarding wizard progress flags (sampleCampaign.*, visited_get_started_shopify, etc). User-account setting, not part of Campaign object contract."
+      },
+      {
+        "normalized_route": "POST https://cloudflareinsights.com/cdn-cgi/rum, POST https://www.google-analytics.com/g/collect, GET https://www.googletagmanager.com/*",
+        "kind": "unrelated",
+        "note": "Third-party analytics/RUM beacons, unrelated to Campaign API."
+      },
+      {
+        "normalized_route": "static assets (js/css/font/image under staging-portal.teeinblue.com/assets, icons8, fonts.googleapis.com, gravatar.com, cdn.ownego.com thumbnails)",
+        "kind": "unrelated",
+        "note": "Portal SPA bundle + CDN thumbnail images, no API contract relevance."
+      }
+    ],
+    "security_surfaces": [
+      {
+        "surface": "Bearer JWT (Authorization header)",
+        "note": "Used uniformly for both REST (staging-api.teeinblue.com) and GraphQL (staging-graphql.teeinblue.com/v1/graphql) calls. Value redacted to [REDACTED] in every capture. Refresh endpoint POST /api/token/refresh observed expires_in=900 (15 min), matches known TTL note.",
+        "evidence_refs": [
+          {
+            "type": "har_entry",
+            "path": "raw/network/ACT-01-01-007-listing-info-view.json"
+          }
+        ]
+      },
+      {
+        "surface": "Role/permission model (GET /api/staff)",
+        "note": "owner role observed with explicit permission list (view-campaigns, manage-campaigns, view-artworks, manage-artworks, view-products, manage-products, view-orders, manage-orders, view-cliparts, manage-cliparts, ...). Only owner role exercised this run -- no negative-permission / restricted-role case tested against Campaign endpoints.",
+        "evidence_refs": [
+          {
+            "type": "har_entry",
+            "path": "raw/network/ACT-01-01-001.json"
+          }
+        ]
+      },
+      {
+        "surface": "Cross-store / org-level visibility in Multi-store launch (GraphQL instances / instances_aggregate)",
+        "note": "Owner-level GraphQL query for the launch dialog returns ALL stores in the Organization (linh-explorer AND linh-explorer-2), including a store explicitly outside this run's allowed account scope. The actual mutating publish call (POST /api/campaigns/{id}/publish) was correctly restricted by the human operator to only the allowed store, but the READ surface itself exposes org-wide store list+domain+sync-status to any owner session. Worth a dedicated tenant-isolation/permission test on this GraphQL query and on POST publish body validation (does the API itself reject an instance_id outside the caller's allowed scope, or does it rely entirely on UI restraint?) -- NOT tested this run.",
+        "evidence_refs": [
+          {
+            "type": "har_entry",
+            "path": "raw/network/ACT-01-01-009-launch.json"
+          }
+        ]
+      },
+      {
+        "surface": "GraphQL query surface (Hasura-style, direct table/aggregate access)",
+        "note": "Client sends raw GraphQL queries/mutations directly against what appear to be near-1:1 database table names (campaigns, campaign_products, campaign_instances, platform_products, instances, campaign_activities, ...) including full 'where' filter clauses constructed client-side. This is a broader read/query surface than the curated REST endpoints and may warrant its own authorization/introspection review (not performed in this run -- introspection query itself was not sent, per api-runtime-trace no-new-request restriction).",
+        "evidence_refs": [
+          {
+            "type": "har_entry",
+            "path": "raw/network/ACT-03-02-001-create-throwaway-and-list.json"
+          }
+        ]
+      }
+    ],
+    "unmapped_endpoints": [
+      {
+        "method_or_type": "GET",
+        "path_or_operation": "/api/merchant/games/{game_type}/{base64_encoded_params}.json",
+        "reason": "Artwork personalization-preview renderer family (moon_phase, shape-text, warp_text, spiral, calendar, qr_code, clock, single_line, crossword, word-cloud observed as distinct game_type segments). Belongs to Artwork object's own capability surface (out_of_scope_reexplore per bootstrap-request; already published under knowledge/products/teeinblue/objects/artwork). Fires as a side-effect whenever an artwork with such template fields is assigned to a Campaign/platform-product.",
+        "act_ids": [
+          "ACT-02-01-005"
+        ],
+        "source_refs": [
+          {
+            "type": "har_entry",
+            "path": "raw/network/ACT-02-01-006-007-select-artwork.json",
+            "act_id": "ACT-02-01-005"
+          }
+        ]
+      },
+      {
+        "method_or_type": "GRAPHQL QUERY",
+        "path_or_operation": "getData { products_connection }",
+        "reason": "Product Base list for the 'Select your product' modal -- Product Base object out of scope for this Campaign API map (out_of_scope_reexplore).",
+        "act_ids": [
+          "ACT-01-01-004-to-006"
+        ],
+        "source_refs": [
+          {
+            "type": "har_entry",
+            "path": "raw/network/ACT-01-01-004-to-006-add-product-and-artwork.json",
+            "act_id": "ACT-01-01-004-to-006"
+          }
+        ]
+      },
+      {
+        "method_or_type": "GRAPHQL QUERY",
+        "path_or_operation": "get { products_by_pk }",
+        "reason": "Product Base detail (title, variants, mockups, printareas) fetched when a product base is selected. Product Base object out of scope.",
+        "act_ids": [
+          "ACT-01-01-004-to-006"
+        ],
+        "source_refs": [
+          {
+            "type": "har_entry",
+            "path": "raw/network/ACT-01-01-004-to-006-add-product-and-artwork.json",
+            "act_id": "ACT-01-01-004-to-006"
+          }
+        ]
+      },
+      {
+        "method_or_type": "GRAPHQL QUERY",
+        "path_or_operation": "{ categories: artwork_categories }",
+        "reason": "Artwork category list for 'Select your artwork' modal. Artwork object out of scope.",
+        "act_ids": [
+          "ACT-01-01-004-to-006",
+          "ACT-02-01-005"
+        ],
+        "source_refs": [
+          {
+            "type": "har_entry",
+            "path": "raw/network/ACT-01-01-004-to-006-add-product-and-artwork.json",
+            "act_id": "ACT-01-01-004-to-006"
+          },
+          {
+            "type": "har_entry",
+            "path": "raw/network/ACT-02-01-006-007-select-artwork.json",
+            "act_id": "ACT-02-01-005"
+          }
+        ]
+      },
+      {
+        "method_or_type": "GRAPHQL QUERY",
+        "path_or_operation": "getData { artworks_connection }",
+        "reason": "Artwork list for 'Select your artwork' modal. Artwork object out of scope.",
+        "act_ids": [
+          "ACT-01-01-004-to-006",
+          "ACT-02-01-005"
+        ],
+        "source_refs": [
+          {
+            "type": "har_entry",
+            "path": "raw/network/ACT-01-01-004-to-006-add-product-and-artwork.json",
+            "act_id": "ACT-01-01-004-to-006"
+          },
+          {
+            "type": "har_entry",
+            "path": "raw/network/ACT-02-01-006-007-select-artwork.json",
+            "act_id": "ACT-02-01-005"
+          }
+        ]
+      }
+    ],
+    "unexplored_operations": [
+      "PATCH/PUT for platform-product field enable_artwork_variant_assignment (toggle 'Connect artworks with Shopify variants') -- toggle never set to true, no request captured.",
+      "POST /api/platform-products/{id}/platform-mockups with per-variant mockup_layer targeting -- only the 'apply to all variants' default path was exercised (single-variant demo product).",
+      "Duplicate campaign / Mark as archive / Import to Translation / See campaign info / View campaign logs action-menu items -- menu observed (OBS-025) but none clicked, no endpoint captured.",
+      "Bulk creator (/campaigns/bulk-editor) and Bulk Fulfill -- not explored, no endpoint captured.",
+      "POST /api/campaigns/{id}/publish targeting a 2nd store (linh-explorer-2) in the same Multi-store launch batch -- only 1-store publish body observed; unknown whether multi-select-then-launch sends multiple instance_ids in one call or loops single-instance_id calls.",
+      "DELETE /api/campaigns/{id}?remove_linked_resources=1 (checkbox checked case) -- only remove_linked_resources=0 tested.",
+      "Preview / 'Generate test design' (storefront-facing preview before publish) -- no endpoint captured.",
+      "GraphQL list queries (campaigns getData, platform_products getData) with non-default filter/search variables (title search, Type, Vendor, Tags, Published-on-store, pagination beyond offset=0) -- only default unfiltered first page observed.",
+      "Negative-permission / non-owner role calling any Campaign mutation endpoint -- only owner role exercised this run."
+    ],
+    "coverage_limitations": [
+      "api-runtime-trace mode: analysis is 100% offline against pre-captured raw/network/*.json; no live request was sent to TIB_API_BASE or TIB_OPENAPI_BASE, per mode restriction. If an OpenAPI spec exists at TIB_OPENAPI_BASE, no diff against it was performed -- documented_observed_mismatches is empty for that reason, not because contracts were confirmed to match a spec.",
+      "No DB access this run (db_observation.enabled=false in bootstrap-request) -- enum-like integer fields (campaign.status=0, campaign_instances.status=5, activity.type=3) are recorded as observed raw values only; their meaning is INFERRED from UI context, not confirmed against a schema/enum definition.",
+      "Every operation_id with observed_count=1 (see per-operation confidence) reflects a single sample; required/optional-ness of individual request fields, full enum ranges, and boundary values are NOT established -- see envelope-level unknowns.",
+      "GraphQL schema was not introspected (no __schema query sent, per no-new-request restriction) -- request_contract/response_contract shapes for GraphQL operations are derived purely from the specific queries and responses observed, not the full available schema.",
+      "Two ACT-IDs (ACT-01-01-002 window's initial ACT-01-01-001, and ACT-02-01-002, ACT-02-01-006) have NO Campaign-specific API operation -- they are pure client-side render/validation-banner steps using already-cached data. Confirmed via full request/response dump of their network_ref files, not assumed.",
+      "ACT-04-01-002 (open row action menu) co-occurs with GraphQL instances/instances_aggregate queries (APIOP-035, APIOP-036) in the same capture window as ACT-04-01-003 (delete). Per the no-causal-inference-from-proximity rule, these two operations are marked knowledge_kind=INFERRED for that act_id and should not be read as 'menu open triggers a store-list fetch' without further isolated verification.",
+      "Raw evidence integrity note (see blocking_issues): raw/network/ACT-02-01-007-to-011-mockup-upload.json contains an un-redacted AWS SigV4 signed URL (X-Amz-Credential + X-Amz-Signature) in the POST /api/users/{userId}/temporary-files/upload-url response body (meta.signed_url). This was NOT copied into this artifact's request/response contracts (shape only, value replaced with a description). The underlying raw file itself still needs a follow-up redaction-fix pass by portal-explorer/orchestrator before that file can be considered publish-safe."
+    ],
+    "redaction_applied": true
+  },
+  "gate": {
+    "decision": "CONDITIONAL_PASS",
+    "blocking_findings": [
+      "Un-redacted AWS SigV4 signed URL found in raw/network/ACT-02-01-007-to-011-mockup-upload.json (see blocking_issues) -- this artifact does not reproduce the secret, but the underlying raw evidence file needs a redaction-fix pass before it should be treated as safe to reference further downstream."
+    ],
+    "conditions": [
+      "Orchestrator/portal-explorer to run a follow-up redaction-fix pass on raw/network/ACT-02-01-007-to-011-mockup-upload.json targeting signature/credential values embedded inside URL-shaped fields (not just key-name matches), then re-verify.",
+      "documented_observed_mismatches is empty only because no OpenAPI spec comparison was performed (mode restriction) -- if TIB_OPENAPI_BASE has a spec, a follow-up pass (outside api-runtime-trace mode, or via a static-inventory mode) should diff it against this artifact's contracts."
+    ],
+    "allowed_next_steps": [
+      "qa-knowledge-normalizer: consume operations[] + action-api-map.json to enrich Product KB (OBSERVED_BASELINE) with API-level evidence per ACT-ID.",
+      "feature-profile-builder: use business_object/capability/documented_observed_mismatches fields to build FEAT-01 vs FEAT-02 differentiated feature profiles (printarea-based vs flat artwork assignment; publish body shape differences)."
+    ]
+  }
+}

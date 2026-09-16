@@ -1,0 +1,766 @@
+{
+  "schema_version": "1.0",
+  "artifact_type": "FeatureDiscoveryArtifact",
+  "artifact_id": "ARTF-portal-explorer-CTX-20260912-02",
+  "workflow_id": "CTX-20260912-02",
+  "producer": "portal-explorer",
+  "source_refs": [
+    { "type": "route", "path": "/login?staff=true" },
+    { "type": "route", "path": "/campaigns" },
+    { "type": "route", "path": "/campaigns/new" },
+    { "type": "route", "path": "/campaigns/{id}/edit" },
+    { "type": "route", "path": "/platform-products" },
+    { "type": "route", "path": "/platform-products/new" },
+    { "type": "route", "path": "/platform-products/{id}/edit" }
+  ],
+  "upstream_artifact_ids": [],
+  "status": "READY",
+  "confidence": "MEDIUM",
+  "observations": [],
+  "assumptions": [
+    "Bootstrap-request nói initial_state = 'none (object chưa tồn tại)' nhưng thực tế store đã có sẵn 1 sample campaign (id 2592) trước khi chạy — coi đây là baseline thực tế, không phải mâu thuẫn cần resolve, chỉ ghi nhận lại (xem OBS-003).",
+    "RETRY (redaction-fix, C1 FAIL, 2026-09-12): orchestrator phát hiện field email/customer_email trong response body chưa được redact ở 5 file raw/network/ (ACT-01-01-001.json, ACT-01-01-002.json, ACT-02-01-001-platform-products-list.json, ACT-03-02-001-create-throwaway-and-list.json, OBS-final-platform-products-list.json) do script redact gốc chỉ match token|password|secret|api_key|access_token|refresh_token|signature|hmac, không match 'email'. Đã fix: redact mọi giá trị dạng email trong các field này thành \"[REDACTED]\", giữ nguyên shape JSON, không tạo/chạy thêm action portal nào, không login lại. Đã grep lại toàn bộ raw/ xác nhận 0 email pattern còn sót.",
+    "RETRY #2 (redaction-fix, 2026-09-12): api-explorer + orchestrator phát hiện raw/network/ACT-02-01-007-to-011-mockup-upload.json chứa presigned upload URL (DigitalOcean Spaces sgp1, S3-compatible) với X-Amz-Credential và X-Amz-Signature nhúng nguyên văn trong QUERY STRING của URL (ở cả request url, response body meta.signed_url, và response url) — lượt redact trước chỉ match theo field KEY nên bỏ sót vì giá trị nằm trong 1 URL string, không phải field có key tên 'signature'/'token'. Đã fix: redact riêng X-Amz-Credential và X-Amz-Signature (không có X-Amz-Security-Token trong file này) thành \"[REDACTED]\", giữ nguyên phần còn lại của URL (path, X-Amz-Algorithm, X-Amz-Date, X-Amz-Expires) để giữ shape presigned-upload-URL cho QA. Đã quét toàn bộ raw/ (network/, portal/portal-evidence.json, README, console-log) — không tìm thêm URL nhúng credential/signature nào khác ngoài file này. Đã grep độc lập intermediate/api/*.json (do api-explorer tạo, không thuộc phạm vi ghi của portal-explorer) — chỉ có mô tả bằng lời về vấn đề (không copy giá trị thật), xác nhận sạch. Không tạo/chạy thêm action portal nào, không login lại."
+  ],
+  "unknowns": [
+    "Validation rule đầy đủ cho 'Campaign title' (min/max length, ký tự đặc biệt, uniqueness) — chỉ test được case rỗng (1 sample).",
+    "Toast lỗi 422 'The name field is required.' có thực sự hiển thị cho user hay không — screenshot chụp ~2.3s sau submit không thấy toast, có thể đã tự ẩn trước khi chụp hoặc UI không hiển thị lỗi field-level (1 sample, chưa xác nhận).",
+    "Hành vi toggle 'Connect artworks with Shopify variants' (by-shopify flow) — chưa bật thử, không rõ nó thay đổi UI/data mapping như thế nào.",
+    "Hành vi 'Assign mockups' khi Shopify product có nhiều variant thật (store hiện dùng sản phẩm demo không có variant) — chưa verify per-variant mockup assignment có bắt buộc hay không.",
+    "Multi-store launch có tạo Shopify product riêng biệt cho mỗi store hay share chung Product Base/data — chỉ launch 1 store nên chưa quan sát được.",
+    "Header sau khi publish của flow by-product-base (Unpublish/View/Update) — suy đoán giống by-shopify dựa trên pattern chung của app, nhưng KHÔNG re-verify trực tiếp bằng screenshot sau khi launch xong (chỉ thấy toast + campaign link ở multi-store dialog)."
+  ],
+  "conflicts": [],
+  "blocking_issues": [],
+  "payload": {
+    "portal_context": {
+      "environment": "staging (staging-portal.teeinblue.com)",
+      "role": "owner",
+      "object_id": "Campaign (2 creation flows: by-product-base id 2595, by-shopify/platform-product id 531)",
+      "object_type": "Campaign",
+      "initial_state": "Store đã có sẵn 1 sample campaign (by-product-base, id 2592, Unpublished) trước khi chạy; không có campaign nào theo flow by-shopify trước khi chạy.",
+      "verified_by": [
+        "Sidebar hiển thị tên 'Linh explorer', store 'linh-explorer.myshopify.com', plan 'Blue (Test)' — screenshot raw/portal/shots/VERIFY-001-login-home.png",
+        "JWT localStorage.teeinblue_token decode: sub=273, user_id=266 — khớp TIB_STAGING_EMAIL account (Linh explorer)",
+        "Không phát hiện sub=2 hoặc store linh-tib-staging bất kỳ lúc nào trong suốt phiên làm việc"
+      ]
+    },
+    "observations": [
+      {
+        "observation_id": "OBS-001",
+        "surface": "Home /",
+        "element": "Sidebar account block + JWT token",
+        "observed_result": "Tên 'Linh explorer', store 'linh-explorer.myshopify.c[om]', badge 'Blue (Test)'; JWT payload sub=273, user_id=266. Home dashboard cho thấy 'Published Campaigns: 0' tại thời điểm login (trước khi tạo campaign nào trong run này).",
+        "evidence_refs": [
+          { "type": "screenshot", "path": "raw/portal/shots/VERIFY-001-login-home.png", "act_id": "VERIFY-001", "note": "Xác nhận target account trước khi thao tác" }
+        ],
+        "knowledge_kind": "OBSERVED_CURRENT"
+      },
+      {
+        "observation_id": "OBS-002",
+        "surface": "Sidebar > Campaigns (submenu)",
+        "element": "Nav item 'Campaigns' expandable",
+        "observed_result": "Có đúng 2 submenu item: 'by Product Base' -> /campaigns, 'by Shopify Products' -> /platform-products. Đây là 2 entry point độc lập cho 2 creation flow yêu cầu khám phá.",
+        "evidence_refs": [
+          { "type": "screenshot", "path": "raw/portal/shots/OBS-003-campaigns-list.png", "act_id": "OBS-002" }
+        ],
+        "knowledge_kind": "OBSERVED_CURRENT"
+      },
+      {
+        "observation_id": "OBS-003",
+        "surface": "/campaigns (Campaigns by Product Bases - list)",
+        "element": "Toàn trang list",
+        "observed_result": "Filter tabs: All/Published/Unpublished/Archived/Update required(0). Filter row: Search, Published on store:Any, Internal Tags:Any, Type:Any, Vendor:Any, Tags:Any. Table cols: CAMPAIGN MOCKUPS, NAME, INTERNAL TAGS, LISTING INFO, STATUS/CREATED, ACTION. Entry points: 'Bulk creator' (/campaigns/bulk-editor) và 'New campaign' (/campaigns/new). Đã có sẵn 1 sample campaign trước khi chạy: '[Sample campaign] Woman and Dog Clipart - Poster' (id 2592), Type Customizer, Tags 'Sample Campaigns', Status Unpublished, created 2026-09-09.",
+        "evidence_refs": [
+          { "type": "screenshot", "path": "raw/portal/shots/OBS-003-campaigns-list.png", "act_id": "OBS-003" }
+        ],
+        "knowledge_kind": "OBSERVED_CURRENT"
+      },
+      {
+        "observation_id": "OBS-004",
+        "surface": "/campaigns/new",
+        "element": "Form 'Basic information'",
+        "observed_result": "Chỉ có 2 field: 'Campaign title' (bắt buộc theo message lỗi quan sát sau) và 'Internal tags (optional)', cùng nút 'Save'. Không chọn product base ở bước này.",
+        "evidence_refs": [
+          { "type": "screenshot", "path": "raw/portal/shots/ACT-01-01-001-after.png", "act_id": "ACT-01-01-001" }
+        ],
+        "knowledge_kind": "OBSERVED_CURRENT"
+      },
+      {
+        "observation_id": "OBS-005",
+        "surface": "/campaigns/new -> POST /api/campaigns",
+        "element": "Nút Save khi Campaign title rỗng",
+        "observed_result": "Request body {\"name\":null}. Response 422: {\"message\":\"The name field is required.\",\"errors\":{\"name\":[\"The name field is required.\"]}}. Console log: 'Failed to load resource: the server responded with a status of 422 ()'. Screenshot ~2.3s sau submit KHÔNG thấy toast/inline error nào hiển thị trên UI — chưa xác nhận có toast thoáng qua đã tự ẩn hay UI thực sự im lặng khi lỗi field-level (xem unknowns).",
+        "evidence_refs": [
+          { "type": "screenshot", "path": "raw/portal/shots/ACT-01-01-002-after2.png", "act_id": "ACT-01-01-002" },
+          { "type": "har_entry", "path": "raw/network/ACT-01-01-002.json", "act_id": "ACT-01-01-002" }
+        ],
+        "knowledge_kind": "OBSERVED_CURRENT"
+      },
+      {
+        "observation_id": "OBS-006",
+        "surface": "/campaigns/new -> /campaigns/{id}/edit",
+        "element": "Submit form với title hợp lệ",
+        "observed_result": "Toast 'Success - Your campaign has been created'. Redirect tới /campaigns/2595/edit. Trang edit có layout: 'STEP 1: ADD PRODUCTS & ARTWORKS' (Available Products, nút '+'), 'STEP 2: PREVIEW YOUR CAMPAIGN' (mockup preview mặc định hình áo thun xám placeholder, tên campaign, banner vàng 'Add a product base ... to preview here'), top bar có 'Listing info', 'Logs', '...', 'Launch'. Banner đỏ dưới cùng: 'Your campaign is NOT ready to launch because of some unresolved issues.' kèm link 'VIEW DETAILS'.",
+        "evidence_refs": [
+          { "type": "screenshot", "path": "raw/portal/shots/ACT-01-01-003-after.png", "act_id": "ACT-01-01-003" },
+          { "type": "screenshot", "path": "raw/portal/shots/ACT-01-01-003-after2.png", "act_id": "ACT-01-01-003" },
+          { "type": "har_entry", "path": "raw/network/ACT-01-01-003.json", "act_id": "ACT-01-01-003" }
+        ],
+        "knowledge_kind": "OBSERVED_CURRENT"
+      },
+      {
+        "observation_id": "OBS-007",
+        "surface": "STEP 1: ADD PRODUCTS & ARTWORKS",
+        "element": "Nút '+' thêm product base",
+        "observed_result": "DOM có 1 node <button class='promise-button vinput-btn vinput-btn-primary'> trùng class-signature nhưng KHÔNG phải element thực sự render trên màn hình (getBoundingClientRect toàn 0, offsetParent=false) — element thật sự clickable nằm ở vị trí đó có class 'campaign-available-product--action'. Đây là DOM quirk ảnh hưởng tới automation locator (duplicate/ẩn node), không kết luận là bug UI cho end-user vì người dùng thật click bằng chuột vào đúng vị trí hiển thị.",
+        "evidence_refs": [
+          { "type": "screenshot", "path": "raw/portal/shots/ACT-01-01-004-after4.png", "act_id": "ACT-01-01-004" }
+        ],
+        "knowledge_kind": "OBSERVED_CURRENT"
+      },
+      {
+        "observation_id": "OBS-008",
+        "surface": "Modal 'Select your product'",
+        "element": "Danh sách Product Base",
+        "observed_result": "Modal search + filter 'Internal name:Any', 'Internal tags:Any'. Hiển thị 3 product base có sẵn: 'QA - product base explore copy' (tag 'QA PB Explore internal'), 'QA - product base explore' (tag 'QA PB Explore internal'), 'Vertical Framed Poster' (vendor Printify).",
+        "evidence_refs": [
+          { "type": "screenshot", "path": "raw/portal/shots/ACT-01-01-004-after5.png", "act_id": "ACT-01-01-004" }
+        ],
+        "knowledge_kind": "OBSERVED_CURRENT"
+      },
+      {
+        "observation_id": "OBS-009",
+        "surface": "STEP 1 sau khi thêm Product Base",
+        "element": "'Print Areas of {product}'",
+        "observed_result": "Sau khi chọn 'Vertical Framed Poster', xuất hiện danh sách print area riêng cho product đó (vd '12\" x 18\"_front', '24\" x 36\"_front'), mỗi print area có link '+ Select artwork' riêng, cộng thêm link chung '+ Select artwork for all' ở góc phải panel.",
+        "evidence_refs": [
+          { "type": "screenshot", "path": "raw/portal/shots/ACT-01-01-005-after-final.png", "act_id": "ACT-01-01-004" }
+        ],
+        "knowledge_kind": "OBSERVED_CURRENT"
+      },
+      {
+        "observation_id": "OBS-010",
+        "surface": "Modal 'Select your artwork' + STEP 2 preview",
+        "element": "Chọn artwork cho toàn bộ print area",
+        "observed_result": "Modal liệt kê artwork có sẵn (thumbnail, tên, kích thước, thời gian tạo) + nút '+New artwork'. Chọn 1 artwork ('Poster - Woman and dog clipart') qua 'Select artwork for all' áp dụng cho MỌI print area cùng lúc; STEP 2 preview cập nhật mockup thật, banner chuyển xanh 'Your campaign is valid and ready to launch!'.",
+        "evidence_refs": [
+          { "type": "screenshot", "path": "raw/portal/shots/ACT-01-01-006-after.png", "act_id": "ACT-01-01-006" },
+          { "type": "screenshot", "path": "raw/portal/shots/ACT-01-01-006-after3.png", "act_id": "ACT-01-01-006" },
+          { "type": "har_entry", "path": "raw/network/ACT-01-01-004-to-006-add-product-and-artwork.json", "act_id": "ACT-01-01-004-to-006" }
+        ],
+        "knowledge_kind": "OBSERVED_CURRENT"
+      },
+      {
+        "observation_id": "OBS-011",
+        "surface": "STEP 2: PREVIEW YOUR CAMPAIGN (by-product-base)",
+        "element": "Panel preview bên phải",
+        "observed_result": "Hiển thị: tên campaign (link), giá '$55.99', link 'AVAILABLE PRODUCT', nút 'Assign mockups', selector COLOR (Black/White), selector SIZE (12\"x18\"/24\"x36\"), text 'Variant's custom printarea(s): 12\" x 18\"_front (3600x5400)', và bên dưới là 'PERSONALIZE' — form field riêng của artwork đã chọn (ở đây artwork test có 3 template chọn 1/2/3).",
+        "evidence_refs": [
+          { "type": "screenshot", "path": "raw/portal/shots/ACT-01-01-006-after3.png", "act_id": "ACT-01-01-006" }
+        ],
+        "knowledge_kind": "OBSERVED_CURRENT"
+      },
+      {
+        "observation_id": "OBS-012",
+        "surface": "Modal 'Edit campaign info' (Listing info)",
+        "element": "Top bar 'Listing info' (có icon cảnh báo tam giác trước khi điền)",
+        "observed_result": "Modal có: 'Product organization' (Product Type mặc định 'Customizer', Vendor trống, Product Tags trống), 'Product Thumbnail' (upload, khuyến nghị <1000x1000px JPG). Mô tả: 'Publishing a campaign creates a new Shopify/Etsy product. Pre-set info of that product here.' KHÔNG bắt buộc để đạt trạng thái 'valid and ready to launch'.",
+        "evidence_refs": [
+          { "type": "screenshot", "path": "raw/portal/shots/ACT-01-01-008-listing-info.png", "act_id": "ACT-01-01-007" },
+          { "type": "har_entry", "path": "raw/network/ACT-01-01-007-listing-info-view.json", "act_id": "ACT-01-01-007" }
+        ],
+        "knowledge_kind": "OBSERVED_CURRENT"
+      },
+      {
+        "observation_id": "OBS-013",
+        "surface": "Modal 'Multi-store launch'",
+        "element": "Bảng Store name/Platform/Campaign link/Action",
+        "observed_result": "QUAN TRỌNG: dialog liệt kê TẤT CẢ store trong Organization 'Linh explorer', ở đây thấy 2 store: 'linh-explorer-2' và 'linh-explorer' (cả 2 Shopify), mỗi row có nút 'Launch' RIÊNG. Publish là theo từng store độc lập — click Launch ở 1 row không ảnh hưởng row khác. Đã CHỈ click Launch ở đúng row 'linh-explorer', KHÔNG chạm 'linh-explorer-2'.",
+        "evidence_refs": [
+          { "type": "screenshot", "path": "raw/portal/shots/ACT-01-01-009-launch-modal.png", "act_id": "ACT-01-01-009" }
+        ],
+        "knowledge_kind": "OBSERVED_CURRENT"
+      },
+      {
+        "observation_id": "OBS-014",
+        "surface": "Modal 'Multi-store launch' sau khi Launch",
+        "element": "Toast + row 'linh-explorer'",
+        "observed_result": "Toast: 'Publishing campaign QA Explore Campaign PB 01. Content is published. Mockups are still publishing.' Row 'linh-explorer' đổi Action thành 'View'/'Update', Campaign link hiển thị 'https://linh-explorer.myshopify.com/products/qa-explore-campaig...'. Row 'linh-explorer-2' vẫn nguyên 'Launch' (không bị ảnh hưởng).",
+        "evidence_refs": [
+          { "type": "screenshot", "path": "raw/portal/shots/ACT-01-01-009-launch-confirm.png", "act_id": "ACT-01-01-009" },
+          { "type": "har_entry", "path": "raw/network/ACT-01-01-009-launch.json", "act_id": "ACT-01-01-009" }
+        ],
+        "knowledge_kind": "OBSERVED_CURRENT"
+      },
+      {
+        "observation_id": "OBS-015",
+        "surface": "/platform-products (Campaigns by Shopify products - empty state)",
+        "element": "Toàn trang trước khi có campaign nào",
+        "observed_result": "Empty state: 'Create your first Campaign by Shopify products — A campaign represents a customizable product. For this campaign type, it's created by adding artworks to a Shopify product.' + nút '+ New campaign'.",
+        "evidence_refs": [
+          { "type": "screenshot", "path": "raw/portal/shots/ACT-02-01-001-after.png", "act_id": "ACT-02-01-001" },
+          { "type": "har_entry", "path": "raw/network/ACT-02-01-001-platform-products-list.json", "act_id": "ACT-02-01-001" }
+        ],
+        "knowledge_kind": "OBSERVED_CURRENT"
+      },
+      {
+        "observation_id": "OBS-016",
+        "surface": "/platform-products/new",
+        "element": "Form 'Basic information'",
+        "observed_result": "'Choose a store' dropdown mặc định = 'linh-explorer | linh-explorer.myshopify.com' (store đã connect, KHÔNG phải chọn thủ công). 'Select a Shopify product' (nút '+'). 'Internal tags (optional)'. Nút 'Create'.",
+        "evidence_refs": [
+          { "type": "screenshot", "path": "raw/portal/shots/ACT-02-01-002-after.png", "act_id": "ACT-02-01-002" },
+          { "type": "har_entry", "path": "raw/network/ACT-02-01-002-new-campaign-form.json", "act_id": "ACT-02-01-002" }
+        ],
+        "knowledge_kind": "OBSERVED_CURRENT"
+      },
+      {
+        "observation_id": "OBS-017",
+        "surface": "Modal 'Select a product from store linh-explorer'",
+        "element": "Bảng Product/Status/Vendor/Product Type",
+        "observed_result": "Liệt kê SẢN PHẨM SHOPIFY THẬT của store (Search + Sort: Created at/desc). Có sản phẩm demo của dev store (The Collection Snowboard: Liquid/Oxygen, The Multi-managed Snowboard, The 3p Fulfilled Snowboard, The Multi-location Snowboard, The Out of Stock Snowboard, ...) VÀ sản phẩm Shopify vừa được tự động tạo khi publish campaign by-product-base ở trên: 'QA Explore Campaign PB 01' với Status 'Used' (mờ đi, KHÔNG chọn được nữa) — xác nhận publish campaign by-product-base tạo ra 1 Shopify product thật, và product đó bị khoá khỏi danh sách chọn cho flow by-shopify.",
+        "evidence_refs": [
+          { "type": "screenshot", "path": "raw/portal/shots/ACT-02-01-003-after2.png", "act_id": "ACT-02-01-003" }
+        ],
+        "knowledge_kind": "OBSERVED_CURRENT"
+      },
+      {
+        "observation_id": "OBS-018",
+        "surface": "/platform-products/{id}/edit",
+        "element": "Layout campaign edit (by-shopify) so với by-product-base",
+        "observed_result": "Khác biệt rõ so với by-product-base: header 'STEP 1: ADD ARTWORK' (không có '& PRODUCTS'), KHÔNG có khái niệm print area — chỉ 1 khối 'Artworks:' + '+ Select artwork' + toggle 'Connect artworks with Shopify variants' (mặc định OFF, chưa test bật). STEP 2 preview hiển thị text tĩnh 'Variants are managed by Shopify.' thay vì Color/Size selector nội bộ. Top bar dùng 'Edit internal info' thay vì 'Listing info'.",
+        "evidence_refs": [
+          { "type": "screenshot", "path": "raw/portal/shots/ACT-02-01-005-after2.png", "act_id": "ACT-02-01-004" }
+        ],
+        "knowledge_kind": "OBSERVED_CURRENT"
+      },
+      {
+        "observation_id": "OBS-019",
+        "surface": "Modal 'Select your artwork' (by-shopify)",
+        "element": "Chọn artwork 'QA - all layers v3'",
+        "observed_result": "Sau khi chọn, PERSONALIZATION FORM render rất nhiều loại field lấy từ artwork (Pet name, OPT curve-text, OPT maps, OPT route-maps + Connect Strava, OPT star-maps, Pick a time, OPT moon-phase, OPT word-cloud, OPT song-search, OPT calendar, OPT qr-code, OPT clock, Add gift box toggle, OPT json-list, OPT font, OPT color + Generate image, OPT vector-category/upload, OPT shape/warp/spiral-text, OPT paragraph, OPT scrabble-crossword/single-line, OPT photo, OPT multiple-uploads, OPT clipart-category, OPT group-clipart-categories). Đây là field do Artwork định nghĩa (đã có KB riêng ở object artwork) — không đào sâu thêm, chỉ ghi nhận Campaign hiển thị/kế thừa toàn bộ personalization form của artwork được gán.",
+        "evidence_refs": [
+          { "type": "screenshot", "path": "raw/portal/shots/ACT-02-01-007-after2.png", "act_id": "ACT-02-01-005" },
+          { "type": "har_entry", "path": "raw/network/ACT-02-01-006-007-select-artwork.json", "act_id": "ACT-02-01-005" }
+        ],
+        "knowledge_kind": "OBSERVED_CURRENT"
+      },
+      {
+        "observation_id": "OBS-020",
+        "surface": "Banner + Modal 'Campaign errors' (by-shopify)",
+        "element": "VIEW DETAILS khi chưa launch được",
+        "observed_result": "Ngay cả khi đã gán artwork, banner đỏ vẫn báo NOT ready. Click 'VIEW DETAILS' -> modal 'Campaign errors: Resolve issues below to launch your campaign.' liệt kê đúng 1 lỗi: 'No mockup'. Đây là validation RIÊNG của flow by-shopify không tồn tại ở flow by-product-base (flow kia dùng chính ảnh print-area làm mockup).",
+        "evidence_refs": [
+          { "type": "screenshot", "path": "raw/portal/shots/ACT-02-01-008-viewdetails.png", "act_id": "ACT-02-01-006" }
+        ],
+        "knowledge_kind": "OBSERVED_CURRENT"
+      },
+      {
+        "observation_id": "OBS-021",
+        "surface": "Modal 'Assign mockups'",
+        "element": "'Select variants' + 'Select mockups' khi chưa có mockup nào",
+        "observed_result": "Text: 'Select variants and mockups that should be shown together.' 'Select variants' dropdown (có 'Select all'); 'Select mockups' hiện 'There is no mockup to assign yet.' — xác nhận phải upload mockup trước (qua nút riêng 'Upload mockup') rồi mới quay lại assign theo variant.",
+        "evidence_refs": [
+          { "type": "screenshot", "path": "raw/portal/shots/ACT-02-01-009-assign-mockups2.png", "act_id": "ACT-02-01-007" }
+        ],
+        "knowledge_kind": "OBSERVED_CURRENT"
+      },
+      {
+        "observation_id": "OBS-022",
+        "surface": "Nút 'Upload mockup' -> thư viện mockup",
+        "element": "Upload + chọn ảnh",
+        "observed_result": "Mở thư viện: drag-and-drop hoặc click để upload, category filter (All/TIB Mockups/Shopify imported/+New category), search, nút 'Reload'. Sau khi upload xong 1 ảnh và bấm 'Select 1 images', banner đổi ngay thành xanh 'Your campaign is valid and ready to launch!' — KHÔNG cần quay lại modal 'Assign mockups' để launch được (1 mockup mặc định áp dụng đủ để pass validation, chưa rõ có áp dụng đúng cho mọi variant Shopify thật hay không — xem unknowns).",
+        "evidence_refs": [
+          { "type": "screenshot", "path": "raw/portal/shots/ACT-02-01-010-upload-mockup.png", "act_id": "ACT-02-01-008" },
+          { "type": "screenshot", "path": "raw/portal/shots/ACT-02-01-010c.png", "act_id": "ACT-02-01-008" },
+          { "type": "har_entry", "path": "raw/network/ACT-02-01-007-to-011-mockup-upload.json", "act_id": "ACT-02-01-008" }
+        ],
+        "knowledge_kind": "OBSERVED_CURRENT"
+      },
+      {
+        "observation_id": "OBS-023",
+        "surface": "Nút 'Launch' (by-shopify) sau khi valid",
+        "element": "Publish trực tiếp",
+        "observed_result": "KHÁC với by-product-base: Launch ở flow by-shopify publish TRỰC TIẾP, KHÔNG mở dialog 'Multi-store launch' (vì store + Shopify product đã cố định từ lúc tạo). Sau publish, top bar đổi thành: 'Unpublish' (link đỏ) / 'Logs' / '...' / 'View' / 'Update'.",
+        "evidence_refs": [
+          { "type": "screenshot", "path": "raw/portal/shots/ACT-02-01-012-launch-result.png", "act_id": "ACT-02-01-009" },
+          { "type": "har_entry", "path": "raw/network/ACT-02-01-012-launch.json", "act_id": "ACT-02-01-009" }
+        ],
+        "knowledge_kind": "OBSERVED_CURRENT"
+      },
+      {
+        "observation_id": "OBS-024",
+        "surface": "Nút 'Unpublish'",
+        "element": "Confirm dialog",
+        "observed_result": "Dialog 'Confirm — Are you sure you want to unpublish this campaign?' với nút đỏ 'Unpublish' / 'Cancel'. Xác nhận xong, top bar quay lại trạng thái trước publish ('Launch' + 'Edit internal info').",
+        "evidence_refs": [
+          { "type": "screenshot", "path": "raw/portal/shots/ACT-03-01-001-unpublish-confirm.png", "act_id": "ACT-02-01-010" },
+          { "type": "screenshot", "path": "raw/portal/shots/ACT-03-01-001-after3.png", "act_id": "ACT-02-01-010" },
+          { "type": "har_entry", "path": "raw/network/ACT-03-01-001-unpublish.json", "act_id": "ACT-02-01-010" }
+        ],
+        "knowledge_kind": "OBSERVED_CURRENT"
+      },
+      {
+        "observation_id": "OBS-025",
+        "surface": "/campaigns list — cột ACTION",
+        "element": "3 control trên mỗi row",
+        "observed_result": "Icon 'rocket/link' (mở thẳng dialog 'Multi-store launch' từ list, không cần vào trang edit), icon bút chì (edit), và '...' overflow menu gồm: 'See campaign info', 'View campaign logs', 'Duplicate campaign', 'Mark as archive', 'Import to Translation', 'Delete campaign'. 4 mục đầu KHÔNG được thực thi trong run này (ngoài scope thời gian) — xem unexplored_areas.",
+        "evidence_refs": [
+          { "type": "screenshot", "path": "raw/portal/shots/ACT-03-02-002-action-menu2.png", "act_id": "ACT-04-01-002" }
+        ],
+        "knowledge_kind": "OBSERVED_CURRENT"
+      },
+      {
+        "observation_id": "OBS-026",
+        "surface": "Modal xoá campaign",
+        "element": "'Warning' confirm",
+        "observed_result": "Text: 'Are you sure to remove {campaign name}?' kèm checkbox (mặc định UNCHECKED) 'Remove artworks & product bases from this campaign.' Nút đỏ 'Remove' / 'Cancel'. Xác nhận (không tick checkbox) -> row biến mất khỏi list ngay, tổng số entries giảm (3 -> 2). Không kiểm tra được ảnh hưởng của việc tick checkbox (chưa thử case đó).",
+        "evidence_refs": [
+          { "type": "screenshot", "path": "raw/portal/shots/ACT-03-02-003-delete-confirm.png", "act_id": "ACT-04-01-003" },
+          { "type": "screenshot", "path": "raw/portal/shots/ACT-03-02-004-after-delete2.png", "act_id": "ACT-04-01-003" },
+          { "type": "har_entry", "path": "raw/network/ACT-03-02-002-004-delete-campaign.json", "act_id": "ACT-04-01-003" }
+        ],
+        "knowledge_kind": "OBSERVED_CURRENT"
+      },
+      {
+        "observation_id": "OBS-027",
+        "surface": "/platform-products list — cấu trúc bảng",
+        "element": "So sánh với /campaigns list",
+        "observed_result": "Cột: MOCKUP, NAME, INTERNAL TAGS, DOMAIN, STATUS/CREATED, ACTION (KHÔNG có LISTING INFO/TYPE/VENDOR như list by-product-base). Filter row chỉ có: Search, Internal Tags:Any, Store:Any (không có Published-on-store/Type/Vendor/Tags). Filter tabs: All/Published/Unpublished (KHÔNG có Archived/Update required như list kia).",
+        "evidence_refs": [
+          { "type": "screenshot", "path": "raw/portal/shots/OBS-final-platform-products-list.png", "act_id": "ACT-03-01-002" },
+          { "type": "har_entry", "path": "raw/network/OBS-final-platform-products-list.json", "act_id": "ACT-03-01-002" }
+        ],
+        "knowledge_kind": "OBSERVED_CURRENT"
+      },
+      {
+        "observation_id": "OBS-028",
+        "surface": "Session / JWT",
+        "element": "localStorage.teeinblue_token",
+        "observed_result": "exp claim tự tăng dần trong suốt phiên (vd 06:27:29Z lúc login -> 06:35:32Z ở cuối phiên) dù không có hành động login lại nào — xác nhận app tự refresh token nền khi tab còn mở/active, khớp ghi chú cũ trong knowledge/portal-login.md.",
+        "evidence_refs": [
+          { "type": "code_ref", "path": "n/a", "act_id": "n/a", "note": "Quan sát qua /verify polling nội bộ của driver script, không phải network capture riêng." }
+        ],
+        "knowledge_kind": "OBSERVED_CURRENT"
+      }
+    ],
+    "feature_candidates": [
+      {
+        "feature_id": "FEAT-01-create-campaign-by-product-base",
+        "name": "Tạo campaign từ Product Base có sẵn",
+        "user_goal": "Chọn 1 Product Base có sẵn, gán artwork cho từng print area, khai báo listing info, và publish campaign lên đúng store test.",
+        "entry_point": "Sidebar > Campaigns > by Product Base > New campaign (/campaigns/new)",
+        "observation_ids": ["OBS-002", "OBS-003", "OBS-004", "OBS-005", "OBS-006", "OBS-007", "OBS-008", "OBS-009", "OBS-010", "OBS-011", "OBS-012", "OBS-013", "OBS-014"],
+        "scenarios": [
+          {
+            "scn_id": "SCN-01-01",
+            "objective": "Quan sát form basic info và validation khi Campaign title rỗng.",
+            "actions": [
+              {
+                "act_id": "ACT-01-01-001",
+                "description": "Mở /campaigns/new từ list.",
+                "input": {},
+                "before": { "screenshot": "raw/portal/shots/ACT-01-01-001-before.png", "dom": "n/a", "object_state": { "campaign": "none" } },
+                "after": { "screenshot": "raw/portal/shots/ACT-01-01-001-after.png", "dom": "n/a", "object_state": { "form": "empty" }, "messages": [] },
+                "network_ref": "raw/network/ACT-01-01-001.json",
+                "network_entry_labels": { "mapped": 3, "polling": 0, "unrelated": 53, "unknown": 0 },
+                "console_errors": [],
+                "mutation": false,
+                "cleanup_result": "NOT_NEEDED",
+                "outcome": "SUCCESS"
+              },
+              {
+                "act_id": "ACT-01-01-002",
+                "description": "Bấm Save khi Campaign title để trống.",
+                "input": { "name": null },
+                "before": { "screenshot": "raw/portal/shots/ACT-01-01-002-before.png", "dom": "n/a", "object_state": { "form": "empty" } },
+                "after": { "screenshot": "raw/portal/shots/ACT-01-01-002-after2.png", "dom": "n/a", "object_state": { "campaign": "not created" }, "messages": ["The name field is required."] },
+                "network_ref": "raw/network/ACT-01-01-002.json",
+                "network_entry_labels": { "mapped": 2, "polling": 0, "unrelated": 0, "unknown": 0 },
+                "console_errors": ["Failed to load resource: the server responded with a status of 422 ()"],
+                "mutation": true,
+                "cleanup_result": "NOT_NEEDED",
+                "outcome": "ERROR"
+              },
+              {
+                "act_id": "ACT-01-01-003",
+                "description": "Nhập title 'QA Explore Campaign PB 01' và Save.",
+                "input": { "name": "QA Explore Campaign PB 01" },
+                "before": { "screenshot": "raw/portal/shots/ACT-01-01-003-before.png", "dom": "n/a", "object_state": { "campaign": "not created" } },
+                "after": { "screenshot": "raw/portal/shots/ACT-01-01-003-after2.png", "dom": "n/a", "object_state": { "campaign_id": 2595, "status": "draft/unpublished" }, "messages": ["Success - Your campaign has been created"] },
+                "network_ref": "raw/network/ACT-01-01-003.json",
+                "network_entry_labels": { "mapped": 4, "polling": 0, "unrelated": 16, "unknown": 0 },
+                "console_errors": [],
+                "mutation": true,
+                "cleanup_result": "NOT_NEEDED",
+                "outcome": "SUCCESS"
+              }
+            ]
+          },
+          {
+            "scn_id": "SCN-01-02",
+            "objective": "Gán Product Base có sẵn và artwork cho toàn bộ print area.",
+            "actions": [
+              {
+                "act_id": "ACT-01-01-004-to-006",
+                "description": "Thêm Product Base 'Vertical Framed Poster' vào campaign, sau đó chọn artwork 'Poster - Woman and dog clipart' cho tất cả print area qua 'Select artwork for all'.",
+                "input": { "product_base": "Vertical Framed Poster", "product_id": 3181, "artwork": "Poster - Woman and dog clipart" },
+                "before": { "screenshot": "raw/portal/shots/ACT-01-01-004-before.png", "dom": "n/a", "object_state": { "products": [], "artworks": [] } },
+                "after": { "screenshot": "raw/portal/shots/ACT-01-01-006-after3.png", "dom": "n/a", "object_state": { "products": ["Vertical Framed Poster"], "print_areas": ["12x18_front", "24x36_front"], "artwork_assigned": true, "launch_ready": true }, "messages": ["Your campaign is valid and ready to launch!"] },
+                "network_ref": "raw/network/ACT-01-01-004-to-006-add-product-and-artwork.json",
+                "network_entry_labels": { "mapped": 9, "polling": 4, "unrelated": 107, "unknown": 0 },
+                "console_errors": [],
+                "mutation": true,
+                "cleanup_result": "NOT_NEEDED",
+                "outcome": "SUCCESS"
+              }
+            ]
+          },
+          {
+            "scn_id": "SCN-01-03",
+            "objective": "Xem metadata 'Listing info' dùng khi publish tạo Shopify/Etsy product.",
+            "actions": [
+              {
+                "act_id": "ACT-01-01-007",
+                "description": "Mở modal 'Edit campaign info' (Listing info) rồi Cancel (không lưu).",
+                "input": {},
+                "before": { "screenshot": "raw/portal/shots/ACT-01-01-007-before-launch.png", "dom": "n/a", "object_state": { "listing_info": "not set" } },
+                "after": { "screenshot": "raw/portal/shots/ACT-01-01-008-listing-info.png", "dom": "n/a", "object_state": { "listing_info": "not set (cancelled)" }, "messages": [] },
+                "network_ref": "raw/network/ACT-01-01-007-listing-info-view.json",
+                "network_entry_labels": { "mapped": 0, "polling": 0, "unrelated": 4, "unknown": 0 },
+                "console_errors": [],
+                "mutation": false,
+                "cleanup_result": "NOT_NEEDED",
+                "outcome": "SUCCESS"
+              }
+            ]
+          },
+          {
+            "scn_id": "SCN-01-04",
+            "objective": "Publish (Launch) campaign lên đúng store test qua Multi-store launch dialog.",
+            "actions": [
+              {
+                "act_id": "ACT-01-01-009",
+                "description": "Bấm Launch -> Multi-store launch dialog hiện 2 store (linh-explorer-2, linh-explorer) -> chỉ bấm Launch ở row 'linh-explorer'.",
+                "input": { "target_store": "linh-explorer" },
+                "before": { "screenshot": "raw/portal/shots/ACT-01-01-009-launch-click.png", "dom": "n/a", "object_state": { "published": false } },
+                "after": { "screenshot": "raw/portal/shots/ACT-01-01-009-launch-confirm.png", "dom": "n/a", "object_state": { "published": true, "store": "linh-explorer.myshopify.com", "product_url": "https://linh-explorer.myshopify.com/products/qa-explore-campaig..." }, "messages": ["Publishing campaign QA Explore Campaign PB 01.", "Content is published.", "Mockups are still publishing."] },
+                "network_ref": "raw/network/ACT-01-01-009-launch.json",
+                "network_entry_labels": { "mapped": 3, "polling": 0, "unrelated": 11, "unknown": 0 },
+                "console_errors": [],
+                "mutation": true,
+                "cleanup_result": "NOT_NEEDED",
+                "outcome": "SUCCESS"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "feature_id": "FEAT-02-create-campaign-by-shopify",
+        "name": "Tạo campaign gắn với Shopify product có sẵn",
+        "user_goal": "Chọn 1 sản phẩm Shopify thật của store đã connect, gán artwork + mockup cho toàn sản phẩm (không có print area riêng), rồi publish trực tiếp lên đúng store đó.",
+        "entry_point": "Sidebar > Campaigns > by Shopify Products > New campaign (/platform-products/new)",
+        "observation_ids": ["OBS-002", "OBS-015", "OBS-016", "OBS-017", "OBS-018", "OBS-019", "OBS-020", "OBS-021", "OBS-022", "OBS-023", "OBS-024"],
+        "scenarios": [
+          {
+            "scn_id": "SCN-02-01",
+            "objective": "Tạo campaign mới gắn với 1 Shopify product có sẵn.",
+            "actions": [
+              {
+                "act_id": "ACT-02-01-001",
+                "description": "Mở /platform-products lần đầu (empty state).",
+                "input": {},
+                "before": { "screenshot": "raw/portal/shots/ACT-02-01-001-before.png", "dom": "n/a", "object_state": { "campaigns": [] } },
+                "after": { "screenshot": "raw/portal/shots/ACT-02-01-001-after.png", "dom": "n/a", "object_state": { "campaigns": [] }, "messages": [] },
+                "network_ref": "raw/network/ACT-02-01-001-platform-products-list.json",
+                "network_entry_labels": { "mapped": 2, "polling": 0, "unrelated": 60, "unknown": 0 },
+                "console_errors": [],
+                "mutation": false,
+                "cleanup_result": "NOT_NEEDED",
+                "outcome": "SUCCESS"
+              },
+              {
+                "act_id": "ACT-02-01-002",
+                "description": "Click 'New campaign' -> form hiện store mặc định linh-explorer.",
+                "input": {},
+                "before": { "screenshot": "raw/portal/shots/ACT-02-01-001-after.png", "dom": "n/a", "object_state": {} },
+                "after": { "screenshot": "raw/portal/shots/ACT-02-01-002-after.png", "dom": "n/a", "object_state": { "store": "linh-explorer | linh-explorer.myshopify.com" }, "messages": [] },
+                "network_ref": "raw/network/ACT-02-01-002-new-campaign-form.json",
+                "network_entry_labels": { "mapped": 1, "polling": 0, "unrelated": 7, "unknown": 0 },
+                "console_errors": [],
+                "mutation": false,
+                "cleanup_result": "NOT_NEEDED",
+                "outcome": "SUCCESS"
+              },
+              {
+                "act_id": "ACT-02-01-003",
+                "description": "Chọn Shopify product 'The 3p Fulfilled Snowboard' từ danh sách sản phẩm store (thấy cả product 'QA Explore Campaign PB 01' đã publish trước đó, status Used, không chọn được).",
+                "input": { "shopify_product": "The 3p Fulfilled Snowboard" },
+                "before": { "screenshot": "raw/portal/shots/ACT-02-01-003-after.png", "dom": "n/a", "object_state": { "product_selected": null } },
+                "after": { "screenshot": "raw/portal/shots/ACT-02-01-004-after.png", "dom": "n/a", "object_state": { "product_selected": "The 3p Fulfilled Snowboard" }, "messages": [] },
+                "network_ref": "raw/network/ACT-02-01-003-004-select-shopify-product.json",
+                "network_entry_labels": { "mapped": 3, "polling": 0, "unrelated": 33, "unknown": 0 },
+                "console_errors": [],
+                "mutation": false,
+                "cleanup_result": "NOT_NEEDED",
+                "outcome": "SUCCESS"
+              },
+              {
+                "act_id": "ACT-02-01-004",
+                "description": "Bấm 'Create' -> tạo platform-product draft.",
+                "input": {},
+                "before": { "screenshot": "raw/portal/shots/ACT-02-01-004-after.png", "dom": "n/a", "object_state": { "campaign": "not created" } },
+                "after": { "screenshot": "raw/portal/shots/ACT-02-01-005-after2.png", "dom": "n/a", "object_state": { "platform_product_id": 531, "status": "draft/unpublished" }, "messages": [] },
+                "network_ref": "raw/network/ACT-02-01-005-create-platform-product.json",
+                "network_entry_labels": { "mapped": 3, "polling": 0, "unrelated": 17, "unknown": 0 },
+                "console_errors": [],
+                "mutation": true,
+                "cleanup_result": "NOT_NEEDED",
+                "outcome": "SUCCESS"
+              }
+            ]
+          },
+          {
+            "scn_id": "SCN-02-02",
+            "objective": "Gán artwork cho toàn bộ Shopify product (không có khái niệm print area).",
+            "actions": [
+              {
+                "act_id": "ACT-02-01-005",
+                "description": "Chọn artwork 'QA - all layers v3' qua 'Select artwork'.",
+                "input": { "artwork": "QA - all layers v3" },
+                "before": { "screenshot": "raw/portal/shots/ACT-02-01-006-after.png", "dom": "n/a", "object_state": { "artwork": null } },
+                "after": { "screenshot": "raw/portal/shots/ACT-02-01-007-after2.png", "dom": "n/a", "object_state": { "artwork": "QA - all layers v3", "launch_ready": false, "blocking_error": "No mockup" }, "messages": [] },
+                "network_ref": "raw/network/ACT-02-01-006-007-select-artwork.json",
+                "network_entry_labels": { "mapped": 6, "polling": 5, "unrelated": 95, "unknown": 0 },
+                "console_errors": [],
+                "mutation": true,
+                "cleanup_result": "NOT_NEEDED",
+                "outcome": "SUCCESS"
+              }
+            ]
+          },
+          {
+            "scn_id": "SCN-02-03",
+            "objective": "Xử lý validation 'No mockup' bắt buộc trước khi launch được, và upload/assign mockup.",
+            "actions": [
+              {
+                "act_id": "ACT-02-01-006",
+                "description": "Click 'VIEW DETAILS' trên banner lỗi.",
+                "input": {},
+                "before": { "screenshot": "raw/portal/shots/ACT-02-01-007-after2.png", "dom": "n/a", "object_state": { "launch_ready": false } },
+                "after": { "screenshot": "raw/portal/shots/ACT-02-01-008-viewdetails.png", "dom": "n/a", "object_state": { "launch_ready": false }, "messages": ["Campaign errors: No mockup"] },
+                "network_ref": "raw/network/ACT-02-01-006-007-select-artwork.json",
+                "network_entry_labels": { "mapped": 0, "polling": 0, "unrelated": 0, "unknown": 1 },
+                "console_errors": [],
+                "mutation": false,
+                "cleanup_result": "NOT_NEEDED",
+                "outcome": "SUCCESS"
+              },
+              {
+                "act_id": "ACT-02-01-007",
+                "description": "Click 'Assign mockups' khi chưa có mockup nào upload.",
+                "input": {},
+                "before": { "screenshot": "raw/portal/shots/ACT-02-01-008-viewdetails.png", "dom": "n/a", "object_state": { "mockups": [] } },
+                "after": { "screenshot": "raw/portal/shots/ACT-02-01-009-assign-mockups2.png", "dom": "n/a", "object_state": { "mockups": [] }, "messages": ["There is no mockup to assign yet."] },
+                "network_ref": "raw/network/ACT-02-01-007-to-011-mockup-upload.json",
+                "network_entry_labels": { "mapped": 0, "polling": 0, "unrelated": 0, "unknown": 2 },
+                "console_errors": [],
+                "mutation": false,
+                "cleanup_result": "NOT_NEEDED",
+                "outcome": "BLOCKED"
+              },
+              {
+                "act_id": "ACT-02-01-008",
+                "description": "Upload 1 ảnh mockup qua 'Upload mockup' rồi 'Select 1 images'.",
+                "input": { "file": "test-data/thumbnail/62bd114cd6482_thumbnail.jpeg" },
+                "before": { "screenshot": "raw/portal/shots/ACT-02-01-009-assign-mockups2.png", "dom": "n/a", "object_state": { "mockups": [] } },
+                "after": { "screenshot": "raw/portal/shots/ACT-02-01-010c.png", "dom": "n/a", "object_state": { "mockups": ["62bd114cd6482_thumbnail.jpeg"], "launch_ready": true }, "messages": ["Your campaign is valid and ready to launch!"] },
+                "network_ref": "raw/network/ACT-02-01-007-to-011-mockup-upload.json",
+                "network_entry_labels": { "mapped": 8, "polling": 6, "unrelated": 120, "unknown": 0 },
+                "console_errors": [],
+                "mutation": true,
+                "cleanup_result": "NOT_NEEDED",
+                "outcome": "SUCCESS"
+              }
+            ]
+          },
+          {
+            "scn_id": "SCN-02-04",
+            "objective": "Publish campaign by-shopify (khác cơ chế so với by-product-base).",
+            "actions": [
+              {
+                "act_id": "ACT-02-01-009",
+                "description": "Bấm Launch -> publish trực tiếp lên store đã gắn sẵn (linh-explorer), KHÔNG có Multi-store launch dialog.",
+                "input": {},
+                "before": { "screenshot": "raw/portal/shots/ACT-02-01-012-launch-modal.png", "dom": "n/a", "object_state": { "published": false } },
+                "after": { "screenshot": "raw/portal/shots/ACT-02-01-012-launch-result.png", "dom": "n/a", "object_state": { "published": true, "store": "linh-explorer.myshopify.com" }, "messages": [] },
+                "network_ref": "raw/network/ACT-02-01-012-launch.json",
+                "network_entry_labels": { "mapped": 2, "polling": 0, "unrelated": 12, "unknown": 0 },
+                "console_errors": [],
+                "mutation": true,
+                "cleanup_result": "NOT_NEEDED",
+                "outcome": "SUCCESS"
+              }
+            ]
+          },
+          {
+            "scn_id": "SCN-02-05",
+            "objective": "Unpublish campaign đã publish (reversible).",
+            "actions": [
+              {
+                "act_id": "ACT-02-01-010",
+                "description": "Bấm 'Unpublish' -> confirm dialog -> xác nhận.",
+                "input": {},
+                "before": { "screenshot": "raw/portal/shots/ACT-03-01-001-unpublish-confirm.png", "dom": "n/a", "object_state": { "published": true } },
+                "after": { "screenshot": "raw/portal/shots/ACT-03-01-001-after3.png", "dom": "n/a", "object_state": { "published": false } },
+                "network_ref": "raw/network/ACT-03-01-001-unpublish.json",
+                "network_entry_labels": { "mapped": 1, "polling": 0, "unrelated": 3, "unknown": 0 },
+                "console_errors": [],
+                "mutation": true,
+                "cleanup_result": "NOT_NEEDED",
+                "outcome": "SUCCESS"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "feature_id": "FEAT-03-campaign-list-browse",
+        "name": "List/browse campaign (chung cho cả 2 flow, UI khác nhau)",
+        "user_goal": "Xem, lọc, tìm kiếm danh sách campaign đã tạo theo từng flow.",
+        "entry_point": "/campaigns (by Product Base) và /platform-products (by Shopify Products)",
+        "observation_ids": ["OBS-003", "OBS-027"],
+        "scenarios": [
+          {
+            "scn_id": "SCN-03-01",
+            "objective": "Quan sát bảng list + filter của /campaigns sau khi có nhiều campaign.",
+            "actions": [
+              {
+                "act_id": "ACT-03-01-001",
+                "description": "Mở /campaigns sau khi đã tạo thêm campaign 2595 và (tạm thời) 2596.",
+                "input": {},
+                "before": { "screenshot": "raw/portal/shots/OBS-003-campaigns-list.png", "dom": "n/a", "object_state": { "count": 1 } },
+                "after": { "screenshot": "raw/portal/shots/ACT-03-02-001-before-delete-list.png", "dom": "n/a", "object_state": { "count": 3 }, "messages": [] },
+                "network_ref": "raw/network/ACT-03-02-001-create-throwaway-and-list.json",
+                "network_entry_labels": { "mapped": 5, "polling": 3, "unrelated": 146, "unknown": 0 },
+                "console_errors": [],
+                "mutation": false,
+                "cleanup_result": "NOT_NEEDED",
+                "outcome": "SUCCESS"
+              }
+            ]
+          },
+          {
+            "scn_id": "SCN-03-02",
+            "objective": "Quan sát bảng list của /platform-products sau khi tạo 1 campaign by-shopify.",
+            "actions": [
+              {
+                "act_id": "ACT-03-01-002",
+                "description": "Mở /platform-products sau khi đã tạo + publish/unpublish campaign 531.",
+                "input": {},
+                "before": { "screenshot": "raw/portal/shots/ACT-02-01-001-after.png", "dom": "n/a", "object_state": { "count": 0 } },
+                "after": { "screenshot": "raw/portal/shots/OBS-final-platform-products-list.png", "dom": "n/a", "object_state": { "count": 1 }, "messages": [] },
+                "network_ref": "raw/network/OBS-final-platform-products-list.json",
+                "network_entry_labels": { "mapped": 2, "polling": 0, "unrelated": 64, "unknown": 0 },
+                "console_errors": [],
+                "mutation": false,
+                "cleanup_result": "NOT_NEEDED",
+                "outcome": "SUCCESS"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "feature_id": "FEAT-04-campaign-delete",
+        "name": "Xoá campaign (by-product-base)",
+        "user_goal": "Xoá 1 campaign draft không cần thiết qua action menu trong list.",
+        "entry_point": "/campaigns -> row action '...' -> Delete campaign",
+        "observation_ids": ["OBS-025", "OBS-026"],
+        "scenarios": [
+          {
+            "scn_id": "SCN-04-01",
+            "objective": "Tạo 1 campaign throwaway rồi xoá để quan sát toàn bộ delete flow an toàn (không đụng sample campaign có sẵn hay campaign đang dùng làm fixture).",
+            "actions": [
+              {
+                "act_id": "ACT-04-01-001",
+                "description": "Tạo nhanh campaign 'QA Delete Test Campaign' (chỉ điền title, không gán product/artwork) để dùng làm fixture test xoá.",
+                "input": { "name": "QA Delete Test Campaign" },
+                "before": { "screenshot": "raw/portal/shots/ACT-02-01-001-after.png", "dom": "n/a", "object_state": { "count": 2 } },
+                "after": { "screenshot": "raw/portal/shots/ACT-03-02-001-before-delete-list.png", "dom": "n/a", "object_state": { "campaign_id": 2596, "count": 3 }, "messages": [] },
+                "network_ref": "raw/network/ACT-03-02-001-create-throwaway-and-list.json",
+                "network_entry_labels": { "mapped": 2, "polling": 0, "unrelated": 152, "unknown": 0 },
+                "console_errors": [],
+                "mutation": true,
+                "cleanup_result": "DONE",
+                "outcome": "SUCCESS"
+              },
+              {
+                "act_id": "ACT-04-01-002",
+                "description": "Mở action menu '...' trên row 'QA Delete Test Campaign' để quan sát các action khác trước khi xoá.",
+                "input": {},
+                "before": { "screenshot": "raw/portal/shots/ACT-03-02-001-before-delete-list.png", "dom": "n/a", "object_state": {} },
+                "after": { "screenshot": "raw/portal/shots/ACT-03-02-002-action-menu2.png", "dom": "n/a", "object_state": { "menu_open": true }, "messages": [] },
+                "network_ref": "raw/network/ACT-03-02-002-004-delete-campaign.json",
+                "network_entry_labels": { "mapped": 0, "polling": 0, "unrelated": 0, "unknown": 1 },
+                "console_errors": [],
+                "mutation": false,
+                "cleanup_result": "NOT_NEEDED",
+                "outcome": "SUCCESS"
+              },
+              {
+                "act_id": "ACT-04-01-003",
+                "description": "Click 'Delete campaign' -> confirm 'Remove' (không tick checkbox 'Remove artworks & product bases').",
+                "input": { "remove_artworks_and_product_bases": false },
+                "before": { "screenshot": "raw/portal/shots/ACT-03-02-003-delete-confirm.png", "dom": "n/a", "object_state": { "campaign_id": 2596, "exists": true } },
+                "after": { "screenshot": "raw/portal/shots/ACT-03-02-004-after-delete2.png", "dom": "n/a", "object_state": { "campaign_id": 2596, "exists": false, "count": 2 }, "messages": [] },
+                "network_ref": "raw/network/ACT-03-02-002-004-delete-campaign.json",
+                "network_entry_labels": { "mapped": 2, "polling": 0, "unrelated": 10, "unknown": 0 },
+                "console_errors": [],
+                "mutation": true,
+                "cleanup_result": "DONE",
+                "outcome": "SUCCESS"
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    "permissions_observed": [
+      "Role 'owner' (Linh explorer) có toàn quyền: create/edit/publish/unpublish/delete campaign ở CẢ 2 flow, không gặp permission-denied nào trong suốt phiên.",
+      "Multi-store launch dialog hiển thị TẤT CẢ store thuộc cùng Organization (kể cả store 'linh-explorer-2' không thuộc phạm vi cho phép của run này) — owner ở level Organization có thể nhìn thấy/launch tới store khác trong org. Đây là điểm cần lưu ý cho permission/tenant-isolation testing sau này (KHÔNG launch thử tới linh-explorer-2 trong run này để tuân thủ mutation policy)."
+    ],
+    "skipped_actions": [
+      { "description": "Launch campaign tới store 'linh-explorer-2' trong Multi-store launch dialog.", "reason": "Ngoài phạm vi cho phép (chỉ được publish trong linh-explorer.myshopify.com); store thứ 2 chưa được xác minh/không nằm trong exploration_policy." },
+      { "description": "Xoá campaign có sẵn '[Sample campaign] Woman and Dog Clipart - Poster' (id 2592).", "reason": "Không phải data do run này tạo ra, không có justification rõ ràng để xoá; tránh phá fixture có thể đang được dùng nơi khác." },
+      { "description": "Bật thử toggle 'Connect artworks with Shopify variants' (by-shopify).", "reason": "Có thể thay đổi cấu trúc data mapping artwork-variant; cần session riêng để verify an toàn, ngoài time-box của run này." },
+      { "description": "Đào sâu 'Assign mockups' (gán mockup theo từng variant) và trình soạn thảo mockup đầy đủ.", "reason": "Thuộc nhóm tool nặng tương tự artwork editor — ngoài scope 'chỉ bước gán, không đào sâu editor nội bộ'." },
+      { "description": "Bấm 'Generate test design', 'Preview' (xem storefront preview) trên STEP 2.", "reason": "Time-box; không thuộc creation-flow cốt lõi, để lại cho lần khám phá sâu hơn nếu cần." },
+      { "description": "Khám phá 'Bulk creator' (/campaigns/bulk-editor) và 'Bulk Fulfill'.", "reason": "Ngoài scope 2 creation flow + CRUD cơ bản được yêu cầu." },
+      { "description": "Thực thi 'Duplicate campaign', 'Mark as archive', 'Import to Translation' từ action menu.", "reason": "Chỉ quan sát menu tồn tại (OBS-025); chưa chạy để tránh vượt time-box của phiên (JWT TTL ngắn dù có auto-refresh)." }
+    ],
+    "unexplored_areas": [
+      "Toggle 'Connect artworks with Shopify variants' (by-shopify).",
+      "Assign mockup theo từng Shopify variant cụ thể (store hiện tại dùng sản phẩm demo, chưa rõ có nhiều variant thật để test).",
+      "Duplicate campaign / Mark as archive / Import to Translation (action menu).",
+      "Bulk creator (/campaigns/bulk-editor) và Bulk Fulfill.",
+      "Preview / Generate test design (storefront-facing preview trước khi publish).",
+      "Effect của checkbox 'Remove artworks & product bases from this campaign' khi xoá campaign (chưa test case tick=true).",
+      "Multi-store launch: publish đồng thời nhiều store cùng lúc, hoặc launch tới store thứ 2 (linh-explorer-2) — cố ý không test do policy.",
+      "Filter/search thực tế (Search box, Published on store, Type, Vendor, Tags) — chỉ quan sát UI, chưa nhập giá trị thử."
+    ],
+    "current_behavior_only": true,
+    "redaction_applied": true
+  },
+  "gate": {
+    "decision": "PASS",
+    "blocking_findings": [],
+    "conditions": [],
+    "allowed_next_steps": [
+      "qa-knowledge-normalizer: nhận toàn bộ FeatureDiscoveryArtifact này (payload đầy đủ) để chuẩn hoá Product KB (OBSERVED_BASELINE) cho object Campaign, 2 flow by-product-base và by-shopify.",
+      "api-explorer: dùng raw/network/*.json (đã map theo ACT-ID) để map API operations tương ứng, đặc biệt POST /api/campaigns, publish/unpublish endpoints, mockup upload endpoint."
+    ]
+  }
+}

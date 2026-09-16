@@ -1,0 +1,273 @@
+{
+  "schema_version": "1.0",
+  "artifact_type": "StorefrontDiscoveryArtifact",
+  "artifact_id": "SF-CTX-20260915-01-global-option-round3",
+  "workflow_id": "CTX-20260915-01",
+  "producer": "storefront-explorer",
+  "source_refs": [
+    { "type": "code_ref", "path": "contracts/qa-context-contract.md", "note": "shared contract v1.3" },
+    { "type": "code_ref", "path": "runs/context/2026-09-15/CTX-20260915-01/raw/storefront/storefront-evidence.json", "note": "round 1 - not overwritten" },
+    { "type": "code_ref", "path": "runs/context/2026-09-15/CTX-20260915-01/raw/storefront/storefront-evidence-round2.json", "note": "round 2 - not overwritten; this round continues its SF-OBS2-* numbering with SF-OBS3-*" },
+    { "type": "code_ref", "path": "runs/context/2026-09-15/CTX-20260915-01/raw/portal/portal-evidence.json", "note": "OBS-021 (2nd layer layer-558994 added to artwork 4167, referencing GO#860; campaign editor's PERSONALIZATION form dedupes to 1 field for GO#860 across 2 artworks; GO#862 prompt changed to 'Generate baby image' outside any agent session)" }
+  ],
+  "upstream_artifact_ids": ["FDA-CTX-20260915-01-global-option", "SF-CTX-20260915-01-global-option-round2"],
+  "status": "PARTIAL",
+  "confidence": "MEDIUM",
+  "observations": [],
+  "assumptions": [
+    "Trusted the task framing that the Gemini API key had been configured outside any agent session; this was independently verified (not taken on faith) by observing the generate-image job actually succeed this round (job id 24309, status progressed 0 -> 1 -> 2, master/url populated, error_message null) versus rounds 1-2's identical, reproducible failure (job ids 24300/24302, status 3, 'No gemini API key configured').",
+    "Read TIB_STORE_URL_1 / TIB_STORE_PASSWORD only via process.env inside a standalone out-of-band Node/Playwright script (project's own Playwright 1.63.0 in node_modules, run via Bash with env sourced from .env in the same non-echoing shell command), same technique as rounds 1-2.",
+    "Used the project's own curl (outside the browser context) to attempt fetching the two _tib_design_link_* URLs found in the cart line item's properties, since these are plain HTTPS URLs not requiring any teeinblue session/auth per their own construction (public CDN path pattern matching other successfully-fetched cdn.ownego.com asset URLs in rounds 1-2). This is a legitimate best-effort observation technique, not a scope violation — no credential or session token was used or needed for the attempt itself."
+  ],
+  "unknowns": [
+    "Whether the '_tib_design_link_1' (printarea=front, containing layer-885184/GO862 + layer-558994/GO860) and '_tib_design_link_2' (printarea=back, containing layer-929347/GO860) rendered PNG files actually contain the customer-entered value 'QA-DUAL-ARTWORK-TEST-860' baked into BOTH renders, or only one, or neither — NOT_OBSERVED. Both URLs returned HTTP 403 'AccessDenied' (S3 bucket 'oe-cdn') on every one of 6 retry attempts spread over ~70 seconds, including attempts with browser-like Referer/Origin/User-Agent headers, ruling out a simple transient-rendering-delay or referrer-check explanation as the sole cause. This is the single most important open question from this round's task and it could NOT be closed by storefront-explorer with the tools/authority available (no backend or print-fulfillment file access).",
+    "Whether 'artwork-4172': '' (an empty string, distinct from 'artwork-4167': 11117, a real version id) inside the /api/merchant/shopify/customization POST request body is meaningful or benign. The campaign API snapshot captured this same round shows artwork 4172's 'current_version_id' is null (vs artwork 4167's 11117), so the empty string is plausibly just that null being stringified — but this was not confirmed with api-explorer/db-explorer, and it sits exactly at the boundary of the artwork (4172/Back) most relevant to this round's core question. Recorded as a raw observation only, not diagnosed further, per contract instruction not to invent backend explanations.",
+    "Whether the blank '_customization_image' composite preview (downloaded and visually confirmed blank — see SF-OBS3-007) is blank because that specific render is async and simply wasn't ready yet at fetch time (screenshot taken seconds after ATC), or because this composite preview mechanism does not reflect personalization content at all in this campaign's current config (consistent with round 2's SF-OBS2-006b finding that mockups are static) — not re-tested with a delay before fetching this round."
+  ],
+  "conflicts": [],
+  "blocking_issues": [
+    "CORE QUESTION NOT CONCLUSIVELY ANSWERED: whether the single, deduplicated GO#860 customer-entered value ('QA-DUAL-ARTWORK-TEST-860') is correctly applied to BOTH the Front artwork (4167/layer-558994) and the Back artwork (4172/layer-929347) print output could NOT be visually/pixel-level confirmed. Structural evidence (SF-OBS3-004/005) is CONSISTENT with correct behavior: the client sent exactly one 'global-option-860' key to POST /api/merchant/shopify/customization, and the resulting cart line item carries exactly 2 design-file properties (_tib_design_link_1 for printarea=front id 13959, _tib_design_link_2 for printarea=back id 14026) — the right shape (one file per print position, not per Global Option, not per layer) IF the backend renders correctly. But BOTH design-file URLs return HTTP 403 AccessDenied to an unauthenticated fetch (confirmed via 6 retries over ~70s, also with browser-like headers), so the actual rendered pixel content of either file could NOT be inspected. This is NOT reported as MATCH (no positive visual confirmation exists) and is NOT a strict two-source CONFLICT per contract §8 (no two observations contradict each other) — it is an evidence gap: DO NOT treat the business rule as CONFIRMED_EXPECTED on the strength of this round alone. Escalating to orchestrator: closing this gap needs either (a) backend/db access to inspect the rendered design files or the render-job's inputs (api-explorer/db-explorer territory), or (b) an authorized, signed/authenticated way to fetch the design-link URLs that storefront-explorer does not have.",
+    "Neither the main product-page mockup frame, the in-portal 'PREVIEW' modal, nor the cart-page line item thumbnail visually reflected EITHER the successfully-generated GO#862 image or the GO#860 text value at any point this round (all three remained a blank white frame — see SF-OBS3-007). This extends round 2's SF-OBS2-006b (which only had an error case to compare against) to a genuine SUCCESS case, and confirms it is not caused by the generation error. Recommend orchestrator route this to code-config-explorer or api-explorer to determine whether this is a known/intended limitation of this campaign's config, or a separate defect from the GO#860 share-value question."
+  ],
+  "payload": {
+    "storefront_context": {
+      "shop": "linh-explorer.myshopify.com",
+      "environment": "staging (Shopify storefront password-gated; teeinblue staging-sdk.teeinblue.com / staging-api.teeinblue.com backing services)",
+      "theme": "Dawn",
+      "theme_version": "not independently re-checked this round (unchanged since round 1: 16.0.0, theme_id 143116042339 - no theme edit occurred)",
+      "product_id": "8147438010467 (Shopify platform product id)",
+      "campaign_id": "2605",
+      "campaign_name": "QA-CTX15 Global Option Test Campaign",
+      "artworks_in_scope_this_round": [
+        { "artwork_id": 4167, "name": "QA-CTX15 Global Option Test Artwork", "printarea": "Front (id 13959)", "layers": ["layer-885184 (GO#862, text-to-image, required=true)", "layer-558994 (GO#860, text, NEW since round2, added via portal OBS-021)"] },
+        { "artwork_id": 4172, "name": "QA-CTX15 Global Option Test Artwork 2", "printarea": "Back (id 14026)", "layers": ["layer-929347 (GO#860, text, unchanged since round2)"] }
+      ],
+      "buyer_state": "GUEST",
+      "market": "United States (storefront country selector defaulted to 'United States | USD $')",
+      "locale": "en",
+      "currency": "USD",
+      "browser": "Headless Chromium 153 via Playwright 1.63.0 (project's own node_modules), standalone out-of-band script - NOT the shared MCP Playwright profile",
+      "device_or_viewport": "Desktop, 1440x1200 viewport, single browser context"
+    },
+    "surfaces": ["PRODUCT_PAGE", "PERSONALIZATION", "PREVIEW", "CART_PAGE"],
+    "observations": [
+      {
+        "observation_id": "SF-OBS3-001",
+        "surface": "PERSONALIZATION",
+        "action": "Clicked 'Generate image' for GO#862 (Front, layer-885184), using the CURRENT prompt 'Generate baby image' (confirmed different from rounds 1-2's 'A colorful abstract pattern of {{name}}'), then polled the field's DOM state every ~3s for up to 100s.",
+        "observed_result": "SUCCEEDED for the first time across all 3 rounds. POST .../customer-uploads/generate (job id 24309, status:0) -> GET .../24309/image-filter-effects/status progressed status:1 (in-progress, no error) -> status:2 (done, master='ws:customers/uploads/260916_jOF8jPLKDuVA3eef_master.png', url='...260916_jOF8jPLKDuVA3eef_large.png', error_message:null, model='nano_banana'). DOM updated to a small thumbnail image (visually confirmed a baby photo, matching the 'Generate baby image' prompt), text changed to '✓ Image generated' with a 'Generate again' button replacing 'Generate image'. This directly closes rounds 1-2's blocking_issues[0] (missing Gemini API key) - the key is now configured and the mechanism works end-to-end for this Global Option.",
+        "state_before": "Field showed 'Generate image' button, no prior successful generation this campaign.",
+        "state_after": "Field shows generated thumbnail, 'Generate again' button, '✓ Image generated' status text.",
+        "act_id": "N/A (buyer-side interaction only)",
+        "evidence_refs": [
+          { "type": "screenshot", "path": "raw/storefront/round3/screens/02-after-generate-862.png" },
+          { "type": "har_entry", "path": "raw/storefront/round3/network/interact-network-log-redacted.json", "note": "entries for customer-uploads/generate (job 24309) and both image-filter-effects/status polls" },
+          { "type": "code_ref", "path": "raw/storefront/round3/interact-steps.json", "note": "steps gen-poll-1 through gen-poll-10, gen-poll-ended outcome=SUCCESS" }
+        ],
+        "knowledge_kind": "OBSERVED_CURRENT"
+      },
+      {
+        "observation_id": "SF-OBS3-002",
+        "surface": "PERSONALIZATION",
+        "action": "Confirmed the campaign API response (GET .../campaigns/8147438010467.json, refetched fresh this round) shows artwork 4167 now has TWO layers (layer-885184/GO862 unchanged, layer-558994/GO860 NEW) before filling the single GO#860 field with 'QA-DUAL-ARTWORK-TEST-860'.",
+        "observed_result": "Confirms portal OBS-021's edit (adding layer-558994 to artwork 4167, referencing GO#860) IS live on the storefront this round - independent evidence of portal-to-storefront propagation for that change (see portal_to_storefront_mapping). Filled the SAME single visible input (id='layer-929347', name='global-option-860', label 'Enter your full name (edited)') as round 2 - still exactly ONE input for GO#860 despite it now being referenced by 2 layers across 2 artworks, matching portal OBS-021's own observation of the campaign editor's personalization-form dedup behavior. DOM value confirmed 'QA-DUAL-ARTWORK-TEST-860' after fill. localStorage 'teeinblue-global-options' shows a single entry keyed '860' (not by layer id, not split into 2 entries for layer-558994 vs layer-929347); 'teeinblue-customizations' shows a single 'global-option-860' key in the per-product customization map (alongside 'global-option-862' and 'global-option-862-data' for the generated image).",
+        "state_before": "GO#860 field empty; GO#862 field holding a generated image from SF-OBS3-001.",
+        "state_after": "GO#860 field holds 'QA-DUAL-ARTWORK-TEST-860'; both fields now filled.",
+        "evidence_refs": [
+          { "type": "api_response", "path": "raw/storefront/round3/network/interact-network-log-redacted.json", "note": "GET campaigns/8147438010467.json entry showing artwork 4167 with both layer-885184 and layer-558994" },
+          { "type": "screenshot", "path": "raw/storefront/round3/screens/03-after-fill-go860.png" },
+          { "type": "code_ref", "path": "raw/storefront/round3/interact-steps.json", "note": "steps go860-field-found (count:1), filled-go860-field, localStorage-snapshot:02-after-fill-go860" }
+        ],
+        "knowledge_kind": "OBSERVED_CURRENT"
+      },
+      {
+        "observation_id": "SF-OBS3-003",
+        "surface": "PREVIEW",
+        "action": "Clicked the in-panel 'PREVIEW' button after both fields were filled, to observe any Front/Back mockup representation before add-to-cart.",
+        "observed_result": "A modal opened showing the SAME single blank white mockup frame already visible on the main product page (no Front/Back tabs, no additional mockup images beyond the ones already loaded for 'You may also like' unrelated products). No text or generated image was visible baked into this mockup. Screenshot confirms a plain empty picture-frame graphic, identical in appearance to the pre-interaction state.",
+        "state_before": "Main product image area showing blank frame; both personalization fields filled.",
+        "state_after": "Preview modal shown and closed (Escape key); no mutation.",
+        "evidence_refs": [
+          { "type": "screenshot", "path": "raw/storefront/round3/screens/04-preview-clicked.png" },
+          { "type": "code_ref", "path": "raw/storefront/round3/interact-steps.json", "note": "step preview-modal-images" }
+        ],
+        "knowledge_kind": "OBSERVED_CURRENT"
+      },
+      {
+        "observation_id": "SF-OBS3-004",
+        "surface": "PERSONALIZATION",
+        "action": "Captured the client-side network call that fires just before Add to cart: POST https://staging-api.teeinblue.com/api/merchant/shopify/customization?shop=linh-explorer.myshopify.com&id=8147438010467.",
+        "observed_result": "Request body: {\"data\":{\"4167\":\"template-490252\",\"4172\":\"template-136080\",\"global-option-862\":\"ws:customers/uploads/260916_jOF8jPLKDuVA3eef_large.png\",\"global-option-862-data\":{...},\"global-option-860\":\"QA-DUAL-ARTWORK-TEST-860\",\"artwork-4167\":11117,\"artwork-4172\":\"\",\"platform_linked_id\":\"44623555100771\"},\"platform_variant_id\":\"44623555100771\"}. Response (201): {\"id\":\"c215a579-9994-495b-b065-8e0eb4b05ba2\",\"data\":{...same...},\"platform_variant_id\":\"44623555100771\",\"campaign\":null}. This is DIRECT confirmation that the single GO#860 value is submitted to the backend exactly ONCE under one key ('global-option-860'), NOT split or duplicated per artwork/layer/printarea - the dedup observed at the DOM/localStorage level in rounds 2-3 carries through unchanged into the actual API payload sent to teeinblue's backend. The returned 'id' (a customization UUID) is the SAME id later found in the cart line item's '_customization_id' property (SF-OBS3-005), confirming this customization record is what the cart item references.",
+        "state_before": "Both personalization fields filled, 'Add to cart' not yet clicked.",
+        "state_after": "Customization record c215a579-9994-495b-b065-8e0eb4b05ba2 created server-side; no cart mutation yet at this exact call.",
+        "evidence_refs": [
+          { "type": "api_response", "path": "raw/storefront/round3/network/interact-network-log-redacted.json", "note": "POST /api/merchant/shopify/customization entry, full request_post_data and body captured" }
+        ],
+        "knowledge_kind": "OBSERVED_CURRENT"
+      },
+      {
+        "observation_id": "SF-OBS3-005",
+        "surface": "CART_PAGE",
+        "action": "Clicked 'Add to cart' with both GO#862 (generated image) and GO#860 (text) filled, then read the resulting cart state via GET /cart.js, GET /cart.json, and the cart page itself.",
+        "observed_result": "ADD TO CART SUCCEEDED for the first time across all 3 rounds (item_count: 1, no blocking error banner - error-banner scan returned an empty array). The single cart line item's 'properties' object contains EXACTLY 5 keys, verbatim: {\"_customization_id\":\"c215a579-9994-495b-b065-8e0eb4b05ba2\",\"_customization_image\":\"https://cdn.ownego.com/teeinblue-staging/customizations/c215a579-9994-495b-b065-8e0eb4b05ba2.jpg\",\"_tib_fulfilled_sku\":\"QA-SKU-BLACK-M\",\"_tib_design_link_1\":\"https://cdn.ownego.com/teeinblue-staging/designs/c215a579-9994-495b-b065-8e0eb4b05ba2/c215a579-9994-495b-b065-8e0eb4b05ba2-13959.png?printarea=front\",\"_tib_design_link_2\":\"https://cdn.ownego.com/teeinblue-staging/designs/c215a579-9994-495b-b065-8e0eb4b05ba2/c215a579-9994-495b-b065-8e0eb4b05ba2-14026.png?printarea=back\"}. CORE FINDING: there is NO property holding the raw text 'QA-DUAL-ARTWORK-TEST-860' anywhere in the cart item - the only place either personalization value could be represented is baked inside the two rendered PNG files, one per PRINTAREA (front=id 13959, back=id 14026) - NOT one per Global Option and NOT one per layer. This property SHAPE (2 links, keyed by printarea) is structurally consistent with the business rule (one shared value should render into every print position that references it), but is NOT itself proof that the rendering was done correctly - see SF-OBS3-006 for why pixel content could not be checked.",
+        "state_before": "Cart empty (item_count 0, confirmed via defensive pre-clear).",
+        "state_after": "Cart holds 1 item, total $19.99 USD, with the properties described above.",
+        "act_id": "N/A (buyer-side interaction only)",
+        "evidence_refs": [
+          { "type": "api_response", "path": "raw/storefront/round3/network/interact-network-log-redacted.json", "note": "GET /cart.js and /cart.json entries post-ATC, full properties object captured verbatim" },
+          { "type": "screenshot", "path": "raw/storefront/round3/screens/05-after-atc-attempt.png" },
+          { "type": "screenshot", "path": "raw/storefront/round3/screens/06-cart-page.png" }
+        ],
+        "knowledge_kind": "OBSERVED_CURRENT"
+      },
+      {
+        "observation_id": "SF-OBS3-006",
+        "surface": "CART_PAGE",
+        "action": "Attempted to directly fetch both '_tib_design_link_1' (front) and '_tib_design_link_2' (back) URLs from SF-OBS3-005, to visually verify whether 'QA-DUAL-ARTWORK-TEST-860' actually appears baked into each rendered file. Retried 6 times over ~70 seconds (in case of async rendering delay), and once more with browser-like Referer/Origin/User-Agent headers added.",
+        "observed_result": "ALL attempts (12 total: 6 plain + retries, plus the header variant) returned HTTP 403 with an identical S3 XML error body: {\"Code\":\"AccessDenied\",\"BucketName\":\"oe-cdn\",...}. This is consistent across every attempt and does not resolve with time or with browser-like headers, ruling out a simple async-rendering-delay or referrer-check explanation. CONCLUSION: pixel-level content of either design file is NOT_OBSERVED - this specific verification could not be completed by storefront-explorer with the tools/authority available (no signed URL, no backend/print-fulfillment credential). The composite '_customization_image' URL, by contrast, WAS fetchable (200, valid JPEG) - see SF-OBS3-007 - so the AccessDenied is specific to the '/designs/' path, not a blanket restriction on the whole cdn.ownego.com host.",
+        "state_before": "Cart item present with the 2 design-link properties.",
+        "state_after": "No change; read-only verification attempt.",
+        "evidence_refs": [
+          { "type": "code_ref", "path": "raw/storefront/round3/screens/design-link-1-front.png", "note": "Saved raw 403 AccessDenied XML body (file has .png extension but is XML text; kept as-is for evidence fidelity)" },
+          { "type": "code_ref", "path": "raw/storefront/round3/screens/design-link-2-back.png", "note": "Same AccessDenied XML body for the back design link" }
+        ],
+        "knowledge_kind": "OBSERVED_CURRENT"
+      },
+      {
+        "observation_id": "SF-OBS3-007",
+        "surface": "CART_PAGE",
+        "action": "Successfully fetched and visually inspected the cart item's '_customization_image' composite preview JPEG (960x720), plus re-examined the main product-page mockup frame and the cart-page line-item thumbnail from the same session's screenshots.",
+        "observed_result": "The composite preview image is a BLANK white mockup frame (a plain picture-frame graphic with no artwork, text, or generated photo visible) - downloaded and confirmed visually. This is the SAME blank frame visible on the main product page (screenshots 01/02/03/05) and inside the in-portal 'PREVIEW' modal (SF-OBS3-003) and on the cart page itself (screenshot 06). This holds true EVEN THOUGH GO#862's image generation SUCCEEDED this round (unlike rounds 1-2, where it always errored) - extending round 2's SF-OBS2-006b (previously only observed against an error case) to a genuine success case: neither the successfully-generated image NOR the GO#860 text value is reflected in ANY customer-visible mockup/preview surface observed this round. Only the small in-panel 'generation history' thumbnail (inside the PERSONALIZE widget itself, not the main product mockup) shows the actual generated baby photo.",
+        "state_before": "n/a (read-only visual inspection across already-captured screenshots and one freshly downloaded image)",
+        "state_after": "n/a",
+        "evidence_refs": [
+          { "type": "screenshot", "path": "raw/storefront/round3/screens/customization-image.jpg", "note": "Downloaded composite preview, visually confirmed blank" },
+          { "type": "screenshot", "path": "raw/storefront/round3/screens/01-product-page-loaded.png" },
+          { "type": "screenshot", "path": "raw/storefront/round3/screens/06-cart-page.png" }
+        ],
+        "knowledge_kind": "OBSERVED_CURRENT"
+      },
+      {
+        "observation_id": "SF-OBS3-008",
+        "surface": "CART_PAGE",
+        "action": "Cleanup: POST /cart/clear.js after all verification steps completed.",
+        "observed_result": "Status 200, item_count 0 confirmed both in the clear response and a follow-up GET /cart.js. Cart returned to empty state, matching pre-test baseline. This is the first round where a REAL cart item existed and needed real cleanup (rounds 1-2 never got past add-to-cart); cleanup completed successfully.",
+        "state_before": "Cart holding 1 item (from SF-OBS3-005).",
+        "state_after": "Cart empty (item_count 0).",
+        "evidence_refs": [
+          { "type": "code_ref", "path": "raw/storefront/round3/interact-steps.json", "note": "steps cleanup-cart-clear, cleanup-verify-cart-empty" }
+        ],
+        "knowledge_kind": "OBSERVED_CURRENT"
+      }
+    ],
+    "feature_candidates": [
+      {
+        "feature_id": "FEAT-06-storefront-share-value",
+        "name": "Share-value business rule for a customer-entered Global Option value applied across multiple artworks/printareas (type=text, Global Option 860)",
+        "status": "STRUCTURALLY_CONSISTENT_NOT_PIXEL_CONFIRMED",
+        "note": "This round closes the round-1/round-2 blocking gap (Gemini key) and, for the first time, reaches real add-to-cart with both GO#862 and GO#860 filled (SF-OBS3-001/002/005). Strong structural evidence supports the business rule: the client submits GO#860's value to the backend exactly ONCE (POST /api/merchant/shopify/customization, SF-OBS3-004), and the resulting cart line item carries exactly 2 design-file properties, one per PRINTAREA (front/back), not one per Global Option or per layer (SF-OBS3-005) - the correct shape IF rendering is done correctly. HOWEVER, this round could NOT visually/pixel-confirm that 'QA-DUAL-ARTWORK-TEST-860' actually appears in BOTH rendered files, because both design-link URLs return HTTP 403 AccessDenied to any unauthenticated fetch attempt, reproducibly, across 12 total attempts including with browser-like headers (SF-OBS3-006). DO NOT report this business rule as CONFIRMED_EXPECTED (MATCH) based on this round alone - the evidence is consistent with, but does not prove, correct behavior. Recommend: hand the customization id (c215a579-9994-495b-b065-8e0eb4b05ba2) and both design-link URLs to api-explorer/db-explorer, who may have backend/print-fulfillment access to inspect the actual rendered files or the render job's stored inputs/outputs directly."
+      }
+    ],
+    "variant_and_option_matrix": [
+      { "field": "Available Product", "value": "QA - product base explore", "type": "top-level variant, single value", "note": "Unchanged from rounds 1-2." },
+      { "field": "Colour", "values": ["Black (default)", "White"], "type": "top-level variant", "note": "Unchanged; not re-exercised this round." },
+      { "field": "Size", "values": ["M (default)", "L"], "type": "top-level variant", "note": "Unchanged; not re-exercised this round." },
+      { "field": "Generate an image from your description (layer-885184)", "value": "GO 862, required=true, SUCCEEDED this round (prompt 'Generate baby image', model nano_banana)", "type": "personalize, required, server-driven generation" },
+      { "field": "Enter your full name (edited) (layer-558994 + layer-929347, deduped to 1 field)", "value": "GO 860, required=false, free text, filled 'QA-DUAL-ARTWORK-TEST-860'", "type": "personalize, optional, buyer-editable, referenced by 2 layers across 2 artworks but rendered as exactly 1 input" }
+    ],
+    "artwork_preview_observations": [
+      {
+        "observation_id": "SF-OBS3-001b",
+        "mechanism": "GO#862 (text-to-image) generation this round: progress-percentage trigger through to a genuine success state ('✓ Image generated', 'Generate again' button, in-panel history thumbnail showing the generated photo).",
+        "loading_state": "Percentage progress text observed incrementing (7% -> 56% -> done) across 10 polls over ~30s.",
+        "success_state": "In-panel thumbnail shows the generated baby photo; server status:2 with populated master/url fields, error_message:null.",
+        "error_state": "NOT_APPLICABLE this round (no error occurred).",
+        "fallback_state": "NOT_OBSERVED (not needed; success path taken).",
+        "knowledge_kind": "OBSERVED_CURRENT"
+      },
+      {
+        "observation_id": "SF-OBS3-007b",
+        "mechanism": "Main product mockup / PREVIEW modal / cart-page thumbnail (all 3 checked this round) never visually reflect either field's value, success or not.",
+        "loading_state": "n/a - stayed static throughout.",
+        "error_state": "n/a.",
+        "fallback_state": "Blank white picture-frame graphic shown in all 3 surfaces at all times this round, confirmed via direct image download of the cart item's composite preview (SF-OBS3-007).",
+        "knowledge_kind": "OBSERVED_CURRENT"
+      }
+    ],
+    "pricing_observations": [
+      { "item": "Regular price", "value": "$29.99 USD (struck through)", "variant": "Black / M (default)", "note": "Unchanged from rounds 1-2." },
+      { "item": "Sale price", "value": "$19.99 USD (labeled 'Sale')", "variant": "Black / M (default)", "note": "Unchanged; matches cart line_price 1999 cents observed at ATC." }
+    ],
+    "cart_handoff_observations": [
+      {
+        "observation_id": "SF-OBS3-005b",
+        "result": "SUCCESS",
+        "detail": "Add-to-cart completed for the first time across all 3 rounds. Cart line item properties: _customization_id, _customization_image, _tib_fulfilled_sku, _tib_design_link_1 (printarea=front), _tib_design_link_2 (printarea=back). NO raw personalization text value is present as a cart property - both GO#862 (image) and GO#860 (text) values are represented ONLY as inputs to the rendered design files, not as visible cart properties themselves. This differs from what a naive expectation might be (e.g. a 'global-option-860: QA-DUAL-ARTWORK-TEST-860' property) - recorded as a plain factual observation, not a defect claim, since teeinblue's rendering-to-PNG approach for personalization is presumably intentional (needed for print fulfillment) and was already implied by the '_tib_design_link_*' naming convention.",
+        "knowledge_kind": "OBSERVED_CURRENT"
+      }
+    ],
+    "portal_to_storefront_mapping": [
+      {
+        "portal_act_id": "N/A (OBS-021 in portal-evidence.json - 2nd layer layer-558994 added to artwork 4167, referencing GO#860, no formal ACT-ID)",
+        "storefront_observation_id": "SF-OBS3-002",
+        "propagation": "IMMEDIATE",
+        "evidence_refs": [
+          { "type": "api_response", "path": "raw/storefront/round3/network/interact-network-log-redacted.json", "note": "GET campaigns/8147438010467.json shows artwork 4167 with both layer-885184 and layer-558994 present" }
+        ],
+        "note": "Same 'found live on first check' basis as rounds 1-2's Launch/Update propagation entries - no retry/wait-and-refresh was needed to see the new layer. Exact elapsed time since OBS-021's edit remains unknown (edit happened in a separate portal-explorer session, no shared timestamp captured)."
+      },
+      {
+        "portal_act_id": "N/A (portal OBS-021 read-only note - GO#862 Prompt field manually changed by user outside any agent session, from 'A colorful abstract pattern of {{name}}' to 'Generate baby image')",
+        "storefront_observation_id": "SF-OBS3-001",
+        "propagation": "IMMEDIATE",
+        "evidence_refs": [
+          { "type": "api_response", "path": "raw/storefront/round3/network/interact-network-log-redacted.json", "note": "customer-uploads/generate request_post_data shows prompt='Generate baby image'; campaigns/8147438010467.json global_options[862].data.text_to_image_prompt also reads 'Generate baby image'" }
+        ],
+        "note": "Same basis as above - the new prompt text was already live on the very first generate-image click this round, no propagation delay observed."
+      }
+    ],
+    "theme_device_market_matrix": [
+      { "theme": "Dawn 16.0.0", "device_or_viewport": "Desktop 1440px", "market": "US", "locale": "en", "currency": "USD", "buyer_state": "GUEST", "browser": "Headless Chromium 153 (Playwright, standalone script)", "tested": true },
+      { "theme": "Dawn 16.0.0", "device_or_viewport": "Mobile / tablet viewport", "tested": false, "reason": "Not exercised this round either; single-viewport scope, consistent with rounds 1-2." },
+      { "theme": "Dawn 16.0.0", "device_or_viewport": "Desktop", "market": "Non-US market/locale/currency", "tested": false, "reason": "Not exercised this round." },
+      { "theme": "Dawn 16.0.0", "device_or_viewport": "Desktop", "buyer_state": "LOGGED_IN / SEGMENTED", "tested": false, "reason": "Task scope specified GUEST only, same as rounds 1-2." }
+    ],
+    "network_observation_refs": [
+      { "type": "har_entry", "path": "raw/storefront/round3/network/interact-network-log-redacted.json", "note": "Full filtered network capture (teeinblue staging-api + Shopify cart calls, headers redacted per contract): includes cart/clear.js, campaigns/8147438010467.json, customer-uploads/generate + status polls (job 24309, first SUCCESS case captured across all 3 rounds), POST /api/merchant/shopify/customization (full request+response body, customization id c215a579-9994-495b-b065-8e0eb4b05ba2), cart.js/cart.json post-ATC (full line-item properties). Contract-level analysis is api-explorer's responsibility - refs only, not treated as a full API contract by this artifact." },
+      { "type": "code_ref", "path": "raw/storefront/round3/screens/design-link-1-front.png", "note": "403 AccessDenied XML body, not an actual image - see SF-OBS3-006" },
+      { "type": "code_ref", "path": "raw/storefront/round3/screens/design-link-2-back.png", "note": "403 AccessDenied XML body, not an actual image - see SF-OBS3-006" }
+    ],
+    "cleanup_results": [
+      { "action": "POST /cart/clear.js (pre-test defensive clear)", "result": "NOT_NEEDED", "note": "Cart already empty (item_count 0) before this round's test began." },
+      { "action": "POST /cart/clear.js (end-of-session cleanup, after a REAL cart item existed for the first time across all 3 rounds)", "result": "DONE", "note": "Status 200, item_count 0 confirmed after clear via a follow-up GET /cart.js." }
+    ],
+    "coverage_limitations": [
+      "Pixel-level content of both '_tib_design_link_1' (front) and '_tib_design_link_2' (back) rendered files could NOT be verified - both consistently return HTTP 403 AccessDenied to unauthenticated fetch, across 12 attempts over ~70s including with browser-like headers. This is the single biggest coverage gap of this round relative to its stated goal.",
+      "The composite '_customization_image' preview and all 3 customer-visible mockup surfaces (main product image, PREVIEW modal, cart-page thumbnail) showed a blank frame throughout - whether this is expected/static for this campaign's config, or an async-timing artifact of checking immediately after ATC, was not conclusively separated (see unknowns).",
+      "Only Global Option 860 (type=text, now spanning 2 artworks/2 printareas) and 862 (type=text-to-image, single artwork) have been exercised at storefront level across all 3 rounds combined - the other 5 fixtures (863 additional-option, 864 vector-category, 865 maps, 866 word-search, 867 qr-code) remain untested at storefront level.",
+      "Only GUEST buyer state, US market, en locale, USD currency, single desktop viewport (1440px) tested - same limitation carried over from rounds 1-2.",
+      "Only 1 quantity, 1 variant (Black/M) exercised for the successful add-to-cart; no test of changing quantity, removing the item via UI (only via /cart/clear.js), or returning to edit personalization after ATC."
+    ],
+    "redaction_applied": true
+  },
+  "gate": {
+    "decision": "CONDITIONAL_PASS",
+    "blocking_findings": [
+      "The core business-rule question this round was scoped to answer (does the single shared GO#860 value render correctly into BOTH the Front and Back print files) remains UNRESOLVED at the pixel level - both design-file URLs are inaccessible (403) to storefront-explorer's tools. Structural evidence is consistent with correct behavior but is not itself proof. Must not be reported upstream as CONFIRMED_EXPECTED / MATCH."
+    ],
+    "conditions": [
+      "Shop/theme/campaign/product/buyer context is clear and was verified before interaction (campaign API snapshot re-fetched fresh this round, confirmed structure matches portal OBS-021's description).",
+      "No checkout/payment boundary was crossed; no real order/charge/notification was created. 'Check out' button was visible on the cart page (screenshot 06) but never clicked.",
+      "No mutation occurred outside campaign-2605's test scope on shop linh-explorer.myshopify.com. Cart held a real item for the first time this round and was fully cleaned up (cleanup_result: DONE, verified item_count 0 after).",
+      "No portal/shared-configuration control was touched (this agent operates storefront-side only, per scope).",
+      "Round 2's CONDITIONAL_PASS gap (Gemini API key blocking GO#862) is CLOSED this round - generation succeeded end-to-end.",
+      "A NEW, different gap was surfaced this round (design-file access-denial blocking pixel-level share-value verification) - reported as blocking_findings/blocking_issues, not silently absorbed into a PASS."
+    ],
+    "allowed_next_steps": [
+      "Escalate the design-file 403 AccessDenied gap to orchestrator - recommend routing the customization id (c215a579-9994-495b-b065-8e0eb4b05ba2) and both design-link URLs to api-explorer/db-explorer for backend-level inspection (they may have credentials/access this agent does not).",
+      "Escalate the 'no customer-visible mockup ever updates' observation (SF-OBS3-007) to orchestrator/code-config-explorer as a separate question from the share-value rule - determine whether this campaign's config is missing a live-preview feature that exists elsewhere, or whether this is a universal current-behavior limitation.",
+      "Hand off this artifact (rounds 1+2+3 together) to qa-knowledge-normalizer and feature-profile-builder - final resolution of whether the share-value rule is CONFIRMED_EXPECTED remains reviewer/orchestrator authority, not this agent's, and must wait on the pixel-level gap being closed by whoever has the needed access.",
+      "Network observation refs (interact-network-log-redacted.json, especially the POST /api/merchant/shopify/customization entry and the customer-uploads/generate success-case entries) handed to api-explorer for contract-level analysis; not treated as a full API contract by this artifact."
+    ]
+  }
+}

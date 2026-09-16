@@ -1,0 +1,18 @@
+import { chromium } from 'playwright';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+process.loadEnvFile('/Users/linhsmac/Documents/work/teeinblue-context-builder/.env');
+const browser = await chromium.launch();
+const context = await browser.newContext({ storageState: path.resolve(__dirname, '..', 'auth-owner.json') });
+const page = await context.newPage();
+await page.goto('https://staging-portal.teeinblue.com/products/3245/edit', { waitUntil: 'domcontentloaded' });
+await page.waitForSelector('text=Mockup', { timeout: 20000 });
+await page.waitForTimeout(1000);
+await page.getByRole('button', { name: /upload/i }).first().click({ timeout: 5000 });
+await page.waitForTimeout(3000);
+const imgs = await page.locator('img').evaluateAll(els => els.map(e => e.src).filter(s => s.includes('mockup-layers') || s.includes('eDHhyXmSDTSwPFRe') || s.includes('XCDEBeJZGBVdhQhA')));
+console.log('IMG SRCS matching:', JSON.stringify(imgs, null, 2));
+const allImgs = await page.locator('img').evaluateAll(els => els.map(e => e.src));
+console.log('ALL IMG SRCS sample:', JSON.stringify(allImgs.slice(0,20), null, 2));
+await browser.close();

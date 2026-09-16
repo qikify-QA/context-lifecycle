@@ -1,0 +1,71 @@
+{
+  "schema_version": "1.0",
+  "ctx_run_id": "CTX-20260910-06",
+  "mode": "ZERO_DOC_BOOTSTRAP",
+  "product": "teeinblue",
+  "object_target": {
+    "object_type": "AssetCategory",
+    "object_key": "asset-category"
+  },
+  "orchestrator": "qa-context-lifecycle-orchestrator",
+  "created_at_note": "run-manifest được orchestrator tạo bổ sung sau khi phát hiện file này chưa từng tồn tại; run đã thực hiện xong explore/normalize/profile/checklist trước đó (2026-09-10, không có manifest ghi timeline chi tiết từng bước - suy từ mtime file trong raw/intermediate/candidate).",
+  "pipeline": [
+    { "step": 1, "agent": "portal-explorer", "artifact": "raw/portal/portal-evidence.json", "gate": "C1", "gate_decision": "CONDITIONAL_PASS", "status": "DONE" },
+    { "step": 2, "agent": "api-explorer", "artifact": "intermediate/api/action-api-map.json", "gate": "C2", "gate_decision": "PASS (tự chấm) -> downgraded to FAIL bởi context-quality-reviewer lần review đầu (F-001)", "status": "PARTIALLY_REWORKED" },
+    { "step": 3, "agent": "db-explorer", "artifact": null, "gate": null, "gate_decision": "NOT_RUN", "status": "SKIPPED", "reason": "db_observation.enabled=false trong bootstrap-request.json" },
+    { "step": 4, "agent": "storefront-explorer", "artifact": null, "gate": null, "gate_decision": "NOT_RUN", "status": "SKIPPED", "reason": "surfaces.storefront.enabled=false trong bootstrap-request.json" },
+    { "step": 5, "agent": "qa-knowledge-normalizer", "artifact": "candidate/product-kb.json", "gate": "C3", "gate_decision": "PASS (tự chấm) -> downgraded to CONDITIONAL_PASS bởi context-quality-reviewer (F-002, hệ quả của F-001)", "status": "PARTIALLY_REWORKED" },
+    { "step": 6, "agent": "feature-profile-builder", "artifact": "candidate/feature-profiles/*.json (4 file)", "gate": "C4", "gate_decision": "PASS", "status": "PARTIALLY_REWORKED", "note": "asset-category-crud.json đã đồng bộ act_ids theo KB mới (rework round 1). 3 file profile còn lại (route-entity-clarification, item-management, bulk-upload) CHƯA rework - cần thiết theo F-003 (round 2)." },
+    { "step": 7, "agent": "qa-checklist-builder", "artifact": "candidate/checklists/*.json (4 file, 45 check)", "gate": "C5", "gate_decision": "PASS", "status": "NEEDS_REWORK", "note": "Không bị động ở round 1. F-003 (round 2) xác định 3/4 checklist có evidence_refs act_id stale, cần rework." },
+    { "step": 8, "agent": "knowledge-diff-analyzer", "artifact": null, "gate": null, "gate_decision": "NOT_APPLICABLE", "status": "SKIPPED", "reason": "context version đầu tiên cho object này (chưa từng publish trước đây) - chỉ áp dụng từ version 2 trở đi theo contract" },
+    { "step": 9, "agent": "context-quality-reviewer", "artifact": "review/verdict.json, review/gate-results.json", "gate": "C6", "gate_decision": "FAIL (round 1), FAIL (round 2), FAIL (round 3), PASS/APPROVED_WITH_CONDITIONS (round 4)", "status": "DONE", "note": "Round 1 (2026-09-11): publish_allowed=false, F-001/F-002 (ACT-ID collision ở APIOP-001..005 + KB-003/004/005/007). Round 2 (2026-09-11): F-001/F-002 xác nhận đã sửa đúng, nhưng F-003 (collision rộng hơn ở APIOP-006..016 + 13 KB item + CONF-003) - vẫn FAIL. Round 3 (2026-09-11, full C0-C6 re-audit do coordinator uỷ quyền): F-003 xác nhận đã sửa đúng toàn bộ, nhưng phát hiện 2 finding MỚI hẹp hơn nhiều: F-004 (3 ACT có evidence mutation thật - ACT-03-02-002/ACT-04-02-002/ACT-05-02-002 trên category MỚI TẠO TRONG RUN NÀY, chính là bằng chứng TASK-3 ưu tiên cao nhất - chưa từng được map vào operation qua cả 3 round) và F-005 (CONF-003 tự mâu thuẫn với KB-011 về provenance của category 6012/6013/6014). Rework hẹp đúng 4 bước theo rework_targets. Round 4 (2026-09-12): cả F-004 và F-005 XÁC NHẬN ĐÃ SỬA ĐÚNG (verify độc lập từng điểm a/b/c/d theo allowed_next_steps của round 3), không regression (redaction scan 226 file sạch, 31-act reconciliation khớp), 3 branch crud/bulk-upload/route-entity-clarification xác nhận KHÔNG bị đụng. decision=APPROVED_WITH_CONDITIONS, publish_allowed=true - conditions chỉ là non-blocking (CONF-003/STALE-001 giữ UNRESOLVED, KB-013/CL-10 gap 2/3 log evidence, 2 MINOR coverage note cũ)." },
+    { "step": 10, "agent": "qa-context-lifecycle-orchestrator", "artifact": "knowledge/products/teeinblue/objects/asset-category/{kb.json, features/*/profile.json (4), checklists/*.json (4)}", "gate": null, "gate_decision": null, "status": "DONE", "reason": "publish_allowed=true ở gate C6 round 4 - đã publish knowledge/products/teeinblue/objects/asset-category/* (version 1, lần publish đầu tiên cho object này), cập nhật knowledge/portal-assets.md (mục Colors/Additional Options/Map Styles) và knowledge/_open-issues/ui-inconsistencies.md mục 1 theo evidence cuối cùng round 4 - giữ CẢ HAI PHÍA của CONF-003 (category gốc 6008/6009/6010 chưa re-test trực tiếp vs 2 nhóm category khác đã test không tái hiện), KHÔNG tự đóng open-issue vì vẫn UNRESOLVED theo contract §8." }
+  ],
+  "known_anomalies": [
+    {
+      "id": "ANOMALY-AUDIT-FILES",
+      "description": "10 file AUDIT-*.json trong raw/network/ không theo convention ACT-ID, không được portal-evidence.json tham chiếu, bị api-explorer loại khỏi APICapabilityArtifact. Đã được người vận hành + context-quality-reviewer (redaction scan độc lập 2 lần) xác nhận sạch, không phải secret leak, chỉ là capture thừa. KHÔNG cần xử lý thêm, giữ nguyên trên đĩa để traceability.",
+      "resolved": true
+    },
+    {
+      "id": "ANOMALY-ACT-ID-COLLISION",
+      "description": "F-001/F-002 (review/verdict.json): api-explorer dùng act_id string 'ACT-02-01-001/002/003/004' (mô tả Clipart category, id 6015/6016) để build APIOP-001/002/003/004/005, nhưng cùng string này trong portal-evidence.json (nguồn thẩm quyền) là act_id CHÍNH THỨC của FEAT-02 (Vector category, id 6025/6026) - collision với numbering cũ từ 2 tiến trình đụng độ trước đó (xem portal-evidence.json's incident_note). Hệ quả: KB-003/004/005/007 trong product-kb.json kế thừa feature_id/act_id sai.",
+      "resolved": true,
+      "rework_ref": "review/verdict.json#round 1 -> đã sửa bởi api-explorer/qa-knowledge-normalizer/feature-profile-builder, xác nhận đúng bởi context-quality-reviewer round 2"
+    },
+    {
+      "id": "F-003-ACT-ID-COLLISION-WIDER",
+      "description": "Phát hiện ở review round 2 (context-quality-reviewer), khởi nguồn từ tự-flag của api-explorer khi làm rework F-001. Cùng bản chất provenance loss như F-001/F-002 nhưng phủ RỘNG HƠN nhiều: 11/16 operation (APIOP-006..016, gồm insert_cliparts Add-new-item, staff-activity-logs, upload item thật, bulk-upload) và 13/19 KB item (KB-006/008/009/010/011/012/013/014/015/016/017/018/019) dùng act_id label lấy từ tên file raw cũ thay vì đối chiếu bảng chính thức trong portal-evidence.json. Đặc biệt nghiêm trọng: CONF-003 (bug 'Add new disabled' - correction quan trọng nhất của run) và KB-012 (dùng act_id ACT-03-04-001 đã bị portal-evidence.json loại trừ chính thức - cùng loại lỗi resurrect-excluded-evidence như F-001) đều bị ảnh hưởng. Lan xuống 3/4 feature profile (item-management, bulk-upload, route-entity-clarification) và 3/4 checklist (evidence_refs act_id stale; oracle logic của checklist KHÔNG sai vì linkage chính qua kb_refs, không qua act_id trực tiếp).",
+      "resolved": true,
+      "rework_ref": "review/verdict.json (round 2)#rework_targets -> full C0-C6 re-audit round 3 (coordinator uỷ quyền) xác nhận sửa đúng toàn bộ."
+    },
+    {
+      "id": "F-004-MISSING-FRESH-CATEGORY-ACTS",
+      "description": "Phát hiện ở review round 3 (context-quality-reviewer, full C0-C6 re-audit). 3 ACT chính thức (ACT-03-02-002/ACT-04-02-002/ACT-05-02-002 - bước 'Add new' THÀNH CÔNG trên category MỚI TẠO TRONG RUN NÀY: Color 6021/Additional Option 6022/Map Style 6023) có network evidence thật (mapped>0, network_ref raw/network/ACT-COLOR-04.json/ACT-ADDOPT-03.json/ACT-MAP-03.json) nhưng chưa từng được api-explorer map vào operation nào qua cả 3 round, dù đây chính là evidence TASK-3 (ưu tiên cao nhất của run) yêu cầu. api-explorer tự khai completeness sai (acts_with_at_least_one_operation=28, 'không bỏ sót act nào') - reviewer script-verify chỉ 24/31.",
+      "resolved": true,
+      "rework_ref": "review/verdict.json (round 3)#rework_targets[0] -> api-explorer round 4 đã bổ sung 3 ACT vào APIOP-007/008, sửa act_coverage.acts_with_at_least_one_operation=27 (script-verified), xác nhận đúng bởi context-quality-reviewer round 4 (point a)."
+    },
+    {
+      "id": "F-005-CONF-003-SELF-CONTRADICTION",
+      "description": "Phát hiện ở review round 3. CONF-003.sides[1] mô tả category 6012/6013/6014 là 'category MỚI' (mới tạo trong run này), tự mâu thuẫn với KB-011 trong CÙNG file (đã sửa đúng round 3: 6012/6013/6014 là category CŨ, tồn tại từ trước run, do 2 tiến trình đụng độ trước tạo). Lan verbatim xuống feature-profile item-management (risks[]/profile_conflicts[0]) và checklist CHK-002, khiến CHK-002 mâu thuẫn trực tiếp với CHK-001 (đúng) trong cùng file checklist. Che khuất F-004 vì làm evidence CONF-003 trông như đã thoả TASK-3, trong khi thực ra chưa.",
+      "resolved": true,
+      "rework_ref": "review/verdict.json (round 3)#rework_targets[1..3] -> qa-knowledge-normalizer/feature-profile-builder/qa-checklist-builder round 4 đã sửa wording (KHÔNG đổi nội dung substantive 2 phía), xác nhận đúng bởi context-quality-reviewer round 4 (point b/c) - CONF-003 không còn tự mâu thuẫn KB-011, CHK-001/CHK-002 không còn mâu thuẫn nhau, oracle_strength/status CHK-002 không đổi."
+    }
+  ],
+  "current_status": "PUBLISHED",
+  "publish_allowed": true,
+  "published_context_version": "1",
+  "review_rounds": [
+    { "round": 1, "date": "2026-09-11", "gate_decision": "FAIL", "publish_allowed": false, "blocking_findings": ["F-001", "F-002"], "scope_audited": "APIOP-001..005 (5/16 operation lõi CRUD) + KB-003/004/005/007 (4/19 KB lõi) - không audit hết 16/16 operation và 19/19 KB item" },
+    { "round": 2, "date": "2026-09-11", "gate_decision": "FAIL", "publish_allowed": false, "blocking_findings": ["F-003 (F-001/F-002 đã xác nhận sửa đúng)"], "scope_audited": "Verify rework F-001/F-002 (đạt) + điều tra thêm cảnh báo tự-flag của api-explorer về APIOP-006..016 (xác nhận đúng, rộng hơn mô tả ban đầu)" },
+    { "round": 3, "date": "2026-09-11", "gate_decision": "FAIL", "publish_allowed": false, "blocking_findings": ["F-004", "F-005 (F-003 đã xác nhận sửa đúng toàn bộ 16/16 operation, 19/19 KB item)"], "scope_audited": "Full C0-C6 re-audit không giới hạn scope (theo yêu cầu coordinator, để tránh lặp lại 'undetected because unaudited') - toàn bộ 16 operation, 19 KB item, 4 profile, 4 checklist, redaction 127 file" },
+    { "round": 4, "date": "2026-09-12", "gate_decision": "PASS", "publish_allowed": true, "decision": "APPROVED_WITH_CONDITIONS", "blocking_findings": [], "scope_audited": "Rework hẹp đúng 4 điểm theo round3 allowed_next_steps: (a) 3 ACT mới trong action-api-map.json, (b) CONF-003 vs KB-011 hết mâu thuẫn, (c) CHK-001/CHK-002 hết mâu thuẫn + oracle không đổi, (d) full-repo redaction re-scan (226 file) + 31-act reconciliation script - không regression, 3 branch crud/bulk-upload/route-entity-clarification xác nhận không bị đụng" }
+  ],
+  "next_actions": [
+    "HOÀN TẤT round 1-2 (F-001/F-002).",
+    "HOÀN TẤT round 3 (full re-audit, xác nhận F-003 đã sửa đúng, phát hiện F-004/F-005 mới hẹp hơn).",
+    "HOÀN TẤT round 4 (rework hẹp đúng 4 bước: api-explorer -> qa-knowledge-normalizer -> feature-profile-builder + qa-checklist-builder song song -> context-quality-reviewer) - publish_allowed=true, decision=APPROVED_WITH_CONDITIONS.",
+    "HOÀN TẤT publish: knowledge/products/teeinblue/objects/asset-category/{kb.json, features/*/profile.json (4), checklists/*.json (4)} - version 1 (lần publish đầu tiên cho object này). Đã cập nhật knowledge/portal-assets.md (mục Colors/Additional Options/Map Styles) và knowledge/_open-issues/ui-inconsistencies.md mục 1 theo evidence round 4, giữ CẢ HAI PHÍA CONF-003, KHÔNG tự đóng open-issue (vẫn UNRESOLVED - category gốc 6008/6009/6010 chưa được re-test trực tiếp, nằm trong forbidden_actions của run này).",
+    "Conditions còn lại (non-blocking, mang theo làm ghi chú, không phải rework): CONF-003/STALE-001 cần quyết định policy re-test trực tiếp 6008/6009/6010 trước khi đóng open-issue; KB-013/CL-10 gap 2/3 ACT mới thiếu staff-activity-logs evidence; 2 MINOR coverage note cũ (cross_layer_evidence_map thiếu vài stub entry, KB-008 gộp nội dung verified+unverified); feature-profile artifact_id item-management thiếu suffix round4 (naming, không ảnh hưởng traceability)."
+  ]
+}

@@ -1,0 +1,318 @@
+{
+  "schema_version": "1.0",
+  "artifact_type": "FeatureProfileCandidate",
+  "artifact_id": "FP-CAND-CTX-20260911-01-09",
+  "workflow_id": "CTX-20260911-01",
+  "producer": "feature-profile-builder",
+  "source_refs": [
+    "runs/context/2026-09-11/CTX-20260911-01/candidate/product-kb.json"
+  ],
+  "upstream_artifact_ids": [
+    "KB-CAND-CTX-20260911-01-01#KB-038",
+    "KB-CAND-CTX-20260911-01-01#KB-039",
+    "KB-CAND-CTX-20260911-01-01#KB-040",
+    "KB-CAND-CTX-20260911-01-01#KB-041"
+  ],
+  "status": "READY",
+  "confidence": "MEDIUM",
+  "observations": [
+    "4 KB item mô tả riêng cơ chế NGĂN VÒNG LẶP phụ thuộc giữa các layer — tách khỏi FEAT-08-conditional-setting-config vì đây là user goal khác (hệ thống bảo vệ tính toàn vẹn, không phải authoring UI).",
+    "BLK-API-002 (unknown nghiêm trọng nhất trong toàn bộ KB) thuộc feature này: KHÔNG có evidence nào xác nhận server có tự chặn vòng độc lập với client hay không."
+  ],
+  "assumptions": [],
+  "unknowns": [
+    "BLK-API-002: server có tự validate/reject đồ thị vòng ở PUT hay hoàn toàn phụ thuộc client.",
+    "Thuật toán chọn 'layer gốc' hiển thị đầu message lỗi — 2/2 sample đều ra Word Search vì trùng hợp cấu trúc test data."
+  ],
+  "conflicts": [],
+  "blocking_issues": [],
+  "payload": {
+    "feature_profiles": [
+      {
+        "feature_id": "FEAT-09-condition-cycle-validation",
+        "feature_key": "condition-cycle-validation",
+        "name": "Ngăn vòng lặp phụ thuộc điều kiện (Circular Condition Validation)",
+        "user_goal": "Hệ thống ngăn không cho lưu 1 artwork mà đồ thị điều kiện hiển thị (Conditional Setting) giữa các layer tạo thành vòng lặp phụ thuộc, để tránh trạng thái không thể resolve khi render.",
+        "stable_since_version": "product-kb@1.0 (fan-in CTX-20260910-01/02/03, chuẩn hoá tại CTX-20260911-01)",
+        "actors": [
+          {
+            "role": "store owner / staff (sub=273, user_id=266, plan Blue (Test))",
+            "permission_observed": "Có thể tạo cấu hình vòng qua UI (không bị chặn lúc chọn), nhưng bị chặn khi Save",
+            "kb_refs": [
+              "KB-038",
+              "KB-039"
+            ]
+          }
+        ],
+        "entry_points": [
+          {
+            "path": "artwork editor — accordion CONDITIONAL SETTING, đang chọn nguồn condition",
+            "precondition": "layer đích đã có ≥1 condition sẵn, chuẩn bị thêm nguồn tạo vòng",
+            "kb_refs": [
+              "KB-038"
+            ]
+          },
+          {
+            "path": "artwork editor — nút Save & Close / Save",
+            "precondition": "đồ thị dependency giữa các layer đã tạo thành vòng khép kín",
+            "kb_refs": [
+              "KB-039"
+            ]
+          }
+        ],
+        "capabilities": [
+          {
+            "name": "UI không chặn lúc chọn nguồn tạo vòng",
+            "description": "Khi chọn ở dropdown 'Option:' một nguồn sẽ tạo thành vòng, UI KHÔNG ẩn, KHÔNG disable, KHÔNG toast ngay lúc chọn — chọn được bình thường như mọi nguồn khác. Quan sát nhất quán ở cả vòng 2 bước và vòng 3 bước.",
+            "kb_refs": [
+              "KB-038"
+            ],
+            "act_ids": [
+              "CTX-20260910-03:ACT-02-01-002",
+              "CTX-20260910-03:ACT-02-02-002"
+            ]
+          },
+          {
+            "name": "Chặn Save khi có vòng (client-side)",
+            "description": "Save & Close / Save bị chặn: modal KHÔNG đóng, validate-default-value vẫn chạy và trả 204, nhưng PUT KHÔNG BAO GIỜ được gửi (0/2 lần thử). DB không bị chạm.",
+            "kb_refs": [
+              "KB-039"
+            ],
+            "act_ids": [
+              "CTX-20260910-03:ACT-02-01-002",
+              "CTX-20260910-03:ACT-02-02-002"
+            ],
+            "apiop_ids": [
+              "CTX-20260910-03:APIOP-001",
+              "CTX-20260910-03:APIOP-002"
+            ]
+          },
+          {
+            "name": "Vòng không persist khi Cancel",
+            "description": "Sau khi Cancel và mở lại artwork, layer liên quan vẫn ở trạng thái 'No conditions' — điều kiện vòng chỉ tồn tại in-memory trong modal.",
+            "kb_refs": [
+              "KB-039"
+            ],
+            "act_ids": []
+          },
+          {
+            "name": "Self-loop không tạo được qua UI",
+            "description": "Dropdown 'Option:' luôn loại trừ chính layer đang cấu hình (đồng nhất với KB-032), nên không có đường UI để tạo self-loop A->A.",
+            "kb_refs": [
+              "KB-041"
+            ],
+            "act_ids": []
+          }
+        ],
+        "state_transitions": [
+          {
+            "from": "condition graph có vòng, đang trong modal Save",
+            "to": "Save bị chặn, toast circular hiện, PUT không gửi, modal vẫn mở",
+            "trigger": "bấm Save & Close / Save",
+            "condition": "đồ thị dependency giữa các layer tạo thành vòng khép kín",
+            "kb_refs": [
+              "KB-039"
+            ]
+          },
+          {
+            "from": "modal Save bị chặn vì vòng",
+            "to": "layer trở về 'No conditions' (điều kiện vòng bị bỏ, không persist)",
+            "trigger": "Cancel modal, mở lại artwork",
+            "condition": "",
+            "kb_refs": [
+              "KB-039"
+            ]
+          }
+        ],
+        "confirmed_rules": [],
+        "observed_behavior": [],
+        "observed_validations": [
+          {
+            "input": "Save khi condition graph có vòng 2 bước hoặc 3 bước",
+            "message_verbatim": "Template - <tên template>:\\nCircular conditions between: A > B > C",
+            "observed_count": 2,
+            "rule_confidence": "LOW",
+            "kb_refs": [
+              "KB-040"
+            ]
+          }
+        ],
+        "permissions": [
+          {
+            "role": "store owner/staff",
+            "capability": "có thể tạo cấu hình vòng qua UI nhưng luôn bị chặn ở bước Save",
+            "kb_refs": [
+              "KB-038",
+              "KB-039"
+            ]
+          }
+        ],
+        "surface_mapping": {
+          "portal": [
+            "artwork editor — accordion CONDITIONAL SETTING, modal Save"
+          ],
+          "storefront": [],
+          "api": [
+            "POST /api/artworks/{id}/validate-default-value (204, KHÔNG phải endpoint kiểm vòng, xem KB-029)",
+            "PUT /api/artworks/{id} (không bao giờ được gửi khi có vòng, theo evidence hiện có)"
+          ],
+          "data": [],
+          "code": []
+        },
+        "dependencies": [
+          {
+            "type": "feature",
+            "description": "Dropdown nguồn/exclusion rule đến từ FEAT-08-conditional-setting-config (KB-032).",
+            "kb_refs": [
+              "KB-032",
+              "KB-041"
+            ]
+          },
+          {
+            "type": "feature",
+            "description": "Sequence validate-default-value/PUT thuộc FEAT-07-artwork-save-persist; feature này mô tả điểm chặn XẢY RA TRƯỚC PUT trong cùng sequence đó.",
+            "kb_refs": [
+              "KB-039"
+            ]
+          }
+        ],
+        "risks": [
+          {
+            "risk": "BLK-API-002 (CRITICAL): TOÀN BỘ evidence của cả 3 run — PUT chưa BAO GIỜ được gửi với payload chứa đồ thị vòng (client luôn chặn trước). validate-default-value vẫn 204 ngay cả ở 2 lần bị chặn này, nghĩa là đây KHÔNG phải endpoint kiểm vòng. KHÔNG CÓ evidence nào xác nhận hay bác bỏ việc server tự chặn vòng độc lập với client — rủi ro data-integrity tiềm ẩn nếu client bị bypass.",
+            "kb_refs": [
+              "KB-039"
+            ],
+            "note": "Cần orchestrator duyệt tường minh direct-API mutation test (PUT thủ công với payload vòng) trước khi mở rộng feature này thành 'API reject cyclic payload'. Cho tới khi đó, feature CHỈ được mô tả là 'chặn ở client/UI'."
+          }
+        ],
+        "freshness": {
+          "observed_at": "2026-09-10",
+          "run_id": "CTX-20260910-03"
+        },
+        "unknown_areas": [
+          {
+            "question": "Server có tự validate/reject đồ thị vòng ở tầng PUT hay hoàn toàn phụ thuộc client? (BLK-API-002)",
+            "why_it_matters": "Nếu chỉ chặn ở client, bypass client (gọi PUT trực tiếp qua API) có thể ghi được dữ liệu vòng vào DB — rủi ro nghiêm trọng, PHẢI xác nhận trước khi coi feature này 'đã bảo vệ' ở mọi tầng."
+          },
+          {
+            "question": "Thuật toán chọn 'layer gốc' hiển thị đầu message lỗi — 2/2 sample đều ra Word Search chỉ vì nó tình cờ là layer DUY NHẤT phụ thuộc cả 8 nguồn trong artwork test này; chưa tách biệt coincidence của test data vs quy luật thật (vd theo thứ tự template/layer).",
+            "why_it_matters": "Không thể viết assertion chính xác cho nội dung message lỗi ở artwork có cấu trúc dependency khác."
+          },
+          {
+            "question": "Chuỗi in trong message là đường đi duyệt (traversal path) DẪN TỚI vòng, KHÔNG phải chu trình tối giản — chưa xác nhận cách hệ thống chọn đường đi khi có nhiều đường khác nhau dẫn tới cùng 1 vòng.",
+            "why_it_matters": "Ảnh hưởng cách verify nội dung message trong test case phức tạp hơn 2 sample đã thử (vd nhiều layer cùng phụ thuộc 1 phần của vòng)."
+          },
+          {
+            "question": "Self-loop qua API trực tiếp (bỏ qua UI, gọi PUT với element trỏ vào chính layer đó) chưa được thử.",
+            "why_it_matters": "Cùng nhóm rủi ro với BLK-API-002."
+          },
+          {
+            "question": "Hành vi runtime storefront khi 1 artwork (giả sử) có vòng lọt qua được validation — 0 evidence, và bản thân trường hợp này chưa xác nhận có thể xảy ra hay không.",
+            "why_it_matters": "coverage_gaps #1; đặc biệt quan trọng vì đây là edge case bảo vệ tính toàn vẹn dữ liệu."
+          }
+        ]
+      }
+    ],
+    "profile_relationships": [
+      {
+        "from_feature_id": "FEAT-09-condition-cycle-validation",
+        "to_feature_id": "FEAT-08-conditional-setting-config",
+        "relation": "guards",
+        "note": "Bảo vệ tính toàn vẹn cho cấu hình được tạo ở FEAT-08."
+      },
+      {
+        "from_feature_id": "FEAT-09-condition-cycle-validation",
+        "to_feature_id": "FEAT-07-artwork-save-persist",
+        "relation": "blocks_step_in",
+        "note": "Điểm chặn nằm trong chính sequence Save của FEAT-07, xảy ra giữa validate-default-value và PUT."
+      }
+    ],
+    "coverage_matrix": [
+      {
+        "feature_id": "FEAT-09-condition-cycle-validation",
+        "layer": "portal",
+        "role": "owner",
+        "state": "vòng 2 bước / 3 bước",
+        "environment": "staging",
+        "covered": true
+      },
+      {
+        "feature_id": "FEAT-09-condition-cycle-validation",
+        "layer": "api",
+        "role": "owner",
+        "state": "PUT trực tiếp với payload vòng (bypass client)",
+        "environment": "staging",
+        "covered": false
+      },
+      {
+        "feature_id": "FEAT-09-condition-cycle-validation",
+        "layer": "api",
+        "role": "owner",
+        "state": "self-loop qua API",
+        "environment": "staging",
+        "covered": false
+      },
+      {
+        "feature_id": "FEAT-09-condition-cycle-validation",
+        "layer": "storefront",
+        "role": "owner",
+        "state": "toàn bộ",
+        "environment": "staging",
+        "covered": false
+      }
+    ],
+    "unassigned_kb_items": [],
+    "profile_conflicts": [],
+    "profile_change_summary": [],
+    "kb_trace_complete": true
+  },
+  "gate": {
+    "decision": "CONDITIONAL_PASS",
+    "blocking_findings": [],
+    "conditions": [
+      "BLK-API-002 PHẢI ở nguyên trong unknown_areas/risks; feature này CHỈ được mô tả ở tầng UI/client cho tới khi có direct-API test được orchestrator duyệt tường minh.",
+      "KHÔNG mở rộng phạm vi thành 'server-side protection đã xác nhận'."
+    ],
+    "allowed_next_steps": [
+      "qa-checklist-builder",
+      "knowledge-diff-analyzer"
+    ]
+  },
+  "publish": {
+    "published_at": "2026-09-11",
+    "published_by": "qa-context-lifecycle-orchestrator",
+    "ctx_run_id": "CTX-20260911-01",
+    "source_ctx_run_ids": [
+      "CTX-20260910-01",
+      "CTX-20260910-02",
+      "CTX-20260910-03"
+    ],
+    "published_context_version": "1",
+    "review_ref": "runs/context/2026-09-11/CTX-20260911-01/review/verdict.json",
+    "review_decision": "APPROVED_WITH_CONDITIONS",
+    "publish_conditions_applied": [
+      "run-manifest.json (FIND-001) cap nhat dung tien do that truoc publish nay.",
+      "Ca 7 conflict (CONF-001..CONF-007) publish giu nguyen CA HAI phia trong payload.conflicts[]; envelope-level conflicts[] chi la con tro (ref) toi payload.conflicts[] theo dung publish_conditions cua reviewer (khong dung ban rut gon lam nguon).",
+      "BLK-API-002 (server co tu chan cyclic dependency graph tren PUT hay khong) giu nguyen trang thai UNKNOWN/unresolved - khong publish bat ky cau nao dien giai 'server tu chan cyclic dependency' cho toi khi co direct-API test duoc orchestrator duyet.",
+      "Moi field/shape co observed_count=1 giu nguyen confidence LOW, khong nang thanh required/enum chinh thuc.",
+      "Khong co KB/feature/checklist item nao duoc nang tu OBSERVED_CURRENT/NEEDS_CONFIRMATION len CONFIRMED_EXPECTED/READY luc publish - 0 CONFIRMED_EXPECTED trong toan bo object nay."
+    ],
+    "narrative_companion_docs": [
+      "knowledge/artwork/README.md",
+      "knowledge/artwork/artwork-management.md",
+      "knowledge/artwork/editor.md",
+      "knowledge/artwork/layer-common.md",
+      "knowledge/artwork/schema-reference.md",
+      "knowledge/artwork/conditional-setting.md",
+      "knowledge/artwork/populate-values.md",
+      "knowledge/artwork/layer-text.md",
+      "knowledge/artwork/layer-image.md",
+      "knowledge/artwork/layer-vector.md",
+      "knowledge/artwork/layer-map.md",
+      "knowledge/artwork/layer-puzzle.md",
+      "knowledge/artwork/layer-others.md",
+      "knowledge/artwork/layer-form-elements.md"
+    ],
+    "narrative_companion_note": "12 file knowledge/artwork/*.md la tai lieu doc-duoc viet tay truoc khi co pipeline nay, giu nguyen lam tai lieu tham khao song song, da duoc them ghi chu tro sang canonical path nay. Khong dung lam evidence machine-readable."
+  }
+}
