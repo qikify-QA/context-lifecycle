@@ -1,0 +1,78 @@
+{
+  "schema_version": "1.0",
+  "artifact_type": "ContextReviewVerdict",
+  "artifact_id": "REVIEW-VERDICT-CTX-20260911-01-01",
+  "workflow_id": "CTX-20260911-01",
+  "producer": "context-quality-reviewer",
+  "source_refs": [
+    "runs/context/2026-09-11/CTX-20260911-01/review/gate-results.json"
+  ],
+  "upstream_artifact_ids": [
+    "KB-CAND-CTX-20260911-01-01",
+    "FP-CAND-CTX-20260911-01-01..11",
+    "CHK-CAND-CTX-20260911-01-01..11"
+  ],
+  "status": "READY",
+  "confidence": "HIGH",
+  "observations": [
+    "Đây là candidate chất lượng cao nhất đã review trong dòng object gần đây: kỷ luật OBSERVED_CURRENT/INFERRED được giữ nghiêm ngặt xuyên suốt 49 KB item, 11 feature profile, 124 checklist item — không phát hiện assumption leakage nào (đã grep + đọc thủ công toàn bộ statement/observed_behavior/risks tìm cụm từ khẳng định thẩm quyền, không tìm thấy trường hợp nào gắn CONFIRMED_EXPECTED thiếu confirmation_source).",
+    "BLK-API-002 (cyclic dependency server-side) và CONF-002 (state divergence do khác object state/thời điểm giữa run-02 và run-03) được xử lý đúng: không bị downstream nào ngầm coi 2 nguồn khác nhau là 1, không bị nâng cấp thành kết luận server-side.",
+    "Traceability 49/49 KB item -> ít nhất 1/11 feature profile, và mọi field trong 11 feature profile trace ngược về kb_id hợp lệ — xác minh bằng script, 0 vi phạm.",
+    "Oracle discipline 124/124 check: 40 NEEDS_CONFIRMATION khớp chính xác 100% với oracle_strength=NONE, không có expected_result khẳng định nào thiếu oracle.",
+    "Redaction sạch trên toàn bộ candidate/ + input/ + evidence gốc của cả 3 run nguồn (grep header nhạy cảm, token/password/secret pattern, JWT pattern, email pattern — không có giá trị thật lộ)."
+  ],
+  "assumptions": [],
+  "unknowns": [],
+  "conflicts": [],
+  "blocking_issues": [],
+  "publish_allowed": true,
+  "decision": "APPROVED_WITH_CONDITIONS",
+  "gate_results": [
+    { "gate": "C0", "status": "PASS", "checks_run": ["bootstrap-request completeness", "consolidation_decision rationale"], "note": "Đầy đủ product/object_target/environment/role/mutation_policy." },
+    { "gate": "C1", "status": "PASS", "checks_run": ["network entry classification 284/284", "redaction", "before/after state", "mutation policy + account scope"], "note": "Evidence gốc nuôi candidate đạt yêu cầu; không có exploration mới nào bị thực hiện trái phép trong run consolidation này (xác minh qua mtime)." },
+    { "gate": "C2", "status": "PASS", "checks_run": ["API operation trace về ACT-ID", "không suy required/enum từ 1 sample"], "note": "" },
+    { "gate": "C3", "status": "PASS", "checks_run": ["49/49 KB item đủ knowledge_kind/evidence/scope/confidence/freshness", "0 CONFIRMED_EXPECTED thiếu confirmation_source", "7/7 conflict giữ cả 2 sides"], "note": "1 MINOR finding không blocking — xem FIND-002." },
+    { "gate": "C4", "status": "PASS", "checks_run": ["mọi field trace kb_id hợp lệ ở 11/11 profile", "confirmed_rules rỗng", "unassigned_kb_items rỗng và xác minh đúng"], "note": "" },
+    { "gate": "C5", "status": "PASS", "checks_run": ["124 check đối chiếu status vs oracle_strength, khớp 1-1", "0 assertion không oracle", "0 oracle giả"], "note": "" },
+    { "gate": "C6", "status": "CONDITIONAL_PASS", "checks_run": ["schema/artifact_id nhất quán", "redaction toàn run", "coverage manifest nhất quán"], "note": "1 MAJOR finding: run-manifest.json chưa phản ánh đúng tiến độ thật — xem FIND-001. Không phải lỗi nội dung, nhưng version lineage phải được sửa trước/khi publish." }
+  ],
+  "findings": [
+    {
+      "finding_id": "FIND-001",
+      "gate": "C6",
+      "severity": "MAJOR",
+      "artifact": "run-manifest.json",
+      "target_id": "stages[] (api-explorer gap-fill run-02/run-03, qa-knowledge-normalizer, feature-profile-builder, qa-checklist-builder, context-quality-reviewer)",
+      "producer": "qa-context-lifecycle-orchestrator",
+      "problem": "run-manifest.json khai status=IN_PROGRESS, completed_at=null, và toàn bộ stage sau 'input' vẫn ghi 'PENDING' — trong khi thực tế candidate/product-kb.json (139905 bytes), 11 feature-profiles, 11 checklists đã tồn tại đầy đủ và mtime tuần tự hợp lý (09:17:46 input -> 09:18:02 manifest -> 09:23-09:27 api-explorer gap-fill -> 09:40:53 product-kb -> 09:47-09:54 feature-profiles -> 10:07:54 checklists). Manifest không được cập nhật theo tiến độ thật, gây rủi ro cho audit trail / version lineage nếu publish ngay ở trạng thái này.",
+      "evidence": "runs/context/2026-09-11/CTX-20260911-01/run-manifest.json (stages[].status='PENDING' cho 6/8 stage); so sánh với `stat -f %Sm` của candidate/product-kb.json và candidate/feature-profiles/*.json, candidate/checklists/*.json cho thấy các artifact này đã ghi xong từ trước khi reviewer bắt đầu.",
+      "required_fix": "Orchestrator cập nhật run-manifest.json: đổi status của các stage 'api-explorer (gap-fill, run-02)', 'api-explorer (gap-fill, run-03)', 'qa-knowledge-normalizer', 'feature-profile-builder', 'qa-checklist-builder' thành DONE với timestamp thực tế; sau khi nhận verdict này, thêm stage context-quality-reviewer=DONE; set overall status và completed_at đúng thời điểm publish. KHÔNG phải việc của reviewer — reviewer không tự sửa run-manifest.json."
+    },
+    {
+      "finding_id": "FIND-002",
+      "gate": "C3",
+      "severity": "MINOR",
+      "artifact": "candidate/product-kb.json",
+      "target_id": "conflicts[] (top-level envelope field, dòng ~100-129)",
+      "producer": "qa-knowledge-normalizer",
+      "problem": "Envelope-level `conflicts[]` (vị trí chuẩn theo contract §1) chỉ chứa {conflict_id, topic} cho cả 7 conflict — thiếu `sides[]`/evidence_refs mà contract §8 yêu cầu ('GIỮ CẢ HAI trong conflicts[], mỗi phía kèm evidence refs'). Bản đầy đủ với sides+evidence thực ra nằm ở `payload.conflicts[]` (một field khác, sâu hơn trong payload). Một consumer chỉ đọc field `conflicts[]` cấp envelope theo đúng vị trí chuẩn của contract sẽ không thấy được evidence 2 phía.",
+      "evidence": "candidate/product-kb.json dòng 100-129 (conflicts[] cấp envelope, chỉ conflict_id+topic) vs dòng 2255-2453 (payload.conflicts[], đầy đủ sides+evidence_refs+resolution+needs).",
+      "required_fix": "qa-knowledge-normalizer nên hợp nhất: hoặc chuyển toàn bộ nội dung sides/evidence vào đúng field envelope `conflicts[]`, hoặc thêm ghi chú rõ ràng trong envelope conflicts[] trỏ tới payload.conflicts[] (vd field `detail_ref: 'payload.conflicts[<index>]'`) để tránh nhầm lẫn khi đọc theo đúng vị trí chuẩn contract. Không blocking publish vì nội dung đầy đủ vẫn tồn tại và được trace đúng xuống feature-profile/checklist."
+    }
+  ],
+  "coverage_findings": [
+    "7 coverage_gaps được khai báo tường minh trong product-kb.json (storefront runtime 0 evidence, DB-level thật sự 0 evidence — chỉ có GraphQL/Hasura readback, cross-tenant/role thấp hơn owner 0 evidence, server-side circular validation chưa xác nhận, validate-default-value lỗi thật chưa có sample, required/enum/boundary phần lớn field ở mức LOW, bộ field tối thiểu để save 8 type bị chặn chưa xác nhận đầy đủ) — tất cả được phản ánh nhất quán xuống unknown_areas của feature-profile liên quan và checks_needing_confirmation của checklist liên quan. Không có coverage gap nào bị 'giấu' ở tầng KB nhưng biến mất khi lên feature-profile/checklist."
+  ],
+  "assumption_leakage": [],
+  "publish_conditions": [
+    "Orchestrator PHẢI cập nhật run-manifest.json (FIND-001) để phản ánh đúng tiến độ thật trước khi hoàn tất publish — đây là điều kiện publish, không phải lý do REWORK candidate.",
+    "Khi ghi vào knowledge/products/teeinblue/objects/artwork/, cả 7 conflict (CONF-001..CONF-007) PHẢI được publish với ĐẦY ĐỦ CẢ HAI phía (dùng bản payload.conflicts[] có sides+evidence, không dùng bản rút gọn ở envelope conflicts[]) — orchestrator KHÔNG được tự chọn 1 phía đúng khi copy sang knowledge/.",
+    "BLK-API-002 phải giữ nguyên trạng thái unresolved/unknown trong knowledge/ — không publish bất kỳ câu nào diễn giải 'server tự chặn cyclic dependency' cho tới khi có direct-API test được orchestrator duyệt tường minh (CHK-008/009 trong checklist).",
+    "Mọi field/shape có observed_count=1 phải giữ nguyên confidence LOW khi publish, không được nâng thành required/optional/enum chính thức trong knowledge/kb.json."
+  ],
+  "rework_targets": [],
+  "allowed_next_steps": [
+    "qa-context-lifecycle-orchestrator: cập nhật run-manifest.json (FIND-001), sau đó publish product-kb.json + 11 feature-profiles + 11 checklists vào knowledge/products/teeinblue/objects/artwork/ theo publish_conditions ở trên.",
+    "Khuyến nghị (không blocking): qa-knowledge-normalizer cân nhắc sửa FIND-002 ở lần chuẩn hoá kế tiếp (không cần rework run này)."
+  ]
+}

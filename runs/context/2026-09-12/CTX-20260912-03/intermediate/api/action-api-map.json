@@ -1,0 +1,569 @@
+{
+  "schema_version": "1.0",
+  "artifact_type": "APICapabilityArtifact",
+  "artifact_id": "ARTF-api-explorer-CTX-20260912-03",
+  "workflow_id": "CTX-20260912-03",
+  "producer": "api-explorer",
+  "source_refs": [
+    { "type": "har_entry", "path": "raw/network/ACT-07-01-001.json", "act_id": "ACT-07-01-001", "note": "42 entries: multi-store publish (instance_id 613) + GraphQL campaign_instances state before/after + instance/theme readiness checks. Verified independently clean of secrets/PII (redaction already fixed and gate-verified by orchestrator per run-manifest.json)." },
+    { "type": "har_entry", "path": "raw/network/ACT-07-02-001-dialog-and-view-check.json", "act_id": "ACT-07-02-001", "note": "Read-only dialog reopen check. Internal JSON field 'act_id' in this file literally reads 'ACT-07-02-000-dialog-reopen', not 'ACT-07-02-001' — see documented_observed_mismatches. Mapped to canonical ACT-07-02-001 per orchestrator instruction and cross-confirmed against raw/portal/portal-evidence.json which uses ACT-07-02-001 for the same dialog-reopen action." },
+    { "type": "har_entry", "path": "raw/storefront/network-log-store2-redacted.json", "act_id": "ACT-07-01-001", "note": "9-entry consolidated/summarized (prose-note) log for store2 SDK v2 session: SDK bootstrap, campaign fetch, cart add/change." },
+    { "type": "har_entry", "path": "raw/storefront/store1-final-log.json", "act_id": "ACT-01-01-009", "note": "Primary store1 log: 18 narrative steps + 71 netlog entries. Used as primary source per task instruction." },
+    { "type": "code_ref", "path": "raw/storefront/store1-run-log.json", "act_id": "ACT-01-01-009", "note": "Earlier diagnostic pass for store1; used ONLY to source the /password gate POST request/response (redacted form body) which is not present in store1-final-log.json's netlog. No double-counting: this is the sole source for that one operation." },
+    { "type": "code_ref", "path": "raw/storefront/storefront-evidence-store1-v1.json", "note": "Storefront-explorer structured evidence (SF-OBS-001..012, CONFLICT-001) for store1/SDK v1, read first per task instruction to map SF-OBS-ID to network entries." },
+    { "type": "code_ref", "path": "raw/storefront/storefront-evidence-store2-v2.json", "note": "Storefront-explorer structured evidence (SF-OBS-001..017) for store2/SDK v2, read first per task instruction." },
+    { "type": "code_ref", "path": "raw/portal/portal-evidence.json", "act_id": "ACT-07-01-001", "note": "Portal before/after object_state for ACT-07-01-001 and ACT-07-02-001, used to corroborate GraphQL state delta." },
+    { "type": "code_ref", "path": "contracts/qa-context-contract.md", "note": "Shared contract read before starting." }
+  ],
+  "upstream_artifact_ids": [
+    "ARTF-portal-explorer-CTX-20260912-03",
+    "ARTF-storefront-explorer-CTX-20260912-03-store1",
+    "SF-ART-CTX-20260912-03-STORE2"
+  ],
+  "status": "PARTIAL",
+  "confidence": "MEDIUM",
+  "observations": [
+    "This is an INCREMENTAL_UPDATE run scoped to FEAT-07-storefront-buyer-facing only. Per orchestrator instruction, numbering starts at APIOP-039 (APIOP-001..038 from CTX-20260912-02/object version 1 are out of scope, not re-mapped, not re-read).",
+    "No OpenAPI/GraphQL schema documentation exists in this repo for any of the operations below (ZERO_DOC_BOOTSTRAP inherited posture) — every contract field below is OBSERVED_CURRENT from redacted network capture, not CONFIRMED_EXPECTED from a spec.",
+    "State delta for the multi-store publish action (ACT-07-01-001) is HIGH-confidence because it is triple-corroborated: (1) GraphQL 'instances' precheck query campaign_instances_aggregate.count for instance 613 goes 0 -> 1 across the publish call, (2) GraphQL 'getData' query campaign_instances[] for instance 613 goes [] -> [{id:2377, instance_id:613, handle:'qa-explore-campaign-pb-01', platform_linked_id:'15280333291824'}], and (3) raw/portal/portal-evidence.json's independently-recorded before/after object_state agrees (published_store2 false -> true, store2_platform_linked_id 15280333291824).",
+    "Several generic bootstrap calls were observed in the same capture windows (GET /api/staff, GET /api/user, GET /api/user/{resource}/exists x4, GET /api/campaigns/2595 (REST), GET /api/campaigns/2595/clipart-categories, GET /api/instances/609/popup-messages, GET /api/instances/609/translation, GraphQL 'get' campaigns_by_pk / product_counter+campaign_products) that fire on every campaign-edit-page load. These are almost certainly already covered by APIOP-001..038 published in version 1 (campaign edit page was explored extensively in the prior run). Per the numbering rule, they are NOT re-mapped here — listed in background_traffic with a note instead of being asserted as new operations.",
+    "The task-provided field name 'platform_linked_handle' does not match the field name actually observed in the GraphQL response, which is 'handle' (see documented_observed_mismatches)."
+  ],
+  "assumptions": [
+    "GET /api/instances?trashed method is inferred as GET from REST convention and the presence of only a 'response' entry (no paired 'request' entry was captured before the netlog window started) — auth header shape for this specific call is therefore unknown, not confirmed identical to the other /api/instances/* calls."
+  ],
+  "unknowns": [
+    "Whether GET /api/instances?trashed requires a specific role/permission distinct from the generic staff bearer token — no request headers captured for this specific call.",
+    "Whether the 429 status reported in storefront-explorer's narrative steps for store1's GET /cart.js and POST /cart/clear.js (page.request()-driven, out-of-band from the browser's own network stack) reflects genuine Shopify anti-bot rate-limiting or an artifact of the automation technique — netlog[] itself only contains 200-status /cart.js entries for store1, so this could not be independently cross-verified from raw network capture alone.",
+    "Whether the multi-store publish endpoint (APIOP-039) behaves differently for a FIRST publish (no prior instance_id) vs this observed case (instance already existed with app-block confirmed enabled) — only one sample, single target instance (613), single outcome (success) observed.",
+    "No error/failure response was ever observed for POST /api/campaigns/{id}/publish, POST /cart/add, or POST /cart/change.js in this run — error_contract for all three is therefore empty, not confirmed absent."
+  ],
+  "conflicts": [
+    {
+      "conflict_id": "CONFLICT-001-carried-forward",
+      "topic": "Store1 (SDK v1) ADD TO CART: whether it can ever complete successfully.",
+      "note": "Carried forward from storefront-explorer's storefront-evidence-store1-v1.json CONFLICT-001 (both sides kept there, not resolved by that agent either). From api-explorer's perspective, the concrete network-level fact is: 0 network requests of any kind were observed following the ADD TO CART click across store1's full 71-entry netlog, in either template configuration tested. This is recorded as an expected-but-unobserved operation in unmapped_endpoints, not as a confirmed defect.",
+      "side_a": { "source": "storefront-explorer store1 automated session", "claim": "0 network requests fired on ADD TO CART click; client blocks before any HTTP call.", "evidence_weight": "HIGH" },
+      "side_b": { "source": "User manual test (verbal, relayed)", "claim": "ADD TO CART works normally by hand.", "evidence_weight": "LOW" },
+      "resolution": "NOT_RESOLVED_BY_THIS_AGENT"
+    }
+  ],
+  "blocking_issues": [],
+  "payload": {
+    "api_context": {
+      "environment": "staging",
+      "auth_role": "owner (Linh explorer, sub=273, user_id=266, plan Blue Test) for portal/GraphQL calls; GUEST/unauthenticated for storefront-public and Shopify-native calls",
+      "base_url": "https://staging-api.teeinblue.com (REST) / https://staging-graphql.teeinblue.com/v1/graphql (GraphQL) / https://staging-sdk.teeinblue.com (SDK static assets) / https://{shop}.myshopify.com (Shopify native storefront)"
+    },
+    "operations": [
+      {
+        "operation_id": "APIOP-039",
+        "protocol": "REST",
+        "method_or_type": "POST",
+        "path_or_operation": "/api/campaigns/{campaignId}/publish",
+        "observed_paths": ["/api/campaigns/2595/publish"],
+        "business_object": "Campaign",
+        "capability": "Multi-store launch — publish a campaign to a specific connected store instance",
+        "act_ids": ["ACT-07-01-001"],
+        "scn_ids": [],
+        "feature_ids": ["FEAT-07-storefront-buyer-facing"],
+        "auth": { "type": "Bearer/JWT", "header": "authorization: [REDACTED]", "role_observed": "owner (staff, sub=273)" },
+        "request_contract": {
+          "content_type": "application/json;charset=UTF-8",
+          "body_shape": { "instance_id": "integer (observed value shape only, e.g. 613)" },
+          "field_presence": "observed — single sample, not asserted required/optional"
+        },
+        "response_contract": {
+          "status_observed": 200,
+          "content_type": "application/json",
+          "body_shape": "Full campaign object echoing post-publish state: id, name, status, label_available_product, field_positions, product_type, product_tags, featured_image_url/thumbnail, vendor, platform_config, product_display_type, internal_tags, from_public, enable_artwork_navigation, artworks[] (id, name, description, width, height, thumbnail, current_version_id, design_format, schema_version, data[] templates with layers[]), plus (per portal-evidence.json UI toast) transient messages 'Publishing campaign...', 'Content is published.', 'Mockups are still publishing.' observed as UI text, not confirmed present as response JSON fields."
+        },
+        "error_contract": [],
+        "observed_status": [200],
+        "observed_count": 1,
+        "state_delta": [
+          {
+            "field": "campaign_instances_aggregate.count for instance 613 (GraphQL, cross-referenced)",
+            "before": "0",
+            "after": "1",
+            "confidence": "HIGH"
+          },
+          {
+            "field": "campaign_instances[] for instance 613 (GraphQL 'getData', cross-referenced)",
+            "before": "[] (empty array)",
+            "after": "[{\"id\":2377,\"instance_id\":613,\"handle\":\"qa-explore-campaign-pb-01\",\"need_sync\":false,\"platform_linked_id\":\"15280333291824\"}]",
+            "confidence": "HIGH"
+          },
+          {
+            "field": "portal_evidence.object_state.published_store2 (independent corroboration)",
+            "before": "false",
+            "after": "true",
+            "confidence": "HIGH"
+          }
+        ],
+        "source_refs": [
+          { "type": "har_entry", "path": "raw/network/ACT-07-01-001.json", "act_id": "ACT-07-01-001" },
+          { "type": "code_ref", "path": "raw/portal/portal-evidence.json", "act_id": "ACT-07-01-001" }
+        ],
+        "observed_request_refs": [
+          { "type": "har_entry", "path": "raw/network/ACT-07-01-001.json", "note": "request ts 1789203749208, response ts 1789203755110" }
+        ],
+        "knowledge_kind": "OBSERVED_CURRENT"
+      },
+      {
+        "operation_id": "APIOP-040",
+        "protocol": "GRAPHQL",
+        "method_or_type": "POST",
+        "path_or_operation": "(anonymous query, no operationName) — instances[] with campaign_instances_aggregate count",
+        "observed_paths": ["https://staging-graphql.teeinblue.com/v1/graphql"],
+        "business_object": "Instance (Store) x Campaign",
+        "capability": "Multi-store launch dialog — per-store precheck of how many campaign_instances already link this campaign, used to decide dialog row state (Launch vs already-launched)",
+        "act_ids": ["ACT-07-01-001", "ACT-07-02-001"],
+        "scn_ids": [],
+        "feature_ids": ["FEAT-07-storefront-buyer-facing"],
+        "auth": { "type": "Bearer/JWT", "header": "authorization: [REDACTED]", "role_observed": "owner (staff, sub=273)" },
+        "request_contract": {
+          "shape": "{ variables: {}, query: \"{ instances(where: {deleted_at: {_is_null: true}, visible: {_eq: true}}) { id name platform_domain platform_id campaign_instances_aggregate(where: {campaign_id: {_eq: 2595}}) { aggregate { count } } } }\" }",
+          "field_presence": "observed — campaign_id is inlined as a literal in the query text in both samples, not passed as a GraphQL variable"
+        },
+        "response_contract": {
+          "status_observed": 200,
+          "body_shape": "data.instances[]: { id, name, platform_domain, platform_id, campaign_instances_aggregate.aggregate.count, __typename }"
+        },
+        "error_contract": [],
+        "observed_status": [200],
+        "observed_count": 2,
+        "state_delta": [
+          {
+            "field": "instances[id=613].campaign_instances_aggregate.aggregate.count",
+            "before": "0 (captured pre-publish, ACT-07-01-001)",
+            "after": "1 (captured on dialog reopen, ACT-07-02-001)",
+            "confidence": "HIGH"
+          }
+        ],
+        "source_refs": [
+          { "type": "har_entry", "path": "raw/network/ACT-07-01-001.json", "act_id": "ACT-07-01-001", "note": "response ts 1789203744811" },
+          { "type": "har_entry", "path": "raw/network/ACT-07-02-001-dialog-and-view-check.json", "act_id": "ACT-07-02-001", "note": "response ts 1789203895672" }
+        ],
+        "observed_request_refs": [
+          { "type": "har_entry", "path": "raw/network/ACT-07-01-001.json", "note": "request ts 1789203743369" }
+        ],
+        "knowledge_kind": "OBSERVED_CURRENT"
+      },
+      {
+        "operation_id": "APIOP-041",
+        "protocol": "GRAPHQL",
+        "method_or_type": "POST",
+        "path_or_operation": "getData",
+        "observed_paths": ["https://staging-graphql.teeinblue.com/v1/graphql"],
+        "business_object": "Instance (Store) x Campaign (campaign_instances link)",
+        "capability": "Multi-store launch dialog — full list of connected store instances with per-instance campaign link detail (handle, platform_linked_id) used to render each dialog row's launched/not-launched state and storefront URL",
+        "act_ids": ["ACT-07-01-001", "ACT-07-02-001"],
+        "scn_ids": [],
+        "feature_ids": ["FEAT-07-storefront-buyer-facing"],
+        "auth": { "type": "Bearer/JWT", "header": "authorization: [REDACTED]", "role_observed": "owner (staff, sub=273)" },
+        "request_contract": {
+          "operationName": "getData",
+          "variables_shape": { "offset": "integer (observed 0)", "limit": "integer (observed 20)" },
+          "query_shape": "instances_aggregate(where: {platform_id in [1], deleted_at is null, visible: true}) { aggregate { count } }; instances(offset, limit, where: same) { id name platform_id campaign_instances(where: ...) { id instance_id handle need_sync platform_linked_id } domain platform_domain platform { name } }"
+        },
+        "response_contract": {
+          "status_observed": 200,
+          "body_shape": "data.instances_aggregate.aggregate.count (integer); data.instances[]: { id, name, platform_id, campaign_instances[]: { id, instance_id, handle, need_sync, platform_linked_id }, domain, platform_domain, platform.name }"
+        },
+        "error_contract": [],
+        "observed_status": [200],
+        "observed_count": 3,
+        "state_delta": [
+          {
+            "field": "instances[id=613].campaign_instances[]",
+            "before": "[] (empty array, pre-publish, ACT-07-01-001)",
+            "after": "[{\"id\":2377,\"instance_id\":613,\"handle\":\"qa-explore-campaign-pb-01\",\"need_sync\":false,\"platform_linked_id\":\"15280333291824\"}] (post-publish, both ACT-07-01-001 re-check and ACT-07-02-001 dialog reopen)",
+            "confidence": "HIGH"
+          },
+          {
+            "field": "instances[id=609].campaign_instances[] (store1, unaffected control)",
+            "before": "[{\"id\":2374,\"instance_id\":609,\"handle\":\"qa-explore-campaign-pb-01\",\"platform_linked_id\":\"8138398629987\"}]",
+            "after": "unchanged, same value, across all 3 samples",
+            "confidence": "HIGH"
+          }
+        ],
+        "source_refs": [
+          { "type": "har_entry", "path": "raw/network/ACT-07-01-001.json", "act_id": "ACT-07-01-001" },
+          { "type": "har_entry", "path": "raw/network/ACT-07-02-001-dialog-and-view-check.json", "act_id": "ACT-07-02-001" }
+        ],
+        "observed_request_refs": [
+          { "type": "har_entry", "path": "raw/network/ACT-07-01-001.json", "note": "requests ts 1789203744806 (pre-publish) and 1789203755103 (post-publish); responses ts 1789203745720 and 1789203756071" },
+          { "type": "har_entry", "path": "raw/network/ACT-07-02-001-dialog-and-view-check.json", "note": "request ts 1789203895595, response ts 1789203896705" }
+        ],
+        "knowledge_kind": "OBSERVED_CURRENT"
+      },
+      {
+        "operation_id": "APIOP-042",
+        "protocol": "REST",
+        "method_or_type": "GET",
+        "path_or_operation": "/api/instances?trashed",
+        "observed_paths": ["/api/instances?trashed"],
+        "business_object": "Instance (Store)",
+        "capability": "List all connected store instances (including trashed) for the current org — feeds the multi-store dialog's store picker",
+        "act_ids": ["ACT-07-01-001"],
+        "scn_ids": [],
+        "feature_ids": ["FEAT-07-storefront-buyer-facing"],
+        "auth": { "type": "unknown — inferred Bearer/JWT by pattern consistency with sibling /api/instances/* calls; no request entry captured to confirm headers", "header": "unknown" },
+        "request_contract": { "query_params": { "trashed": "presence-only flag, no value observed" } },
+        "response_contract": {
+          "status_observed": 200,
+          "body_shape": "array of instance objects: { id, address1, affiliate_ref, city, country, country_name, created_at, crisp_token[REDACTED], currency, customer_email[REDACTED], deleted_at, domain, email[REDACTED], has_new_pricing, iana_timezone, name, order_combine_by, plan_name, platform_domain, sdk_version (integer, e.g. 1 or 2), shop_owner, sku_prefix, token[REDACTED], config: {...many widget-display-config booleans/enums...}, subscription_id, is_development, is_plus, primary_locale, visible, usage/cycle fields, platform: {id, name, display_name} }"
+        },
+        "error_contract": [],
+        "observed_status": [200],
+        "observed_count": 1,
+        "state_delta": [],
+        "source_refs": [
+          { "type": "har_entry", "path": "raw/network/ACT-07-01-001.json", "act_id": "ACT-07-01-001", "note": "response ts 1789203739644; matching request not captured in this window" }
+        ],
+        "observed_request_refs": [],
+        "knowledge_kind": "OBSERVED_CURRENT"
+      },
+      {
+        "operation_id": "APIOP-043",
+        "protocol": "REST",
+        "method_or_type": "GET",
+        "path_or_operation": "/api/instances/{instanceId}/themes/app-block-enabled",
+        "observed_paths": ["/api/instances/613/themes/app-block-enabled"],
+        "business_object": "Instance (Store) x Theme",
+        "capability": "Multi-store launch readiness check — verify the target store's active theme has the teeinblue app-embed/block enabled before allowing publish",
+        "act_ids": ["ACT-07-01-001"],
+        "scn_ids": [],
+        "feature_ids": ["FEAT-07-storefront-buyer-facing"],
+        "auth": { "type": "Bearer/JWT", "header": "authorization: [REDACTED]", "role_observed": "owner (staff, sub=273)" },
+        "request_contract": { "body": "none (GET)" },
+        "response_contract": { "status_observed": 200, "body_shape": "{ enabled: boolean }" },
+        "error_contract": [],
+        "observed_status": [200],
+        "observed_count": 1,
+        "state_delta": [],
+        "source_refs": [
+          { "type": "har_entry", "path": "raw/network/ACT-07-01-001.json", "act_id": "ACT-07-01-001", "note": "request ts 1789203746800, response ts 1789203749209, body {\"enabled\":true} — checked for instance 613 BEFORE the publish call fired at ts 1789203749208, suggesting this is a pre-flight gate rather than a post-publish confirmation" }
+        ],
+        "observed_request_refs": [],
+        "knowledge_kind": "OBSERVED_CURRENT"
+      },
+      {
+        "operation_id": "APIOP-044",
+        "protocol": "REST",
+        "method_or_type": "GET",
+        "path_or_operation": "https://staging-api.teeinblue.com/api/merchant/campaigns/{platformProductId}.json",
+        "observed_paths": [
+          "https://staging-api.teeinblue.com/api/merchant/campaigns/8138398629987.json?shop=linh-explorer.myshopify.com&v={cachebust}",
+          "https://staging-api.teeinblue.com/api/merchant/campaigns/15280333291824.json?shop=linh-explorer-2.myshopify.com&v={cachebust}"
+        ],
+        "business_object": "Campaign (storefront-facing config)",
+        "capability": "Storefront widget bootstrap — fetch the full campaign personalization config (templates, fields, artworks, printareas) keyed by the platform product id, consumed client-side to render the buyer-facing widget",
+        "act_ids": ["ACT-01-01-009", "ACT-07-01-001"],
+        "scn_ids": [],
+        "feature_ids": ["FEAT-07-storefront-buyer-facing"],
+        "auth": { "type": "none observed", "header": "no authorization header present on either sample — public, keyed only by platform product id + shop query param" },
+        "request_contract": {
+          "query_params": { "shop": "string, storefront domain", "v": "integer, cache-busting value, presumably a timestamp" }
+        },
+        "response_contract": {
+          "status_observed": 200,
+          "content_type": "application/json",
+          "cache_control_observed": "max-age=900, private (store1 sample)",
+          "body_shape": "campaign object: id, name, ... (same family of fields as APIOP-039's publish response — artworks[], templates, fields) — full shape not diffed field-by-field between the two stores in this run, both returned 200 with rendering content"
+        },
+        "error_contract": [],
+        "observed_status": [200, 200],
+        "observed_count": 2,
+        "state_delta": [
+          {
+            "field": "existence/renderability of campaign config at this route for platform_product_id 15280333291824 (store2)",
+            "before": "route did not resolve to any linked campaign (instance had 0 campaign_instances prior to ACT-07-01-001)",
+            "after": "200 with fully rendering campaign content, observed within minutes of publish — propagation recorded as IMMEDIATE by storefront-explorer, not independently timed by api-explorer",
+            "confidence": "MEDIUM"
+          }
+        ],
+        "source_refs": [
+          { "type": "api_response", "path": "raw/storefront/store1-final-log.json", "act_id": "ACT-01-01-009", "note": "netlog entry for campaigns/8138398629987.json" },
+          { "type": "api_response", "path": "raw/storefront/network-log-store2-redacted.json", "act_id": "ACT-07-01-001", "note": "campaigns/15280333291824.json entry" }
+        ],
+        "observed_request_refs": [],
+        "knowledge_kind": "OBSERVED_CURRENT"
+      },
+      {
+        "operation_id": "APIOP-045",
+        "protocol": "OTHER",
+        "method_or_type": "GET (static asset)",
+        "path_or_operation": "staging-sdk.teeinblue.com/shopify/app-v{N}.js and staging-sdk.teeinblue.com/async.js",
+        "observed_paths": [
+          "https://staging-sdk.teeinblue.com/shopify/app-v1.js?token=[REDACTED]&shop=linh-explorer.myshopify.com",
+          "https://staging-sdk.teeinblue.com/async.js?platform=shopify&v=1&token=[REDACTED]&shop=linh-explorer.myshopify.com",
+          "https://staging-sdk.teeinblue.com/shopify/app-v2.js?token=[REDACTED]&shop=linh-explorer-2.myshopify.com",
+          "https://staging-sdk.teeinblue.com/async.js?platform=shopify&v=2&token=[REDACTED]&shop=linh-explorer-2.myshopify.com"
+        ],
+        "business_object": "Storefront SDK",
+        "capability": "Bootstrap the correct SDK version (v1 vs v2) widget script for a given store instance based on its sdk_version config field",
+        "act_ids": ["ACT-01-01-009", "ACT-07-01-001"],
+        "scn_ids": [],
+        "feature_ids": ["FEAT-07-storefront-buyer-facing"],
+        "auth": { "type": "query-string token", "header": "token query param, value redacted" },
+        "request_contract": { "query_params": { "token": "[REDACTED]", "shop": "string", "platform": "string, observed 'shopify'", "v": "integer, 1 or 2, matches instance.sdk_version" } },
+        "response_contract": { "status_observed": 200, "body_shape": "JS bundle, not parsed for contract purposes" },
+        "error_contract": [],
+        "observed_status": [200],
+        "observed_count": 4,
+        "state_delta": [],
+        "source_refs": [
+          { "type": "har_entry", "path": "raw/storefront/store1-final-log.json", "act_id": "ACT-01-01-009" },
+          { "type": "har_entry", "path": "raw/network/ACT-07-01-001.json", "act_id": "ACT-07-01-001", "note": "cross-referenced via storefront-evidence-store2-v2.json SF-OBS-003, not present as a raw entry in this specific portal-side capture file — script actually observed in network-log-store2-redacted.json" }
+        ],
+        "observed_request_refs": [],
+        "knowledge_kind": "OBSERVED_CURRENT"
+      },
+      {
+        "operation_id": "APIOP-046",
+        "protocol": "OTHER",
+        "method_or_type": "POST",
+        "path_or_operation": "https://{shop}.myshopify.com/password",
+        "observed_paths": ["https://linh-explorer.myshopify.com/password"],
+        "business_object": "Shopify Storefront Password Protection (native Shopify feature, outside teeinblue app boundary)",
+        "capability": "Gate access to a password-protected storefront before any teeinblue widget can load — directly relevant to FEAT-07 discovery because it was the blocker in the prior run (KB-031/KB-032)",
+        "act_ids": ["ACT-01-01-009"],
+        "scn_ids": [],
+        "feature_ids": ["FEAT-07-storefront-buyer-facing"],
+        "auth": { "type": "Shopify storefront password + Rails authenticity_token (CSRF)", "header": "none — form body only" },
+        "request_contract": {
+          "content_type": "application/x-www-form-urlencoded",
+          "body_shape": "authenticity_token=[REDACTED]&password=[REDACTED]"
+        },
+        "response_contract": {
+          "status_observed": 302,
+          "body_shape": "empty body, Location header redirect to shop root ('/')"
+        },
+        "error_contract": [],
+        "observed_status": [302],
+        "observed_count": 1,
+        "state_delta": [
+          { "field": "password-gate session cookie", "before": "absent (unauthenticated)", "after": "set (not persisted to any artifact; storefront navigation subsequently unblocked)", "confidence": "MEDIUM" }
+        ],
+        "source_refs": [
+          { "type": "har_entry", "path": "raw/storefront/store1-run-log.json", "act_id": "ACT-01-01-009", "note": "This exact request is NOT present in store1-final-log.json's netlog (71 entries); store1-run-log.json is the only source that captured it. No double-counting: observed_count=1 reflects this single capture only." }
+        ],
+        "observed_request_refs": [],
+        "knowledge_kind": "OBSERVED_CURRENT"
+      },
+      {
+        "operation_id": "APIOP-047",
+        "protocol": "REST",
+        "method_or_type": "POST",
+        "path_or_operation": "https://{shop}.myshopify.com/cart/add",
+        "observed_paths": ["https://linh-explorer-2.myshopify.com/cart/add"],
+        "business_object": "Cart (Shopify native)",
+        "capability": "Add a personalized line item to the Shopify cart, carrying teeinblue-generated design references as line item properties",
+        "act_ids": ["ACT-07-01-001"],
+        "scn_ids": [],
+        "feature_ids": ["FEAT-07-storefront-buyer-facing"],
+        "auth": { "type": "Shopify storefront session cookie", "header": "cookie: [REDACTED]" },
+        "request_contract": {
+          "field_presence": "not captured verbatim (network-log-store2-redacted.json stores only a prose summary, not the raw body); inferred fields from SF-OBS-013 narrative: variant id, quantity, and line item properties matching the response shape below",
+          "note": "request body shape is INFERRED from response + narrative, not directly read from a captured request body — flagged accordingly"
+        },
+        "response_contract": {
+          "status_observed": 200,
+          "body_shape": "{ variant_id: <shopify variant id>, quantity: <int>, price: <int, minor units>, properties: { _customization_id: <uuid>, _customization_image: <url, cdn.ownego.com>, _tib_fulfilled_sku: <string>, _tib_design_link_1: <url, cdn.ownego.com PNG> }, sections include cart-drawer HTML fragment (theme-native Dawn-family markup, no teeinblue-specific customization observed in the drawer markup itself) }",
+          "observed_sample": "variant_id 67776422019376 ('Vertical Framed Poster / Black / 12in x 18in'), quantity 1, price 5599 (=$55.99, matches displayed price exactly, no hidden fee this sample)"
+        },
+        "error_contract": [],
+        "observed_status": [200],
+        "observed_count": 1,
+        "state_delta": [
+          { "field": "cart.item_count", "before": "0", "after": "1", "confidence": "HIGH" },
+          { "field": "cart.total_price", "before": "0", "after": "5599", "confidence": "HIGH" }
+        ],
+        "source_refs": [
+          { "type": "api_response", "path": "raw/storefront/network-log-store2-redacted.json", "act_id": "ACT-07-01-001" },
+          { "type": "code_ref", "path": "raw/storefront/storefront-evidence-store2-v2.json", "note": "SF-OBS-013/014/015" }
+        ],
+        "observed_request_refs": [],
+        "knowledge_kind": "OBSERVED_CURRENT"
+      },
+      {
+        "operation_id": "APIOP-048",
+        "protocol": "REST",
+        "method_or_type": "POST",
+        "path_or_operation": "https://{shop}.myshopify.com/cart/change.js",
+        "observed_paths": ["https://linh-explorer-2.myshopify.com/cart/change.js"],
+        "business_object": "Cart (Shopify native)",
+        "capability": "Update the quantity (or remove, via quantity 0) of an existing cart line item",
+        "act_ids": ["ACT-07-01-001"],
+        "scn_ids": [],
+        "feature_ids": ["FEAT-07-storefront-buyer-facing"],
+        "auth": { "type": "Shopify storefront session cookie", "header": "cookie: [REDACTED]" },
+        "request_contract": { "body_shape": "{ id: <line item key>, quantity: <int> } — observed values 2 (increase) and 0 (cleanup/remove)" },
+        "response_contract": { "status_observed": 200, "body_shape": "cart JSON: { item_count, total_price, items[] }" },
+        "error_contract": [],
+        "observed_status": [200],
+        "observed_count": 2,
+        "state_delta": [
+          { "field": "cart quantity for the added line item", "before": "1", "after": "2", "confidence": "HIGH" },
+          { "field": "cart.total_price", "before": "5599", "after": "11198 (exactly 2x — linear scaling, single sample, not asserted as a general no-bulk-discount rule)", "confidence": "HIGH" },
+          { "field": "cart quantity (cleanup call)", "before": "2", "after": "0 (item_count 0, items: [])", "confidence": "HIGH" }
+        ],
+        "source_refs": [
+          { "type": "api_response", "path": "raw/storefront/network-log-store2-redacted.json", "act_id": "ACT-07-01-001" },
+          { "type": "code_ref", "path": "raw/storefront/storefront-evidence-store2-v2.json", "note": "SF-OBS-016/017" }
+        ],
+        "observed_request_refs": [],
+        "knowledge_kind": "OBSERVED_CURRENT"
+      },
+      {
+        "operation_id": "APIOP-049",
+        "protocol": "REST",
+        "method_or_type": "GET",
+        "path_or_operation": "https://{shop}.myshopify.com/cart.js",
+        "observed_paths": ["https://linh-explorer.myshopify.com/cart.js", "https://linh-explorer-2.myshopify.com/cart.js"],
+        "business_object": "Cart (Shopify native)",
+        "capability": "Read current cart state (baseline check before/after mutation)",
+        "act_ids": ["ACT-01-01-009", "ACT-07-01-001"],
+        "scn_ids": [],
+        "feature_ids": ["FEAT-07-storefront-buyer-facing"],
+        "auth": { "type": "Shopify storefront session cookie", "header": "cookie: [REDACTED]" },
+        "request_contract": { "body": "none (GET)" },
+        "response_contract": { "body_shape": "{ item_count: int, total_price: int, items: [] }" },
+        "error_contract": [],
+        "observed_status": [200, 429],
+        "observed_count": 4,
+        "state_delta": [],
+        "source_refs": [
+          { "type": "har_entry", "path": "raw/storefront/store1-final-log.json", "act_id": "ACT-01-01-009", "note": "2 entries in netlog[], both status 200" },
+          { "type": "code_ref", "path": "raw/storefront/store1-final-log.json", "act_id": "ACT-01-01-009", "note": "SF-OBS-013 narrative step reports 2 separate calls (baseline check + cleanup check) returning HTTP 429 (Shopify rate-limit interstitial); these 429 calls do NOT appear as entries in netlog[] — see documented_observed_mismatches and unknowns. Not double-counted as identical observations; recorded as a distinct, unreconciled evidence pair." },
+          { "type": "api_response", "path": "raw/storefront/network-log-store2-redacted.json", "act_id": "ACT-07-01-001", "note": "1 entry, status 200, baseline empty-cart check before ATC" }
+        ],
+        "observed_request_refs": [],
+        "knowledge_kind": "OBSERVED_CURRENT"
+      },
+      {
+        "operation_id": "APIOP-050",
+        "protocol": "REST",
+        "method_or_type": "POST",
+        "path_or_operation": "https://{shop}.myshopify.com/cart/clear.js",
+        "observed_paths": ["https://linh-explorer.myshopify.com/cart/clear.js"],
+        "business_object": "Cart (Shopify native)",
+        "capability": "Cleanup — empty the cart at end of test session",
+        "act_ids": ["ACT-01-01-009"],
+        "scn_ids": [],
+        "feature_ids": ["FEAT-07-storefront-buyer-facing"],
+        "auth": { "type": "Shopify storefront session cookie", "header": "cookie: [REDACTED]" },
+        "request_contract": { "body": "none (POST, no body per Shopify convention)" },
+        "response_contract": { "body_shape": "unknown — this call is reported only in narrative form (CLEANUP-001 step), no raw request/response entry exists in netlog[] to independently read headers/status/body" },
+        "error_contract": [],
+        "observed_status": [429],
+        "observed_count": 1,
+        "state_delta": [],
+        "source_refs": [
+          { "type": "code_ref", "path": "raw/storefront/store1-final-log.json", "act_id": "ACT-01-01-009", "note": "CLEANUP-001 narrative step only; not present in netlog[]. LOW confidence: single narrative-only sample, cannot independently verify from raw network capture. Cart never held a real item this session (ATC never succeeded), so this cleanup call was NOT_NEEDED per storefront-explorer's own cleanup_results." }
+        ],
+        "observed_request_refs": [],
+        "knowledge_kind": "OBSERVED_CURRENT"
+      }
+    ],
+    "documented_observed_mismatches": [
+      {
+        "topic": "No documented API/GraphQL contract exists for any operation in this run",
+        "detail": "No OpenAPI spec or GraphQL schema doc is checked into this repo for staging-api.teeinblue.com or staging-graphql.teeinblue.com. Per inherited ZERO_DOC_BOOTSTRAP posture, all contract fields recorded above are observed-only (OBSERVED_CURRENT), not compared against a documented source.",
+        "resolution": "NOT_APPLICABLE — no documented side exists to conflict with."
+      },
+      {
+        "topic": "Field name: 'platform_linked_handle' (task/orchestrator reference) vs 'handle' (actually observed)",
+        "detail": "The task instructions refer to a field 'platform_linked_handle' on campaign_instances. The GraphQL response actually observed in both ACT-07-01-001 and ACT-07-02-001-dialog-and-view-check.json uses the field name 'handle' (sibling to 'platform_linked_id'), not 'platform_linked_handle'. No documented schema exists to say which name is canonical.",
+        "resolution": "NOT_RESOLVED — recorded as observed field name 'handle' in APIOP-041; not assuming the task's naming is wrong, not assuming the observation is wrong."
+      },
+      {
+        "topic": "act_id metadata mismatch in raw/network/ACT-07-02-001-dialog-and-view-check.json",
+        "detail": "The file's own top-level 'act_id' JSON field reads 'ACT-07-02-000-dialog-reopen', which does not match the canonical ACT-ID 'ACT-07-02-001' used both in the filename and in raw/portal/portal-evidence.json for the same dialog-reopen action.",
+        "resolution": "Mapped to ACT-07-02-001 per orchestrator task instruction and corroborating portal-evidence.json usage. Discrepancy is flagged, not silently corrected in the source file (out of this agent's write scope)."
+      },
+      {
+        "topic": "GET /cart.js status 200 (netlog) vs 429 (narrative steps) for store1, same session",
+        "detail": "store1-final-log.json's netlog[] contains 2 GET /cart.js entries, both status 200. The same file's steps[] narrative (SF-OBS-013, CLEANUP-001) separately reports 2 additional /cart.js-equivalent checks returning HTTP 429. These appear to be different calls (browser-context fetch vs out-of-band page.request()) that were not reconciled into a single log by the producing agent.",
+        "resolution": "NOT_RESOLVED_BY_THIS_AGENT — both observations kept in APIOP-049's observed_status array ([200, 429])."
+      }
+    ],
+    "background_traffic": [
+      { "normalized_route": "GraphQL 'get' (campaigns_by_pk)", "kind": "unrelated", "note": "Fires on every campaign-edit-page load (observed 3x across this run's captures). Almost certainly already covered by APIOP-001..038 from CTX-20260912-02 version 1. Not re-mapped per incremental-run numbering rule." },
+      { "normalized_route": "GraphQL 'get' (product_counter + campaign_products + campaign_artworks + campaign_variants)", "kind": "unrelated", "note": "Same as above — generic campaign-detail load query, observed 3x, presumed already covered by v1." },
+      { "normalized_route": "/api/staff", "kind": "unrelated", "note": "Generic portal-shell bootstrap call, observed 2x." },
+      { "normalized_route": "/api/user", "kind": "unrelated", "note": "Generic portal-shell bootstrap call (current user profile), observed 1x." },
+      { "normalized_route": "/api/user/{resource}/exists", "kind": "unrelated", "note": "4 variants observed (platform-products, products, campaigns, artworks) — generic quota/onboarding-state checks fired on portal shell load, unrelated to multi-store launch specifically." },
+      { "normalized_route": "/api/campaigns/{campaignId}", "kind": "unrelated", "note": "REST GET, generic campaign-detail load, observed 2x (once per session)." },
+      { "normalized_route": "/api/campaigns/{campaignId}/clipart-categories", "kind": "unrelated", "note": "Generic campaign-edit-page load call, observed 2x." },
+      { "normalized_route": "/api/instances/{instanceId}/popup-messages", "kind": "unrelated", "note": "Store1 (instance 609)-specific, observed 2x, unrelated to the store2 multi-store launch capability." },
+      { "normalized_route": "/api/instances/{instanceId}/translation", "kind": "unrelated", "note": "Store1 (instance 609)-specific, observed 2x." },
+      { "normalized_route": "https://www.google-analytics.com/g/collect", "kind": "unrelated", "note": "Third-party analytics beacon, not a teeinblue/Shopify API." },
+      { "normalized_route": "https://cloudflareinsights.com/cdn-cgi/rum", "kind": "unrelated", "note": "Cloudflare RUM beacon, not an application API." },
+      { "normalized_route": "cdn.ownego.com/teeinblue-staging/users/{userId}/**", "kind": "unrelated", "note": "~40 static image asset GETs (mockup layers, clipart thumbnails) in store1 netlog — asset delivery, not an application contract endpoint." },
+      { "normalized_route": "https://{shop}.myshopify.com/api/2026-01/graphql.json", "kind": "unrelated", "note": "Shopify's own storefront GraphQL API (checkout/PaymentSessionMutation related assets), native Shopify checkout-web infrastructure, unrelated to teeinblue." }
+    ],
+    "security_surfaces": [
+      { "surface": "staging-api.teeinblue.com/api/campaigns/*, /api/instances/*", "auth": "Bearer/JWT via 'authorization' header (redacted in all evidence)", "role_observed": "owner/staff (sub=273)", "note": "No negative-auth (403/401) sample observed in this run's scope; all captured calls used a valid session." },
+      { "surface": "staging-graphql.teeinblue.com/v1/graphql", "auth": "Same Bearer/JWT pattern as REST staging-api calls", "note": "campaign_id passed as inline literal in one query variant (APIOP-040) vs as a bound variable in another ('get', not in scope) — inconsistent parameterization observed, not evaluated for injection risk in this run (read-only analysis only)." },
+      { "surface": "staging-api.teeinblue.com/api/merchant/campaigns/{platformProductId}.json", "auth": "none — public, keyed only by platform product id + shop query param", "note": "Any party knowing a store's platform_product_id can fetch this campaign's full personalization config unauthenticated. Not asserting this is a defect (may be an intentional public storefront-config endpoint by design) — recorded as an observed fact for reviewer awareness." },
+      { "surface": "{shop}.myshopify.com/password, /cart/*", "auth": "Shopify-native session cookie / CSRF authenticity_token", "note": "Outside teeinblue app boundary; Shopify's own rate-limiting (HTTP 429 'Verifying your connection...' Cloudflare interstitial) was triggered on store1 by repeated automated calls to /cart.js and /cart/clear.js within this session (per storefront-explorer's narrative) — recorded as an availability/rate-limit behavior, not a teeinblue app defect." },
+      { "surface": "staging-sdk.teeinblue.com/shopify/app-v{N}.js, /async.js", "auth": "query-string 'token' parameter (redacted in all evidence)", "note": "Token appears in the URL query string rather than a header for this asset-loading pattern; not evaluated further (static asset, not a mutation/data endpoint)." }
+    ],
+    "unmapped_endpoints": [
+      {
+        "expected_operation": "POST {shop}.myshopify.com/cart/add (or equivalent) triggered by clicking ADD TO CART on store1 (linh-explorer.myshopify.com, SDK v1) after filling every discoverable required personalization field",
+        "status": "EXPECTED_OPERATION_NOT_OBSERVED",
+        "detail": "Across store1's full 71-entry netlog (store1-final-log.json), covering both template configurations tested (template-277843/1-cat and template-578330/2-cat), ZERO network requests of any kind were fired following the ADD TO CART click once all fields were filled. This is not a case of missing evidence capture — a request listener spanned the click and confirmed 0 requests (per storefront-evidence-store1-v1.json SF-OBS-008/011). This is a client-side block that never reaches the network layer, so it cannot be characterized as an API operation with a request/response contract; recorded here as an operation that was EXPECTED (by direct analogy to store2's successful /cart/add, APIOP-047) but NOT OBSERVED for store1.",
+        "act_ids": ["ACT-01-01-009"],
+        "linked_conflict": "CONFLICT-001-carried-forward (see conflicts[]) — storefront-explorer's own evidence keeps both sides (automated-session HIGH-weight block vs user's verbal LOW-weight 'works manually' report) unresolved. api-explorer does not take a side on whether this is a genuine SDK v1 defect or an automation-interaction artifact; only the network-level fact (0 requests observed) is asserted here.",
+        "evidence_refs": [
+          { "type": "screenshot", "path": "raw/storefront/shots/store1/08-after-valid-add-to-cart.png" },
+          { "type": "screenshot", "path": "raw/storefront/shots/store1/diag-final-atc-attempt.png" },
+          { "type": "har_entry", "path": "raw/storefront/store1-final-log.json", "note": "netlog[] contains no /cart/add or /cart/add.js entry anywhere in the session" }
+        ]
+      },
+      {
+        "expected_operation": "Shopify /password gate submit on store2 (linh-explorer-2.myshopify.com)",
+        "status": "NOT_INDEPENDENTLY_CAPTURED",
+        "detail": "network-log-store2-redacted.json's password-gate entry is a single collapsed narrative note ('Initial navigation after password-gate passed') rather than a discrete POST /password request/response pair like store1's. The actual form POST for store2 was not captured as a separable network entry in the evidence provided to api-explorer.",
+        "act_ids": ["ACT-07-01-001"],
+        "evidence_refs": [
+          { "type": "code_ref", "path": "raw/storefront/network-log-store2-redacted.json" }
+        ]
+      }
+    ],
+    "unexplored_operations": [
+      "Negative-auth / permission-boundary variants of APIOP-039/040/041/042/043 (e.g. publish attempted by a non-owner role, or targeting an instance outside the account's org) — not exercised, mutation_policy scoped this run to the account's own 2 stores only.",
+      "POST /api/campaigns/{id}/publish failure path (e.g. target instance's app-block NOT enabled, or instance already fully synced) — only the success path was exercised (app-block-enabled returned true before publish).",
+      "Storefront /cart/add error path (e.g. missing required personalization field bypassing client-side validation, sold-out variant, invalid customization payload) — only the success path (store2) and the client-side-blocked-before-network path (store1) were observed; no server-side 4xx/5xx from /cart/add was seen.",
+      "Any idempotency/retry behavior for POST /api/campaigns/{id}/publish when called twice for the same instance_id — not tested (would require a second real mutation against the same store, out of this run's single-launch scope)."
+    ],
+    "coverage_limitations": [
+      "This artifact covers ONLY newly-relevant operations for FEAT-07 in this incremental run (APIOP-039 onward). Generic campaign-edit-page bootstrap calls observed in the same capture windows are listed in background_traffic (presumed already covered by APIOP-001..038 from version 1) rather than re-verified against that prior artifact, which api-explorer did not have write or read access to re-open in this run.",
+      "No OpenAPI or GraphQL schema documentation exists for any operation in this run; all contracts are OBSERVED_CURRENT from a small number of samples (mostly observed_count 1-4) — none of the field-presence assertions should be read as required/optional or as an exhaustive error-code list.",
+      "GET /api/instances?trashed (APIOP-042) has no captured request entry, so its auth header shape is inferred, not confirmed.",
+      "POST /cart/add's request body (APIOP-047) was not captured verbatim in the redacted evidence handed to api-explorer (network-log-store2-redacted.json stores only a prose summary for this entry) — the request_contract shape is inferred from the response + storefront-explorer's narrative, not read directly from a request payload.",
+      "POST /cart/clear.js (APIOP-050) and 2 of the 4 GET /cart.js (APIOP-049) observations for store1 exist only as narrative text in storefront-explorer's steps[], with no corresponding raw netlog[] entry — api-explorer could not independently verify headers/body for these from raw network capture.",
+      "The store1 ADD TO CART block (see unmapped_endpoints) means cart drawer, cart page line-item rendering, and quantity-update-in-cart were never exercised for SDK v1/store1 in this run — those surfaces are only evidenced for store2/SDK v2 (APIOP-047/048).",
+      "Only one target store instance (613) and one campaign (2595) were exercised for the multi-store publish flow — no second/third store target, no re-publish-to-same-store, no unpublish/remove-from-store operation was observed."
+    ],
+    "redaction_applied": true
+  },
+  "gate": {
+    "decision": "PASS",
+    "blocking_findings": [],
+    "conditions": [
+      "Every operation in operations[] has either a direct request+response evidence_ref or a clearly-flagged narrative-only/inferred provenance (documented explicitly in coverage_limitations, not hidden).",
+      "api_context (environment=staging, auth_role, base_url) is recorded and unambiguous.",
+      "Independent secret/PII re-scan by this agent (email, customer_email, key=value in query-string/form-body — the two defect classes that recurred earlier in this run per run-manifest.json gate history) found 0 unredacted matches across all raw/ files consumed.",
+      "The store1 ADD TO CART finding is recorded as an unmapped/expected-but-unobserved operation tied to the pre-existing, unresolved CONFLICT-001 — this agent does not assert PASS/FAIL on that feature behavior, only on the completeness of its own API inventory work."
+    ],
+    "allowed_next_steps": [
+      "Hand off to qa-knowledge-normalizer and feature-profile-builder for FEAT-07-storefront-buyer-facing, including the carried-forward CONFLICT-001 and the two documented_observed_mismatches (field-naming, act_id metadata) for resolution-authority review.",
+      "If full FEAT-07 API coverage is required beyond this incremental scope, a follow-up run should (a) obtain a raw network capture for store2's /password POST, (b) obtain the raw request body for /cart/add, and (c) re-run store1's ADD TO CART with real click/type interaction per storefront-explorer's own recommended_followup, so api-explorer can produce a first-party contract entry instead of relying on unmapped_endpoints."
+    ]
+  }
+}

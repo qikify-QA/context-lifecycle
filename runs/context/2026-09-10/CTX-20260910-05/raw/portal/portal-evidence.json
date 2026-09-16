@@ -1,0 +1,431 @@
+{
+  "schema_version": "1.0",
+  "artifact_type": "FeatureDiscoveryArtifact",
+  "artifact_id": "FDA-CTX-20260910-05-font",
+  "workflow_id": "CTX-20260910-05",
+  "producer": "portal-explorer",
+  "source_refs": [
+    "contracts/qa-context-contract.md",
+    "runs/context/2026-09-10/CTX-20260910-05/input/bootstrap-request.json",
+    "knowledge/portal-login.md",
+    "knowledge/portal-fonts.md",
+    "knowledge/artwork/editor.md"
+  ],
+  "upstream_artifact_ids": [],
+  "status": "READY",
+  "confidence": "MEDIUM",
+  "observations": [
+    "Full UI inventory, upload/rename/download/delete lifecycle, and data-source confirmation completed with before/after evidence and network capture for every mutating action.",
+    "Several individual findings are single-sample (e.g. duplicate-name upload allowed, invalid-format client block) and are explicitly marked knowledge_kind OBSERVED_CURRENT with LOW per-finding confidence in unknowns — do not generalize as confirmed business rules from one sample.",
+    "Pre-existing store state already contained 3 custom fonts (ids 915/916/917) with 'ago' timestamps of 12-13h, including one named 'QA Renamed Baginda' that strongly suggests a prior QA rename test on this same store/date — documented as initial_state, not created by this run, and left untouched (no delete/rename beyond what this run itself created)."
+  ],
+  "assumptions": [],
+  "unknowns": [
+    "ACT-02-02-001 first upload attempt (network index 45) failed with net::ERR_HTTP2_PROTOCOL_ERROR at transport level (no HTTP response). Treated as environment/network noise, not evidence of any duplicate-name business rule. Retried immediately and the retry (index 46) succeeded with 201, which IS used as evidence.",
+    "ACT-02-03-001 (invalid format upload) produced no literal error text in the DOM, only a warning-triangle icon (la-exclamation-triangle) with no title/aria-label — recorded verbatim; the exact user-facing meaning of that icon (vs. a text tooltip that might exist but wasn't triggered) is unknown.",
+    "Duplicate-name upload allowed (no uniqueness validation observed) is based on a single sample (ACT-02-02-001) — confidence LOW for this specific finding, do not treat as a confirmed platform-wide rule.",
+    "Download filename discrepancy: server content-disposition header names a UUID (1df707cc-....ttf), Playwright's download event reports 'Hey Magnolia.ttf' (original upload filename), and the card's current display name at download time was 'QA CTX-20260910-05 Hey Magnolia'. The exact client-side logic that produced 'Hey Magnolia.ttf' as the saved filename is not confirmed from network evidence alone (likely cached original filename in front-end component state) — flagged as unknown, not asserted as a bug or a confirmed rule.",
+    "Whether Show entries / search / page-size selections persist across a real page reload was not tested (store only had ≤5 fonts total, so multi-page pagination behavior and the old KB's 'URL doesn't change, refresh returns to page 1' claim could not be re-verified on this store)."
+  ],
+  "conflicts": [],
+  "blocking_issues": [],
+  "payload": {
+    "portal_context": {
+      "environment": "staging (https://staging-portal.teeinblue.com)",
+      "role": "owner — Linh explorer, sub=273, user_id=266, store linh-explorer.myshopify.com, plan Blue (Test)",
+      "object_id": "/fonts",
+      "object_type": "Font (entity custom_fonts, page Assets > Upload Fonts)",
+      "initial_state": "3 pre-existing custom fonts on this store before this run's actions: id 917 'QA Renamed Baginda' (original_name 'Baginda Script'), id 916 'Bebas Neue', id 915 'Dear Sans_Condensed Regular' — all updated_at ~12-13h before this session, i.e. earlier same day. Not created by this run; left untouched.",
+      "verified_by": [
+        "Sidebar shows 'Linh explorer / linh-explorer.myshopify.com / Blue (Test)'",
+        "localStorage.teeinblue_token JWT payload: sub='273', user_id=266, iss=https://staging-api.teeinblue.com/api/token/refresh — checked at session start (before ACT-01-01-001) and again at session end (after ACT-04-01-001, before final screenshot) — same account both times",
+        "URL confirmed https://staging-portal.teeinblue.com/fonts (distinct from /font-categories, out of scope per bootstrap-request note)"
+      ]
+    },
+    "observations": [
+      {
+        "observation_id": "OBS-001",
+        "surface": "/fonts — page header",
+        "element": "Breadcrumb 'Home / Fonts', heading 'Your Custom Fonts' with 'Upload fonts' button",
+        "observed_result": "Present, matches old KB structurally",
+        "evidence_refs": [{ "type": "screenshot", "path": "raw/portal/shots/OBS-baseline-fonts-list.png", "act_id": "ACT-01-01-001", "note": "" }],
+        "knowledge_kind": "OBSERVED_CURRENT"
+      },
+      {
+        "observation_id": "OBS-002",
+        "surface": "/fonts — toolbar",
+        "element": "Search textbox, preview-size slider, 'Font Settings' button, warning banner about unsupported characters (link to wakamaifondue.com)",
+        "observed_result": "All present and functional (search verified in ACT-01-04-*, Font Settings verified in ACT-01-03-*). Slider control present but not exercised (out of explicit scope items; only structure noted).",
+        "evidence_refs": [{ "type": "screenshot", "path": "raw/portal/shots/OBS-baseline-fonts-list.png", "act_id": "ACT-01-01-001", "note": "" }],
+        "knowledge_kind": "OBSERVED_CURRENT"
+      },
+      {
+        "observation_id": "OBS-003",
+        "surface": "/fonts — font card",
+        "element": "Per-card: name (clickable, inline rename), family name subtitle, live preview line rendered in that font, relative time, Download icon, Delete icon",
+        "observed_result": "Matches old KB structure exactly on this store, confirmed via ACT-03-01-001 (rename), ACT-03-02-001 (download), ACT-03-03-001 (delete)",
+        "evidence_refs": [{ "type": "screenshot", "path": "raw/portal/shots/OBS-baseline-fonts-list.png", "act_id": "ACT-01-01-001", "note": "" }],
+        "knowledge_kind": "OBSERVED_CURRENT"
+      },
+      {
+        "observation_id": "OBS-004",
+        "surface": "/fonts — footer",
+        "element": "'Show [20|50|100|250|500] entries' select + '‹ ›' pagination links",
+        "observed_result": "Select DOM value is '' (selectedIndex -1) on fresh page load even though the actual query sent uses limit=6 — reproduces the old KB quirk ('select không bind, default 6') on THIS store too. After manually selecting an option, the select DOES bind correctly (value becomes '50', selectedIndex 1) and the next query uses that limit. Because this store never had more than 5 fonts, hasNextPage was always false, so the '‹ ›' pagination controls were never exercised with real multi-page data.",
+        "evidence_refs": [
+          { "type": "screenshot", "path": "raw/portal/shots/ACT-01-02-001-before.png", "act_id": "ACT-01-02-001", "note": "before: select unbound, value=''" },
+          { "type": "screenshot", "path": "raw/portal/shots/ACT-01-02-001-after.png", "act_id": "ACT-01-02-001", "note": "after: select bound, value='50'" },
+          { "type": "har_entry", "path": "raw/network/ACT-01-01-001.json", "act_id": "ACT-01-01-001", "note": "initial query variables.limit=6 despite select showing no selection" },
+          { "type": "har_entry", "path": "raw/network/ACT-01-02-001.json", "act_id": "ACT-01-02-001", "note": "query variables.limit=50 after manual selection" }
+        ],
+        "knowledge_kind": "OBSERVED_CURRENT"
+      },
+      {
+        "observation_id": "OBS-005",
+        "surface": "/fonts — Upload fonts flow",
+        "element": "Clicking 'Upload fonts' button",
+        "observed_result": "DIFFERS from old KB (different store, 2026-09-09): on THIS store it opens a MODAL dialog ('Browse fonts to upload:' heading, warning banner 'Convert font into TTF before uploading (Online converter)' linking to transfonter.org, and a 'Choose File' button), not a direct-to-OS-picker with no modal. 'Choose File' then opens the native OS file chooser. Input DOM: <input type=\"file\" id=\"new-font\" multiple accept=\".otf,.ttf\">. Selecting a file auto-uploads (no separate submit button found) and the filename appears under a 'New fonts' list with a status icon.",
+        "evidence_refs": [
+          { "type": "screenshot", "path": "raw/portal/shots/ACT-02-01-001-dialog.png", "act_id": "ACT-02-01-001", "note": "" }
+        ],
+        "knowledge_kind": "OBSERVED_CURRENT"
+      },
+      {
+        "observation_id": "OBS-006",
+        "surface": "/fonts — Font Settings popover",
+        "element": "'Unsupported Character Settings': radios 'Block rendering (default)' / 'Replace with space' / 'Fallback to a custom font', conditional 'Fallback Font' field, 'Save' button",
+        "observed_result": "Same 3 options as old KB. Default selection 'Block rendering (default)' confirmed checked. Selecting 'Fallback to a custom font' reveals 'Fallback Font' field with 'No font selected' + 'Select a font' button (differs from old KB's store which had a font already configured there — expected data difference, not a conflict). Selecting the radio fires 0 network requests (client-side only state until Save, which was NOT clicked in this run).",
+        "evidence_refs": [
+          { "type": "screenshot", "path": "raw/portal/shots/ACT-01-03-001-after.png", "act_id": "ACT-01-03-001", "note": "" },
+          { "type": "screenshot", "path": "raw/portal/shots/ACT-01-03-002-after.png", "act_id": "ACT-01-03-002", "note": "" }
+        ],
+        "knowledge_kind": "OBSERVED_CURRENT"
+      },
+      {
+        "observation_id": "OBS-007",
+        "surface": "/fonts — Delete confirm dialog",
+        "element": "Custom confirm dialog (not window.confirm)",
+        "observed_result": "Verbatim: heading 'Confirm'; body 'Are you sure to remove <b>Hey Magnolia</b>?' followed by bullets '- This action could make design corrupted if you already use it in artwork or font category' and '- If you want to replace a font, you can rename old one and upload new one'; buttons 'Remove' / 'Cancel'.",
+        "evidence_refs": [{ "type": "screenshot", "path": "raw/portal/shots/ACT-03-03-001-confirm.png", "act_id": "ACT-03-03-001", "note": "" }],
+        "knowledge_kind": "OBSERVED_CURRENT"
+      },
+      {
+        "observation_id": "OBS-008",
+        "surface": "Artwork editor (/artworks?id=4085) — text layer Font family control",
+        "element": "Canvas toolbar Font family selector on a selected text ('Paragraph') layer: 'Font type' radios 'Google Fonts' / 'Custom Fonts', and when Custom Fonts is chosen, a 'Select a font' button opening 'Your Custom Fonts' — the SAME picker component/data as the standalone /fonts page (same GraphQL getData/custom_fonts_connection query, same card layout, plus a 'Select' action per card).",
+        "observed_result": "Fonts uploaded via /fonts (this run's 'QA CTX-20260910-05 Hey Magnolia', id 920, plus the 3 pre-existing fonts) all appear in this picker. Confirms custom fonts are directly usable as a text layer's font without going through a separate Font Category step.",
+        "evidence_refs": [
+          { "type": "screenshot", "path": "raw/portal/shots/ACT-04-01-003-picker.png", "act_id": "ACT-04-01-001", "note": "" },
+          { "type": "har_entry", "path": "raw/network/ACT-04-01-001.json", "act_id": "ACT-04-01-001", "note": "" }
+        ],
+        "knowledge_kind": "OBSERVED_CURRENT"
+      }
+    ],
+    "feature_candidates": [
+      {
+        "feature_id": "FEAT-01-view-and-configure-font-list",
+        "name": "Xem và cấu hình cách hiển thị thư viện Custom Fonts",
+        "user_goal": "Người dùng muốn xem danh sách font đã upload, tìm một font cụ thể, đổi số lượng hiển thị mỗi trang, và cấu hình cách xử lý ký tự không được font hỗ trợ",
+        "entry_point": "/fonts",
+        "observation_ids": ["OBS-001", "OBS-002", "OBS-003", "OBS-004", "OBS-006"],
+        "scenarios": [
+          {
+            "scn_id": "SCN-01-01",
+            "objective": "Xem danh sách font hiện có và xác nhận nguồn dữ liệu backend (Hasura GraphQL vs REST)",
+            "actions": [
+              {
+                "act_id": "ACT-01-01-001",
+                "description": "Reload /fonts, quan sát list load và network call phát sinh",
+                "input": {},
+                "before": { "screenshot": "raw/portal/shots/ACT-01-01-001-before.png", "dom": "about:blank (navigated away first to force a clean reload)", "object_state": { "page": "blank" } },
+                "after": { "screenshot": "raw/portal/shots/ACT-01-01-001-after.png", "dom": "Heading 'Your Custom Fonts' + 3 font cards (QA Renamed Baginda / Bebas Neue / Dear Sans_Condensed Regular)", "object_state": { "font_count_visible": 3, "select_show_entries_value": "", "select_show_entries_selectedIndex": -1 }, "messages": [] },
+                "network_ref": "raw/network/ACT-01-01-001.json",
+                "network_entry_labels": { "mapped": 1, "polling": 0, "unrelated": 9, "unknown": 0 },
+                "console_errors": ["Failed to load resource: 404 @ gravatar.com/avatar/...?default=404 (avatar fallback, unrelated to fonts)"],
+                "mutation": false,
+                "cleanup_result": "NOT_NEEDED",
+                "outcome": "SUCCESS"
+              }
+            ]
+          },
+          {
+            "scn_id": "SCN-01-02",
+            "objective": "Đối chiếu quirk cũ 'Show entries select không bind, default page size 6' trên store hiện tại",
+            "actions": [
+              {
+                "act_id": "ACT-01-02-001",
+                "description": "Chọn '50' trong dropdown Show entries",
+                "input": { "selected_value": "50" },
+                "before": { "screenshot": "raw/portal/shots/ACT-01-02-001-before.png", "dom": "select.value='' selectedIndex=-1 (browser renders first option '20' visually despite this)", "object_state": { "select_value": "", "select_selectedIndex": -1, "last_query_limit": 6 } },
+                "after": { "screenshot": "raw/portal/shots/ACT-01-02-001-after.png", "dom": "select.value='50' selectedIndex=1", "object_state": { "select_value": "50", "select_selectedIndex": 1, "last_query_limit": 50 }, "messages": [] },
+                "network_ref": "raw/network/ACT-01-02-001.json",
+                "network_entry_labels": { "mapped": 1, "polling": 0, "unrelated": 0, "unknown": 0 },
+                "console_errors": [],
+                "mutation": false,
+                "cleanup_result": "NOT_NEEDED",
+                "outcome": "SUCCESS"
+              }
+            ]
+          },
+          {
+            "scn_id": "SCN-01-03",
+            "objective": "Mở Font Settings (Unsupported Character Settings) và quan sát các option",
+            "actions": [
+              {
+                "act_id": "ACT-01-03-001",
+                "description": "Click 'Font Settings' button, quan sát popover mặc định",
+                "input": {},
+                "before": { "screenshot": "raw/portal/shots/ACT-01-03-001-before.png", "dom": "Font Settings popover closed", "object_state": {} },
+                "after": { "screenshot": "raw/portal/shots/ACT-01-03-001-after.png", "dom": "Popover open, radio 'Block rendering (default)' checked, others unchecked", "object_state": { "selected_option": "block" }, "messages": [] },
+                "network_ref": "raw/network/ACT-01-03-001.json",
+                "network_entry_labels": { "mapped": 0, "polling": 0, "unrelated": 0, "unknown": 0 },
+                "console_errors": [],
+                "mutation": false,
+                "cleanup_result": "NOT_NEEDED",
+                "outcome": "SUCCESS"
+              },
+              {
+                "act_id": "ACT-01-03-002",
+                "description": "Trong popover đang mở, chọn radio 'Fallback to a custom font' (KHÔNG bấm Save)",
+                "input": { "selected_option": "fallback" },
+                "before": { "screenshot": "raw/portal/shots/ACT-01-03-001-after.png", "dom": "Popover open, 'Block rendering' checked (state carried over from ACT-01-03-001)", "object_state": { "selected_option": "block" } },
+                "after": { "screenshot": "raw/portal/shots/ACT-01-03-002-after.png", "dom": "Radio 'Fallback to a custom font' checked; new field 'Fallback Font' revealed with 'No font selected' + 'Select a font' button", "object_state": { "selected_option": "fallback", "fallback_font": null }, "messages": [] },
+                "network_ref": "raw/network/ACT-01-03-002.json",
+                "network_entry_labels": { "mapped": 0, "polling": 0, "unrelated": 0, "unknown": 0 },
+                "console_errors": [],
+                "mutation": false,
+                "cleanup_result": "NOT_NEEDED",
+                "outcome": "SUCCESS"
+              }
+            ]
+          },
+          {
+            "scn_id": "SCN-01-04",
+            "objective": "Tìm kiếm font theo tên: 1 trường hợp match, 1 trường hợp không match",
+            "actions": [
+              {
+                "act_id": "ACT-01-04-001",
+                "description": "Gõ 'Bebas' vào Search, Enter",
+                "input": { "search_term": "Bebas" },
+                "before": { "screenshot": "raw/portal/shots/ACT-01-04-001-before.png", "dom": "Search box empty, 3 cards visible", "object_state": { "search_term": "" } },
+                "after": { "screenshot": "raw/portal/shots/ACT-01-04-001-after.png", "dom": "1 card visible: 'Bebas Neue'", "object_state": { "search_term": "Bebas", "results_count": 1 }, "messages": [] },
+                "network_ref": "raw/network/ACT-01-04-001.json",
+                "network_entry_labels": { "mapped": 1, "polling": 0, "unrelated": 0, "unknown": 0 },
+                "console_errors": [],
+                "mutation": false,
+                "cleanup_result": "NOT_NEEDED",
+                "outcome": "SUCCESS"
+              },
+              {
+                "act_id": "ACT-01-04-002",
+                "description": "Đổi search term sang 'Script' (khớp original_name của 'QA Renamed Baginda' nhưng không khớp display name)",
+                "input": { "search_term": "Script" },
+                "before": { "screenshot": "raw/portal/shots/ACT-01-04-001-after.png", "dom": "Search box = 'Bebas', 1 card visible", "object_state": { "search_term": "Bebas", "results_count": 1 } },
+                "after": { "screenshot": "raw/portal/shots/ACT-01-04-002-after.png", "dom": "Literal text 'No data matched' shown, 0 cards", "object_state": { "search_term": "Script", "results_count": 0 }, "messages": ["No data matched"] },
+                "network_ref": "raw/network/ACT-01-04-002.json",
+                "network_entry_labels": { "mapped": 1, "polling": 0, "unrelated": 0, "unknown": 0 },
+                "console_errors": [],
+                "mutation": false,
+                "cleanup_result": "NOT_NEEDED",
+                "outcome": "SUCCESS"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "feature_id": "FEAT-02-upload-custom-font",
+        "name": "Upload font thật vào thư viện Custom Fonts",
+        "user_goal": "Người dùng muốn thêm một file font (.ttf/.otf) của riêng họ vào store để dùng trong artwork, bao gồm việc hiểu hệ thống phản ứng thế nào với file hợp lệ, trùng tên, hoặc sai định dạng",
+        "entry_point": "/fonts > Upload fonts",
+        "observation_ids": ["OBS-005"],
+        "scenarios": [
+          {
+            "scn_id": "SCN-02-01",
+            "objective": "Upload 1 file .ttf hợp lệ (Hey Magnolia.ttf) end-to-end",
+            "actions": [
+              {
+                "act_id": "ACT-02-01-001",
+                "description": "Upload fonts -> dialog -> Choose File -> chọn Hey Magnolia.ttf",
+                "input": { "file": "test-data/assets/fonts/Hey Magnolia.ttf" },
+                "before": { "screenshot": "raw/portal/shots/ACT-02-01-001-before.png", "dom": "3 font cards, no upload dialog", "object_state": { "font_count": 3 } },
+                "after": { "screenshot": "raw/portal/shots/ACT-02-01-001-after.png", "dom": "Dialog closed, 4 font cards now, new card 'Hey Magnolia' first (most recent)", "object_state": { "font_count": 4, "new_font_id": 919, "new_font_name": "Hey Magnolia" }, "messages": [] },
+                "network_ref": "raw/network/ACT-02-01-001.json",
+                "network_entry_labels": { "mapped": 2, "polling": 0, "unrelated": 1, "unknown": 0 },
+                "console_errors": [],
+                "mutation": true,
+                "cleanup_result": "NOT_NEEDED",
+                "outcome": "SUCCESS"
+              }
+            ]
+          },
+          {
+            "scn_id": "SCN-02-02",
+            "objective": "Upload lại CÙNG file/tên (Hey Magnolia.ttf) lần thứ 2 để quan sát xử lý trùng tên",
+            "actions": [
+              {
+                "act_id": "ACT-02-02-001",
+                "description": "Upload fonts -> dialog -> Choose File -> chọn lại Hey Magnolia.ttf",
+                "input": { "file": "test-data/assets/fonts/Hey Magnolia.ttf (same as ACT-02-01-001)" },
+                "before": { "screenshot": "raw/portal/shots/ACT-02-02-001-before.png", "dom": "4 font cards (id 919 'Hey Magnolia' among them)", "object_state": { "font_count": 4 } },
+                "after": { "screenshot": "raw/portal/shots/ACT-02-02-001-after.png", "dom": "5 font cards now, second card also named 'Hey Magnolia' (id 920)", "object_state": { "font_count": 5, "new_font_id": 920, "new_font_name": "Hey Magnolia", "duplicate_of_id": 919 }, "messages": [] },
+                "network_ref": "raw/network/ACT-02-02-001.json",
+                "network_entry_labels": { "mapped": 1, "polling": 0, "unrelated": 0, "unknown": 1 },
+                "console_errors": ["net::ERR_HTTP2_PROTOCOL_ERROR @ /api/custom-fonts (first attempt, transport-level, not a server validation response — retried)"],
+                "mutation": true,
+                "cleanup_result": "NOT_NEEDED",
+                "outcome": "SUCCESS"
+              }
+            ]
+          },
+          {
+            "scn_id": "SCN-02-03",
+            "objective": "Chọn 1 file không phải font (.png) để xem hệ thống chặn ở đâu",
+            "actions": [
+              {
+                "act_id": "ACT-02-03-001",
+                "description": "Upload fonts -> dialog -> Choose File -> chọn no1.png (bypass OS-level accept filter bằng cách set file input trực tiếp qua Playwright)",
+                "input": { "file": "test-data/thumbnail/no1.png" },
+                "before": { "screenshot": "raw/portal/shots/ACT-02-03-001-before.png", "dom": "5 font cards, no upload dialog", "object_state": { "font_count": 5 } },
+                "after": { "screenshot": "raw/portal/shots/ACT-02-03-001-after.png", "dom": "Dialog open, 'New fonts' section shows 'no1.png' with a warning-triangle icon (la-exclamation-triangle), no literal text message, no title/aria-label attribute", "object_state": { "font_count": 5, "upload_blocked": true }, "messages": [] },
+                "network_ref": "raw/network/ACT-02-03-001.json",
+                "network_entry_labels": { "mapped": 0, "polling": 0, "unrelated": 0, "unknown": 0 },
+                "console_errors": [],
+                "mutation": false,
+                "cleanup_result": "NOT_NEEDED",
+                "outcome": "BLOCKED"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "feature_id": "FEAT-03-manage-uploaded-font",
+        "name": "Đổi tên, tải xuống, và xoá một font đã upload",
+        "user_goal": "Người dùng muốn đổi tên hiển thị của font, tải file font gốc về máy, hoặc xoá font không cần dùng nữa",
+        "entry_point": "/fonts card actions",
+        "observation_ids": ["OBS-003", "OBS-007"],
+        "scenarios": [
+          {
+            "scn_id": "SCN-03-01",
+            "objective": "Đổi tên inline font id 920 (bản trùng tên vừa tạo) để dùng làm fixture cuối run",
+            "actions": [
+              {
+                "act_id": "ACT-03-01-001",
+                "description": "Click tên font trên card id 920 -> input inline -> sửa thành 'QA CTX-20260910-05 Hey Magnolia' -> Save",
+                "input": { "font_id": 920, "new_name": "QA CTX-20260910-05 Hey Magnolia" },
+                "before": { "screenshot": "raw/portal/shots/ACT-03-01-001-before.png", "dom": "Card id920 name='Hey Magnolia', card id919 name='Hey Magnolia'", "object_state": { "font_id_920_name": "Hey Magnolia" } },
+                "after": { "screenshot": "raw/portal/shots/ACT-03-01-001-after.png", "dom": "Card id920 name updated to 'QA CTX-20260910-05 Hey Magnolia'; no toast/snackbar observed anywhere in DOM", "object_state": { "font_id_920_name": "QA CTX-20260910-05 Hey Magnolia" }, "messages": [] },
+                "network_ref": "raw/network/ACT-03-01-001.json",
+                "network_entry_labels": { "mapped": 1, "polling": 1, "unrelated": 0, "unknown": 0 },
+                "console_errors": [],
+                "mutation": true,
+                "cleanup_result": "NOT_NEEDED",
+                "outcome": "SUCCESS"
+              }
+            ]
+          },
+          {
+            "scn_id": "SCN-03-02",
+            "objective": "Tải file font gốc về máy từ card id 920",
+            "actions": [
+              {
+                "act_id": "ACT-03-02-001",
+                "description": "Click icon Download trên card id 920",
+                "input": { "font_id": 920 },
+                "before": { "screenshot": "raw/portal/shots/ACT-03-02-001-before.png", "dom": "Card id920 name='QA CTX-20260910-05 Hey Magnolia'", "object_state": {} },
+                "after": { "screenshot": "raw/portal/shots/ACT-03-02-001-after.png", "dom": "No visible DOM change (download doesn't alter the list UI); confirmed identical card structure for id920 before and after via this screenshot plus the chronologically-next screenshot ACT-03-03-001-before.png", "object_state": {}, "messages": [] },
+                "network_ref": "raw/network/ACT-03-02-001.json",
+                "network_entry_labels": { "mapped": 1, "polling": 0, "unrelated": 0, "unknown": 0 },
+                "console_errors": [],
+                "mutation": false,
+                "cleanup_result": "NOT_NEEDED",
+                "outcome": "SUCCESS"
+              }
+            ]
+          },
+          {
+            "scn_id": "SCN-03-03",
+            "objective": "Xoá font id 919 (bản gốc đầu tiên, không dùng làm fixture) để test luồng delete",
+            "actions": [
+              {
+                "act_id": "ACT-03-03-001",
+                "description": "Click icon Delete trên card id 919 -> confirm dialog -> Remove",
+                "input": { "font_id": 919 },
+                "before": { "screenshot": "raw/portal/shots/ACT-03-03-001-before.png", "dom": "5 font cards including id919 'Hey Magnolia'", "object_state": { "font_count": 5 } },
+                "after": { "screenshot": "raw/portal/shots/ACT-03-03-001-after.png", "dom": "4 font cards, id919 no longer present. Remaining: 920 (renamed fixture), 917, 916, 915", "object_state": { "font_count": 4 }, "messages": ["Confirm dialog verbatim: 'Are you sure to remove Hey Magnolia?' / '- This action could make design corrupted if you already use it in artwork or font category' / '- If you want to replace a font, you can rename old one and upload new one'"] },
+                "network_ref": "raw/network/ACT-03-03-001.json",
+                "network_entry_labels": { "mapped": 2, "polling": 0, "unrelated": 0, "unknown": 0 },
+                "console_errors": [],
+                "mutation": true,
+                "cleanup_result": "NOT_NEEDED",
+                "outcome": "SUCCESS"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "feature_id": "FEAT-04-use-custom-font-in-artwork-editor",
+        "name": "Sử dụng font đã upload làm Font family cho text layer trong artwork editor",
+        "user_goal": "Người dùng muốn dùng font mà họ vừa upload ở /fonts để style một text layer khi thiết kế artwork",
+        "entry_point": "/artworks?id=<id> -> chọn text layer -> canvas toolbar Font family -> Custom Fonts",
+        "observation_ids": ["OBS-008"],
+        "scenarios": [
+          {
+            "scn_id": "SCN-04-01",
+            "objective": "Xác nhận font vừa upload (id 920) xuất hiện trong Custom Fonts picker của 1 text layer có sẵn (artwork 4085, layer 'Paragraph') — quan sát duy nhất theo TASK-5, không lưu thay đổi",
+            "actions": [
+              {
+                "act_id": "ACT-04-01-001",
+                "description": "Mở artwork 4085 -> chọn layer 'Paragraph' -> Font family dropdown -> Font type = Custom Fonts -> Select a font -> quan sát danh sách trong 'Your Custom Fonts' -> đóng picker -> Cancel editor KHÔNG lưu",
+                "input": { "artwork_id": 4085, "layer": "Paragraph" },
+                "before": { "screenshot": "raw/portal/shots/ACT-04-01-001-before.png", "dom": "Editor open, no layer selected, Font type toolbar not visible", "object_state": {} },
+                "after": { "screenshot": "raw/portal/shots/ACT-04-01-003-picker.png", "dom": "'Your Custom Fonts' picker open showing 4 cards: 'QA CTX-20260910-05 Hey Magnolia' (id920, this run's font), 'QA Renamed Baginda', 'Bebas Neue', 'Dear Sans_Condensed Regular' — each with Select/Download/Delete", "object_state": { "font_visible_in_editor_picker": true, "matched_font_id": 920 }, "messages": [] },
+                "network_ref": "raw/network/ACT-04-01-001.json",
+                "network_entry_labels": { "mapped": 1, "polling": 0, "unrelated": 1, "unknown": 0 },
+                "console_errors": [],
+                "mutation": false,
+                "cleanup_result": "NOT_NEEDED",
+                "outcome": "SUCCESS"
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    "permissions_observed": [
+      "Only 1 role available for this run (owner / Linh explorer, sub=273) — knowledge/portal-login.md confirms TIB_USER_A_* / TIB_USER_B_* are no longer in .env as of 2026-09-10, so no cross-account/permission comparison (e.g. staff role restrictions on /fonts) could be performed. Not a gap introduced by this run; pre-existing environment limitation, noted for the record."
+    ],
+    "skipped_actions": [
+      { "description": "Click 'Save' in Font Settings popover after selecting 'Fallback to a custom font' (ACT-01-03-002)", "reason": "Font Settings is a store-wide setting (affects unsupported-character handling for ALL fonts/storefront rendering, not just one font). Not in the explicit allowed mutation list for this run (upload/rename/download/delete on the created font only). Skipped to avoid a side effect outside scope; radio selection alone was enough to observe the revealed 'Fallback Font' field." },
+      { "description": "Click 'Select' on a custom font in the artwork editor's font picker, and/or Save & Close the artwork afterward (within ACT-04-01-001)", "reason": "TASK-5 explicitly scoped as a single quick observation, 'không đổi scope'. Selecting + saving would persist a template/layer config change on artwork 4085, which is a shared example artwork referenced by other KB (knowledge/artwork/editor.md) and out of this run's object scope (Font/custom_fonts only). Editor was closed via Cancel + discard native confirm instead." },
+      { "description": "Test additional invalid-upload variants: multi-file upload (input has multiple attribute), other rejected formats (.woff/.woff2 per old KB's accept attribute), oversized file, corrupted font file", "reason": "Not required by explicit scope ('nếu dễ thử'); one representative invalid-format sample (PNG) already demonstrated the client-side gating behavior with concrete evidence. Expanding further would exceed the single-object, single-session discipline of ZERO_DOC_BOOTSTRAP." }
+    ],
+    "unexplored_areas": [
+      "Font Settings 'Save' persistence and its actual effect on portal/storefront rendering (radio only toggled client-side, not saved)",
+      "Real multi-page pagination behavior ('‹ ›' controls, URL not changing / refresh-resets-to-page-1 claim from old KB) — this store never exceeded 5 fonts so hasNextPage was always false",
+      "Preview-size slider control (mentioned in scope, structurally present, not functionally exercised)",
+      "File size limits, corrupted-file handling, and .woff/.woff2 rejection at the client accept-filter level (old KB claim, not re-verified on this store)",
+      "Multi-file upload via the input's 'multiple' attribute",
+      "Actual selection + save of a custom font on a text layer (only opened the picker and observed the list; did not click Select or Save)",
+      "Whether/how the uploaded font propagates to Font Categories (/font-categories, explicitly out of scope for this run) or to the storefront customer-facing font picker",
+      "Cross-role / permission behavior on /fonts (no second account available in current .env)",
+      "Exact client-side mechanism behind the download filename discrepancy (see unknowns)"
+    ],
+    "current_behavior_only": true,
+    "redaction_applied": true
+  },
+  "gate": {
+    "decision": "PASS",
+    "blocking_findings": [],
+    "conditions": [
+      "Downstream consumers (qa-knowledge-normalizer) should treat single-sample findings (duplicate-name upload allowed, invalid-format client-side block with no text message, download filename behavior) as LOW confidence / needing confirmation, not as confirmed business rules.",
+      "The 'Upload fonts opens a modal' finding (OBS-005) differs from old KB (different store) — normalizer should record this as a new OBSERVED_CURRENT data point for THIS store rather than silently overwriting or conflicting with the old KB entry, since the two were observed on different stores/dates."
+    ],
+    "allowed_next_steps": [
+      "Hand off full artifact to qa-knowledge-normalizer for Product KB candidate generation",
+      "Hand off network evidence refs (raw/network/ACT-*.json) to api-explorer for endpoint/contract mapping (REST /api/custom-fonts for create/download/delete, GraphQL /v1beta1/relay for reads, GraphQL /v1/graphql for rename mutation)"
+    ]
+  }
+}

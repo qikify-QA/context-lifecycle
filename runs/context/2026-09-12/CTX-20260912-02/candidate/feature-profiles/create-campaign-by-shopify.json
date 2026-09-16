@@ -1,0 +1,193 @@
+{
+  "schema_version": "1.0",
+  "artifact_type": "FeatureProfileCandidate",
+  "artifact_id": "ARTF-feature-profile-builder-FEAT-02-CTX-20260912-02",
+  "workflow_id": "CTX-20260912-02",
+  "producer": "feature-profile-builder",
+  "source_refs": [
+    { "type": "code_ref", "path": "runs/context/2026-09-12/CTX-20260912-02/candidate/product-kb.json", "note": "KB-013..KB-024, KB-034" },
+    { "type": "code_ref", "path": "runs/context/2026-09-12/CTX-20260912-02/intermediate/api/api-capability-artifact.json", "note": "chi tiết method/path cho APIOP-012..024,034,037,038" }
+  ],
+  "upstream_artifact_ids": ["ARTF-knowledge-normalizer-CTX-20260912-02"],
+  "status": "READY",
+  "confidence": "MEDIUM",
+  "observations": [
+    "Giữ TÁCH BIỆT hoàn toàn với FEAT-01 theo đúng điều kiện gate của product-kb.json (flat artwork thay vì print area, validation 'No mockup' riêng, publish trực tiếp không dialog chọn store).",
+    "KB-013 (cross-flow effect từ FEAT-01) được gán feature_id FEAT-02 trong KB gốc vì nó mô tả trạng thái quan sát TẠI flow by-shopify (Shopify product bị khoá 'Used' trong picker); profile này đưa nó vào capability #1 (chọn Shopify product) như 1 ràng buộc quan sát được, đúng vị trí feature_id gốc."
+  ],
+  "assumptions": [],
+  "unknowns": [
+    "Toggle 'Connect artworks with Shopify variants' khi bật — chưa test.",
+    "Assign mockup theo từng Shopify variant với sản phẩm nhiều variant thật — store demo chỉ 1 variant ('Default Title').",
+    "Validation 'No mockup' chỉ có 1 sample quan sát (observed_count=1, LOW) — chưa tổng quát hoá."
+  ],
+  "conflicts": [],
+  "blocking_issues": [],
+  "payload": {
+    "feature_profiles": [
+      {
+        "feature_id": "FEAT-02-create-campaign-by-shopify",
+        "feature_key": "create-campaign-by-shopify",
+        "name": "Create Campaign by Shopify Product",
+        "user_goal": "Là owner, tạo 1 campaign (platform-product) gắn với 1 sản phẩm Shopify thật đã tồn tại trong store đã kết nối, gán artwork phẳng cho toàn sản phẩm, cung cấp mockup, và publish trực tiếp lên store cố định đó.",
+        "stable_since_version": "candidate-v1 (CTX-20260912-02, chưa publish)",
+        "actors": [
+          { "role": "owner (Linh explorer, sub=273)", "permission_observed": "Toàn quyền create/select Shopify product/assign artwork/upload mockup/publish/unpublish trong flow này, không gặp permission-denied", "kb_refs": ["KB-014", "KB-017", "KB-023", "KB-024", "KB-029"] }
+        ],
+        "entry_points": [
+          { "path": "/platform-products (empty state trước khi có campaign nào)", "precondition": "role owner đã đăng nhập; store Shopify đã connect", "kb_refs": ["KB-014"] },
+          { "path": "/platform-products/new", "precondition": "role owner; ít nhất 1 sản phẩm Shopify thật khả dụng trong store để chọn", "kb_refs": ["KB-015"] }
+        ],
+        "capabilities": [
+          {
+            "name": "Chọn store + sản phẩm Shopify (không có bước print area)",
+            "description": "Form /platform-products/new có 'Choose a store' (mặc định = store đã connect), 'Select a Shopify product' (bắt buộc, mở modal liệt kê sản phẩm Shopify THẬT của store, có search+sort Created at), 'Internal tags (optional)'. KHÔNG có bước chọn print area (khác FEAT-01/KB-006). Sản phẩm Shopify đã publish qua FEAT-01 sẽ hiện Status 'Used' (mờ, không chọn được) trong picker này.",
+            "kb_refs": ["KB-015", "KB-016", "KB-013"],
+            "act_ids": ["ACT-02-01-002", "ACT-02-01-003"]
+          },
+          {
+            "name": "Tạo platform-product shell",
+            "description": "Bấm Create gọi POST /api/platform-products {instance_id, name (copy tên Shopify product), platform_linked_id, internal_tags}; response 201 trả id, published_at=null, mockups=[] rỗng.",
+            "kb_refs": ["KB-017"],
+            "act_ids": ["ACT-02-01-004"]
+          },
+          {
+            "name": "Gán artwork phẳng cho toàn sản phẩm (đối lập print-area của FEAT-01)",
+            "description": "Layout edit page khác FEAT-01: header 'STEP 1: ADD ARTWORK' (không '& PRODUCTS'), KHÔNG có print area — chỉ 1 khối 'Artworks:' + '+ Select artwork' + toggle 'Connect artworks with Shopify variants' (mặc định OFF, chưa test bật). Gán artwork dùng POST /api/platform-artworks {artwork_id, platform_product_id, position} — KHÔNG có printarea_id, 1 artwork áp dụng cho TOÀN sản phẩm. Sau khi gán, banner NOT-ready VẪN còn.",
+            "kb_refs": ["KB-018", "KB-019"],
+            "act_ids": ["ACT-02-01-004", "ACT-02-01-005"]
+          },
+          {
+            "name": "Resolve validation 'No mockup' bằng upload+assign mockup",
+            "description": "Ngay cả sau khi gán artwork, campaign vẫn 'NOT ready to launch'; modal 'Campaign errors' liệt kê đúng 1 lỗi 'No mockup' — validation RIÊNG của flow này, không tồn tại ở FEAT-01. Modal 'Assign mockups' khi rỗng hiện 'There is no mockup to assign yet.' + nút 'Upload mockup'. Sau khi upload ảnh và bấm 'Select 1 images' (không cần quay lại modal), banner đổi ngay thành xanh 'ready to launch'. Chuỗi API: upload-url (presigned) -> mockup-layers/by-temporary-file -> platform-mockups {mockup_layer_ids}.",
+            "kb_refs": ["KB-020", "KB-021", "KB-022"],
+            "act_ids": ["ACT-02-01-006", "ACT-02-01-007", "ACT-02-01-008"]
+          },
+          {
+            "name": "Publish trực tiếp (không dialog chọn store)",
+            "description": "Bấm Launch khi 'ready to launch' publish TRỰC TIẾP, KHÔNG mở dialog chọn store (đối lập Multi-store launch của FEAT-01) vì store+Shopify product đã cố định từ lúc tạo. POST /api/platform-products/{id}/publish KHÔNG có request body (đối lập {instance_id} của FEAT-01). Sau publish: published_at null->timestamp, version null->int; top bar đổi thành 'Unpublish'(đỏ)/'Logs'/'...'/'View'/'Update'.",
+            "kb_refs": ["KB-023"],
+            "act_ids": ["ACT-02-01-009"]
+          },
+          {
+            "name": "Unpublish (reversible)",
+            "description": "Bấm 'Unpublish' hiện confirm dialog; xác nhận xong published_at/version reset về null, top bar quay lại trạng thái trước publish ('Launch' + 'Edit internal info').",
+            "kb_refs": ["KB-024"],
+            "act_ids": ["ACT-02-01-010"]
+          }
+        ],
+        "state_transitions": [
+          { "from": "platform-product: none", "to": "draft (published_at=null, mockups=[])", "trigger": "Create với Shopify product đã chọn", "condition": "n/a", "kb_refs": ["KB-017"] },
+          { "from": "draft, chưa có artwork", "to": "có artwork, vẫn NOT ready ('No mockup')", "trigger": "'+ Select artwork'", "condition": "n/a", "kb_refs": ["KB-019", "KB-020"] },
+          { "from": "có artwork, mockup rỗng, NOT ready", "to": "có 1 mockup, ready to launch", "trigger": "Upload mockup + 'Select 1 images'", "condition": "n/a", "kb_refs": ["KB-021", "KB-022"] },
+          { "from": "ready to launch, chưa publish", "to": "published (published_at/version set)", "trigger": "Launch (trực tiếp, không dialog)", "condition": "store+Shopify product cố định từ lúc tạo", "kb_refs": ["KB-023"] },
+          { "from": "published", "to": "unpublished (published_at/version reset null)", "trigger": "Unpublish + confirm", "condition": "n/a", "kb_refs": ["KB-024"] }
+        ],
+        "confirmed_rules": [],
+        "observed_behavior": [
+          { "statement": "/platform-products trước khi có campaign nào hiện empty-state với text hướng dẫn + nút '+ New campaign'.", "kb_refs": ["KB-014"] },
+          { "statement": "Modal chọn sản phẩm Shopify xác nhận nguồn dữ liệu là sản phẩm Shopify THẬT của store (demo products + product đã 'Used'), không phải mock nội bộ.", "kb_refs": ["KB-016"] },
+          { "statement": "Contract chi tiết platform-product (GET /api/platform-products/{id}) ổn định qua 3 bước: id, uuid, instance_id, platform_linked_id, name, preview_url/thumbnail, version, enable_artwork_variant_assignment(bool), enable_artwork_navigation(bool), published_at, artworks[], mockups[], global_options[].", "kb_refs": ["KB-034"] }
+        ],
+        "observed_validations": [
+          {
+            "input": "platform-product đã có artwork nhưng mockups rỗng",
+            "message_verbatim": "No mockup",
+            "observed_count": 1,
+            "rule_confidence": "LOW",
+            "kb_refs": ["KB-020"],
+            "note": "NEEDS_CONFIRMATION: chỉ 1 sample, chưa xác nhận đây là rule tổng quát cho mọi trường hợp/số lượng variant."
+          },
+          {
+            "input": "modal Assign mockups khi platform_mockups rỗng",
+            "message_verbatim": "There is no mockup to assign yet.",
+            "observed_count": 1,
+            "rule_confidence": "LOW",
+            "kb_refs": ["KB-021"],
+            "note": "Store demo chỉ có 1 variant ('Default Title'); chưa verify hành vi per-variant."
+          }
+        ],
+        "permissions": [
+          { "statement": "Role owner có toàn quyền trong flow này (create/select/assign/upload/publish/unpublish); chưa test role khác hoặc cross-tenant (xem FEAT-06).", "kb_refs": ["KB-029"] }
+        ],
+        "surface_mapping": {
+          "portal": [
+            { "path": "/platform-products (empty state)", "kb_refs": ["KB-014"] },
+            { "path": "/platform-products/new", "kb_refs": ["KB-015", "KB-016"] },
+            { "path": "/platform-products/{id}/edit — STEP1 ADD ARTWORK", "kb_refs": ["KB-018", "KB-019"] },
+            { "path": "/platform-products/{id}/edit — STEP2 'Variants are managed by Shopify.'", "kb_refs": ["KB-018"] },
+            { "path": "Modal 'Assign mockups' / 'Upload mockup'", "kb_refs": ["KB-021", "KB-022"] },
+            { "path": "Modal 'Edit internal info'", "kb_refs": ["KB-018"] }
+          ],
+          "storefront": [],
+          "api": [
+            { "method": "GET", "path": "/api/instances/{instanceId}/shopify/products", "apiop_id": "APIOP-012", "kb_refs": ["KB-013", "KB-015", "KB-016"] },
+            { "method": "POST", "path": "/api/platform-products", "apiop_id": "APIOP-013", "kb_refs": ["KB-017"] },
+            { "method": "GET", "path": "/api/platform-products/{platformProductId}", "apiop_id": "APIOP-014", "kb_refs": ["KB-017", "KB-018", "KB-034"] },
+            { "method": "GET", "path": "/api/instances/{instanceId}/shopify/products/{shopifyProductId}", "apiop_id": "APIOP-015", "kb_refs": ["KB-017"] },
+            { "method": "POST", "path": "/api/platform-artworks", "apiop_id": "APIOP-016", "kb_refs": ["KB-019"] },
+            { "method": "GET", "path": "/api/instances/{instanceId}/shopify/products/{shopifyProductId}/variants", "apiop_id": "APIOP-017", "kb_refs": ["KB-021"] },
+            { "method": "GET", "path": "/api/mockup-layer-categories", "apiop_id": "APIOP-018", "kb_refs": ["KB-021"] },
+            { "method": "GET", "path": "/api/mockup-layers", "apiop_id": "APIOP-019", "kb_refs": ["KB-021"] },
+            { "method": "POST", "path": "/api/users/{userId}/temporary-files/upload-url", "apiop_id": "APIOP-020", "kb_refs": ["KB-022"] },
+            { "method": "POST", "path": "/api/mockup-layers/by-temporary-file", "apiop_id": "APIOP-021", "kb_refs": ["KB-022"] },
+            { "method": "POST", "path": "/api/platform-products/{platformProductId}/platform-mockups", "apiop_id": "APIOP-022", "kb_refs": ["KB-022"] },
+            { "method": "POST", "path": "/api/platform-products/{platformProductId}/publish", "apiop_id": "APIOP-023", "kb_refs": ["KB-023"] },
+            { "method": "POST", "path": "/api/platform-products/{platformProductId}/unpublish", "apiop_id": "APIOP-024", "kb_refs": ["KB-024"] },
+            { "method": "GRAPHQL QUERY getData", "path": "{ platform_products_aggregate, platform_products }", "apiop_id": "APIOP-034", "kb_refs": ["KB-014"] },
+            { "method": "GRAPHQL QUERY", "path": "get { platform_artworks }", "apiop_id": "APIOP-037", "kb_refs": ["KB-019"] },
+            { "method": "GRAPHQL QUERY", "path": "get { mockup_layers }", "apiop_id": "APIOP-038", "kb_refs": ["KB-022"] }
+          ],
+          "data": ["NOT_OBSERVED — DB skipped run này. State (draft->ready->published->unpublished) dựa trên response API, không xác nhận schema/DB thật."],
+          "code": []
+        },
+        "dependencies": [
+          { "description": "Phụ thuộc store Shopify đã kết nối (linh-explorer.myshopify.com) với ít nhất 1 sản phẩm Shopify thật khả dụng để chọn.", "kb_refs": ["KB-016"] },
+          { "description": "Cross-flow: sản phẩm Shopify đã publish qua FEAT-01 sẽ bị khoá 'Used' trong picker của flow này — không hoàn toàn độc lập ở tầng Shopify product.", "kb_refs": ["KB-013"] }
+        ],
+        "risks": [
+          { "description": "Validation 'No mockup' chỉ có 1 sample (observed_count=1, LOW) — không nên coi là rule đầy đủ, đặc biệt với multi-variant.", "kb_refs": ["KB-020"] },
+          { "description": "Toggle 'Connect artworks with Shopify variants' chưa test khi bật — chưa rõ ảnh hưởng UI/data mapping.", "kb_refs": ["KB-018"] },
+          { "description": "Assign mockup theo từng Shopify variant chưa verify với sản phẩm nhiều variant thật (store demo chỉ 1 variant 'Default Title').", "kb_refs": ["KB-021", "KB-022"] }
+        ],
+        "freshness": { "observed_at": "2026-09-12", "run_id": "CTX-20260912-02", "environment": "staging" },
+        "unknown_areas": [
+          { "question": "Hành vi toggle 'Connect artworks with Shopify variants' khi bật là gì?", "why_it_matters": "Chưa test, có thể thay đổi cách gán artwork/mockup theo variant — ảnh hưởng thiết kế test case." },
+          { "question": "Mockup mặc định có áp dụng đúng cho MỌI variant Shopify khi sản phẩm có nhiều variant thật không?", "why_it_matters": "Store demo chỉ có 1 variant; hành vi per-variant thật hoàn toàn chưa kiểm chứng — rủi ro cao cho sản phẩm multi-variant thực tế." },
+          { "question": "'No mockup' có phải validation duy nhất, hay còn điều kiện khác (vd theo variant/print size) khi dữ liệu phức tạp hơn?", "why_it_matters": "Chỉ 1 sample quan sát; nếu tổng quát hoá sai sẽ tạo oracle sai cho regression test." }
+        ]
+      }
+    ],
+    "profile_relationships": [
+      { "feature_id": "FEAT-02-create-campaign-by-shopify", "related_feature_id": "FEAT-00-campaign-navigation", "relationship": "entry_point_source", "kb_refs": ["KB-001"] },
+      { "feature_id": "FEAT-02-create-campaign-by-shopify", "related_feature_id": "FEAT-01-create-campaign-by-product-base", "relationship": "cross_flow_side_effect (sản phẩm Shopify publish ở FEAT-01 bị khoá 'Used' ở đây)", "kb_refs": ["KB-013"] },
+      { "feature_id": "FEAT-02-create-campaign-by-shopify", "related_feature_id": "FEAT-03-campaign-list-browse", "relationship": "feeds_list_view", "kb_refs": ["KB-026"] },
+      { "feature_id": "FEAT-02-create-campaign-by-shopify", "related_feature_id": "FEAT-06-campaign-security-permissions", "relationship": "shares_permission_model", "kb_refs": ["KB-029"] }
+    ],
+    "coverage_matrix": [
+      { "feature_id": "FEAT-02-create-campaign-by-shopify", "layer": "portal", "role": "owner", "state": "draft/no-artwork", "environment": "staging", "covered": true },
+      { "feature_id": "FEAT-02-create-campaign-by-shopify", "layer": "portal", "role": "owner", "state": "has artwork, no mockup", "environment": "staging", "covered": true },
+      { "feature_id": "FEAT-02-create-campaign-by-shopify", "layer": "portal", "role": "owner", "state": "published/unpublished", "environment": "staging", "covered": true },
+      { "feature_id": "FEAT-02-create-campaign-by-shopify", "layer": "api", "role": "owner", "state": "draft->published->unpublished", "environment": "staging", "covered": true },
+      { "feature_id": "FEAT-02-create-campaign-by-shopify", "layer": "data", "role": "owner", "state": "any", "environment": "staging", "covered": false },
+      { "feature_id": "FEAT-02-create-campaign-by-shopify", "layer": "portal", "role": "owner", "state": "multi-variant product", "environment": "staging", "covered": false },
+      { "feature_id": "FEAT-02-create-campaign-by-shopify", "layer": "storefront", "role": "guest", "state": "published", "environment": "staging", "covered": false }
+    ],
+    "unassigned_kb_items": [],
+    "profile_conflicts": [],
+    "profile_change_summary": ["Khởi tạo lần đầu (bootstrap), chưa có version trước để so sánh."],
+    "kb_trace_complete": true
+  },
+  "gate": {
+    "decision": "CONDITIONAL_PASS",
+    "blocking_findings": [],
+    "conditions": [
+      "qa-checklist-builder phải đánh dấu observed_validation 'No mockup' là LOW confidence (1 sample), không tổng quát hoá cho mọi trường hợp/variant.",
+      "Không dùng hành vi per-variant mockup (chưa test) làm oracle cho sản phẩm multi-variant."
+    ],
+    "allowed_next_steps": [
+      "qa-checklist-builder: build checklist regression cho capabilities + state_transitions, tách biệt rõ với FEAT-01.",
+      "knowledge-diff-analyzer: dùng làm baseline v1 cho FEAT-02."
+    ]
+  }
+}

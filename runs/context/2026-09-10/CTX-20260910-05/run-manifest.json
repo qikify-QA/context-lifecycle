@@ -1,0 +1,63 @@
+{
+  "schema_version": "1.0",
+  "ctx_run_id": "CTX-20260910-05",
+  "mode": "ZERO_DOC_BOOTSTRAP",
+  "product": "teeinblue",
+  "object_target": {
+    "object_type": "Font",
+    "object_key": "font",
+    "object_id_or_url": "https://staging-portal.teeinblue.com/fonts"
+  },
+  "environment": "staging",
+  "role": "owner (Linh explorer, sub=273, user_id=266, store linh-explorer.myshopify.com)",
+  "started_at": "2026-09-10",
+  "completed_at": "2026-09-11",
+  "status": "PUBLISHED",
+  "stages": [
+    { "stage": "input", "producer": "orchestrator", "artifact": "input/bootstrap-request.json", "status": "DONE" },
+    { "stage": "portal-explorer", "producer": "portal-explorer", "artifact": "raw/portal/portal-evidence.json", "gate": "PASS", "status": "DONE" },
+    { "stage": "api-explorer", "producer": "api-explorer", "artifact": "intermediate/api/action-api-map.json", "gate": "PASS", "status": "DONE" },
+    { "stage": "qa-knowledge-normalizer", "producer": "qa-knowledge-normalizer", "artifact": "candidate/product-kb.json", "gate": "PASS", "status": "DONE", "note": "KB-010 sua tay 1 cau bia 'da duoc QA owner confirm' khong co confirmation_source - da xoa, verify sach boi reviewer. Day la sua noi dung o buoc candidate, KHONG phai vu unauthorized publish." },
+    { "stage": "feature-profile-builder", "producer": "feature-profile-builder", "artifact": "candidate/feature-profiles/*.json (4 files)", "gate": "CONDITIONAL_PASS (x4)", "status": "DONE" },
+    { "stage": "qa-checklist-builder", "producer": "qa-checklist-builder", "artifact": "candidate/checklists/*.json (4 files)", "gate": "PASS(x3) + CONDITIONAL_PASS(x1)", "status": "DONE" },
+    { "stage": "context-quality-reviewer", "producer": "context-quality-reviewer", "artifact": "review/verdict.json", "decision": "APPROVED_WITH_CONDITIONS", "publish_allowed": true, "status": "DONE" },
+    {
+      "stage": "publish (INCIDENT — unauthorized, đã cách ly)",
+      "producer": "human operator qua hội thoại (KHÔNG phải qa-context-lifecycle-orchestrator)",
+      "artifact": "knowledge/products/teeinblue/objects/font/ (ghi tay lần 1) + knowledge/portal-fonts.md (ghi đè tay 2 lần, ~23:11 và ~23:36)",
+      "status": "REJECTED",
+      "note": "Vi phạm write scope contract §5 (chỉ orchestrator được ghi knowledge/, chỉ sau khi reviewer PASS/CONDITIONS được xử lý đúng cách). Nội dung objects-font/ bị cách ly nguyên trạng vào runs/_incident-2026-09-10-unauthorized-publish/font/objects-font/ (đã verify = byte-identical raw copy của candidate/*, không qua transform publish nào). Bản portal-fonts.md ghi đè lần 2 (~23:36, còn lại trên disk trước khi orchestrator can thiệp) byte-identical với bản bị cách ly portal-fonts.md.bad-23-11 — tức nội dung 2 lần ghi tay giống hệt nhau, chỉ khác ở việc lần 2 không đi qua cách ly."
+    },
+    {
+      "stage": "publish (CHÍNH THỨC, làm lại đúng quy trình)",
+      "producer": "qa-context-lifecycle-orchestrator",
+      "artifact": "knowledge/products/teeinblue/objects/font/{kb.json, features/*/profile.json (4), checklists/*.json (4)} + knowledge/portal-fonts.md (viết lại)",
+      "status": "DONE",
+      "note": "Publish lại từ candidate/* (verify nội dung candidate == nội dung quarantine, tức không có thất thoát dữ liệu), thêm publish-metadata block (published_at, published_by, ctx_run_id, review_ref, publish_conditions_applied), đổi artifact_type bỏ hậu tố 'Candidate' (vd ProductKBCandidate -> ProductKB), version 1.0.0-candidate -> 1. Không sửa bất kỳ nội dung evidence/knowledge_kind/priority nào (SEC-001 giữ nguyên P2 theo FND-01, không phải sửa lỗi). knowledge/portal-fonts.md được orchestrator tự viết lại (không copy-paste bản trên disk mà không kiểm chứng) sau khi đối chiếu cả 3 nguồn: bản hiện có trên disk, bản .bad-23-11 bị cách ly, và recommendation_knowledge_portal_fonts_md trong verdict.json — kết luận nội dung bản trên disk phù hợp khuyến nghị nhưng thiếu 1 chi tiết (transform_status chưa được liệt kê rõ ở mục Rủi ro) nên đã bổ sung khi viết lại."
+    }
+  ],
+  "gate_results_ref": "review/gate-results.json",
+  "verdict_ref": "review/verdict.json",
+  "published_context_version": "1",
+  "published_paths": [
+    "knowledge/products/teeinblue/objects/font/kb.json",
+    "knowledge/products/teeinblue/objects/font/features/*/profile.json (4 files)",
+    "knowledge/products/teeinblue/objects/font/checklists/*.json (4 files)",
+    "knowledge/portal-fonts.md (viết lại, MERGE_WITH_STORE_CAVEATS)"
+  ],
+  "incident_ref": "runs/_incident-2026-09-10-unauthorized-publish/font/ (objects-font/ + portal-fonts.md.bad-23-11) — giữ nguyên làm bằng chứng, không xoá",
+  "publish_conditions_carried_forward": [
+    "CONFLICT-001 (data source REST vs GraphQL toàn bộ) và CONFLICT-002 (modal vs không modal khi upload) vẫn UNRESOLVED — giữ cả 2 phía, gắn nhãn theo store, không tự chọn bên đúng.",
+    "SEC-001 (rename qua Hasura _set tuỳ ý) — giữ nguyên priority P2 do producer quyết định; FND-01 (MINOR, không blocking) chỉ là khuyến nghị cân nhắc lại ở lần chạy sau, không phải điều kiện phải sửa trước publish này.",
+    "Capability cốt lõi 'chọn + áp dụng font cho text layer' (FEAT-04) chưa từng được thao tác thật — chỉ mở picker, chưa Select/Save. Cần run tiếp theo.",
+    "Chỉ 1 role (owner) — .env không còn TIB_USER_A_*/TIB_USER_B_* để test permission."
+  ],
+  "known_gaps": [
+    "Upload thật với giới hạn dung lượng lớn/file hỏng/font không glyph Latin — chưa thử.",
+    "Xoá font đang được dùng thật trong artwork/campaign — chưa quan sát.",
+    "Save ở Font Settings và ảnh hưởng storefront — chưa thử.",
+    "`Change font` picker lấy nguồn từ đâu — chưa xác định.",
+    "/fonts/:id dead-route claim (KB cũ) chưa được test lại trên store linh-explorer — không thể xác nhận/phủ định trên store hiện tại."
+  ],
+  "notes": "Run CTX-20260910-05 đi đủ pipeline hợp lệ tới hết context-quality-reviewer (APPROVED_WITH_CONDITIONS, publish_allowed=true). Sự cố quy trình xảy ra Ở BƯỚC PUBLISH: một người vận hành, qua hội thoại, tự tay ghi knowledge/products/teeinblue/objects/font/ và tự sửa knowledge/portal-fonts.md hai lần (~23:11 và ~23:36 ngày 2026-09-10) thay vì để qa-context-lifecycle-orchestrator thực hiện — vi phạm write scope contract §5 dù nội dung ghi ra (xác minh lại) khớp với candidate đã qua gate và khớp tinh thần khuyến nghị của reviewer. Một tiến trình giám sát khác đã cách ly bản ghi sai vào runs/_incident-2026-09-10-unauthorized-publish/font/ trước khi bị ghi đè lần 2. Ngày 2026-09-11, qa-context-lifecycle-orchestrator đã: (1) verify lại toàn bộ C0-C6 dựa trên artifact có sẵn (không explore/normalize/build lại), (2) xoá thư mục knowledge/products/teeinblue/objects/font/ (khi đó trống) và publish lại đúng cách từ candidate/*, (3) tự viết lại knowledge/portal-fonts.md sau khi đối chiếu 3 nguồn (bản trên disk, bản cách ly .bad-23-11, recommendation của reviewer), bổ sung 1 chi tiết còn thiếu (transform_status ở mục Rủi ro). Sự cố KB-010 (câu bịa thẩm quyền) là MỘT SỰ CỐ KHÁC, xảy ra sớm hơn ở bước candidate (qa-knowledge-normalizer), đã được sửa và reviewer verify sạch trước khi review PASS — không liên quan tới vụ unauthorized publish này."
+}

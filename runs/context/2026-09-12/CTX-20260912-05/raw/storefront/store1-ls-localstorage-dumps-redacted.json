@@ -1,0 +1,82 @@
+{
+  "note": "Redacted, shape-preserving snapshots of localStorage/sessionStorage captured during storefront-explorer store1 localStorage investigation. Free-text field values and any URL/path pointing to an image asset are redacted to \"[REDACTED]\"; field names, key names, object/array shape, and non-text identifiers (template ids, Shopify product/variant ids, numeric timestamps) are preserved.",
+  "product_url": "https://linh-explorer.myshopify.com/products/qa-explore-campaign-pb-01",
+  "snapshots": [
+    {
+      "snapshot_id": "LS-SNAP-01",
+      "label": "initial_page_load_before_any_personalization_interaction",
+      "localStorageKeys": ["signInWithShop:cartSyncTransferAttemptedAt", "shopify:webmcp_adapter_loaded"],
+      "teeinblue_customizations_present": false,
+      "teeinblue_global_options_present": false,
+      "sessionStorageKeys": [
+        "wpm-ri-*(rotating session id)*-z", "consentHeader", "ri-*(rotating session id)*-x",
+        "ri-*(rotating session id)*-z", "__shopify_agent_context_events", "_shs_state"
+      ],
+      "note": "Only Shopify-native storage keys present (sign-in-with-shop cart sync marker, webmcp adapter flag). No teeinblue-prefixed key exists before any personalization interaction."
+    },
+    {
+      "snapshot_id": "LS-SNAP-02",
+      "label": "immediately_after_clicking_first_template_thumbnail (field 4081, a radio/click interaction)",
+      "trigger_event": "click on template radio input (immediate, no debounce observed)",
+      "localStorageKeys": ["signInWithShop:cartSyncTransferAttemptedAt", "shopify:webmcp_adapter_loaded", "teeinblue-global-options", "teeinblue-customizations"],
+      "teeinblue_customizations_shape": {
+        "type": "JSON string encoding an ARRAY",
+        "array_length_observed": 1,
+        "entry_shape": {
+          "productId": "8138398629987 (Shopify product id, numeric string)",
+          "customization": {
+            "4081": "template-277843 (template field id -> selected template value, enum-like string, not free text)",
+            "global-option-847": "[REDACTED — value was a library asset path shaped like users/<id>/cliparts/<id>/<hash>_large.webp; treated as URL/asset-path per redaction policy]"
+          },
+          "platform_linked_id": "44589908099171 (Shopify variant id, numeric string)",
+          "timestamp": "<number, epoch milliseconds — present, updates on every write>"
+        }
+      },
+      "teeinblue_global_options_shape": {
+        "type": "JSON string encoding an OBJECT keyed by global-option numeric id",
+        "example_key": "847",
+        "example_value_shape": {
+          "value": "[REDACTED — same asset-path/URL shape as above]",
+          "extra": "{} (empty object observed; reserved for additional metadata, not populated in this sample)",
+          "timestamp": "<number, epoch milliseconds>"
+        }
+      },
+      "note": "Key appears synchronously on click of a clipart/template radio input — no separate save/preview button press required. This auto-selected the default 'skin tone' dependent field (global-option-847) as a side effect of choosing the template."
+    },
+    {
+      "snapshot_id": "LS-SNAP-03",
+      "label": "same_state_after_1.5s_settle_delay",
+      "note": "Identical to LS-SNAP-02 — no further async mutation observed after settling (no delayed/debounced second write detected within this window)."
+    },
+    {
+      "snapshot_id": "LS-SNAP-04",
+      "label": "text_field_typing_timing_probe (field global-option-849, 'Woman Name', synthetic value typed)",
+      "sub_observations": [
+        { "point": "mid_typing (3 of 8 synthetic chars typed)", "teeinblue_customizations_contains_new_text": false },
+        { "point": "immediately_after_full_text_typed (input event fired, field still focused)", "teeinblue_customizations_contains_new_text": false },
+        { "point": "after_blur (clicked elsewhere on page)", "teeinblue_customizations_contains_new_text": true }
+      ],
+      "conclusion": "For this text-type personalization field, the localStorage write is triggered on BLUR, not on each keystroke/input event and not immediately on completing typing while still focused. This differs from the template/clipart radio fields (LS-SNAP-02), which persist immediately on click/change.",
+      "text_field_value_in_localstorage_after_blur": "[REDACTED — free-text value typed by tester, synthetic/non-real, still redacted per policy]",
+      "timestamp_behavior": "Top-level 'timestamp' in the teeinblue-customizations entry is overwritten (increased) on the blur-triggered write — consistent with a 'last write' timestamp, not a fixed creation timestamp."
+    },
+    {
+      "snapshot_id": "LS-SNAP-05",
+      "label": "sessionStorage_check_throughout",
+      "finding": "No teeinblue-prefixed key was ever observed in sessionStorage at any point (initial, after template select, after text blur). All sessionStorage keys observed belong to Shopify's own instrumentation (consentHeader, __shopify_agent_context_events, _shs_state, ri-*/wpm-ri-* rotating session identifiers).",
+      "conclusion": "Personalization draft data is stored in localStorage only, not sessionStorage, for this store/theme."
+    },
+    {
+      "snapshot_id": "LS-SNAP-06",
+      "label": "reload_restore_probe",
+      "steps": "Selected template + typed+blurred Woman Name field -> confirmed teeinblue-customizations populated -> page.reload()",
+      "localStorage_after_reload": "teeinblue-customizations and teeinblue-global-options KEYS AND VALUES survive reload unchanged (byte-identical to pre-reload value).",
+      "dom_after_reload": {
+        "template_radio_checked": null,
+        "woman_name_input_present_in_dom": false,
+        "note": "Personalization form re-renders to its default/collapsed state (only the top-level template selector visible, none of the 3 template thumbnails marked selected; dependent fields incl. the Woman Name text input are not rendered at all, since no template is 'selected' in the fresh DOM render)."
+      },
+      "conclusion": "localStorage PERSISTS the draft across reload, but the storefront-buyer-facing personalization FORM DOES NOT READ/RESTORE from it — i.e., save-without-restore. Screenshot evidence: 05a-before-reload.png (state before) vs 05b-after-reload.png (state after, panel reset to unselected 1/2/3 template thumbnails)."
+    }
+  ]
+}

@@ -1,0 +1,85 @@
+{
+  "schema_version": "1.0",
+  "artifact_type": "ContextReviewVerdict",
+  "artifact_id": "ARTF-context-quality-reviewer-verdict-CTX-20260912-02",
+  "workflow_id": "CTX-20260912-02",
+  "producer": "context-quality-reviewer",
+  "source_refs": [
+    { "type": "code_ref", "path": "runs/context/2026-09-12/CTX-20260912-02/review/gate-results.json" }
+  ],
+  "upstream_artifact_ids": [
+    "ARTF-knowledge-normalizer-CTX-20260912-02",
+    "ARTF-feature-profile-builder-CTX-20260912-02",
+    "ARTF-qa-checklist-builder-CTX-20260912-02"
+  ],
+  "status": "READY",
+  "confidence": "HIGH",
+  "observations": [
+    "Đây là review độc lập lần đầu (bootstrap version 1). Toàn bộ redaction/provenance/knowledge-kind/account-scope/FEAT-01-FEAT-02 separation/coverage-honesty đã được TỰ chạy lại kiểm chứng (không chỉ đọc lời khai của producer/orchestrator), theo đúng yêu cầu độc lập.",
+    "KHÔNG phát hiện thêm vấn đề redaction/PII/secret mới nào ngoài 2 lượt đã được orchestrator phát hiện+fix trước đó (email PII và AWS SigV4 signed URL) — cả 2 vẫn giữ nguyên trạng thái đã fix tại thời điểm review này.",
+    "Toàn bộ artifact candidate/ (product-kb.json, 7 feature-profiles, 7 checklists) đạt chất lượng publish: 0 evidence bịa, 0 kb_id mồ côi hoặc mồ côi ngược, 0 CONFIRMED_EXPECTED trái phép, 0 duplicate check, 0 assertion sai oracle_strength."
+  ],
+  "assumptions": [],
+  "unknowns": [],
+  "conflicts": [],
+  "blocking_issues": [],
+  "payload": {
+    "decision": "APPROVED_WITH_CONDITIONS",
+    "gate_results": [
+      { "gate": "C0", "status": "PASS", "checks_run": ["product/object/environment/role/mutation_policy present"], "note": "Đầy đủ trong bootstrap-request.json." },
+      { "gate": "C1", "status": "PASS", "checks_run": ["feature grouping by goal", "SCN/ACT-ID", "before/after", "network classification", "redaction re-grep", "mutation+cleanup"], "note": "Redaction re-verify độc lập sạch (grep toàn bộ raw/intermediate/candidate). 2 lượt fix lịch sử vẫn hiệu lực." },
+      { "gate": "C2", "status": "CONDITIONAL_PASS", "checks_run": ["APIOP trace ACT-ID", "single-sample rule guard", "DB delta"], "note": "38 APIOP đầy đủ evidence+trace. DB/code-config skipped do thiếu access, khai báo trung thực, không suy đoán." },
+      { "gate": "C3", "status": "PASS", "checks_run": ["knowledge_kind check", "evidence_refs script-verify", "conflict re-check"], "note": "34 OBSERVED_CURRENT + 1 INFERRED, 0 CONFIRMED_EXPECTED trái phép, 35/35 evidence_refs hợp lệ." },
+      { "gate": "C4", "status": "PASS", "checks_run": ["kb_refs script-verify", "field completeness"], "note": "0 kb_refs bịa trong 7 profile, 35/35 KB-id được dùng." },
+      { "gate": "C5", "status": "PASS", "checks_run": ["oracle+applicability", "duplicate scan", "NONE-oracle assertion guard"], "note": "80 check (35 BASELINE + 45 NEEDS_CONFIRMATION), 0 assertion sai, 0 duplicate." },
+      { "gate": "C6", "status": "PASS", "checks_run": ["C0-C5 tổng hợp", "schema validity", "traceability", "redaction final", "version lineage"], "note": "Sẵn sàng publish version 1, layout đúng knowledge/products/teeinblue/objects/campaign/{kb.json, features/<key>/profile.json, checklists/<key>.json}." }
+    ],
+    "findings": [
+      {
+        "finding_id": "FIND-01",
+        "gate": "C1",
+        "severity": "MINOR",
+        "artifact": "candidate/product-kb.json",
+        "target_id": "n/a (feature_id numbering)",
+        "producer": "qa-knowledge-normalizer",
+        "problem": "Feature ID nhảy từ FEAT-04-campaign-delete thẳng sang FEAT-06-campaign-security-permissions, không có FEAT-05 ở bất kỳ đâu trong toàn bộ run (KB, feature-profiles, checklists). Không gây lỗi trace (không ai tham chiếu FEAT-05) nhưng là khoảng trống đánh số không giải thích, có thể gây nhầm lẫn khi tra cứu về sau hoặc khi version 2 cần chèn feature mới.",
+        "evidence": "grep FEAT-05 trên toàn bộ run dir trả về 0 kết quả; feature_id set quan sát được: FEAT-00, FEAT-01, FEAT-02, FEAT-03, FEAT-04, FEAT-06, FEAT-07.",
+        "required_fix": "qa-knowledge-normalizer nên ghi 1 dòng note trong observations giải thích lý do bỏ số FEAT-05 (reserved cho feature nào, hay đơn giản là đánh số nhảy có chủ đích), để tránh nhầm lẫn ở lần refresh/incremental-update sau. Không bắt buộc phải đổi số hiện có (đổi số sẽ phá vỡ mapping FEAT-01/02/03/04/06/07 đã ổn định trong candidate hiện tại)."
+      }
+    ],
+    "coverage_findings": [
+      "FEAT-07 (storefront buyer-facing) gần như toàn bộ UNKNOWN do Shopify password-gate — đã khai báo trung thực, đúng bản chất coverage gap thật, KHÔNG phải lỗi che giấu. Cần credential storefront password (biến env mới, không tái dùng TIB_STAGING_PASSWORD) cho lần refresh kế tiếp.",
+      "FEAT-06 (security/permission) chỉ có role owner, 1 organization — negative-permission và cross-tenant hoàn toàn chưa test. KB-030 (Multi-store launch READ surface trả dữ liệu toàn Organization) là risk P1 cần ưu tiên test enforcement ở lần chạy kế tiếp (dùng TIB_USER_B_*, TIB_FORBIDDEN_TOKEN, TIB_INVALID_TOKEN theo §12 contract).",
+      "DB layer và code/config layer skipped hoàn toàn (không có access) — mọi enum số nguyên (status, type) và state_delta chỉ dựa trên API response, chưa có xác nhận schema thật. Đã khai báo trung thực trong coverage_gaps, không suy đoán."
+    ],
+    "assumption_leakage": [],
+    "publish_conditions": [
+      "Khi publish vào knowledge/products/teeinblue/objects/campaign/, orchestrator PHẢI giữ nguyên trạng thái UNKNOWN/PARTIAL của FEAT-07 và coverage gap của FEAT-06 — không được tự ý diễn giải lại thành đã coverage đủ.",
+      "qa-knowledge-normalizer bổ sung 1 ghi chú giải thích khoảng trống FEAT-05 (FIND-01, MINOR, không blocking publish) — có thể fix ở lần refresh/incremental-update kế tiếp, không cần rework ngay trước khi publish version 1 này.",
+      "Lần refresh/incremental-update kế tiếp nên ưu tiên: (1) storefront password credential cho FEAT-07, (2) negative-permission/cross-tenant test cho FEAT-06 (đặc biệt KB-030 READ surface org-wide), (3) checkbox remove_linked_resources=1 cho FEAT-04, (4) DB access nếu có thể để xác nhận enum status."
+    ],
+    "rework_targets": [
+      {
+        "subagent": "qa-knowledge-normalizer",
+        "scope": ["product-kb.json#observations (feature_id numbering note)"],
+        "reason": "FIND-01 MINOR — bổ sung giải thích khoảng trống FEAT-05, không blocking, có thể xử lý ở lần cập nhật kế tiếp thay vì rework ngay.",
+        "keep_intact": ["candidate/product-kb.json#kb_candidates (toàn bộ 35 item, không cần sửa nội dung)", "candidate/feature-profiles/*", "candidate/checklists/*", "raw/", "intermediate/"]
+      }
+    ],
+    "allowed_next_steps": [
+      "orchestrator: publish version 1 vào knowledge/products/teeinblue/objects/campaign/ theo layout contract §5.",
+      "orchestrator: ghi lại publish_conditions ở trên vào metadata version lineage để lần refresh kế tiếp biết ưu tiên gì."
+    ],
+    "publish_allowed": true
+  },
+  "gate": {
+    "decision": "PASS",
+    "blocking_findings": [],
+    "conditions": [
+      "publish_conditions trong payload phải được orchestrator tôn trọng khi ghi vào knowledge/."
+    ],
+    "allowed_next_steps": [
+      "orchestrator: proceed to publish."
+    ]
+  }
+}

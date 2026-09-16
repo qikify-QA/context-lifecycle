@@ -1,0 +1,139 @@
+{
+  "schema_version": "1.0",
+  "artifact_type": "APICapabilityArtifact",
+  "artifact_id": "APICAP-CTX-20260912-05-sdk-storefront-buyer-facing",
+  "workflow_id": "CTX-20260912-05",
+  "producer": "api-explorer",
+  "source_refs": [
+    { "type": "har_entry", "path": "raw/storefront/store2-network-events2.json", "note": "Successful ATC run (store2/SDK v2, second/resolved attempt). Entries are thin: {t, method, url, resourceType} only -- no headers/status/body captured for ANY entry in this file." },
+    { "type": "har_entry", "path": "raw/storefront/store2-network-events.json", "note": "Failed ATC run (store2/SDK v2, first attempt, missing grouped_clipart child click). Same thin schema, no headers/status/body." },
+    { "type": "dom_snapshot", "path": "raw/storefront/store2-full-run-log2.json", "note": "Narrative log, success run -- used to cross-check timing and downstream cart line-item shape." },
+    { "type": "dom_snapshot", "path": "raw/storefront/store2-full-run-log.json", "note": "Narrative log, failed run -- used to confirm client-side error text and absence of any teeinblue network call." },
+    { "type": "dom_snapshot", "path": "raw/storefront/storefront-evidence-store2-localstorage.json", "note": "Upstream StorefrontDiscoveryArtifact (storefront-explorer), SF-OBS-010/011/014 and network_observation_refs read for context before mapping." }
+  ],
+  "upstream_artifact_ids": ["SF-DISC-CTX-20260912-05-store2-localstorage", "OBJ-SDK-sdk", "FEAT-07-storefront-buyer-facing"],
+  "status": "PARTIAL",
+  "confidence": "LOW",
+  "observations": [
+    "APIOP-051 (POST /api/merchant/shopify/customization) is a NEW operation, not previously mapped under the prior APIOP-039..050 range for object SDK. Numbering for this run starts at APIOP-051 per orchestrator instruction.",
+    "The operation IS present in the successful-ATC capture (store2-network-events2.json, single occurrence, fires immediately before the Shopify native POST /cart/add) and is ABSENT (zero occurrences, confirmed by exhaustive scan of all entries and all hosts) from the failed-ATC capture (store2-network-events.json). In the failed run, clicking 'Add to cart' produced a client-rendered validation error ('Error: Some fields are required or invalid data', inline 'This field is required!' under the three unfilled grouped_clipart child sub-fields) with NO network call to this endpoint (nor to /cart/add) at all -- this is direct evidence that client-side JS validation blocks the request before it is ever sent, rather than the endpoint itself being called and returning a validation error.",
+    "Both network capture files use a reduced schema of only {t, method, url, resourceType} -- no request headers, no response status, no request/response body were captured for ANY entry in either file, including this operation. All contract fields below beyond method + normalized route + query-param shape are therefore UNKNOWN, not merely unobserved-but-assumed."
+  ],
+  "assumptions": [],
+  "unknowns": [
+    "Full request body shape/fields of POST /api/merchant/shopify/customization -- not captured (capture format has no body field).",
+    "Response status code and response body shape -- not captured. observed_status is intentionally left empty rather than assumed 200, even though the subsequent /cart/add succeeded.",
+    "Auth/authz mechanism for this endpoint -- no headers captured, so unknown whether it is public like the sibling GET /api/merchant/campaigns/{platformProductId}.json (confirmed no-auth in prior KB) or requires some other signal.",
+    "Whether store1 (SDK v1) calls this same endpoint (or an equivalent) at its own ATC time -- store1 never reached ATC in this or the prior run, so NOT_OBSERVED.",
+    "Whether the group-radio-only click (without the child click) in the failed run would have produced a DIFFERENT server-side error if the request had actually been sent -- cannot be determined since the request was never sent (client blocked it first)."
+  ],
+  "conflicts": [],
+  "blocking_issues": [],
+  "payload": {
+    "api_context": {
+      "environment": "staging",
+      "auth_role": "guest (buyer, storefront) -- portal surface disabled this run",
+      "base_url": "https://staging-api.teeinblue.com"
+    },
+    "operations": [
+      {
+        "operation_id": "APIOP-051",
+        "protocol": "REST",
+        "method_or_type": "POST",
+        "path_or_operation": "/api/merchant/shopify/customization",
+        "observed_paths": [
+          "https://staging-api.teeinblue.com/api/merchant/shopify/customization?shop=linh-explorer-2.myshopify.com&id=15280333291824"
+        ],
+        "business_object": "Personalization/Customization record (server-side)",
+        "capability": "Server-side sync/creation of a customization record for a Shopify product at Add-to-cart time (storefront, buyer-facing personalization flow)",
+        "act_ids": ["N/A"],
+        "scn_ids": [],
+        "feature_ids": ["FEAT-07-storefront-buyer-facing"],
+        "note_on_act_id": "Portal surface was disabled for this run (bootstrap-request.json surfaces.portal.enabled=false); this run is storefront-only with no portal-defined SCN/ACT chain in scope. Per explicit run instruction, this operation is recorded with act_ids=[\"N/A\"] rather than a fabricated ACT-ID.",
+        "auth": {
+          "observed": "UNKNOWN -- no request headers captured in this network log format (only method/url/t/resourceType recorded). Cannot confirm presence/absence of authorization, cookie, or other auth signal.",
+          "query_identity_params": "shop + id (Shopify product id) are present in the URL and plausibly used server-side to resolve tenant/campaign context, but this is a query param, not a confirmed auth mechanism.",
+          "confidence": "LOW"
+        },
+        "request_contract": {
+          "query_params": {
+            "shop": { "type": "string", "shape": "Shopify *.myshopify.com domain", "observed_count": 1 },
+            "id": { "type": "string (numeric)", "shape": "Shopify product id, e.g. 14-digit numeric string", "observed_count": 1 }
+          },
+          "body": "NOT_OBSERVED -- capture format does not record request payloads for this or any other entry.",
+          "correlation_hint_inferred": "At the moment this call fires, localStorage keys teeinblue-customizations and teeinblue-global-options hold the full 8-field personalization draft for this session (per upstream SF-OBS-007/012, redacted). It is PLAUSIBLE the POST body derives from this client-side draft, but no interception of the actual payload was performed -- this correlation is INFERRED from temporal/state adjacency only, not confirmed.",
+          "knowledge_kind": "INFERRED"
+        },
+        "response_contract": {
+          "status_observed": [],
+          "body": "NOT_OBSERVED -- no response status or body captured.",
+          "inferred_correlation": "The immediately-following successful Shopify POST /cart/add response's line item carries properties _customization_id (uuid), _customization_image (rendered JPG URL), _tib_fulfilled_sku, _tib_design_link_1 (rendered PNG URL) that were not present in any localStorage/DOM state prior to this call. It is PLAUSIBLE this POST's response supplies the customization_id and rendered asset URLs later attached to the cart line, but this is an INFERRED sequence relationship based on ~1.2s temporal adjacency (352642ms -> 353850ms in store2-network-events2.json) between this call and /cart/add, not a confirmed data-flow link -- no body was captured for either call.",
+          "knowledge_kind": "INFERRED"
+        },
+        "error_contract": [
+          {
+            "note": "No error response observed for this operation itself -- the only failure evidence available (store2-network-events.json) shows the call NEVER FIRING at all when required grouped_clipart child fields are unset; the visible 'This field is required!' / 'Error: Some fields are required or invalid data' text is CLIENT-RENDERED (Vue app), confirmed by zero network activity to this host at that moment. Whether the endpoint itself would return a 4xx for malformed/incomplete customization data is UNKNOWN -- not exercised.",
+            "knowledge_kind": "UNKNOWN"
+          }
+        ],
+        "observed_status": [],
+        "observed_count": 1,
+        "state_delta": [],
+        "state_delta_note": "No before/after resource state comparison possible -- no response body captured for this operation. The broader cart-level delta (item_count 0->1, total_price 0->5599) belongs to the subsequent Shopify /cart/add call, already mapped separately (APIOP-047), not to this operation.",
+        "source_refs": [
+          { "type": "har_entry", "path": "raw/storefront/store2-network-events2.json", "note": "Entry at t=1789214352642, POST, resourceType=fetch, immediately followed at t=1789214353850 by POST /cart/add." },
+          { "type": "har_entry", "path": "raw/storefront/store2-network-events.json", "note": "Confirmed ABSENT: zero entries matching this URL/host across all 439 entries in the failed-ATC capture." }
+        ],
+        "observed_request_refs": [
+          { "type": "har_entry", "path": "raw/storefront/store2-network-events2.json", "note": "line ~2678-2683 (single success sample)" }
+        ],
+        "knowledge_kind": "OBSERVED_CURRENT"
+      }
+    ],
+    "documented_observed_mismatches": [],
+    "background_traffic": [
+      { "normalized_route": "https://otlp-http-production.shopifysvc.com/v1/{metrics,logs}", "kind": "unrelated", "note": "Shopify telemetry, present continuously in both success and failure captures, unrelated to teeinblue operations." },
+      { "normalized_route": "https://monorail-edge.shopifysvc.com/v1/produce", "kind": "unrelated", "note": "Shopify analytics beacon." },
+      { "normalized_route": "https://linh-explorer-2.myshopify.com/.well-known/shopify/{fec/produce,monorail/unstable/produce_batch}", "kind": "unrelated", "note": "Shopify first-party analytics." },
+      { "normalized_route": "https://error-analytics-sessions-production.shopifysvc.com/*", "kind": "unrelated", "note": "Shopify error/session analytics, seen in failed-run capture." },
+      { "normalized_route": "https://staging-api.teeinblue.com/api/merchant/campaigns/{platformProductId}.json", "kind": "polling", "note": "Page-load bootstrap config fetch, seen 2x per run (initial load + after password gate) in BOTH the success and failure captures, with identical query shape (shop, v=<cache-bust timestamp>). Already mapped under the prior APIOP-039..050 range per existing KB (kb.json, profile.json) -- NOT remapped here. No significant contract difference observed this run vs prior mapping." },
+      { "normalized_route": "https://staging-sdk.teeinblue.com/{async.js,shopify/app-v2.js}", "kind": "polling", "note": "Static SDK script loads, token query param already redacted at capture source ([REDACTED]). Not an API operation; script asset load." },
+      { "normalized_route": "https://linh-explorer-2.myshopify.com/cart.js", "kind": "polling", "note": "Shopify native cart-state read-checks (GET), used before and after ATC in both captures for verification. Conceptually already covered by the prior Shopify cart-operation mapping (APIOP-047/048 range) -- not remapped. No significant difference this run." },
+      { "normalized_route": "https://linh-explorer-2.myshopify.com/cart/add", "kind": "unrelated", "note": "Already mapped as APIOP-047 in prior run (CTX-20260912-03) per existing KB -- not remapped. Present only in the success capture, absent from the failure capture (consistent with client-side validation gating both this and APIOP-051 together)." }
+    ],
+    "security_surfaces": [
+      {
+        "note": "Auth requirement of APIOP-051 (POST /api/merchant/shopify/customization) is UNKNOWN -- capture format lacks headers. This is worth flagging for a follow-up runtime capture WITH headers enabled, since the sibling read endpoint (GET /api/merchant/campaigns/{platformProductId}.json) is already confirmed public/no-auth in prior KB (kb.json line 62, 92, 332) -- unknown whether this write endpoint shares that same public/no-auth posture or is gated differently (e.g. by knowledge of the shop+id query params alone, which would itself be a notable security surface if so)."
+      }
+    ],
+    "unmapped_endpoints": [],
+    "unexplored_operations": [
+      "Full request/response body contract of APIOP-051 (no body/status ever captured in this run's network log format).",
+      "APIOP-051 error-path / 4xx-5xx behavior when a syntactically-sent request has invalid/incomplete customization data (not exercised -- the one failure case observed was blocked client-side before any request was sent).",
+      "Whether store1 (SDK v1) invokes this same endpoint or an equivalent at its own ATC time -- store1 has never reached a successful ATC in any run to date.",
+      "Whether any partial/incremental sync to this or a similar endpoint occurs on individual field changes before ATC (checked across steps 02-07 in this run's field-fill sequence -- zero teeinblue-host XHR/fetch observed in that window -- but single-session evidence only, not exhaustive).",
+      "Idempotency/retry/rate-limit behavior of APIOP-051 -- no repeated/failed calls observed to test this."
+    ],
+    "coverage_limitations": [
+      "Both source network captures (store2-network-events.json, store2-network-events2.json) use a reduced 4-field schema {t, method, url, resourceType} with NO headers, NO status code, and NO request/response body for any entry -- this caps every operation's contract confidence in this artifact, not just APIOP-051.",
+      "observed_count=1 for APIOP-051 (single successful sample) -> confidence LOW; no field can be marked always_present/required from this sample per counting rules.",
+      "act_ids=[\"N/A\"] for APIOP-051 is a deliberate deviation from the standard ACT-ID chain, driven by this run's bootstrap-request explicitly disabling the portal surface (storefront-only investigation) -- not a gap in this agent's mapping effort.",
+      "Store1 (SDK v1) equivalent evidence for this operation does not exist -- store1 has not completed ATC in any run to date, so cross-SDK-version comparison for this specific operation is not possible yet.",
+      "GET /api/merchant/campaigns/{platformProductId}.json and the Shopify-native cart endpoints (/cart/add, /cart.js, /cart/change.js, /cart/clear.js) reappear in this run's captures but were intentionally NOT remapped here per task instruction, since they already carry APIOP-039..050 range IDs from prior runs; only background-traffic notes were recorded for them.",
+      "The presence/absence contrast for APIOP-051 (fires on success, absent on client-blocked failure) is based on ONE success sample and ONE failure sample from the same session/campaign/theme -- generalizing this client-side-gate behavior to all field-validation failure modes (not just the grouped_clipart two-step case) is not established."
+    ],
+    "redaction_applied": true
+  },
+  "gate": {
+    "decision": "CONDITIONAL_PASS",
+    "blocking_findings": [],
+    "conditions": [
+      "APIOP-051 is included with an observed route/method and a clear presence-vs-absence contrast across success/failure captures, but its full request/response contract (body, status, auth) is UNKNOWN due to the thin capture format -- treat as inventory + partial runtime observation, not a full verified contract.",
+      "Single-sample (observed_count=1) evidence only -- no required/optional/enum inference has been made, per contract counting rules."
+    ],
+    "allowed_next_steps": [
+      "Hand off to qa-knowledge-normalizer and feature-profile-builder alongside the storefront-explorer StorefrontDiscoveryArtifact for this run.",
+      "If a full request/response contract for APIOP-051 is needed, a follow-up storefront-explorer or api-explorer pass with request/response body + header capture enabled would be required -- this agent could not fabricate that from the available evidence."
+    ]
+  }
+}

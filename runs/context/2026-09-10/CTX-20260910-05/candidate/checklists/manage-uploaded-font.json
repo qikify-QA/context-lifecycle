@@ -1,0 +1,290 @@
+{
+  "schema_version": "1.0",
+  "artifact_type": "RegressionChecklistCandidate",
+  "artifact_id": "RCC-CTX-20260910-05-font-feat03",
+  "workflow_id": "CTX-20260910-05",
+  "producer": "qa-checklist-builder (skill qa-context-modeling chưa tồn tại -> dùng hướng dẫn viết sẵn trong agent definition, theo contract §11)",
+  "source_refs": [
+    "contracts/qa-context-contract.md",
+    "runs/context/2026-09-10/CTX-20260910-05/candidate/feature-profiles/manage-uploaded-font.json",
+    "runs/context/2026-09-10/CTX-20260910-05/candidate/product-kb.json"
+  ],
+  "upstream_artifact_ids": [
+    "FPC-CTX-20260910-05-font-feat03"
+  ],
+  "status": "READY",
+  "confidence": "MEDIUM",
+  "observations": [
+    "Feature này chứa SEC-001 (rename gọi thẳng Hasura mutation table-level với _set do client tự xây, không có negative sample) — risk P2 theo chỉ định của orchestrator, có 1 check NEGATIVE riêng cho vấn đề này.",
+    "CONFLICT-001 (data source REST vs GraphQL) áp dụng cho phần download/delete của feature này — có 1 check INTEGRATION riêng, oracle_strength NONE vì UNRESOLVED.",
+    "KB-003 (cấu trúc card) là bằng chứng chéo mạnh nhất của feature vì được xác nhận qua cả 3 thao tác ghi thật (rename/download/delete) trên cùng 1 card — dùng làm nền cho CHK-001.",
+    "Xoá font ĐANG được dùng thật trong artwork/font category nằm trong forbidden_actions của run gốc — chưa từng quan sát, xếp priority P1 vì liên quan rủi ro mất/hỏng dữ liệu thiết kế."
+  ],
+  "assumptions": [],
+  "unknowns": [
+    "Xoá font đang được dùng thật trong artwork/font category — hành vi hoàn toàn chưa quan sát (forbidden trong run).",
+    "Phạm vi field mà client được phép _set trong mutation rename — không có negative sample (SEC-001).",
+    "Cơ chế client sinh tên file khi Download khác cả UUID server lẫn tên hiển thị hiện tại — chưa xác định."
+  ],
+  "conflicts": ["CONFLICT-001"],
+  "blocking_issues": [],
+  "payload": {
+    "checklists": [
+      {
+        "feature_id": "FEAT-03-manage-uploaded-font",
+        "feature_key": "manage-uploaded-font",
+        "checklist_version": "1.0.0-candidate",
+        "checks": [
+          {
+            "check_id": "CHK-001",
+            "dimension": "CORE",
+            "layer": "portal",
+            "title": "Rename inline 1 font qua GraphQL mutation update_custom_fonts thành công",
+            "applicability": { "role": "owner", "state": "có ít nhất 1 font trên list", "environment": "staging", "theme_or_device": "n/a" },
+            "precondition": "Có ít nhất 1 font trên /fonts.",
+            "steps": [
+              "Click tên font trên card để bật inline edit.",
+              "Sửa tên, submit (Enter/blur/nút Save tuỳ UI).",
+              "Bắt network request mutation phát sinh.",
+              "Quan sát card sau khi lưu (tên hiển thị, có toast/snackbar không)."
+            ],
+            "observation_point": "request mutation + response + UI card sau khi lưu",
+            "expected_result": "Request là mutation Hasura table-level POST /v1/graphql :: update_custom_fonts(where:{id}, _set:{name, updated_at}); client tự sinh giá trị updated_at gửi lên; response chỉ trả field 'id' (không trả lại name/url mới); KHÔNG có toast/snackbar xác nhận sau khi rename thành công (KB-014). Card hiển thị tên mới ngay (do client tự cập nhật state, không phải từ response).",
+            "oracle": { "kb_ids": ["KB-014"], "oracle_strength": "BASELINE" },
+            "status": "READY", "open_question": null,
+            "risk_refs": [], "priority": "P2",
+            "act_ids": ["ACT-03-01-001"],
+            "evidence_refs": [
+              { "type": "har_entry", "path": "raw/network/ACT-03-01-001.json", "act_id": "ACT-03-01-001", "note": "mutation update_custom_fonts" },
+              { "type": "screenshot", "path": "raw/portal/shots/ACT-03-01-001-after.png", "act_id": "ACT-03-01-001", "note": "không thấy toast" }
+            ],
+            "automation_suitability": "SUITABLE"
+          },
+          {
+            "check_id": "CHK-002",
+            "dimension": "NEGATIVE",
+            "layer": "api",
+            "title": "[SEC-001, risk P2] Mutation update_custom_fonts chỉ cho phép _set các field dự kiến (name/updated_at), không cho set field nhạy cảm khác",
+            "applicability": { "role": "owner", "state": "rename 1 font sở hữu bởi chính store, gọi mutation trực tiếp qua API client", "environment": "staging", "theme_or_device": "n/a" },
+            "precondition": "Có quyền gọi trực tiếp GraphQL mutation (devtools/API client) với JWT portal hợp lệ của role owner.",
+            "steps": [
+              "Gọi mutation update_custom_fonts(where:{id: <font sở hữu bởi mình>}, _set:{name:..., user_id: <giá trị khác>}) — thêm 1 field ngoài name/updated_at vào _set.",
+              "Quan sát response: server chấp nhận field lạ, từ chối cả request, hay tự lọc field không hợp lệ ra khỏi kết quả?",
+              "Nếu request thành công, kiểm tra lại record qua query getData xem field lạ có thực sự bị thay đổi không."
+            ],
+            "observation_point": "response body + giá trị field lạ trên record sau khi gọi",
+            "expected_result": null,
+            "oracle": { "kb_ids": ["KB-018"], "oracle_strength": "NONE" },
+            "status": "NEEDS_CONFIRMATION",
+            "open_question": "Mutation update_custom_fonts có Hasura permission rule giới hạn cột được phép _set không? Có thể gửi field như user_id qua _set từ client hay không? KB-018 chỉ mô tả 1 request bình thường (name+updated_at), KHÔNG phải negative test — chưa từng có sample nào thử gửi field khác. Cần dev xác nhận cấu hình Hasura permission cho bảng custom_fonts, hoặc thử 1 request thủ công có giám sát trên môi trường staging.",
+            "risk_refs": ["SEC-001"], "priority": "P2",
+            "act_ids": ["ACT-03-01-001"],
+            "evidence_refs": [
+              { "type": "har_entry", "path": "raw/network/ACT-03-01-001.json", "act_id": "ACT-03-01-001", "note": "SEC-001, request bình thường không phải negative test" }
+            ],
+            "automation_suitability": "HYBRID"
+          },
+          {
+            "check_id": "CHK-003",
+            "dimension": "CORE",
+            "layer": "portal",
+            "title": "Sau rename thành công, không có toast/snackbar xác nhận xuất hiện trong DOM",
+            "applicability": { "role": "owner", "state": "vừa rename 1 font", "environment": "staging", "theme_or_device": "n/a" },
+            "precondition": "Vừa rename 1 font thành công.",
+            "steps": [
+              "Rename 1 font.",
+              "Quan sát DOM trong vài giây sau khi lưu, tìm toast/snackbar/notification."
+            ],
+            "observation_point": "DOM sau khi rename, vùng thường xuất hiện toast",
+            "expected_result": "KHÔNG có toast/snackbar nào xuất hiện (KB-014, 1 sample) — đây là ghi nhận hiện trạng, KHÔNG khẳng định là thiếu sót UX cần sửa.",
+            "oracle": { "kb_ids": ["KB-014"], "oracle_strength": "BASELINE" },
+            "status": "READY", "open_question": null,
+            "risk_refs": [], "priority": "P3",
+            "act_ids": ["ACT-03-01-001"],
+            "evidence_refs": [
+              { "type": "screenshot", "path": "raw/portal/shots/ACT-03-01-001-after.png", "act_id": "ACT-03-01-001", "note": "không thấy toast" }
+            ],
+            "automation_suitability": "SUITABLE"
+          },
+          {
+            "check_id": "CHK-004",
+            "dimension": "BOUNDARY",
+            "layer": "api",
+            "title": "Rename thành chuỗi rỗng hoặc trùng tên với font khác đã tồn tại",
+            "applicability": { "role": "owner", "state": "có ≥2 font trên store", "environment": "staging", "theme_or_device": "n/a" },
+            "precondition": "Store có ít nhất 2 font.",
+            "steps": [
+              "Thử rename 1 font thành chuỗi rỗng.",
+              "Quan sát có bị chặn/validate ở client hoặc server không.",
+              "Thử rename 1 font thành tên trùng với 1 font khác đã tồn tại.",
+              "Quan sát kết quả."
+            ],
+            "observation_point": "response + UI khi submit tên rỗng hoặc trùng",
+            "expected_result": null,
+            "oracle": { "kb_ids": [], "oracle_strength": "NONE" },
+            "status": "NEEDS_CONFIRMATION",
+            "open_question": "Rename thành chuỗi rỗng có bị chặn ở client/server không? Rename trùng tên với font khác có được chấp nhận (tương tự pattern upload trùng tên, KB-012) không? Chỉ có 1 sample rename sang tên hoàn toàn mới trong toàn bộ run gốc.",
+            "risk_refs": ["coverage_gap:FEAT-03:rename-edge-case"], "priority": "P2",
+            "act_ids": [],
+            "evidence_refs": [],
+            "automation_suitability": "UNKNOWN"
+          },
+          {
+            "check_id": "CHK-005",
+            "dimension": "CORE",
+            "layer": "api",
+            "title": "Download file font qua REST GET /api/custom-fonts/{id}/download trả về đúng nội dung",
+            "applicability": { "role": "owner", "state": "font đã tồn tại", "environment": "staging", "theme_or_device": "n/a" },
+            "precondition": "Có ít nhất 1 font trên /fonts.",
+            "steps": [
+              "Bấm icon Download trên 1 card font.",
+              "Bắt network request.",
+              "Kiểm tra response headers (content-type, content-disposition) + nội dung file tải về."
+            ],
+            "observation_point": "response headers + file tải về",
+            "expected_result": "GET /api/custom-fonts/{id}/download trả 200, content-type 'font/sfnt', content-disposition dùng tên UUID server-sinh (vd '<uuid>.ttf') — tên này KHÁC tên hiển thị hiện tại trên card VÀ khác tên gốc user từng upload (KB-015, 1 sample). Cơ chế client lưu tên file cục bộ khác cả 2 tên trên là UNKNOWN — KHÔNG kết luận là bug.",
+            "oracle": { "kb_ids": ["KB-015"], "oracle_strength": "BASELINE" },
+            "status": "READY", "open_question": null,
+            "risk_refs": [], "priority": "P2",
+            "act_ids": ["ACT-03-02-001"],
+            "evidence_refs": [
+              { "type": "har_entry", "path": "raw/network/ACT-03-02-001.json", "act_id": "ACT-03-02-001", "note": "GET /api/custom-fonts/920/download 200" }
+            ],
+            "automation_suitability": "SUITABLE"
+          },
+          {
+            "check_id": "CHK-006",
+            "dimension": "CORE",
+            "layer": "portal",
+            "title": "Xoá font (không đang dùng) qua dialog xác nhận custom + REST DELETE thành công",
+            "applicability": { "role": "owner", "state": "font không đang được dùng ở artwork/font category nào", "environment": "staging", "theme_or_device": "n/a" },
+            "precondition": "Có 1 font xác nhận KHÔNG đang được dùng ở artwork/font category nào.",
+            "steps": [
+              "Bấm icon Delete trên card.",
+              "Quan sát dialog xác nhận (heading, body text nguyên văn, các nút).",
+              "Bấm 'Remove'.",
+              "Bắt network request DELETE.",
+              "Quan sát list refetch sau đó."
+            ],
+            "observation_point": "nội dung dialog + response DELETE + list sau refetch",
+            "expected_result": "Dialog custom (KHÔNG phải window.confirm) với heading 'Confirm', body nguyên văn 'Are you sure to remove <b>{tên font}</b>?' kèm 2 bullet cảnh báo (nguy cơ corrupt design; gợi ý rename+upload thay vì replace), nút 'Remove'/'Cancel' (KB-007). Bấm Remove -> DELETE /api/custom-fonts/{id} -> 204 No Content -> refetch list không còn font đó (KB-016).",
+            "oracle": { "kb_ids": ["KB-007", "KB-016"], "oracle_strength": "BASELINE" },
+            "status": "READY", "open_question": null,
+            "risk_refs": [], "priority": "P1",
+            "act_ids": ["ACT-03-03-001"],
+            "evidence_refs": [
+              { "type": "screenshot", "path": "raw/portal/shots/ACT-03-03-001-confirm.png", "act_id": "ACT-03-03-001", "note": "OBS-007" },
+              { "type": "har_entry", "path": "raw/network/ACT-03-03-001.json", "act_id": "ACT-03-03-001", "note": "204" }
+            ],
+            "automation_suitability": "SUITABLE"
+          },
+          {
+            "check_id": "CHK-007",
+            "dimension": "NEGATIVE",
+            "layer": "api",
+            "title": "Xoá 1 font ĐANG được dùng thật trong artwork/font category",
+            "applicability": { "role": "owner", "state": "font đang được áp dụng cho ít nhất 1 text layer trong artwork hoặc gán vào 1 Font Category", "environment": "staging (cần fixture cô lập, KHÔNG chạy trên dữ liệu thật)", "theme_or_device": "n/a" },
+            "precondition": "Font đang thực sự được dùng ở artwork/font category — cần chuẩn bị fixture riêng, không thao tác trên artwork/font thật của store.",
+            "steps": [
+              "Chọn 1 font đang thực sự được dùng (fixture).",
+              "Bấm Delete -> Remove.",
+              "Quan sát response DELETE (có bị chặn/trả lỗi 4xx không).",
+              "Kiểm tra artwork đang dùng font đó có bị lỗi/hiển thị sai sau đó không."
+            ],
+            "observation_point": "response DELETE + trạng thái artwork sau đó",
+            "expected_result": null,
+            "oracle": { "kb_ids": [], "oracle_strength": "NONE" },
+            "status": "NEEDS_CONFIRMATION",
+            "open_question": "Server có chặn xoá font đang được dùng (409/400) hay cho xoá vô điều kiện rồi để artwork lỗi font? Hành động này nằm trong forbidden_actions của run gốc (rủi ro phá hỏng dữ liệu artwork thật) nên chưa từng được quan sát trong bất kỳ run nào. Dialog cảnh báo hiện tại (KB-007) chỉ nhắc nhở bằng text, chưa rõ có ngăn được thao tác thật hay không. Cần PO xác nhận hành vi mong muốn VÀ môi trường test có fixture artwork/font riêng, không phải store production/thật.",
+            "risk_refs": [], "priority": "P1",
+            "act_ids": [],
+            "evidence_refs": [],
+            "automation_suitability": "NOT_SUITABLE"
+          },
+          {
+            "check_id": "CHK-008",
+            "dimension": "INTEGRATION",
+            "layer": "api",
+            "title": "[CONFLICT-001 — cần verify lại] Xác minh data source của Download và Delete: REST hay GraphQL",
+            "applicability": { "role": "owner", "state": "có ≥2 font để test (1 cho download, 1 cho delete)", "environment": "staging", "theme_or_device": "n/a" },
+            "precondition": "Có ít nhất 2 font khả dụng để test (1 dùng cho Download, 1 dùng cho Delete).",
+            "steps": [
+              "Thực hiện Download 1 font, bắt toàn bộ network request phát sinh.",
+              "Thực hiện Delete 1 font khác (không đang dùng), bắt toàn bộ network request phát sinh.",
+              "Xác định request nào thực sự thực hiện thao tác (REST hay GraphQL)."
+            ],
+            "observation_point": "toàn bộ network request trong 2 luồng Download và Delete",
+            "expected_result": null,
+            "oracle": { "kb_ids": ["KB-015", "KB-016"], "oracle_strength": "NONE" },
+            "status": "NEEDS_CONFIRMATION",
+            "open_question": "Download/Delete font hiện tại đi qua REST hay GraphQL trên store đang test? 2 nguồn mâu thuẫn: (a) knowledge/portal-fonts.md (store khác, 2026-09-09, TỰ NHẬN 'Delete... chưa test - read-only') claim toàn bộ /fonts đi Hasura GraphQL; (b) run CTX-20260910-05 quan sát Download = REST GET /api/custom-fonts/{id}/download (200, 1 sample), Delete = REST DELETE /api/custom-fonts/{id} (204, 1 sample). Cần xác nhận kiến trúc thật hoặc chạy lại trên đúng 1 store để loại biến khác-store/khác-ngày.",
+            "risk_refs": ["CONFLICT-001"], "priority": "P2",
+            "act_ids": ["ACT-03-02-001", "ACT-03-03-001"],
+            "evidence_refs": [
+              { "type": "har_entry", "path": "raw/network/ACT-03-02-001.json", "act_id": "ACT-03-02-001", "note": "GET download REST" },
+              { "type": "har_entry", "path": "raw/network/ACT-03-03-001.json", "act_id": "ACT-03-03-001", "note": "DELETE REST" }
+            ],
+            "automation_suitability": "HYBRID"
+          },
+          {
+            "check_id": "CHK-009",
+            "dimension": "STATE_DATA",
+            "layer": "api",
+            "title": "[SEC-002] File font có thể tải trực tiếp từ CDN mà không cần qua endpoint REST/auth hay không",
+            "applicability": { "role": "owner", "state": "có 1 font đã upload, biết path url/master từ response", "environment": "staging", "theme_or_device": "n/a" },
+            "precondition": "Có ít nhất 1 font đã upload, đã lấy được field url/master từ response GraphQL/REST của font đó.",
+            "steps": [
+              "Lấy field url/master của 1 font (dạng 'users/{user_id}/fonts/{hash}.{ext}').",
+              "Thử truy cập trực tiếp path đó trên CDN (vd https://cdn.ownego.com/teeinblue-staging/<path>) KHÔNG kèm session/token/cookie hợp lệ.",
+              "Quan sát có tải được file không."
+            ],
+            "observation_point": "response khi truy cập trực tiếp CDN không auth",
+            "expected_result": null,
+            "oracle": { "kb_ids": [], "oracle_strength": "NONE" },
+            "status": "NEEDS_CONFIRMATION",
+            "open_question": "File font trên CDN có công khai truy cập được không cần auth không? 0 request nào tới CDN được quan sát trong toàn bộ 13 file capture của run gốc; claim cũ 'CDN công khai không cần auth' (SEC-002, unmapped_evidence trong product-kb, knowledge_kind INFERRED, không phải KB item chính thức) chưa được re-verify. Nếu công khai, ai biết path (vd qua response API) đều tải được file — cần đánh giá security exposure.",
+            "risk_refs": ["SEC-002"], "priority": "P2",
+            "act_ids": [],
+            "evidence_refs": [],
+            "automation_suitability": "UNKNOWN"
+          }
+        ]
+      }
+    ],
+    "coverage_by_feature_and_risk": [
+      { "feature_id": "FEAT-03-manage-uploaded-font", "risk_or_gap_ref": "SEC-001: rename _set tuỳ ý qua JWT thường, chưa có negative sample", "covered_by_check_ids": ["CHK-002"], "coverage_status": "OPEN_NEEDS_CONFIRMATION" },
+      { "feature_id": "FEAT-03-manage-uploaded-font", "risk_or_gap_ref": "CONFLICT-001: data source download/delete REST vs GraphQL", "covered_by_check_ids": ["CHK-008"], "coverage_status": "OPEN_NEEDS_CONFIRMATION" },
+      { "feature_id": "FEAT-03-manage-uploaded-font", "risk_or_gap_ref": "SEC-002: CDN public path chưa re-verify", "covered_by_check_ids": ["CHK-009"], "coverage_status": "OPEN_NEEDS_CONFIRMATION" },
+      { "feature_id": "FEAT-03-manage-uploaded-font", "risk_or_gap_ref": "xoá font đang dùng thật trong artwork (forbidden trong run gốc)", "covered_by_check_ids": ["CHK-007"], "coverage_status": "OPEN_NEEDS_CONFIRMATION" },
+      { "feature_id": "FEAT-03-manage-uploaded-font", "risk_or_gap_ref": "rename edge case (rỗng/trùng tên)", "covered_by_check_ids": ["CHK-004"], "coverage_status": "OPEN_NEEDS_CONFIRMATION" },
+      { "feature_id": "FEAT-03-manage-uploaded-font", "risk_or_gap_ref": "core capability rename/download/delete (KB-003, KB-014, KB-015, KB-016)", "covered_by_check_ids": ["CHK-001", "CHK-003", "CHK-005", "CHK-006"], "coverage_status": "COVERED_BASELINE" }
+    ],
+    "checks_needing_confirmation": [
+      { "check_id": "CHK-002", "reason": "SEC-001: chưa có negative sample cho phạm vi field được phép _set trong mutation rename." },
+      { "check_id": "CHK-004", "reason": "Chỉ 1 sample rename, chưa test edge case tên rỗng/trùng." },
+      { "check_id": "CHK-007", "reason": "Xoá font đang dùng thật nằm trong forbidden_actions, chưa từng quan sát." },
+      { "check_id": "CHK-008", "reason": "CONFLICT-001 unresolved cho phần download/delete." },
+      { "check_id": "CHK-009", "reason": "SEC-002: claim CDN công khai chưa re-verify, 0 request CDN quan sát được trong run gốc." }
+    ],
+    "duplicates_removed": [
+      { "note": "Không phát hiện check trùng ngữ nghĩa. CHK-001/CHK-003 cùng dùng KB-014 (rename) nhưng test 2 khía cạnh khác nhau (request/response shape vs UI feedback/toast) — giữ tách vì có test intent riêng biệt." }
+    ],
+    "excluded_dimensions": [
+      { "dimension": "PERMISSION", "reason": "File .env hiện chỉ còn 1 account (owner, sub=273). Không có TIB_USER_A/TIB_USER_B để test rename/download/delete cross-role hoặc cross-tenant — không thể viết check PERMISSION có oracle thật; đây cũng là gap đã ghi trong coverage_matrix của feature profile." },
+      { "dimension": "REGRESSION", "reason": "CONFLICT-001 (phần download/delete) đã được đưa vào dimension INTEGRATION (CHK-008) theo chỉ định của orchestrator. Đây là lần chạy bootstrap đầu tiên cho feature này — không có phiên bản Feature Profile trước đó trong hệ thống để diff thực sự theo nghĩa REGRESSION dimension." }
+    ]
+  },
+  "gate": {
+    "decision": "PASS",
+    "blocking_findings": [],
+    "conditions": [
+      "CHK-002 (SEC-001) và CHK-009 (SEC-002) là risk/unknown chưa xác nhận — KHÔNG được dùng làm security assertion cứng cho tới khi có xác nhận dev/PO.",
+      "CHK-007 (xoá font đang dùng thật) chỉ được thực thi trong môi trường có fixture cô lập, KHÔNG bao giờ trên dữ liệu artwork/font thật của store — theo mutation policy SAFE_REVERSIBLE_ONLY.",
+      "CHK-008 giữ nguyên CONFLICT-001 ở trạng thái UNRESOLVED, không tự chọn phía đúng."
+    ],
+    "allowed_next_steps": [
+      "Handoff sang knowledge-diff-analyzer để đối chiếu CHK-008 (CONFLICT-001) với knowledge/portal-fonts.md.",
+      "Handoff sang context-quality-reviewer để review coverage/traceability, đặc biệt CHK-002/CHK-007 (rủi ro P1/P2)."
+    ]
+  }
+}

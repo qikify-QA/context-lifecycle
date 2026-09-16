@@ -1,0 +1,134 @@
+{
+  "schema_version": "1.0",
+  "artifact_type": "ContextReviewVerdict",
+  "artifact_id": "REVIEW-CTX-20260913-01-GATES",
+  "workflow_id": "CTX-20260913-01",
+  "producer": "context-quality-reviewer",
+  "source_refs": [
+    "contracts/qa-context-contract.md",
+    "input/bootstrap-request.json",
+    "raw/storefront/storefront-evidence.json",
+    "raw/portal/portal-evidence.json",
+    "raw/portal/network/graphql-calls-around-fulfill-click.json",
+    "raw/portal/network/orders-list-response.json",
+    "intermediate/api/api-capability-artifact.json",
+    "candidate/product-kb.json",
+    "candidate/feature-profiles/FEAT-ORDER-01.json",
+    "candidate/feature-profiles/FEAT-ORDER-PORTAL-01.json",
+    "candidate/checklists/FEAT-ORDER-01.json",
+    "candidate/checklists/FEAT-ORDER-PORTAL-01.json",
+    "run-manifest.json"
+  ],
+  "upstream_artifact_ids": [
+    "SF-CTX-20260913-01-01",
+    "PORTAL-CTX-20260913-01-01",
+    "API-CTX-20260913-01-01",
+    "KB-CTX-20260913-01-01",
+    "FP-CTX-20260913-01-FEAT-ORDER-01",
+    "FP-CTX-20260913-01-FEAT-ORDER-PORTAL-01",
+    "CHKLIST-CTX-20260913-01-FEAT-ORDER-01",
+    "CHKLIST-CTX-20260913-01-FEAT-ORDER-PORTAL-01"
+  ],
+  "status": "READY",
+  "confidence": "MEDIUM",
+  "observations": [
+    "Full redaction grep (authorization/bearer/cookie/set-cookie/token/password/secret/api_key + email pattern) run across the entire run directory. No live credential values found — 'token'/'password' hits are field names, KB narrative, or a store password-gate description; email hits are explicitly synthetic test addresses (qa-explore-order-test*@example.com) already disclosed as non-personal test data.",
+    "All 5 candidate/intermediate screenshots reviewed visually (order-confirmation, portal order-details, fulfill modal, item-activity-logs, change-status dropdown, product page). No secrets, tokens, or real PII visible. Portal sidebar consistently shows 'Linh explorer / linh-explorer.myshopify.com' matching the required sub=273 account scope — no evidence of touching the forbidden 'Linh Pham' (sub=2) account.",
+    "KB-CONFLICT-001 (order JTEL87JY0 sync failure) verified UNRESOLVED and structurally identical across all 4 downstream layers: product-kb.json conflicts[], both feature-profile-builder profile_conflicts[], and both checklists' CHK-006-ORDER01-SYNC / CHK-P12-SYNC-VISIBILITY. No layer silently marks it resolved based on the user's unverified webhook-fix claim.",
+    "KB-022 ('Confirm & Send to fulfill' triggers no mutation) verified scoped strictly to the POD-disconnected state in every downstream artifact: FEAT-ORDER-PORTAL-01 profile explicitly separates the disconnected finding from the connected-branch risk/unknown, and the checklist splits it into CHK-P10 (BASELINE oracle, disconnected only) vs CHK-P16 (oracle_strength NONE, connected, NEEDS_CONFIRMATION). No generalization found.",
+    "No knowledge_kind was found improperly upgraded from OBSERVED_CURRENT/INFERRED to CONFIRMED_EXPECTED anywhere; all 'confirmed_rules' arrays in both feature profiles are empty, consistent with ZERO_DOC_BOOTSTRAP having no authority source.",
+    "Single-sample (N=1/2) limitations are consistently reflected: KB items capped confidence LOW/MEDIUM, checklist checks resting on N=1 with no authority source (KB-006, KB-009, and all NEEDS_CONFIRMATION checks) correctly carry oracle_strength NONE and status NEEDS_CONFIRMATION rather than being asserted as fact.",
+    "Coverage gaps (portal/fulfills non-existence, Bulk Fulfill unexplored, Change status transitions unexercised, POD-connected branch unknown, no DB evidence, no error paths) are documented consistently in KB coverage_gaps, both feature profiles' unknown_areas/risks, and both checklists' checks_needing_confirmation / excluded_dimensions."
+  ],
+  "assumptions": [],
+  "unknowns": [
+    "Whether linh-explorer-2.myshopify.com (actual exploration store) or linh-explorer.myshopify.com (TIB_STORE_URL_1, bootstrap-requested store) is the intended authoritative store for this Order KB has not been decided — normalizer flagged it but no orchestrator decision is recorded anywhere in the run artifacts reviewed."
+  ],
+  "conflicts": [],
+  "blocking_issues": [],
+  "payload": {
+    "gate_results": [
+      {
+        "gate": "C0",
+        "status": "PASS",
+        "checks_run": ["product present", "object_target present", "environment present", "role present", "mutation_policy present"],
+        "note": "input/bootstrap-request.json is complete: object_type Order, environment staging, role owner (Linh explorer sub=273), mutation_policy FULL_MUTATION_WITHIN_OWN_TEST_DATA_SCOPE with forbidden_actions and payment_policy fallback all specified."
+      },
+      {
+        "gate": "C1",
+        "status": "CONDITIONAL_PASS",
+        "checks_run": [
+          "feature grouped by user goal, not by control name",
+          "SCN-ID/ACT-ID presence",
+          "before/after state on every action",
+          "network entry labeling completeness",
+          "redaction sweep",
+          "mutation policy + cleanup_result"
+        ],
+        "note": "FEAT-ORDER-01 and FEAT-ORDER-PORTAL-01 are both named by user goal, not by control name — PASS. Redaction clean (see observations). Mutation policy respected: the only real mutation (2 storefront orders created) is within FULL_MUTATION_WITHIN_OWN_TEST_DATA_SCOPE and correctly carries cleanup_result NOT_NEEDED per cleanup_required=false. Two gaps found, both already disclosed upstream rather than hidden: (1) ACT-P-001/ACT-P-003/ACT-P-005 have narrative observed_result text but lack the formal structured before/after object_state block that ACT-P-002/ACT-P-004 have, and are not wrapped in a formal SCN-ID scenario; (2) portal-evidence.json's ACT-P-004 network_entry_labels claims 5 total network entries (mapped=2, unrelated=3) but the underlying capture file only enumerates 4, leaving 3 'unrelated' entries with zero backing evidence — correctly NOT assumed benign downstream, but the discrepancy itself is unexplained. Neither gap involves fabrication or hidden data; both are capped to LOW confidence and flagged. See findings F1/F2."
+      },
+      {
+        "gate": "C2",
+        "status": "CONDITIONAL_PASS",
+        "checks_run": [
+          "operation has route/method/status/shape/evidence_refs",
+          "trace to ACT-ID",
+          "no required/enum inferred from single sample"
+        ],
+        "note": "All 6 APIOPs (APIOP-001..006) trace to ACT-IDs and carry evidence_refs, knowledge_kind, and explicit observed_count. No field is marked required/always_present from a single sample — api-capability-artifact.json explicitly states 'no field meets observed_count>=3 ... not marked required/optional' and tib_status is explicitly called out as single-value/no-enum. Two referenced capture files (raw/network/ACT-101-004.json, raw/portal/network/orders-get-4322.json) are absent on disk; the affected operations (APIOP-001, APIOP-003) are correctly kept at UI/summary-only fidelity and not treated as payload-verified. This is disclosed, not hidden — CONDITIONAL_PASS carried from api-explorer's own gate, not downgraded further."
+      },
+      {
+        "gate": "C3",
+        "status": "PASS",
+        "checks_run": [
+          "knowledge_kind + evidence_refs + scope + confidence + freshness per item",
+          "no illegal OBSERVED_CURRENT -> CONFIRMED_EXPECTED upgrade",
+          "conflict retained with both sides + evidence"
+        ],
+        "note": "All 24 KB items carry knowledge_kind, scope (environment/role/object_state/surface), confidence, freshness, and evidence_refs (or explicit empty array + INFERRED classification when no ref exists, e.g. KB-006/KB-009). No item's knowledge_kind is CONFIRMED_EXPECTED anywhere in the candidate. KB-CONFLICT-001 keeps both sides with independent evidence_refs and resolution: UNRESOLVED with an explicit 'only orchestrator + reviewer may resolve' note, matching contract §8."
+      },
+      {
+        "gate": "C4",
+        "status": "PASS",
+        "checks_run": [
+          "every field traces to kb_id",
+          "actors/entry_points/capabilities/state_transitions/observed_validation/dependencies/unknown_areas present"
+        ],
+        "note": "Both feature profiles carry kb_refs on every actor, entry_point, capability, state_transition, observed_behavior, and permission entry; spot-checked each capability/statement against the cited kb_id and found no untraceable content. 'kb_trace_complete: true' is corroborated, not just asserted. unknown_areas and risks sections are extensive and correctly scoped (POD-connected branch, sync reliability, permission boundary, multi-item, DB layer)."
+      },
+      {
+        "gate": "C5",
+        "status": "PASS",
+        "checks_run": [
+          "oracle + applicability per check",
+          "no duplicate checks",
+          "expected_result with oracle_strength NONE never asserts a hard fact"
+        ],
+        "note": "All checks in both checklists carry oracle.kb_ids/oracle_strength and an applicability block (role/state/environment). Every check with oracle_strength NONE (CHK-011/012/013/014/015/016/017-ORDER01; CHK-P12/P13/P14/P15/P16) has an expected_result phrased as 'Not established' and status NEEDS_CONFIRMATION — none asserts a confirmed outcome. CHK-P10 vs CHK-P16 and CHK-002/CHK-007 vs their single-sample caveats show correct non-duplication and correct risk-scoped splitting rather than merging into an over-generalized check."
+      },
+      {
+        "gate": "C6",
+        "status": "CONDITIONAL_PASS",
+        "checks_run": [
+          "C0-C5 all PASS/CONDITIONAL_PASS",
+          "envelope schema present on every artifact",
+          "traceability chain intact",
+          "redaction sweep",
+          "conflict handling consistent across layers",
+          "coverage documented",
+          "version lineage / run-manifest consistency"
+        ],
+        "note": "All prerequisite gates are PASS or CONDITIONAL_PASS (none FAIL). Every candidate/intermediate/raw artifact reviewed carries a valid Artifact Envelope. Redaction and conflict-handling checks pass cleanly (see observations). Two lineage/scope items are NOT resolved and require orchestrator action before this run is treated as fully published: (1) run-manifest.json at the run root still records status=BLOCKED, publish_allowed=false, and empty artifact refs, even though candidate/ contains a complete, internally consistent set of 5 artifacts for this same run_id — this is a stale/inconsistent manifest, not a content defect (see finding F3); (2) the storefront store used (linh-explorer-2.myshopify.com) differs from the store specified in input/bootstrap-request.json (TIB_STORE_URL_1 = linh-explorer.myshopify.com) — transparently flagged by every downstream artifact but never resolved by an explicit orchestrator decision (see publish_conditions)."
+      }
+    ]
+  },
+  "gate": {
+    "decision": "CONDITIONAL_PASS",
+    "blocking_findings": [],
+    "conditions": [
+      "Orchestrator must reconcile/update run-manifest.json before treating this run as published (see finding F3).",
+      "Orchestrator must explicitly confirm which store (linh-explorer.myshopify.com vs linh-explorer-2.myshopify.com) this Order KB is authoritative for, and update bootstrap-request.json or record the decision, before downstream test-data/execution work relies on it."
+    ],
+    "allowed_next_steps": ["context-quality-reviewer: see verdict.json for full decision"]
+  }
+}
