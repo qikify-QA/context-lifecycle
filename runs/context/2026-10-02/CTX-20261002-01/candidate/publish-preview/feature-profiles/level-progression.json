@@ -1,0 +1,357 @@
+{
+  "feature_key": "level-progression",
+  "name": "Len bac theo so shop tra phi",
+  "user_goal": "Affiliate biet minh dang o bac nao, can them bao nhieu shop tra phi de len bac, va bac moi anh huong gi tu dot payout sau",
+  "stable_since_version": "v1",
+  "actors": [
+    {
+      "role": "unspecified (hệ thống tự tính tại thời điểm import payout)",
+      "permission_observed": "tính Level dựa trên total_paid_customers, ghi vào User.level",
+      "kb_refs": [
+        "KB-001",
+        "KB-007",
+        "KB-020"
+      ]
+    },
+    {
+      "role": "admin",
+      "permission_observed": "sửa thông tin ảnh hưởng tiêu chí lên bậc có hiệu lực từ lần import sau, không hồi tố",
+      "kb_refs": [
+        "KB-022"
+      ]
+    }
+  ],
+  "entry_points": [
+    {
+      "path": "quy trình import CSV Payout (tính Level lại từ đầu mỗi dòng)",
+      "precondition": "affiliate không VIP (is_vip=false)",
+      "kb_refs": [
+        "KB-010"
+      ]
+    }
+  ],
+  "capabilities": [
+    {
+      "name": "Level quyết định rate hoa hồng",
+      "description": "Level quyết định affiliate được hưởng rate hoa hồng nào — bước đầu tiên trong mọi lần tính hoa hồng.",
+      "kb_refs": [
+        "KB-001"
+      ]
+    },
+    {
+      "name": "Tính total_paid_customers",
+      "description": "total_paid_customers = số lượng Customer (shop) có ít nhất 1 Conversion loại first hoặc recurring — không tính usage/custom; shop chỉ từng có usage-charge hoặc chỉ có custom conversion admin thêm tay không tính là 'shop trả phí'.",
+      "kb_refs": [
+        "KB-002",
+        "KB-003",
+        "KB-004",
+        "KB-005",
+        "KB-006"
+      ]
+    },
+    {
+      "name": "Chọn Level theo ngưỡng cao nhất thoả điều kiện",
+      "description": "Level được chọn là Level có min_paid_customers <= total_paid_customers, ưu tiên min_paid_customers cao nhất thoả điều kiện (ORDER BY min_paid_customers DESC LIMIT 1); nếu không Level nào thoả, level=0.",
+      "kb_refs": [
+        "KB-007",
+        "KB-008",
+        "KB-009"
+      ]
+    },
+    {
+      "name": "Tính lại Level tại mỗi dòng import, không cache",
+      "description": "Việc tính Level diễn ra lại từ đầu tại thời điểm import cho từng dòng payout, không cache 'Level hiện tại' để tái dùng giữa các dòng trong cùng 1 lần import.",
+      "kb_refs": [
+        "KB-010"
+      ]
+    },
+    {
+      "name": "Lên bậc giữa các lần import không hồi tố",
+      "description": "Dòng đã xử lý trước khi lên bậc giữ rate cũ (không tính lại ngược); dòng xử lý sau khi lên bậc (kể cả trong cùng file) dùng rate mới; file luôn sort theo Charge Creation Time tăng dần trước khi import.",
+      "kb_refs": [
+        "KB-014",
+        "KB-015",
+        "KB-016"
+      ]
+    },
+    {
+      "name": "Đồng bộ User.level với Level.level_index",
+      "description": "User.level là bậc hiện tại dạng số nguyên, đồng bộ với Level.level_index qua calculateLevel/updateLevel.",
+      "kb_refs": [
+        "KB-020"
+      ]
+    },
+    {
+      "name": "Thay đổi admin có hiệu lực từ lần import tiếp theo",
+      "description": "Thay đổi admin lưu ở màn hình User có hiệu lực ngay từ lần import CSV Payout tiếp theo, không hồi tố các Conversion cũ đã tính.",
+      "kb_refs": [
+        "KB-022"
+      ]
+    }
+  ],
+  "state_transitions": [
+    {
+      "from": "Level N",
+      "to": "Level N+k (ngưỡng cao nhất thoả)",
+      "trigger": "import CSV Payout phát sinh thêm Customer đạt first/recurring conversion",
+      "condition": "total_paid_customers tăng vượt min_paid_customers của Level cao hơn",
+      "kb_refs": [
+        "KB-007",
+        "KB-008"
+      ]
+    },
+    {
+      "from": "chưa có Level thoả điều kiện",
+      "to": "level = 0",
+      "trigger": "import CSV Payout, không Level nào có min_paid_customers <= total_paid_customers",
+      "condition": "total_paid_customers chưa đạt ngưỡng Level 1 (hoặc Level thấp nhất)",
+      "kb_refs": [
+        "KB-009"
+      ]
+    }
+  ],
+  "confirmed_rules": [
+    {
+      "statement": "Level quyết định affiliate được hưởng rate hoa hồng nào — bước đầu tiên trong mọi lần tính hoa hồng.",
+      "kb_refs": [
+        "KB-001"
+      ]
+    },
+    {
+      "statement": "total_paid_customers = số lượng Customer (shop) có ít nhất 1 Conversion loại first hoặc recurring — không phải tổng tiền hoa hồng hay tổng doanh thu.",
+      "kb_refs": [
+        "KB-002"
+      ]
+    },
+    {
+      "statement": "Conversion loại usage và custom KHÔNG được tính vào total_paid_customers.",
+      "kb_refs": [
+        "KB-003"
+      ]
+    },
+    {
+      "statement": "Một shop chỉ từng phát sinh usage-charge (chưa từng có subscription charge) không tính là 'shop trả phí' cho mục đích lên bậc.",
+      "kb_refs": [
+        "KB-004"
+      ]
+    },
+    {
+      "statement": "Một custom conversion admin tự thêm tay không giúp affiliate lên bậc.",
+      "kb_refs": [
+        "KB-005"
+      ]
+    },
+    {
+      "statement": "total_paid_customers = COUNT(DISTINCT Customer) theo điều kiện Conversion type thuộc (first, recurring).",
+      "kb_refs": [
+        "KB-006"
+      ]
+    },
+    {
+      "statement": "Với affiliate không VIP, Level được chọn là Level có min_paid_customers <= total_paid_customers, ưu tiên min_paid_customers cao nhất thoả điều kiện.",
+      "kb_refs": [
+        "KB-007"
+      ]
+    },
+    {
+      "statement": "Trong các Level thoả điều kiện, hệ thống ORDER BY min_paid_customers DESC và lấy 1 — bậc có ngưỡng cao nhất thắng.",
+      "kb_refs": [
+        "KB-008"
+      ]
+    },
+    {
+      "statement": "Nếu không tìm được Level nào thoả, hệ thống trả về level = 0.",
+      "kb_refs": [
+        "KB-009"
+      ]
+    },
+    {
+      "statement": "Việc tính Level diễn ra lại từ đầu tại thời điểm import cho từng dòng payout — không cache, không lưu sẵn 'Level hiện tại' giữa các dòng trong cùng 1 lần import.",
+      "kb_refs": [
+        "KB-010"
+      ]
+    },
+    {
+      "statement": "Các dòng payout đã xử lý trước khi lên bậc giữ rate của Level cũ (không tính lại ngược).",
+      "kb_refs": [
+        "KB-014"
+      ]
+    },
+    {
+      "statement": "Các dòng xử lý sau (kể cả trong cùng file, nếu nằm sau dòng làm phát sinh lên bậc) mới dùng rate mới.",
+      "kb_refs": [
+        "KB-015"
+      ]
+    },
+    {
+      "statement": "File luôn được sắp xếp theo Charge Creation Time tăng dần trước khi import.",
+      "kb_refs": [
+        "KB-016"
+      ]
+    },
+    {
+      "statement": "User.level là bậc hiện tại (số nguyên), đồng bộ với Level.level_index qua calculateLevel/updateLevel.",
+      "kb_refs": [
+        "KB-020"
+      ]
+    },
+    {
+      "statement": "Thay đổi admin lưu ở màn hình User có hiệu lực ngay từ lần import CSV Payout tiếp theo, không hồi tố các Conversion cũ đã tính.",
+      "kb_refs": [
+        "KB-022"
+      ]
+    }
+  ],
+  "observed_behavior": [
+    {
+      "statement": "[EXAMPLE_ONLY, brand UNCERTAIN] Ví dụ minh hoạ cấu hình 3 Level (0/4/16 shop) dẫn từ KB nội bộ MYS-275 — KHÔNG phải cấu hình thật của hệ thống hay brand cụ thể nào; 0 shop → Level 1, 5 shop → Level 2 chỉ là minh hoạ công thức.",
+      "kb_refs": [
+        "KB-011",
+        "KB-012",
+        "KB-013"
+      ]
+    },
+    {
+      "statement": "[EXAMPLE_ONLY] Worked example: calculateLevel nâng level cho đợt payout tiếp theo nhưng Conversion đã lưu giữ nguyên rate cũ — cùng nguyên lý với KB-014 nhưng ở dạng ví dụ, không phải phát biểu quy tắc tổng quát.",
+      "kb_refs": [
+        "KB-017"
+      ]
+    },
+    {
+      "statement": "[hedged] Source code không có comment giải thích tại sao chọn 'số shop' thay vì 'tổng doanh thu' làm tiêu chí lên bậc; hệ quả quan sát được là affiliate có 10 shop nhỏ lên bậc nhanh hơn affiliate chỉ có 1 shop rất lớn — quan sát từ code, chưa xác nhận PO.",
+      "kb_refs": [
+        "KB-018",
+        "KB-019"
+      ]
+    },
+    {
+      "statement": "[hedged] Level của affiliate bình thường (không VIP) được hệ thống tự tính, ngoại trừ khi tạo bằng form tay hoặc khi is_vip=true.",
+      "kb_refs": [
+        "KB-021"
+      ]
+    }
+  ],
+  "observed_validations": [],
+  "permissions": [],
+  "surface_mapping": {
+    "portal": [
+      "KB-021",
+      "KB-022"
+    ],
+    "storefront": [],
+    "api": [],
+    "data": [
+      "KB-006",
+      "KB-008",
+      "KB-020"
+    ],
+    "code": [],
+    "unspecified": [
+      "KB-001",
+      "KB-002",
+      "KB-003",
+      "KB-004",
+      "KB-005",
+      "KB-007",
+      "KB-009",
+      "KB-010",
+      "KB-011",
+      "KB-012",
+      "KB-013",
+      "KB-014",
+      "KB-015",
+      "KB-016",
+      "KB-017",
+      "KB-018",
+      "KB-019"
+    ]
+  },
+  "dependencies": [
+    {
+      "feature_key": "vip-level-override",
+      "relation": "exception_path — is_vip=true bỏ qua hoàn toàn công thức ở feature này"
+    },
+    {
+      "feature_key": "level-definition-management",
+      "relation": "upstream — cấu hình Level (level_index, min_paid_customers) do admin quản lý ở feature đó"
+    }
+  ],
+  "risks": [
+    {
+      "risk": "Chưa có cấu hình Level THẬT của brand koin (bao nhiêu bậc, ngưỡng cụ thể) — mọi số liệu trong KB-011/012/013 chỉ là ví dụ brand UNCERTAIN.",
+      "kb_refs": [
+        "KB-011",
+        "KB-012",
+        "KB-013"
+      ]
+    }
+  ],
+  "unknown_areas": [
+    {
+      "question": "Cấu hình Level THẬT đang chạy (bao nhiêu bậc, ngưỡng min_paid_customers bao nhiêu) của brand koin là gì?",
+      "why_it_matters": "Toàn bộ con số trong tài liệu nguồn chỉ là ví dụ dẫn từ KB nội bộ MYS-275, brand_scope=UNCERTAIN. Không có cấu hình thật thì không viết được expected result cho test lên bậc."
+    },
+    {
+      "question": "Khi 2 Level được cấu hình TRÙNG min_paid_customers thì bậc nào được chọn?",
+      "why_it_matters": "Công thức chỉ nêu ORDER BY min_paid_customers DESC LIMIT 1, không nêu tie-break (level_index? id?). Trùng ngưỡng là lỗi cấu hình dễ xảy ra ở màn hình Level."
+    },
+    {
+      "question": "level = 0 (không tìm được Level nào) dẫn tới hệ quả gì ở bước tính hoa hồng?",
+      "why_it_matters": "Tài liệu nêu hệ thống trả về level = 0 nhưng không nói dòng payout đó bị lỗi như trường hợp VIP thiếu level, hay có Level mặc định nhận level_index = 0."
+    }
+  ],
+  "last_updated": {
+    "date": "2026-10-05",
+    "ccr_ref": "bootstrap"
+  },
+  "profile_relationships": [
+    {
+      "from": "level-progression",
+      "to": "vip-level-override",
+      "relation": "exception_path"
+    },
+    {
+      "from": "level-progression",
+      "to": "level-definition-management",
+      "relation": "depends_on"
+    }
+  ],
+  "unassigned_kb_items": [],
+  "profile_conflicts": [],
+  "profile_change_summary": [
+    {
+      "change": "Tạo mới feature profile lần đầu (bootstrap v1) từ 22 kb_candidates của shard level-progression."
+    }
+  ],
+  "kb_trace_complete": true,
+  "coverage_matrix": [
+    {
+      "layer": "data",
+      "role": "unspecified",
+      "state": "any",
+      "environment": "documented",
+      "covered": true
+    },
+    {
+      "layer": "portal",
+      "role": "admin",
+      "state": "any",
+      "environment": "documented",
+      "covered": true
+    },
+    {
+      "layer": "api",
+      "role": "unspecified",
+      "state": "any",
+      "environment": "documented",
+      "covered": false
+    },
+    {
+      "layer": "code",
+      "role": "unspecified",
+      "state": "any",
+      "environment": "documented",
+      "covered": false
+    }
+  ]
+}

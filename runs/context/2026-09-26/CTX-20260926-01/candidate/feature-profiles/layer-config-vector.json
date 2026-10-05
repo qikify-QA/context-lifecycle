@@ -1,0 +1,328 @@
+{
+  "schema_version": "1.0",
+  "artifact_type": "FeatureProfileCandidate",
+  "artifact_id": "FP-CAND-CTX-20260926-01-artwork-layer-config-vector",
+  "workflow_id": "CTX-20260926-01",
+  "producer": "feature-profile-builder",
+  "source_refs": [
+    "contracts/qa-context-contract.md",
+    "runs/context/2026-09-26/CTX-20260926-01/candidate/product-kb.json",
+    "runs/context/2026-09-26/CTX-20260926-01/run-manifest.json",
+    "knowledge/products/teeinblue/objects/artwork/features/layer-config-vector/profile.json (canon FEAT-14, published_context_version=2, CTX-20260912-01 — READ-ONLY baseline này run MERGE vào)",
+    "knowledge/products/teeinblue/objects/artwork/feature-summary.md (dòng 371-412, verify độc lập trước khi tin lead của orchestrator)",
+    "knowledge/products/teeinblue/objects/_registry.json (feature-key layer-config-vector xác nhận thuộc object artwork)"
+  ],
+  "upstream_artifact_ids": [
+    "PKBC-CTX-20260926-01-001#KB-126",
+    "PKBC-CTX-20260926-01-001#KB-127",
+    "PKBC-CTX-20260926-01-001#KB-128",
+    "knowledge/products/teeinblue/objects/artwork/features/layer-config-vector/profile.json#capabilities (deep-copy nguyên vẹn 1/3 capability không bị chạm — Vector Category)"
+  ],
+  "status": "READY",
+  "confidence": "MEDIUM",
+  "observations": [
+    "TỰ VERIFY ĐỘC LẬP lead của orchestrator (run-manifest.json) trước khi dùng: đọc feature-summary.md dòng 371-388 VÀ canon profile.json layer-config-vector — xác nhận FEAT-14 (feature_key=layer-config-vector) đúng là feature duy nhất mô tả 3 layer type nhóm sidebar VECTOR (Static Vector, Vector Category, Vector Upload), và capability 'Vector Upload' trong canon đã có sẵn mô tả field 'Upload editor' chỉ 1 lựa chọn 'Direct upload, no editor' — KHỚP CHÍNH XÁC với route POST /api/merchant/{platform}/vector-upload (buyer-facing OPT vector-upload field) mà KB-126/KB-127 quan sát. KHÔNG tạo feature mới.",
+    "Phân biệt rõ 2 CAPABILITY KHÁC user-sub-goal trong CÙNG FEAT-14 (không gộp lẫn, đúng nguyên tắc 'gộp capability không cùng goal = gate FAIL'): (1) 'Vector Upload' (vector-upload layer type) — buyer/mô phỏng-buyer upload file cá nhân hoá qua field personalization 'OPT vector-upload' trên Live Preview, nhận KB-126 (POST vector-upload, limit=4/phút) + KB-127 (POST upload-error-logs tự động khi lỗi 500, limit=6/phút); (2) 'Static Vector' (static-vector layer type) — merchant upload asset vào THƯ VIỆN layer (route riêng '+Layer > Vector > Static Vector > tab Upload a vector'), nhận KB-128 (POST /api/layer-images/svg, limit=1000/24h, KHÁC route /api/cliparts/svg dùng cho Clipart).",
+    "Cả 3 KB item (KB-126/127/128) đều đủ ACT-ID + APIOP-ID + 2 nguồn evidence độc lập (API trực tiếp + UI/network capture) theo product-kb.json — đủ điều kiện oracle theo §4 của contract, KHÔNG phải endpoint rời rạc.",
+    "Conflict CONF-CBS004-001 (x-ratelimit-remaining behavior của POST /api/layer-images/svg không nhất quán giữa 2 nguồn evidence, mỗi phía 1 status code khác nhau) được GIỮ NGUYÊN CẢ HAI PHÍA từ product-kb.json, gắn vào capability 'Static Vector' — KHÔNG tự resolve, đúng §8."
+  ],
+  "assumptions": [],
+  "unknowns": [
+    "Window 24h thật của layer_image (KB-128, limit=1000) CHƯA verify runtime — chỉ verify giá trị LIMIT qua header, theo đúng chỉ đạo tránh tải staging dùng chung (xem coverage_gaps của product-kb.json).",
+    "x-ratelimit-remaining behavior cho POST /api/layer-images/svg (tăng/giảm theo status code 422 vs 201) — CHỈ 1 sample mỗi phía, mỗi phía 1 status code khác nhau, KHÔNG đủ để khẳng định causal rule (xem conflict CONF-CBS004-001).",
+    "4 endpoint layer 1 còn lại trong nhóm CCR (gpx-upload, strava-upload, upload-url merchant, customer-uploads/{id}/uploaded-at) CHƯA test trong run này — không thuộc 3 layer type nhóm VECTOR nên KHÔNG đưa vào feature này, chỉ ghi để tránh hiểu nhầm là đã đóng toàn bộ CCR CBS-004 layer 1.",
+    "pdf-upload (POST /api/merchant/{platform}/pdf-upload) verify runtime khớp CCR nhưng KHÔNG có ACT-ID/UI entry point sau 2 dispatch — KHÔNG liên quan trực tiếp tới layer type nhóm VECTOR (nghi vấn liên quan Product Base/Campaign print-file/Boundless instance), KHÔNG đưa vào feature này theo đúng §4."
+  ],
+  "conflicts": [
+    {
+      "conflict_id": "CONF-CBS004-001",
+      "topic": "x-ratelimit-remaining behavior cho POST /api/layer-images/svg (layer 3, resource layer_image) không nhất quán giữa 2 nguồn evidence",
+      "sides": [
+        {
+          "statement": "Khi gọi POST /api/layer-images/svg lặp lại 3 lần liên tiếp với request THIẾU field 'file' bắt buộc (422 mỗi lần), ở role merchant/owner môi trường staging, x-ratelimit-remaining giữ nguyên = 1000 (không giảm) qua cả 3 lần, dù x-ratelimit-limit=1000 hiển thị đúng mỗi lần.",
+          "source": "api-explorer dispatch #1 - direct API test trực tiếp, không qua UI/ACT-ID",
+          "evidence_refs": [{ "type": "api_response", "path": "raw/api/APIOP-004-layer-images-svg.json" }],
+          "confidence": "LOW"
+        },
+        {
+          "statement": "Khi merchant (role merchant/owner 'Linh explorer') upload 1 file .svg THÀNH CÔNG (201) vào thư viện 'Static Vector' qua UI thật (Layer picker > Vector > Static Vector > tab 'Upload a vector'), ở môi trường staging, x-ratelimit-remaining = 999 (giảm 1 so với limit=1000) trên request đó.",
+          "source": "portal-explorer dispatch #2, ACT-02-01-001",
+          "evidence_refs": [{ "type": "api_response", "path": "raw/network/ACT-02-01-001.json", "act_id": "ACT-02-01-001" }],
+          "confidence": "LOW"
+        }
+      ],
+      "resolution": "UNRESOLVED",
+      "needs": "Cần thêm sample ở cả 2 status code (422 và 201) để xác định remaining counter chỉ tăng khi request THÀNH CÔNG (pass validation) hay theo quy tắc khác. Hiện tại mỗi phía chỉ có 1 sample, mỗi phía ở 1 status code khác nhau - không đủ để khẳng định causal rule. CCR ref: CBS-004. KHÔNG publish làm oracle behavior 'remaining' cho tới khi giải quyết."
+    }
+  ],
+  "blocking_issues": [],
+  "payload": {
+    "feature_profiles": [
+      {
+        "feature_id": "FEAT-14-layer-config-vector",
+        "feature_key": "layer-config-vector",
+        "name": "Cấu hình layer — nhóm sidebar VECTOR (field/behavior riêng từng layer type)",
+        "user_goal": "Store owner cấu hình field/behavior CHỈ thuộc riêng từng layer type trong nhóm sidebar VECTOR khi thêm layer trong artwork editor. Nhóm gồm 3 layer type: Static Vector, Vector Category, Vector Upload. Tách biệt khỏi cơ chế dùng chung (xem FEAT-04-layer-common-config) để 1 lần fix/thêm field cho 1 layer type chỉ cần đọc và sửa đúng phần nhỏ trong file này, không phải đọc lại toàn bộ layer-common-config cũ hay các nhóm sidebar khác.",
+        "stable_since_version": "product-kb@2.0 (split tại CTX-20260912-01 từ FEAT-04-layer-common-config v1, evidence gốc vẫn là fan-in CTX-20260910-01/02/03). [MỚI, CTX-20260926-01, CBS-004] Bổ sung rate-limit middleware quan sát runtime cho 2/3 capability (Static Vector — upload asset vào thư viện; Vector Upload — buyer-facing personalization upload), evidence namespace KB-126/127/128. Vector Category KHÔNG bị chạm trong run này.",
+        "actors": [
+          {
+            "role": "store owner / staff (sub=273, user_id=266, plan Blue (Test))",
+            "permission_observed": "Truy cập đầy đủ field/accordion riêng của các layer type nhóm VECTOR",
+            "kb_refs": ["KB-011", "KB-022"]
+          },
+          {
+            "role": "[MỚI, CTX-20260926-01, CBS-004] merchant/owner 'Linh explorer' (id=266, identity verify qua GET /api/user — cơ chế Sanctum cookie+XSRF, KHÁC JWT sub=273 cũ ghi trong memory teeinblue-account-scope.md; ghi nhận discrepancy, KHÔNG tự sửa file memory người dùng) mô phỏng buyer flow qua Live Preview (staff-authenticated proxy, KHÔNG phải guest thật) để quan sát rate-limit header",
+            "permission_observed": "Upload file .svg vào field personalization 'OPT vector-upload' (Vector Upload layer, qua Live Preview) và vào thư viện 'Static Vector' (qua '+Layer' picker) — cả 2 đều trả rate-limit header hợp lệ. Trigger lỗi 500 (file content garbage) để quan sát client tự gọi upload-error-logs.",
+            "kb_refs": ["KB-126", "KB-127", "KB-128"]
+          }
+        ],
+        "entry_points": [
+          {
+            "path": "artwork editor — thêm/chọn 1 layer type thuộc nhóm VECTOR, mở config panel",
+            "precondition": "artwork editor có ≥1 layer thuộc nhóm VECTOR",
+            "kb_refs": ["KB-011", "KB-022", "KB-023"]
+          },
+          {
+            "path": "[MỚI, CTX-20260926-01] artwork editor — '+ Layer' > Vector > 'Static Vector' > tab 'Upload a vector' (upload asset thật vào thư viện Static Vector, KHÁC route /api/cliparts/svg dùng cho Clipart)",
+            "precondition": "đang thêm mới hoặc mở lại config layer Static Vector",
+            "kb_refs": ["KB-128"]
+          },
+          {
+            "path": "[MỚI, CTX-20260926-01] Live Preview widget (staff-authenticated proxy cho buyer) — field personalization 'OPT vector-upload' trên artwork đã có layer Vector Upload; song song với direct API burst test (không qua UI) để đo ngưỡng limit thật",
+            "precondition": "artwork #4087 (fixture QA) có layer Vector Upload đã cấu hình field OPT vector-upload",
+            "kb_refs": ["KB-126", "KB-127"]
+          }
+        ],
+        "capabilities": [
+          {
+            "name": "Static Vector (static-vector) — ngoại lệ Custom class (xem boundary KB-011) + [MỚI, CTX-20260926-01, CBS-004] rate-limit upload asset thư viện",
+            "description": "Static Vector là 1/2 layer type KHÔNG có field 'Custom class:' theo KB-011 (v2, FEAT-04-layer-common-config). Ngoài ngoại lệ này, CHƯA có per-type DOM dump riêng khác. [MỚI, CTX-20260926-01, CBS-004] Khi merchant upload 1 file .svg vào thư viện 'Static Vector' qua Layer picker > Vector > 'Static Vector' > tab 'Upload a vector' (route POST /api/layer-images/svg — KHÁC route /api/cliparts/svg dùng cho Clipart, KHÔNG gộp 2 route), ở môi trường staging, quan sát x-ratelimit-limit=1000 và x-ratelimit-reset=86400 (giây, 24h) — khớp ở CẢ 2 nguồn độc lập (API trực tiếp 422 + UI-driven 201). Hành vi giảm của x-ratelimit-remaining giữa 2 nguồn KHÔNG nhất quán — xem conflict CONF-CBS004-001 (UNRESOLVED, KHÔNG tự chọn phía). Window 24h thật CHƯA verify runtime, chỉ verify giá trị LIMIT qua header.",
+            "kb_refs": ["KB-011", "KB-128"],
+            "act_ids": ["ACT-02-01-001"]
+          },
+          {
+            "name": "Vector Category (vector-category) — field category riêng, key JSON dùng chung `clipart`",
+            "description": "vector-category có PERSONALIZATION SETTINGS riêng: 'Select one vector category*' (picker + Search/Search top-level/+ New category), 'Vector category's default value:', 'Show option to select default value'. Theo bundle-registry, field JSON dùng chung key `clipart` (không có key `vector_category` riêng) — cùng key với clipart-category/font/color (registry §2), điểm cần lưu ý khi viết assertion API/DB.",
+            "kb_refs": ["KB-022"],
+            "act_ids": []
+          },
+          {
+            "name": "Vector Upload (vector-upload) — chỉ có 1 option Upload editor + [MỚI, CTX-20260926-01, CBS-004] rate-limit buyer-facing personalization upload",
+            "description": "vector-upload có PERSONALIZATION SETTINGS field 'Upload editor:' nhưng CHỈ có đúng 1 option 'Direct upload, no editor' (không có Photo Cropper/Photo Reposition như photo ở KB-017, dù cùng field label 'Upload editor'). Theo bundle-registry, `photo_editor` của vector-upload observed chỉ dùng chung key với photo nhưng registry `tz['vector-upload']` KHÔNG liệt kê enum image_cropper/image_placement — khớp UI chỉ có 1 lựa chọn. [MỚI, CTX-20260926-01, CBS-004] Khi buyer (mô phỏng qua merchant Live Preview) chọn file .svg hợp lệ để điền field cá nhân hoá 'OPT vector-upload' trên artwork (đây CHÍNH LÀ field personalization của layer type vector-upload đang mô tả ở đây, KHÔNG PHẢI thao tác merchant thêm layer vào canvas), ở môi trường staging, quan sát response 201 kèm x-ratelimit-limit=4; burst test trực tiếp cho thấy remaining giảm dần 3→2→1→0 rồi request thứ 5 trả 429 'Too Many Attempts' kèm Retry-After giảm dần theo thời gian thực. Khi route vector-upload trả lỗi 500 (file .svg content garbage), client TỰ ĐỘNG gọi POST /api/merchant/{platform}/upload-error-logs (không phải hành động người dùng bấm trực tiếp), quan sát response 204 kèm x-ratelimit-limit=6 (khác giá trị 4 của route vector-upload) — remaining giảm dần rồi request thứ 7 trả 429. Cả 2 giá trị limit (4 và 6) khớp ở CẢ 2 nguồn độc lập (API trực tiếp + UI/network capture qua Live Preview).",
+            "kb_refs": ["KB-023", "KB-126", "KB-127"],
+            "act_ids": ["ACT-01-01-001", "ACT-01-03-001"]
+          }
+        ],
+        "state_transitions": [
+          {
+            "from": "[MỚI, CTX-20260926-01] field personalization 'OPT vector-upload' (Vector Upload layer, Live Preview) rỗng",
+            "to": "field có giá trị (thumbnail file .svg vừa upload)",
+            "trigger": "buyer/mô phỏng-buyer chọn file .svg hợp lệ",
+            "condition": "POST /api/merchant/{platform}/vector-upload trả 201, dưới ngưỡng rate-limit 4/phút (nếu vượt ngưỡng → 429 'Too Many Attempts')",
+            "kb_refs": ["KB-126"]
+          },
+          {
+            "from": "[MỚI, CTX-20260926-01] route vector-upload vừa trả lỗi 500 (file content garbage)",
+            "to": "client tự động gửi log lỗi, không cần hành động người dùng",
+            "trigger": "lỗi 500 phía server trên route vector-upload",
+            "condition": "POST /api/merchant/{platform}/upload-error-logs trả 204, dưới ngưỡng rate-limit 6/phút",
+            "kb_refs": ["KB-127"]
+          },
+          {
+            "from": "[MỚI, CTX-20260926-01] thư viện Static Vector chưa có asset mới",
+            "to": "thư viện có 1 asset .svg mới (chưa gắn layer/template nào)",
+            "trigger": "merchant upload file .svg qua tab 'Upload a vector'",
+            "condition": "POST /api/layer-images/svg trả 201, dưới ngưỡng rate-limit 1000/24h",
+            "kb_refs": ["KB-128"]
+          }
+        ],
+        "confirmed_rules": [],
+        "observed_behavior": [
+          {
+            "statement": "[MỚI, CTX-20260926-01, CBS-004, OBSERVED_CURRENT, observed_count=2/route, confidence HIGH cho giá trị LIMIT] Route buyer-facing vector-upload giới hạn 4/phút; route upload-error-logs (tự động, không do người dùng bấm) giới hạn 6/phút; route merchant Static Vector upload (/api/layer-images/svg) giới hạn 1000/24h. Cả 3 giá trị LIMIT khớp giữa 2 nguồn độc lập (API trực tiếp + UI/network capture). KHÔNG suy rộng thành CONFIRMED_EXPECTED — chưa có nguồn thẩm quyền (PO/dev) xác nhận đây là ngưỡng mong đợi, chỉ là hành vi hiện tại quan sát trên staging.",
+            "kb_refs": ["KB-126", "KB-127", "KB-128"]
+          }
+        ],
+        "observed_validations": [
+          {
+            "input": "Burst request liên tiếp vượt ngưỡng route vector-upload (>4 request/phút)",
+            "message_verbatim": "Too Many Attempts.",
+            "observed_count": 1,
+            "rule_confidence": "LOW",
+            "kb_refs": ["KB-126"]
+          },
+          {
+            "input": "Burst request liên tiếp vượt ngưỡng route upload-error-logs (>6 request/phút)",
+            "message_verbatim": "Too Many Attempts.",
+            "observed_count": 1,
+            "rule_confidence": "LOW",
+            "kb_refs": ["KB-127"]
+          }
+        ],
+        "permissions": [
+          {
+            "role": "store owner/staff",
+            "capability": "full access field riêng của các layer type nhóm VECTOR",
+            "kb_refs": ["KB-011", "KB-022", "KB-023"]
+          },
+          {
+            "role": "[MỚI, CTX-20260926-01] merchant/owner 'Linh explorer' mô phỏng buyer (Live Preview proxy)",
+            "capability": "upload file .svg vào field personalization Vector Upload và vào thư viện Static Vector, đều chịu rate-limit middleware riêng theo route — KHÔNG có sample cross-role/cross-tenant cho phần rate-limit này",
+            "kb_refs": ["KB-126", "KB-127", "KB-128"]
+          }
+        ],
+        "surface_mapping": {
+          "portal": [
+            "artwork editor — config panel của các layer type nhóm VECTOR",
+            "[MỚI, CTX-20260926-01] '+ Layer' > Vector > 'Static Vector' > tab 'Upload a vector'",
+            "[MỚI, CTX-20260926-01] Live Preview widget — field personalization 'OPT vector-upload' (staff-authenticated proxy, KHÔNG phải guest thật)"
+          ],
+          "storefront": [],
+          "api": [
+            "[MỚI, CTX-20260926-01] POST /api/merchant/{platform}/vector-upload (KB-126, rate-limit 4/phút)",
+            "[MỚI, CTX-20260926-01] POST /api/merchant/{platform}/upload-error-logs (KB-127, rate-limit 6/phút, client tự gọi khi vector-upload lỗi 500)",
+            "[MỚI, CTX-20260926-01] POST /api/layer-images/svg (KB-128, rate-limit 1000/24h, resource layer_image — KHÁC /api/cliparts/svg)"
+          ],
+          "code": [
+            "bundle-registry: key `clipart` dùng chung cho vector-category/clipart-category/font/color; tz['vector-upload'] không liệt kê enum image_cropper/image_placement — INFERRED."
+          ],
+          "data": []
+        },
+        "dependencies": [
+          {
+            "type": "feature",
+            "description": "Baseline icon/accordion/Group name của cả 3 type do FEAT-04-layer-common-config xác định; Custom class có 1 ngoại lệ (Static Vector, KB-011).",
+            "kb_refs": ["KB-002", "KB-004", "KB-005", "KB-008", "KB-010", "KB-011", "KB-012"]
+          },
+          {
+            "type": "feature",
+            "description": "Vector library rỗng chặn thêm layer nhóm VECTOR (bao gồm cả 3 type này) — thuộc FEAT-03-editor-layer-workspace (KB-048), không lặp lại ở đây.",
+            "kb_refs": ["KB-023"]
+          },
+          {
+            "type": "cross_object",
+            "description": "[MỚI, CTX-20260926-01, CBS-004] Middleware rate-limit (3 layer: route throttle, GenAI backstop, user_rate_limiter theo resource) là cơ chế CROSS-CUTTING dùng chung với object asset-category (POST /api/cliparts/svg, /api/clipart-categories) và object sdk (layer 2 buyer-facing GenAI backstop, KHÔNG có kb_candidate trong run này). Feature này chỉ mô tả PHẦN áp dụng lên 2 layer type Vector Upload/Static Vector — không lặp lại narrative đầy đủ của toàn bộ CCR CBS-004.",
+            "kb_refs": ["KB-126", "KB-127", "KB-128"]
+          }
+        ],
+        "risks": [
+          {
+            "risk": "CONF-006 liên quan gián tiếp: Static Vector là type ngoại lệ Custom class thứ 2 — xem CONF-006 ở FEAT-04-layer-common-config.",
+            "kb_refs": ["KB-011"]
+          },
+          {
+            "risk": "vector-category dùng chung key JSON `clipart` với clipart-category/font/color (theo bundle-registry) — dễ nhầm khi viết assertion DB/API theo field name UI.",
+            "kb_refs": ["KB-022"]
+          },
+          {
+            "risk": "Toàn bộ per-type item baseline trong feature này có observed_count=1 (1 DOM dump duy nhất từ CTX-20260910-01) — confidence LOW, KHÔNG suy required/optional/enum chính thức.",
+            "kb_refs": ["KB-011", "KB-022", "KB-023"]
+          },
+          {
+            "risk": "[MỚI, CTX-20260926-01, CCR CBS-004] CONF-CBS004-001 UNRESOLVED — x-ratelimit-remaining của POST /api/layer-images/svg (Static Vector) không nhất quán giữa 2 nguồn (422 giữ nguyên vs 201 giảm 1), mỗi phía chỉ 1 sample ở 1 status code khác nhau. KHÔNG dùng làm oracle cho behavior 'remaining' tới khi giải quyết — chỉ giá trị LIMIT (1000/24h) được coi là đủ evidence.",
+            "kb_refs": ["KB-128"],
+            "conflict_id": "CONF-CBS004-001"
+          },
+          {
+            "risk": "[MỚI, CTX-20260926-01] Cả 3 giá trị rate-limit (KB-126/127/128) chỉ là OBSERVED_CURRENT trên staging — KHÔNG có PO/dev xác nhận đây là ngưỡng mong đợi (business rule), KHÔNG nâng CONFIRMED_EXPECTED. Cột 'Prod' trong CCR CBS-004 hoàn toàn KHÔNG verify trong run này (chỉ đạo operator, chỉ quan sát staging) — KHÔNG so sánh staging vs prod trong profile này.",
+            "kb_refs": ["KB-126", "KB-127", "KB-128"]
+          },
+          {
+            "risk": "[MỚI, CTX-20260926-01] Window 24h thật của rate-limit layer_image (KB-128) CHƯA verify runtime (chỉ verify giá trị LIMIT qua header) — chủ đích tránh tải không cần thiết lên staging dùng chung.",
+            "kb_refs": ["KB-128"]
+          }
+        ],
+        "freshness": {
+          "observed_at": "2026-09-26",
+          "run_id": "CTX-20260926-01",
+          "note": "2 dải freshness trong feature này: (1) Static Vector (ngoại lệ Custom class)/Vector Category/baseline field 'Upload editor' của Vector Upload — last observed 2026-09-10 (CTX-20260910-01), KHÔNG re-verify trong run này. (2) Rate-limit middleware của Static Vector (POST /api/layer-images/svg) và Vector Upload (POST vector-upload + upload-error-logs) — MỚI tại 2026-09-26 (CTX-20260926-01, CCR CBS-004), evidence 2 nguồn độc lập (API trực tiếp + UI/network capture qua portal-explorer dispatch #2)."
+        },
+        "unknown_areas": [
+          {
+            "question": "Static Vector — chưa có per-type DOM dump riêng xác nhận field DESIGN SETTINGS cụ thể ngoài việc thiếu Custom class.",
+            "why_it_matters": "Nếu cần sửa field riêng của Static Vector sau này, hiện chưa có KB item chi tiết để trace."
+          },
+          {
+            "question": "Hành vi runtime storefront (SDK) của các field/layer type trong nhóm này — 0 evidence, ngoài phạm vi 3 run bootstrap (thuộc storefront-explorer).",
+            "why_it_matters": "coverage_gaps #1 của KB gốc; không thể viết test case storefront cho các field này tới khi có evidence riêng."
+          },
+          {
+            "question": "Hành vi với role khác owner / cross-tenant cho các field/layer type trong nhóm này — chưa test, chỉ 1 role/1 tenant trong cả 3 run.",
+            "why_it_matters": "coverage_gaps #3 của KB gốc."
+          },
+          {
+            "question": "[MỚI, CTX-20260926-01] x-ratelimit-remaining của POST /api/layer-images/svg tăng/giảm theo quy tắc gì (status code, pass validation, hay khác) — xem CONF-CBS004-001.",
+            "why_it_matters": "Không thể viết assertion 'remaining' đáng tin cậy cho test case rate-limit tới khi resolve — hiện chỉ có 1 sample mỗi phía, mỗi phía 1 status code khác nhau."
+          },
+          {
+            "question": "[MỚI, CTX-20260926-01] Window 24h thật của rate-limit layer_image (Static Vector) — chỉ verify giá trị LIMIT qua header, chưa verify runtime reset sau 24h.",
+            "why_it_matters": "Không thể viết test case boundary đầy đủ cho reset window tới khi có evidence runtime."
+          },
+          {
+            "question": "[MỚI, CTX-20260926-01] Cột 'Prod' trong CCR CBS-004 (vd vector-upload Prod=20/phút theo CCR) — hoàn toàn KHÔNG verify trong run này theo chỉ thị operator (chỉ verify staging).",
+            "why_it_matters": "KHÔNG thể so sánh hành vi staging vs production; KHÔNG dùng giá trị Prod của CCR làm oracle cho tới khi có run riêng verify production (nếu chính sách cho phép)."
+          }
+        ]
+      }
+    ],
+    "profile_relationships": [
+      {
+        "from_feature_id": "FEAT-14-layer-config-vector",
+        "to_feature_id": "FEAT-04-layer-common-config",
+        "relation": "depends_on (baseline mechanism)",
+        "note": "Icon buttons/tồn tại accordion/Custom class/Group name baseline do FEAT-04 xác định; feature này chỉ mô tả nội dung field riêng."
+      },
+      {
+        "from_feature_id": "FEAT-14-layer-config-vector",
+        "to_feature_id": "asset-category-crud / asset-category-item-management (object asset-category)",
+        "relation": "related_feature (cross-object, cùng CCR CBS-004 — dùng chung cơ chế rate-limit middleware nhưng route/resource khác nhau)",
+        "note": "[MỚI, CTX-20260926-01] POST /api/layer-images/svg (Static Vector, feature này) KHÁC route với POST /api/cliparts/svg (Clipart item, object asset-category) — 2 route riêng biệt cho 2 resource (layer_image vs clipart), KHÔNG gộp. Xem asset-category/features/asset-category-item-management/profile.json (candidate CTX-20260926-01) cho phần clipart."
+      }
+    ],
+    "coverage_matrix": [
+      { "feature_id": "FEAT-14-layer-config-vector", "layer": "portal", "role": "owner", "state": "layer type nhóm VECTOR (baseline)", "environment": "staging", "covered": true },
+      { "feature_id": "FEAT-14-layer-config-vector", "layer": "code", "role": "owner", "state": "bundle-registry cross-check (một phần)", "environment": "staging", "covered": true },
+      { "feature_id": "FEAT-14-layer-config-vector", "layer": "api", "role": "owner", "state": "field-level request/response mapping (baseline, toàn feature)", "environment": "staging", "covered": false },
+      { "feature_id": "FEAT-14-layer-config-vector", "layer": "storefront", "role": "owner", "state": "layer type nhóm VECTOR (baseline)", "environment": "staging", "covered": false },
+      { "feature_id": "FEAT-14-layer-config-vector", "layer": "api", "role": "merchant/owner mô phỏng buyer", "state": "[MỚI, CTX-20260926-01] rate-limit middleware — Vector Upload (vector-upload + upload-error-logs)", "environment": "staging", "covered": true, "kb_refs": ["KB-126", "KB-127"], "note": "2 nguồn độc lập, giá trị LIMIT confidence HIGH; window 24h/remaining behavior chưa đầy đủ cho route này (chỉ verify limit/phút, không phải 24h)." },
+      { "feature_id": "FEAT-14-layer-config-vector", "layer": "api", "role": "merchant/owner", "state": "[MỚI, CTX-20260926-01] rate-limit middleware — Static Vector (POST /api/layer-images/svg)", "environment": "staging", "covered": true, "kb_refs": ["KB-128"], "note": "Giá trị LIMIT/reset covered; behavior remaining KHÔNG covered — CONF-CBS004-001 UNRESOLVED." }
+    ],
+    "unassigned_kb_items": [],
+    "profile_conflicts": [
+      {
+        "conflict_id": "CONF-CBS004-001",
+        "owner": "FEAT-14-layer-config-vector (primary — capability Static Vector)",
+        "summary": "x-ratelimit-remaining behavior của POST /api/layer-images/svg không nhất quán giữa 2 nguồn evidence (422 giữ nguyên vs 201 giảm 1). UNRESOLVED, CCR CBS-004.",
+        "full_detail_ref": "conflicts[0] (envelope-level, cùng file này)"
+      }
+    ],
+    "profile_change_summary": [
+      {
+        "change": "new_feature_split_from_layer_common_config",
+        "detail": "Feature MỚI tại CTX-20260912-01, tách từ FEAT-04-layer-common-config (v1) theo yêu cầu user để tăng granularity cập nhật per-layer-type. Nhóm sidebar: VECTOR.",
+        "source_run": "CTX-20260912-01"
+      },
+      {
+        "change": "capability_updated_from_ccr (rate-limit middleware, cross-object CCR CBS-004)",
+        "detail": "[CTX-20260926-01, CCR CBS-004] Bổ sung evidence rate-limit middleware cho 2/3 capability: 'Static Vector' (POST /api/layer-images/svg, limit=1000/24h, conflict CONF-CBS004-001 UNRESOLVED về remaining behavior) và 'Vector Upload' (POST vector-upload limit=4/phút + POST upload-error-logs limit=6/phút, tự động khi vector-upload lỗi 500). Deep-copy nguyên vẹn capability 'Vector Category' (KHÔNG bị chạm). Đây LÀ đúng sub-type 'Vector Upload' đã tồn tại sẵn trong canon FEAT-14 (field 'Upload editor' chỉ 1 lựa chọn) — KHÔNG tạo feature/capability mới, KHÔNG lẫn với FEAT-13 (nhóm IMAGE, object khác). Tự verify độc lập lead của orchestrator trước khi dùng (đọc feature-summary.md + canon profile.json), xác nhận lead ĐÚNG.",
+        "source_run": "CTX-20260926-01"
+      }
+    ],
+    "kb_trace_complete": true
+  },
+  "gate": {
+    "decision": "CONDITIONAL_PASS",
+    "blocking_findings": [],
+    "conditions": [
+      "Mọi capability per-layer-type BASELINE trong nhóm này (deep-copy, KHÔNG re-verify trong run này) vẫn observed_count=1 -> confidence LOW, KHÔNG suy required/optional/enum chính thức.",
+      "[MỚI] 3 giá trị rate-limit (KB-126/127/128) là OBSERVED_CURRENT, KHÔNG CONFIRMED_EXPECTED — KHÔNG có PO/dev xác nhận ngưỡng này là business rule mong đợi. Downstream KHÔNG được viết assertion cứng dạng 'hệ thống PHẢI limit đúng N/phút' như spec đã chốt, chỉ như regression baseline hiện tại.",
+      "[MỚI] CONF-CBS004-001 (x-ratelimit-remaining behavior) PHẢI giữ UNRESOLVED ở downstream (qa-checklist-builder/context-quality-reviewer) — KHÔNG tự chọn phía đúng, KHÔNG dùng remaining-behavior làm oracle chính thức, CHỈ giá trị LIMIT/reset được coi là đủ evidence.",
+      "[MỚI] Cột 'Prod' của CCR CBS-004 KHÔNG được gắn bất kỳ giá trị nào vào profile này — chỉ thị operator giới hạn scope run ở staging.",
+      "Field JSON key gắn qua bundle-registry (code) là INFERRED, chưa cross-check trực tiếp bằng API/DB cho từng field -> không coi là contract chính thức."
+    ],
+    "allowed_next_steps": [
+      "qa-checklist-builder",
+      "knowledge-diff-analyzer"
+    ]
+  }
+}

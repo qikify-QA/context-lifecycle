@@ -1,0 +1,44 @@
+{
+  "schema_version": "1.0",
+  "ctx_run_id": "CTX-20260926-01",
+  "product": "teeinblue",
+  "mode": "INCREMENTAL_UPDATE",
+  "source": {
+    "type": "ContextChangeRequest",
+    "proposal_id": "CBS-004",
+    "source_task_id": "TIB-004",
+    "submitted_by": "u-jm",
+    "submitted_at": "2026-09-26T08:25:53.178Z",
+    "filename": "CCR-2026-09-26-api-upload-rate-limit.md"
+  },
+  "label": "API Upload Rate Limit cross-object (artwork/asset-category/sdk)",
+  "object_target": {
+    "primary_object_key": "artwork",
+    "secondary_object_keys": ["asset-category", "sdk"],
+    "cross_cutting_topic": "upload rate-limit middleware (3 layers: route throttle, upload_rate_limiter GenAI backstop, user_rate_limiter:<resource> 24h) trên các endpoint upload file của teeinblue-api",
+    "note": "Không có object_key 'rate-limit' trong _registry.json (đúng theo CCR Phần 1) — không tạo mới. font cũng được CCR nêu tên nhưng KHÔNG đưa vào object_target của run này: font hiện chỉ có 1 endpoint liên quan (cliparts/font qua asset-category, đã cover) — không có route font riêng nào khác trong 3 bảng CCR, nên không mở thêm object. Việc gắn feature/note cụ thể trong mỗi object do orchestrator quyết ở bước feature-profile-builder, theo đúng CCR Phần 4.2 (không tự quyết trước khi có evidence)."
+  },
+  "environment": {
+    "value": "staging",
+    "source": "OPERATOR DIRECTIVE (session này) + contract §14 default — KHÔNG phải suy diễn từ CCR. CCR Phần 2 tự khai 'Cả production và staging' vì số liệu code có 2 cột Prod/Staging, nhưng người vận hành ra chỉ thị rõ: CHỈ verify/quan sát staging, KHÔNG tự ý gửi request tới production dù có tò mò khác biệt. Hệ quả: cột 'Prod' trong 3 bảng CCR giữ nguyên trạng thái chỉ đọc-từ-code (chưa verify, tối đa INFERRED), KHÔNG được context builder tự nâng cấp bằng runtime probing trong run này.",
+    "api_base_env_var": "TIB_API_BASE",
+    "stop_condition": "Nếu TIB_API_BASE resolve khác staging-api.teeinblue.com → BLOCKED ngay, không gọi request nào."
+  },
+  "role": {
+    "value": ["merchant/owner (Linh explorer)", "buyer/guest (SDK JWT, nếu có fixture campaign còn dùng được)"],
+    "source": "Orchestrator tự chọn theo §12.3 — role không có trong CCR. merchant/owner cần cho các route throttle theo route + user_rate_limiter (layer-images, cliparts, clipart-categories, clipart-category-bulk-uploads — đều dưới merchant/*). buyer/guest cần cho route buyer-facing dưới upload_rate_limiter (photo-upload, customer-uploads/*, image-filter-effects) — CHỈ dispatch nếu có fixture an toàn, không tạo campaign/publish mới chỉ để test rate limit."
+  },
+  "account_scope": {
+    "constraint": "CHỈ thao tác trên account 'Linh explorer' (Linh Pham memory rule). Sau mỗi lần login: verify identity qua GET /api/user (hoặc tương đương) trước khi tiếp tục. Không khớp → DỪNG, ghi blocking_issues, KHÔNG tự thử account khác.",
+    "expected_identity_hint": "id=266 'Linh explorer' theo tiền lệ CTX-20260925-01 (cookie+XSRF session, không còn JWT sub=273 theo ghi chú vận hành 2026-09-14)."
+  },
+  "mutation_policy": "SAFE_REVERSIBLE_ONLY",
+  "forbidden_actions": ["delete", "publish_live", "charge", "send_notification"],
+  "cleanup_required": true,
+  "exploration_policy": {
+    "note": "Rate-limit verification nghĩa là gửi NHIỀU request liên tiếp tới cùng 1 endpoint để cố tình chạm limit và quan sát response 429/shape. Đây là action lặp lại nhưng KHÔNG persistent-mutating theo nghĩa nguy hại (upload file test nhỏ, không phải charge/delete/publish) — vẫn phải tuân SAFE_REVERSIBLE_ONLY: dùng file test tối thiểu, dùng draft/preview thay vì publish, và cleanup (xoá file test tạo ra qua API nếu endpoint hỗ trợ, hoặc để tự expire nếu là temp file) — ghi cleanup_result cho mọi mutation.",
+    "db_observation": { "enabled": false, "reason": "Không có yêu cầu DB evidence trong CCR; rate-limit state có thể nằm ở cache (config/cache.php:26 theo CCR) nhưng không có DB read-only access xác nhận trong run trước (CTX-20260925-01) — không mở lại trong run này, ghi coverage_gap nếu cần."
+    }
+  },
+  "gate_c0_note": "PASS — product=teeinblue (Phần 1 CCR); object_target=artwork+asset-category+sdk với danh sách endpoint cụ thể theo route (Phần 1 CCR, best-effort hợp lệ theo §12.3 vì đây là PROFILE_GAP nguồn code, không phải URL portal); environment=staging (operator directive, không phải field CCR); role=orchestrator tự chọn; mutation_policy=SAFE_REVERSIBLE_ONLY mặc định. Đủ 3/3 mục CCR cung cấp được (product/environment-hint/object target) → dựng run ngay, không hỏi lại."
+}

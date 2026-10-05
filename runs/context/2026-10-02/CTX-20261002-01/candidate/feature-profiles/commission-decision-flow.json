@@ -1,0 +1,386 @@
+{
+  "schema_version": "1.0",
+  "artifact_type": "FeatureProfileCandidate",
+  "artifact_id": "FP-CAND-CTX-20261002-01-commission-decision-flow",
+  "workflow_id": "CTX-20261002-01",
+  "producer": "feature-profile-builder",
+  "source_refs": [
+    "candidate/product-kb/commission-decision-flow.json",
+    "candidate/product-kb/_object-level.commission-calculation.json"
+  ],
+  "upstream_artifact_ids": [
+    "KBCAND-CTX-20261002-01-commission-decision-flow",
+    "KBCAND-CTX-20261002-01-OBJECT-LEVEL"
+  ],
+  "status": "READY",
+  "confidence": "MEDIUM",
+  "observations": [
+    "feature_id dùng nguyên feature_key \"commission-decision-flow\" — chưa có FEAT-ID chính thức do orchestrator mint cho object commission-calculation (§4 contract); khớp với feature_id đã dùng trong candidate/product-kb/commission-decision-flow.json.",
+    "_object-level.commission-calculation.json có kb_candidates=[] một cách có chủ đích (không có thuộc tính/rule dùng chung toàn object nằm ngoài 5 feature đã phân rã) — đã đọc để xác nhận, không có nội dung nào cần hợp nhất vào profile này.",
+    "2/12 KB item của shard này (KB-010, KB-011) là phía `qikfiliate/commission - overview` của 2 conflict cross-doc đã biết (OQ-commission-calculation-006, OQ-commission-calculation-005) — KHÔNG được dựng thành capability/state_transition như sự thật đã chốt; giữ nguyên trong profile_conflicts, không chọn phía.",
+    "9/12 KB item CONFIRMED_EXPECTED của shard này chỉ có 1 nguồn độc lập (`qikfiliate/commission - overview`) trong phạm vi giao cho agent qa-knowledge-normalizer — confidence MEDIUM, chưa đạt HIGH."
+  ],
+  "assumptions": [],
+  "unknowns": [],
+  "conflicts": [],
+  "blocking_issues": [],
+  "payload": {
+    "feature_profiles": [
+      {
+        "feature_id": "commission-decision-flow",
+        "feature_key": "commission-decision-flow",
+        "name": "Chọn công thức cho 1 dòng payout",
+        "user_goal": "Với một dòng payout bất kỳ, QA/ops xác định được hệ thống sẽ tính theo nhánh nào (usage / recurring / first-month) và làm tròn ra sao.",
+        "stable_since_version": "commission-calculation kb_version v1 (DOC_BOOTSTRAP, doc_set generated 2026-08-20, run CTX-20261002-01)",
+        "actors": [
+          {
+            "role": "system/engine (không gắn qua UI)",
+            "permission_observed": "Áp quy tắc quyết định nhánh + rounding cho mọi dòng payout trong pipeline tính hoa hồng.",
+            "kb_refs": [
+              "KB-001"
+            ]
+          },
+          {
+            "role": "admin/ops",
+            "permission_observed": "Chạy import payout file; thấy dòng LỖI khi thiếu cấu hình ProgramCommission cho (Program, Level) đang xét.",
+            "kb_refs": [
+              "KB-005",
+              "KB-012"
+            ]
+          }
+        ],
+        "entry_points": [
+          {
+            "path": "Pipeline tính hoa hồng — bước xét charge_type cho từng dòng trong file payout đã import",
+            "precondition": "Payout file đã được đưa vào pipeline (object payout-import, ngoài phạm vi feature này); Level của affiliate đã được tính trước bước này.",
+            "kb_refs": [
+              "KB-001",
+              "KB-004"
+            ]
+          }
+        ],
+        "capabilities": [
+          {
+            "name": "Xét charge_type để chọn nhánh",
+            "description": "charge_type của 1 dòng payout được xét bằng so khớp chuỗi con (substring), không phân biệt hoa/thường (KB-001); quy tắc này áp dụng y hệt cho dòng refund của usage charge vì Shopify không cung cấp cách liên kết dòng refund với charge gốc (KB-002). Các charge_type còn lại sau khi loại \"one-time\" và \"usage\" đi nhánh recurring/first-month (KB-003) — LƯU Ý: phạm vi chính xác của biên loại trừ \"one-time\" đang MÂU THUẪN giữa nguồn, xem profile_conflicts (OQ-commission-calculation-006), KHÔNG coi đây là đã chốt.",
+            "kb_refs": [
+              "KB-001",
+              "KB-002",
+              "KB-003"
+            ],
+            "act_ids": []
+          },
+          {
+            "name": "Tra rate hoa hồng từ ProgramCommission",
+            "description": "Rate được tra từ ProgramCommission theo tổ hợp (Program, Level); Level của affiliate được tính TRƯỚC bước tra ProgramCommission và trước bước xét charge_type.",
+            "kb_refs": [
+              "KB-004"
+            ],
+            "act_ids": []
+          },
+          {
+            "name": "Fail-fast khi thiếu rate card",
+            "description": "Nếu không có cấu hình ProgramCommission cho tổ hợp (Program, Level) đang xét thì dòng payout đó là LỖI và không xử lý được; tài liệu không nêu cơ chế fallback nào.",
+            "kb_refs": [
+              "KB-005"
+            ],
+            "act_ids": []
+          },
+          {
+            "name": "Hai loại cap khác phạm vi: per-row vs lifetime",
+            "description": "Cap lifetime của usage-charge (usage_maximum_amount) có phạm vi cộng dồn cả đời của 1 affiliate trên 1 Program, khác hẳn phạm vi per-row của cap recurring (KB-006) — phạm vi chính xác của cap per-row đối với nhánh first-month đang MÂU THUẪN giữa nguồn, xem profile_conflicts (OQ-commission-calculation-005). Cap per-row không cần reset vì mỗi dòng conversion tính độc lập (KB-007). Cap lifetime (usage) không bao giờ tự reset, chỉ giảm khi có dòng refund âm (KB-008).",
+            "kb_refs": [
+              "KB-006",
+              "KB-007",
+              "KB-008"
+            ],
+            "act_ids": []
+          },
+          {
+            "name": "Rounding chung cho mọi conversion",
+            "description": "Mọi amount cuối cùng được round(giá_trị, 6) trước khi lưu vào DB — không phải làm tròn 2 chữ số tiền tệ; hiển thị 2 chữ số thập phân là việc của tầng giao diện, không phải tầng tính toán.",
+            "kb_refs": [
+              "KB-009"
+            ],
+            "act_ids": []
+          }
+        ],
+        "state_transitions": [
+          {
+            "from": "dòng payout (charge_type chưa xét)",
+            "to": "nhánh usage",
+            "trigger": "charge_type chứa \"usage\" (so khớp substring, không phân biệt hoa/thường)",
+            "condition": "",
+            "kb_refs": [
+              "KB-001"
+            ]
+          },
+          {
+            "from": "dòng payout (charge_type chưa xét)",
+            "to": "nhánh recurring/first-month",
+            "trigger": "charge_type không chứa \"usage\" (các giá trị còn lại: subscription bình thường, refund, downgrade)",
+            "condition": "ngoại trừ dòng chứa \"one-time\" theo `qikfiliate/commission - overview` — phạm vi này UNRESOLVED, xem OQ-commission-calculation-006",
+            "kb_refs": [
+              "KB-003"
+            ]
+          },
+          {
+            "from": "đã biết (Program, Level) của dòng payout",
+            "to": "LỖI, dòng này không xử lý được",
+            "trigger": "tra ProgramCommission theo (Program, Level)",
+            "condition": "không có cấu hình ProgramCommission cho tổ hợp (Program, Level) đó",
+            "kb_refs": [
+              "KB-005"
+            ]
+          }
+        ],
+        "confirmed_rules": [
+          {
+            "statement": "charge_type được xét bằng so khớp chuỗi con (substring), không phân biệt hoa/thường; quy tắc áp dụng y hệt cho dòng refund của usage charge.",
+            "kb_refs": [
+              "KB-001",
+              "KB-002"
+            ]
+          },
+          {
+            "statement": "Rate hoa hồng được tra từ ProgramCommission theo (Program, Level); Level của affiliate được tính trước bước tra và trước bước xét charge_type.",
+            "kb_refs": [
+              "KB-004"
+            ]
+          },
+          {
+            "statement": "Thiếu cấu hình ProgramCommission cho (Program, Level) đang xét -> dòng payout đó LỖI, không xử lý được, không có fallback.",
+            "kb_refs": [
+              "KB-005"
+            ]
+          },
+          {
+            "statement": "Cap lifetime (usage_maximum_amount) cộng dồn cả đời của 1 affiliate trên 1 Program (lifetime, per-affiliate-per-program); cap per-row (maximum_amount) không cần reset vì mỗi dòng tính độc lập; cap lifetime không bao giờ tự reset, chỉ giảm khi có dòng refund âm.",
+            "kb_refs": [
+              "KB-006",
+              "KB-007",
+              "KB-008"
+            ]
+          },
+          {
+            "statement": "Mọi amount cuối cùng được round(giá_trị, 6) trước khi lưu DB — không phải làm tròn 2 chữ số tiền tệ; hiển thị 2 chữ số là việc của tầng giao diện.",
+            "kb_refs": [
+              "KB-009"
+            ]
+          }
+        ],
+        "observed_behavior": [],
+        "observed_validations": [],
+        "permissions": [
+          {
+            "role": "admin/ops",
+            "capability": "Chạy import payout file; thấy dòng lỗi khi thiếu ProgramCommission cho (Program, Level) đang xét.",
+            "kb_refs": [
+              "KB-005",
+              "KB-012"
+            ]
+          }
+        ],
+        "surface_mapping": {
+          "portal": [
+            "Import payout — màn hình/luồng hiển thị lỗi khi thiếu ProgramCommission (KB-012, admin, known_defect framing)"
+          ],
+          "storefront": [],
+          "api": [],
+          "data": [
+            "Conversion.amount = round(giá_trị, 6) (KB-009)",
+            "Cap lifetime usage_maximum_amount theo (affiliate, Program) (KB-006)"
+          ],
+          "code": []
+        },
+        "dependencies": [
+          {
+            "dependency": "commission-rate-card / rate-card-configuration: ProgramCommission được cấu hình theo (Program, Level) ở object khác; thiếu cấu hình làm nhánh này LỖI.",
+            "kb_refs": [
+              "KB-004",
+              "KB-005"
+            ]
+          },
+          {
+            "dependency": "level-progression: Level của affiliate phải được tính xong trước khi tra ProgramCommission ở bước này.",
+            "kb_refs": [
+              "KB-004"
+            ]
+          },
+          {
+            "dependency": "recurring-commission / first-month-commission / usage-charge-commission: 3 feature con nhận input từ quyết định nhánh của feature này.",
+            "kb_refs": [
+              "KB-003"
+            ]
+          }
+        ],
+        "risks": [
+          {
+            "risk": "[KNOWN_DEFECT] Thiếu ProgramCommission cho (Program, Level) sau khi thêm Level mới -> import lỗi, dễ bị ops bỏ sót khi mở Level mới. Giữ OBSERVED_CURRENT, dùng làm regression watch, không phải oracle.",
+            "kb_refs": [
+              "KB-012"
+            ]
+          },
+          {
+            "risk": "Toàn bộ 9 KB CONFIRMED_EXPECTED của feature này chỉ có 1 nguồn độc lập (`qikfiliate/commission - overview`) trong phạm vi được giao -> confidence MEDIUM, chưa đạt HIGH do thiếu corroboration độc lập thứ 2.",
+            "kb_refs": [
+              "KB-001",
+              "KB-004",
+              "KB-009"
+            ]
+          },
+          {
+            "risk": "CLM-07-060 (`qikfiliate/commision - recurring & first month`) nêu statement gần giống KB-005 nhưng được gắn object_candidate=commission-rate-card / feature_candidate=rate-card-configuration — NGOÀI object được giao cho agent normalize. Nếu orchestrator xác nhận cùng object thì KB-005 có thể nâng HIGH; cần đối chiếu trước khi dùng làm oracle mạnh.",
+            "kb_refs": [
+              "KB-005"
+            ]
+          }
+        ],
+        "freshness": {
+          "observed_at": "2026-08-20",
+          "run_id": "CTX-20261002-01"
+        },
+        "unknown_areas": [
+          {
+            "question": "Danh sách giá trị charge_type thật mà Shopify gửi trong file Payout chưa được tài liệu cung cấp — chỉ có luật so khớp CHUỖI CON (\"one-time\", \"usage\", \"yearly\"). Một charge_type có thể chứa đồng thời nhiều từ khoá hay không?",
+            "why_it_matters": "Không có enum thật thì không dựng được test data phủ đủ nhánh của decision-flow, và đây chính là gốc của conflict OQ-commission-calculation-006 (thứ tự ưu tiên loại trừ \"one-time\" trước \"usage\" hay không)."
+          },
+          {
+            "question": "\"LỖI, dòng này không xử lý được\" (thiếu ProgramCommission) không được mô tả ở mức vận hành: dừng cả file import, chỉ bỏ qua riêng dòng đó, hay báo lỗi ra UI nào?",
+            "why_it_matters": "Ảnh hưởng trực tiếp expected result của test case import khi thiếu rate card — 3 hành vi vận hành khác nhau cho ra 3 expected result khác nhau."
+          }
+        ]
+      }
+    ],
+    "profile_relationships": [
+      {
+        "from_feature_id": "commission-decision-flow",
+        "to_feature_id": "recurring-commission",
+        "relation": "feeds_into",
+        "note": "Nhánh recurring/first-month (xem conflict OQ-commission-calculation-006 về biên \"one-time\") được quyết định ở feature này trước khi recurring-commission áp công thức."
+      },
+      {
+        "from_feature_id": "commission-decision-flow",
+        "to_feature_id": "first-month-commission",
+        "relation": "feeds_into",
+        "note": "Cùng nhánh recurring/first-month; cap per-row (maximum_amount) áp cho nhánh nào đang tranh chấp ở OQ-commission-calculation-005, ảnh hưởng trực tiếp first-month-commission."
+      },
+      {
+        "from_feature_id": "commission-decision-flow",
+        "to_feature_id": "usage-charge-commission",
+        "relation": "feeds_into",
+        "note": "charge_type chứa \"usage\" được quyết định ở feature này trước khi usage-charge-commission áp công thức cap lifetime riêng."
+      },
+      {
+        "from_feature_id": "commission-decision-flow",
+        "to_feature_id": "refund-and-downgrade-adjustment",
+        "relation": "feeds_into",
+        "note": "Cơ chế cap 2 loại (per-row vs lifetime) được định nghĩa ở feature này; refund-and-downgrade-adjustment áp cụ thể cho trường hợp amount âm."
+      }
+    ],
+    "coverage_matrix": [
+      {
+        "feature_id": "commission-decision-flow",
+        "layer": "data",
+        "role": "system",
+        "state": "decision flow",
+        "environment": "documented",
+        "covered": true
+      },
+      {
+        "feature_id": "commission-decision-flow",
+        "layer": "portal",
+        "role": "admin",
+        "state": "import error",
+        "environment": "documented",
+        "covered": true
+      },
+      {
+        "feature_id": "commission-decision-flow",
+        "layer": "api",
+        "role": "system",
+        "state": "decision flow",
+        "environment": "documented",
+        "covered": false
+      },
+      {
+        "feature_id": "commission-decision-flow",
+        "layer": "storefront",
+        "role": "n/a",
+        "state": "decision flow",
+        "environment": "documented",
+        "covered": false
+      },
+      {
+        "feature_id": "commission-decision-flow",
+        "layer": "code",
+        "role": "system",
+        "state": "decision flow",
+        "environment": "documented",
+        "covered": false
+      }
+    ],
+    "unassigned_kb_items": [],
+    "profile_conflicts": [
+      {
+        "conflict_id": "OQ-commission-calculation-006",
+        "topic": "Dòng charge_type chứa \"one-time\" thuộc nhánh nào",
+        "conflict_scope": "cross_doc",
+        "sides": [
+          {
+            "statement": "`qikfiliate/commission - overview`: dòng chứa \"one-time\" BỊ BỎ QUA, không tạo Conversion.",
+            "source": "`qikfiliate/commission - overview` §Sơ đồ luồng quyết định cho 1 dòng payout (CLM-03-002) — shard này (commission-decision-flow), kb_ref KB-010",
+            "confidence": "LOW"
+          },
+          {
+            "statement": "`qikfiliate/commision - recurring & first month`: nhánh recurring/first-month áp dụng cho MỌI dòng payout không chứa \"usage\" (tức bao hàm cả one-time, theo nghĩa đen).",
+            "source": "`qikfiliate/commision - recurring & first month` §preamble (CLM-07-001) — shard recurring-commission.json, kb_ref KB-008",
+            "confidence": "LOW"
+          }
+        ],
+        "resolution": "UNRESOLVED",
+        "needs": "PO/dev xác nhận thứ tự loại trừ: `qikfiliate/commission - overview` loại \"one-time\" TRƯỚC khi xét \"usage\"; `qikfiliate/commision - recurring & first month` không nói rõ có ưu tiên loại trừ \"one-time\" trước hay không. Không chọn bên ở feature profile này."
+      },
+      {
+        "conflict_id": "OQ-commission-calculation-005",
+        "topic": "maximum_amount có áp cho nhánh first-month hay không",
+        "conflict_scope": "cross_doc",
+        "sides": [
+          {
+            "statement": "`qikfiliate/commission - overview`: maximum_amount (cap per-row) áp dụng chung cho cả recurring VÀ first-month.",
+            "source": "`qikfiliate/commission - overview` §Bảng so sánh nhanh (CLM-03-008) — shard này (commission-decision-flow), kb_ref KB-011",
+            "confidence": "LOW"
+          },
+          {
+            "statement": "`qikfiliate/commision - recurring & first month`: KHÔNG áp maximum_amount cho first-month bình thường (chỉ nhánh first-month+yearly dùng maximum_amount × 11).",
+            "source": "`qikfiliate/commision - recurring & first month` §Công thức first-month (CLM-07-021, CLM-07-029) — shard first-month-commission.json, kb_ref KB-013",
+            "confidence": "LOW"
+          }
+        ],
+        "resolution": "UNRESOLVED",
+        "needs": "PO/dev xác nhận maximum_amount có áp cho nhánh first-month (non-yearly) hay không. Sai hướng nào cũng là trả sai tiền cho affiliate. Không chọn bên ở feature profile này."
+      }
+    ],
+    "profile_change_summary": [
+      {
+        "change": "created",
+        "detail": "Profile khởi tạo lần đầu từ DOC_BOOTSTRAP CTX-20261002-01, dựng từ 12 KB candidate của shard commission-decision-flow.json (9 CONFIRMED_EXPECTED, 2 CONFLICTED/INFERRED, 1 KNOWN_DEFECT/OBSERVED_CURRENT).",
+        "source_run": "CTX-20261002-01"
+      }
+    ],
+    "kb_trace_complete": true
+  },
+  "gate": {
+    "decision": "CONDITIONAL_PASS",
+    "blocking_findings": [],
+    "conditions": [
+      "KB-010/KB-011 (phía `qikfiliate/commission - overview` của OQ-commission-calculation-006/OQ-commission-calculation-005) KHÔNG được dùng làm oracle cho tới khi PO/dev xác nhận — giữ trong profile_conflicts, không trong capabilities/confirmed_rules.",
+      "KB-012 (known_defect) chỉ dùng làm regression watch, không phải expected result.",
+      "Thiếu enum charge_type thật (unknown_areas #1) chặn việc dựng test data phủ đủ nhánh — checklist-builder cần biết giới hạn này."
+    ],
+    "allowed_next_steps": [
+      "qa-checklist-builder",
+      "knowledge-diff-analyzer"
+    ]
+  }
+}

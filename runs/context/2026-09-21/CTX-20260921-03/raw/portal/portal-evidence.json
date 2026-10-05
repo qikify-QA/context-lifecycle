@@ -1,0 +1,390 @@
+{
+  "schema_version": "1.0",
+  "artifact_type": "FeatureDiscoveryArtifact",
+  "artifact_id": "FDA-CTX-20260921-03-portal",
+  "workflow_id": "CTX-20260921-03",
+  "producer": "portal-explorer",
+  "source_refs": [
+    "runs/context/2026-09-21/CTX-20260921-03/input/bootstrap-request.json",
+    "knowledge/products/teeinblue/objects/artwork/features/layer-config-image/profile.json",
+    "knowledge/products/teeinblue/objects/asset-category/kb.json",
+    "knowledge/products/teeinblue/objects/artwork/kb.json"
+  ],
+  "upstream_artifact_ids": [],
+  "status": "PARTIAL",
+  "confidence": "MEDIUM",
+  "observations": [
+    "Account verified: sidebar 'Linh explorer' / linh-explorer.myshopify.com / Blue (Test); network request GET /api/user carried header x-acting-user-id: 266. Matches required scope (sub=273/user_id=266). No action taken on Linh Pham (sub=2).",
+    "Add-layer asset picker for BOTH 'Clipart Category' sub-types shows exactly 2 tabs: 'Upload an image' and 'Choose from clipart category' -- verbatim label text unchanged from prior evidence.",
+    "The 'Choose from clipart category' tab's category tree renders EMPTY ('Select a category on the left', no items) even for a brand-new user with 10+ existing clipart_categories rows (confirmed via GraphQL query response). Root cause traced to REST endpoint GET /api/layer-image-categories?type=clipart returning `[]` while a parallel GraphQL query (clipart_categories table) returns real data. Reproduced 2 additional times on separate surfaces (see conflicts/unknowns).",
+    "Layer config panel is NOT a persistent sidebar in this modal-based artwork editor UI. The only way found to reach Personalization/Populate/Design/Conditional/Extra settings for a layer -- even with exactly 1 layer selected -- is via the layer's '...' menu -> 'Bulk edit' dialog. Direct single-layer settings panel was not found despite trying: double-click (renames layer instead), right-click (no context menu), clicking the SVG canvas element directly, and the artwork-level gear icon (opens unrelated grid/snap toggle) and 'Preview Options' panel (unrelated, template/print variant selector).",
+    "DESIGN SETTINGS accordion ('Select one clipart category:' / 'Select a group of clipart categories:' + default-value picker) only renders meaningful content when PERSONALIZATION SETTINGS -> 'Personalization for this layer' is set to 'Create a new option'. With 'No personalization' (default/unset) it renders as an empty ~15px strip. This condition was not documented in prior evidence and is recorded as a new structural finding.",
+    "clipart-category (single) sub-type field inventory confirmed via Bulk Edit, 1 layer selected: DESIGN SETTINGS = 'Select one clipart category:' + 'Clipart category's default value:' (toggle 'Show option to select default value'); PERSONALIZATION SETTINGS = radio 'Personalization for this layer' (No personalization / Create a new option / Use an existing global option) -> when 'Create a new option': 'Option Title:', 'Add instruction for customer:', 'Mark this option as required:' (On/No change/Off tri-state in Bulk Edit), 'Show customization data on cart/checkout:' (On/No change/Off); EXTRA = 'Display this layer on:' radio (Mockup Preview & Order design / Mockup Preview only / Order Design only / None). POPULATE VALUES and CONDITIONAL SETTING accordions were left collapsed/unexplored (not required for this sub-type per baseline FEAT-04).",
+    "'Custom class:' field was NOT found anywhere in the Bulk Edit dialog for the clipart-category (single) layer, across Design/Personalization/Extra sections, fully scrolled to bottom. Prior evidence (profile.json capability list, layer-image.md) lists 'Custom class' as a field of this sub-type. This is recorded as a CONFLICT (see conflicts[]), not resolved here.",
+    "group-clipart-categories sub-type field inventory (delta vs single type): DESIGN SETTINGS label is 'Select a group of clipart categories:' (singular selection UI observed -- see conflicts[] re: 'group' semantics) + 'Group's default value:' (rendered as a SELECT/COMBOBOX, not a thumbnail grid like the single type); PERSONALIZATION SETTINGS additionally has 'Placeholder text:' field (default ghost text 'Choose something...') positioned between Option Title and Add instruction, which the single type does not have.",
+    "API field mapping confirmed via actual PUT /api/artworks/4339 response body (schema_version 2): single type layer keys = type:'clipart-category', clipart:<category_id>, customization_type:'normal' (enum value for 'Create a new option'), form_label, required, fit_mode/direct_upload_style/direct_clipart_style:'contain', default_value:<file path>. Group type layer keys = type:'group-clipart-categories', grouped_clipart:<category_id> (DIFFERENT key name from single type's 'clipart'), form_label, form_placeholder (group-only), default_value, grouped_reposition:[] (empty array, purpose not explored further), customization_type:'normal'.",
+    "Image file path shape confirmed for 3 pre-generated variants per uploaded image, independent of any category Preview/Thumbnail size setting: master (no suffix, original), '<hash>_large.webp' (used for canvas/print rendering url, and also referenced by layer.default_value), '<hash>_thumbnail.webp' (used for small list-row thumbnails, 28x28 CSS box observed). This matches prior artwork kb.json evidence about '_large' suffix usage.",
+    "Clipart category 'Preview size' and 'Thumbnail size' fields (Max-width display group, category create/edit form) confirmed with REAL enumerated values via DOM: Preview size options = 100/150/200/250/300/400/500(default)/700/1000/1600 px. Thumbnail size options = 100(default)/300/500 px. Changed Thumbnail size 100px -> 300px for test category id 6202 (clipart_thumbnail_size:300 confirmed in POST /api/clipart-categories response). Preview size left at default 500px (clipart_max_width:500).",
+    "Category create/edit form additionally exposes (not previously documented with this granularity): 'Custom class' (free text, category-level, distinct from the missing layer-level Custom class field noted above), 'Display options on personalization form as:' radio group with 5 modes (Thumbnail Images [default] / Dropdown list of Clipart name / Dropdown list of Clipart name + Thumbnail / Inline button of Clipart name / Radio of Clipart name), and 'Show option name on hover' toggle (off by default, tooltip on thumbnail hover). These directly control NHOM 4 buyer-facing display and are portal-side config; actual storefront rendering per mode was NOT tested here (out of scope, handed to storefront-explorer).",
+    "'Group's default value' combobox for the group-clipart-categories layer showed literal text 'List is empty.' after linking category 6202, despite that same category's 2 items rendering correctly with thumbnails moments earlier in the single-type layer's own default-value picker in the same session. This is the clearest, most specific manifestation of the category/item-listing anomaly (3rd distinct surface, see conflicts[]).",
+    "TASK-2a/2b mechanism observed directly (not inferred): picking an image via the 'Upload an image' tab at add-layer time sets layer.url (canvas rendering source) immediately -- confirmed image appeared on canvas right after selection, and persisted as the SAME file after Save & Close and reopening the artwork. Separately, 'Clipart category's default value' picker lets merchant EXPLICITLY choose any single item within the linked category (not automatically 'first item added') -- selecting item 'no2' (the 2nd uploaded item, position 2) worked immediately with a checkmark UI and 'Clear default value' button, proving arbitrary explicit selection rather than a fixed positional default. These two values (layer.url vs layer.default_value) are stored as SEPARATE JSON keys and did NOT converge: after reopening the saved artwork, canvas still rendered layer.url ('cat1', the original upload-tab pick), not layer.default_value ('no2'). Which one actually drives the storefront buyer's initial personalization state is unverified here -- see conflicts[] TASK-2c and handoff note to storefront-explorer.",
+    "Validation message captured verbatim: 'Template - Default template: cat1: - Select one clipart category is required' (red toast, top-right, after attempting Save & Close with customization_type unset / no category linked). Confirms 'Select one clipart category' is enforced server-side as required once the layer type is clipart-category, matching the 2-tier validation pattern documented for other layer types (FEAT-07/KB-051).",
+    "Test artwork 'QA-TEST-clipart-category-CTX20260921-03' (id 4339) created with 2 layers: 'cat1' (clipart-category, category 6202, default_value=no2, Option Title='Select your clipart') and 'body' (group-clipart-categories, grouped_clipart=6202, Option Title='Select your clipart group', Placeholder='Choose a design', default_value=null because the picker was broken).",
+    "Test campaign 'QA-TEST-clipart-category-campaign-CTX20260921-03' (id 2626) created, product base 'Vertical Framed Poster' (product-id 3181) attached, artwork 4339 assigned to both print areas (12x18 and 24x36), campaign validated ('Your campaign is valid and ready to launch!') and launched to store 'linh-explorer' (org 'Linh explorer' also has a second connected store 'linh-explorer-2', NOT used). Published product URL: https://linh-explorer.myshopify.com/products/qa-test-clipart-category-campaign-ctx20260921-03 -- mockup image generation was still async ('Mockups are still publishing') at the time of capture; product page itself was confirmed published."
+  ],
+  "assumptions": [],
+  "unknowns": [
+    "Whether the empty/broken category-item listing (3 surfaces: asset-picker tree, inline Design-Settings search box firing zero requests, group layer's default-value combobox) is a genuine current product defect, a staging-only data/cache issue, or store-specific -- not diagnosed further per portal-explorer's non-judging mandate. Recommend api-explorer cross-check GET /api/layer-image-categories?type=clipart directly and db-explorer check whether clipart_categories rows for user 266 have any missing FK/flag that this endpoint filters on.",
+    "Whether 'Select a group of clipart categories' truly supports selecting MULTIPLE categories (a real merchant-facing multi-select 'group'), or whether 'group' actually refers to a category that itself has child/nested sub-categories (the 'Parent Category' field seen on the category form) with only ONE top-level category assignable per layer. Only a single-selection UI ('Selected: <name>' with one clear-X) was observed; no way to add a 2nd category was found in the time available. Needs a follow-up run with a category that has children to confirm.",
+    "Whether the Preview/Thumbnail size setting change (thumbnail 100px->300px) produces any portal-visible pixel effect -- could not verify because the only portal UI that consumes category items for rendering (asset-picker tree, group default-value combobox) was non-functional throughout this session. Deferred entirely to storefront-explorer per task boundary (TASK-5b/5c).",
+    "Purpose and behavior of 'grouped_reposition' array (observed empty []) on the group-clipart-categories layer JSON -- not explored (would require adding 2+ categories to the group, blocked by the single-selection observation above)."
+  ],
+  "conflicts": [
+    {
+      "conflict_id": "CONF-CTX20260921-03-01",
+      "topic": "Custom class field presence for clipart-category (single) sub-type",
+      "side_a": {
+        "source": "knowledge/products/teeinblue/objects/artwork/features/layer-config-image/profile.json (FEAT-13, capability 'Baseline types không có deviation riêng') + knowledge/artwork/layer-image.md",
+        "claim": "clipart-category sub-type has a 'Custom class:' field (part of baseline PERSONALIZATION SETTINGS field list)."
+      },
+      "side_b": {
+        "source": "This run, ACT-01-01-011..015 (Bulk Edit dialog, 1 layer selected, all 5 accordions expanded and scrolled to bottom)",
+        "claim": "No 'Custom class' field rendered anywhere for the clipart-category layer in Bulk Edit. Fields present: Design Settings (category + default value), Personalization Settings (customization_type radio, Option Title, Add instruction, Mark required, Show on cart/checkout), Extra (Display this layer on: radio only)."
+      },
+      "note": "Could be a Bulk-Edit-specific omission (single-layer edit panel might differ) rather than the field truly not existing -- the dedicated single-layer settings panel could not be located in this UI (see observations). Not resolved; both sides kept."
+    },
+    {
+      "conflict_id": "CONF-CTX20260921-03-02",
+      "topic": "TASK-2c: which value drives the layer's shown clipart -- add-layer-time pick (url) vs category default_value",
+      "side_a": {
+        "source": "ACT-01-01-002/ACT-01-01-006 (this run)",
+        "claim": "layer.url is set at add-layer time (image picked via 'Upload an image' tab = 'cat1') and this is what the PORTAL canvas/editor renders, both immediately and after Save & Close + reopen."
+      },
+      "side_b": {
+        "source": "ACT-01-01-005/ACT-01-01-006 (this run)",
+        "claim": "layer.default_value is set independently via 'Clipart category's default value' picker (merchant explicitly chose item 'no2') and persists as its own JSON key, but does NOT override or get reflected in the portal canvas rendering."
+      },
+      "note": "Both values coexist in the same saved layer JSON (see raw/network/ACT-01-01-006.json). Which one (if either) the STOREFRONT actually uses as the buyer's initial personalization value is unverified -- explicitly handed off to storefront-explorer TASK-3a (live preview) to determine empirically."
+    }
+  ],
+  "blocking_issues": [],
+  "payload": {
+    "portal_context": {
+      "environment": "staging",
+      "role": "owner (Linh explorer, sub=273/user_id=266)",
+      "object_id": "artwork:4339 (QA-TEST-clipart-category-CTX20260921-03), clipart_category:6202 (QA-TEST-clipart-category-CTX20260921-03), campaign:2626 (QA-TEST-clipart-category-campaign-CTX20260921-03)",
+      "object_type": "ArtworkLayer (clipart-category, group-clipart-categories)",
+      "initial_state": "New test artwork/category/campaign created this run (INCREMENTAL_UPDATE on top of published FEAT-13-layer-config-image v2)",
+      "verified_by": ["sidebar text 'Linh explorer'", "network header x-acting-user-id: 266", "store name linh-explorer.myshopify.com in sidebar"]
+    },
+    "observations": [
+      { "observation_id": "OBS-001", "surface": "artwork editor > Layer > Image > Clipart Category submenu", "element": "sub-type buttons", "observed_result": "Exactly 2 options: '1 Clipart Category' and 'Group of clipart categories' -- labels match prior evidence verbatim.", "evidence_refs": [{"type":"screenshot","path":"raw/portal/screenshots/ACT-02-01-004-layer-added.png"}], "knowledge_kind": "OBSERVED_CURRENT" },
+      { "observation_id": "OBS-002", "surface": "asset picker (add-layer time)", "element": "tabs", "observed_result": "'Upload an image' / 'Choose from clipart category' -- verbatim match to prior evidence.", "evidence_refs": [{"type":"screenshot","path":"raw/portal/screenshots/ACT-02-01-002-category-tab.png"}], "knowledge_kind": "OBSERVED_CURRENT" },
+      { "observation_id": "OBS-003", "surface": "asset picker > Choose from clipart category tab", "element": "category tree", "observed_result": "Renders empty ('Select a category on the left') despite 10 categories existing server-side (GraphQL confirmed). REST endpoint /api/layer-image-categories?type=clipart returns [].", "evidence_refs": [{"type":"screenshot","path":"raw/portal/screenshots/ACT-02-01-002-category-tab-loaded.png"},{"type":"har_entry","path":"raw/network/ACT-05-01-003.json"}], "knowledge_kind": "OBSERVED_CURRENT" },
+      { "observation_id": "OBS-004", "surface": "Bulk edit dialog, 1 layer selected (clipart-category)", "element": "5 accordions", "observed_result": "DESIGN SETTINGS, POPULATE VALUES, PERSONALIZATION SETTINGS, CONDITIONAL SETTING, EXTRA -- matches baseline accordion set from FEAT-04.", "evidence_refs": [{"type":"screenshot","path":"raw/portal/screenshots/ACT-01-01-011-bulk-edit.png"}], "knowledge_kind": "OBSERVED_CURRENT" },
+      { "observation_id": "OBS-005", "surface": "Bulk edit > Design Settings (clipart-category)", "element": "Select one clipart category / Clipart category's default value", "observed_result": "Only renders when Personalization Settings = 'Create a new option'. Default value picker shows thumbnail grid of category items, merchant clicks one to set as explicit default (checkmark + name + 'Clear default value' button appear).", "evidence_refs": [{"type":"screenshot","path":"raw/portal/screenshots/ACT-02-01-018-no2-selected.png"}], "knowledge_kind": "OBSERVED_CURRENT" },
+      { "observation_id": "OBS-006", "surface": "Bulk edit > Design Settings (group-clipart-categories)", "element": "Select a group of clipart categories / Group's default value", "observed_result": "Category link field shows single 'Selected: <name>' text with clear-X (not an obvious multi-select list). Default value field is a SELECT/COMBOBOX (not thumbnail grid) and displayed 'List is empty.' despite the linked category having 2 confirmed items.", "evidence_refs": [{"type":"screenshot","path":"raw/portal/screenshots/ACT-01-02-010-group-default-dropdown.png"}], "knowledge_kind": "OBSERVED_CURRENT" },
+      { "observation_id": "OBS-007", "surface": "Category create form (Assets > Clipart Categories > New category, also reachable inline from layer Design Settings)", "element": "Max-width display group + Display options radio", "observed_result": "Preview size select: 100/150/200/250/300/400/500(default)/700/1000/1600 px. Thumbnail size select: 100(default)/300/500 px. Display options on personalization form as: Thumbnail Images(default)/Dropdown list of Clipart name/Dropdown list of Clipart name + Thumbnail/Inline button of Clipart name/Radio of Clipart name. Plus 'Show option name on hover' toggle and 'Custom class' (category-level).", "evidence_refs": [{"type":"screenshot","path":"raw/portal/screenshots/ACT-05-01-002-new-category-full.png"}], "knowledge_kind": "OBSERVED_CURRENT" },
+      { "observation_id": "OBS-008", "surface": "Save & Close validation (clipart-category, no category linked)", "element": "toast", "observed_result": "Verbatim: 'Template - Default template: cat1: - Select one clipart category is required'", "evidence_refs": [{"type":"screenshot","path":"raw/portal/screenshots/ACT-01-01-006-after-save-close2.png"}], "knowledge_kind": "OBSERVED_CURRENT" },
+      { "observation_id": "OBS-009", "surface": "POST /api/artworks + PUT /api/artworks/4339 response bodies", "element": "layer JSON schema", "observed_result": "single type keys: type, clipart, customization_type, form_label, required, fit_mode, direct_upload_style, direct_clipart_style, default_value, url. group type keys: type, grouped_clipart, form_label, form_placeholder, default_value, grouped_reposition, customization_type, required, fit_mode, url. Both schema_version:2.", "evidence_refs": [{"type":"api_response","path":"raw/network/ACT-01-01-006.json"},{"type":"api_response","path":"raw/network/ACT-01-02-004.json"}], "knowledge_kind": "OBSERVED_CURRENT" },
+      { "observation_id": "OBS-010", "surface": "Campaign launch", "element": "Multi-store launch dialog + published product page", "observed_result": "Campaign 2626 launched to store 'linh-explorer'; published product URL https://linh-explorer.myshopify.com/products/qa-test-clipart-category-campaign-ctx20260921-03 ; mockups still generating async at capture time.", "evidence_refs": [{"type":"screenshot","path":"raw/portal/screenshots/ACT-06-01-011-launch-complete.png"}], "knowledge_kind": "OBSERVED_CURRENT" }
+    ],
+    "feature_candidates": [
+      {
+        "feature_id": "FEAT-13-layer-config-image",
+        "name": "Cấu hình layer — nhóm sidebar IMAGE (mở rộng: Clipart Category 1/Group)",
+        "user_goal": "Store owner cấu hình đầy đủ field/behavior của layer clipart-category (1 category) và group-clipart-categories (nhiều/nested category), gồm cơ chế chọn ảnh mặc định qua 2 con đường (add-layer picker vs category default value).",
+        "entry_point": "artwork editor > + Layer > Image > Clipart Category > (1 Clipart Category | Group of clipart categories)",
+        "observation_ids": ["OBS-001","OBS-002","OBS-003","OBS-004","OBS-005","OBS-006","OBS-007","OBS-008","OBS-009"],
+        "scenarios": [
+          {
+            "scn_id": "SCN-01-01",
+            "objective": "Tạo artwork test mới, thêm layer clipart-category (single), re-verify toàn bộ field config, test cơ chế default value.",
+            "actions": [
+              {
+                "act_id": "ACT-01-01-001",
+                "description": "Tạo artwork mới 'QA-TEST-clipart-category-CTX20260921-03' (1600x1600 PNG_RGB)",
+                "input": { "name": "QA-TEST-clipart-category-CTX20260921-03", "width": 1600, "height": 1600 },
+                "before": { "screenshot": "raw/portal/screenshots/ACT-01-01-001-before.png", "dom": "", "object_state": { "artworks_count": 5 } },
+                "after": { "screenshot": "raw/portal/screenshots/ACT-01-01-001-after.png", "dom": "", "object_state": { "editor_opened": true }, "messages": [] },
+                "network_ref": "raw/network/ACT-01-01-006.json",
+                "network_entry_labels": { "mapped": 1, "polling": 0, "unrelated": 0, "unknown": 0 },
+                "console_errors": [],
+                "mutation": true,
+                "cleanup_result": "NOT_NEEDED",
+                "outcome": "SUCCESS"
+              },
+              {
+                "act_id": "ACT-01-01-002",
+                "description": "Add layer type '1 Clipart Category'; asset picker opened; used 'Upload an image' tab (since 'Choose from clipart category' tab tree was empty, OBS-003) to pick existing image 'cat1'",
+                "input": { "layer_type": "clipart-category", "picked_image": "cat1" },
+                "before": { "screenshot": "raw/portal/screenshots/ACT-02-01-001-upload-tab.png", "dom": "", "object_state": { "layers": [] } },
+                "after": { "screenshot": "raw/portal/screenshots/ACT-02-01-004-layer-added.png", "dom": "", "object_state": { "layers": ["cat1"] }, "messages": [] },
+                "network_ref": "raw/network/ACT-05-01-003.json",
+                "network_entry_labels": { "mapped": 0, "polling": 0, "unrelated": 0, "unknown": 2 },
+                "console_errors": [],
+                "mutation": true,
+                "cleanup_result": "NOT_NEEDED",
+                "outcome": "SUCCESS"
+              },
+              {
+                "act_id": "ACT-01-01-003",
+                "description": "Attempted Save & Close with customization_type unset / no category linked -> blocked by validation",
+                "input": {},
+                "before": { "screenshot": "raw/portal/screenshots/ACT-01-01-005-after-save-close.png", "dom": "", "object_state": {} },
+                "after": { "screenshot": "raw/portal/screenshots/ACT-01-01-006-after-save-close2.png", "dom": "", "object_state": {}, "messages": ["Template - Default template: cat1: - Select one clipart category is required"] },
+                "network_ref": "",
+                "network_entry_labels": { "mapped": 0, "polling": 0, "unrelated": 0, "unknown": 0 },
+                "console_errors": [],
+                "mutation": false,
+                "cleanup_result": "NOT_NEEDED",
+                "outcome": "BLOCKED"
+              },
+              {
+                "act_id": "ACT-01-01-004",
+                "description": "Opened Bulk edit (layer '...' menu) for 1 selected layer; expanded all 5 accordions to inventory fields",
+                "input": {},
+                "before": { "screenshot": "raw/portal/screenshots/ACT-01-01-011-bulk-edit.png", "dom": "", "object_state": {} },
+                "after": { "screenshot": "raw/portal/screenshots/ACT-01-01-014-extra-scrolled.png", "dom": "", "object_state": {}, "messages": [] },
+                "network_ref": "",
+                "network_entry_labels": { "mapped": 0, "polling": 0, "unrelated": 0, "unknown": 0 },
+                "console_errors": [],
+                "mutation": false,
+                "cleanup_result": "NOT_NEEDED",
+                "outcome": "SUCCESS"
+              },
+              {
+                "act_id": "ACT-01-01-005",
+                "description": "Set category=QA-TEST-clipart-category-CTX20260921-03 (id 6202) via Search modal (inline search box was non-functional, OBS-003); toggled 'Show option to select default value'; explicitly selected item 'no2' as default; set Option Title='Select your clipart'; clicked Save on Bulk edit dialog",
+                "input": { "clipart_category_id": 6202, "default_value_item": "no2", "form_label": "Select your clipart" },
+                "before": { "screenshot": "raw/portal/screenshots/ACT-02-01-013-after-create-option.png", "dom": "", "object_state": {} },
+                "after": { "screenshot": "raw/portal/screenshots/ACT-02-01-018-no2-selected.png", "dom": "", "object_state": { "customization_type": "normal", "default_value_selected": "no2" }, "messages": [] },
+                "network_ref": "",
+                "network_entry_labels": { "mapped": 0, "polling": 0, "unrelated": 0, "unknown": 0 },
+                "console_errors": [],
+                "mutation": true,
+                "cleanup_result": "NOT_NEEDED",
+                "outcome": "SUCCESS"
+              },
+              {
+                "act_id": "ACT-01-01-006",
+                "description": "Save & Close artwork -> persisted server-side, artwork id 4339 created",
+                "input": {},
+                "before": { "screenshot": "raw/portal/screenshots/ACT-01-01-015-final-save.png", "dom": "", "object_state": {} },
+                "after": { "screenshot": "raw/portal/screenshots/ACT-01-02-001-reopen-artwork.png", "dom": "", "object_state": { "artwork_id": 4339, "canvas_shows": "cat1 (layer.url), NOT no2 (layer.default_value)" }, "messages": [] },
+                "network_ref": "raw/network/ACT-01-01-006.json",
+                "network_entry_labels": { "mapped": 1, "polling": 0, "unrelated": 0, "unknown": 0 },
+                "console_errors": [],
+                "mutation": true,
+                "cleanup_result": "NOT_NEEDED",
+                "outcome": "SUCCESS"
+              }
+            ]
+          },
+          {
+            "scn_id": "SCN-01-02",
+            "objective": "Thêm layer group-clipart-categories vào cùng artwork, re-verify field config, test cơ chế default value cho group.",
+            "actions": [
+              {
+                "act_id": "ACT-01-02-001",
+                "description": "Add layer type 'Group of clipart categories'; asset picker -> 'Upload an image' tab -> picked 'body' image",
+                "input": { "layer_type": "group-clipart-categories", "picked_image": "body" },
+                "before": { "screenshot": "raw/portal/screenshots/ACT-01-02-002-group-picker.png", "dom": "", "object_state": { "layers": ["cat1"] } },
+                "after": { "screenshot": "raw/portal/screenshots/ACT-01-02-004-layer-list.png", "dom": "", "object_state": { "layers": ["cat1","body"] }, "messages": [] },
+                "network_ref": "",
+                "network_entry_labels": { "mapped": 0, "polling": 0, "unrelated": 0, "unknown": 0 },
+                "console_errors": [],
+                "mutation": true,
+                "cleanup_result": "NOT_NEEDED",
+                "outcome": "SUCCESS"
+              },
+              {
+                "act_id": "ACT-01-02-002",
+                "description": "Bulk edit 'body' layer: Personalization Settings -> Create a new option -> filled Option Title + Placeholder text (group-only field)",
+                "input": { "form_label": "Select your clipart group", "form_placeholder": "Choose a design" },
+                "before": { "screenshot": "raw/portal/screenshots/ACT-01-02-005-group-design-settings.png", "dom": "", "object_state": {} },
+                "after": { "screenshot": "raw/portal/screenshots/ACT-01-02-012-recheck.png", "dom": "", "object_state": {}, "messages": [] },
+                "network_ref": "",
+                "network_entry_labels": { "mapped": 0, "polling": 0, "unrelated": 0, "unknown": 0 },
+                "console_errors": [],
+                "mutation": true,
+                "cleanup_result": "NOT_NEEDED",
+                "outcome": "SUCCESS"
+              },
+              {
+                "act_id": "ACT-01-02-003",
+                "description": "Design Settings -> linked category 6202 via Search modal; attempted 'Group's default value' combobox -> showed 'List is empty.' (anomaly, OBS-006)",
+                "input": { "grouped_clipart": 6202 },
+                "before": { "screenshot": "raw/portal/screenshots/ACT-01-02-008-group-category-selected.png", "dom": "", "object_state": {} },
+                "after": { "screenshot": "raw/portal/screenshots/ACT-01-02-010-group-default-dropdown.png", "dom": "", "object_state": { "default_value": "NOT SET (picker broken)" }, "messages": ["List is empty."] },
+                "network_ref": "raw/network/ACT-05-01-003.json",
+                "network_entry_labels": { "mapped": 0, "polling": 0, "unrelated": 0, "unknown": 1 },
+                "console_errors": [],
+                "mutation": false,
+                "cleanup_result": "NOT_NEEDED",
+                "outcome": "BLOCKED"
+              },
+              {
+                "act_id": "ACT-01-02-004",
+                "description": "Save Bulk edit + Save & Close artwork -> PUT /api/artworks/4339 persisted both layers",
+                "input": {},
+                "before": { "screenshot": "raw/portal/screenshots/ACT-01-02-012-recheck.png", "dom": "", "object_state": {} },
+                "after": { "screenshot": "", "dom": "", "object_state": { "layers_persisted": 2 }, "messages": [] },
+                "network_ref": "raw/network/ACT-01-02-004.json",
+                "network_entry_labels": { "mapped": 2, "polling": 0, "unrelated": 0, "unknown": 0 },
+                "console_errors": [],
+                "mutation": true,
+                "cleanup_result": "NOT_NEEDED",
+                "outcome": "SUCCESS"
+              }
+            ]
+          },
+          {
+            "scn_id": "SCN-05-01",
+            "objective": "Tạo clipart category test với ≥2 item, đọc và đổi giá trị thật Preview size/Thumbnail size (NHOM 5a).",
+            "actions": [
+              {
+                "act_id": "ACT-05-01-001",
+                "description": "Tạo category 'QA-TEST-clipart-category-CTX20260921-03' qua '+ New category' inline trong Design Settings; Preview size để mặc định 500px, đổi Thumbnail size 100px -> 300px",
+                "input": { "name": "QA-TEST-clipart-category-CTX20260921-03", "clipart_max_width": 500, "clipart_thumbnail_size": 300 },
+                "before": { "screenshot": "raw/portal/screenshots/ACT-05-01-001-new-category-dialog.png", "dom": "", "object_state": { "categories_count": 10 } },
+                "after": { "screenshot": "raw/portal/screenshots/ACT-05-01-004-after-create.png", "dom": "", "object_state": { "category_id": 6202 }, "messages": [] },
+                "network_ref": "raw/network/ACT-05-01-001.json",
+                "network_entry_labels": { "mapped": 1, "polling": 0, "unrelated": 0, "unknown": 0 },
+                "console_errors": [],
+                "mutation": true,
+                "cleanup_result": "NOT_NEEDED",
+                "outcome": "SUCCESS"
+              },
+              {
+                "act_id": "ACT-05-01-002",
+                "description": "Upload 2 clipart items (no1.png, no2.png, local test fixtures) vào category 6202, thứ tự riêng biệt để test default-value ordering",
+                "input": { "files": ["no1.png","no2.png"], "category_id": 6202 },
+                "before": { "screenshot": "raw/portal/screenshots/ACT-05-01-005-cliparts-category-page.png", "dom": "", "object_state": { "items_count": 0 } },
+                "after": { "screenshot": "raw/portal/screenshots/ACT-05-01-006-item1-uploaded.png", "dom": "", "object_state": { "items": [{"id":42387,"name":"no1","position":1},{"id":42388,"name":"no2","position":2}] }, "messages": [] },
+                "network_ref": "raw/network/ACT-05-01-002.json",
+                "network_entry_labels": { "mapped": 6, "polling": 0, "unrelated": 0, "unknown": 0 },
+                "console_errors": [],
+                "mutation": true,
+                "cleanup_result": "NOT_NEEDED",
+                "outcome": "SUCCESS"
+              }
+            ]
+          },
+          {
+            "scn_id": "SCN-06-01",
+            "objective": "Publish artwork test qua 1 campaign test để storefront-explorer dùng ngay.",
+            "actions": [
+              {
+                "act_id": "ACT-06-01-001",
+                "description": "Tạo campaign 'QA-TEST-clipart-category-campaign-CTX20260921-03' (Campaigns by Product Base), gắn product base 'Vertical Framed Poster', assign artwork 4339 vào cả 2 print area",
+                "input": { "campaign_title": "QA-TEST-clipart-category-campaign-CTX20260921-03", "product_base": "Vertical Framed Poster", "artwork_id": 4339 },
+                "before": { "screenshot": "raw/portal/screenshots/ACT-06-01-002-new-campaign.png", "dom": "", "object_state": {} },
+                "after": { "screenshot": "raw/portal/screenshots/ACT-06-01-007-artwork-assigned.png", "dom": "", "object_state": { "campaign_id": 2626, "valid_to_launch": true }, "messages": ["Your campaign is valid and ready to launch!"] },
+                "network_ref": "",
+                "network_entry_labels": { "mapped": 0, "polling": 0, "unrelated": 0, "unknown": 0 },
+                "console_errors": [],
+                "mutation": true,
+                "cleanup_result": "NOT_NEEDED",
+                "outcome": "SUCCESS"
+              },
+              {
+                "act_id": "ACT-06-01-002",
+                "description": "Launch campaign to store 'linh-explorer' (Multi-store launch dialog)",
+                "input": { "store": "linh-explorer" },
+                "before": { "screenshot": "raw/portal/screenshots/ACT-06-01-008-launch-dialog.png", "dom": "", "object_state": {} },
+                "after": { "screenshot": "raw/portal/screenshots/ACT-06-01-011-launch-complete.png", "dom": "", "object_state": { "published_url": "https://linh-explorer.myshopify.com/products/qa-test-clipart-category-campaign-ctx20260921-03", "mockups_status": "still publishing (async) at capture time" }, "messages": ["Content is published. Mockups are still publishing."] },
+                "network_ref": "raw/network/ACT-06-01-002.json",
+                "network_entry_labels": { "mapped": 3, "polling": 0, "unrelated": 0, "unknown": 0 },
+                "console_errors": [],
+                "mutation": true,
+                "cleanup_result": "NOT_NEEDED",
+                "outcome": "SUCCESS"
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "permissions_observed": [],
+  "skipped_actions": [
+    {
+      "description": "Testing 'Show option to select default value' OFF state impact on portal UI, and toggling it back/forth multiple times",
+      "reason": "Time-boxed; single ON-state transition already gives clear evidence of the mechanism (explicit item picker appears). Left ON as final state since storefront-explorer needs this to observe the buyer-facing effect (TASK-2b storefront half)."
+    },
+    {
+      "description": "Adding a SECOND category to the group-clipart-categories layer's 'Select a group of clipart categories' field to confirm true multi-select vs single-select semantics",
+      "reason": "Time-boxed; the Search modal only offered single-selection behavior in the time available. Recorded as unknowns[] instead of guessing."
+    },
+    {
+      "description": "POPULATE VALUES and CONDITIONAL SETTING accordions for both sub-types",
+      "reason": "Out of NHOM 1 scope focus (not part of the specific field list requested for re-verification) and time-boxed; left collapsed/unexplored, recorded in unexplored_areas."
+    },
+    {
+      "description": "Reverting Thumbnail size from 300px back to 100px, and deleting test category/items/artwork/campaign",
+      "reason": "Explicitly required by orchestrator instructions to STAY ALIVE for storefront-explorer to consume next -- see payload.pending_cleanup below. Not a skip due to policy block, but an intentional deferred cleanup (TASK-7, to run AFTER storefront-explorer finishes)."
+    }
+  ],
+  "unexplored_areas": [
+    "POPULATE VALUES accordion content for both clipart-category and group-clipart-categories layer types.",
+    "CONDITIONAL SETTING accordion content for both layer types.",
+    "Whether 'Select a group of clipart categories' supports true multi-category selection (see unknowns).",
+    "Behavior of nested/child categories (Parent Category field) in relation to the 'group' concept.",
+    "grouped_reposition array purpose/shape when non-empty.",
+    "Portal-visible effect (if any) of the Thumbnail size change, since the only consuming portal UI observed was non-functional this session."
+  ],
+  "current_behavior_only": true,
+  "redaction_applied": true,
+  "gate": {
+    "decision": "CONDITIONAL_PASS",
+    "blocking_findings": [],
+    "conditions": [
+      "2 open conflicts (Custom class field presence; url vs default_value precedence) must be carried forward, not silently resolved, until storefront-explorer/reviewer confirms which side holds.",
+      "3-surface category/item-listing anomaly (asset-picker tree, inline search box, group default-value combobox) should be flagged to api-explorer/db-explorer for root-cause check before being treated as a confirmed defect vs staging quirk.",
+      "Test artwork (4339), category (6202, Thumbnail size changed to 300px), and campaign (2626, published) are INTENTIONALLY left live for storefront-explorer -- see payload.pending_cleanup. Orchestrator must schedule a TASK-7 cleanup pass after storefront-explorer completes."
+    ],
+    "allowed_next_steps": [
+      "qa-knowledge-normalizer",
+      "api-explorer",
+      "storefront-explorer"
+    ]
+  },
+  "handoff": {
+    "to_storefront_explorer": {
+      "store": "linh-explorer.myshopify.com",
+      "product_url": "https://linh-explorer.myshopify.com/products/qa-test-clipart-category-campaign-ctx20260921-03",
+      "artwork_id": 4339,
+      "clipart_category_id": 6202,
+      "campaign_id": 2626,
+      "layers": [
+        { "name": "cat1", "type": "clipart-category", "form_label": "Select your clipart", "default_value_item": "no2 (position 2)", "url_item": "cat1 (original upload-tab pick)" },
+        { "name": "body", "type": "group-clipart-categories", "form_label": "Select your clipart group", "form_placeholder": "Choose a design", "default_value": null }
+      ],
+      "note_for_conflict_verification": "Please check on the storefront live preview / personalization form which image actually shows as the buyer's initial default for the 'cat1' (single clipart-category) layer: the add-layer-time pick ('cat1'/6a5ddc9f0ca7b) or the category default_value pick ('no2'/260921_jhjwt4MBWSB35CyG). This resolves CONF-CTX20260921-03-02.",
+      "note_on_sizing": "Category 6202 has clipart_max_width=500 (Preview size, default/unchanged) and clipart_thumbnail_size=300 (Thumbnail size, CHANGED from default 100). Please measure actual rendered px of the clipart picker thumbnail and canvas/live-preview image on storefront and compare against these settings (TASK-5b/5c)."
+    },
+    "to_api_explorer": {
+      "network_refs": [
+        "raw/network/ACT-05-01-001.json",
+        "raw/network/ACT-05-01-002.json",
+        "raw/network/ACT-05-01-003.json",
+        "raw/network/ACT-01-01-006.json",
+        "raw/network/ACT-01-02-004.json",
+        "raw/network/ACT-06-01-002.json"
+      ],
+      "note": "GET /api/layer-image-categories?type=clipart returning [] while GraphQL clipart_categories table has data is worth a direct API cross-check (see ACT-05-01-003.json)."
+    }
+  },
+  "payload_pending_cleanup": {
+    "note": "This section duplicates into gate.conditions for visibility. Entities intentionally left LIVE for storefront-explorer; a follow-up portal-explorer TASK-7 pass must revert/delete these AFTER storefront-explorer finishes:",
+    "entities": [
+      { "type": "artwork", "id": 4339, "name": "QA-TEST-clipart-category-CTX20260921-03", "action_when_done": "archive/delete (test-only, never used by any other run)" },
+      { "type": "clipart_category", "id": 6202, "name": "QA-TEST-clipart-category-CTX20260921-03", "action_when_done": "delete (test-only); revert not needed since it did not modify any pre-existing category", "field_to_revert_if_reused": { "clipart_thumbnail_size": { "current": 300, "original_default_at_creation": 100 } } },
+      { "type": "clipart_item", "id": 42387, "name": "no1", "action_when_done": "delete along with category 6202" },
+      { "type": "clipart_item", "id": 42388, "name": "no2", "action_when_done": "delete along with category 6202" },
+      { "type": "campaign", "id": 2626, "name": "QA-TEST-clipart-category-campaign-CTX20260921-03", "published_store": "linh-explorer", "action_when_done": "unpublish then delete (test-only, not a real customer campaign)" },
+      { "type": "product_base_usage", "id": "product-id=3181 (Vertical Framed Poster)", "action_when_done": "no cleanup needed -- pre-existing shared product base, only referenced not modified" }
+    ]
+  }
+}

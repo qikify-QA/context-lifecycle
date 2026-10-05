@@ -1,0 +1,271 @@
+{
+  "feature_key": "charge-type-classification",
+  "name": "Phân loại Charge Type từ file payout CSV",
+  "user_goal": "Hệ thống cần suy ra LOẠI charge (Recurring/First-month, Usage-charge, hay bị loại hoàn toàn) của mỗi dòng CSV payout dựa trên cột Charge Type do Shopify sinh ra (một chuỗi mô tả tự do, không phải enum), để định tuyến đúng rate và cơ chế tính hoa hồng cho dòng đó.",
+  "stable_since_version": "v1",
+  "actors": [
+    {
+      "role": "unspecified",
+      "permission_observed": "Cơ chế phân loại chạy hoàn toàn ở tầng xử lý dữ liệu (db/code) khi import payout, không có actor người dùng trực tiếp tương tác với bước phân loại này. Không có claim permission nào trong shard cho bước này.",
+      "kb_refs": [
+        "KB-001",
+        "KB-002"
+      ]
+    }
+  ],
+  "entry_points": [],
+  "capabilities": [
+    {
+      "name": "Phân loại Charge Type bằng substring match, không phân biệt hoa/thường",
+      "description": "Charge Type là cụm từ mô tả do Shopify sinh ra, không phải mã ngắn cố định trong 1 enum. Hệ thống phân loại chỉ bằng cách kiểm tra chuỗi Charge Type có chứa 1 chuỗi con nào đó hay không, không phân biệt hoa/thường — không so khớp chính xác toàn bộ chuỗi. Đây là quyết định thiết kế có chủ đích để chịu được việc Shopify thay đổi cách đặt tên.",
+      "kb_refs": [
+        "KB-001",
+        "KB-002",
+        "KB-003"
+      ]
+    },
+    {
+      "name": "Định tuyến theo kết quả match: Recurring/First-month vs Usage-charge vs loại bỏ one-time",
+      "description": "Chuỗi không chứa 'usage' và không chứa 'one-time' → nhánh Recurring/First-month (phí subscription định kỳ bình thường). Chuỗi chứa 'usage' → nhánh Usage-charge (metered billing, charge ID dạng gid://shopify/AppUsageRecord/...). Chuỗi chứa 'one-time' → bị loại hoàn toàn, không tính hoa hồng — đây là quyết định nghiệp vụ có chủ đích, được lập trình rõ ràng, không phải sót.",
+      "kb_refs": [
+        "KB-005",
+        "KB-006",
+        "KB-007",
+        "KB-008",
+        "KB-009"
+      ]
+    },
+    {
+      "name": "Nhận diện refund/downgrade qua dấu hiệu số âm, không qua cột riêng",
+      "description": "File CSV không có cột/flag 'is refund' riêng. Cột Category vẫn giữ nguyên giá trị 'App revenue' ở dòng refund/downgrade, nên không dùng được để phát hiện refund — việc nhận diện refund dựa vào dấu hiệu khác (số âm ở cột tiền), không dựa vào charge_type hay Category.",
+      "kb_refs": [
+        "KB-010",
+        "KB-011"
+      ]
+    }
+  ],
+  "state_transitions": [
+    {
+      "from": "row_with_charge_type_string",
+      "to": "classified_recurring_or_first_month",
+      "trigger": "Str::contains(Str::lower(charge_type), 'usage') == false VÀ Str::contains(..., 'one-time') == false",
+      "condition": "Chuỗi Charge Type không chứa 'usage' và không chứa 'one-time'.",
+      "kb_refs": [
+        "KB-005"
+      ]
+    },
+    {
+      "from": "row_with_charge_type_string",
+      "to": "classified_usage_charge",
+      "trigger": "Str::contains(Str::lower(charge_type), 'usage') == true",
+      "condition": "Chuỗi Charge Type chứa 'usage' (ví dụ \"App sale – usage\").",
+      "kb_refs": [
+        "KB-006",
+        "KB-007"
+      ]
+    },
+    {
+      "from": "row_with_charge_type_string",
+      "to": "excluded_no_commission",
+      "trigger": "Str::contains(Str::lower(charge_type), 'one-time') == true",
+      "condition": "Chuỗi Charge Type chứa 'one-time' — bị loại hoàn toàn, không tính hoa hồng.",
+      "kb_refs": [
+        "KB-008",
+        "KB-009"
+      ]
+    }
+  ],
+  "confirmed_rules": [
+    {
+      "statement": "KB-001: Charge Type là cụm từ mô tả do Shopify sinh ra, không phải enum cố định.",
+      "kb_refs": [
+        "KB-001"
+      ]
+    },
+    {
+      "statement": "KB-002: Phân loại bằng match chuỗi con, không phân biệt hoa/thường — không so khớp chính xác toàn bộ chuỗi.",
+      "kb_refs": [
+        "KB-002"
+      ]
+    },
+    {
+      "statement": "KB-003: Match chuỗi con là quyết định thiết kế có chủ đích để chịu được việc Shopify đổi cách đặt tên.",
+      "kb_refs": [
+        "KB-003"
+      ]
+    },
+    {
+      "statement": "KB-005: Chuỗi không chứa 'usage' và không chứa 'one-time' → nhánh Recurring/First-month.",
+      "kb_refs": [
+        "KB-005"
+      ]
+    },
+    {
+      "statement": "KB-006/KB-007: Chuỗi chứa 'usage' → nhánh Usage-charge; charge ID dạng gid://shopify/AppUsageRecord/...",
+      "kb_refs": [
+        "KB-006",
+        "KB-007"
+      ]
+    },
+    {
+      "statement": "KB-008/KB-009: Chuỗi chứa 'one-time' → bị loại hoàn toàn, không tính hoa hồng — quyết định nghiệp vụ có chủ đích.",
+      "kb_refs": [
+        "KB-008",
+        "KB-009"
+      ]
+    },
+    {
+      "statement": "KB-010: File CSV không có cột/flag 'is refund' riêng.",
+      "kb_refs": [
+        "KB-010"
+      ]
+    },
+    {
+      "statement": "KB-011: Category vẫn giữ 'App revenue' ở dòng refund/downgrade — không dùng được để phát hiện refund.",
+      "kb_refs": [
+        "KB-011"
+      ]
+    },
+    {
+      "statement": "KB-013: Shopify tuyên bố không cam kết ổn định các giá trị/cột trong export này.",
+      "kb_refs": [
+        "KB-013"
+      ]
+    }
+  ],
+  "observed_behavior": [],
+  "observed_validations": [],
+  "permissions": [],
+  "surface_mapping": {
+    "portal": [],
+    "storefront": [],
+    "api": [],
+    "data": [
+      "Charge Type (cột CSV) → charge_type (DB) — KB-001, KB-002, KB-010, KB-011"
+    ],
+    "code": [
+      "Str::contains(Str::lower($charge_type), 'usage'/'one-time') (KB-012, risk)",
+      "UsageCommissionCapper nhận dòng có charge_type chứa 'usage' (KB-016, risk)"
+    ]
+  },
+  "dependencies": [
+    "payout-csv-upload: kết quả phân loại charge_type quyết định dòng có bị loại (one-time) hay đi nhánh tính hoa hồng nào khi tạo Conversion.",
+    "populate-reconcile-late-data: populate cũng cập nhật lại charge_type khi khớp Conversion — dùng chung cơ chế phân loại này."
+  ],
+  "risks": [
+    {
+      "risk": "KNOWN_DEFECT (KB-004): Không có gì đảm bảo Shopify luôn dùng đúng chuỗi đã quan sát — Shopify tự nêu cột/giá trị export 'có thể thay đổi bất cứ lúc nào'.",
+      "kb_refs": [
+        "KB-004"
+      ]
+    },
+    {
+      "risk": "KNOWN_DEFECT (KB-012): Nhìn từ code, phân loại dựa vào Str::contains(Str::lower($charge_type), 'usage'/'one-time') — chuỗi con, không phân biệt hoa thường, không enum cố định; tài liệu tự đánh giá đây là rủi ro 'âm thầm' nhất trong toàn hệ thống.",
+      "kb_refs": [
+        "KB-012"
+      ]
+    },
+    {
+      "risk": "KNOWN_DEFECT (KB-014): Nếu Shopify phát hành charge_type mới không khớp cả 2 từ khoá hiện có (ví dụ 'App proration credit'), dòng tự động rơi vào nhánh recurring/first-month.",
+      "kb_refs": [
+        "KB-014"
+      ]
+    },
+    {
+      "risk": "KNOWN_DEFECT (KB-015): Không có log cảnh báo cho charge_type lạ chưa từng thấy.",
+      "kb_refs": [
+        "KB-015"
+      ]
+    },
+    {
+      "risk": "KNOWN_DEFECT (KB-016): Nếu charge_type refund/downgrade từng chứa 'usage' (ví dụ 'App sale – usage refund'), dòng đi qua UsageCommissionCapper (nhánh usage) thay vì nhánh recurring như refund/downgrade thông thường.",
+      "kb_refs": [
+        "KB-016"
+      ]
+    },
+    {
+      "risk": "KNOWN_DEFECT (KB-017): Sai định tuyến không gây lỗi/crash, chỉ ra số tiền hoa hồng sai — rất khó phát hiện qua kiểm tra thông thường.",
+      "kb_refs": [
+        "KB-017"
+      ]
+    },
+    {
+      "risk": "OBSERVED_CURRENT + KNOWN_DEFECT (KB-018): Nếu Shopify đặt tên generic 'App refund' (không chứa 'usage') cho dòng refund của 1 usage charge, dòng đó bị định tuyến NHẦM vào nhánh recurring/first-month — sai rate và sai cơ chế cap. Rủi ro thiết kế thực sự, chưa có dữ liệu thật để xác nhận; cần QA test ngay khi có dòng refund-usage-charge đầu tiên, và PO cần xác nhận hành vi mong muốn trước.",
+      "kb_refs": [
+        "KB-018"
+      ]
+    }
+  ],
+  "unknown_areas": [
+    {
+      "question": "Literal charge_type thực tế mà Shopify dùng cho refund của 1 usage charge là gì?",
+      "why_it_matters": "Quyết định dòng đó đi nhánh usage (đúng rate/cap) hay nhánh recurring (sai rate/cap) — chưa từng quan sát được literal này (KB-018)."
+    },
+    {
+      "question": "Lý do nghiệp vụ đằng sau việc loại hoàn toàn charge chứa 'one-time' khỏi hoa hồng là gì?",
+      "why_it_matters": "Không có lý do nghiệp vụ thì không biết luật này (KB-008/KB-009) còn đúng khi sản phẩm đổi gói bán hay không."
+    },
+    {
+      "question": "Cột Category của file payout có những giá trị nào ngoài 'App revenue'?",
+      "why_it_matters": "KB-011 nêu Category luôn là 'App revenue' kể cả với refund, nhưng không nói tập giá trị đầy đủ của cột này; không suy enum từ 1 giá trị đã thấy."
+    },
+    {
+      "question": "Hệ thống xử lý đơn vị tiền tệ của các cột tiền trong file payout thế nào (chỉ USD, hay có quy đổi)?",
+      "why_it_matters": "Mọi ví dụ số đều dùng ký hiệu $ nhưng không có phát biểu quy tắc tiền tệ nào; không tự gán 'USD'."
+    }
+  ],
+  "last_updated": {
+    "date": "2026-10-05",
+    "ccr_ref": "bootstrap"
+  },
+  "profile_relationships": [
+    {
+      "from": "charge-type-classification",
+      "to": "payout-csv-upload",
+      "relation": "SUPPORTS",
+      "note": "Kết quả phân loại quyết định dòng CSV có bị loại hay đi nhánh tính hoa hồng nào khi tạo Conversion."
+    },
+    {
+      "from": "charge-type-classification",
+      "to": "populate-reconcile-late-data",
+      "relation": "SUPPORTS",
+      "note": "Populate cũng cập nhật lại charge_type khi khớp Conversion, dùng chung cơ chế phân loại này."
+    }
+  ],
+  "unassigned_kb_items": [],
+  "profile_conflicts": [],
+  "profile_change_summary": [
+    "Profile mới tạo ở (DOC_BOOTSTRAP), chưa có version trước để so sánh."
+  ],
+  "kb_trace_complete": true,
+  "coverage_matrix": [
+    {
+      "layer": "data",
+      "role": "unspecified",
+      "state": "any",
+      "environment": "documented",
+      "covered": true
+    },
+    {
+      "layer": "code",
+      "role": "unspecified",
+      "state": "any",
+      "environment": "documented",
+      "covered": true
+    },
+    {
+      "layer": "portal",
+      "role": "admin",
+      "state": "any",
+      "environment": "documented",
+      "covered": false
+    },
+    {
+      "layer": "api",
+      "role": "unspecified",
+      "state": "any",
+      "environment": "documented",
+      "covered": false
+    }
+  ]
+}

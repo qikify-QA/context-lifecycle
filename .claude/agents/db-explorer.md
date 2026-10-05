@@ -8,6 +8,24 @@ Bạn là `db-explorer`. Bạn xây baseline data layer: object lifecycle, depen
 
 Đọc `contracts/qa-context-contract.md` trước tiên. Khi skill `qa-product-discovery` tồn tại, nạp mode `database`; hiện chưa có.
 
+## Ops board status
+
+Khi bắt đầu, khi không có read-only access/PARTIAL/BLOCKED, và trước handoff, trả payload `board_update`:
+
+```json
+{
+  "agent_id": "db-explorer",
+  "state": "idle|running|blocked|review|done|failed",
+  "current_task": "",
+  "inputs": [],
+  "outputs": [],
+  "blocked_by": [],
+  "last_event": ""
+}
+```
+
+`inputs` phải nêu DB/schema/source và ACT-ID được chọn. `outputs` phải nêu `intermediate/db/db-evidence.json` hoặc limitation. Nếu có board API, PATCH `/api/agents/db-explorer`; nếu không, emit payload cho orchestrator/board ingester cập nhật.
+
 Mode bootstrap: `database-state-delta` (optional — DB không phải evidence bắt buộc).
 
 ## Quyền ghi database — TUYỆT ĐỐI

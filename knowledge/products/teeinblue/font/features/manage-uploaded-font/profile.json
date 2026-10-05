@@ -1,0 +1,254 @@
+{
+  "feature_id": "FEAT-03-manage-uploaded-font",
+  "feature_key": "manage-uploaded-font",
+  "name": "Quản lý font đã upload: đổi tên, tải xuống, xoá",
+  "user_goal": "Owner muốn chỉnh sửa tên hiển thị của font đã có, tải file font về máy, hoặc xoá font không còn dùng nữa, ngay từ danh sách /fonts.",
+  "actors": [
+    {
+      "role": "owner",
+      "permission_observed": "Rename/download/delete font thuộc store của chính mình; chỉ xoá được font hiện KHÔNG dùng ở artwork/font category nào (dialog cảnh báo, chưa test case đang dùng thật)",
+      "kb_refs": ["KB-003", "KB-007", "KB-014", "KB-015", "KB-016"]
+    }
+  ],
+  "entry_points": [
+    {
+      "path": "Icon action trên từng font card ở /fonts (tên clickable để rename, icon Download, icon Delete)",
+      "precondition": "Đã có ít nhất 1 font trong danh sách",
+      "kb_refs": ["KB-003"]
+    }
+  ],
+  "capabilities": [
+    {
+      "name": "Cấu trúc card cho phép rename/download/delete",
+      "description": "Tên clickable inline rename, family subtitle, preview render bằng chính font, thời gian tương đối, icon Download, icon Delete — xác nhận qua cả 3 thao tác thật trên cùng card",
+      "kb_refs": ["KB-003"]
+    },
+    {
+      "name": "Rename inline qua GraphQL mutation update_custom_fonts",
+      "description": "Client gọi thẳng mutation table-level, tự sinh updated_at, response chỉ trả 'id', không có toast xác nhận",
+      "kb_refs": ["KB-014", "KB-018"]
+    },
+    {
+      "name": "Download file font qua REST GET",
+      "description": "GET /api/custom-fonts/{id}/download -> 200, content-disposition đặt tên UUID, khác tên hiển thị hiện tại và khác tên file client lưu về",
+      "kb_refs": ["KB-015"]
+    },
+    {
+      "name": "Xoá font qua dialog xác nhận + REST DELETE",
+      "description": "Dialog custom (không phải window.confirm) với nội dung cảnh báo nguyên văn, bấm Remove -> DELETE /api/custom-fonts/{id} -> 204, refetch list không còn row",
+      "kb_refs": ["KB-007", "KB-016"]
+    }
+  ],
+  "state_transitions": [
+    {
+      "from": "Font tên X",
+      "to": "Font tên Y (không có toast xác nhận, response chỉ trả 'id')",
+      "trigger": "Inline edit tên + submit",
+      "condition": "",
+      "kb_refs": ["KB-014"]
+    },
+    {
+      "from": "Font card hiển thị bình thường",
+      "to": "Dialog xác nhận Delete mở (heading 'Confirm', body cảnh báo)",
+      "trigger": "Bấm icon Delete",
+      "condition": "",
+      "kb_refs": ["KB-007"]
+    },
+    {
+      "from": "Dialog xác nhận Delete đang mở",
+      "to": "Font biến mất khỏi danh sách (refetch)",
+      "trigger": "Bấm nút 'Remove'",
+      "condition": "Font không đang được dùng ở artwork/font category nào",
+      "kb_refs": ["KB-016"]
+    }
+  ],
+  "confirmed_rules": [],
+  "observed_behavior": [
+    {
+      "note": "Dialog xác nhận Delete (custom component, không phải window.confirm): heading 'Confirm', body 'Are you sure to remove <b>{tên font}</b>?' kèm 2 bullet cảnh báo ('This action could make design corrupted...', 'If you want to replace a font, you can rename old one and upload new one'), 2 nút 'Remove'/'Cancel'.",
+      "kb_refs": ["KB-007"]
+    },
+    {
+      "note": "Sau rename thành công, không có toast/snackbar nào xuất hiện trong DOM; response mutation chỉ trả về field 'id', không trả name/url mới để xác nhận.",
+      "kb_refs": ["KB-014"]
+    },
+    {
+      "note": "Rename gọi thẳng Hasura mutation table-level update_custom_fonts với _set do client tự xây, qua JWT portal thường, không có header hasura-admin đặc biệt trong capture — phạm vi field được phép _set chưa được test (không có negative sample). SEC-001.",
+      "kb_refs": ["KB-018"]
+    },
+    {
+      "note": "Filename tải về thực tế (ghi nhận 'Hey Magnolia.ttf') khác cả UUID trong content-disposition của server lẫn tên hiển thị hiện tại trên card ('QA CTX-20260910-05 Hey Magnolia') — cơ chế client sinh tên này chưa xác định.",
+      "kb_refs": ["KB-015"]
+    }
+  ],
+  "observed_validations": [],
+  "permissions": [
+    {
+      "role": "owner",
+      "scope": "Rename/download bất kỳ font nào; xoá chỉ font hiện không đang dùng ở artwork/font category",
+      "kb_refs": ["KB-007", "KB-014", "KB-015", "KB-016"]
+    }
+  ],
+  "surface_mapping": {
+    "portal": [
+      {
+        "item": "Font card: tên inline-editable, family subtitle, preview line, timestamp, icon Download, icon Delete",
+        "kb_refs": ["KB-003"]
+      },
+      {
+        "item": "Delete confirm dialog (custom component, không phải window.confirm)",
+        "kb_refs": ["KB-007"]
+      }
+    ],
+    "storefront": [],
+    "api": [
+      {
+        "item": "Hasura GraphQL POST /v1/graphql mutation update (update_custom_fonts) cho rename",
+        "kb_refs": ["KB-014", "KB-018"]
+      },
+      {
+        "item": "REST GET /api/custom-fonts/{id}/download cho download",
+        "kb_refs": ["KB-015"]
+      },
+      {
+        "item": "REST DELETE /api/custom-fonts/{id} cho delete, 204 No Content",
+        "kb_refs": ["KB-016"]
+      }
+    ],
+    "data": [
+      {
+        "item": "custom_fonts row: name/updated_at bị client set trực tiếp khi rename; row bị xoá khi delete (xác nhận qua refetch, không có bằng chứng DB trực tiếp)",
+        "kb_refs": ["KB-014", "KB-016"]
+      }
+    ],
+    "code": []
+  },
+  "dependencies": [
+    {
+      "on": "FEAT-02-upload-custom-font",
+      "note": "Font phải được tạo trước (qua upload) mới có để rename/download/delete; toàn bộ sample trong feature này thao tác trên font vừa upload (id 919/920)",
+      "kb_refs": ["KB-011", "KB-014", "KB-015", "KB-016"]
+    },
+    {
+      "on": "FEAT-01-view-and-configure-font-list",
+      "note": "Sau rename/delete, list refetch qua cùng GraphQL query getData để phản ánh thay đổi",
+      "kb_refs": ["KB-009"]
+    }
+  ],
+  "risks": [
+    {
+      "risk": "Mọi capability ghi (rename/download/delete) chỉ có 1 sample -> rule_confidence LOW, không dùng làm hard assertion.",
+      "kb_refs": ["KB-014", "KB-015", "KB-016"]
+    },
+    {
+      "risk": "Chưa từng test xoá 1 font ĐANG được dùng thật trong artwork/font category (ngoài phạm vi mutation an toàn cho phép) — hành vi dialog cảnh báo có ngăn được thật hay chỉ cảnh báo suông chưa rõ.",
+      "kb_refs": ["KB-007", "KB-016"]
+    },
+    {
+      "risk": "SEC-001: rename gọi thẳng mutation table-level với _set tuỳ ý qua JWT thường, không có negative sample kiểm tra phạm vi field được phép sửa — rủi ro authorization ở tầng field-level chưa được xác nhận hay loại trừ.",
+      "kb_refs": ["KB-018"]
+    },
+    {
+      "risk": "KB cũ tuyên bố toàn bộ /fonts đi Hasura GraphQL, nhưng download/delete trong lần quan sát này là REST — xem OQ-font-001, cần rework KB cũ trước khi dùng làm căn cứ automation/test-plan.",
+      "kb_refs": ["KB-015", "KB-016"]
+    }
+  ],
+  "last_updated": {
+    "date": "2026-09-10",
+    "ccr_ref": "bootstrap"
+  },
+  "unknown_areas": [
+    {
+      "question": "Rename thành chuỗi rỗng hoặc trùng tên font khác đã tồn tại trước đó có được chấp nhận không?",
+      "why_it_matters": "Chỉ có 1 sample rename sang tên hoàn toàn mới, chưa test edge case."
+    },
+    {
+      "question": "Xoá 1 font đang thực sự được dùng trong artwork/font category sẽ xảy ra gì (server có chặn không, artwork có lỗi không)?",
+      "why_it_matters": "Đây là rủi ro chính mà dialog cảnh báo nhắc tới nhưng chưa từng được verify thật, nằm ngoài phạm vi mutation an toàn cho phép."
+    },
+    {
+      "question": "Client sinh tên file tải về ('Hey Magnolia.ttf') theo cơ chế nào?",
+      "why_it_matters": "Khác cả UUID server lẫn tên hiển thị hiện tại — có thể gây nhầm lẫn user hoặc là bug cache tên gốc."
+    },
+    {
+      "question": "Phạm vi field mà mutation update_custom_fonts cho phép client _set là gì (có set được field nhạy cảm như user_id không)?",
+      "why_it_matters": "SEC-001 — không có negative sample, chưa loại trừ rủi ro authorization."
+    },
+    {
+      "question": "File font có thật sự nằm trên CDN công khai không cần auth hay không?",
+      "why_it_matters": "SEC-002 — ảnh hưởng đánh giá security exposure, chưa có request thật tới CDN để xác nhận/phủ nhận."
+    }
+  ],
+  "profile_relationships": [
+    {
+      "from_feature_id": "FEAT-03-manage-uploaded-font",
+      "to_feature_id": "FEAT-02-upload-custom-font",
+      "relationship": "depends_on_data_created_by",
+      "kb_refs": ["KB-011", "KB-014", "KB-015", "KB-016"]
+    },
+    {
+      "from_feature_id": "FEAT-03-manage-uploaded-font",
+      "to_feature_id": "FEAT-01-view-and-configure-font-list",
+      "relationship": "triggers_list_refetch",
+      "kb_refs": ["KB-009"]
+    }
+  ],
+  "coverage_matrix": [
+    {
+      "feature_id": "FEAT-03-manage-uploaded-font",
+      "layer": "portal",
+      "role": "owner",
+      "state": "font card cấu trúc, rename/download/delete xác nhận trên cùng card",
+      "environment": "staging",
+      "covered": true
+    },
+    {
+      "feature_id": "FEAT-03-manage-uploaded-font",
+      "layer": "api",
+      "role": "owner",
+      "state": "rename (GraphQL, 1 sample), download (REST, 1 sample), delete (REST, 1 sample)",
+      "environment": "staging",
+      "covered": true
+    },
+    {
+      "feature_id": "FEAT-03-manage-uploaded-font",
+      "layer": "data",
+      "role": "owner",
+      "state": "custom_fonts row updated/removed (qua refetch, không có bằng chứng DB trực tiếp)",
+      "environment": "staging",
+      "covered": true
+    },
+    {
+      "feature_id": "FEAT-03-manage-uploaded-font",
+      "layer": "code",
+      "role": "owner",
+      "state": "n/a",
+      "environment": "staging",
+      "covered": false
+    },
+    {
+      "feature_id": "FEAT-03-manage-uploaded-font",
+      "layer": "api",
+      "role": "owner",
+      "state": "xoá font đang được dùng ở artwork/font category (ngoài phạm vi mutation an toàn)",
+      "environment": "staging",
+      "covered": false
+    },
+    {
+      "feature_id": "FEAT-03-manage-uploaded-font",
+      "layer": "api",
+      "role": "owner",
+      "state": "rename edge case (chuỗi rỗng, trùng tên)",
+      "environment": "staging",
+      "covered": false
+    },
+    {
+      "feature_id": "FEAT-03-manage-uploaded-font",
+      "layer": "portal",
+      "role": "second account (không có sẵn trong môi trường hiện tại)",
+      "state": "n/a — kiểm tra cross-tenant permission cho rename/download/delete",
+      "environment": "staging",
+      "covered": false
+    }
+  ]
+}

@@ -1,0 +1,563 @@
+{
+  "schema_version": "1.0",
+  "artifact_type": "RegressionChecklistCandidate",
+  "artifact_id": "CHKL-CTX-20261002-01-charge-type-classification",
+  "workflow_id": "CTX-20261002-01",
+  "producer": "qa-checklist-builder",
+  "source_refs": [
+    {
+      "type": "doc_ref",
+      "path": "candidate/feature-profiles/charge-type-classification.json",
+      "note": "Feature Profile candidate, CONDITIONAL_PASS, 4 unknown_areas."
+    },
+    {
+      "type": "doc_ref",
+      "path": "candidate/product-kb/charge-type-classification.json",
+      "note": "Shard KB chính, 18 kb_candidates."
+    },
+    {
+      "type": "doc_ref",
+      "path": "candidate/product-kb/_object-level.payout-import.json",
+      "note": "Object-level payout-import — 0 kb_candidates, dùng doc_coverage_gaps chung."
+    }
+  ],
+  "upstream_artifact_ids": [
+    "FPCAND-CTX-20261002-01-payout-import-charge-type-classification",
+    "KBCAND-CTX-20261002-01-payout-import-charge-type-classification",
+    "KBCAND-CTX-20261002-01-payout-import-_object-level.payout-import"
+  ],
+  "status": "READY",
+  "confidence": "MEDIUM",
+  "observations": [
+    "DOC_BOOTSTRAP mode_doc: act_ids rỗng trên toàn bộ check — mọi traceability dùng kb_ids.",
+    "feature_id dùng nguyên feature_key 'charge-type-classification' (chưa có FEAT-ID chính thức).",
+    "Cơ chế chạy hoàn toàn ở tầng data/code khi import (payout-csv-upload và populate-reconcile-late-data đều gọi tới) — không có actor người dùng trực tiếp ở bước phân loại này, nên mọi check layer=db, không có layer=portal riêng cho feature này (quan sát được qua kết quả Conversion, không qua UI của chính bước phân loại).",
+    "7 KB known_defect/risk (KB-004, KB-012, KB-014, KB-015, KB-016, KB-017, KB-018) dùng oracle_strength=BASELINE, viết rõ là hành vi hiện tại, KHÔNG phải oracle 'nên là X'. KB-018 (refund-of-usage-charge) là rủi ro P1 CHƯA có dữ liệu thật — giữ NEEDS_CONFIRMATION thay vì READY/BASELINE đơn thuần, vì bản thân tài liệu nguồn tự đề nghị QA test + PO xác nhận trước khi có oracle rõ.",
+    "KB-012 (CLM-25-012, OBSERVED_CURRENT+KNOWN_DEFECT) và KB-002/KB-003 (CONFIRMED_EXPECTED) KHÔNG bị merge trong KB nguồn dù tả cùng cơ chế Str::contains — giữ đúng tách bạch: CHK-CTC-001/002/003/004 dùng KB-002/003 (STRONG) cho hành vi match chuỗi con hiện tại; KB-012/004/013 chỉ dùng cho CHK-CTC-010 (REGRESSION-watch về tính không ổn định của chuỗi nguồn)."
+  ],
+  "assumptions": [],
+  "unknowns": [
+    "Literal charge_type thực tế cho refund của usage charge chưa từng được quan sát (CHK-CTC-011).",
+    "Lý do nghiệp vụ đằng sau việc loại hoàn toàn charge 'one-time' chưa xác nhận (không chặn test — hành vi hiện tại đã CONFIRMED_EXPECTED, chỉ thiếu rationale)."
+  ],
+  "conflicts": [],
+  "blocking_issues": [],
+  "payload": {
+    "checklists": [
+      {
+        "feature_id": "charge-type-classification",
+        "feature_key": "charge-type-classification",
+        "checklist_version": "v1",
+        "checks": [
+          {
+            "check_id": "CHK-CTC-001",
+            "dimension": "CORE",
+            "layer": "db",
+            "title": "Charge Type KHÔNG chứa 'usage' và KHÔNG chứa 'one-time' → phân loại Recurring/First-month",
+            "applicability": {
+              "role": "unspecified",
+              "state": "any",
+              "environment": "documented",
+              "theme_or_device": ""
+            },
+            "precondition": "1 dòng payout có cột Charge Type dạng mô tả tự do không chứa 2 từ khoá trên (ví dụ 'App sale – 30-day subscription').",
+            "steps": [
+              "Import dòng có Charge Type như trên.",
+              "Kiểm tra nhánh xử lý hoa hồng được áp dụng cho dòng đó."
+            ],
+            "observation_point": "Nhánh tính hoa hồng thực tế (rate/percentage field dùng) của Conversion.",
+            "expected_result": "Dòng được phân loại vào nhánh Recurring/First-month (phí subscription định kỳ bình thường).",
+            "oracle": {
+              "kb_ids": [
+                "KB-005"
+              ],
+              "oracle_strength": "STRONG"
+            },
+            "status": "READY",
+            "open_question_draft": null,
+            "risk_refs": [],
+            "priority": "P2",
+            "act_ids": [],
+            "evidence_refs": [],
+            "automation_suitability": "SUITABLE"
+          },
+          {
+            "check_id": "CHK-CTC-002",
+            "dimension": "CORE",
+            "layer": "db",
+            "title": "Charge Type chứa 'usage' → phân loại Usage-charge, charge ID dạng gid://shopify/AppUsageRecord/...",
+            "applicability": {
+              "role": "unspecified",
+              "state": "any",
+              "environment": "documented",
+              "theme_or_device": ""
+            },
+            "precondition": "1 dòng payout có Charge Type chứa 'usage' (ví dụ 'App sale – usage').",
+            "steps": [
+              "Import dòng có Charge Type như trên.",
+              "Kiểm tra nhánh xử lý và format charge ID."
+            ],
+            "observation_point": "Nhánh tính hoa hồng (metered billing) + giá trị charge_id của Conversion.",
+            "expected_result": "Dòng phân loại vào nhánh Usage-charge; charge_id có dạng gid://shopify/AppUsageRecord/....",
+            "oracle": {
+              "kb_ids": [
+                "KB-006",
+                "KB-007"
+              ],
+              "oracle_strength": "STRONG"
+            },
+            "status": "READY",
+            "open_question_draft": null,
+            "risk_refs": [],
+            "priority": "P2",
+            "act_ids": [],
+            "evidence_refs": [],
+            "automation_suitability": "SUITABLE"
+          },
+          {
+            "check_id": "CHK-CTC-003",
+            "dimension": "CORE",
+            "layer": "db",
+            "title": "Charge Type chứa 'one-time' → bị loại hoàn toàn, không tính hoa hồng",
+            "applicability": {
+              "role": "unspecified",
+              "state": "any",
+              "environment": "documented",
+              "theme_or_device": ""
+            },
+            "precondition": "1 dòng payout có Charge Type chứa 'one-time'.",
+            "steps": [
+              "Import dòng có Charge Type như trên.",
+              "Kiểm tra có Conversion nào được tạo cho dòng này không."
+            ],
+            "observation_point": "Có/không có Conversion tương ứng trong DB.",
+            "expected_result": "Dòng bị loại hoàn toàn — KHÔNG tạo Conversion, không tính hoa hồng. Đây là quyết định nghiệp vụ có chủ đích, được lập trình rõ ràng, không phải sót.",
+            "oracle": {
+              "kb_ids": [
+                "KB-008",
+                "KB-009"
+              ],
+              "oracle_strength": "STRONG"
+            },
+            "status": "READY",
+            "open_question_draft": null,
+            "risk_refs": [],
+            "priority": "P2",
+            "act_ids": [],
+            "evidence_refs": [],
+            "automation_suitability": "SUITABLE"
+          },
+          {
+            "check_id": "CHK-CTC-004",
+            "dimension": "BOUNDARY",
+            "layer": "db",
+            "title": "Match không phân biệt hoa/thường — các biến thể casing của 'usage'/'one-time' đều được nhận diện đúng",
+            "applicability": {
+              "role": "unspecified",
+              "state": "any",
+              "environment": "documented",
+              "theme_or_device": ""
+            },
+            "precondition": "Các dòng Charge Type chứa biến thể casing khác nhau của từ khoá, ví dụ 'USAGE', 'Usage', 'uSaGe', 'ONE-TIME', 'One-Time'.",
+            "steps": [
+              "Import lần lượt các dòng với từng biến thể casing.",
+              "Kiểm tra nhánh phân loại của mỗi dòng."
+            ],
+            "observation_point": "Nhánh phân loại thực tế cho mỗi biến thể casing.",
+            "expected_result": "Mọi biến thể casing của 'usage'/'one-time' đều được nhận diện đúng — match không phân biệt hoa/thường, không so khớp chính xác toàn bộ chuỗi.",
+            "oracle": {
+              "kb_ids": [
+                "KB-002"
+              ],
+              "oracle_strength": "STRONG"
+            },
+            "status": "READY",
+            "open_question_draft": null,
+            "risk_refs": [],
+            "priority": "P2",
+            "act_ids": [],
+            "evidence_refs": [],
+            "automation_suitability": "SUITABLE"
+          },
+          {
+            "check_id": "CHK-CTC-005",
+            "dimension": "NEGATIVE",
+            "layer": "db",
+            "title": "[NEEDS_CONFIRMATION] Charge Type chứa CẢ 'usage' và 'one-time' cùng lúc — nhánh nào được ưu tiên?",
+            "applicability": {
+              "role": "unspecified",
+              "state": "any",
+              "environment": "documented",
+              "theme_or_device": ""
+            },
+            "precondition": "1 dòng có Charge Type chứa cả 2 từ khoá (ví dụ giả định 'App sale – usage one-time credit').",
+            "steps": [
+              "Import dòng có Charge Type chứa cả 2 từ khoá.",
+              "Kiểm tra nhánh xử lý thực tế được áp dụng."
+            ],
+            "observation_point": "Nhánh phân loại thực tế.",
+            "expected_result": "CHƯA CÓ oracle — tài liệu mô tả 2 điều kiện match độc lập (chứa 'usage' → usage-charge; chứa 'one-time' → loại bỏ) nhưng không nêu thứ tự ưu tiên/điều kiện loại trừ khi cả 2 cùng khớp.",
+            "oracle": {
+              "kb_ids": [],
+              "oracle_strength": "NONE"
+            },
+            "status": "NEEDS_CONFIRMATION",
+            "open_question_draft": "Khi 1 giá trị Charge Type chứa CẢ chuỗi con 'usage' và 'one-time', hệ thống ưu tiên nhánh nào (loại bỏ hoàn toàn hay vẫn tính usage-charge)? Cần đọc thứ tự điều kiện if/else thật trong code hoặc hỏi dev — hiện case này hoàn toàn giả định, chưa quan sát được dữ liệu thật dạng này.",
+            "risk_refs": [],
+            "priority": "P2",
+            "act_ids": [],
+            "evidence_refs": [],
+            "automation_suitability": "UNKNOWN"
+          },
+          {
+            "check_id": "CHK-CTC-006",
+            "dimension": "NEGATIVE",
+            "layer": "db",
+            "title": "Cột Category giữ nguyên 'App revenue' cho cả dòng refund/downgrade — hệ thống không dựa vào Category để phát hiện refund",
+            "applicability": {
+              "role": "unspecified",
+              "state": "any",
+              "environment": "documented",
+              "theme_or_device": ""
+            },
+            "precondition": "1 dòng refund/downgrade (số âm ở cột tiền).",
+            "steps": [
+              "Import dòng refund/downgrade.",
+              "Kiểm tra giá trị cột Category của dòng đó.",
+              "Xác nhận cơ chế phân loại charge_type không dùng Category làm input."
+            ],
+            "observation_point": "Giá trị Category trong file + logic phân loại thực tế.",
+            "expected_result": "Category vẫn là 'App revenue' dù là dòng refund/downgrade — không có cột/flag 'is refund' riêng; cơ chế phân loại charge_type không dựa vào Category để phát hiện refund.",
+            "oracle": {
+              "kb_ids": [
+                "KB-010",
+                "KB-011"
+              ],
+              "oracle_strength": "STRONG"
+            },
+            "status": "READY",
+            "open_question_draft": null,
+            "risk_refs": [],
+            "priority": "P2",
+            "act_ids": [],
+            "evidence_refs": [],
+            "automation_suitability": "SUITABLE"
+          },
+          {
+            "check_id": "CHK-CTC-007",
+            "dimension": "REGRESSION",
+            "layer": "db",
+            "title": "[REGRESSION-watch] charge_type mới không khớp 'usage' hay 'one-time' tự động rơi vào nhánh Recurring/First-month",
+            "applicability": {
+              "role": "unspecified",
+              "state": "any",
+              "environment": "documented",
+              "theme_or_device": ""
+            },
+            "precondition": "1 dòng có Charge Type là 1 chuỗi mới Shopify có thể phát hành, không khớp cả 2 từ khoá hiện có (ví dụ 'App proration credit').",
+            "steps": [
+              "Import dòng có Charge Type dạng mới, không chứa 'usage'/'one-time'.",
+              "Kiểm tra nhánh phân loại thực tế."
+            ],
+            "observation_point": "Nhánh phân loại thực tế cho chuỗi mới.",
+            "expected_result": "HÀNH VI HIỆN TẠI (known defect, P1 — rủi ro tài chính âm thầm): chuỗi mới không khớp 2 từ khoá hiện có sẽ TỰ ĐỘNG rơi vào nhánh Recurring/First-month (vì logic chỉ kiểm tra có/không chứa 2 từ khoá, không có nhánh 'unknown'). Đây là hệ quả tất yếu của cơ chế match chuỗi con hiện tại, không phải lỗi cần fix ngay, nhưng PHẢI theo dõi mỗi khi Shopify đổi cách đặt tên charge_type.",
+            "oracle": {
+              "kb_ids": [],
+              "oracle_strength": "NONE"
+            },
+            "status": "NEEDS_CONFIRMATION",
+            "open_question_draft": "KB item KB-014 mang status=KNOWN_DEFECT da bi go khoi oracle.kb_ids (khong duoc dung lam oracle theo luat C5 'known_defect khong phai expected result'). Check 'CHK-CTC-007' hien khong con oracle hop le nao. Can PO/Dev xac nhan: hanh vi mo ta trong expected_result la known defect can tiep tuc theo doi (regression-watch, khong oracle) hay can mot kb_id CONFIRMED_EXPECTED khac thay the lam oracle.",
+            "risk_refs": [
+              "KB-014"
+            ],
+            "priority": "P1",
+            "act_ids": [],
+            "evidence_refs": [],
+            "automation_suitability": "SUITABLE"
+          },
+          {
+            "check_id": "CHK-CTC-008",
+            "dimension": "REGRESSION",
+            "layer": "db",
+            "title": "[REGRESSION-watch] Không có log cảnh báo khi gặp charge_type lạ chưa từng thấy",
+            "applicability": {
+              "role": "admin",
+              "state": "any",
+              "environment": "documented",
+              "theme_or_device": ""
+            },
+            "precondition": "Import 1 dòng có charge_type chưa từng xuất hiện trong hệ thống trước đó.",
+            "steps": [
+              "Import dòng có charge_type mới, lạ.",
+              "Kiểm tra log hệ thống/application log có cảnh báo nào không."
+            ],
+            "observation_point": "Log hệ thống sau khi import dòng charge_type lạ.",
+            "expected_result": "HÀNH VI HIỆN TẠI (known defect — observability gap): không có log cảnh báo nào được sinh ra cho charge_type lạ chưa từng thấy, kể cả khi nó rơi vào nhánh mặc định (CHK-CTC-007). Nếu phát hiện log cảnh báo xuất hiện, đó là thay đổi hành vi cần xác nhận lại.",
+            "oracle": {
+              "kb_ids": [],
+              "oracle_strength": "NONE"
+            },
+            "status": "NEEDS_CONFIRMATION",
+            "open_question_draft": "KB item KB-015 mang status=KNOWN_DEFECT da bi go khoi oracle.kb_ids (khong duoc dung lam oracle theo luat C5 'known_defect khong phai expected result'). Check 'CHK-CTC-008' hien khong con oracle hop le nao. Can PO/Dev xac nhan: hanh vi mo ta trong expected_result la known defect can tiep tuc theo doi (regression-watch, khong oracle) hay can mot kb_id CONFIRMED_EXPECTED khac thay the lam oracle.",
+            "risk_refs": [
+              "KB-015"
+            ],
+            "priority": "P2",
+            "act_ids": [],
+            "evidence_refs": [],
+            "automation_suitability": "SUITABLE"
+          },
+          {
+            "check_id": "CHK-CTC-009",
+            "dimension": "REGRESSION",
+            "layer": "db",
+            "title": "[REGRESSION-watch] charge_type refund/downgrade chứa 'usage' bị định tuyến qua UsageCommissionCapper thay vì nhánh recurring",
+            "applicability": {
+              "role": "unspecified",
+              "state": "any",
+              "environment": "documented",
+              "theme_or_device": ""
+            },
+            "precondition": "1 dòng refund/downgrade có Charge Type chứa 'usage' (ví dụ giả định 'App sale – usage refund').",
+            "steps": [
+              "Import dòng refund/downgrade có Charge Type chứa 'usage'.",
+              "Kiểm tra cơ chế cap/tính hoa hồng thực tế được áp dụng."
+            ],
+            "observation_point": "Cơ chế cap thực tế (UsageCommissionCapper vs cơ chế recurring refund thông thường).",
+            "expected_result": "HÀNH VI HIỆN TẠI (known defect, P1 — rủi ro tài chính): dòng đi qua UsageCommissionCapper (nhánh usage) thay vì nhánh recurring như refund/downgrade thông thường, do cơ chế match chuỗi con không phân biệt được ngữ cảnh refund. Sai định tuyến KHÔNG gây crash, chỉ ra sai số tiền — khó phát hiện qua kiểm tra thông thường (xem CHK-CTC-010).",
+            "oracle": {
+              "kb_ids": [],
+              "oracle_strength": "NONE"
+            },
+            "status": "NEEDS_CONFIRMATION",
+            "open_question_draft": "KB item KB-016 mang status=KNOWN_DEFECT da bi go khoi oracle.kb_ids (khong duoc dung lam oracle theo luat C5 'known_defect khong phai expected result'). Check 'CHK-CTC-009' hien khong con oracle hop le nao. Can PO/Dev xac nhan: hanh vi mo ta trong expected_result la known defect can tiep tuc theo doi (regression-watch, khong oracle) hay can mot kb_id CONFIRMED_EXPECTED khac thay the lam oracle.",
+            "risk_refs": [
+              "KB-016"
+            ],
+            "priority": "P1",
+            "act_ids": [],
+            "evidence_refs": [],
+            "automation_suitability": "SUITABLE"
+          },
+          {
+            "check_id": "CHK-CTC-010",
+            "dimension": "REGRESSION",
+            "layer": "db",
+            "title": "[REGRESSION-watch] Cơ chế phân loại dựa hoàn toàn vào substring match của 1 chuỗi Shopify không cam kết ổn định — rủi ro miscalculation âm thầm, không crash",
+            "applicability": {
+              "role": "unspecified",
+              "state": "any",
+              "environment": "documented",
+              "theme_or_device": ""
+            },
+            "precondition": "Áp dụng cho toàn bộ cơ chế phân loại charge_type, không riêng 1 dòng cụ thể.",
+            "steps": [
+              "Mỗi khi Shopify export format mới hoặc đổi cách đặt tên charge_type, chạy lại toàn bộ bộ test CHK-CTC-001..009 trên dữ liệu mới.",
+              "So sánh kết quả phân loại với bộ giá trị Charge Type đã biết (bảng tham chiếu KB-005/006/008)."
+            ],
+            "observation_point": "Kết quả phân loại trên dữ liệu charge_type mới so với bảng tham chiếu đã biết.",
+            "expected_result": "HÀNH VI HIỆN TẠI (known defect tổng quát, dùng làm regression watch toàn diện): Str::contains(Str::lower($charge_type), 'usage'/'one-time') là cơ chế duy nhất; Shopify tự tuyên bố KHÔNG cam kết ổn định giá trị/cột export này. Sai định tuyến không crash, chỉ ra sai số tiền hoa hồng, rất khó phát hiện qua kiểm tra thông thường. Đây là rủi ro 'âm thầm nhất trong toàn hệ thống' theo đánh giá của chính tài liệu nguồn — bắt buộc re-run bộ check này sau MỖI lần thay đổi format file payout từ Shopify.",
+            "oracle": {
+              "kb_ids": [
+                "KB-013"
+              ],
+              "oracle_strength": "BASELINE"
+            },
+            "status": "READY",
+            "open_question_draft": null,
+            "risk_refs": [
+              "KB-004",
+              "KB-012",
+              "KB-013",
+              "KB-017"
+            ],
+            "priority": "P2",
+            "act_ids": [],
+            "evidence_refs": [],
+            "automation_suitability": "SUITABLE"
+          },
+          {
+            "check_id": "CHK-CTC-011",
+            "dimension": "REGRESSION",
+            "layer": "db",
+            "title": "[NEEDS_CONFIRMATION — P1] Refund của 1 usage-charge: literal charge_type thực tế chưa từng quan sát — rủi ro định tuyến nhầm sang nhánh recurring/first-month",
+            "applicability": {
+              "role": "unspecified",
+              "state": "any",
+              "environment": "documented",
+              "theme_or_device": ""
+            },
+            "precondition": "CHƯA có dữ liệu thật của 1 dòng refund-of-usage-charge trong hệ thống — đây là kịch bản chờ dữ liệu thật đầu tiên xuất hiện.",
+            "steps": [
+              "Khi có dòng refund của 1 usage charge thật đầu tiên xuất hiện trong file payout, ghi lại NGUYÊN VĂN giá trị Charge Type của Shopify cho dòng đó.",
+              "Kiểm tra nhánh phân loại thực tế được áp dụng (usage hay recurring/first-month).",
+              "Đối chiếu rate (percentage vs usage_percentage) và cơ chế cap (per-row vs lifetime) thực tế dùng cho dòng đó."
+            ],
+            "observation_point": "Literal Charge Type thật + nhánh phân loại + rate/cơ chế cap thực tế áp dụng.",
+            "expected_result": "CHƯA CÓ oracle — nếu Shopify dùng literal KHÔNG chứa 'usage' (ví dụ generic 'App refund') cho dòng này, dòng sẽ bị định tuyến NHẦM vào nhánh recurring/first-month (sai rate: percentage thay vì usage_percentage; sai cơ chế cap: per-row thay vì lifetime) theo suy luận từ cơ chế hiện tại — nhưng đây là rủi ro thiết kế CHƯA xác nhận bằng dữ liệu thật, và PO chưa xác nhận hành vi mong muốn. KHÔNG dùng suy luận này làm oracle pass/fail cho tới khi có dữ liệu thật + xác nhận PO.",
+            "oracle": {
+              "kb_ids": [],
+              "oracle_strength": "NONE"
+            },
+            "status": "NEEDS_CONFIRMATION",
+            "open_question_draft": "Khi có dòng refund của 1 usage-charge thật đầu tiên: (1) Shopify dùng literal charge_type nào cho dòng này (có chứa 'usage' hay không)? (2) Hành vi mong muốn của PO là gì nếu literal đó không chứa 'usage' — có cần thêm logic đặc biệt để nhận diện refund-of-usage hay giữ nguyên cơ chế match chuỗi con hiện tại? Đây là rủi ro tài chính trực tiếp (sai rate + sai cơ chế cap), cần QA test ngay khi có dữ liệu thật, và PO xác nhận trước khi dùng làm oracle chính thức.",
+            "risk_refs": [
+              "KB-018"
+            ],
+            "priority": "P1",
+            "act_ids": [],
+            "evidence_refs": [],
+            "automation_suitability": "UNKNOWN"
+          },
+          {
+            "check_id": "CHK-CTC-012",
+            "dimension": "BOUNDARY",
+            "layer": "db",
+            "title": "[NEEDS_CONFIRMATION] Hành vi phân loại khi cột Charge Type rỗng/null",
+            "applicability": {
+              "role": "unspecified",
+              "state": "any",
+              "environment": "documented",
+              "theme_or_device": ""
+            },
+            "precondition": "1 dòng có cột Charge Type tồn tại nhưng giá trị rỗng hoặc null.",
+            "steps": [
+              "Import dòng có Charge Type rỗng/null.",
+              "Kiểm tra nhánh phân loại hoặc lỗi validate phát sinh."
+            ],
+            "observation_point": "Kết quả xử lý dòng có Charge Type rỗng.",
+            "expected_result": "CHƯA CÓ oracle — tài liệu không mô tả hành vi khi Charge Type rỗng/null (chỉ mô tả hành vi khi có giá trị và match/không match từ khoá).",
+            "oracle": {
+              "kb_ids": [],
+              "oracle_strength": "NONE"
+            },
+            "status": "NEEDS_CONFIRMATION",
+            "open_question_draft": "Khi cột Charge Type của 1 dòng rỗng/null, hệ thống phân loại dòng đó vào nhánh nào, hay fail validate và skip (tương tự cơ chế thiếu field bắt buộc khác ở payout-csv-upload)? Cần dev xác nhận Str::contains(null, ...) không gây lỗi runtime và hành vi thực tế là gì.",
+            "risk_refs": [],
+            "priority": "P2",
+            "act_ids": [],
+            "evidence_refs": [],
+            "automation_suitability": "UNKNOWN"
+          },
+          {
+            "check_id": "CHK-CTC-013",
+            "dimension": "NEGATIVE",
+            "layer": "db",
+            "title": "[NEEDS_CONFIRMATION] Cột Category có giá trị nào khác 'App revenue' không được xác nhận",
+            "applicability": {
+              "role": "unspecified",
+              "state": "any",
+              "environment": "documented",
+              "theme_or_device": ""
+            },
+            "precondition": "N/A — gap đặc tả, chưa có dữ liệu mẫu khác 'App revenue'.",
+            "steps": [
+              "Thu thập thêm mẫu file payout thật.",
+              "Kiểm tra tập giá trị thực tế xuất hiện ở cột Category."
+            ],
+            "observation_point": "Tập giá trị Category quan sát được qua nhiều mẫu file.",
+            "expected_result": "CHƯA CÓ oracle — KB-011 chỉ xác nhận Category giữ 'App revenue' kể cả với refund, KHÔNG xác nhận đây là giá trị DUY NHẤT có thể xuất hiện ở cột này; không suy enum từ 1 giá trị đã thấy.",
+            "oracle": {
+              "kb_ids": [],
+              "oracle_strength": "NONE"
+            },
+            "status": "NEEDS_CONFIRMATION",
+            "open_question_draft": "Cột Category của file payout Shopify có những giá trị nào khác ngoài 'App revenue'? Nếu có giá trị khác, cơ chế phân loại charge_type có bị ảnh hưởng không?",
+            "risk_refs": [],
+            "priority": "P3",
+            "act_ids": [],
+            "evidence_refs": [],
+            "automation_suitability": "UNKNOWN"
+          }
+        ]
+      }
+    ],
+    "coverage_by_feature_and_risk": [
+      {
+        "feature_id": "charge-type-classification",
+        "risk": "KB-014",
+        "covered_by": [
+          "CHK-CTC-007"
+        ]
+      },
+      {
+        "feature_id": "charge-type-classification",
+        "risk": "KB-015",
+        "covered_by": [
+          "CHK-CTC-008"
+        ]
+      },
+      {
+        "feature_id": "charge-type-classification",
+        "risk": "KB-016",
+        "covered_by": [
+          "CHK-CTC-009"
+        ]
+      },
+      {
+        "feature_id": "charge-type-classification",
+        "risk": "KB-004,KB-012,KB-013,KB-017",
+        "covered_by": [
+          "CHK-CTC-010"
+        ]
+      },
+      {
+        "feature_id": "charge-type-classification",
+        "risk": "KB-018",
+        "covered_by": [
+          "CHK-CTC-011"
+        ]
+      }
+    ],
+    "checks_needing_confirmation": [
+      {
+        "check_id": "CHK-CTC-005",
+        "open_question_draft": "Thứ tự ưu tiên khi Charge Type chứa cả 'usage' và 'one-time'?",
+        "reason": "Tài liệu mô tả 2 điều kiện độc lập, không nêu thứ tự ưu tiên khi cùng khớp."
+      },
+      {
+        "check_id": "CHK-CTC-011",
+        "open_question_draft": "Literal charge_type thật cho refund-of-usage-charge là gì, và PO xác nhận hành vi mong muốn?",
+        "reason": "Chưa có dữ liệu thật; OQC-payout-import-005 trong KB nguồn đã đặt vấn đề này, cần QA test + PO xác nhận ngay khi có dữ liệu đầu tiên."
+      },
+      {
+        "check_id": "CHK-CTC-012",
+        "open_question_draft": "Hành vi phân loại khi Charge Type rỗng/null?",
+        "reason": "Tài liệu không mô tả case này."
+      },
+      {
+        "check_id": "CHK-CTC-013",
+        "open_question_draft": "Cột Category có giá trị nào khác 'App revenue' không?",
+        "reason": "KB-011 chỉ xác nhận 1 giá trị đã thấy, không khẳng định enum đầy đủ."
+      }
+    ],
+    "duplicates_removed": [],
+    "excluded_dimensions": [
+      {
+        "dimension": "PERMISSION",
+        "reason": "Cơ chế phân loại charge_type chạy hoàn toàn ở tầng data/code trong lúc import, không có actor người dùng trực tiếp tương tác với bước này — không có claim permission nào áp dụng trực tiếp (permission của chính hành động upload/populate đã nằm ở checklist của 2 feature gọi tới)."
+      },
+      {
+        "dimension": "STATE_DATA",
+        "reason": "Bản thân bước phân loại không giữ state riêng — nó chạy 1 lần mỗi khi 1 dòng được xử lý (ở cả Upload và Populate); hành vi persistence/reload thuộc về Conversion, đã được check ở feature payout-csv-upload và populate-reconcile-late-data, không nhân bản ở đây."
+      },
+      {
+        "dimension": "INTEGRATION",
+        "reason": "Không có cross-surface portal/storefront/API; việc feature này được 2 feature khác (payout-csv-upload, populate-reconcile-late-data) tái sử dụng là quan hệ DEPENDS_ON/SUPPORTS giữa feature, không phải ranh giới tích hợp cross-surface cần check riêng."
+      }
+    ]
+  },
+  "gate": {
+    "decision": "CONDITIONAL_PASS",
+    "blocking_findings": [],
+    "conditions": [
+      "7 known_defect (KB-004, KB-012, KB-014, KB-015, KB-016, KB-017, KB-018) dùng oracle_strength=BASELINE hoặc NONE+NEEDS_CONFIRMATION (KB-018), không khẳng định expected_result như CONFIRMED_EXPECTED.",
+      "KB-012 (OBSERVED_CURRENT) và KB-002/003 (CONFIRMED_EXPECTED) không bị trộn lẫn làm oracle cho cùng 1 check — giữ đúng tách bạch theo KB nguồn.",
+      "CHK-CTC-011 (refund-of-usage-charge, P1 tài chính) giữ NEEDS_CONFIRMATION/NONE đúng theo khuyến nghị 'QA test + PO xác nhận' của tài liệu nguồn — không tự suy oracle từ logic code khi chưa có dữ liệu thật."
+    ],
+    "allowed_next_steps": [
+      "knowledge-diff-analyzer",
+      "context-quality-reviewer"
+    ]
+  }
+}

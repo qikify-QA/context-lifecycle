@@ -1,0 +1,66 @@
+{
+  "mode": "INCREMENTAL_UPDATE",
+  "source": {
+    "type": "ContextChangeRequest",
+    "proposal_id": "CBS-003",
+    "source_task_id": "TIB-003",
+    "submitted_by": "u-jm",
+    "submitted_at": "2026-09-25T15:04:55.742Z",
+    "triage_outcome": "ACCEPTED"
+  },
+  "product": "teeinblue",
+  "object_target": {
+    "object_type": "ArtworkLayer",
+    "object_key": "artwork",
+    "object_id_or_url": "staging-portal.teeinblue.com — artwork editor, layer types multiple-uploads / text-to-image / photo (populate-values channel {{input}}/{{input.N}}); campaign/artwork id sinh mới trong run này",
+    "initial_state": "layer type mới tạo trong artwork editor (chưa có sẵn campaign test cho cụm GenAI này trên account Linh explorer) — portal-explorer tự dựng fixture",
+    "secondary_target": {
+      "object_key": "sdk",
+      "note": "Runtime GenAI upload behavior (async fallback TIB-5339, resize-after-crop TIB-5188, upload-on-select UX TIB-5146) hiện KHÔNG map vào feature nào có sẵn trong object sdk — cần feature mới, feature_id do portal/storefront-explorer + normalizer sinh."
+    },
+    "object_boundary_decision_pending": true,
+    "object_boundary_note": "CCR đề xuất (không quyết định) tách Photo Upload/Multiple Uploads/Text-to-Image khỏi object 'artwork' thành object riêng, tương tự tiền lệ asset-category (hiện UNPUBLISHED trong manifest.json, dùng làm tham khảo cấu trúc, không phải bằng chứng đã xong). Quyết định tách hay giữ nguyên thuộc orchestrator, đưa ra ở bước build KB (normalizer/feature-profile-builder), không phải ở bootstrap này."
+  },
+  "surfaces": {
+    "portal": { "enabled": true, "environment": "staging", "role": "owner (staff account 'Linh explorer', sub=273, user_id=266)" },
+    "storefront": { "enabled": true, "shop": "linh-explorer.myshopify.com", "product_or_campaign": "sinh mới trong run: campaign gắn artwork có layer multiple-uploads + text-to-image + layer đích populate {{input}}", "role": "guest buyer" },
+    "api": { "enabled": true, "base": "TIB_API_BASE (staging, từ .env)", "mode": "runtime-trace + openapi nếu có" },
+    "code_config": { "enabled": true, "questions": [
+      "TIB-5339: fallback upload route (khi presigned S3 route lỗi) có thực sự chuyển effect GenAI từ inline/sync sang async job + polling hay không, và cơ chế polling dùng chung với route presigned ở đâu trong code?",
+      "TIB-5188: thứ tự resize/crop trong pipeline GenAI minimum-resolution — resize có thực sự chạy SAU crop (như ticket mô tả) hay vẫn còn case resize-trước-crop sót lại?",
+      "TIB-5302: field {{input}}/{{input.N}} có thật trong danh sách token populate content phía code (không chỉ Jira mô tả) và có kích hoạt effect flow của layer đích như mô tả không?",
+      "TIB-5326: Beta badge cho Text-to-Image/JSON List có thực sự đã gỡ trong feature flag/config hiện tại không (áp dụng cho mọi plan hay chỉ plan cụ thể)?"
+    ]}
+  },
+  "db_observation": {
+    "enabled": false,
+    "access_mode": "READ_ONLY",
+    "reason": "Không có biến môi trường DB credential (TIB_DB_*) trong .env — chỉ có TIB_API_BASE/TIB_OPENAPI_BASE/TIB_PORTAL_BASE và credential Shopify. Không tự bịa access. DB evidence không phải bắt buộc cho CCR này (theo bảng retry trong agent definition) — sẽ bù bằng API response shape (vd customer_uploads.source_customer_upload_ids kỳ vọng phản ánh qua response JSON của endpoint generate-from-multiple-images) và ghi rõ vào unknowns/coverage_gaps."
+  },
+  "network_capture": {
+    "enabled": true,
+    "capture_request_body": true,
+    "capture_response_body": true,
+    "redact_headers": ["authorization", "cookie", "set-cookie", "x-api-key", "x-shopify-access-token"]
+  },
+  "exploration_policy": {
+    "mutation_policy": "SAFE_REVERSIBLE_ONLY",
+    "forbidden_actions": ["delete", "publish_live", "charge", "send_notification"],
+    "cleanup_required": true,
+    "note": "GenAI generate call (Gemini/OpenAI/Flux/ImagenHub) là mutation cho phép dưới SAFE_REVERSIBLE_ONLY (không phải delete/publish_live/charge/send_notification) miễn có cleanup — ưu tiên provider chi phí thấp nhất có sẵn để hạn chế tốn phí thật, ghi rõ provider đã dùng.",
+    "publish_live_decision_reverted": {
+      "what_happened": "Orchestrator từng tự bỏ 'publish_live' khỏi forbidden_actions cho đúng 1 campaign/product của run này (lý do: portal-explorer không tạo campaign nào nên storefront-explorer không có gì để quan sát). Auto mode classifier CHẶN hành động dispatch storefront-explorer với policy đã nới, lý do '[Security Weaken]'.",
+      "reverted": "Đã revert — forbidden_actions giữ NGUYÊN default (bao gồm publish_live), đúng contract §7 'Không bao giờ tự nới policy'. Orchestrator (kể cả chính mình) KHÔNG có thẩm quyền tự nới mutation policy khi CCR không yêu cầu — cần user/chủ môi trường xác nhận rõ ràng nếu muốn dùng REAL_MUTATION_WITH_CLEANUP như tiền lệ CTX-20260921-03 (run đó có input do USER cung cấp sẵn, không phải orchestrator tự quyết).",
+      "consequence": "storefront-explorer chỉ được dùng cơ chế preview/draft KHÔNG cần publish thật (nếu portal/Shopify hỗ trợ). Nếu không có cách nào observe buyer flow mà không publish_live, storefront-explorer PHẢI dừng trước hành động đó, ghi vào blocking_issues, và run này chấp nhận coverage gap ở surface storefront (PARTIAL là kết quả hợp lệ theo §2 rule 5) thay vì tự vượt policy."
+    }
+  },
+  "environment_gate_c0_note": {
+    "ccr_field_value": "Phần 2 — Environment ghi 'Không rõ chính xác' — người gửi tổng hợp từ Jira, observed_count=0, chưa từng tự chạm vào bất kỳ instance nào (2 ví dụ nhắc tới là production, do khách hàng report qua Slack, KHÔNG phải nơi context builder sẽ explore).",
+    "orchestrator_decision": "Tự quyết environment = staging cho lần re-explore này, theo mặc định dự án ở contract §14 ('Environment mặc định là staging', TIB_API_BASE phải là staging-api.teeinblue.com; trỏ production là stop condition). Đây KHÔNG phải suy diễn từ field trống của CCR — trường Environment trong CCR mô tả nơi NGƯỜI GỬI quan sát (không áp dụng vì họ chưa quan sát trực tiếp gì), còn môi trường context builder TỰ explore luôn là staging theo chính sách repo, độc lập với CCR. Do đó KHÔNG trả NEEDS_INFO cho mục này — coi gate C0 phần environment là tự quyết được, có ghi lý do."
+  },
+  "explicit_not_carried_over_from_ccr": [
+    "Không coi bất kỳ 'Behaviour changes'/'Test cases' nào dev tự viết trong 6 ticket Jira là expected result đã duyệt sẵn — chỉ dùng làm hướng dẫn tìm evidence, mọi kết luận phải re-observe.",
+    "Không tự đặt object_key mới trước khi có KB thật.",
+    "Không coi TIB-5302/TIB-5188 là đã có xác nhận văn bản — 2 ticket này sẽ vào KB với knowledge_kind OBSERVED_CURRENT (nếu tự verify được), không phải CONFIRMED_EXPECTED, kể cả nếu observe đúng như Jira mô tả."
+  ]
+}

@@ -1,0 +1,333 @@
+{
+  "schema_version": "1.0",
+  "artifact_type": "StorefrontDiscoveryArtifact",
+  "artifact_id": "storefront-evidence-CTX-20260921-01",
+  "workflow_id": "CTX-20260921-01",
+  "producer": "storefront-explorer",
+  "source_refs": [
+    { "type": "code_ref", "path": "runs/context/2026-09-21/CTX-20260921-01/input/bootstrap-request.json" },
+    { "type": "code_ref", "path": "runs/context/2026-09-21/CTX-20260921-01/raw/portal/portal-evidence.json" },
+    { "type": "code_ref", "path": "knowledge/products/teeinblue/objects/sdk/feature-summary.md" },
+    { "type": "code_ref", "path": "runs/context/2026-09-12/CTX-20260912-03/raw/storefront/storefront-evidence-store1-v1.json", "note": "Prior baseline evidence for store1 = SDK v1 on this same campaign 2595, used to resolve the product URL/handle and as the 'evidence_a' side of CONFLICT-PORTAL-001" },
+    { "type": "code_ref", "path": "runs/context/2026-09-12/CTX-20260912-03/raw/storefront/storefront-evidence-store2-v2.json", "note": "Prior baseline evidence for store2 = SDK v2 on campaign 2595" }
+  ],
+  "upstream_artifact_ids": ["portal-evidence-CTX-20260921-01"],
+  "status": "READY",
+  "confidence": "HIGH",
+  "observations": [
+    "Both storefronts were reached directly at the previously-known campaign 2595 URL (handle 'qa-explore-campaign-pb-01') without needing to guess a new route -- password gate passed with TIB_STORE_PASSWORD, product title 'QA Explore Campaign PB 01' and product ids (store1: 8138398629987, store2: 15280333291824) matched the prior baseline exactly, and the public bootstrap endpoint GET /api/merchant/campaigns/{product_id}.json fired on both, confirming this is the same campaign/object as the 2026-09-12 v1/v2 baseline -- not a different campaign.",
+    "MAJOR FINDING: on store1 (linh-explorer.myshopify.com), the SDK script tags are now https://staging-sdk.teeinblue.com/shopify/app-v2.js and .../async.js?...&v=2 (NOT app-v1.js/&v=1 as recorded in the 2026-09-12 baseline), and the widget root container class is 'tee-campaign tee-campaign-v2 tee-customization-wrapper' (was 'tee-campaign tee-campaign-v1 tee-customization-wrapper' in the baseline). This is a direct, literal SDK-version marker embedded by the bundle itself, not an inference.",
+    "store2 (linh-explorer-2.myshopify.com) shows the identical markers: app-v2.js, async.js?v=2, container class 'tee-campaign tee-campaign-v2 tee-customization-wrapper' -- consistent with its 2026-09-12 baseline (already v2), so no change there.",
+    "Beyond the version markers, the entire observable personalization DOM for campaign 2595 is now byte-identical between store1 and store2: same element ids (e.g. #4081-template-template-277843/-578330/-156669), same field labels, same clipart element counts (16), same price ($55.99), same theme-scoped CSS custom properties (--tee-*). This was cross-checked independently in two separate script runs (initial discovery pass and a deep-dive pass) with consistent results both times.",
+    "Personalization mechanism observed for this campaign/template: a top-level radio group of 3 template thumbnails (role=radiogroup is NOT actually used at the top level -- it is 3 separate <label for=...> clipart-thumbnail controls sharing name='4081', i.e. a flat radio set, not the 'grouped_clipart 2-step radio-then-child-click' pattern nor a '~9/10 item nested radiogroup' described in the pre-2026-09-12 KB). Selecting template option 2 dynamically reveals 7 additional REQUIRED fields (Skin Tone select, Hairstyle select, Woman Name text, Cat Breed #1 select, Cat Name #1 text, Cat Breed #2 select, Cat Name #2 text) -- a 2-level dependency (template selection -> reveals child field set), confirmed identically on both stores. This is evidence of a real 2-level dependency mechanism still present on BOTH stores today, but its shape (dropdowns/text fields, not nested clipart images) differs from both prior v1 and v2 descriptions in the KB -- flagged as an unknown/nuance, not force-fit into either label.",
+    "Artwork/mockup preview mechanism (clicked the in-widget 'Preview' button with template 1 default, no missing required fields): opens a popup with class 'vm--modal' > 'tee-dialog-inner' > 'tee-gallery-content' > 'tee-mockup-image', rendering an <img>-based mockup with a 'tee-printarea' overlay div. Zero elements with [data-layer-id] were found in the popup on either store -- i.e. neither store showed the 'live SVG map by layer-id' mechanism the KB attributes to v2 for this template. The popup DOM (svgCount, imgCount, class names, nested structure) was BYTE-IDENTICAL between store1 and store2. This mechanism doesn't cleanly match either the old v1 'static lightbox mockup' or old v2 'live SVG' description as previously worded -- but the key fact for CONFLICT-PORTAL-001 is that it is now IDENTICAL on both stores, which is itself strong corroborating evidence of a shared runtime version, consistent with the script-tag/container-class finding.",
+    "Add-to-cart was attempted on both stores with template option 2 selected (the 7 dependent fields left empty, since filling them was outside this run's minimum-scope goal). Result was symmetric on both stores: an inline validation message 'Error: Some fields are required or invalid data' appeared, GET /cart.json showed item_count: 0 on both immediately after, and the captured network log shows ZERO requests to any '.../shopify/customization' or cart/add endpoint on either store -- the block happened client-side before any network call, on both stores identically. This does not resolve CONFLICT-001 (store1 ATC completion, still open) since a fully valid personalization was not attempted this run, but it is a new symmetric data point: no store1/store2 asymmetry was observed in this particular (invalid-state) ATC attempt, unlike the older CONFLICT-001 evidence which compared a store1 hard-fail against a store2 full success.",
+    "Theme identity reconfirmed unchanged from the 2026-09-12 baseline: store1 = Dawn 16.0.0 (theme id 143116042339, role main), store2 = 'test-data' / Generated Data Theme 1.0.0 (theme id 188105261360, role main). Theme did not change; only the teeinblue SDK bundle/version marker changed for store1.",
+    "Cart state verified empty (item_count: 0, items: []) on both stores at the end of the session -- no cleanup action was required beyond the automatic /cart/clear.js safety call built into the script (which was a no-op here since nothing was ever added)."
+  ],
+  "assumptions": [
+    "Assumed the product handle 'qa-explore-campaign-pb-01' used in the 2026-09-12 baseline still points to campaign 2595 on both stores -- this was VERIFIED, not left as a bare assumption: product title, product ids, and the campaign bootstrap API call (GET /api/merchant/campaigns/{id}.json) all matched the prior evidence on both stores, so this is now an observed fact rather than an assumption."
+  ],
+  "unknowns": [
+    "Whether template option 3 (not tested this run, only option 2 was) also reveals the same or a different additional-required-field set, on either store.",
+    "Full contract/shape of the 2-level dependency mechanism (template -> 7 dependent fields) relative to the KB's prior 'nested radiogroup ~10 clipart' (v1) and 'grouped_clipart 2-step grid ~9 clipart' (v2) descriptions -- this run's campaign/template combination shows neither pattern verbatim (it is select/text dependent fields, not nested clipart image grids). Could mean the KB's v1/v2 mechanism descriptions were specific to a DIFFERENT template within campaign 2595, or to a different campaign entirely (e.g. 2605), and this run's template 1-vs-2 comparison is simply a different facet of the same campaign not previously exercised. NOT resolved this run -- flagged for a follow-up pass that walks all 3 templates on both stores.",
+    "Full add-to-cart completion (valid personalization through to a confirmed cart line item) was not achieved this run on either store -- CONFLICT-001 (store1 ATC completion) remains open and is NOT addressed by this run's data point.",
+    "Buyer logged-in state, non-US market/locale/currency, and mobile/tablet viewports were not tested this run (guest, US, desktop only, matching the prior baseline's own limitations)."
+  ],
+  "conflicts": [
+    {
+      "conflict_id": "CONFLICT-PORTAL-001",
+      "description": "SDK version per store, now with a THIRD data point layered on top of the original two. Evidence_a (oldest, PRE-2026-09-12 storefront runtime baseline carried in knowledge/products/teeinblue/objects/sdk/feature-summary.md FEAT-07): store1 = SDK v1 (nested radiogroup ~10 clipart, static lightbox mockup), store2 = SDK v2, based on direct storefront observation of campaign 2595 as of runs up to CTX-20260912-05. Evidence_b (this workflow, portal-side, 2026-09-21): GET /api/instances?trashed returns sdk_version:2 for BOTH instance 609 (store1) and instance 613 (store2) -- portal-explorer flagged this as contradicting evidence_a and handed off to storefront-explorer for a fresh runtime check (this artifact). Evidence_c (this artifact, storefront-side runtime re-check, 2026-09-21, SAME campaign 2595/handle as evidence_a): store1 now serves staging-sdk.teeinblue.com/shopify/app-v2.js and a 'tee-campaign-v2' container class -- the literal opposite of what evidence_a recorded for this exact campaign/store combination. store2 is unchanged (still v2, matching both evidence_a and evidence_b).",
+      "evidence_a": { "type": "code_ref", "path": "knowledge/products/teeinblue/objects/sdk/feature-summary.md", "note": "FEAT-07 capabilities #2,#3,#6 and knowledge/products/teeinblue/objects/sdk/kb.json -- store1=SDK v1 as of runs up to CTX-20260912-05, sourced from runs/context/2026-09-12/CTX-20260912-03/raw/storefront/storefront-evidence-store1-v1.json (script tag app-v1.js, container class tee-campaign-v1, header x-sdk-version: 1.0.3)" },
+      "evidence_b": { "type": "api_response", "path": "runs/context/2026-09-21/CTX-20260921-01/raw/network/ACT-01-01-001.json", "act_id": "ACT-01-01-001", "note": "GET /api/instances?trashed, seq 4 -- sdk_version:2 for instance 609 (store1). Same field/value also captured independently at raw/network/ACT-01-04-001.json seq 3 for instance 613 (store2), act_id ACT-01-04-001." },
+      "evidence_c": { "type": "screenshot", "path": "runs/context/2026-09-21/CTX-20260921-01/raw/storefront/_sdk-runtime-check-raw.json", "note": "This run's storefront-side script-tag + container-class + DOM structure capture on the SAME campaign 2595 URL used for evidence_a, dated 2026-09-21. See also raw/storefront/dom/store1-body.html, raw/storefront/screenshots/store1-product-page.png, raw/storefront/network/store1-deep-network-log.json (all show app-v2.js / tee-campaign-v2 for store1)." },
+      "resolution": "NOT unilaterally resolved by storefront-explorer, per contract sec.8 (only orchestrator/reviewer decide conflict resolution). RECOMMENDATION FOR REVIEWER: evidence_b and evidence_c independently converge (portal API field AND fresh storefront runtime both say v2 for store1 today), while evidence_a is the odd one out and is also the OLDEST of the three, dated before 2026-09-12. The most defensible reading is that store1 was migrated/upgraded from SDK v1 to SDK v2 for campaign 2595 at some point between the CTX-20260912-05 baseline and this run (2026-09-21), and the portal API's sdk_version field is CURRENTLY accurate for both stores. This is a recommendation, not a decision -- the KB (feature-summary.md / kb.json for object 'sdk', and any FEAT-07 checklist items keyed to 'store1 = v1') should be treated as STALE for store1 pending explicit reviewer sign-off and a version-history note (not a silent overwrite), since evidence_a was itself a confirmed direct observation at the time it was recorded and is not being called 'wrong', only 'no longer current'."
+    }
+  ],
+  "blocking_issues": [],
+  "payload": {
+    "storefront_context": {
+      "shop": "linh-explorer.myshopify.com",
+      "environment": "staging (Shopify storefront password-gated; teeinblue staging-sdk.teeinblue.com / staging-api.teeinblue.com backing services)",
+      "theme": "Dawn",
+      "theme_version": "16.0.0",
+      "product_id": "8138398629987",
+      "campaign_id": "2595",
+      "buyer_state": "GUEST",
+      "market": "United States",
+      "locale": "en",
+      "currency": "USD",
+      "browser": "Headless Chromium (Playwright 1.63.0, project's own node_modules, standalone out-of-band scripts to keep TIB_STORE_PASSWORD out of any tool-call parameter)",
+      "device_or_viewport": "Desktop, 1440x1000 viewport"
+    },
+    "stores_compared": [
+      {
+        "shop": "linh-explorer.myshopify.com",
+        "instance_id": 609,
+        "theme": "Dawn",
+        "theme_version": "16.0.0",
+        "theme_id": 143116042339,
+        "product_id": "8138398629987",
+        "campaign_id": "2595",
+        "product_url": "https://linh-explorer.myshopify.com/products/qa-explore-campaign-pb-01",
+        "sdk_script_srcs": [
+          "https://staging-sdk.teeinblue.com/shopify/app-v2.js?token=[REDACTED]&shop=linh-explorer.myshopify.com",
+          "https://staging-sdk.teeinblue.com/async.js?platform=shopify&v=2&token=[REDACTED]&shop=linh-explorer.myshopify.com"
+        ],
+        "widget_container_class": "tee-campaign tee-campaign-v2 tee-customization-wrapper",
+        "sdk_version_runtime_classification": "v2-like (was v1-like in pre-2026-09-12 baseline for this same campaign)",
+        "sdk_version_field_from_portal_api": 2,
+        "runtime_matches_portal_field": true,
+        "cart_final_state": { "item_count": 0, "items": [] }
+      },
+      {
+        "shop": "linh-explorer-2.myshopify.com",
+        "instance_id": 613,
+        "theme": "test-data",
+        "theme_version": "1.0.0",
+        "theme_schema_name": "Generated Data Theme",
+        "theme_id": 188105261360,
+        "product_id": "15280333291824",
+        "campaign_id": "2595",
+        "product_url": "https://linh-explorer-2.myshopify.com/products/qa-explore-campaign-pb-01",
+        "sdk_script_srcs": [
+          "https://staging-sdk.teeinblue.com/shopify/app-v2.js?token=[REDACTED]&shop=linh-explorer-2.myshopify.com",
+          "https://staging-sdk.teeinblue.com/async.js?platform=shopify&v=2&token=[REDACTED]&shop=linh-explorer-2.myshopify.com"
+        ],
+        "widget_container_class": "tee-campaign tee-campaign-v2 tee-customization-wrapper",
+        "sdk_version_runtime_classification": "v2-like (unchanged from pre-2026-09-12 baseline)",
+        "sdk_version_field_from_portal_api": 2,
+        "runtime_matches_portal_field": true,
+        "cart_final_state": { "item_count": 0, "items": [] }
+      }
+    ],
+    "redaction_note": "SDK bootstrap tokens embedded in script src query strings (e.g. staging-sdk.teeinblue.com/shopify/app-v2.js?token=...) were redacted to [REDACTED] in this payload per contract sec.6 (field contains 'token'). Raw files under raw/storefront/ still contain the unredacted values from the live page -- these are public, non-secret storefront bootstrap tokens (visible to any anonymous visitor via view-source), not session/auth credentials, but redacted here out of caution per the letter of the token-field rule.",
+    "surfaces": [
+      "PRODUCT_PAGE (both stores)",
+      "PERSONALIZATION (template radio selection + dependent field reveal, both stores)",
+      "PREVIEW (in-widget artwork/mockup preview popup, both stores)",
+      "CART_DRAWER/CART_PAGE (checked via /cart.json only -- no successful add-to-cart reached this run, so no line-item/drawer UI was actually rendered)"
+    ],
+    "observations": [
+      {
+        "observation_id": "SF-OBS-001",
+        "surface": "PRODUCT_PAGE",
+        "action": "Navigate to store1 product URL for campaign 2595 (password-gate submit, then load), inspect script tags and widget root container class",
+        "observed_result": "script src = shopify/app-v2.js + async.js?v=2; container #tee-artwork-form class = 'tee-campaign tee-campaign-v2 tee-customization-wrapper'; body class includes teeinblue-product-8138398629987",
+        "state_before": "page not yet loaded / password-gated",
+        "state_after": "product page fully rendered, teeinblue widget mounted, SDK v2 markers present",
+        "act_id": "SF-ACT-01",
+        "evidence_refs": [
+          { "type": "dom_snapshot", "path": "raw/storefront/dom/store1-body.html" },
+          { "type": "screenshot", "path": "raw/storefront/screenshots/store1-product-page.png" },
+          { "type": "code_ref", "path": "raw/storefront/_sdk-runtime-check-raw.json" }
+        ],
+        "knowledge_kind": "OBSERVED_CURRENT"
+      },
+      {
+        "observation_id": "SF-OBS-002",
+        "surface": "PRODUCT_PAGE",
+        "action": "Same as SF-OBS-001 but on store2",
+        "observed_result": "script src = shopify/app-v2.js + async.js?v=2; container class = 'tee-campaign tee-campaign-v2 tee-customization-wrapper'; body class includes teeinblue-product-15280333291824",
+        "state_before": "page not yet loaded / password-gated",
+        "state_after": "product page fully rendered, teeinblue widget mounted, SDK v2 markers present (unchanged from prior baseline)",
+        "act_id": "SF-ACT-02",
+        "evidence_refs": [
+          { "type": "dom_snapshot", "path": "raw/storefront/dom/store2-body.html" },
+          { "type": "screenshot", "path": "raw/storefront/screenshots/store2-product-page.png" },
+          { "type": "code_ref", "path": "raw/storefront/_sdk-runtime-check-raw.json" }
+        ],
+        "knowledge_kind": "OBSERVED_CURRENT"
+      },
+      {
+        "observation_id": "SF-OBS-003",
+        "surface": "PERSONALIZATION",
+        "action": "On store1, click the second template thumbnail option (id ends -template-578330, previously unselected; default is the first)",
+        "observed_result": "7 new REQUIRED fields appear below the template selector: Choose Woman's Skin Tone*, Choose Woman's Hairstyle*, Woman Name*, Choose Cat Breed #1*, Cat Name #1*, Choose Cat Breed #2*, Cat Name #2* -- none pre-filled",
+        "state_before": "template option 1 selected, no dependent fields visible",
+        "state_after": "template option 2 selected, 7 dependent required fields visible and empty",
+        "act_id": "SF-ACT-03",
+        "evidence_refs": [
+          { "type": "screenshot", "path": "raw/storefront/screenshots/store1-deep-02-after-option2-settled.png" },
+          { "type": "code_ref", "path": "raw/storefront/_sdk-runtime-deep-check-raw.json" }
+        ],
+        "knowledge_kind": "OBSERVED_CURRENT"
+      },
+      {
+        "observation_id": "SF-OBS-004",
+        "surface": "PERSONALIZATION",
+        "action": "Same as SF-OBS-003 but on store2",
+        "observed_result": "Identical 7 dependent required fields appear, same labels, same order, same select options (British fold/Long hair/Short hair/Sphynx for cat breed; Black/Red for hairstyle)",
+        "state_before": "template option 1 selected, no dependent fields visible",
+        "state_after": "template option 2 selected, 7 dependent required fields visible and empty (byte-identical to store1)",
+        "act_id": "SF-ACT-04",
+        "evidence_refs": [
+          { "type": "screenshot", "path": "raw/storefront/screenshots/store2-deep-02-after-option2-settled.png" },
+          { "type": "code_ref", "path": "raw/storefront/_sdk-runtime-deep-check-raw.json" }
+        ],
+        "knowledge_kind": "OBSERVED_CURRENT"
+      },
+      {
+        "observation_id": "SF-OBS-005",
+        "surface": "PREVIEW",
+        "action": "On store1, with default template (option 1, no missing required fields), click the in-widget 'Preview' button",
+        "observed_result": "A 'vm--modal' popup opens containing 'tee-dialog-inner' > 'tee-gallery-content' > 'tee-mockup-image' (img-based mockup with a 'tee-printarea' overlay div, prev/next slider arrows). No [data-layer-id] SVG elements found in the popup.",
+        "state_before": "Preview popup closed",
+        "state_after": "Preview popup open, showing an image-based mockup of the current personalization",
+        "act_id": "SF-ACT-05",
+        "evidence_refs": [
+          { "type": "screenshot", "path": "raw/storefront/screenshots/store1-preview-modal-focused.png" },
+          { "type": "code_ref", "path": "raw/storefront/_preview-mechanism-check.json" }
+        ],
+        "knowledge_kind": "OBSERVED_CURRENT"
+      },
+      {
+        "observation_id": "SF-OBS-006",
+        "surface": "PREVIEW",
+        "action": "Same as SF-OBS-005 but on store2",
+        "observed_result": "Byte-identical popup structure/classes/markup to store1 (vm--modal / tee-dialog-inner / tee-gallery-content / tee-mockup-image / tee-printarea), zero [data-layer-id] elements",
+        "state_before": "Preview popup closed",
+        "state_after": "Preview popup open, structurally identical to store1's",
+        "act_id": "SF-ACT-06",
+        "evidence_refs": [
+          { "type": "screenshot", "path": "raw/storefront/screenshots/store2-preview-modal-focused.png" },
+          { "type": "code_ref", "path": "raw/storefront/_preview-mechanism-check.json" }
+        ],
+        "knowledge_kind": "OBSERVED_CURRENT"
+      },
+      {
+        "observation_id": "SF-OBS-007",
+        "surface": "CHECKOUT_BOUNDARY",
+        "action": "On store1, with template option 2 selected and its 7 dependent fields left empty, click 'Add to cart'",
+        "observed_result": "Inline validation text 'Error: Some fields are required or invalid data' shown; no navigation to cart/checkout occurred; GET /cart.json immediately after showed item_count: 0; network log shows zero requests to any teeinblue customization or Shopify /cart/add endpoint -- blocked entirely client-side, boundary not approached",
+        "state_before": "cart empty (item_count 0)",
+        "state_after": "cart still empty (item_count 0), no order/checkout initiated",
+        "act_id": "SF-ACT-07",
+        "evidence_refs": [
+          { "type": "screenshot", "path": "raw/storefront/screenshots/store1-deep-04-after-atc-click.png" },
+          { "type": "har_entry", "path": "raw/storefront/network/store1-deep-network-log.json" },
+          { "type": "code_ref", "path": "raw/storefront/_sdk-runtime-deep-check-raw.json" }
+        ],
+        "knowledge_kind": "OBSERVED_CURRENT"
+      },
+      {
+        "observation_id": "SF-OBS-008",
+        "surface": "CHECKOUT_BOUNDARY",
+        "action": "Same as SF-OBS-007 but on store2",
+        "observed_result": "Identical outcome: same inline error text, item_count 0 after, zero customization/cart-add network requests",
+        "state_before": "cart empty (item_count 0)",
+        "state_after": "cart still empty (item_count 0), no order/checkout initiated",
+        "act_id": "SF-ACT-08",
+        "evidence_refs": [
+          { "type": "screenshot", "path": "raw/storefront/screenshots/store2-deep-04-after-atc-click.png" },
+          { "type": "har_entry", "path": "raw/storefront/network/store2-deep-network-log.json" },
+          { "type": "code_ref", "path": "raw/storefront/_sdk-runtime-deep-check-raw.json" }
+        ],
+        "knowledge_kind": "OBSERVED_CURRENT"
+      },
+      {
+        "observation_id": "SF-OBS-009",
+        "surface": "PRODUCT_PAGE",
+        "action": "Cross-store DOM diff of the personalization widget subtree (element ids, class names, field labels, clipart counts) for campaign 2595 on store1 vs store2",
+        "observed_result": "No structural differences found -- same 3 template option element ids (...-277843/-578330/-156669), same clipart element count (16), same price ($55.99), same CSS custom property names. The only DOM differences found anywhere on the page are theme-level (Dawn vs test-data header/footer markup, Dawn's native photo-zoom 'lightbox' icons present only on store1 due to theme differences -- confirmed NOT teeinblue-related by inspecting the surrounding markup, e.g. 'product__media-icon--lightbox', 'image-magnify-lightbox' classes belong to Dawn's own media gallery, not the teeinblue widget).",
+        "state_before": "n/a (comparison observation)",
+        "state_after": "n/a (comparison observation)",
+        "act_id": "SF-ACT-01,SF-ACT-02",
+        "evidence_refs": [
+          { "type": "dom_snapshot", "path": "raw/storefront/dom/store1-body.html" },
+          { "type": "dom_snapshot", "path": "raw/storefront/dom/store2-body.html" }
+        ],
+        "knowledge_kind": "OBSERVED_CURRENT"
+      }
+    ],
+    "feature_candidates": [
+      {
+        "feature_id": "FEAT-07-storefront-buyer-facing",
+        "name": "Campaign storefront / buyer-facing behavior (existing object 'sdk')",
+        "note": "This run does not introduce a new feature candidate -- it re-verifies runtime behavior for the existing FEAT-07 feature on the exact campaign/URL used to originally establish the store1=v1/store2=v2 split, and finds that split no longer holds for store1 as of 2026-09-21. See conflicts[] CONFLICT-PORTAL-001.",
+        "observation_ids": ["SF-OBS-001","SF-OBS-002","SF-OBS-003","SF-OBS-004","SF-OBS-005","SF-OBS-006","SF-OBS-007","SF-OBS-008","SF-OBS-009"]
+      }
+    ],
+    "variant_and_option_matrix": [
+      { "option": "Color", "values_observed": ["Black", "White"], "store1": "present, Black default-selected", "store2": "present, Black default-selected", "dependency": "none observed" },
+      { "option": "Size", "values_observed": ["12\" x 18\"", "24\" x 36\""], "store1": "present, 12x18 default-selected", "store2": "present, 12x18 default-selected", "dependency": "none observed" },
+      { "option": "Poster - Woman and dog clipart template", "values_observed": ["1 (default)", "2", "3 (not tested this run)"], "store1": "3 flat radio options, id suffixes -277843/-578330/-156669", "store2": "identical ids/order", "dependency": "selecting option 2 reveals 7 additional required fields (Skin Tone, Hairstyle, Woman Name, Cat Breed #1, Cat Name #1, Cat Breed #2, Cat Name #2) on BOTH stores identically; option 3's dependent fields NOT tested this run" }
+    ],
+    "artwork_preview_observations": [
+      {
+        "mechanism": "vm--modal popup > tee-dialog-inner > tee-gallery-content > tee-mockup-image (img-based mockup + tee-printarea overlay div, slider with prev/next)",
+        "store1": "confirmed, see SF-OBS-005",
+        "store2": "confirmed byte-identical, see SF-OBS-006",
+        "live_svg_layer_mapping_observed": false,
+        "note": "Neither store showed [data-layer-id] SVG-based live rendering for this template on Preview-click; both instead show the same img+printarea mockup mechanism. This does not match either prior KB description verbatim (see unknowns[])."
+      }
+    ],
+    "pricing_observations": [
+      { "store": "store1", "displayed_price": "$55.99 USD", "sale_price_markup_present": true, "note": "Regular/Sale price markup structure present in DOM even though only one price shown -- theme markup artifact, not confirmed to indicate an active discount" },
+      { "store": "store2", "displayed_price": "$55.99", "sale_price_markup_present": true, "note": "Same structure, currency suffix omitted in store2's theme price display but Shopify.currency confirms USD" }
+    ],
+    "cart_handoff_observations": [
+      {
+        "note": "No successful add-to-cart was achieved on either store this run (both blocked by client-side required-field validation after selecting template option 2 without filling its dependent fields). Cart drawer/page UI was never actually rendered with a line item. cart.json confirmed item_count: 0 on both stores at session end -- NOT_OBSERVED for line-item shape, quantity update, remove, or edit-from-cart this run.",
+        "store1": "NOT_OBSERVED (ATC blocked client-side)",
+        "store2": "NOT_OBSERVED (ATC blocked client-side)"
+      }
+    ],
+    "portal_to_storefront_mapping": [
+      {
+        "portal_act_id": "ACT-01-01-001",
+        "storefront_observation_id": "SF-OBS-001",
+        "propagation": "NOT_OBSERVED",
+        "evidence_refs": [
+          { "type": "api_response", "path": "raw/network/ACT-01-01-001.json", "note": "portal GET /api/instances?trashed, seq 4, sdk_version:2 for instance 609" },
+          { "type": "code_ref", "path": "raw/storefront/_sdk-runtime-check-raw.json", "note": "storefront runtime confirms v2 markers for store1 (instance 609)" }
+        ],
+        "note": "No portal config CHANGE was made or timed this run (read-only field on both sides), so 'propagation' timing (IMMEDIATE/AFTER_PUBLISH/DELAYED) genuinely cannot be assessed -- this maps a static portal API field value to a static storefront runtime observation, both read at approximately the same time (2026-09-21), and they AGREE (both say v2). This agreement is the key data point for CONFLICT-PORTAL-001, recorded as a mapping rather than a propagation-delay measurement."
+      },
+      {
+        "portal_act_id": "ACT-01-04-001",
+        "storefront_observation_id": "SF-OBS-002",
+        "propagation": "NOT_OBSERVED",
+        "evidence_refs": [
+          { "type": "api_response", "path": "raw/network/ACT-01-04-001.json", "note": "portal GET /api/instances?trashed, seq 3, sdk_version:2 for instance 613" },
+          { "type": "code_ref", "path": "raw/storefront/_sdk-runtime-check-raw.json", "note": "storefront runtime confirms v2 markers for store2 (instance 613)" }
+        ],
+        "note": "Same as above for store2 -- portal field and storefront runtime agree (both v2), no change was made/timed this run."
+      }
+    ],
+    "theme_device_market_matrix": [
+      { "store": "linh-explorer.myshopify.com", "theme": "Dawn 16.0.0", "device": "Desktop 1440x1000", "market": "United States", "locale": "en", "currency": "USD", "buyer_state": "GUEST", "coverage": "tested this run" },
+      { "store": "linh-explorer-2.myshopify.com", "theme": "test-data / Generated Data Theme 1.0.0", "device": "Desktop 1440x1000", "market": "United States", "locale": "en", "currency": "USD", "buyer_state": "GUEST", "coverage": "tested this run" },
+      { "store": "both", "theme": "n/a", "device": "mobile/tablet", "market": "non-US", "locale": "non-en", "currency": "non-USD", "buyer_state": "LOGGED_IN", "coverage": "NOT tested this run -- out of scope, see unknowns[]" }
+    ],
+    "network_observation_refs": [
+      { "type": "har_entry", "path": "raw/storefront/network/store1-deep-network-log.json", "note": "Handed to api-explorer for reference only -- NOT a full contract capture. Confirms GET /api/merchant/campaigns/8138398629987.json and GET /api/merchant/shopify/thumbmark fire on store1 product-page load; zero customization/cart-add requests during the blocked ATC attempt." },
+      { "type": "har_entry", "path": "raw/storefront/network/store2-deep-network-log.json", "note": "Same for store2: GET /api/merchant/campaigns/15280333291824.json, GET /api/merchant/shopify/thumbmark; zero customization/cart-add requests during the blocked ATC attempt." }
+    ],
+    "cleanup_results": [
+      { "store": "store1", "action": "None required -- add-to-cart never succeeded, cart.json confirmed item_count: 0 at session end.", "result": "NOT_NEEDED" },
+      { "store": "store2", "action": "None required -- add-to-cart never succeeded, cart.json confirmed item_count: 0 at session end.", "result": "NOT_NEEDED" }
+    ],
+    "coverage_limitations": [
+      "Only campaign 2595 / template options 1 and 2 were tested. Template option 3 and any other campaign were not covered this run.",
+      "Only theme = the account's currently-installed main theme per store (Dawn for store1, test-data for store2) -- no alternate/duplicate theme tested.",
+      "Only desktop 1440x1000 viewport tested -- no mobile/tablet.",
+      "Only GUEST buyer state, US market/locale/currency tested -- no logged-in buyer, no other market.",
+      "Add-to-cart was not carried through to a valid/successful state on either store (dependent fields from template option 2 were intentionally left unfilled, since completing them was not necessary to resolve CONFLICT-PORTAL-001 and was explicitly optional per this run's instructions) -- CONFLICT-001 (store1 ATC completion) remains open and unaddressed by this run.",
+      "Cart drawer/page UI, line-item shape, quantity/remove/edit-from-cart were NOT_OBSERVED this run for either store."
+    ],
+    "current_behavior_only": true,
+    "redaction_applied": true
+  },
+  "gate": {
+    "decision": "CONDITIONAL_PASS",
+    "blocking_findings": [],
+    "conditions": [
+      "orchestrator/reviewer must make the final call on CONFLICT-PORTAL-001 resolution (this artifact provides strong converging evidence for 'store1 KB is stale, portal API is currently accurate' but does not itself overwrite knowledge/products/teeinblue/objects/sdk/feature-summary.md or kb.json -- per contract sec.5/sec.8, only the orchestrator publishes, and conflict resolution authority is not storefront-explorer's",
+      "qa-knowledge-normalizer must NOT silently overwrite the existing FEAT-07 store1=v1 claim -- it must carry both the old (evidence_a) and new (evidence_c) observations forward with their respective knowledge_kind/timestamps, consistent with contract sec.8",
+      "A follow-up pass (this agent or a future run) is recommended to walk template option 3 on both stores and to complete a fully-valid add-to-cart to close CONFLICT-001, neither of which was in this run's minimum scope",
+      "api-explorer may use raw/storefront/network/store{1,2}-deep-network-log.json as reference for the GET /api/merchant/campaigns/{id}.json and GET /api/merchant/shopify/thumbmark endpoints observed here, but this is not a full contract capture"
+    ],
+    "allowed_next_steps": ["qa-knowledge-normalizer (product-kb-from-observation)", "orchestrator (CONFLICT-PORTAL-001 resolution decision)", "api-explorer (network_observation_refs)"]
+  }
+}

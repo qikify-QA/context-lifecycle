@@ -1,0 +1,387 @@
+{
+  "feature_key": "payout-csv-upload",
+  "name": "Upload Payout CSV — tạo Conversion mới cho 1 kỳ payout",
+  "user_goal": "Với vai trò admin, đưa dữ liệu hoa hồng (payout) từ file CSV/XLS export của Shopify Partner Dashboard vào hệ thống Qikfiliate để tạo mới các Conversion cho LẦN ĐẦU xử lý 1 kỳ payout (khác với việc đối soát dữ liệu settle muộn của 1 kỳ đã import — xem feature populate-reconcile-late-data).",
+  "stable_since_version": "v1",
+  "actors": [
+    {
+      "role": "admin",
+      "permission_observed": "Đăng nhập admin panel (encore/laravel-admin), vào menu Conversion, bấm màn hình 'Upload payout file' (route admin/conversion/form-upload). Quyền truy cập route này có bị giới hạn theo role con nào trong admin hay không KHÔNG được xác nhận bởi tài liệu (xem unknown_areas) — chỉ biết đây là route trong admin panel.",
+      "kb_refs": [
+        "KB-013"
+      ]
+    }
+  ],
+  "entry_points": [
+    {
+      "path": "admin/conversion/form-upload",
+      "precondition": "Admin đã đăng nhập admin panel (encore/laravel-admin) và đang ở menu Conversion.",
+      "kb_refs": [
+        "KB-013",
+        "KB-014"
+      ]
+    }
+  ],
+  "capabilities": [
+    {
+      "name": "Upload file payout, tạo Conversion mới cho kỳ payout",
+      "description": "Admin chọn đúng 1 file (field payment_history, bắt buộc, chấp nhận .csv/.txt/.xls/.xlsx) trên form, bấm nút submit 'Create conversions'. Đây là màn hình chỉ TẠO MỚI Conversion, không dùng để cập nhật dữ liệu đã có. Nguồn dữ liệu duy nhất là file Payout report của Shopify Partner Dashboard — không có API real-time nào từ Shopify; 1 file export gộp chung nhiều app/brand, không lọc riêng theo app/brand.",
+      "kb_refs": [
+        "KB-001",
+        "KB-002",
+        "KB-003",
+        "KB-005",
+        "KB-013",
+        "KB-014",
+        "KB-015",
+        "KB-016",
+        "KB-017",
+        "KB-026"
+      ]
+    },
+    {
+      "name": "Chuẩn bị cột app_slug cho format CSV mới trước khi upload",
+      "description": "Với format 'earnings' mới của Shopify (19 cột, tên file dạng <period>-earnings-<date>.csv), file không có cột App Slug (chỉ có App Title). Admin phải tự tra bảng ánh xạ App Title → app_slug (bảng này nằm ngoài hệ thống) rồi bổ sung thêm 1 cột app_slug vào file trước khi upload, vì validator ShopifyPayoutImport::rules bắt buộc app_slug và không có logic nào tự suy app_slug từ App Title.",
+      "kb_refs": [
+        "KB-006",
+        "KB-009",
+        "KB-010",
+        "KB-012"
+      ]
+    },
+    {
+      "name": "Sắp xếp & validate cấu trúc file trước khi xử lý từng dòng",
+      "description": "Ngay khi nhận file, trước khi xử lý bất kỳ dòng nào, hệ thống tự sắp xếp lại toàn bộ dòng CSV theo cột Charge Creation Time tăng dần — admin không cần tự sort. Nếu file không có cột tên đúng 'Charge Creation Time', hệ thống báo lỗi ngay tại bước này, chưa chạy import, chưa tạo Conversion nào. Importer xử lý từng dòng theo đúng thứ tự đã sort (Excel::import / ShopifyPayoutImport).",
+      "kb_refs": [
+        "KB-018",
+        "KB-019",
+        "KB-020",
+        "KB-026",
+        "KB-027"
+      ]
+    },
+    {
+      "name": "Tính hoa hồng cho mỗi dòng theo rate hiện tại",
+      "description": "Mỗi dòng được tính hoa hồng theo rate hiện tại tại thời điểm import (tính Level của affiliate rồi tra rate ProgramCommission). Partner Share = Partner Sale − Shopify Fee − Processing Fee − Regulatory Operating Fee.",
+      "kb_refs": [
+        "KB-021",
+        "KB-028",
+        "KB-030"
+      ]
+    },
+    {
+      "name": "Báo kết quả import qua banner",
+      "description": "Sau khi import xong, hệ thống hiển thị banner báo số Conversion đã tạo thành công. Nếu 0 dòng nào khớp được Customer nào, hiển thị thông báo 'Not found any eligible customer from payout file'. Các lý do khiến 1 dòng bị bỏ qua (được tài liệu nêu, KHÔNG khẳng định đầy đủ) gồm: thiếu app_slug, thiếu partner_share, không khớp Customer nào, hoặc charge_type chứa 'one-time'.",
+      "kb_refs": [
+        "KB-022",
+        "KB-023",
+        "KB-025"
+      ]
+    }
+  ],
+  "state_transitions": [
+    {
+      "from": "file_selected",
+      "to": "import_rejected_no_rows_processed",
+      "trigger": "Admin bấm 'Create conversions' nhưng file không có cột tên đúng 'Charge Creation Time'",
+      "condition": "Thiếu cột Charge Creation Time — hệ thống báo lỗi ngay, chưa chạy import, chưa tạo Conversion nào.",
+      "kb_refs": [
+        "KB-019"
+      ]
+    },
+    {
+      "from": "file_uploaded_and_sorted",
+      "to": "conversion_created",
+      "trigger": "1 dòng CSV khớp đủ Customer + đầy đủ field bắt buộc (app_slug, partner_share, charge_type hợp lệ)",
+      "condition": "Dòng hợp lệ, qua được validator ShopifyPayoutImport::rules",
+      "kb_refs": [
+        "KB-013",
+        "KB-014",
+        "KB-017",
+        "KB-021"
+      ]
+    },
+    {
+      "from": "file_uploaded_and_sorted",
+      "to": "row_skipped_silently",
+      "trigger": "1 dòng lỗi validate (thiếu app_slug/partner_share, không khớp Customer, hoặc charge_type chứa 'one-time')",
+      "condition": "Lỗi validate ở mức dòng — bị bỏ qua âm thầm, các dòng khác vẫn tiếp tục xử lý, không log.",
+      "kb_refs": [
+        "KB-025",
+        "KB-032",
+        "KB-033",
+        "KB-034"
+      ]
+    },
+    {
+      "from": "import_finished",
+      "to": "result_banner_shown",
+      "trigger": "Import hoàn tất (dù có dòng bị skip hay không)",
+      "condition": "Banner chỉ báo số lượng tạo thành công; nếu 0 dòng khớp Customer, hiển thị 'Not found any eligible customer from payout file'.",
+      "kb_refs": [
+        "KB-022",
+        "KB-023"
+      ]
+    }
+  ],
+  "confirmed_rules": [
+    {
+      "statement": "KB-001: Không có API real-time từ Shopify; toàn bộ hoa hồng vào hệ thống qua việc admin tải CSV Payout report thủ công, định kỳ.",
+      "kb_refs": [
+        "KB-001"
+      ]
+    },
+    {
+      "statement": "KB-002/KB-003: File Payout report chứa mọi dòng charge (subscription, usage, one-time, refund, downgrade...), gộp chung nhiều app/brand, không lọc riêng theo app/brand.",
+      "kb_refs": [
+        "KB-002",
+        "KB-003"
+      ]
+    },
+    {
+      "statement": "KB-006: Format 'earnings' mới có 19 cột, tên file dạng <period>-earnings-<date>.csv, không có cột App Slug (chỉ App Title) — HIGH confidence, xác nhận bởi 2 tài liệu độc lập.",
+      "kb_refs": [
+        "KB-006"
+      ]
+    },
+    {
+      "statement": "KB-009/KB-010/KB-012: Với format mới, admin phải tự tra bảng ánh xạ App Title → app_slug (nằm ngoài hệ thống) và bổ sung cột app_slug vào file trước khi upload.",
+      "kb_refs": [
+        "KB-009",
+        "KB-010",
+        "KB-012"
+      ]
+    },
+    {
+      "statement": "KB-013/KB-014: Route admin/conversion/form-upload là màn hình TẠO MỚI Conversion, không dùng để cập nhật dữ liệu đã có.",
+      "kb_refs": [
+        "KB-013",
+        "KB-014"
+      ]
+    },
+    {
+      "statement": "KB-015/KB-016/KB-017: Form chỉ có đúng 1 ô file bắt buộc (payment_history, nhận .csv/.txt/.xls/.xlsx), nút submit 'Create conversions'.",
+      "kb_refs": [
+        "KB-015",
+        "KB-016",
+        "KB-017"
+      ]
+    },
+    {
+      "statement": "KB-018/KB-019/KB-020: Hệ thống tự sort toàn bộ dòng theo Charge Creation Time tăng dần trước khi xử lý; thiếu cột này → lỗi ngay, chưa import; admin không cần tự sort.",
+      "kb_refs": [
+        "KB-018",
+        "KB-019",
+        "KB-020"
+      ]
+    },
+    {
+      "statement": "KB-021: Hoa hồng của mỗi dòng tính theo rate hiện tại tại thời điểm import.",
+      "kb_refs": [
+        "KB-021"
+      ]
+    },
+    {
+      "statement": "KB-022/KB-023: Banner báo số Conversion tạo thành công; 0 dòng khớp Customer → thông báo 'Not found any eligible customer from payout file'.",
+      "kb_refs": [
+        "KB-022",
+        "KB-023"
+      ]
+    },
+    {
+      "statement": "KB-029: Lần đầu xử lý dữ liệu của 1 kỳ payout mới dùng màn hình này (phân biệt với Populate/reconcile).",
+      "kb_refs": [
+        "KB-029"
+      ]
+    },
+    {
+      "statement": "KB-030: Partner Share = Partner Sale − Shopify Fee − Processing Fee − Regulatory Operating Fee.",
+      "kb_refs": [
+        "KB-030"
+      ]
+    },
+    {
+      "statement": "KB-034: 1 dòng lỗi validate (thiếu field bắt buộc) bị bỏ qua âm thầm, hệ thống tiếp tục xử lý các dòng còn lại, không log.",
+      "kb_refs": [
+        "KB-034"
+      ]
+    }
+  ],
+  "observed_behavior": [],
+  "observed_validations": [],
+  "permissions": [
+    {
+      "statement": "Route admin/conversion/form-upload nằm trong admin panel (encore/laravel-admin), truy cập với role admin. Việc có phân vai ops riêng giữa các tài khoản admin cho ĐÚNG route này hay không KHÔNG được 1 kb_id nào trong shard này xác nhận — xem unknown_areas.",
+      "kb_refs": [
+        "KB-013"
+      ]
+    }
+  ],
+  "surface_mapping": {
+    "portal": [
+      "admin/conversion/form-upload (KB-013) — form upload + banner kết quả (KB-022, KB-023, KB-024)"
+    ],
+    "storefront": [],
+    "api": [],
+    "data": [
+      "Conversion (tạo mới — KB-013, KB-014, KB-017, KB-021, KB-030)"
+    ],
+    "code": [
+      "ShopifyPayoutImport::rules bắt buộc app_slug (KB-008, risk)",
+      "Excel::import / ShopifyPayoutImport xử lý từng dòng theo thứ tự đã sort (KB-026, KB-027, INFERRED)"
+    ]
+  },
+  "dependencies": [
+    "customer-matching-and-dedup: mỗi dòng CSV phải khớp được 1 Customer (2 điều kiện Customer.name + Customer.program_id→Program.slug) trước khi tạo Conversion — nếu không khớp, dòng bị bỏ qua (liên quan KB-023 của feature này).",
+    "charge-type-classification: charge_type của dòng (substring match 'usage'/'one-time') quyết định dòng có bị loại hoàn toàn (one-time) hay đi nhánh tính hoa hồng nào — liên quan lý do skip ở KB-025.",
+    "populate-reconcile-late-data: feature song song, dùng cho dữ liệu settle muộn của kỳ ĐÃ import (khác với lần đầu xử lý của feature này, KB-029)."
+  ],
+  "risks": [
+    {
+      "risk": "KNOWN_DEFECT (KB-007): App Title không dùng được làm khoá join vì cùng 1 họ app có thể xuất hiện với casing khác nhau trong cùng 1 file thật ('Qikify Upsell' vs 'qikify Slide Cart').",
+      "kb_refs": [
+        "KB-007"
+      ]
+    },
+    {
+      "risk": "KNOWN_DEFECT (KB-008): ShopifyPayoutImport::rules bắt buộc app_slug; không có logic tự suy app_slug từ App Title.",
+      "kb_refs": [
+        "KB-008"
+      ]
+    },
+    {
+      "risk": "KNOWN_DEFECT (KB-011): Bổ sung app_slug là bước thủ công bắt buộc (map ngoài hệ thống, ví dụ spreadsheet) trước khi upload, không có hỗ trợ tự động.",
+      "kb_refs": [
+        "KB-011"
+      ]
+    },
+    {
+      "risk": "KNOWN_DEFECT (KB-024): Banner kết quả chỉ báo số lượng tạo thành công, không liệt kê dòng bị bỏ qua; không có cách nào từ UI để biết chính xác dòng nào bị bỏ — observability gap, không phải bug, nhưng là rủi ro vận hành thực tế.",
+      "kb_refs": [
+        "KB-024"
+      ]
+    },
+    {
+      "risk": "KNOWN_DEFECT (KB-031): Ví dụ số thực tế của Usage charge có chênh lệch ~$0.06 giữa công thức Partner Share và số thật, chưa giải thích được (làm tròn hoặc phí phụ ẩn) — dùng làm regression watch, không phải oracle công thức.",
+      "kb_refs": [
+        "KB-031"
+      ]
+    },
+    {
+      "risk": "KNOWN_DEFECT (KB-032): Thiếu app_slug/thiếu giá trị app_slug → dòng bị bỏ qua, banner không bao gồm dòng đó, không log, không cách nào xác định từ UI — hệ quả: hoa hồng của app đó trong kỳ payout biến mất âm thầm.",
+      "kb_refs": [
+        "KB-032"
+      ]
+    },
+    {
+      "risk": "KNOWN_DEFECT (KB-033): Partner Share có thể rỗng dù các cột tiền khác có giá trị (dữ liệu gốc từ Shopify tự thiếu, không phải lỗi quy trình) → dòng fail validate required, skip âm thầm theo cùng cơ chế onFailure rỗng như KB-032; không có cách phòng tránh trước khi upload.",
+      "kb_refs": [
+        "KB-033"
+      ]
+    }
+  ],
+  "unknown_areas": [
+    {
+      "question": "Tần suất tải file payout và người chịu trách nhiệm (Ops/Finance) là gì?",
+      "why_it_matters": "KB-004 chỉ là suy luận từ tên biến payout_period, tài liệu tự ghi chưa xác nhận với PO; ảnh hưởng tới việc dựng lịch test định kỳ."
+    },
+    {
+      "question": "Danh sách đầy đủ các lý do khiến 1 dòng bị bỏ qua là gì?",
+      "why_it_matters": "KB-025 kết thúc bằng '...', tài liệu tự đánh dấu không đầy đủ — thiếu nó thì không viết được bộ test case negative đầy đủ cho màn hình này."
+    },
+    {
+      "question": "Có bảng DB nào lưu lịch sử từng lần upload file payout (ai, lúc nào, kết quả) hay không?",
+      "why_it_matters": "Quyết định QA có thể đối soát 'lần import nào tạo Conversion nào' hay không — tài liệu chỉ nêu tên lớp ShopifyPayoutImport, không nói gì về audit trail."
+    },
+    {
+      "question": "Route admin/conversion/form-upload được cấp quyền truy cập cho role nào trong admin panel?",
+      "why_it_matters": "Upload payout là thao tác tạo tiền trực tiếp; không có tài liệu nào xác nhận quyền truy cập route này."
+    },
+    {
+      "question": "Có giới hạn kích thước file, số dòng tối đa, hay timeout khi import file payout lớn không?",
+      "why_it_matters": "Quyết định có cần test case boundary/performance cho import hay không — tài liệu không nêu bất kỳ giới hạn nào."
+    },
+    {
+      "question": "Bảng ánh xạ App Title → app_slug do ai giữ, lưu ở đâu, cập nhật thế nào khi có app mới?",
+      "why_it_matters": "Đây là bước thủ công bắt buộc trước upload (KB-009/KB-012); nếu bảng sai/thiếu app mới thì dòng payout của app đó bị bỏ âm thầm (liên quan KB-032)."
+    },
+    {
+      "question": "Đặc tả cột đầy đủ của 2 biến thể file CSV Payout của Shopify ('payout' cũ vs 'earnings' mới) là gì?",
+      "why_it_matters": "Không có đặc tả cột thì không viết được test data hợp lệ/không hợp lệ cho màn hình upload."
+    }
+  ],
+  "last_updated": {
+    "date": "2026-10-05",
+    "ccr_ref": "bootstrap"
+  },
+  "profile_relationships": [
+    {
+      "from": "payout-csv-upload",
+      "to": "customer-matching-and-dedup",
+      "relation": "DEPENDS_ON",
+      "note": "Mỗi dòng CSV phải khớp 1 Customer theo cơ chế của feature kia trước khi được tạo Conversion."
+    },
+    {
+      "from": "payout-csv-upload",
+      "to": "charge-type-classification",
+      "relation": "DEPENDS_ON",
+      "note": "charge_type của dòng quyết định dòng bị loại (one-time) hay đi nhánh tính hoa hồng nào."
+    },
+    {
+      "from": "payout-csv-upload",
+      "to": "populate-reconcile-late-data",
+      "relation": "MUTUALLY_EXCLUSIVE_SCOPE",
+      "note": "Dùng cho LẦN ĐẦU của 1 kỳ payout (KB-029); feature kia dùng cho dữ liệu settle muộn của kỳ ĐÃ import."
+    }
+  ],
+  "unassigned_kb_items": [],
+  "profile_conflicts": [],
+  "profile_change_summary": [
+    "Profile mới tạo ở (DOC_BOOTSTRAP), chưa có version trước để so sánh."
+  ],
+  "kb_trace_complete": true,
+  "coverage_matrix": [
+    {
+      "layer": "portal",
+      "role": "admin",
+      "state": "new_payout_period_first_upload",
+      "environment": "documented",
+      "covered": true
+    },
+    {
+      "layer": "db",
+      "role": "unspecified",
+      "state": "new_payout_period_first_upload",
+      "environment": "documented",
+      "covered": true
+    },
+    {
+      "layer": "code",
+      "role": "unspecified",
+      "state": "any",
+      "environment": "documented",
+      "covered": true
+    },
+    {
+      "layer": "portal",
+      "role": "admin",
+      "state": "any",
+      "environment": "documented",
+      "covered": true
+    },
+    {
+      "layer": "api",
+      "role": "unspecified",
+      "state": "any",
+      "environment": "documented",
+      "covered": false
+    },
+    {
+      "layer": "portal",
+      "role": "affiliate",
+      "state": "any",
+      "environment": "documented",
+      "covered": false
+    }
+  ]
+}

@@ -1,0 +1,339 @@
+{
+  "feature_id": "FEAT-02-upload-custom-font",
+  "feature_key": "upload-custom-font",
+  "checklist_version": "1",
+  "checks": [
+    {
+      "check_id": "CHK-001",
+      "dimension": "CORE",
+      "layer": "portal",
+      "title": "Upload 1 file .ttf hợp lệ tạo font mới thành công qua REST POST /api/custom-fonts",
+      "applicability": {
+        "role": "owner",
+        "state": "đang ở /fonts, có file .ttf hợp lệ",
+        "environment": "staging",
+        "theme_or_device": "n/a"
+      },
+      "precondition": "Đang ở /fonts, có sẵn 1 file .ttf hợp lệ, tên chưa tồn tại trên store.",
+      "steps": [
+        "Bắt đầu luồng 'Upload fonts' theo UI thực tế hiện có trên store (xem CHK-003 nếu luồng khác với quan sát gần nhất).",
+        "Chọn 1 file .ttf hợp lệ.",
+        "Bắt network request POST /api/custom-fonts.",
+        "Quan sát response + card mới xuất hiện trên list sau khi refetch."
+      ],
+      "observation_point": "response POST /api/custom-fonts + list sau refetch",
+      "expected_result": "Request POST /api/custom-fonts (multipart/form-data) trả 201 với id/user_id/name/original_name/master(.ttf có giá trị ngay)/url(.woff2 có giá trị ngay, không cần polling)/transform_status/created_at/updated_at; list /fonts refetch và hiện thêm 1 card mới (KB-011, KB-009). CHỈ có 2 sample — lệch (vd cần polling transform, field thiếu) cần điều tra, chưa phải bug xác nhận.",
+      "oracle": {
+        "kb_ids": ["KB-011", "KB-009"],
+        "oracle_strength": "BASELINE"
+      },
+      "status": "READY",
+      "risk_refs": [],
+      "priority": "P1",
+      "automation_suitability": "SUITABLE"
+    },
+    {
+      "check_id": "CHK-002",
+      "dimension": "CORE",
+      "layer": "api",
+      "title": "Response create luôn có field transform_status, giá trị quan sát được luôn = 1",
+      "applicability": {
+        "role": "owner",
+        "state": "ngay sau khi create thành công",
+        "environment": "staging",
+        "theme_or_device": "n/a"
+      },
+      "precondition": "Vừa thực hiện create font hợp lệ (như CHK-001).",
+      "steps": [
+        "Thực hiện create font hợp lệ.",
+        "Đọc field transform_status trong response."
+      ],
+      "observation_point": "response body field transform_status",
+      "expected_result": "transform_status=1 ở thời điểm response trả về ngay (2 sample quan sát được đều =1). Ý nghĩa đầy đủ enum (có giá trị khác 0/2... hay không, có đổi sau khi convert xong không) là UNKNOWN — KHÔNG suy diễn thành 'luôn luôn =1 vĩnh viễn'.",
+      "oracle": {
+        "kb_ids": ["KB-017"],
+        "oracle_strength": "BASELINE"
+      },
+      "status": "READY",
+      "risk_refs": [],
+      "priority": "P3",
+      "automation_suitability": "SUITABLE"
+    },
+    {
+      "check_id": "CHK-003",
+      "dimension": "STATE_DATA",
+      "layer": "portal",
+      "title": "[CONFLICT-002 — cần verify lại] Xác minh luồng mở Upload fonts: modal trước hay mở thẳng OS file picker",
+      "applicability": {
+        "role": "owner",
+        "state": "chưa mở luồng upload trong phiên",
+        "environment": "staging",
+        "theme_or_device": "n/a"
+      },
+      "precondition": "Đang ở /fonts. LƯU Ý: 2 nguồn evidence hiện có khác store/role/ngày — chạy check này trên đúng 1 store cố định để loại biến.",
+      "steps": [
+        "Bấm nút 'Upload fonts'.",
+        "Quan sát: modal 'Browse fonts to upload' xuất hiện, hay OS file picker mở thẳng.",
+        "Nếu là modal, bấm 'Choose File' và xác nhận OS file picker mở tiếp theo."
+      ],
+      "observation_point": "UI ngay sau khi bấm 'Upload fonts'",
+      "expected_result": null,
+      "oracle": {
+        "kb_ids": ["KB-005"],
+        "oracle_strength": "NONE"
+      },
+      "status": "NEEDS_CONFIRMATION",
+      "oq_ref": "OQ-font-002",
+      "risk_refs": ["CONFLICT-002"],
+      "priority": "P2",
+      "automation_suitability": "HYBRID"
+    },
+    {
+      "check_id": "CHK-004",
+      "dimension": "INTEGRATION",
+      "layer": "api",
+      "title": "[CONFLICT-001 — cần verify lại] Xác minh data source của thao tác Create font: REST hay GraphQL",
+      "applicability": {
+        "role": "owner",
+        "state": "đang thực hiện create font",
+        "environment": "staging",
+        "theme_or_device": "n/a"
+      },
+      "precondition": "Đang thực hiện create 1 font hợp lệ.",
+      "steps": [
+        "Thực hiện create 1 font hợp lệ.",
+        "Bắt toàn bộ network request phát sinh (cả REST lẫn GraphQL).",
+        "Xác định request nào thực sự tạo font (request có multipart file)."
+      ],
+      "observation_point": "toàn bộ network request phát sinh trong luồng create",
+      "expected_result": null,
+      "oracle": {
+        "kb_ids": ["KB-011"],
+        "oracle_strength": "NONE"
+      },
+      "status": "NEEDS_CONFIRMATION",
+      "oq_ref": "OQ-font-001",
+      "risk_refs": ["CONFLICT-001"],
+      "priority": "P2",
+      "automation_suitability": "HYBRID"
+    },
+    {
+      "check_id": "CHK-005",
+      "dimension": "NEGATIVE",
+      "layer": "api",
+      "title": "Upload lại đúng tên font đã tồn tại — server chấp nhận, không có uniqueness validation quan sát được",
+      "applicability": {
+        "role": "owner",
+        "state": "đã có 1 font tên X trên store",
+        "environment": "staging",
+        "theme_or_device": "n/a"
+      },
+      "precondition": "Store đã có 1 font tên X.",
+      "steps": [
+        "Upload 1 file mới với tên trùng font X đã có.",
+        "Quan sát response code + UI (có warning/error nào không)."
+      ],
+      "observation_point": "response code + UI feedback",
+      "expected_result": "Theo quan sát duy nhất hiện có (KB-012, CHỈ 1 SAMPLE THÀNH CÔNG THỰC SỰ), server chấp nhận (201), tạo font độc lập cùng tên, không có lỗi/cảnh báo uniqueness — nhưng đây chỉ là 1 sample, KHÔNG được khái quát hoá thành 'hệ thống không có unique constraint'.",
+      "oracle": {
+        "kb_ids": ["KB-012"],
+        "oracle_strength": "BASELINE"
+      },
+      "status": "NEEDS_CONFIRMATION",
+      "oq_ref": "OQ-font-007",
+      "risk_refs": [],
+      "priority": "P2",
+      "automation_suitability": "HYBRID"
+    },
+    {
+      "check_id": "CHK-006",
+      "dimension": "NEGATIVE",
+      "layer": "portal",
+      "title": "Chọn file sai định dạng (.png) bị chặn ở client, không có message giải thích rõ",
+      "applicability": {
+        "role": "owner",
+        "state": "dialog Upload fonts đang mở",
+        "environment": "staging",
+        "theme_or_device": "n/a"
+      },
+      "precondition": "Dialog Upload fonts đang mở.",
+      "steps": [
+        "Chọn 1 file .png (có thể cần bypass accept-filter của OS/trình duyệt tuỳ công cụ dùng để test).",
+        "Quan sát UI."
+      ],
+      "observation_point": "UI trong dialog Upload fonts + network tab",
+      "expected_result": "Client chặn hoàn toàn trước khi gửi request (0 network request); chỉ hiện icon cảnh báo cạnh tên file, KHÔNG có text/title/aria-label giải thích lý do (KB-013, 1 sample). Hành vi server thật với input sai định dạng tách riêng ở CHK-007 (NEEDS_CONFIRMATION) vì request chưa từng tới server.",
+      "oracle": {
+        "kb_ids": ["KB-013"],
+        "oracle_strength": "BASELINE"
+      },
+      "status": "READY",
+      "risk_refs": [],
+      "priority": "P2",
+      "automation_suitability": "SUITABLE"
+    },
+    {
+      "check_id": "CHK-007",
+      "dimension": "NEGATIVE",
+      "layer": "api",
+      "title": "Server có validate/reject định dạng file sai khi request thực sự tới được server hay không",
+      "applicability": {
+        "role": "owner",
+        "state": "request gọi trực tiếp API, bypass UI client-side check",
+        "environment": "staging",
+        "theme_or_device": "n/a"
+      },
+      "precondition": "Cần cách bypass client-side blocking (vd gọi thẳng REST POST /api/custom-fonts bằng API client với file .png, không qua UI).",
+      "steps": [
+        "Gọi trực tiếp POST /api/custom-fonts với file .png (qua API client, không qua UI).",
+        "Quan sát response."
+      ],
+      "observation_point": "response code + body",
+      "expected_result": null,
+      "oracle": {
+        "kb_ids": [],
+        "oracle_strength": "NONE"
+      },
+      "status": "NEEDS_CONFIRMATION",
+      "oq_ref": "OQ-font-008",
+      "risk_refs": ["coverage_gap:FEAT-02:server-side-format-validation"],
+      "priority": "P2",
+      "automation_suitability": "SUITABLE"
+    },
+    {
+      "check_id": "CHK-008",
+      "dimension": "BOUNDARY",
+      "layer": "portal",
+      "title": "Upload nhiều file cùng lúc qua input 'multiple'",
+      "applicability": {
+        "role": "owner",
+        "state": "dialog Upload fonts đang mở",
+        "environment": "staging",
+        "theme_or_device": "n/a"
+      },
+      "precondition": "input#new-font có attribute multiple.",
+      "steps": [
+        "Mở dialog Upload fonts.",
+        "Chọn nhiều file .ttf/.otf cùng lúc trong 1 lần chọn.",
+        "Quan sát có bao nhiêu request/font được tạo, có giới hạn số lượng không."
+      ],
+      "observation_point": "số lượng network request + số card mới xuất hiện",
+      "expected_result": null,
+      "oracle": {
+        "kb_ids": [],
+        "oracle_strength": "NONE"
+      },
+      "status": "NEEDS_CONFIRMATION",
+      "oq_ref": "OQ-font-009",
+      "risk_refs": ["coverage_gap:FEAT-02:multi-file-upload"],
+      "priority": "P3",
+      "automation_suitability": "UNKNOWN"
+    },
+    {
+      "check_id": "CHK-009",
+      "dimension": "BOUNDARY",
+      "layer": "api",
+      "title": "Giới hạn dung lượng file và hành vi với file font hỏng/corrupt",
+      "applicability": {
+        "role": "owner",
+        "state": "chọn file lớn hoặc corrupt",
+        "environment": "staging",
+        "theme_or_device": "n/a"
+      },
+      "precondition": "Có sẵn 1 file .ttf/.otf rất lớn (vd >10MB) và 1 file .ttf bị corrupt để test.",
+      "steps": [
+        "Upload 1 file rất lớn.",
+        "Quan sát response/hành vi.",
+        "Upload 1 file .ttf bị corrupt (header sai nhưng đuôi .ttf).",
+        "Quan sát response/hành vi."
+      ],
+      "observation_point": "response code + trạng thái transform_status",
+      "expected_result": null,
+      "oracle": {
+        "kb_ids": [],
+        "oracle_strength": "NONE"
+      },
+      "status": "NEEDS_CONFIRMATION",
+      "oq_ref": "OQ-font-010",
+      "risk_refs": ["coverage_gap:FEAT-02:file-size-corrupt"],
+      "priority": "P2",
+      "automation_suitability": "UNKNOWN"
+    },
+    {
+      "check_id": "CHK-010",
+      "dimension": "STATE_DATA",
+      "layer": "portal",
+      "title": "Sau khi create font thành công, danh sách /fonts tự refetch và hiện font mới, không cần reload thủ công",
+      "applicability": {
+        "role": "owner",
+        "state": "đang ở /fonts, thực hiện create font hợp lệ",
+        "environment": "staging",
+        "theme_or_device": "n/a"
+      },
+      "precondition": "Đang ở /fonts.",
+      "steps": [
+        "Ghi nhận số lượng font hiện có trên list.",
+        "Upload 1 file hợp lệ.",
+        "KHÔNG reload trang, quan sát list có tự cập nhật hiện thêm font mới không."
+      ],
+      "observation_point": "list trên /fonts ngay sau khi create thành công, không F5",
+      "expected_result": "List tự refetch qua GraphQL getData và hiện thêm 1 card mới ngay sau khi create thành công, không cần reload thủ công (KB-009, KB-011).",
+      "oracle": {
+        "kb_ids": ["KB-009", "KB-011"],
+        "oracle_strength": "BASELINE"
+      },
+      "status": "READY",
+      "risk_refs": [],
+      "priority": "P2",
+      "automation_suitability": "SUITABLE"
+    }
+  ],
+  "coverage_by_feature_and_risk": [
+    {
+      "feature_id": "FEAT-02-upload-custom-font",
+      "risk_or_gap_ref": "CONFLICT-001: data source create REST vs GraphQL",
+      "covered_by_check_ids": ["CHK-004"],
+      "coverage_status": "OPEN_NEEDS_CONFIRMATION"
+    },
+    {
+      "feature_id": "FEAT-02-upload-custom-font",
+      "risk_or_gap_ref": "CONFLICT-002: modal vs no-modal upload flow",
+      "covered_by_check_ids": ["CHK-003"],
+      "coverage_status": "OPEN_NEEDS_CONFIRMATION"
+    },
+    {
+      "feature_id": "FEAT-02-upload-custom-font",
+      "risk_or_gap_ref": "upload trùng tên (KB-012) — intent chưa rõ",
+      "covered_by_check_ids": ["CHK-005"],
+      "coverage_status": "OPEN_NEEDS_CONFIRMATION"
+    },
+    {
+      "feature_id": "FEAT-02-upload-custom-font",
+      "risk_or_gap_ref": "coverage_gap: server-side format validation chưa test",
+      "covered_by_check_ids": ["CHK-007"],
+      "coverage_status": "OPEN_NEEDS_CONFIRMATION"
+    },
+    {
+      "feature_id": "FEAT-02-upload-custom-font",
+      "risk_or_gap_ref": "coverage_gap: file size/corrupt/multi-file chưa test",
+      "covered_by_check_ids": ["CHK-008", "CHK-009"],
+      "coverage_status": "OPEN_NEEDS_CONFIRMATION"
+    },
+    {
+      "feature_id": "FEAT-02-upload-custom-font",
+      "risk_or_gap_ref": "core capability create font (KB-011)",
+      "covered_by_check_ids": ["CHK-001", "CHK-002", "CHK-010"],
+      "coverage_status": "COVERED_BASELINE"
+    }
+  ],
+  "excluded_dimensions": [
+    {
+      "dimension": "PERMISSION",
+      "reason": "Chỉ có 1 account khả dụng (owner, sub=273) trong môi trường hiện tại. Không có second account để test ai được phép tạo font trên store nào — không thể viết check PERMISSION có oracle thật cho thao tác create; xem OQ-font-019."
+    },
+    {
+      "dimension": "REGRESSION",
+      "reason": "2 conflict với KB cũ (CONFLICT-001, CONFLICT-002) đã được đưa vào dimension INTEGRATION/STATE_DATA (mỗi conflict có ≥1 check tương ứng). Đây là lần xây dựng checklist đầu tiên cho feature này — không có phiên bản trước để diff thực sự theo nghĩa REGRESSION dimension."
+    }
+  ]
+}

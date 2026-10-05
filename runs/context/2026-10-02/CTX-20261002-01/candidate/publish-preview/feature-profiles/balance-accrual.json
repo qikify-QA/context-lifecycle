@@ -1,0 +1,164 @@
+{
+  "feature_key": "balance-accrual",
+  "name": "Tích luỹ balance của affiliate",
+  "user_goal": "Số dư (balance) của affiliate được cộng/trừ đúng theo Conversion và các sự kiện nghiệp vụ khác, làm nền số liệu cho mọi điều kiện/yêu cầu thanh toán phía sau (payout-request-eligibility, payout-request-submission).",
+  "stable_since_version": "v1",
+  "actors": [
+    {
+      "role": "affiliate",
+      "permission_observed": "balance (User.balance) là số dư thuộc về chính affiliate đó; tăng/giảm theo Conversion gắn với affiliate đó. Không có evidence về việc actor khác (admin) trực tiếp tác động balance qua cơ chế Conversion của feature này (admin điều chỉnh tay balance thuộc phạm vi feature khác — xem admin-invoice-processing KB-014).",
+      "kb_refs": [
+        "KB-001"
+      ]
+    }
+  ],
+  "entry_points": [
+    {
+      "path": "Sự kiện hệ thống: 1 Conversion mới được tạo (từ import CSV hoặc custom conversion entry — nguồn tạo Conversion nằm ở feature khác, ngoài phạm vi profile này)",
+      "precondition": "Conversion.amount đã được xác định (dương = cộng, âm/clawback/refund = trừ)",
+      "kb_refs": [
+        "KB-001"
+      ]
+    }
+  ],
+  "capabilities": [
+    {
+      "name": "Cộng/trừ balance theo Conversion",
+      "description": "Mỗi khi có Conversion mới (import CSV hoặc custom conversion), User.balance của affiliate đó được cộng ngay lập tức đúng bằng Conversion.amount; nếu Conversion.amount là số âm (dòng clawback/refund) thì balance bị trừ tương ứng.",
+      "kb_refs": [
+        "KB-001"
+      ]
+    },
+    {
+      "name": "Điều chỉnh balance bằng bonus 'premium offer' / thu hồi bonus (INFERRED — chưa xác nhận)",
+      "description": "Ngoài Conversion, tài liệu nêu balance có thể được cộng bonus ('premium offer' cho affiliate mới) hoặc bị trừ nếu bonus đó bị thu hồi. Tài liệu TỰ đánh dấu đây là claim hedged, chưa xác nhận — knowledge_kind=INFERRED, confidence=LOW. KHÔNG dùng làm oracle cho test case cho tới khi có xác nhận PO/dev.",
+      "kb_refs": [
+        "KB-002"
+      ]
+    },
+    {
+      "name": "Tính tổng hoa hồng cả đời của affiliate",
+      "description": "getAllTimeCommissionAttribute = balance (số dư nội bộ) + tổng Invoice.amount của các invoice ở trạng thái completed/pending/approved.",
+      "kb_refs": [
+        "KB-003"
+      ]
+    }
+  ],
+  "state_transitions": [],
+  "confirmed_rules": [
+    {
+      "statement": "Mỗi khi có Conversion mới (bất kỳ loại), balance tăng/giảm ngay lập tức đúng bằng Conversion.amount.",
+      "knowledge_kind": "CONFIRMED_EXPECTED",
+      "confidence": "HIGH",
+      "kb_refs": [
+        "KB-001"
+      ]
+    },
+    {
+      "statement": "getAllTimeCommissionAttribute = balance + tổng Invoice.amount (completed/pending/approved).",
+      "knowledge_kind": "CONFIRMED_EXPECTED",
+      "confidence": "MEDIUM",
+      "kb_refs": [
+        "KB-003"
+      ]
+    },
+    {
+      "statement": "balance KHÔNG đơn thuần bằng tổng Conversion.amount — là 1 con số tích luỹ độc lập, tăng/giảm qua từng sự kiện nghiệp vụ (Conversion, bonus, tạo/huỷ Invoice).",
+      "knowledge_kind": "CONFIRMED_EXPECTED",
+      "confidence": "MEDIUM",
+      "kb_refs": [
+        "KB-004"
+      ]
+    },
+    {
+      "statement": "Không có quan hệ 1-1 giữa 1 dòng Payout (Shopify) và 1 Invoice (Qikfiliate); nhiều Conversion từ nhiều kỳ Payout khác nhau cộng dồn vào balance trước khi affiliate rút.",
+      "knowledge_kind": "CONFIRMED_EXPECTED",
+      "confidence": "MEDIUM",
+      "kb_refs": [
+        "KB-005"
+      ]
+    }
+  ],
+  "observed_behavior": [],
+  "observed_validations": [],
+  "permissions": [],
+  "surface_mapping": {
+    "portal": [],
+    "storefront": [],
+    "api": [],
+    "data": [
+      "User.balance tăng/giảm ngay theo Conversion.amount (KB-001)",
+      "getAllTimeCommissionAttribute = balance + sum(Invoice.amount completed/pending/approved) (KB-003)",
+      "balance là số tích lũy độc lập (KB-004); không có FK 1-1 Payout-Invoice (KB-005)"
+    ],
+    "code": []
+  },
+  "dependencies": [
+    "Phụ thuộc gián tiếp vào nguồn tạo Conversion (import CSV / custom conversion entry) — ngoài phạm vi feature này, chỉ consume giá trị Conversion.amount.",
+    "Là nền tảng dữ liệu cho payout-request-eligibility (so sánh balance với transfer_fee và ngưỡng $50) và payout-request-submission (trừ balance khi tạo Invoice)."
+  ],
+  "risks": [],
+  "unknown_areas": [
+    {
+      "question": "Đơn vị tiền tệ của balance là gì, có hỗ trợ nhiều currency không?",
+      "why_it_matters": "Mọi ngưỡng tiền (min_balance_to_create_invoice, transfer_fee) là số không đơn vị; thiếu currency thì không dựng được test data tiền chính xác."
+    },
+    {
+      "question": "Balance có được phép âm không (ví dụ clawback lớn hơn số dư hiện có)?",
+      "why_it_matters": "Tài liệu nói Conversion âm trừ thẳng vào balance nhưng không nêu sàn; đây là cạnh biên tiền quan trọng và hiện không có expected result."
+    },
+    {
+      "question": "Có log/ledger nào ghi lại từng lần balance tăng/giảm để đối soát không?",
+      "why_it_matters": "balance được gọi là 'con số tích lũy độc lập'; nếu không có ledger thì chỉ verify được delta tức thời, không verify được tổng hợp."
+    },
+    {
+      "question": "Cơ chế bonus 'premium offer' cộng/trừ balance (KB-002) có phải hành vi thật đã xác nhận hay chỉ là mô tả hedged?",
+      "why_it_matters": "Nếu không xác nhận, QA không nên dựng test case khẳng định/phủ định hành vi này như 1 rule."
+    }
+  ],
+  "last_updated": {
+    "date": "2026-10-05",
+    "ccr_ref": "bootstrap"
+  },
+  "profile_relationships": [
+    {
+      "from": "FEAT-01-balance-accrual",
+      "to": "FEAT-02-payout-request-eligibility",
+      "relation": "FEEDS_INTO"
+    },
+    {
+      "from": "FEAT-01-balance-accrual",
+      "to": "FEAT-03-payout-request-submission",
+      "relation": "FEEDS_INTO"
+    }
+  ],
+  "unassigned_kb_items": [],
+  "profile_conflicts": [],
+  "profile_change_summary": [
+    "Profile mới tạo ở (DOC_BOOTSTRAP), chưa có version trước."
+  ],
+  "kb_trace_complete": true,
+  "coverage_matrix": [
+    {
+      "layer": "data",
+      "role": "affiliate",
+      "state": "any",
+      "environment": "documented",
+      "covered": true
+    },
+    {
+      "layer": "api",
+      "role": "affiliate",
+      "state": "any",
+      "environment": "documented",
+      "covered": false
+    },
+    {
+      "layer": "portal",
+      "role": "affiliate",
+      "state": "any",
+      "environment": "documented",
+      "covered": false
+    }
+  ]
+}

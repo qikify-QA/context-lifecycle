@@ -1,0 +1,295 @@
+{
+  "schema_version": "1.0",
+  "artifact_type": "FeatureProfileCandidate",
+  "artifact_id": "FP-CAND-CTX-20261002-01-recurring-commission",
+  "workflow_id": "CTX-20261002-01",
+  "producer": "feature-profile-builder",
+  "source_refs": [
+    "candidate/product-kb/recurring-commission.json",
+    "candidate/product-kb/_object-level.commission-calculation.json"
+  ],
+  "upstream_artifact_ids": [
+    "KBCAND-CTX-20261002-01-recurring-commission",
+    "KBCAND-CTX-20261002-01-OBJECT-LEVEL"
+  ],
+  "status": "READY",
+  "confidence": "MEDIUM",
+  "observations": [
+    "feature_id dùng nguyên feature_key \"recurring-commission\" — chưa có FEAT-ID chính thức do orchestrator mint cho object commission-calculation (§4 contract).",
+    "_object-level.commission-calculation.json có kb_candidates=[] — không có nội dung object-level cần hợp nhất.",
+    "1/8 KB item của shard này (KB-008) là phía `qikfiliate/commision - recurring & first month` của conflict cross-doc OQ-commission-calculation-006 đã biết — giữ trong profile_conflicts, không dựng thành capability đã chốt.",
+    "KB-007 là item EXAMPLE_ONLY (INFERRED/LOW) — chỉ dùng minh hoạ cho công thức ở KB-002/KB-004/KB-005, không tự suy thêm quy tắc."
+  ],
+  "assumptions": [],
+  "unknowns": [],
+  "conflicts": [],
+  "blocking_issues": [],
+  "payload": {
+    "feature_profiles": [
+      {
+        "feature_id": "recurring-commission",
+        "feature_key": "recurring-commission",
+        "name": "Hoa hồng recurring (và cap per-row)",
+        "user_goal": "Affiliate nhận đúng số tiền cho charge subscription bình thường, kể cả khi bị cap hoặc khi charge là gói năm.",
+        "stable_since_version": "commission-calculation kb_version v1 (DOC_BOOTSTRAP, doc_set generated 2026-08-20, run CTX-20261002-01)",
+        "actors": [
+          {
+            "role": "system/engine (không gắn qua UI)",
+            "permission_observed": "Tính amount cho mọi Conversion type=\"recurring\" theo công thức rate/cap/rounding.",
+            "kb_refs": [
+              "KB-001"
+            ]
+          }
+        ],
+        "entry_points": [
+          {
+            "path": "Pipeline tính hoa hồng — áp dụng khi commission-decision-flow đã xếp 1 dòng payout vào nhánh recurring/first-month và dòng đó KHÔNG phải first-month",
+            "precondition": "charge_type đã được commission-decision-flow phân loại vào nhánh recurring/first-month; Customer::isFirstMonth() = false cho dòng này (xem first-month-commission).",
+            "kb_refs": [
+              "KB-001",
+              "KB-008"
+            ]
+          }
+        ],
+        "capabilities": [
+          {
+            "name": "Tính số tiền hoa hồng recurring từ partner_share",
+            "description": "rate = ProgramCommission.percentage / 100 (KB-001). amount_raw = partner_share × rate (KB-002). max = maximum_amount × 12 nếu charge_type chứa \"yearly\" (vì Shopify tính phí 1 lần cho cả 12 tháng thay vì hàng tháng), ngược lại max = maximum_amount (KB-003). amount = clamp(amount_raw, max) — hàm clamp (tên thật trong code calculateRecurringAffiliateShare): nếu max==0 trả nguyên giá trị (không giới hạn); nếu đầu vào >=0 trả về min(giá_trị, |max|) (KB-004). Ví dụ minh hoạ clamp không cap và bị cap: KB-007 (EXAMPLE_ONLY, không tự suy thêm quy tắc).",
+            "kb_refs": [
+              "KB-001",
+              "KB-002",
+              "KB-003",
+              "KB-004",
+              "KB-007"
+            ],
+            "act_ids": []
+          },
+          {
+            "name": "Ghi nhận percentage hiệu lực thực tế lên Conversion",
+            "description": "percentage lưu lại trên Conversion được tính ngược nếu là yearly, ngược lại bằng rate gốc; field này được gọi là \"% hiệu lực thực tế\" — khi dòng bị cap, percentage lưu lại KHÁC với percentage cấu hình gốc trong ProgramCommission.",
+            "kb_refs": [
+              "KB-005"
+            ],
+            "act_ids": []
+          },
+          {
+            "name": "Phân loại Conversion type=\"recurring\"",
+            "description": "Conversion sinh ra từ nhánh này có type = \"recurring\".",
+            "kb_refs": [
+              "KB-006"
+            ],
+            "act_ids": []
+          }
+        ],
+        "state_transitions": [
+          {
+            "from": "amount_raw = partner_share × rate",
+            "to": "amount (sau clamp)",
+            "trigger": "clamp(amount_raw, max)",
+            "condition": "max = maximum_amount × 12 nếu charge_type chứa \"yearly\", ngược lại = maximum_amount",
+            "kb_refs": [
+              "KB-003",
+              "KB-004"
+            ]
+          }
+        ],
+        "confirmed_rules": [
+          {
+            "statement": "rate = ProgramCommission.percentage / 100",
+            "kb_refs": [
+              "KB-001"
+            ]
+          },
+          {
+            "statement": "amount_raw = partner_share × rate",
+            "kb_refs": [
+              "KB-002"
+            ]
+          },
+          {
+            "statement": "max = maximum_amount × 12 nếu charge_type chứa \"yearly\" (phí 1 lần cho 12 tháng), ngược lại max = maximum_amount",
+            "kb_refs": [
+              "KB-003"
+            ]
+          },
+          {
+            "statement": "amount = clamp(amount_raw, max); max==0 => không giới hạn; đầu vào >=0 => min(giá_trị, |max|)",
+            "kb_refs": [
+              "KB-004"
+            ]
+          },
+          {
+            "statement": "percentage lưu trên Conversion = % hiệu lực thực tế (tính ngược nếu yearly, ngược lại = rate gốc); khác rate cấu hình gốc khi bị cap",
+            "kb_refs": [
+              "KB-005"
+            ]
+          },
+          {
+            "statement": "Conversion sinh từ nhánh này có type = \"recurring\"",
+            "kb_refs": [
+              "KB-006"
+            ]
+          }
+        ],
+        "observed_behavior": [],
+        "observed_validations": [],
+        "permissions": [],
+        "surface_mapping": {
+          "portal": [],
+          "storefront": [],
+          "api": [],
+          "data": [
+            "Conversion.type = \"recurring\", Conversion.percentage = % hiệu lực thực tế (KB-005, KB-006)"
+          ],
+          "code": []
+        },
+        "dependencies": [
+          {
+            "dependency": "commission-decision-flow: phạm vi charge_type nào được coi là \"recurring/first-month\" (không chứa \"usage\") do nhánh quyết định flow xác định — tranh chấp OQ-commission-calculation-006 ảnh hưởng trực tiếp input của feature này.",
+            "kb_refs": [
+              "KB-008"
+            ]
+          },
+          {
+            "dependency": "refund-and-downgrade-adjustment: dùng chung hàm clamp(new, max) khi amount âm (clawback 2 chiều) — nhánh âm được xử lý riêng ở feature đó.",
+            "kb_refs": [
+              "KB-004"
+            ]
+          },
+          {
+            "dependency": "first-month-commission: feature này CHỈ áp dụng khi Customer::isFirstMonth() = false cho dòng đang xét.",
+            "kb_refs": [
+              "KB-001"
+            ]
+          }
+        ],
+        "risks": [
+          {
+            "risk": "Phạm vi áp dụng công thức recurring cho dòng \"one-time\" đang mâu thuẫn nguồn (OQ-commission-calculation-006) — rủi ro tính sai nhánh (áp công thức recurring cho dòng one-time, hoặc ngược lại) nếu PO/dev không xác nhận trước khi viết expected result.",
+            "kb_refs": [
+              "KB-008"
+            ]
+          },
+          {
+            "risk": "6/8 KB CONFIRMED_EXPECTED của feature này chỉ có 1 nguồn độc lập (`qikfiliate/commision - recurring & first month`) trong phạm vi được giao -> confidence MEDIUM, chưa đạt HIGH do thiếu corroboration độc lập thứ 2.",
+            "kb_refs": [
+              "KB-001",
+              "KB-002",
+              "KB-006"
+            ]
+          }
+        ],
+        "freshness": {
+          "observed_at": "2026-08-20",
+          "run_id": "CTX-20261002-01"
+        },
+        "unknown_areas": [
+          {
+            "question": "`qikfiliate/commision - recurring & first month` dẫn chiếu tới một mục \"percentage lưu trên Conversion\" (cho công thức tính ngược percentage của charge yearly) KHÔNG TỒN TẠI trong `qikfiliate/commision - recurring & first month` — công thức tính ngược percentage cho charge yearly không trích được từ bộ tài liệu được giao.",
+            "why_it_matters": "Không biết chính xác percentage lưu lại cho dòng yearly bị cap tính như thế nào — ảnh hưởng expected result của Conversion.percentage cho nhóm charge_type yearly."
+          },
+          {
+            "question": "Không rõ giá trị mặc định khi tạo mới ProgramCommission của percentage/maximum_amount là gì.",
+            "why_it_matters": "Ảnh hưởng expected result khi test ProgramCommission mới tạo chưa cấu hình rate (ProgramCommission rỗng -> amount tính ra sao)."
+          }
+        ]
+      }
+    ],
+    "profile_relationships": [
+      {
+        "from_feature_id": "recurring-commission",
+        "to_feature_id": "commission-decision-flow",
+        "relation": "depends_on",
+        "note": "Nhận input charge_type đã phân nhánh từ commission-decision-flow; biên \"one-time\" đang tranh chấp (OQ-commission-calculation-006)."
+      },
+      {
+        "from_feature_id": "recurring-commission",
+        "to_feature_id": "first-month-commission",
+        "relation": "mutually_exclusive_branch",
+        "note": "Cùng input (charge_type recurring/first-month) nhưng rẽ nhánh theo Customer::isFirstMonth() — chỉ đúng 1 trong 2 nhánh áp dụng cho 1 dòng."
+      },
+      {
+        "from_feature_id": "recurring-commission",
+        "to_feature_id": "refund-and-downgrade-adjustment",
+        "relation": "shares_mechanism",
+        "note": "Dùng chung hàm clamp(new, max) cho nhánh amount âm (refund/downgrade)."
+      }
+    ],
+    "coverage_matrix": [
+      {
+        "feature_id": "recurring-commission",
+        "layer": "data",
+        "role": "system",
+        "state": "formula recurring",
+        "environment": "documented",
+        "covered": true
+      },
+      {
+        "feature_id": "recurring-commission",
+        "layer": "portal",
+        "role": "n/a",
+        "state": "formula recurring",
+        "environment": "documented",
+        "covered": false
+      },
+      {
+        "feature_id": "recurring-commission",
+        "layer": "api",
+        "role": "system",
+        "state": "formula recurring",
+        "environment": "documented",
+        "covered": false
+      },
+      {
+        "feature_id": "recurring-commission",
+        "layer": "storefront",
+        "role": "n/a",
+        "state": "formula recurring",
+        "environment": "documented",
+        "covered": false
+      }
+    ],
+    "unassigned_kb_items": [],
+    "profile_conflicts": [
+      {
+        "conflict_id": "OQ-commission-calculation-006",
+        "topic": "Dòng charge_type chứa \"one-time\" thuộc nhánh nào",
+        "conflict_scope": "cross_doc",
+        "sides": [
+          {
+            "statement": "`qikfiliate/commission - overview`: dòng chứa \"one-time\" BỊ BỎ QUA, không tạo Conversion.",
+            "source": "`qikfiliate/commission - overview` §Sơ đồ luồng quyết định cho 1 dòng payout (CLM-03-002) — shard commission-decision-flow.json, kb_ref KB-010",
+            "confidence": "LOW"
+          },
+          {
+            "statement": "`qikfiliate/commision - recurring & first month`: nhánh recurring/first-month áp dụng cho MỌI dòng payout không chứa \"usage\" (tức bao hàm cả one-time, theo nghĩa đen).",
+            "source": "`qikfiliate/commision - recurring & first month` §preamble (CLM-07-001) — shard này (recurring-commission), kb_ref KB-008",
+            "confidence": "LOW"
+          }
+        ],
+        "resolution": "UNRESOLVED",
+        "needs": "PO/dev xác nhận thứ tự loại trừ. Không chọn bên ở feature profile này. Xem đầy đủ ở shard commission-decision-flow.json."
+      }
+    ],
+    "profile_change_summary": [
+      {
+        "change": "created",
+        "detail": "Profile khởi tạo lần đầu từ DOC_BOOTSTRAP CTX-20261002-01, dựng từ 8 KB candidate của shard recurring-commission.json (6 CONFIRMED_EXPECTED, 1 EXAMPLE_ONLY/INFERRED, 1 CONFLICTED/INFERRED).",
+        "source_run": "CTX-20261002-01"
+      }
+    ],
+    "kb_trace_complete": true
+  },
+  "gate": {
+    "decision": "CONDITIONAL_PASS",
+    "blocking_findings": [],
+    "conditions": [
+      "KB-008 (phía `qikfiliate/commision - recurring & first month` của OQ-commission-calculation-006) KHÔNG được dùng làm oracle cho tới khi PO/dev xác nhận — giữ trong profile_conflicts, không trong capabilities/confirmed_rules.",
+      "Công thức tính ngược percentage cho charge yearly (unknown_areas #1) chưa trích được — checklist cho field Conversion.percentage của charge yearly cần đánh dấu NEEDS_CONFIRMATION."
+    ],
+    "allowed_next_steps": [
+      "qa-checklist-builder",
+      "knowledge-diff-analyzer"
+    ]
+  }
+}

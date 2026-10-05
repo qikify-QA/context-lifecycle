@@ -1,0 +1,390 @@
+{
+  "schema_version": "1.0",
+  "artifact_type": "APICapabilityArtifact",
+  "artifact_id": "ACA-CTX-20260921-02-translation-api",
+  "workflow_id": "CTX-20260921-02",
+  "producer": "api-explorer",
+  "source_refs": [
+    { "type": "code_ref", "path": "contracts/qa-context-contract.md", "note": "shared contract" },
+    { "type": "code_ref", "path": "runs/context/2026-09-21/CTX-20260921-02/input/bootstrap-request.json", "note": "TASK-9 scope" },
+    { "type": "code_ref", "path": "runs/context/2026-09-21/CTX-20260921-02/raw/portal/portal-evidence.json", "note": "portal-explorer FeatureDiscoveryArtifact FDA-CTX-20260921-02-translation-portal" },
+    { "type": "code_ref", "path": "runs/context/2026-09-21/CTX-20260921-02/raw/storefront/storefront-evidence.json", "note": "storefront-explorer StorefrontDiscoveryArtifact SDA-CTX-20260921-02-translation-storefront" }
+  ],
+  "upstream_artifact_ids": [
+    "FDA-CTX-20260921-02-translation-portal",
+    "SDA-CTX-20260921-02-translation-storefront"
+  ],
+  "status": "PARTIAL",
+  "confidence": "MEDIUM",
+  "observations": [],
+  "assumptions": [
+    "APIOP-006's path parameter (observed value 8138398629987) is assumed to be a Shopify product_id, not teeinblue's internal campaign_id (2595), based on storefront-evidence.json's own field naming ('campaign_product_id') and the value matching the known Shopify product_id exactly. Not confirmed by any backend/code source — api-explorer had no code access in this pass."
+  ],
+  "unknowns": [
+    "GET /api/instances/{instanceId}/shop-locales (APIOP-001): exact request/response HTTP status code, full response headers, and auth headers were not captured in a standalone network file — only the response body was recorded inline by portal-explorer (OBS-003). Auth mechanism for this call is inferred from sibling calls (002/003), not directly observed for this specific request.",
+    "GET /api/translations (APIOP-004): response body was not captured in this pass (raw/network/ACT-05-01-005.json only records method/url/status=200 for this entry, no body). Whether this endpoint loads existing Dynamic Translation entries for the selected locale is INFERRED from timing/context only, not confirmed by response content — do not treat as confirmed.",
+    "Whether GET /api/instances/{instanceId}/shop-locales is a live Shopify Admin API pass-through or a teeinblue-cached copy — carried forward from portal-evidence.json's own unknown, api-explorer had no backend/code visibility to resolve this.",
+    "Full response schema of GET /api/merchant/campaigns/{productId}.json (APIOP-006) — only 2 fields were positively identified (form_header_title, campaign_products[0].product.title/label) out of a ~61KB response body; remaining schema not enumerated.",
+    "Whether any server-side (non-client-visible) request delivers the Product Page Content translation into the initial HTML document for /vi/products/... — this mechanism (APIOP-002's downstream consumer) is architecturally required for SF-OBS-005's observed behavior but produces no client-observable network entry; cannot be mapped to an APIOP-ID from client-side capture alone. See coverage_limitations."
+  ],
+  "conflicts": [
+    {
+      "description": "Carried forward from storefront-evidence.json: bootstrap-request business context states both Product Page Content AND Dynamic Translations should show on storefront. APIOP-006 (GET /api/merchant/campaigns/{productId}.json) response is identical byte-for-byte in structure between locale=en and locale=vi requests for campaign_products[0].product.title/label — the Dynamic Translation saved via APIOP-003 (record id=69, 'Vertical Framed Poster' -> vi) never appears in this response in either locale context, nor anywhere else on the rendered storefront page.",
+      "evidence_refs": [
+        { "type": "api_response", "path": "raw/storefront/network/campaign-config-api-call.json" },
+        { "type": "dom_snapshot", "path": "raw/storefront/network/product-base-text-location.json" }
+      ]
+    }
+  ],
+  "blocking_issues": [],
+  "payload": {
+    "api_context": {
+      "environment": "staging",
+      "auth_role": "mixed — portal operations (APIOP-001..004): owner, user_id=266 (Linh explorer), cookie session + x-xsrf-token + x-acting-user-id header; storefront operations (APIOP-005, APIOP-006): unauthenticated/GUEST buyer, no teeinblue auth header present",
+      "base_url": {
+        "teeinblue_portal_api": "https://staging-api.teeinblue.com",
+        "shopify_storefront": "https://linh-explorer.myshopify.com"
+      }
+    },
+    "operations": [
+      {
+        "operation_id": "APIOP-001",
+        "protocol": "REST",
+        "method_or_type": "GET",
+        "path_or_operation": "/api/instances/{instanceId}/shop-locales",
+        "observed_paths": ["/api/instances/609/shop-locales"],
+        "business_object": "Translation",
+        "capability": "List the store's published Shopify locales, used to populate the 'Languages from <store>' combobox on both Product Page Content and Dynamic Translations pages.",
+        "act_ids": ["ACT-01-01-001"],
+        "scn_ids": ["SCN-01-01"],
+        "feature_ids": [
+          "FEAT-01-edit-product-page-content-translations",
+          "FEAT-02-portal-translation-language-switcher",
+          "FEAT-03-dynamic-translations"
+        ],
+        "auth": {
+          "mechanism_inferred": "cookie session (Sanctum SPA) + x-xsrf-token + x-acting-user-id header, by analogy with APIOP-002/003 on the same portal session — not directly captured for this specific request",
+          "role_observed": "owner (user_id=266)"
+        },
+        "request_contract": {
+          "path_params": { "instanceId": "numeric string, e.g. store instance id (observed: 609)" },
+          "query_params": "none observed",
+          "body": "none (GET)"
+        },
+        "response_contract": {
+          "body_shape": "array<{ locale: string, name: string, primary: boolean, published: boolean }>",
+          "status_code": "not explicitly captured — response body was recorded without a status line; success is inferred from the UI successfully rendering the combobox, not from a captured status code"
+        },
+        "error_contract": [],
+        "observed_status": [],
+        "observed_count": 1,
+        "state_delta": [],
+        "source_refs": [
+          { "type": "api_response", "path": "raw/portal/portal-evidence.json#OBS-003", "act_id": "ACT-01-01-001" }
+        ],
+        "observed_request_refs": [],
+        "knowledge_kind": "OBSERVED_CURRENT"
+      },
+      {
+        "operation_id": "APIOP-002",
+        "protocol": "REST",
+        "method_or_type": "PUT",
+        "path_or_operation": "/api/instances/{instanceId}/config-translations",
+        "observed_paths": ["/api/instances/609/config-translations"],
+        "business_object": "Translation",
+        "capability": "Save Product Page Content translation (static built-in product-page UI strings) for a given store, storing the full 'en' default set alongside a per-locale override object.",
+        "act_ids": ["ACT-01-05-003"],
+        "scn_ids": ["SCN-01-05"],
+        "feature_ids": ["FEAT-01-edit-product-page-content-translations"],
+        "auth": {
+          "mechanism_observed": "cookie session (Sanctum SPA, per knowledge/portal-login note) + CSRF header + acting-user header",
+          "headers_observed_shape": {
+            "x-xsrf-token": "string (redacted)",
+            "x-acting-user-id": "numeric string (observed: \"266\")",
+            "content-type": "application/json;charset=UTF-8"
+          },
+          "role_observed": "owner (user_id=266)"
+        },
+        "request_contract": {
+          "path_params": { "instanceId": "numeric string (observed: 609)" },
+          "body_shape": {
+            "translations": "array<{ locale: string, name: string, data: object<string,string> }>",
+            "notes": "In the single observed sample, the 'en' entry's data contained the FULL default key set (~130 keys) unchanged; the edited non-default locale ('vi') entry's data was SPARSE (only the edited key present). Single sample — do not infer required/optional or full-vs-sparse as a general rule for either locale."
+          }
+        },
+        "response_contract": {
+          "status_code": 200,
+          "body_shape": "echoes the same { translations: [...] } structure back per portal-explorer's OBS-005; only a partial summary (vi_locale_data_saved) was preserved in the saved network evidence file, not the full echoed body"
+        },
+        "error_contract": [],
+        "observed_status": [200],
+        "observed_count": 1,
+        "state_delta": [
+          {
+            "field": "config-translations[locale=vi].form_header_title",
+            "before": "not set (falls back to en default value)",
+            "after": "QA test string set via ACT-01-05-003 (non-sensitive test data)",
+            "confidence": "HIGH"
+          }
+        ],
+        "source_refs": [
+          { "type": "har_entry", "path": "raw/network/ACT-01-05-003.json", "act_id": "ACT-01-05-003" },
+          { "type": "api_response", "path": "raw/portal/portal-evidence.json#OBS-005", "act_id": "ACT-01-05-003" }
+        ],
+        "observed_request_refs": ["raw/network/ACT-01-05-003.json"],
+        "knowledge_kind": "OBSERVED_CURRENT"
+      },
+      {
+        "operation_id": "APIOP-003",
+        "protocol": "REST",
+        "method_or_type": "POST",
+        "path_or_operation": "/api/translations/bulk",
+        "observed_paths": ["/api/translations/bulk"],
+        "business_object": "Translation",
+        "capability": "Create/save Dynamic Translation entries (merchant-entered content translations) — one record per locale, storage keyed by the literal free-text 'Default' source string rather than a semantic key.",
+        "act_ids": ["ACT-05-01-005"],
+        "scn_ids": ["SCN-03-05"],
+        "feature_ids": ["FEAT-03-dynamic-translations"],
+        "auth": {
+          "mechanism_observed": "same as APIOP-002 (cookie session + x-xsrf-token + x-acting-user-id)",
+          "headers_observed_shape": {
+            "x-xsrf-token": "string (redacted)",
+            "x-acting-user-id": "numeric string (observed: \"266\")",
+            "content-type": "application/json;charset=UTF-8"
+          },
+          "role_observed": "owner (user_id=266)"
+        },
+        "request_contract": {
+          "body_shape": {
+            "translations": "array<{ locale: string, name: string, data: object<string,string> }> — data keys are the literal free-text 'Default' source string typed into the UI, NOT a fixed semantic key (contrast with APIOP-002's config-translations, which uses fixed semantic keys like form_header_title)"
+          }
+        },
+        "response_contract": {
+          "status_code": 200,
+          "body_shape": "array<{ id: number, user_id: number, is_default: boolean, locale: string, data: object<string,string>, created_at: string (ISO8601), updated_at: string (ISO8601), name: string }>"
+        },
+        "error_contract": [],
+        "observed_status": [200],
+        "observed_count": 1,
+        "state_delta": [
+          {
+            "field": "translations record id=69, data['Vertical Framed Poster']",
+            "before": "record did not exist",
+            "after": "QA test translation string set via ACT-05-01-005 (non-sensitive test data), record created with id=69, user_id=266, locale=vi",
+            "confidence": "HIGH"
+          }
+        ],
+        "source_refs": [
+          { "type": "har_entry", "path": "raw/network/ACT-05-01-005.json", "act_id": "ACT-05-01-005" },
+          { "type": "api_response", "path": "raw/portal/portal-evidence.json#OBS-011", "act_id": "ACT-05-01-005" }
+        ],
+        "observed_request_refs": ["raw/network/ACT-05-01-005.json"],
+        "knowledge_kind": "OBSERVED_CURRENT"
+      },
+      {
+        "operation_id": "APIOP-004",
+        "protocol": "REST",
+        "method_or_type": "GET",
+        "path_or_operation": "/api/translations",
+        "observed_paths": ["/api/translations"],
+        "business_object": "Translation",
+        "capability": "unknown — fired around the same time as the locale switch / save on the Dynamic Translations page; plausibly the load-existing-entries call for the currently selected locale, but this is INFERRED from timing/proximity only. Per contract rule (no causal inference from temporal proximity alone) this capability mapping must not be treated as confirmed.",
+        "act_ids": ["ACT-05-01-005"],
+        "scn_ids": ["SCN-03-05"],
+        "feature_ids": ["FEAT-03-dynamic-translations"],
+        "auth": {
+          "mechanism_inferred": "same portal session as APIOP-002/003 (not directly captured for this request)"
+        },
+        "request_contract": {
+          "query_params": "not captured — request fired without recorded query string in this pass",
+          "body": "none (GET)"
+        },
+        "response_contract": {
+          "body_shape": "unknown — response body was not captured in this pass. Do not assume shape."
+        },
+        "error_contract": [],
+        "observed_status": [200],
+        "observed_count": 1,
+        "state_delta": [],
+        "source_refs": [
+          { "type": "har_entry", "path": "raw/network/ACT-05-01-005.json", "act_id": "ACT-05-01-005", "note": "entry index 34: method/url/status captured, no response_body field present" }
+        ],
+        "observed_request_refs": ["raw/network/ACT-05-01-005.json"],
+        "knowledge_kind": "INFERRED"
+      },
+      {
+        "operation_id": "APIOP-005",
+        "protocol": "OTHER",
+        "method_or_type": "POST",
+        "path_or_operation": "/localization",
+        "observed_paths": ["https://linh-explorer.myshopify.com/localization"],
+        "business_object": "Translation",
+        "capability": "Set the buyer's active storefront locale (Shopify Markets/locale mechanism). This is a Shopify theme-native endpoint (Dawn theme's stock <localization-form> component), NOT a teeinblue app-backend operation — included here because it is the mechanism that determines which locale's translations (both Product Page Content and Dynamic Translations) a buyer sees.",
+        "act_ids": [],
+        "scn_ids": [],
+        "feature_ids": ["FEAT-04-storefront-language-switcher"],
+        "auth": {
+          "mechanism_observed": "none (Shopify storefront session cookie only, standard theme request — no teeinblue auth header involved)",
+          "role_observed": "GUEST buyer"
+        },
+        "request_contract": {
+          "body_shape": "multipart/form-data: form_type=\"localization\", _method=\"put\", return_to=string (path), locale_code=string (observed: \"vi\")"
+        },
+        "response_contract": {
+          "status_code": 302,
+          "body_shape": "empty (redirect). Location resolves to the same path with the locale prefixed (e.g. /vi/...)."
+        },
+        "error_contract": [],
+        "observed_status": [302],
+        "observed_count": 1,
+        "state_delta": [
+          {
+            "field": "buyer session active locale (document.documentElement.lang / URL path prefix)",
+            "before": "en (default, no path prefix)",
+            "after": "vi (/vi/ path prefix)",
+            "confidence": "HIGH"
+          }
+        ],
+        "source_refs": [
+          { "type": "har_entry", "path": "raw/storefront/network/header-locale-switch.json" },
+          { "type": "api_response", "path": "raw/storefront/storefront-evidence.json#SF-OBS-003" }
+        ],
+        "observed_request_refs": ["raw/storefront/network/header-locale-switch.json"],
+        "knowledge_kind": "OBSERVED_CURRENT",
+        "mapping_note": "No portal ACT-ID exists for this operation because it originates entirely from storefront-explorer's evidence model, which records view-only/state-change interactions as SF-OBS-IDs (act_id explicitly recorded as 'N/A' in storefront-evidence.json) rather than ACT-IDs. Traceability preserved via source_refs to SF-OBS-002/SF-OBS-003 and feature_ids instead."
+      },
+      {
+        "operation_id": "APIOP-006",
+        "protocol": "REST",
+        "method_or_type": "GET",
+        "path_or_operation": "/api/merchant/campaigns/{productId}.json",
+        "observed_paths": [
+          "https://staging-api.teeinblue.com/api/merchant/campaigns/8138398629987.json?shop=linh-explorer.myshopify.com&v=1789194483"
+        ],
+        "business_object": "Translation",
+        "capability": "Load campaign/product configuration consumed by the storefront personalization (tee-campaign) widget, including Product Page Content EN default strings and product/variant data. This is the primary data source for the widget on both en and vi locale page loads.",
+        "act_ids": [],
+        "scn_ids": [],
+        "feature_ids": [
+          "FEAT-05-product-page-content-storefront-propagation",
+          "FEAT-06-dynamic-translations-storefront-propagation"
+        ],
+        "auth": {
+          "mechanism_observed": "none — no teeinblue auth header present in the captured request; publicly readable given a valid shop/product identifier",
+          "role_observed": "GUEST buyer",
+          "cors_observed": "access-control-allow-origin: *, access-control-allow-methods: GET, POST, PUT, DELETE, OPTIONS"
+        },
+        "request_contract": {
+          "path_params": {
+            "productId": "numeric string — observed value (8138398629987) matches the Shopify product_id, not teeinblue's internal campaign_id (2595); relationship is ASSUMED from context match, not confirmed by any doc/code source (see assumptions[])"
+          },
+          "query_params": {
+            "shop": "string, myshopify.com domain",
+            "v": "string, numeric cache-busting token"
+          },
+          "headers_tested": "Accept-Language header was explicitly varied (vi / vi-VN) in one comparison — observed to have no effect on response content"
+        },
+        "response_contract": {
+          "status_code": 200,
+          "body_shape": "JSON object, ~61KB transferred; only 2 fields positively identified in this pass: config.form_header_title (string, Product Page Content EN default) and campaign_products[0].product.title / .label (string, product base name). Remaining schema not enumerated — do not assume completeness."
+        },
+        "error_contract": [],
+        "observed_status": [200],
+        "observed_count": 2,
+        "state_delta": [
+          {
+            "field": "campaign_products[0].product.title (product base display name)",
+            "before": "'Vertical Framed Poster' (en-locale request)",
+            "after": "'Vertical Framed Poster' — UNCHANGED (vi-locale request, even though Dynamic Translation record id=69 for this exact source string had already been saved via APIOP-003 prior to this observation)",
+            "confidence": "HIGH"
+          },
+          {
+            "field": "config.form_header_title",
+            "before": "'personalize' (en-locale request)",
+            "after": "'personalize' — UNCHANGED (vi-locale request). Note: the Vietnamese override IS visible on the rendered storefront page (SF-OBS-005), but NOT via this endpoint's response — it is injected elsewhere (server-side into the HTML document itself; see unknowns and coverage_limitations).",
+            "confidence": "HIGH"
+          }
+        ],
+        "source_refs": [
+          { "type": "api_response", "path": "raw/storefront/network/campaign-config-api-call.json" },
+          { "type": "dom_snapshot", "path": "raw/storefront/network/product-base-text-location.json" },
+          { "type": "api_response", "path": "raw/storefront/storefront-evidence.json#SF-OBS-006" },
+          { "type": "api_response", "path": "raw/storefront/storefront-evidence.json#SF-OBS-007" }
+        ],
+        "observed_request_refs": ["raw/storefront/network/campaign-config-api-call.json"],
+        "knowledge_kind": "OBSERVED_CURRENT",
+        "mapping_note": "No portal ACT-ID exists for this operation (storefront-side, SF-OBS evidence model — see APIOP-005's mapping_note for the same reasoning)."
+      }
+    ],
+    "documented_observed_mismatches": [
+      {
+        "description": "Bootstrap-request business context (user-provided, not a formal spec) asserts both Product Page Content and Dynamic Translations propagate to storefront. Observed via APIOP-006: Product Page Content DOES propagate (through a mechanism outside this endpoint — see APIOP-002/coverage_limitations), but Dynamic Translations does NOT propagate through this endpoint's response, in either locale, despite the underlying record (APIOP-003, id=69) existing and being correctly saved on the portal side. This is a mismatch between stated business expectation and observed API behavior — neither side has been chosen as 'correct'; both are recorded (also see conflicts[] and storefront-evidence.json's own conflicts[]).",
+        "related_operations": ["APIOP-003", "APIOP-006"]
+      },
+      {
+        "description": "APIOP-002 (config-translations) and APIOP-003 (translations/bulk) use materially different storage/key models for what the portal UI presents as two flavors of the same 'Translation' object: APIOP-002 uses fixed semantic keys (e.g. form_header_title) with a full-default-plus-sparse-override shape; APIOP-003 uses the literal free-text source string as the data key with no full/sparse distinction observed. No documented API spec exists to compare against (ZERO_DOC_BOOTSTRAP) — this is an internal-consistency observation, not a doc-vs-observed mismatch in the strict sense, recorded here for downstream normalizer awareness.",
+        "related_operations": ["APIOP-002", "APIOP-003"]
+      }
+    ],
+    "background_traffic": [
+      { "normalized_route": "staging-sdk.teeinblue.com/shopify/app-v2.js", "kind": "unrelated", "note": "SDK bootstrap script asset load, not a data API call. Checked and ruled out as translation data source (no QA marker strings found)." },
+      { "normalized_route": "staging-sdk.teeinblue.com/async.js", "kind": "unrelated", "note": "SDK bootstrap script asset load, not a data API call. Checked and ruled out as translation data source." }
+    ],
+    "security_surfaces": [
+      {
+        "surface": "APIOP-001..004 (portal teeinblue API)",
+        "note": "Authenticated via cookie session + x-xsrf-token (CSRF) + x-acting-user-id header. instance_id (609) is passed as a path parameter on APIOP-001/002; whether the backend independently validates instance_id ownership against the session (vs. trusting the path param) was NOT tested in this run — no cross-tenant (TIB_USER_B) or forbidden-token check was performed against these specific endpoints. Flagged as an unexplored PERMISSION surface, not a confirmed finding."
+      },
+      {
+        "surface": "APIOP-006 (storefront teeinblue API, GET /api/merchant/campaigns/{productId}.json)",
+        "note": "Publicly readable with no auth header, CORS allow-origin: * — appears to be by design for a storefront-facing widget config endpoint (buyer never authenticates). Noted for completeness; not flagged as a defect."
+      },
+      {
+        "surface": "APIOP-005 (POST /localization)",
+        "note": "Shopify-owned endpoint, outside teeinblue's security boundary entirely."
+      }
+    ],
+    "unmapped_endpoints": [
+      {
+        "method_or_type": "GET",
+        "path_or_operation": "/api/merchant/shopify/thumbmark",
+        "note": "Observed once per storefront product page load (SF-OBS-007), alongside APIOP-006. Purpose not investigated (name suggests device/browser fingerprinting, not translation-related); no response captured; not mappable to any ACT-ID or Translation capability in this pass."
+      }
+    ],
+    "unexplored_operations": [
+      "DELETE (or equivalent) operation behind the trash-can icon on the Dynamic Translations table row — method/path never observed (TASK-8 cleanup deferred to a later portal-explorer run per portal-evidence.json).",
+      "The load-existing-overrides GET counterpart for APIOP-002 (config-translations) on initial /product-page-content page open — only the SAVE (PUT) call was captured; the page must fetch existing overrides somehow on load, but that call was not isolated in the captured network list.",
+      "'Auto translate' button (present on both /product-page-content and /artwork-translations) — endpoint/method never observed, not clicked (portal-evidence.json skipped_actions).",
+      "'Export' button (present on both pages) — endpoint/method never observed, not clicked.",
+      "Actual file-upload submission for Dynamic Translations 'Import' — file chooser was opened then cancelled with no file selected; the resulting upload request (method/path/body) was never observed.",
+      "'Reset' button on both translation pages — endpoint/method never observed, not clicked.",
+      "Dynamic Translations save/load behavior for MORE than 1 saved entry or MORE than 2 published locales — not exercised (store only has en/vi, table only ever had 0-1 row in this run).",
+      "Any endpoint on linh-explorer-2.myshopify.com (TIB_STORE_URL_2) — not tested, only linh-explorer.myshopify.com was captured."
+    ],
+    "coverage_limitations": [
+      "Server-side HTML-injection mechanism for Product Page Content translation (consumed by APIOP-002's saved data, observed rendering in SF-OBS-005): the actual server-to-server or app-embed request that resolves locale='vi' and injects the translated string into the raw HTML document response for /vi/products/... was NOT observed and cannot be mapped to an APIOP-ID. This is a genuine client-side network capture limitation (the rendering happens before the browser receives any response — nothing to intercept), not an omission or guess. Recommended follow-up: code-config-explorer / backend route inspection.",
+      "GET /api/translations (APIOP-004) response body was never captured — its role as the 'load existing Dynamic Translation entries' endpoint remains INFERRED, not confirmed.",
+      "GET /api/instances/{instanceId}/shop-locales (APIOP-001) was only observed inline (response body only) in portal-evidence.json; no standalone request/response capture with headers/status exists for this run.",
+      "Only 1 sample exists for 5 of 6 mapped operations (APIOP-001/002/003/004/005) — all carry confidence: LOW per the single-sample rule; no field on any of these should be treated as required/optional/always-present.",
+      "APIOP-006 was observed twice (en + vi locale loads) — enough to support the specific 'no locale variance' finding, but not enough (need >=3 per contract rule) to declare any individual field 'always_present'.",
+      "Only campaign 2595 / product base 3181 / product_id 8138398629987 was exercised for APIOP-006; no other campaign/product was tested, so the endpoint's behavior for campaigns with a genuine free-text personalization Option Title (the other Dynamic Translations sub-scope) is unverified.",
+      "No error-path (4xx/5xx) responses were observed for any of the 6 mapped operations — error_contract is empty everywhere, not confirmed-absent.",
+      "No PERMISSION/cross-tenant testing was performed against any of the mapped portal endpoints (TIB_USER_B / TIB_FORBIDDEN_TOKEN / TIB_INVALID_TOKEN fixtures were not exercised in this pass — out of scope for TASK-9 as defined)."
+    ],
+    "redaction_applied": true
+  },
+  "gate": {
+    "decision": "CONDITIONAL_PASS",
+    "blocking_findings": [],
+    "conditions": [
+      "APIOP-001 and APIOP-004 have incomplete runtime observation (missing status code/headers for APIOP-001; missing response body for APIOP-004) — treat their capability/contract as provisional until a future run captures the missing detail.",
+      "The server-side HTML-injection path for Product Page Content translations (downstream of APIOP-002) has no corresponding APIOP-ID — this is a structural client-side observability gap, not a mapping omission; downstream consumers should not expect an operation entry for it.",
+      "All 6 operations are OBSERVED_CURRENT / single-or-double-sample (LOW/MEDIUM confidence) — none should be promoted to CONFIRMED_EXPECTED without an authoritative source (spec, PO/dev confirmation)."
+    ],
+    "allowed_next_steps": [
+      "Hand off this artifact to qa-knowledge-normalizer and feature-profile-builder.",
+      "Recommend a follow-up run (code-config-explorer or backend-access pass) to resolve: (a) the server-side rendering mechanism for Product Page Content translations, (b) GET /api/translations response schema, (c) whether Dynamic Translations has any storefront-facing delivery path at all.",
+      "Recommend re-testing APIOP-006 against a campaign with a genuine free-text Option Title to close the Dynamic Translations 'Option Title' sub-scope coverage gap noted by storefront-explorer."
+    ]
+  }
+}

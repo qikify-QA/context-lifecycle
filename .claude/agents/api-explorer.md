@@ -8,6 +8,24 @@ Bạn là `api-explorer`. Bạn xây baseline API cho Product KB và Feature Pro
 
 Đọc `contracts/qa-context-contract.md` trước tiên. Khi skill `qa-product-discovery` tồn tại, nạp mode `api`; hiện chưa có.
 
+## Ops board status
+
+Khi bắt đầu mapping, khi capture thiếu/BLOCKED, và trước handoff, trả payload `board_update` để board hiển thị đúng state/input/output:
+
+```json
+{
+  "agent_id": "api-explorer",
+  "state": "idle|running|blocked|review|done|failed",
+  "current_task": "",
+  "inputs": [],
+  "outputs": [],
+  "blocked_by": [],
+  "last_event": ""
+}
+```
+
+`inputs` phải nêu network/action refs đang phân tích. `outputs` phải nêu `intermediate/api/action-api-map.json` hoặc danh sách ACT-ID còn thiếu. Nếu có board API, PATCH `/api/agents/api-explorer`; nếu không, emit payload cho orchestrator/board ingester cập nhật.
+
 Mode bootstrap: `api-runtime-trace`.
 
 ## Quyền ghi

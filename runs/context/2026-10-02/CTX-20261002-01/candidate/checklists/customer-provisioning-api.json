@@ -1,0 +1,748 @@
+{
+  "schema_version": "1.0",
+  "artifact_type": "RegressionChecklistCandidate",
+  "artifact_id": "CHKCAND-CTX-20261002-01-integration-api-customer-provisioning-api",
+  "workflow_id": "CTX-20261002-01",
+  "producer": "qa-checklist-builder",
+  "source_refs": [
+    {
+      "type": "doc_ref",
+      "doc_id": "`qikfiliate/integration api - overview and auth`",
+      "path": "candidate/feature-profiles/customer-provisioning-api.json"
+    },
+    {
+      "type": "doc_ref",
+      "doc_id": "`qikfiliate/integration api - customer lifecycle api`",
+      "path": "candidate/product-kb/customer-provisioning-api.json"
+    },
+    {
+      "type": "doc_ref",
+      "doc_id": "`qikfiliate/integration api - overview and auth`",
+      "path": "candidate/product-kb/_object-level.integration-api.json"
+    }
+  ],
+  "upstream_artifact_ids": [
+    "FPCAND-CTX-20261002-01-integration-api-customer-provisioning-api",
+    "KBCAND-CTX-20261002-01-integration-api-customer-provisioning-api",
+    "KBCAND-CTX-20261002-01-integration-api-object-level"
+  ],
+  "status": "READY",
+  "confidence": "MEDIUM",
+  "observations": [
+    "DOC_BOOTSTRAP: act_ids để rỗng ở mọi check. apiop_ids doc-scoped (APIOP-21-002..004, APIOP-22-002..004) dùng làm evidence bổ sung trong evidence_refs của check tương ứng route cụ thể.",
+    "Check xác thực X-API-Key (middleware auth.api_key) KHÔNG lặp lại ở đây — đã có ở checklist api-key-authentication.json (CHK-001..CHK-007), feature này chỉ phụ thuộc (DEPENDS_ON FEAT-01), không sở hữu nghiệp vụ auth.",
+    "3 known_defect liên quan program_slug (KB-009, KB-010, KB-011) viết thành check dimension REGRESSION, oracle_strength BASELINE, expected_result khẳng định rõ đây là rủi ro/lỗ hổng đã biết (thiếu validate tồn tại, có thể gây lỗi 500) — KHÔNG viết như hành vi đúng.",
+    "KB-004, KB-008, KB-015, KB-017 (payload/response mẫu EXAMPLE_ONLY, confidence LOW) KHÔNG được dùng làm oracle cho bất kỳ check nào trong file này — chỉ dùng để minh hoạ cách dựng request body trong steps. Theo đúng luật: không suy required/optional/boundary từ 1 sample.",
+    "CHK-017 (PERMISSION — composite key related_id+program_slug cho DELETE/PUT) là NEEDS_CONFIRMATION vì oracle duy nhất có thể dùng (KB-015, KB-017) là EXAMPLE_ONLY/LOW — không đủ mạnh để khẳng định đây là composite key duy nhất xác định Customer, khác với check tương tự ở customer-event-reporting-api (CHK-010 ở đó dùng được KB-002 CONFIRMED_EXPECTED HIGH nên READY/STRONG)."
+  ],
+  "assumptions": [],
+  "unknowns": [
+    "Không rõ hành vi khi POST /api/customers với related_id đã tồn tại (cùng Program) — lỗi trùng, ghi đè, hay tạo bản ghi thứ 2 (CHK-005).",
+    "Không rõ status/body của PUT /api/trashed-customers khi restore thành công và khi không tìm thấy bản ghi đã soft-delete (CHK-014, CHK-015).",
+    "Không rõ field nào required/optional cho cả 3 route (chỉ có payload mẫu) — không dựng được check validate field thiếu/sai kiểu, ghi vào excluded_dimensions (BOUNDARY).",
+    "Không rõ client app có BẮT BUỘC gọi cả DELETE /api/customers và POST /api/customer-events(uninstalled) khi uninstall hay chỉ 1 trong 2 đã đủ (CHK-016).",
+    "Không rõ composite key (related_id + program_slug) có phải là khoá duy nhất xác định Customer cho DELETE/PUT hay không, vì chỉ có payload mẫu (CHK-017)."
+  ],
+  "conflicts": [],
+  "blocking_issues": [],
+  "payload": {
+    "checklists": [
+      {
+        "feature_id": "FEAT-02-customer-provisioning-api",
+        "feature_key": "customer-provisioning-api",
+        "checklist_version": "v1",
+        "checks": [
+          {
+            "check_id": "CHK-001",
+            "dimension": "CORE",
+            "layer": "api",
+            "title": "POST /api/customers tạo Customer mới khi shop thực sự cài app (install)",
+            "applicability": {
+              "role": "client_app",
+              "state": "not_exists_to_active",
+              "environment": "documented",
+              "theme_or_device": null
+            },
+            "precondition": "Đã có TrackingInformation hợp lệ (chưa dùng) ứng với tracking_id gửi lên; Program tồn tại theo program_slug gửi lên. Đã xác thực theo FEAT-01 (xem checklist api-key-authentication.json).",
+            "steps": [
+              "Chuẩn bị 1 TrackingInformation hợp lệ, chưa dùng, ứng với tracking_id = X; Program tồn tại với slug = Y.",
+              "Gửi POST /api/customers với body gồm tracking_id=X, program_slug=Y, cộng related_id/name/email hợp lệ (xem KB-004 làm ví dụ shape, không phải đặc tả required).",
+              "Quan sát Customer được tạo và response trả về."
+            ],
+            "observation_point": "Customer mới trong hệ thống; cấu trúc response trả về.",
+            "expected_result": "1 Customer mới được tạo, gắn với affiliate giới thiệu qua tracking_id + program_slug; dữ liệu Customer gộp user_id/source_url từ TrackingInformation với name/email/related_id từ request (KB-001). Response trả về dạng CustomerResource (KB-007).",
+            "oracle": {
+              "kb_ids": [
+                "KB-001",
+                "KB-007"
+              ],
+              "oracle_strength": "STRONG"
+            },
+            "status": "READY",
+            "open_question_draft": null,
+            "risk_refs": [],
+            "priority": "P2",
+            "act_ids": [],
+            "evidence_refs": [
+              {
+                "type": "doc_ref",
+                "doc_id": "`qikfiliate/integration api - customer lifecycle api`",
+                "dsec_id": "DSEC-22-003",
+                "apiop_id": "APIOP-22-002",
+                "quote": "3. Gộp `user_id`/`source_url` từ `TrackingInformation` với `name`/`email`/`related_id` từ request → tạo `Customer`."
+              }
+            ],
+            "automation_suitability": "SUITABLE"
+          },
+          {
+            "check_id": "CHK-002",
+            "dimension": "STATE_DATA",
+            "layer": "db",
+            "title": "TrackingInformation bị xoá ngay sau khi tạo Customer thành công (token dùng 1 lần)",
+            "applicability": {
+              "role": "client_app",
+              "state": "active",
+              "environment": "documented",
+              "theme_or_device": null
+            },
+            "precondition": "Đã hoàn thành CHK-001 thành công với tracking_id = X.",
+            "steps": [
+              "Sau khi POST /api/customers với tracking_id=X thành công, kiểm tra bản ghi TrackingInformation ứng với tracking_id=X còn tồn tại hay không."
+            ],
+            "observation_point": "Sự tồn tại của bản ghi TrackingInformation sau khi Customer đã được tạo.",
+            "expected_result": "Bản ghi TrackingInformation ứng với tracking_id=X bị xoá ngay sau khi Customer được tạo thành công, vì token chỉ dùng đúng 1 lần (KB-005).",
+            "oracle": {
+              "kb_ids": [
+                "KB-005"
+              ],
+              "oracle_strength": "STRONG"
+            },
+            "status": "READY",
+            "open_question_draft": null,
+            "risk_refs": [],
+            "priority": "P2",
+            "act_ids": [],
+            "evidence_refs": [
+              {
+                "type": "doc_ref",
+                "doc_id": "`qikfiliate/integration api - customer lifecycle api`",
+                "dsec_id": "DSEC-22-003",
+                "apiop_id": "APIOP-22-002",
+                "quote": "4. **Xoá `TrackingInformation`** — token dùng đúng 1 lần"
+              }
+            ],
+            "automation_suitability": "HYBRID"
+          },
+          {
+            "check_id": "CHK-003",
+            "dimension": "NEGATIVE",
+            "layer": "api",
+            "title": "Gọi lại POST /api/customers với cùng tracking_id lần 2 thất bại",
+            "applicability": {
+              "role": "client_app",
+              "state": "active",
+              "environment": "documented",
+              "theme_or_device": null
+            },
+            "precondition": "Đã hoàn thành CHK-001/CHK-002 (TrackingInformation ứng với tracking_id=X đã bị xoá).",
+            "steps": [
+              "Gửi lại POST /api/customers với cùng tracking_id=X đã dùng ở CHK-001.",
+              "Quan sát request có tạo thêm Customer mới hay không."
+            ],
+            "observation_point": "Số lượng Customer mới được tạo bởi lần gọi lại.",
+            "expected_result": "Request thất bại, KHÔNG tạo Customer mới, vì không tìm thấy TrackingInformation (đã bị xoá ở lần gọi thứ nhất) (KB-006). Không khẳng định mã HTTP/body cụ thể — xem CHK-004.",
+            "oracle": {
+              "kb_ids": [
+                "KB-006"
+              ],
+              "oracle_strength": "STRONG"
+            },
+            "status": "READY",
+            "open_question_draft": null,
+            "risk_refs": [],
+            "priority": "P2",
+            "act_ids": [],
+            "evidence_refs": [
+              {
+                "type": "doc_ref",
+                "doc_id": "`qikfiliate/integration api - customer lifecycle api`",
+                "dsec_id": "DSEC-22-003",
+                "apiop_id": "APIOP-22-002",
+                "quote": "gọi lại `POST /api/customers` với cùng `tracking_id` lần 2 sẽ thất bại (không tìm thấy)."
+              }
+            ],
+            "automation_suitability": "SUITABLE"
+          },
+          {
+            "check_id": "CHK-004",
+            "dimension": "NEGATIVE",
+            "layer": "api",
+            "title": "Xác nhận HTTP status/response body khi tracking_id không tìm thấy (đã dùng/không hợp lệ)",
+            "applicability": {
+              "role": "client_app",
+              "state": "n/a",
+              "environment": "documented",
+              "theme_or_device": null
+            },
+            "precondition": "tracking_id không khớp bất kỳ TrackingInformation còn hiệu lực nào.",
+            "steps": [
+              "Gửi POST /api/customers với tracking_id không hợp lệ/đã dùng.",
+              "Ghi lại chính xác HTTP status code và response body."
+            ],
+            "observation_point": "HTTP status code và response body.",
+            "expected_result": "KHÔNG xác định — `qikfiliate/integration api - overview and auth`/`qikfiliate/integration api - customer lifecycle api` không đặc tả contract response cho ca này ngoài việc biết nó 'thất bại'. Cần PO/dev xác nhận.",
+            "oracle": {
+              "kb_ids": [],
+              "oracle_strength": "NONE"
+            },
+            "status": "NEEDS_CONFIRMATION",
+            "open_question_draft": "HTTP status/response body cụ thể khi POST /api/customers với tracking_id không hợp lệ/đã dùng là gì?",
+            "risk_refs": [],
+            "priority": "P3",
+            "act_ids": [],
+            "evidence_refs": [],
+            "automation_suitability": "UNKNOWN"
+          },
+          {
+            "check_id": "CHK-005",
+            "dimension": "NEGATIVE",
+            "layer": "api",
+            "title": "Xác nhận hành vi khi POST /api/customers với related_id đã tồn tại (cùng Program)",
+            "applicability": {
+              "role": "client_app",
+              "state": "active",
+              "environment": "documented",
+              "theme_or_device": null
+            },
+            "precondition": "Customer với related_id=R, program_slug=Y đã tồn tại (active).",
+            "steps": [
+              "Chuẩn bị 1 TrackingInformation hợp lệ khác (tracking_id mới).",
+              "Gửi POST /api/customers với related_id=R (đã tồn tại cho Program Y), program_slug=Y.",
+              "Quan sát hệ thống tạo bản ghi mới, ghi đè, hay trả lỗi trùng."
+            ],
+            "observation_point": "Số Customer tồn tại ứng với (related_id=R, program_slug=Y) sau request.",
+            "expected_result": "KHÔNG xác định — `qikfiliate/integration api - overview and auth`/`qikfiliate/integration api - customer lifecycle api` không tài liệu hoá hành vi này. Đây là tình huống thực tế dễ xảy ra (shop cài lại gọi sai endpoint, POST thay vì PUT /api/trashed-customers) nhưng không có expected result.",
+            "oracle": {
+              "kb_ids": [],
+              "oracle_strength": "NONE"
+            },
+            "status": "NEEDS_CONFIRMATION",
+            "open_question_draft": "Gọi POST /api/customers với related_id đã tồn tại (cùng Program) thì xảy ra gì — lỗi trùng, ghi đè, hay tạo bản ghi thứ 2? Tình huống thực tế dễ xảy ra khi client app gọi sai endpoint lúc shop cài lại.",
+            "risk_refs": [],
+            "priority": "P2",
+            "act_ids": [],
+            "evidence_refs": [],
+            "automation_suitability": "UNKNOWN"
+          },
+          {
+            "check_id": "CHK-006",
+            "dimension": "REGRESSION",
+            "layer": "api",
+            "title": "[RỦI RO ĐÃ BIẾT] POST /api/customers không validate program_slug tồn tại",
+            "applicability": {
+              "role": "client_app",
+              "state": "n/a",
+              "environment": "documented",
+              "theme_or_device": null
+            },
+            "precondition": "Có 1 TrackingInformation hợp lệ; program_slug KHÔNG khớp Program nào tồn tại.",
+            "steps": [
+              "Gửi POST /api/customers với tracking_id hợp lệ, program_slug KHÔNG tồn tại (ví dụ 'khong-ton-tai').",
+              "Quan sát response (status/body) và xem có bị chặn ở tầng validate request trước khi tới logic nghiệp vụ không."
+            ],
+            "observation_point": "Response của request và việc request có bị chặn sớm ở tầng validate hay không.",
+            "expected_result": "Đây là RỦI RO ĐÃ BIẾT (KB-009), KHÔNG phải hành vi đúng mong đợi: tầng request hiện KHÔNG có luật validate exists:programs,slug cho program_slug — request KHÔNG bị chặn sớm vì program_slug không tồn tại. Hành vi runtime cụ thể sau đó xem CHK-007. Nếu quan sát thấy validate đã được thêm (request bị chặn 422 ngay), đó là thay đổi cần điều tra/cập nhật KB.",
+            "oracle": {
+              "kb_ids": [],
+              "oracle_strength": "NONE"
+            },
+            "status": "NEEDS_CONFIRMATION",
+            "open_question_draft": "KB item KB-009 mang status=KNOWN_DEFECT da bi go khoi oracle.kb_ids (khong duoc dung lam oracle theo luat C5 'known_defect khong phai expected result'). Check 'CHK-006' hien khong con oracle hop le nao. Can PO/Dev xac nhan: hanh vi mo ta trong expected_result la known defect can tiep tuc theo doi (regression-watch, khong oracle) hay can mot kb_id CONFIRMED_EXPECTED khac thay the lam oracle.",
+            "risk_refs": [
+              "KB-009"
+            ],
+            "priority": "P1",
+            "act_ids": [],
+            "evidence_refs": [
+              {
+                "type": "doc_ref",
+                "doc_id": "`qikfiliate/integration api - customer lifecycle api`",
+                "dsec_id": "DSEC-22-003",
+                "apiop_id": "APIOP-22-002",
+                "quote": "nếu `program_slug` gửi lên không khớp Program nào tồn tại, hệ thống hiện không có validate `exists:programs,slug` ở tầng request"
+              }
+            ],
+            "automation_suitability": "SUITABLE"
+          },
+          {
+            "check_id": "CHK-007",
+            "dimension": "REGRESSION",
+            "layer": "api",
+            "title": "[RỦI RO ĐÃ BIẾT, nghi vấn] program_slug không tồn tại có thể gây lỗi runtime 500 thay vì 422",
+            "applicability": {
+              "role": "client_app",
+              "state": "n/a",
+              "environment": "documented",
+              "theme_or_device": null
+            },
+            "precondition": "Có 1 TrackingInformation hợp lệ; program_slug KHÔNG khớp Program nào tồn tại.",
+            "steps": [
+              "Gửi POST /api/customers với tracking_id hợp lệ, program_slug KHÔNG tồn tại.",
+              "Ghi lại chính xác HTTP status code trả về (500 hay 422 hay khác)."
+            ],
+            "observation_point": "HTTP status code trả về khi program_slug không tồn tại.",
+            "expected_result": "Đây là RỦI RO ĐÃ BIẾT nhưng chưa xác nhận chắc chắn (KB-010, confidence LOW, giọng dè dặt 'có khả năng'): request CÓ KHẢ NĂNG trả lỗi runtime 500 (khi code cố truy cập $program->id trên Program null) thay vì 422 rõ ràng. KHÔNG viết như hành vi đúng — ghi lại status thực tế quan sát được để so sánh, lệch theo hướng nào cũng cần ghi nhận (500 xác nhận defect; 422 hoặc khác nghĩa là KB cần cập nhật).",
+            "oracle": {
+              "kb_ids": [],
+              "oracle_strength": "NONE"
+            },
+            "status": "NEEDS_CONFIRMATION",
+            "open_question_draft": "KB item KB-010 mang status=KNOWN_DEFECT da bi go khoi oracle.kb_ids (khong duoc dung lam oracle theo luat C5 'known_defect khong phai expected result'). Check 'CHK-007' hien khong con oracle hop le nao. Can PO/Dev xac nhan: hanh vi mo ta trong expected_result la known defect can tiep tuc theo doi (regression-watch, khong oracle) hay can mot kb_id CONFIRMED_EXPECTED khac thay the lam oracle.",
+            "risk_refs": [
+              "KB-010"
+            ],
+            "priority": "P1",
+            "act_ids": [],
+            "evidence_refs": [
+              {
+                "type": "doc_ref",
+                "doc_id": "`qikfiliate/integration api - customer lifecycle api`",
+                "dsec_id": "DSEC-22-003",
+                "apiop_id": "APIOP-22-002",
+                "quote": "ví dụ gửi \"program_slug\": \"khong-ton-tai\" có khả năng gây lỗi runtime (500) ngay khi cố lấy $program->id, thay vì trả lỗi rõ ràng 422 \"program_slug không hợp lệ\""
+              }
+            ],
+            "automation_suitability": "SUITABLE"
+          },
+          {
+            "check_id": "CHK-008",
+            "dimension": "REGRESSION",
+            "layer": "api",
+            "title": "[RỦI RO ĐÃ BIẾT, chưa xác minh] Các endpoint khác dùng program_slug có thể gặp lỗi tương tự",
+            "applicability": {
+              "role": "client_app",
+              "state": "n/a",
+              "environment": "documented",
+              "theme_or_device": null
+            },
+            "precondition": "Customer đã tồn tại (active hoặc soft_deleted) để thử DELETE/PUT.",
+            "steps": [
+              "Gửi DELETE /api/customers với program_slug KHÔNG tồn tại (related_id hợp lệ).",
+              "Gửi PUT /api/trashed-customers với program_slug KHÔNG tồn tại (related_id hợp lệ).",
+              "Ghi lại HTTP status code của cả 2 trường hợp."
+            ],
+            "observation_point": "HTTP status code của DELETE và PUT khi program_slug không tồn tại.",
+            "expected_result": "CHƯA XÁC MINH (KB-011, confidence LOW, giọng dè dặt 'có thể') — tài liệu nêu khả năng các endpoint khác dùng program_slug cũng gặp lỗi tương tự KB-010 nhưng chưa xác minh endpoint nào. Đây là test khám phá (regression-watch), KHÔNG có expected result cố định — ghi lại status thực tế quan sát được để xác nhận hoặc loại trừ.",
+            "oracle": {
+              "kb_ids": [],
+              "oracle_strength": "NONE"
+            },
+            "status": "NEEDS_CONFIRMATION",
+            "open_question_draft": "KB item KB-011 mang status=KNOWN_DEFECT da bi go khoi oracle.kb_ids (khong duoc dung lam oracle theo luat C5 'known_defect khong phai expected result'). Check 'CHK-008' hien khong con oracle hop le nao. Can PO/Dev xac nhan: hanh vi mo ta trong expected_result la known defect can tiep tuc theo doi (regression-watch, khong oracle) hay can mot kb_id CONFIRMED_EXPECTED khac thay the lam oracle.",
+            "risk_refs": [
+              "KB-011"
+            ],
+            "priority": "P2",
+            "act_ids": [],
+            "evidence_refs": [
+              {
+                "type": "doc_ref",
+                "doc_id": "`qikfiliate/integration api - customer lifecycle api`",
+                "dsec_id": "DSEC-22-011",
+                "quote": "cả `POST /api/customers` lẫn có thể một số endpoint khác dùng `program_slug` đều nên được test với giá trị không tồn tại để xác nhận response code thực tế"
+              }
+            ],
+            "automation_suitability": "SUITABLE"
+          },
+          {
+            "check_id": "CHK-009",
+            "dimension": "CORE",
+            "layer": "api",
+            "title": "DELETE /api/customers soft-delete Customer khi shop gỡ cài app (uninstall)",
+            "applicability": {
+              "role": "client_app",
+              "state": "active_to_soft_deleted",
+              "environment": "documented",
+              "theme_or_device": null
+            },
+            "precondition": "Customer (theo related_id + program_slug) đang ở trạng thái active, chưa soft-delete.",
+            "steps": [
+              "Gửi DELETE /api/customers với related_id, program_slug của 1 Customer đang active.",
+              "Quan sát response và trạng thái Customer sau request."
+            ],
+            "observation_point": "HTTP status/body trả về; trạng thái soft-delete của Customer.",
+            "expected_result": "Customer được soft-delete (deleted_at được set); response trả về 204 No Content, không có body (KB-013, KB-014).",
+            "oracle": {
+              "kb_ids": [
+                "KB-013",
+                "KB-014"
+              ],
+              "oracle_strength": "STRONG"
+            },
+            "status": "READY",
+            "open_question_draft": null,
+            "risk_refs": [],
+            "priority": "P2",
+            "act_ids": [],
+            "evidence_refs": [
+              {
+                "type": "doc_ref",
+                "doc_id": "`qikfiliate/integration api - customer lifecycle api`",
+                "dsec_id": "DSEC-22-006",
+                "apiop_id": "APIOP-22-003",
+                "quote": "response `204 No Content`, không có body"
+              }
+            ],
+            "automation_suitability": "SUITABLE"
+          },
+          {
+            "check_id": "CHK-010",
+            "dimension": "STATE_DATA",
+            "layer": "db",
+            "title": "Sau soft-delete, Customer chuyển sang trashed scope, không còn ở scope mặc định",
+            "applicability": {
+              "role": "client_app",
+              "state": "soft_deleted",
+              "environment": "documented",
+              "theme_or_device": null
+            },
+            "precondition": "Đã hoàn thành CHK-009 (Customer đã soft-delete).",
+            "steps": [
+              "Sau DELETE /api/customers thành công, kiểm tra Customer đó có còn xuất hiện ở các truy vấn/scope mặc định (không trashed) hay không.",
+              "Xác nhận Customer vẫn có thể tìm thấy ở trashed scope (tiền đề để PUT /api/trashed-customers khôi phục được — xem KB-016)."
+            ],
+            "observation_point": "Khả năng truy vấn Customer ở scope mặc định vs trashed scope sau soft-delete.",
+            "expected_result": "Customer không còn xuất hiện ở scope mặc định (đã soft-delete theo KB-013), nhưng vẫn tồn tại ở trashed scope — tiền đề cho PUT /api/trashed-customers khôi phục qua restore() (KB-016).",
+            "oracle": {
+              "kb_ids": [
+                "KB-013",
+                "KB-016"
+              ],
+              "oracle_strength": "STRONG"
+            },
+            "status": "READY",
+            "open_question_draft": null,
+            "risk_refs": [],
+            "priority": "P2",
+            "act_ids": [],
+            "evidence_refs": [],
+            "automation_suitability": "HYBRID"
+          },
+          {
+            "check_id": "CHK-011",
+            "dimension": "NEGATIVE",
+            "layer": "api",
+            "title": "Xác nhận hành vi khi DELETE /api/customers gọi lần 2 trên Customer đã soft-delete",
+            "applicability": {
+              "role": "client_app",
+              "state": "soft_deleted",
+              "environment": "documented",
+              "theme_or_device": null
+            },
+            "precondition": "Customer (related_id + program_slug) đã ở trạng thái soft_deleted từ trước.",
+            "steps": [
+              "Gửi DELETE /api/customers lần 2 với cùng related_id, program_slug của Customer đã soft-delete.",
+              "Ghi lại HTTP status/body trả về."
+            ],
+            "observation_point": "HTTP status/body khi soft-delete 1 Customer đã soft-delete.",
+            "expected_result": "KHÔNG xác định — `qikfiliate/integration api - overview and auth`/`qikfiliate/integration api - customer lifecycle api` không nêu hành vi khi gọi DELETE lần 2 trên Customer đã soft-delete (idempotent 204, hay 404 not found). Cần PO/dev xác nhận.",
+            "oracle": {
+              "kb_ids": [],
+              "oracle_strength": "NONE"
+            },
+            "status": "NEEDS_CONFIRMATION",
+            "open_question_draft": "Gọi DELETE /api/customers lần 2 trên 1 Customer đã soft-delete trả về gì — vẫn 204 (idempotent), hay lỗi not-found?",
+            "risk_refs": [],
+            "priority": "P2",
+            "act_ids": [],
+            "evidence_refs": [],
+            "automation_suitability": "UNKNOWN"
+          },
+          {
+            "check_id": "CHK-012",
+            "dimension": "CORE",
+            "layer": "api",
+            "title": "PUT /api/trashed-customers khôi phục Customer đã soft-delete khi shop cài lại (reinstall)",
+            "applicability": {
+              "role": "client_app",
+              "state": "soft_deleted_to_active",
+              "environment": "documented",
+              "theme_or_device": null
+            },
+            "precondition": "Customer đã bị soft-delete trước đó (tồn tại trong trashed scope).",
+            "steps": [
+              "Gửi PUT /api/trashed-customers với related_id, program_slug của 1 Customer đang soft_deleted, kèm deleted_at = null (hoặc rỗng/false).",
+              "Quan sát trạng thái Customer sau request."
+            ],
+            "observation_point": "Trạng thái soft-delete của Customer sau request (restore() có được gọi không).",
+            "expected_result": "Hệ thống gọi restore() trên Customer, huỷ soft-delete, Customer chuyển về trạng thái active (KB-016).",
+            "oracle": {
+              "kb_ids": [
+                "KB-016"
+              ],
+              "oracle_strength": "STRONG"
+            },
+            "status": "READY",
+            "open_question_draft": null,
+            "risk_refs": [],
+            "priority": "P2",
+            "act_ids": [],
+            "evidence_refs": [
+              {
+                "type": "doc_ref",
+                "doc_id": "`qikfiliate/integration api - customer lifecycle api`",
+                "dsec_id": "DSEC-22-007",
+                "apiop_id": "APIOP-22-004",
+                "quote": "Gửi `deleted_at` rỗng/`null`/`false` → hệ thống gọi `restore()`, huỷ soft-delete"
+              }
+            ],
+            "automation_suitability": "SUITABLE"
+          },
+          {
+            "check_id": "CHK-013",
+            "dimension": "STATE_DATA",
+            "layer": "db",
+            "title": "Sau restore, Customer truy vấn lại được ở scope mặc định",
+            "applicability": {
+              "role": "client_app",
+              "state": "active",
+              "environment": "documented",
+              "theme_or_device": null
+            },
+            "precondition": "Đã hoàn thành CHK-012 (Customer đã được restore).",
+            "steps": [
+              "Sau PUT /api/trashed-customers thành công, kiểm tra Customer đó có xuất hiện lại ở scope mặc định (không trashed) không."
+            ],
+            "observation_point": "Khả năng truy vấn Customer ở scope mặc định sau restore.",
+            "expected_result": "Customer xuất hiện lại ở scope mặc định (deleted_at đã bị xoá bởi restore()), như một Customer active bình thường (KB-016).",
+            "oracle": {
+              "kb_ids": [
+                "KB-016"
+              ],
+              "oracle_strength": "STRONG"
+            },
+            "status": "READY",
+            "open_question_draft": null,
+            "risk_refs": [],
+            "priority": "P2",
+            "act_ids": [],
+            "evidence_refs": [],
+            "automation_suitability": "HYBRID"
+          },
+          {
+            "check_id": "CHK-014",
+            "dimension": "NEGATIVE",
+            "layer": "api",
+            "title": "Xác nhận HTTP status/response body khi PUT /api/trashed-customers không tìm thấy bản ghi soft-delete",
+            "applicability": {
+              "role": "client_app",
+              "state": "n/a",
+              "environment": "documented",
+              "theme_or_device": null
+            },
+            "precondition": "related_id + program_slug KHÔNG khớp bất kỳ Customer đã soft-delete nào.",
+            "steps": [
+              "Gửi PUT /api/trashed-customers với related_id/program_slug không khớp bản ghi trashed nào.",
+              "Ghi lại HTTP status/body trả về."
+            ],
+            "observation_point": "HTTP status/body khi không tìm thấy bản ghi trashed.",
+            "expected_result": "KHÔNG xác định — `qikfiliate/integration api - overview and auth`/`qikfiliate/integration api - customer lifecycle api` không đặc tả status/body cho ca không tìm thấy. Cần PO/dev xác nhận.",
+            "oracle": {
+              "kb_ids": [],
+              "oracle_strength": "NONE"
+            },
+            "status": "NEEDS_CONFIRMATION",
+            "open_question_draft": "PUT /api/trashed-customers trả về status/body gì khi không tìm thấy bản ghi đã soft-delete khớp related_id+program_slug?",
+            "risk_refs": [],
+            "priority": "P3",
+            "act_ids": [],
+            "evidence_refs": [],
+            "automation_suitability": "UNKNOWN"
+          },
+          {
+            "check_id": "CHK-015",
+            "dimension": "NEGATIVE",
+            "layer": "api",
+            "title": "Xác nhận HTTP status/response body khi PUT /api/trashed-customers restore thành công",
+            "applicability": {
+              "role": "client_app",
+              "state": "soft_deleted_to_active",
+              "environment": "documented",
+              "theme_or_device": null
+            },
+            "precondition": "Customer đã bị soft-delete trước đó.",
+            "steps": [
+              "Gửi PUT /api/trashed-customers restore thành công (xem CHK-012).",
+              "Ghi lại chính xác HTTP status code và response body."
+            ],
+            "observation_point": "HTTP status code và response body khi restore thành công.",
+            "expected_result": "KHÔNG xác định — `qikfiliate/integration api - overview and auth`/`qikfiliate/integration api - customer lifecycle api` chỉ nêu hệ thống gọi restore() (KB-016), không nêu status/body cụ thể trả về cho client app. Cần PO/dev xác nhận.",
+            "oracle": {
+              "kb_ids": [],
+              "oracle_strength": "NONE"
+            },
+            "status": "NEEDS_CONFIRMATION",
+            "open_question_draft": "PUT /api/trashed-customers trả về status/body gì khi restore thành công? Là endpoint duy nhất khôi phục dữ liệu nên cần contract response rõ ràng để verify.",
+            "risk_refs": [],
+            "priority": "P3",
+            "act_ids": [],
+            "evidence_refs": [],
+            "automation_suitability": "UNKNOWN"
+          },
+          {
+            "check_id": "CHK-016",
+            "dimension": "INTEGRATION",
+            "layer": "api",
+            "title": "Xác nhận client app có BẮT BUỘC gọi cả DELETE /api/customers và POST /api/customer-events(uninstalled) khi uninstall",
+            "applicability": {
+              "role": "client_app",
+              "state": "active_to_soft_deleted",
+              "environment": "documented",
+              "theme_or_device": null
+            },
+            "precondition": "Customer đang active.",
+            "steps": [
+              "Gửi DELETE /api/customers mà KHÔNG gửi POST /api/customer-events(name=uninstalled) kèm theo.",
+              "Quan sát trạng thái hiển thị của Customer (ở nơi hệ thống hiển thị trạng thái dựa trên CustomerEvent, thuộc object customer-shop) có phản ánh đúng 'đã gỡ cài' hay không nếu chỉ có soft-delete mà không có event."
+            ],
+            "observation_point": "Sự nhất quán giữa trạng thái soft-delete (FEAT-02) và trạng thái hiển thị dựa trên CustomerEvent (FEAT-03) khi chỉ gọi 1 trong 2 lệnh.",
+            "expected_result": "KHÔNG xác định — KB-012 (INFERRED, hedged 'thường') chỉ nói 2 lệnh 'thường đi cùng nhau', không khẳng định bắt buộc cả 2. Cần PO/dev xác nhận liệu chỉ gọi DELETE (không gọi customer-events) có đủ để hệ thống coi là đã uninstall đúng cách hay không.",
+            "oracle": {
+              "kb_ids": [],
+              "oracle_strength": "NONE"
+            },
+            "status": "NEEDS_CONFIRMATION",
+            "open_question_draft": "Client app có BẮT BUỘC gọi cả DELETE /api/customers và POST /api/customer-events(uninstalled) khi uninstall, hay 1 trong 2 đã đủ để hệ thống nhận biết đúng shop đã gỡ cài? Ảnh hưởng thiết kế test case cho luồng uninstall.",
+            "risk_refs": [
+              "KB-012"
+            ],
+            "priority": "P2",
+            "act_ids": [],
+            "evidence_refs": [
+              {
+                "type": "doc_ref",
+                "doc_id": "`qikfiliate/integration api - customer lifecycle api`",
+                "dsec_id": "DSEC-22-006",
+                "quote": "Hai lệnh gọi riêng biệt, thường đi cùng nhau:"
+              }
+            ],
+            "automation_suitability": "UNKNOWN"
+          },
+          {
+            "check_id": "CHK-017",
+            "dimension": "PERMISSION",
+            "layer": "api",
+            "title": "Xác nhận composite key (related_id + program_slug) có cách ly đúng Customer giữa các Program khác nhau cho DELETE/PUT",
+            "applicability": {
+              "role": "client_app",
+              "state": "n/a",
+              "environment": "documented",
+              "theme_or_device": null
+            },
+            "precondition": "Tồn tại 2 Customer thuộc 2 Program khác nhau (Program A, Program B) nếu có thể tạo related_id trùng giữa 2 Program (ví dụ cùng shop domain được giới thiệu vào 2 program khác nhau).",
+            "steps": [
+              "Tạo Customer A (related_id=R, program_slug=ProgA) và Customer B (related_id=R, program_slug=ProgB) nếu hệ thống cho phép related_id trùng giữa 2 Program.",
+              "Gửi DELETE /api/customers với related_id=R, program_slug=ProgA.",
+              "Xác nhận chỉ Customer A bị soft-delete, Customer B (program_slug=ProgB) không bị ảnh hưởng."
+            ],
+            "observation_point": "Customer nào bị soft-delete khi related_id trùng nhưng program_slug khác nhau.",
+            "expected_result": "KHÔNG xác định với độ tin cậy đủ để làm oracle — `qikfiliate/integration api - overview and auth`/`qikfiliate/integration api - customer lifecycle api` chỉ có payload MẪU (KB-015, KB-017; EXAMPLE_ONLY, confidence LOW) liệt kê related_id+program_slug như field gửi lên, KHÔNG có đặc tả chính thức khẳng định đây là composite key duy nhất xác định Customer cho DELETE/PUT (khác với POST /api/customer-events ở FEAT-03, nơi KB-002 nói rõ 'tìm Customer theo cặp (program_slug, related_id)'). Cần PO/dev xác nhận trước khi dùng làm oracle cho test cách ly cross-Program.",
+            "oracle": {
+              "kb_ids": [],
+              "oracle_strength": "NONE"
+            },
+            "status": "NEEDS_CONFIRMATION",
+            "open_question_draft": "related_id + program_slug có phải composite key duy nhất xác định Customer cho DELETE /api/customers và PUT /api/trashed-customers không? Hiện chỉ có payload mẫu (EXAMPLE_ONLY), không có đặc tả chính thức — cần xác nhận trước khi dùng làm oracle cho test cách ly dữ liệu giữa các Program.",
+            "risk_refs": [],
+            "priority": "P1",
+            "act_ids": [],
+            "evidence_refs": [],
+            "automation_suitability": "UNKNOWN"
+          }
+        ]
+      }
+    ],
+    "coverage_by_feature_and_risk": [
+      {
+        "feature_id": "FEAT-02-customer-provisioning-api",
+        "risk_kb_id": "KB-009",
+        "check_ids": [
+          "CHK-006"
+        ]
+      },
+      {
+        "feature_id": "FEAT-02-customer-provisioning-api",
+        "risk_kb_id": "KB-010",
+        "check_ids": [
+          "CHK-007"
+        ]
+      },
+      {
+        "feature_id": "FEAT-02-customer-provisioning-api",
+        "risk_kb_id": "KB-011",
+        "check_ids": [
+          "CHK-008"
+        ]
+      }
+    ],
+    "checks_needing_confirmation": [
+      {
+        "check_id": "CHK-004",
+        "open_question_draft": "HTTP status/response body khi tracking_id không hợp lệ/đã dùng?",
+        "reason": "Không có contract response cho ca này ngoài việc biết nó 'thất bại'."
+      },
+      {
+        "check_id": "CHK-005",
+        "open_question_draft": "Gọi POST /api/customers với related_id đã tồn tại (cùng Program) thì xảy ra gì?",
+        "reason": "Không tài liệu hoá; tình huống thực tế dễ xảy ra (gọi sai endpoint khi reinstall)."
+      },
+      {
+        "check_id": "CHK-011",
+        "open_question_draft": "DELETE /api/customers lần 2 trên Customer đã soft-delete trả về gì?",
+        "reason": "Không tài liệu hoá tính idempotent của soft-delete."
+      },
+      {
+        "check_id": "CHK-014",
+        "open_question_draft": "PUT /api/trashed-customers trả status/body gì khi không tìm thấy bản ghi trashed?",
+        "reason": "Không có contract response cho ca not-found."
+      },
+      {
+        "check_id": "CHK-015",
+        "open_question_draft": "PUT /api/trashed-customers trả status/body gì khi restore thành công?",
+        "reason": "Chỉ biết restore() được gọi (KB-016), không biết response contract."
+      },
+      {
+        "check_id": "CHK-016",
+        "open_question_draft": "Client app có BẮT BUỘC gọi cả DELETE /api/customers và POST /api/customer-events(uninstalled) khi uninstall không?",
+        "reason": "KB-012 chỉ INFERRED/hedged ('thường'), chưa xác nhận bắt buộc."
+      },
+      {
+        "check_id": "CHK-017",
+        "open_question_draft": "related_id + program_slug có phải composite key duy nhất cho DELETE/PUT không?",
+        "reason": "Chỉ có payload mẫu EXAMPLE_ONLY, không có đặc tả chính thức để dùng làm oracle cách ly cross-Program."
+      }
+    ],
+    "duplicates_removed": [],
+    "excluded_dimensions": [
+      {
+        "dimension": "BOUNDARY",
+        "reason": "Cả 3 route (POST /api/customers, DELETE /api/customers, PUT /api/trashed-customers) chỉ có payload MẪU (KB-004, KB-008, KB-015, KB-017 — EXAMPLE_ONLY, confidence LOW); không có đặc tả required/optional hay giới hạn độ dài/định dạng cho related_id/tracking_id/name/email/program_slug. Theo luật contract 'không suy required/boundary từ 1 sample', không có cơ sở hợp lệ để dựng check BOUNDARY cho feature này. _object-level.integration-api.json xác nhận cùng gap này ở mức object (doc_coverage_gaps: 'Ràng buộc định dạng/độ dài cho related_id, name')."
+      }
+    ]
+  },
+  "gate": {
+    "decision": "CONDITIONAL_PASS",
+    "blocking_findings": [],
+    "conditions": [
+      "CHK-006, CHK-007, CHK-008 (known_defect KB-009/010/011) đều oracle_strength BASELINE, expected_result khẳng định rõ đây là rủi ro/lỗ hổng đã biết hoặc chưa xác minh, KHÔNG viết như hành vi đúng.",
+      "KB-004, KB-008, KB-015, KB-017 (EXAMPLE_ONLY) không xuất hiện trong bất kỳ trường oracle.kb_ids nào — chỉ dùng minh hoạ trong steps.",
+      "Check xác thực X-API-Key không lặp lại — đã thuộc checklist api-key-authentication.json.",
+      "CHK-017 đúng oracle_strength NONE dù có vẻ 'hiển nhiên' — composite key chỉ được minh hoạ qua payload mẫu, không có đặc tả chính thức.",
+      "Rework CTX-20261002-01 (REJECTED verdict FND-001/002/003/006): nhieu check trong shard nay vua duoc ha tu STRONG/da-co-oracle xuong BASELINE/NONE + NEEDS_CONFIRMATION theo luat C5 (P1 dev_doc-sole-STRONG, known_defect-as-oracle, derivation brake). Checklist van PASS coverage va traceability, nhung nhung check nay can PO/Dev xac nhan (test_case PASS hoac po_dev_confirm) truoc khi nang lai STRONG."
+    ],
+    "allowed_next_steps": [
+      "knowledge-diff-analyzer",
+      "context-quality-reviewer"
+    ]
+  }
+}

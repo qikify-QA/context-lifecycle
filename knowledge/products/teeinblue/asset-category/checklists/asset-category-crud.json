@@ -1,0 +1,671 @@
+{
+  "checklists": [
+    {
+      "feature_id": "FEAT-02-asset-category-crud",
+      "feature_key": "asset-category-crud",
+      "checks": [
+        {
+          "check_id": "CHK-001",
+          "dimension": "CORE",
+          "layer": "api",
+          "title": "Tạo category mới loại Clipart",
+          "applicability": {
+            "role": "owner (sub=273)",
+            "state": "category chưa tồn tại",
+            "environment": "staging",
+            "theme_or_device": "n/a"
+          },
+          "precondition": "Đã đăng nhập role owner, ở /cliparts.",
+          "steps": [
+            "Click 'New category'.",
+            "Điền Name, để Display option mặc định.",
+            "Submit form."
+          ],
+          "observation_point": "request POST /api/clipart-categories body & response status",
+          "expected_result": "Request gửi type='clipart_category', response trả 201 kèm id category mới (lưu ý: response type có thể lệch với request - xem CHK-011).",
+          "oracle": {
+            "kb_ids": [
+              "KB-003"
+            ],
+            "oracle_strength": "BASELINE"
+          },
+          "status": "READY",
+          "risk_refs": [],
+          "priority": "P2",
+          "automation_suitability": "SUITABLE"
+        },
+        {
+          "check_id": "CHK-002",
+          "dimension": "CORE",
+          "layer": "api",
+          "title": "Tạo category mới loại Color/Additional Option/Map Style/Font (dùng chung endpoint)",
+          "applicability": {
+            "role": "owner (sub=273)",
+            "state": "category chưa tồn tại",
+            "environment": "staging",
+            "theme_or_device": "n/a"
+          },
+          "precondition": "Đã đăng nhập role owner, ở trang tương ứng (/color-categories, /additional-options, /map-styles, /font-categories).",
+          "steps": [
+            "Click 'New category'.",
+            "Điền Name.",
+            "Submit form."
+          ],
+          "observation_point": "request POST /api/clipart-categories, field type theo loại; response status",
+          "expected_result": "Cùng 1 endpoint POST /api/clipart-categories dùng chung, phân biệt bằng field `type` (giá trị riêng theo từng loại, KHÔNG theo quy tắc hậu tố cố định - xem CHK-011): additional_option='additional_option', map='map', font_category='font_category' - cả 3 loại này network-verified đầy đủ, response trả 201. Color: type='color_category' CHỈ xác nhận GIÁN TIẾP qua GET detail/clone (KB-003) - KHÔNG có network evidence trực tiếp cho chính request POST create trong các đợt quan sát đã có (chỉ xác nhận object_state qua DOM, category_id 6021 xuất hiện sau khi bấm Create), không tính vào phần network-verified của check này.",
+          "oracle": {
+            "kb_ids": [
+              "KB-003"
+            ],
+            "oracle_strength": "BASELINE"
+          },
+          "status": "READY",
+          "risk_refs": [],
+          "priority": "P2",
+          "automation_suitability": "SUITABLE"
+        },
+        {
+          "check_id": "CHK-003",
+          "dimension": "CORE",
+          "layer": "api",
+          "title": "Sửa tên category (Clipart, Font) qua PUT",
+          "applicability": {
+            "role": "owner (sub=273)",
+            "state": "category đã tồn tại",
+            "environment": "staging",
+            "theme_or_device": "n/a"
+          },
+          "precondition": "Category Clipart hoặc Font đã tồn tại.",
+          "steps": [
+            "Mở category detail.",
+            "Đổi Name.",
+            "Submit."
+          ],
+          "observation_point": "request PUT /api/clipart-categories/{id}, response status+body",
+          "expected_result": "Trả 200, tên cập nhật; response category Clipart có field updated_at (ISO 8601). chỉ Clipart (6015) và Font (6027) có network PUT đầy đủ theo KB-004 đợt review trước - Vector (6025) và Color (6021) đổi tên thành công theo DOM/screenshot nhưng network capture chính thức KHÔNG chứa entry PUT thật (chỉ 1 GraphQL query nền), nên KHÔNG dùng làm sample network-verified cho check này. Không suy quy luật cho Vector/Color/Additional Option/Map Style.",
+          "oracle": {
+            "kb_ids": [
+              "KB-004"
+            ],
+            "oracle_strength": "BASELINE"
+          },
+          "status": "READY",
+          "risk_refs": [],
+          "priority": "P2",
+          "automation_suitability": "SUITABLE"
+        },
+        {
+          "check_id": "CHK-004",
+          "dimension": "CORE",
+          "layer": "api",
+          "title": "Nhân bản (clone) category Clipart/Color, đặt tên '<gốc> copy'",
+          "applicability": {
+            "role": "owner (sub=273)",
+            "state": "category gốc đã tồn tại, có ≥1 item con",
+            "environment": "staging",
+            "theme_or_device": "n/a"
+          },
+          "precondition": "Category gốc Clipart hoặc Color đã tồn tại, có ít nhất 1 item con.",
+          "steps": [
+            "Click Duplicate trên sidebar tree.",
+            "Quan sát category mới trong danh sách."
+          ],
+          "observation_point": "request POST /api/clipart-categories/{id}/clone, response name",
+          "expected_result": "Trả 201, tên bản sao = '<tên gốc> copy'. Color clone có 1 điểm không nhất quán trong nguồn upstream - network capture khai báo chính thức là network capture gốc (không chứa POST clone) nhưng nội dung response clone thực tế nằm trong network capture gốc (KB-005 flag inconsistency, không tự sửa nguồn).",
+          "oracle": {
+            "kb_ids": [
+              "KB-005"
+            ],
+            "oracle_strength": "BASELINE"
+          },
+          "status": "READY",
+          "risk_refs": [],
+          "priority": "P2",
+          "automation_suitability": "SUITABLE"
+        },
+        {
+          "check_id": "CHK-005",
+          "dimension": "INTEGRATION",
+          "layer": "api",
+          "title": "Clone sao chép sâu item con (deep-copy) - verify qua GraphQL",
+          "applicability": {
+            "role": "owner (sub=273)",
+            "state": "category gốc Clipart có ≥1 item con trước khi clone; chỉ verify được 1/2 sample (Clipart)",
+            "environment": "staging",
+            "theme_or_device": "n/a"
+          },
+          "precondition": "Category gốc Clipart có ≥1 item con trước khi clone.",
+          "steps": [
+            "Clone category Clipart có item con.",
+            "Query GraphQL lấy item con của category clone.",
+            "So sánh tên/id với item con gốc."
+          ],
+          "observation_point": "GraphQL response item con của category clone",
+          "expected_result": "Item con mới xuất hiện trong category clone (cùng tên, khác id) - hành vi deep-copy. Sample Color chưa verify item con qua GraphQL, không tổng quát hoá cho loại đó.",
+          "oracle": {
+            "kb_ids": [
+              "KB-006"
+            ],
+            "oracle_strength": "BASELINE"
+          },
+          "status": "READY",
+          "risk_refs": [],
+          "priority": "P2",
+          "automation_suitability": "HYBRID"
+        },
+        {
+          "check_id": "CHK-006",
+          "dimension": "CORE",
+          "layer": "api",
+          "title": "Xoá category (clone) qua DELETE",
+          "applicability": {
+            "role": "owner (sub=273)",
+            "state": "category CLONE vừa tạo (không phải category gốc)",
+            "environment": "staging",
+            "theme_or_device": "n/a"
+          },
+          "precondition": "Category clone đã tồn tại (nối tiếp CHK-004).",
+          "steps": [
+            "Click Delete.",
+            "Confirm modal 'Are you sure to delete <tên>?'.",
+            "Quan sát response + danh sách sau xoá."
+          ],
+          "observation_point": "request DELETE /api/clipart-categories/{id}, response status, list sau xoá",
+          "expected_result": "Trả 204 No Content, category biến mất khỏi danh sách. Chỉ xác nhận cho category CLONE (rỗng hoặc item được deep-copy) - không phải category gốc có dữ liệu thật lâu năm (xem CHK-010). chỉ Clipart và Color có raw DELETE 204 network-verified theo KB-007 đợt review trước - Vector/Font xoá thành công nhưng chỉ xác nhận post-hoc (không raw DELETE capture), không dùng cho check này.",
+          "oracle": {
+            "kb_ids": [
+              "KB-007"
+            ],
+            "oracle_strength": "BASELINE"
+          },
+          "status": "READY",
+          "risk_refs": [],
+          "priority": "P2",
+          "automation_suitability": "SUITABLE"
+        },
+        {
+          "check_id": "CHK-007",
+          "dimension": "BOUNDARY",
+          "layer": "portal",
+          "title": "Field Preview size / Thumbnail size trên form Edit category Clipart hiển thị đúng default quan sát",
+          "applicability": {
+            "role": "owner (sub=273)",
+            "state": "form 'Edit category' Clipart (6015) đang mở",
+            "environment": "staging",
+            "theme_or_device": "n/a - CHỈ áp dụng Clipart, xem đợt review trước SYNC"
+          },
+          "precondition": "Mở form Edit category cho Clipart (6015).",
+          "steps": [
+            "Mở form Edit category Clipart.",
+            "Quan sát field Preview size (dropdown, giá trị đang chọn).",
+            "Quan sát field Thumbnail size (dropdown, giá trị đang chọn)."
+          ],
+          "observation_point": "DOM field attributes/labels",
+          "expected_result": "Preview size dropdown đang chọn 500px; Thumbnail size dropdown đang chọn 100px; 5 Display option (Thumbnail Images đang chọn/mặc định). KB-008 bị HẠ PHẠM VI trong đợt review trước - CHỈ Clipart được re-verify qua evidence chính thức (ảnh đọc lại trực tiếp: ảnh evidence gốc = evidence chính thức của evidence gốc). Claim về Vector/Color/Additional Option/Map Style/Font (range Preview 100-1600px, Thumbnail 100/300/500px, số Display option riêng) KHÔNG re-verify được (4/4 evidence gốc trỏ evidence không hợp lệ/không tồn tại) - KHÔNG dùng check này để khẳng định field cho 5 loại còn lại, xem kb.json KB-008.unknowns.",
+          "oracle": {
+            "kb_ids": [
+              "KB-008"
+            ],
+            "oracle_strength": "BASELINE"
+          },
+          "status": "READY",
+          "risk_refs": [
+            "KB-008"
+          ],
+          "priority": "P3",
+          "automation_suitability": "SUITABLE"
+        },
+        {
+          "check_id": "CHK-008",
+          "dimension": "BOUNDARY",
+          "layer": "portal",
+          "title": "Hành vi validate khi nhập Preview size/Thumbnail size ngoài range cho phép (100-1600px)",
+          "applicability": {
+            "role": "owner (sub=273)",
+            "state": "form New category Clipart/Vector đang mở",
+            "environment": "staging",
+            "theme_or_device": "n/a"
+          },
+          "precondition": "Form New category Clipart/Vector đang mở.",
+          "steps": [
+            "Nhập Preview size = 99 (dưới min) hoặc 1601 (trên max).",
+            "Submit form.",
+            "Quan sát message lỗi/hành vi clamp."
+          ],
+          "observation_point": "response/UI validation message",
+          "expected_result": null,
+          "oracle": {
+            "kb_ids": [],
+            "oracle_strength": "NONE"
+          },
+          "status": "NEEDS_CONFIRMATION",
+          "oq_ref": "OQ-asset-category-008",
+          "risk_refs": [],
+          "priority": "P3",
+          "automation_suitability": "UNKNOWN"
+        },
+        {
+          "check_id": "CHK-009",
+          "dimension": "NEGATIVE",
+          "layer": "api",
+          "title": "Submit form New category (Clipart) với Name rỗng",
+          "applicability": {
+            "role": "owner (Linh explorer, sub=273)",
+            "state": "form New category (Clipart) đang mở, Name để trống",
+            "environment": "staging",
+            "theme_or_device": "n/a - chỉ verify trên Clipart, 1 sample"
+          },
+          "precondition": "Form New category (Clipart) đang mở.",
+          "steps": [
+            "Để trống Name.",
+            "Submit form.",
+            "Quan sát response."
+          ],
+          "observation_point": "response status + message lỗi POST /api/clipart-categories",
+          "expected_result": "Server trả 422 {message: 'The name field is required.', errors: {name: [...]}} - không tạo category rỗng tên. KB-029 là OBSERVED_CURRENT (không có nguồn thẩm quyền xác nhận, 1 sample, chỉ test trên Clipart) - KHÔNG có PO/spec xác nhận riêng cho phần này, nên dù hành vi rất chuẩn (422 required-field là REST convention thông thường), oracle_strength giữ ở BASELINE thay vì STRONG để không tự nâng OBSERVED_CURRENT thành CONFIRMED_EXPECTED khi chưa có nguồn thẩm quyền (contract §2 rule 1). Không suy rộng ra loại category khác chưa test.",
+          "oracle": {
+            "kb_ids": [
+              "KB-029"
+            ],
+            "oracle_strength": "BASELINE"
+          },
+          "status": "READY",
+          "risk_refs": [
+            "gap-validation-name"
+          ],
+          "priority": "P2",
+          "automation_suitability": "SUITABLE"
+        },
+        {
+          "check_id": "CHK-010",
+          "dimension": "STATE_DATA",
+          "layer": "api",
+          "title": "Hành vi xoá category có item con thật (không phải category clone rỗng) - OBSERVED, network-verified",
+          "applicability": {
+            "role": "owner (Linh explorer, sub=273)",
+            "state": "category Clipart có 1 item con thật (ảnh PNG đã upload thật, id clipart=41800)",
+            "environment": "staging",
+            "theme_or_device": "n/a"
+          },
+          "precondition": "Category Clipart mới tạo, đã upload 1 ảnh thật vào đó (item con thật đã tồn tại).",
+          "steps": [
+            "Tạo category Clipart mới.",
+            "Upload 1 ảnh clipart thật vào category đó (tạo item con thật).",
+            "Xoá category đó qua modal confirm.",
+            "Quan sát response DELETE + trạng thái sau đó."
+          ],
+          "observation_point": "response DELETE /api/clipart-categories/{id} + list sau xoá",
+          "expected_result": "Hành vi quan sát được, network-verified, CHƯA có business confirmation (KB-024 hạ từ CONFIRMED_EXPECTED xuống OBSERVED_CURRENT bởi quá trình chuẩn hoá KB - po_answer 'chạy thật' là PO ủy quyền thực thi, KHÔNG phải xác nhận hành vi đúng): DELETE /api/clipart-categories/{id} trả 204 No Content dù category có 1 item con thật (id clipart=41800) - KHÔNG bị chặn, KHÔNG có warning/error body, KHÔNG cascade lỗi. Category biến mất khỏi list. 1 sample duy nhất, network-verified. Lệch khỏi hành vi này khi retest = cần điều tra, không tự động coi là bug.",
+          "oracle": {
+            "kb_ids": [
+              "KB-024"
+            ],
+            "oracle_strength": "BASELINE"
+          },
+          "status": "READY",
+          "risk_refs": [
+            "gap-delete-with-real-children"
+          ],
+          "priority": "P1",
+          "automation_suitability": "SUITABLE"
+        },
+        {
+          "check_id": "CHK-011",
+          "dimension": "REGRESSION",
+          "layer": "api",
+          "title": "Field `type` trong response tạo/clone category - CFL-001 phần hẹp CONFIRMED cho Clipart, khung diễn giải rộng vẫn UNRESOLVED (CFL-001)",
+          "applicability": {
+            "role": "owner (Linh explorer, sub=273)",
+            "state": "tạo hoặc clone category Clipart mới; đối chứng với 5 loại còn lại (vector/color/additional_option/map/font)",
+            "environment": "staging",
+            "theme_or_device": "n/a"
+          },
+          "precondition": "Tạo hoặc clone category Clipart mới.",
+          "steps": [
+            "Tạo category Clipart mới, quan sát response type.",
+            "Clone category Clipart đó ngay, quan sát response type có giữ nguyên không.",
+            "Đối chứng với Vector/Additional Option/Map Style/Font Category/Color (request/response type có khớp quy tắc hậu tố _category không)."
+          ],
+          "observation_point": "response body field `type` qua create + clone, đối chứng nhiều loại",
+          "expected_result": "[UPDATED, đợt quan sát 2026-09-14] PHẦN HẸP đã CONFIRMED qua KB-020 (PO 'B đúng', 2026-09-14): giá trị type='clipart' (không hậu tố _category) ổn định qua CẢ create VÀ clone cho Clipart (2 sample network-verified độc lập, evidence gốc/002). NHƯNG khung diễn giải RỘNG của câu hỏi gốc ('chỉ 1/6 loại - Clipart - bị mất hậu tố, chỉ lộ ra lúc Clone') KHÔNG được evidence rộng hơn xác nhận - bị phản bác bởi CFL-001: thực tế 4/6 loại (clipart/vector/additional_option/map) đều KHÔNG có hậu tố NGAY TỪ LÚC CREATE, chỉ 2/6 loại (color_category/font_category) CÓ hậu tố; KHÔNG có sample nào cho thấy Clone tự đổi type ở bất kỳ loại nào (clone luôn giữ nguyên type mà create đã trả). Đây là vấn đề naming-convention không nhất quán trên NHIỀU loại category, KHÔNG PHẢI lỗi riêng của Clipart hay riêng của thao tác Clone. Liên hệ trực tiếp CFL-002 (Vector type='vector' cũng thuộc nhóm 4/6 loại không hậu tố, cùng root cause khả dĩ). TUYỆT ĐỐI KHÔNG kết luận 'chỉ Clipart bị lỗi' là fact đã chốt - CFL-001 và CFL-002 vẫn UNRESOLVED, cần authority (PO/Dev) quyết định khung diễn giải cuối trước khi đóng.",
+          "oracle": {
+            "kb_ids": [
+              "KB-003",
+              "KB-020"
+            ],
+            "oracle_strength": "BASELINE"
+          },
+          "status": "NEEDS_CONFIRMATION",
+          "oq_ref": "OQ-asset-category-006",
+          "risk_refs": [
+            "OQ-asset-category-006",
+            "OQ-asset-category-007"
+          ],
+          "priority": "P2",
+          "automation_suitability": "HYBRID"
+        },
+        {
+          "check_id": "CHK-012",
+          "dimension": "CORE",
+          "layer": "api",
+          "title": "Edit/Clone/Delete category Additional Option, Map Style, Font Category - OBSERVED, network-verified",
+          "applicability": {
+            "role": "owner (Linh explorer, sub=273)",
+            "state": "3 category mới tạo (Additional Option id=6052, Map Style id=6054, Font Category id=6056 có 1 font item con thật), qua đủ chu trình Create->Edit->Clone->Delete",
+            "environment": "staging",
+            "theme_or_device": "n/a"
+          },
+          "precondition": "Tạo mới 3 category: Additional Option, Map Style, Font Category.",
+          "steps": [
+            "Tạo mới category (POST), kiểm tra type theo loại.",
+            "Edit đổi tên (PUT), kiểm tra tên cập nhật.",
+            "Clone (Duplicate icon, không có modal confirm), kiểm tra response type có giữ nguyên bản gốc không.",
+            "Delete cả bản gốc (kể cả Font category có item con thật) và bản clone (modal confirm), kiểm tra 204."
+          ],
+          "observation_point": "request/response cho từng thao tác Create/Edit/Clone/Delete",
+          "expected_result": "Hành vi quan sát được, network-verified, CHƯA có business confirmation (KB-030 hạ từ CONFIRMED_EXPECTED xuống OBSERVED_CURRENT bởi quá trình chuẩn hoá KB - po_answer 'tự chạy test' là PO ủy quyền thực thi, KHÔNG phải xác nhận hành vi đúng): toàn bộ thao tác quan sát thành công cho cả 3 loại (đợt quan sát 2026-09-14, 3 category): POST create (201, type giữ đúng theo loại: additional_option/map/font_category), PUT edit (200, tên đổi đúng, type KHÔNG có trong request body PUT/không đổi được qua PUT), POST clone (201, type GIỮ NGUYÊN y hệt bản gốc - không gặp hiện tượng mất hậu tố như Clipart ở CFL-001/KB-020), DELETE (204) cho cả bản gốc (kể cả Font category có item con thật, cascade OK, không cần xoá item con trước) và bản clone. KHÔNG có modal confirm khi Clone (chỉ Delete mới có modal). Lệch khỏi hành vi này khi retest = cần điều tra, không tự động coi là bug.",
+          "oracle": {
+            "kb_ids": [
+              "KB-030"
+            ],
+            "oracle_strength": "BASELINE"
+          },
+          "status": "READY",
+          "risk_refs": [
+            "gap-4-types-edit-clone-delete"
+          ],
+          "priority": "P2",
+          "automation_suitability": "SUITABLE"
+        },
+        {
+          "check_id": "CHK-013",
+          "dimension": "CORE",
+          "layer": "api",
+          "title": "Tạo category Vector mới và xác nhận field type thực tế trong request/response - OBSERVED, network-verified",
+          "applicability": {
+            "role": "owner (Linh explorer, sub=273)",
+            "state": "category Vector mới tạo (QA-TEST-CHK013-Vector)",
+            "environment": "staging",
+            "theme_or_device": "n/a"
+          },
+          "precondition": "Chưa có category Vector mới nào được tạo trong phiên test.",
+          "steps": [
+            "Mở /vectors, click New category.",
+            "Điền Name, submit.",
+            "Quan sát request body field type + response."
+          ],
+          "observation_point": "request/response POST /api/clipart-categories",
+          "expected_result": "Hành vi quan sát được, network-verified, CHƯA có business confirmation (KB-021 hạ từ CONFIRMED_EXPECTED xuống OBSERVED_CURRENT bởi quá trình chuẩn hoá KB - po_answer 'tự tạo test-data và chạy test' là PO ủy quyền thực thi, KHÔNG phải xác nhận hành vi đúng): request VÀ response đều có field `type`='vector' - KHÔNG có hậu tố '_category'. Giá trị này TRÙNG KHỚP KB-003 cũ (đợt quan sát 2026-09-10), củng cố đây là giá trị quan sát ổn định qua 2 đợt quan sát độc lập (nhưng vẫn BASELINE, không phải business-confirmed). LƯU Ý: literal action_needed gốc của yêu cầu test gốc ghi kỳ vọng type='vector_category' - conflict CFL-002 (PO literal vs giá trị thật quan sát) vẫn giữ UNRESOLVED - liên hệ CFL-001 (cùng root cause: Vector thuộc nhóm 4/6 loại không hậu tố ngay từ create). Lệch khỏi hành vi này khi retest = cần điều tra, không tự động coi là bug.",
+          "oracle": {
+            "kb_ids": [
+              "KB-003",
+              "KB-021"
+            ],
+            "oracle_strength": "BASELINE"
+          },
+          "status": "READY",
+          "risk_refs": [
+            "gap-vector-create",
+            "OQ-asset-category-007"
+          ],
+          "priority": "P2",
+          "automation_suitability": "SUITABLE"
+        },
+        {
+          "check_id": "CHK-014",
+          "dimension": "CORE",
+          "layer": "portal",
+          "title": "Action buttons trên sidebar tree category detail khác nhau theo loại (KB-010 UNVERIFIED - xem đợt review trước SYNC)",
+          "applicability": {
+            "role": "owner (sub=273)",
+            "state": "category detail đang mở - object_state không xác định lại được trong đợt review trước",
+            "environment": "staging",
+            "theme_or_device": "n/a"
+          },
+          "precondition": "Mở trang chi tiết category.",
+          "steps": [
+            "Mở category detail Color, quan sát sidebar tree action buttons.",
+            "Mở category detail Clipart, quan sát sidebar tree action buttons."
+          ],
+          "observation_point": "DOM sidebar tree",
+          "expected_result": null,
+          "oracle": {
+            "kb_ids": [
+              "KB-010"
+            ],
+            "oracle_strength": "NONE"
+          },
+          "status": "NEEDS_CONFIRMATION",
+          "oq_ref": "OQ-asset-category-009",
+          "risk_refs": [
+            "KB-010"
+          ],
+          "priority": "P3",
+          "automation_suitability": "UNKNOWN"
+        },
+        {
+          "check_id": "CHK-015",
+          "dimension": "STATE_DATA",
+          "layer": "api",
+          "title": "Giá trị mặc định display_type theo loại category (Clipart/Vector='image', Additional Option/Map Style/Font='radio')",
+          "applicability": {
+            "role": "owner (sub=273)",
+            "state": "form New category, Display option để mặc định",
+            "environment": "staging",
+            "theme_or_device": "n/a"
+          },
+          "precondition": "Form New category Clipart/Vector/Additional Option/Map Style/Font, Display option để mặc định.",
+          "steps": [
+            "Mở form New category Clipart, không đổi Display option, submit. Kiểm tra request display_type.",
+            "Lặp lại cho Vector.",
+            "Lặp lại cho Additional Option, Map Style, Font."
+          ],
+          "observation_point": "request POST body field display_type",
+          "expected_result": "KB-009 được VIẾT LẠI theo evidence hợp lệ đợt review trước - Clipart và Vector gửi display_type='image'; Additional Option, Map Style, Font gửi display_type='radio' (5 sample network-verified qua operation API tương ứng). Claim gốc 'display_type=radio cho Color' đã bị GỠ BỎ vì dựa trên evidence đã bị loại trừ - Color KHÔNG có network evidence cho chính request CREATE trong các đợt quan sát đã có, display_type mặc định của Color KHÔNG được xác nhận.",
+          "oracle": {
+            "kb_ids": [
+              "KB-009"
+            ],
+            "oracle_strength": "BASELINE"
+          },
+          "status": "READY",
+          "risk_refs": [],
+          "priority": "P3",
+          "automation_suitability": "SUITABLE"
+        },
+        {
+          "check_id": "CHK-016",
+          "dimension": "NEGATIVE",
+          "layer": "api",
+          "title": "Submit form New category (Clipart) với Name TRÙNG category đã tồn tại (finding mới, chưa PO xác nhận mong đợi hay bug)",
+          "applicability": {
+            "role": "owner (Linh explorer, sub=273)",
+            "state": "1 category Clipart cùng tên đã tồn tại (QA-TEST-CONF001-Clipart)",
+            "environment": "staging",
+            "theme_or_device": "n/a - chỉ verify trên Clipart, 1 sample"
+          },
+          "precondition": "1 category Clipart đã tồn tại tên 'QA-TEST-CONF001-Clipart'.",
+          "steps": [
+            "Mở form New category (Clipart).",
+            "Nhập Name trùng với category đã tồn tại.",
+            "Submit form.",
+            "Quan sát response."
+          ],
+          "observation_point": "response status khi Name trùng với category đã tồn tại",
+          "expected_result": "OBSERVED (1 sample, đợt quan sát 2026-09-14, KB-029): server trả 201, KHÔNG chặn tên trùng. Đây là QUAN SÁT hiện tại (OBSERVED_CURRENT), TUYỆT ĐỐI KHÔNG coi 'server cho phép trùng tên' là 1 rule đã chốt PASS - PO CHƯA xác nhận đây là hành vi mong đợi (data-integrity by design) hay cần fix (thêm validate unique name). Nếu retest lệch khỏi 201 (server bắt đầu chặn), đó là thay đổi hành vi cần ghi nhận lại, không tự kết luận là fix hay regression.",
+          "oracle": {
+            "kb_ids": [
+              "KB-029"
+            ],
+            "oracle_strength": "BASELINE"
+          },
+          "status": "NEEDS_CONFIRMATION",
+          "oq_ref": "OQ-asset-category-010",
+          "risk_refs": [
+            "gap-validation-name",
+            "KB-029"
+          ],
+          "priority": "P2",
+          "automation_suitability": "UNKNOWN"
+        },
+        {
+          "check_id": "CHK-017",
+          "dimension": "BOUNDARY",
+          "layer": "api",
+          "title": "[MỚI] Rate-limit middleware trên POST /api/clipart-categories (Tạo category mới, resource user_rate_limiter:clipart_category) — giá trị limit=1000/24h",
+          "applicability": {
+            "role": "merchant / owner 'Linh explorer'",
+            "state": "gọi POST /api/clipart-categories (route dùng chung cho 'Tạo category mới', mọi loại category)",
+            "environment": "staging",
+            "theme_or_device": "n/a"
+          },
+          "precondition": "Đã đăng nhập role merchant/owner, có quyền gọi endpoint tạo category.",
+          "steps": [
+            "Gọi POST /api/clipart-categories (qua form 'New category' hoặc trực tiếp API).",
+            "Quan sát header x-ratelimit-limit trong response.",
+            "Lặp lại vài lần liên tiếp để xác nhận giá trị limit không đổi qua các lần gọi."
+          ],
+          "observation_point": "header x-ratelimit-limit của response POST /api/clipart-categories",
+          "expected_result": "[OBSERVED_CURRENT, CBS-004, 3 sample (3x422 liên tiếp thiếu field bắt buộc), 1 nguồn (API trực tiếp, không có UI-driven song song trong các đợt quan sát đã có)] x-ratelimit-limit=1000, giữ nguyên qua 3 lần gọi liên tiếp (không phân biệt request 422 hay 201, chưa có sample 201 để đối chứng). Giá trị rate-limit này là quan sát mới tại 2026-09-26. Đây là hành vi HIỆN TẠI trên staging, KHÔNG CONFIRMED_EXPECTED — chưa có PO/dev xác nhận ngưỡng 1000/24h là business rule mong đợi. Áp dụng chung cho MỌI loại category (clipart/vector/color/additional_option/map/font) vì cùng 1 route dùng chung — CHƯA test riêng từng loại để xác nhận limit có tách theo loại hay không (xem CHK-018).",
+          "oracle": {
+            "kb_ids": [
+              "KB-036"
+            ],
+            "oracle_strength": "BASELINE"
+          },
+          "status": "READY",
+          "risk_refs": [
+            "CBS-004-rate-limit-not-confirmed"
+          ],
+          "priority": "P2",
+          "automation_suitability": "SUITABLE"
+        },
+        {
+          "check_id": "CHK-018",
+          "dimension": "BOUNDARY",
+          "layer": "api",
+          "title": "[MỚI] Window reset 24h thật và hành vi x-ratelimit-remaining khi POST /api/clipart-categories thành công (201) — CHƯA verify runtime",
+          "applicability": {
+            "role": "merchant / owner",
+            "state": "POST /api/clipart-categories — cả trường hợp thành công (201) và ngưỡng reset sau 24h",
+            "environment": "staging",
+            "theme_or_device": "n/a"
+          },
+          "precondition": "n/a.",
+          "steps": [
+            "Gọi POST /api/clipart-categories thành công (201) và quan sát x-ratelimit-remaining có giảm không.",
+            "Lặp tới gần ngưỡng 1000 (không tương xứng tải staging chung nếu chạy full) hoặc đợi 24h để xác nhận reset.",
+            "Nếu có thời gian, test riêng từng loại category (clipart/vector/color/additional_option/map/font) để xác nhận limit có tách theo loại hay chung 1 counter."
+          ],
+          "observation_point": "x-ratelimit-remaining khi 201; giá trị counter sau 24h; counter có tách theo loại category hay không",
+          "expected_result": null,
+          "oracle": {
+            "kb_ids": [],
+            "oracle_strength": "NONE"
+          },
+          "status": "NEEDS_CONFIRMATION",
+          "oq_ref": "OQ-asset-category-011",
+          "risk_refs": [
+            "CBS-004-window-24h-not-verified"
+          ],
+          "priority": "P3",
+          "automation_suitability": "UNKNOWN"
+        }
+      ]
+    }
+  ],
+  "coverage_by_feature_and_risk": [
+    {
+      "feature_id": "FEAT-02-asset-category-crud",
+      "risk_ref": "OQ-asset-category-006",
+      "check_ids": [
+        "CHK-011"
+      ]
+    },
+    {
+      "feature_id": "FEAT-02-asset-category-crud",
+      "risk_ref": "STALE-003",
+      "check_ids": [
+        "CHK-011"
+      ]
+    },
+    {
+      "feature_id": "FEAT-02-asset-category-crud",
+      "risk_ref": "gap-4-types-edit-clone-delete",
+      "check_ids": [
+        "CHK-012"
+      ]
+    },
+    {
+      "feature_id": "FEAT-02-asset-category-crud",
+      "risk_ref": "gap-vector-create",
+      "check_ids": [
+        "CHK-013"
+      ]
+    },
+    {
+      "feature_id": "FEAT-02-asset-category-crud",
+      "risk_ref": "gap-delete-with-real-children",
+      "check_ids": [
+        "CHK-010"
+      ]
+    },
+    {
+      "feature_id": "FEAT-02-asset-category-crud",
+      "risk_ref": "gap-validation-name",
+      "check_ids": [
+        "CHK-009"
+      ]
+    },
+    {
+      "feature_id": "FEAT-02-asset-category-crud",
+      "risk_ref": "KB-008",
+      "check_ids": [
+        "CHK-007"
+      ]
+    },
+    {
+      "feature_id": "FEAT-02-asset-category-crud",
+      "risk_ref": "KB-010",
+      "check_ids": [
+        "CHK-014"
+      ]
+    },
+    {
+      "feature_id": "FEAT-02-asset-category-crud",
+      "risk_ref": "KB-029-duplicate-name",
+      "check_ids": [
+        "CHK-016"
+      ]
+    },
+    {
+      "feature_id": "FEAT-02-asset-category-crud",
+      "risk_ref": "CBS-004-rate-limit-not-confirmed",
+      "check_ids": [
+        "CHK-017"
+      ],
+      "note": "[MỚI] Rate-limit clipart_category (limit=1000/24h) — giá trị LIMIT covered qua 1 nguồn (API trực tiếp, 3x422)."
+    },
+    {
+      "feature_id": "FEAT-02-asset-category-crud",
+      "risk_ref": "CBS-004-window-24h-not-verified",
+      "check_ids": [
+        "CHK-018"
+      ],
+      "note": "[MỚI] Window 24h thật + remaining behavior khi 201 — NEEDS_CONFIRMATION, chưa covered."
+    }
+  ],
+  "checks_needing_confirmation": [
+    "CHK-008",
+    "CHK-011",
+    "CHK-014",
+    "CHK-016",
+    "CHK-018"
+  ],
+  "excluded_dimensions": [
+    {
+      "dimension": "PERMISSION",
+      "reason": ".env chỉ còn 1 account khả dụng (Linh explorer, sub=273) - không có TIB_USER_B_*/cross-tenant account để test cross-role/cross-tenant CRUD category, kể cả cho phần rate-limit mới (KB-036 không có sample cross-role/cross-tenant)."
+    }
+  ]
+}

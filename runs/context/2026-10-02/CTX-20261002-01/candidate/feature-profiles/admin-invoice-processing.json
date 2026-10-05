@@ -1,0 +1,427 @@
+{
+  "schema_version": "1.0",
+  "artifact_type": "FeatureProfileCandidate",
+  "artifact_id": "FPCAND-CTX-20261002-01-invoice-payout-admin-invoice-processing",
+  "workflow_id": "CTX-20261002-01",
+  "producer": "feature-profile-builder",
+  "source_refs": [
+    {
+      "type": "doc_ref",
+      "doc_id": "`qikfiliate/admin - invoices and payment methods`",
+      "path": "candidate/product-kb/admin-invoice-processing.json"
+    },
+    {
+      "type": "doc_ref",
+      "doc_id": "`qikfiliate/Domain Entities`",
+      "path": "candidate/product-kb/_object-level.invoice-payout.json"
+    }
+  ],
+  "upstream_artifact_ids": [
+    "PKC-CTX-20261002-01-admin-invoice-processing",
+    "PKC-CTX-20261002-01-object-invoice-payout"
+  ],
+  "status": "READY",
+  "confidence": "MEDIUM",
+  "observations": [
+    "DOC_BOOTSTRAP: không có quan sát runtime. act_ids[] rỗng theo luật.",
+    "KB-015 là KNOWN DEFECT C2 (đổi status sang completed không gọi API thanh toán nào và không có chặn thao tác nhầm) — theo chỉ thị: đưa vào risks[] với mức độ nghiêm trọng rõ ràng, giữ knowledge_kind=OBSERVED_CURRENT, KHÔNG đưa vào confirmed_rules/permissions.",
+    "obj:KB-001 (định nghĩa Invoice) được gán làm bối cảnh nền.",
+    "Cross-link: KB-003/KB-014 của feature payout-request-cancellation (known defect C1 — mất balance khi huỷ từ approved) có liên hệ trực tiếp tới risk ở đây — cùng gốc rủi ro 'hệ thống không tích hợp cổng thanh toán thật, mọi xác nhận đều là thao tác tay của Ops'."
+  ],
+  "assumptions": [],
+  "unknowns": [
+    "Ai được phép đổi status invoice sang approved/completed, có maker-checker 2 người không.",
+    "fee trên invoice tính/lưu thế nào khi transfer_fee của Payment Method để trống (Absorbed).",
+    "Admin có sửa tay được các ô snapshot trước khi lưu không.",
+    "Có log/audit trail nào ghi lại việc admin đổi status không."
+  ],
+  "conflicts": [],
+  "blocking_issues": [],
+  "payload": {
+    "feature_profiles": [
+      {
+        "feature_id": "FEAT-05-admin-invoice-processing",
+        "feature_key": "admin-invoice-processing",
+        "name": "Ops/admin xử lý yêu cầu thanh toán",
+        "user_goal": "Admin/Ops xử lý 1 yêu cầu thanh toán từ affiliate từ đầu đến cuối (phát hiện, duyệt, chuyển tiền thực ngoài hệ thống, xác nhận completed) để affiliate nhận được tiền.",
+        "stable_since_version": "v1",
+        "actors": [
+          {
+            "role": "admin",
+            "permission_observed": "Admin/Ops là actor duy nhất thực hiện mọi hành động trong feature này (lọc/tìm invoice pending, đổi status, điền/xác nhận snapshot thông tin thanh toán). Tài liệu không nêu phân quyền/maker-checker 2 người (xem unknown_areas).",
+            "kb_refs": [
+              "KB-003",
+              "KB-004",
+              "KB-006",
+              "KB-007"
+            ]
+          }
+        ],
+        "entry_points": [
+          {
+            "path": "Thông báo Slack kênh 'affiliate' khi affiliate bấm Request Payment",
+            "precondition": "Affiliate đã bấm Request Payment (feature payout-request-submission)",
+            "kb_refs": [
+              "KB-003"
+            ]
+          },
+          {
+            "path": "Admin panel — màn hình Invoice, filter status = pending (hoặc tìm theo tên affiliate từ Slack)",
+            "precondition": "n/a",
+            "kb_refs": [
+              "KB-004"
+            ]
+          }
+        ],
+        "capabilities": [
+          {
+            "name": "Phát hiện yêu cầu thanh toán mới",
+            "description": "Khi affiliate bấm 'Request Payment', hệ thống gửi 1 thông báo Slack vào kênh affiliate — đây là cách DUY NHẤT Ops biết có yêu cầu mới, vì admin panel KHÔNG có badge/số đếm 'pending invoices' nào để nhắc. Admin tìm invoice cần xử lý bằng cách lọc status=pending hoặc tìm theo tên affiliate từ nội dung Slack.",
+            "kb_refs": [
+              "KB-003",
+              "KB-004"
+            ],
+            "act_ids": []
+          },
+          {
+            "name": "Xử lý thanh toán thủ công ngoài hệ thống",
+            "description": "Hệ thống KHÔNG tích hợp bất kỳ cổng thanh toán thật nào (không PayPal Payouts API, không Stripe, không API ngân hàng). Ops tự tính và tự chuyển tiền bằng tài khoản PayPal/ngân hàng thực NGOÀI hệ thống; Qikfiliate không gọi API thanh toán nào. Đổi status sang completed chỉ là admin tự xác nhận bằng tay rằng mình đã chuyển tiền thật ở đâu đó bên ngoài — hệ thống không xác minh việc chuyển tiền có thực sự xảy ra. Thứ tự đúng luôn phải là chuyển tiền thật trước, đổi status sau.",
+            "kb_refs": [
+              "KB-001",
+              "KB-002"
+            ],
+            "act_ids": []
+          },
+          {
+            "name": "Chuyển trạng thái Invoice không bị code ép buộc thứ tự",
+            "description": "Đi theo pending → approved → completed hay đi thẳng pending → completed đều tuỳ quy trình vận hành thực tế; code không ép buộc thứ tự nào. 'approved' là trạng thái trung gian Ops có thể đặt trước completed để xác nhận 'đã duyệt, sắp chi'.",
+            "kb_refs": [
+              "KB-006",
+              "KB-012"
+            ],
+            "act_ids": []
+          },
+          {
+            "name": "Snapshot thông tin thanh toán tự động khi chuyển completed",
+            "description": "Ngay khi form invoice chuyển sang completed, 1 đoạn JS tự động gọi AJAX lấy payment_method_name/fee/payment_info HIỆN TẠI của affiliate và điền sẵn (snapshot) vào các ô tương ứng trên form. Mục đích: lịch sử invoice vẫn giữ đúng thông tin thanh toán tại thời điểm đã chi trả, kể cả khi sau đó affiliate đổi phương thức thanh toán.",
+            "kb_refs": [
+              "KB-007",
+              "KB-013"
+            ],
+            "act_ids": []
+          },
+          {
+            "name": "Fallback payment info khi invoice trống",
+            "description": "Khi payment_method_name/payment_info của invoice trống, hệ thống tự fallback hiển thị thông tin thanh toán HIỆN TẠI của User (getActualPaymentMethodAttribute()/getActualPaymentInfoAttribute()).",
+            "kb_refs": [
+              "KB-005"
+            ],
+            "act_ids": []
+          },
+          {
+            "name": "Xác nhận hoàn tất qua email",
+            "description": "Sau khi admin lưu Invoice với status completed, hệ thống tự gửi email 'Payment completed' (event InvoiceCompleted) cho affiliate.",
+            "kb_refs": [
+              "KB-008"
+            ],
+            "act_ids": []
+          },
+          {
+            "name": "Tính số tiền thực nhận sau phí",
+            "description": "getActualReceivedAttribute() = amount - actual_fee — số tiền affiliate thực nhận sau phí.",
+            "kb_refs": [
+              "KB-011"
+            ],
+            "act_ids": []
+          }
+        ],
+        "state_transitions": [
+          {
+            "from": "pending",
+            "to": "approved",
+            "trigger": "Admin đổi status (bước trung gian, theo quy trình nội bộ nếu có)",
+            "condition": "n/a — không bị code ép buộc",
+            "kb_refs": [
+              "KB-006",
+              "KB-012"
+            ]
+          },
+          {
+            "from": "pending",
+            "to": "completed",
+            "trigger": "Admin đổi status thẳng, bỏ qua approved",
+            "condition": "n/a — không bị code ép buộc",
+            "kb_refs": [
+              "KB-006"
+            ]
+          },
+          {
+            "from": "approved",
+            "to": "completed",
+            "trigger": "Admin lưu Invoice với status completed sau khi đã chuyển tiền thật ngoài hệ thống",
+            "condition": "Thứ tự đúng: đã chuyển tiền thật trước, đổi status sau (không được hệ thống enforce — xem risks KB-015)",
+            "kb_refs": [
+              "KB-002",
+              "KB-007",
+              "KB-008"
+            ]
+          }
+        ],
+        "confirmed_rules": [
+          {
+            "statement": "Hệ thống KHÔNG tích hợp bất kỳ cổng thanh toán thật nào.",
+            "knowledge_kind": "CONFIRMED_EXPECTED",
+            "confidence": "HIGH",
+            "kb_refs": [
+              "KB-001"
+            ]
+          },
+          {
+            "statement": "Đổi status sang completed là admin tự xác nhận bằng tay; hệ thống không xác minh việc chuyển tiền thật. Thứ tự đúng: chuyển tiền trước, đổi status sau.",
+            "knowledge_kind": "CONFIRMED_EXPECTED",
+            "confidence": "MEDIUM",
+            "kb_refs": [
+              "KB-002"
+            ]
+          },
+          {
+            "statement": "Thông báo Slack là cách duy nhất Ops biết có yêu cầu mới; admin panel không có badge đếm pending invoices.",
+            "knowledge_kind": "CONFIRMED_EXPECTED",
+            "confidence": "HIGH",
+            "kb_refs": [
+              "KB-003"
+            ]
+          },
+          {
+            "statement": "Admin tìm invoice cần xử lý qua filter status=pending hoặc tên affiliate từ Slack.",
+            "knowledge_kind": "CONFIRMED_EXPECTED",
+            "confidence": "MEDIUM",
+            "kb_refs": [
+              "KB-004"
+            ]
+          },
+          {
+            "statement": "Payment info trống tự fallback về thông tin hiện tại của User.",
+            "knowledge_kind": "CONFIRMED_EXPECTED",
+            "confidence": "HIGH",
+            "kb_refs": [
+              "KB-005"
+            ]
+          },
+          {
+            "statement": "Thứ tự pending→approved→completed hay pending→completed đều không bị code ép buộc.",
+            "knowledge_kind": "CONFIRMED_EXPECTED",
+            "confidence": "MEDIUM",
+            "kb_refs": [
+              "KB-006"
+            ]
+          },
+          {
+            "statement": "Chuyển sang completed tự động AJAX điền sẵn (snapshot) thông tin thanh toán hiện tại.",
+            "knowledge_kind": "CONFIRMED_EXPECTED",
+            "confidence": "HIGH",
+            "kb_refs": [
+              "KB-007"
+            ]
+          },
+          {
+            "statement": "Lưu completed → hệ thống tự gửi email 'Payment completed' (InvoiceCompleted).",
+            "knowledge_kind": "CONFIRMED_EXPECTED",
+            "confidence": "HIGH",
+            "kb_refs": [
+              "KB-008"
+            ]
+          },
+          {
+            "statement": "Invoice.status nhận 1 trong 4 giá trị: pending/approved/cancel/completed.",
+            "knowledge_kind": "CONFIRMED_EXPECTED",
+            "confidence": "LOW",
+            "kb_refs": [
+              "KB-009"
+            ]
+          },
+          {
+            "statement": "Invoice.fee nullable, fallback về PaymentMethod.transfer_fee nếu trống.",
+            "knowledge_kind": "CONFIRMED_EXPECTED",
+            "confidence": "LOW",
+            "kb_refs": [
+              "KB-010"
+            ]
+          },
+          {
+            "statement": "Số tiền thực nhận = amount - actual_fee.",
+            "knowledge_kind": "CONFIRMED_EXPECTED",
+            "confidence": "LOW",
+            "kb_refs": [
+              "KB-011"
+            ]
+          },
+          {
+            "statement": "'approved' là trạng thái trung gian xác nhận 'đã duyệt, sắp chi'.",
+            "knowledge_kind": "CONFIRMED_EXPECTED",
+            "confidence": "MEDIUM",
+            "kb_refs": [
+              "KB-012"
+            ]
+          },
+          {
+            "statement": "Mục đích snapshot: giữ đúng thông tin tại thời điểm chi trả ngay cả khi affiliate đổi phương thức thanh toán sau này.",
+            "knowledge_kind": "CONFIRMED_EXPECTED",
+            "confidence": "MEDIUM",
+            "kb_refs": [
+              "KB-013"
+            ]
+          },
+          {
+            "statement": "Tiền chỉ lấy lại được nếu Ops tự tay điều chỉnh balance qua form User (quy trình bù khuyết cho known defect C1 ở feature payout-request-cancellation).",
+            "knowledge_kind": "CONFIRMED_EXPECTED",
+            "confidence": "MEDIUM",
+            "kb_refs": [
+              "KB-014"
+            ]
+          },
+          {
+            "statement": "Invoice là yêu cầu/thanh toán hoa hồng từ Ownego cho affiliate.",
+            "knowledge_kind": "CONFIRMED_EXPECTED",
+            "confidence": "MEDIUM",
+            "kb_refs": [
+              "obj:KB-001"
+            ]
+          }
+        ],
+        "observed_behavior": [
+          "KB-015 (OBSERVED_CURRENT, xem risks[] để biết đầy đủ mức độ nghiêm trọng): đổi status 1 invoice từ pending thẳng sang completed KHÔNG hề gọi bất kỳ API PayPal/ngân hàng nào; hệ thống chấp nhận bình thường việc đổi completed cho 1 invoice mà chưa thực sự chuyển tiền; affiliate vẫn nhận email 'thanh toán hoàn tất' dù chưa nhận tiền thật; không có gì ở tầng code chặn thao tác nhầm."
+        ],
+        "observed_validations": [],
+        "permissions": [
+          "Vai trò 'admin' thực hiện mọi hành động (duyệt, đổi status, xác nhận snapshot) trong feature này; tài liệu không nêu rõ có phân quyền/maker-checker 2 người cho bước approved/completed hay không."
+        ],
+        "surface_mapping": {
+          "portal": [
+            "Thông báo Slack + filter màn hình Invoice (KB-003, KB-004)",
+            "Hệ thống thanh toán thủ công ngoài hệ thống (KB-001, KB-002)",
+            "Chuyển trạng thái không ép thứ tự (KB-006, KB-012)",
+            "Snapshot AJAX khi chuyển completed (KB-007, KB-013)",
+            "Email 'Payment completed' (KB-008)",
+            "KNOWN DEFECT C2: không chặn thao tác nhầm (KB-015)"
+          ],
+          "storefront": [],
+          "api": [],
+          "data": [
+            "Payment info fallback (KB-005)",
+            "Invoice.status enum (KB-009)",
+            "Invoice.fee nullable fallback (KB-010)",
+            "getActualReceivedAttribute (KB-011)"
+          ],
+          "code": []
+        },
+        "dependencies": [
+          "Consume Invoice pending được tạo từ payout-request-submission.",
+          "Chồng lấp với payout-request-cancellation (Ops thao tác trên Invoice đã approved) — cùng gốc rủi ro không tích hợp cổng thanh toán thật.",
+          "Consume transfer_fee từ payment-method-catalog (object payment-method) làm fallback cho Invoice.fee."
+        ],
+        "risks": [
+          {
+            "risk": "KNOWN_DEFECT C2 — SEVERITY: HIGH (rủi ro vận hành/tài chính do lỗi con người). Đổi Invoice.status sang completed KHÔNG gọi bất kỳ API thanh toán nào (không PayPal/ngân hàng) và KHÔNG có cơ chế ở tầng code chặn thao tác nhầm (quên chuyển tiền mà đổi status, hoặc chuyển tiền rồi quên đổi status). Hệ thống chấp nhận bình thường việc đổi completed dù chưa chuyển tiền thật; affiliate vẫn nhận email 'thanh toán hoàn tất' dù chưa nhận tiền thật. Đây là hành vi HIỆN TẠI (knowledge_kind=OBSERVED_CURRENT, confidence=LOW theo đúng KB gốc) — KHÔNG phải expected result; KHÔNG được dùng làm oracle PASS cho test case 'completed luôn đồng nghĩa đã trả tiền'. Rủi ro nằm hoàn toàn ở quy trình con người.",
+            "kb_refs": [
+              "KB-015",
+              "KB-001",
+              "KB-002"
+            ],
+            "severity": "HIGH"
+          },
+          {
+            "risk": "Liên quan trực tiếp tới KNOWN_DEFECT C1 ở feature payout-request-cancellation: nếu Ops huỷ 1 invoice đã approved mà chưa chi tiền, tiền chỉ lấy lại được nếu Ops tự tay điều chỉnh balance (KB-014) — cùng gốc rủi ro 'không có cổng thanh toán thật, mọi xác nhận là thao tác tay'.",
+            "kb_refs": [
+              "KB-014"
+            ],
+            "severity": "MEDIUM"
+          }
+        ],
+        "freshness": {
+          "observed_at": null,
+          "run_id": "CTX-20261002-01"
+        },
+        "unknown_areas": [
+          {
+            "question": "Ai được phép đổi status invoice sang approved/completed, và có bước duyệt 2 người (maker-checker) nào không?",
+            "why_it_matters": "Bước approved được tài liệu mô tả là 'nếu quy trình nội bộ yêu cầu' — tức quy ước vận hành, không phải hàng rào hệ thống."
+          },
+          {
+            "question": "fee của invoice được tính/lưu thế nào khi transfer_fee của Payment Method để trống (Absorbed)?",
+            "why_it_matters": "Tài liệu nêu để trống = Ownego chịu phí, không phải $0; nhưng không nói giá trị fee trên invoice khi đó là gì."
+          },
+          {
+            "question": "Sau khi snapshot tự điền khi chuyển sang completed, admin có sửa tay được các ô payment_method_name/fee/payment_info trước khi lưu không, và nếu sửa thì bản ghi lưu giá trị nào?",
+            "why_it_matters": "Tài liệu nói 'admin chỉ cần xác nhận rồi lưu' — không nói có chặn sửa hay không."
+          },
+          {
+            "question": "Có log/audit trail nào ghi lại việc admin đổi status invoice sang completed (ai đổi, lúc nào) không?",
+            "why_it_matters": "C2 nói rủi ro nằm hoàn toàn ở quy trình con người và không có gì ở tầng code chặn thao tác nhầm. Nếu cũng không có audit trail thì không có cách truy ngược sai sót."
+          }
+        ]
+      }
+    ],
+    "profile_relationships": [
+      {
+        "from": "FEAT-05-admin-invoice-processing",
+        "to": "FEAT-03-payout-request-submission",
+        "relation": "CONSUMES"
+      },
+      {
+        "from": "FEAT-05-admin-invoice-processing",
+        "to": "FEAT-04-payout-request-cancellation",
+        "relation": "OVERLAPS_WITH"
+      },
+      {
+        "from": "FEAT-05-admin-invoice-processing",
+        "to": "payment-method:FEAT-02-payment-method-catalog",
+        "relation": "CONSUMES"
+      }
+    ],
+    "coverage_matrix": [
+      {
+        "feature_id": "FEAT-05-admin-invoice-processing",
+        "layer": "portal",
+        "role": "admin",
+        "state": "any",
+        "environment": "documented",
+        "covered": true
+      },
+      {
+        "feature_id": "FEAT-05-admin-invoice-processing",
+        "layer": "data",
+        "role": "admin",
+        "state": "any",
+        "environment": "documented",
+        "covered": true
+      },
+      {
+        "feature_id": "FEAT-05-admin-invoice-processing",
+        "layer": "api",
+        "role": "admin",
+        "state": "any",
+        "environment": "documented",
+        "covered": false
+      }
+    ],
+    "unassigned_kb_items": [],
+    "profile_conflicts": [],
+    "profile_change_summary": [
+      "Profile mới tạo ở run CTX-20261002-01 (DOC_BOOTSTRAP), chưa có version trước."
+    ],
+    "kb_trace_complete": true
+  },
+  "gate": {
+    "decision": "CONDITIONAL_PASS",
+    "blocking_findings": [],
+    "conditions": [
+      "KB-015 (known defect C2, OBSERVED_CURRENT) nằm trong observed_behavior[] + risks[] với severity HIGH, KHÔNG nằm trong confirmed_rules/permissions.",
+      "observed_validations[] rỗng, act_ids[] rỗng theo luật DOC_BOOTSTRAP."
+    ],
+    "allowed_next_steps": [
+      "qa-checklist-builder",
+      "knowledge-diff-analyzer"
+    ]
+  }
+}

@@ -1,0 +1,559 @@
+{
+  "schema_version": "1.0",
+  "artifact_type": "RequirementAnalysis",
+  "artifact_id": "REQ-DQA-20260923-01",
+  "workflow_id": "daily-test",
+  "producer": "qa-daily-test-orchestrator",
+  "produced_via": "skill qa-requirement-analysis (global skill, ~/.claude/skills/qa-requirement-analysis) + rule library rules/rate-limit-public-endpoints.md and rules/text-to-image-genai-layer.md",
+  "source_refs": [
+    "runs/daily/2026-09-23/TIB-5460/DQA-20260923-01/input/task-intake.json",
+    "runs/daily/2026-09-23/TIB-5460/DQA-20260923-01/input/source-snapshot.json",
+    "JIRA:TIB-5460 (PRIMARY)",
+    "JIRA:TIB-5341 (SUPPLEMENTARY_CONTEXT)",
+    "~/.claude/skills/qa-requirement-analysis/rules/rate-limit-public-endpoints.md"
+  ],
+  "upstream_artifact_ids": [
+    "TASK-DQA-20260923-01",
+    "SNAP-DQA-20260923-01"
+  ],
+  "status": "PARTIAL",
+  "confidence": "MEDIUM",
+  "payload": {
+    "readiness": "PARTIALLY_READY",
+    "readiness_rationale": "The main flow and its oracle are clear: the dev note gives a concrete repro (block the thumbmark URL, two incognito windows), an explicit expected result (second window's first upload succeeds), and named constants (5 uploads/window, 5-min staging window, 8s timeout, 1 retry, no retry on 429). Acceptance test cases can be written for that. What is NOT ready is the storage/stability contract of the new random fallback ID (see AMB-01), which is exactly what the highest-value negative test depends on, and the interaction with the pre-existing IP-keyed limits from TIB-5341 (RISK-03), which may mean the reported symptom still reproduces after this fix through a different mechanism. Those two must be answered by dev before the suite can claim to cover the bug.",
+    "feature_summary": "Buyers personalizing a product on the storefront can upload an image into an artwork field. When that field uses an AI effect (Remove Background, AI Enhance / Image Filter, Text-to-Image), the upload is rate limited. The limit is counted per visitor, and the visitor is identified by a 'thumbmark' ID that the storefront SDK fetches from the server and caches in the browser. If that ID was not available at upload time, the SDK used to invent one from device characteristics - so two different buyers on the same phone model in the same region produced the SAME id and shared one quota, and the second buyer was blocked on their very first upload. TIB-5460 replaces that device-derived fallback with a random per-browser value, fetches the real ID earlier (at page load), and makes that fetch more tolerant of slow/failed networks.",
+    "confirmed_requirements": [
+      {
+        "id": "CR-01",
+        "text": "The device-info-derived fallback visitor ID is removed and replaced by a random ID generated per browser, so different visitors never share a quota.",
+        "authority": "CONFIRMED_EXPECTED",
+        "source": "JIRA:TIB-5460 description, Solution + comment 51220 item 1"
+      },
+      {
+        "id": "CR-02",
+        "text": "The SDK fetches the visitor ID as soon as the page loads, instead of waiting until the first upload.",
+        "authority": "CONFIRMED_EXPECTED",
+        "source": "JIRA:TIB-5460 comment 51220 item 2",
+        "note": "The description calls fetching earlier a seller workaround that 'does not fully solve it'. The comment lists it as part of the fix. See CONF-01."
+      },
+      {
+        "id": "CR-03",
+        "text": "The thumbmark fetch timeout is raised from 3s to 8s, and one retry is performed on a network error or 5xx. No retry on a 429.",
+        "authority": "CONFIRMED_EXPECTED",
+        "source": "JIRA:TIB-5460 comment 51220 item 3"
+      },
+      {
+        "id": "CR-04",
+        "text": "Rate limiting applies only to uploads that use an AI effect. A plain upload with no effect is never limited.",
+        "authority": "CONFIRMED_EXPECTED",
+        "source": "JIRA:TIB-5460 comment 51220, 'Before you start'"
+      },
+      {
+        "id": "CR-05",
+        "text": "Default limit is 5 uploads per window per visitor. Window is 1 hour in production and 5 minutes on staging.",
+        "authority": "CONFIRMED_EXPECTED",
+        "source": "JIRA:TIB-5460 comment 51220, 'Before you start'",
+        "corroboration": "JIRA:TIB-5341 F41-04 states default 5/hour per thumbmark on AI routes - consistent."
+      },
+      {
+        "id": "CR-06",
+        "text": "The signed thumbmark is cached in localStorage under key teeinblue_signed_thumbmark with no expiry once successfully fetched; a reload with the key present must NOT re-issue GET /thumbmark.",
+        "authority": "CONFIRMED_EXPECTED",
+        "source": "JIRA:TIB-5460 comment 51220, 'Before you start' + Test step 3"
+      },
+      {
+        "id": "CR-07",
+        "text": "A genuine repeat visitor is still limited: after 5 uploads in the window, the 6th shows 'Upload limit exceeded'. This must survive the fix, i.e. the fix must not accidentally exempt anyone.",
+        "authority": "CONFIRMED_EXPECTED",
+        "source": "JIRA:TIB-5460 comment 51220, Test step 2"
+      },
+      {
+        "id": "CR-08",
+        "text": "The fallback ID stays consistent for the same visitor across page reloads within the same window (a reload must not hand the visitor a fresh quota).",
+        "authority": "CONFIRMED_EXPECTED",
+        "source": "JIRA:TIB-5460 comment 51220, Test step 2, 'Reload the page and try uploading once more (still same 5-min window) -> should still be blocked. This confirms the fallback ID stays consistent for the same visitor across page reloads instead of resetting.'",
+        "note": "Stated as an expected result, but the mechanism that makes it true is not stated. See AMB-01."
+      },
+      {
+        "id": "CR-09",
+        "text": "After the page-load fetch succeeds, an upload must not fire a second GET /thumbmark - it reuses the page-load result.",
+        "authority": "CONFIRMED_EXPECTED",
+        "source": "JIRA:TIB-5460 comment 51220, Test step 3"
+      },
+      {
+        "id": "CR-10",
+        "text": "Normal uploads (with and without AI effects) behave exactly as before, with no new errors.",
+        "authority": "CONFIRMED_EXPECTED",
+        "source": "JIRA:TIB-5460 comment 51220, Test step 4"
+      },
+      {
+        "id": "CR-11",
+        "text": "Out of scope for this ticket: raising the thumbmark-issuance endpoint's own IP-keyed rate limit. Explicitly deferred to a possible follow-up teeinblue-api PR.",
+        "authority": "CONFIRMED_EXPECTED",
+        "source": "JIRA:TIB-5460 comment 51220, 'Known follow-up'"
+      }
+    ],
+    "business_rules": [
+      {
+        "id": "BR-01",
+        "rule": "limit_applies IF upload uses an AI effect; never otherwise",
+        "testable": true,
+        "oracle": "CR-04"
+      },
+      {
+        "id": "BR-02",
+        "rule": "limit key = visitor + product + time window",
+        "testable": true,
+        "oracle": "JIRA:TIB-5460 description ('counted per visitor + product + 1 hour')",
+        "caveat": "The per-PRODUCT dimension appears only in the TIB-5460 description and is not restated in the dev note or in TIB-5341. Treat as INFERRED until confirmed; it implies a buyer blocked on product A should still be able to upload on product B, which no test step in the ticket exercises."
+      },
+      {
+        "id": "BR-03",
+        "rule": "visitor identity = signed thumbmark when available, else random per-browser fallback ID",
+        "testable": true,
+        "oracle": "CR-01"
+      },
+      {
+        "id": "BR-04",
+        "rule": "two distinct browsers on the same device model must receive two distinct fallback IDs",
+        "testable": true,
+        "oracle": "CR-01 + Test step 1",
+        "note": "This is the actual bug fix and the single most important assertion in the suite."
+      },
+      {
+        "id": "BR-05",
+        "rule": "one browser's fallback ID is stable across reloads within a window",
+        "testable": true,
+        "oracle": "CR-08",
+        "note": "BR-04 and BR-05 together require the random ID to be persisted somewhere. The ticket never says where. See AMB-01."
+      },
+      {
+        "id": "BR-06",
+        "rule": "thumbmark fetch happens at page load; exactly once per cached lifetime",
+        "testable": true,
+        "oracle": "CR-02 + CR-09 + CR-06"
+      },
+      {
+        "id": "BR-07",
+        "rule": "fetch retries once on network error/5xx, never on 429, and gives up after 8s",
+        "testable": true,
+        "oracle": "CR-03",
+        "note": "Retry-on-5xx is observable in DevTools; 'no retry on 429' needs a way to force a 429 from the thumbmark endpoint, which per TIB-5341 F41-01 is throttled 30/min per IP - reachable with a small script."
+      }
+    ],
+    "user_flow": {
+      "primary": [
+        "Buyer opens a storefront product page for a campaign whose artwork field has an AI effect enabled.",
+        "On page load, the SDK issues GET /merchant/{platform}/thumbmark (new timing) and caches the signed ID in localStorage under teeinblue_signed_thumbmark.",
+        "Buyer selects an image for the AI-effect field; the SDK sends the upload with the visitor ID attached.",
+        "Backend counts the upload against that visitor's quota for the product and window.",
+        "Under the limit, the upload succeeds and the effect is applied; at or over the limit, the buyer sees 'Upload limit exceeded'."
+      ],
+      "alternate_fallback": [
+        "The page-load fetch fails (offline, timeout past 8s, 5xx twice, or 429) OR the buyer is in a context where the cached ID is unavailable.",
+        "The SDK generates a RANDOM per-browser fallback ID instead of the old device-derived one.",
+        "Uploads proceed using that fallback ID; the buyer's quota is now their own rather than shared with strangers on the same phone model."
+      ]
+    },
+    "impacted_areas": [
+      {
+        "area": "teeinblue-sdk ThumbmarkService - fallback ID generation, fetch timing, timeout, retry",
+        "classification": "Confirmed",
+        "source": "JIRA:TIB-5460 comment 51220"
+      },
+      {
+        "area": "Storefront personalization widget: every product page load now issues a thumbmark request",
+        "classification": "Confirmed",
+        "source": "CR-02"
+      },
+      {
+        "area": "Artwork personalization fields with AI effects (Remove Background, AI Enhance / Image Filter, Text-to-Image)",
+        "classification": "Confirmed",
+        "source": "CR-04"
+      },
+      {
+        "area": "teeinblue-api ValidateThumbmark middleware - must still accept the new unsigned random fallback value",
+        "classification": "Need Dev/PO confirmation",
+        "source": "JIRA:TIB-5341 F41-02/F41-06; TIB-5460 is silent",
+        "why": "The random fallback is unsigned. TIB-5341 made the server verify signatures and accept legacy unsigned values only during a soft-transition window. If that window has closed, every fallback upload now returns 401."
+      },
+      {
+        "area": "GET /merchant/{platform}/thumbmark endpoint load - request volume shifts from 'per upload attempt' to 'per page load'",
+        "classification": "Assumption",
+        "source": "derived from CR-02",
+        "why": "Moving the fetch to page load means product page views that never upload now also consume the endpoint's 30/min-per-IP budget (TIB-5341 F41-01)."
+      },
+      {
+        "area": "AI-route IP backstop of 50/hour (TIB-5341 F41-03)",
+        "classification": "Need Dev/PO confirmation",
+        "source": "JIRA:TIB-5341 comment 48900 item 2",
+        "why": "Untouched by this fix. Shared-NAT buyers can still be blocked on a first upload through the IP layer, i.e. the reported symptom can recur with a different cause."
+      },
+      {
+        "area": "Add-to-cart conversion for AI-effect campaigns",
+        "classification": "Assumption",
+        "source": "rules/rate-limit-public-endpoints.md 'Risk so 1: false positive chan nham shopper that -> mat don hang'"
+      },
+      {
+        "area": "Text-to-Image / GenAI layer - generation counts against the same upload limit, and a GenAI effect is a second hit",
+        "classification": "Assumption",
+        "source": "rules/text-to-image-genai-layer.md",
+        "why": "Double-counting against a quota whose identity mechanism just changed is worth one explicit check."
+      },
+      {
+        "area": "Incognito / private browsing and ITP-restricted Safari, where localStorage may be unavailable",
+        "classification": "Confirmed as in-scope by the ticket itself",
+        "source": "JIRA:TIB-5460 description ('especially in private/incognito browsers where the ID may not be stored')"
+      }
+    ],
+    "risks": [
+      {
+        "id": "RISK-01",
+        "severity": "HIGH",
+        "type": "product",
+        "risk": "Quota bypass / cost exposure. If the new random fallback ID is NOT persisted, a buyer (or a bot) regains a full quota on every page reload or every new private window. TIB-5341 records that AI generation carries 'real $ cost per call', so this converts a false-positive problem (blocking real buyers) into a false-negative one (unmetered paid AI calls).",
+        "evidence": "CR-01 requires uniqueness per browser; CR-08 requires stability across reloads; the ticket never states where the random value lives. In the very scenario the bug report highlights - private/incognito - the description itself says the ID 'may not be stored'.",
+        "test_implication": "The reload-still-blocked check (dev Test step 2) is the control for this and must be run in incognito, not only in a normal window."
+      },
+      {
+        "id": "RISK-02",
+        "severity": "HIGH",
+        "type": "product",
+        "risk": "The unsigned random fallback is accepted by the server only while TIB-5341's soft-transition legacy-format window remains open. If it has been closed, every fallback upload becomes a 401 and the fix makes the original symptom worse rather than better.",
+        "evidence": "JIRA:TIB-5341 F41-02 / F41-06. TIB-5460 does not mention the transition window at all.",
+        "test_implication": "Must be confirmed with dev before testing; otherwise a 401 seen during Test step 1 will be misread as an SDK bug."
+      },
+      {
+        "id": "RISK-03",
+        "severity": "HIGH",
+        "type": "coverage",
+        "risk": "The reported customer symptom may still reproduce after this fix, via the 50/hour-per-IP backstop on AI routes rather than via visitor collision. The dev note's 'Known follow-up' mentions only the thumbmark-issuance endpoint's IP limit, not this backstop.",
+        "evidence": "JIRA:TIB-5341 comment 48900 item 2 (F41-03).",
+        "test_implication": "The suite should state explicitly that it verifies the collision mechanism, not the end-to-end absence of the customer-reported symptom."
+      },
+      {
+        "id": "RISK-04",
+        "severity": "MEDIUM",
+        "type": "product",
+        "risk": "Fetching at page load multiplies traffic to an endpoint throttled 30/min per IP. Office networks, carrier NAT and crawlers can now exhaust it without anyone uploading, pushing more buyers onto the fallback path - the opposite of fix part 2's intent.",
+        "evidence": "CR-02 vs JIRA:TIB-5341 F41-01.",
+        "test_implication": "Worth one measurement: how many thumbmark requests a normal browsing session now generates."
+      },
+      {
+        "id": "RISK-05",
+        "severity": "MEDIUM",
+        "type": "testing",
+        "risk": "False PASS from a warm cache. The dev note flags the stale teeinblue_signed_thumbmark key for Test step 3 only, but a tester who has run staging before will also silently skip the fallback path in steps 1 and 2.",
+        "evidence": "JIRA:TIB-5460 comment 51220 'Before you start' note.",
+        "test_implication": "Cache-clear must be a precondition on every fallback-path case, not a note on one step."
+      },
+      {
+        "id": "RISK-06",
+        "severity": "MEDIUM",
+        "type": "product",
+        "risk": "8s is long enough for a buyer to start an upload while the page-load fetch is still in flight. The dev note asserts this is 'safe since it is a background page-load fetch, not something blocking the upload button' - that assertion is untested.",
+        "evidence": "CR-03.",
+        "test_implication": "Throttle to slow 3G, upload at ~2s after load, confirm the upload is not stalled waiting for the fetch and that whichever ID is used is used consistently."
+      },
+      {
+        "id": "RISK-07",
+        "severity": "MEDIUM",
+        "type": "product",
+        "risk": "Multi-tab race: two tabs opening together both fetch at page load (new timing makes this far more likely than the old fetch-on-first-upload timing) and can interleave writes to localStorage or to the fallback value.",
+        "evidence": "rules/rate-limit-public-endpoints.md 'Race multi-tab'; JIRA:TIB-5341 QA guidelines section 7."
+      },
+      {
+        "id": "RISK-08",
+        "severity": "MEDIUM",
+        "type": "coverage",
+        "risk": "Regression debt from TIB-5341. The rule library states that when two consecutive tickets touch ThumbmarkService/ValidateThumbmark, the later ticket must re-run the earlier one's critical checks: legacy format still passes, tampered signature returns 401, per-route buckets stay independent.",
+        "evidence": "rules/rate-limit-public-endpoints.md, section 'Chuoi nhan qua giua cac ticket cung sua thumbmark/identity'."
+      },
+      {
+        "id": "RISK-09",
+        "severity": "LOW",
+        "type": "testing",
+        "risk": "Two incognito windows of the same browser share a process and may share storage, so they may not faithfully simulate 'two different customers'. Test step 1's setup could pass for the wrong reason, or fail for the wrong reason.",
+        "evidence": "JIRA:TIB-5460 comment 51220 Test step 1.",
+        "test_implication": "Corroborate with two different browsers or two separate profiles."
+      }
+    ],
+    "ambiguities": [
+      {
+        "id": "AMB-01",
+        "severity": "BLOCKING_FOR_THIS_AREA",
+        "question": "Where is the new random fallback ID stored, and what is its lifetime?",
+        "why_it_matters": "CR-01 (unique per browser) and CR-08 (stable across reloads) can only both hold if the value is persisted. If it is persisted in localStorage, then in the incognito/ITP case the description itself calls out, it is not persisted, and CR-08 silently fails. Without this answer there is no oracle for the most valuable negative test.",
+        "blocks": [
+          "acceptance test cases for BR-05 / CR-08 in a private-browsing context"
+        ]
+      },
+      {
+        "id": "AMB-02",
+        "severity": "HIGH",
+        "question": "Is TIB-5341's soft-transition window (ValidateThumbmark accepting unsigned legacy values) still open on staging and on production?",
+        "why_it_matters": "RISK-02. Determines whether a 401 during fallback testing is a bug or expected."
+      },
+      {
+        "id": "AMB-03",
+        "severity": "MEDIUM",
+        "question": "Is the limit really keyed per product as well as per visitor?",
+        "why_it_matters": "BR-02. Only the description says so. If true, a cross-product case belongs in the suite; if not, the description is misleading."
+      },
+      {
+        "id": "AMB-04",
+        "severity": "MEDIUM",
+        "question": "When the page-load fetch fails and the SDK falls back, does it retry on a later page load, or is the browser stuck on the fallback for the session?",
+        "why_it_matters": "Determines whether the fallback is transient or sticky, and therefore how long a buyer carries an unsigned identity."
+      },
+      {
+        "id": "AMB-05",
+        "severity": "MEDIUM",
+        "question": "What exactly does the buyer see at the limit - is 'Upload limit exceeded' the literal string, and is there a retry-after hint?",
+        "why_it_matters": "CR-07 needs an exact expected result. Per the rule library, 429 handling that breaks the widget UI is a known failure mode."
+      },
+      {
+        "id": "AMB-06",
+        "severity": "MEDIUM",
+        "question": "Does TIB-5460 change teeinblue-api at all, or is it SDK-only? And which build/PR carries it?",
+        "why_it_matters": "U-03. Without a build reference there is nothing to bind a later execution result to."
+      },
+      {
+        "id": "AMB-07",
+        "severity": "LOW",
+        "question": "Which comment is the authoritative dev note?",
+        "why_it_matters": "U-01/ASM-01. Comment 51220 is being treated as dev-confirmed on the strength of its own wording."
+      }
+    ],
+    "open_questions_for_po_dev": [
+      "Where does the new random fallback visitor ID live (localStorage? sessionStorage? cookie? in-memory only?) and how long does it survive? We need this to test the 'reload should still be blocked' expectation in a private window, which is the exact case the ticket says is most affected.",
+      "Is the legacy/unsigned thumbmark acceptance from TIB-5341 still enabled on staging and production? The new random fallback is unsigned, so if that window has closed, fallback uploads will 401.",
+      "The 50/hour-per-IP backstop on AI-effect routes from TIB-5341 is untouched here. Two buyers behind the same carrier NAT can still block each other. Should that be in scope for this ticket, or is it part of the follow-up you mentioned?",
+      "Now that the thumbmark is fetched on every product page load rather than at first upload, how much traffic does that add to an endpoint throttled 30/min per IP? Could an office or NAT network exhaust it and push buyers onto the fallback more often than before?",
+      "Is the limit keyed per product as well as per visitor and window? The description says visitor + product + 1 hour, the dev note and TIB-5341 only mention per visitor.",
+      "If the page-load fetch fails, does the SDK try again on the next page load, or does the browser stay on the fallback for the whole session?",
+      "What is the exact buyer-facing message and state at the limit? Is 'Upload limit exceeded' the literal copy, and does the widget stay usable (no blank screen / no loss of entered data)?",
+      "Which build or PR carries this fix? The ticket has no fixVersion and no linked PR, so we cannot record what was tested.",
+      "Confirm comment 51220 is the dev implementation note of record for this ticket.",
+      "Should TIB-5460 be linked to TIB-5341 in Jira? TIB-5341 introduced the fetch-with-fallback mechanism this bug lives in, and right now nothing in Jira connects them."
+    ],
+    "suggested_test_focus": [
+      {
+        "id": "TF-01",
+        "priority": "P0",
+        "focus": "Collision fix: with the thumbmark endpoint blocked, two independent browser contexts each get their own quota; the second context's FIRST upload succeeds.",
+        "covers": [
+          "BR-04",
+          "CR-01"
+        ],
+        "oracle_available": true
+      },
+      {
+        "id": "TF-02",
+        "priority": "P0",
+        "focus": "Rate limiting still bites: 5 uploads succeed, the 6th is refused with the limit message, and a reload inside the same window does not restore quota.",
+        "covers": [
+          "CR-07",
+          "CR-08",
+          "BR-05"
+        ],
+        "oracle_available": true,
+        "caveat": "The reload half depends on AMB-01; run it in incognito as well as in a normal window."
+      },
+      {
+        "id": "TF-03",
+        "priority": "P0",
+        "focus": "Regression: plain upload with no AI effect is never limited, and normal upload+effect flows produce no new errors.",
+        "covers": [
+          "CR-04",
+          "CR-10"
+        ],
+        "oracle_available": true
+      },
+      {
+        "id": "TF-04",
+        "priority": "P1",
+        "focus": "Fetch timing: GET /thumbmark fires on page load before any field is touched, and an upload afterwards issues no second call.",
+        "covers": [
+          "CR-02",
+          "CR-09",
+          "CR-06"
+        ],
+        "oracle_available": true,
+        "precondition": "teeinblue_signed_thumbmark cleared or fresh incognito."
+      },
+      {
+        "id": "TF-05",
+        "priority": "P1",
+        "focus": "Fetch resilience: one retry on 5xx and on network error; NO retry on 429; give up at 8s and fall back cleanly.",
+        "covers": [
+          "CR-03",
+          "BR-07"
+        ],
+        "oracle_available": true
+      },
+      {
+        "id": "TF-06",
+        "priority": "P1",
+        "focus": "Degradation: incognito / localStorage blocked / slow 3G / upload started while the page-load fetch is still in flight.",
+        "covers": [
+          "RISK-01",
+          "RISK-06"
+        ],
+        "oracle_available": false,
+        "blocked_by": "AMB-01"
+      },
+      {
+        "id": "TF-07",
+        "priority": "P1",
+        "focus": "TIB-5341 regression re-run: legacy unsigned format still accepted, tampered signature returns 401, per-route buckets independent.",
+        "covers": [
+          "RISK-08",
+          "RISK-02"
+        ],
+        "oracle_available": true,
+        "oracle_source": "JIRA:TIB-5341 (SUPPLEMENTARY - confirm with dev before treating as acceptance criteria for TIB-5460)"
+      },
+      {
+        "id": "TF-08",
+        "priority": "P2",
+        "focus": "Multi-tab: two tabs opened together both end up with a valid, consistent identity and no duplicate/conflicting fetch.",
+        "covers": [
+          "RISK-07"
+        ],
+        "oracle_available": false
+      },
+      {
+        "id": "TF-09",
+        "priority": "P2",
+        "focus": "UI behaviour at the limit: message is clear, widget does not blank out, buyer's already-entered personalization data is not lost.",
+        "covers": [
+          "AMB-05"
+        ],
+        "oracle_available": false,
+        "blocked_by": "AMB-05"
+      },
+      {
+        "id": "TF-10",
+        "priority": "P2",
+        "focus": "Cross-product: a visitor blocked on product A can still upload on product B (only if AMB-03 confirms per-product keying).",
+        "covers": [
+          "BR-02"
+        ],
+        "oracle_available": false,
+        "blocked_by": "AMB-03"
+      }
+    ],
+    "not_in_scope": [
+      "Raising the thumbmark-issuance endpoint IP limit (explicitly deferred by the dev note).",
+      "Test execution and PASS/FAIL - this run is DRY_RUN and nothing was executed.",
+      "Test case creation in Testlane - excluded by the requested mode."
+    ]
+  },
+  "observations": [
+    {
+      "id": "OBS-REQ-01",
+      "text": "The dev note is unusually complete for a bugfix: it supplies a forced-repro technique (DevTools request blocking on */merchant/*/thumbmark), an environment difference that matters (5-min staging window vs 1-hour production), a named localStorage key, and a warning about a stale cache producing a misleading result. Most of the suite can be written directly from it."
+    },
+    {
+      "id": "OBS-REQ-02",
+      "text": "The single largest analytical gain in this run came from a source that is not in the knowledge base and not linked in Jira: the QA skill's own rule library file rules/rate-limit-public-endpoints.md, which names the TIB-5341 -> TIB-5460 causal chain and instructs re-running the predecessor's checklist. Risks RISK-02, RISK-03, RISK-04 and RISK-08 all trace back to following that pointer."
+    },
+    {
+      "id": "OBS-REQ-03",
+      "text": "The fix's two stated goals are in tension. CR-01 wants the fallback ID to be unique per browser; CR-08 wants it stable across reloads. Satisfying both requires persistence, and the bug report itself says persistence is unreliable in exactly the private-browsing case that motivated the ticket. Nothing in the issue resolves this."
+    }
+  ],
+  "assumptions": [
+    {
+      "id": "ASM-REQ-01",
+      "text": "Comment 51220 is the dev implementation note (inherited from ASM-01 in the task manifest)."
+    },
+    {
+      "id": "ASM-REQ-02",
+      "text": "The AI-effect routes named in TIB-5341 (photo-upload, apply-effects, image-filter-effects, customer-uploads/generate, ...) are the same routes carrying the limit described in TIB-5460. TIB-5460 never names a route, so this mapping is inferred from TIB-5341."
+    }
+  ],
+  "unknowns": [
+    {
+      "id": "U-REQ-01",
+      "text": "Storage and lifetime of the new random fallback ID (AMB-01)."
+    },
+    {
+      "id": "U-REQ-02",
+      "text": "Whether TIB-5341's legacy-format transition window is still open (AMB-02)."
+    },
+    {
+      "id": "U-REQ-03",
+      "text": "Whether the limit is keyed per product (AMB-03)."
+    },
+    {
+      "id": "U-REQ-04",
+      "text": "Exact buyer-facing error copy and widget state at the limit (AMB-05)."
+    },
+    {
+      "id": "U-REQ-05",
+      "text": "Target build / PR (AMB-06)."
+    }
+  ],
+  "conflicts": [
+    {
+      "id": "CONF-01",
+      "topic": "Is the fix one change or three?",
+      "side_a": {
+        "claim": "One change: remove the device-derived fallback. Fetching earlier is described as a seller workaround that does not solve the problem.",
+        "source": "JIRA:TIB-5460 description, Solution"
+      },
+      "side_b": {
+        "claim": "Three changes: random fallback ID, fetch at page load, resilient fetch (8s timeout, one retry, none on 429).",
+        "source": "JIRA:TIB-5460 comment 51220"
+      },
+      "resolution": "NOT_RESOLVED. Both retained. The comment is later and says 'Fix has three parts now', which reads as scope growth, but that is an inference. Test scope covers the union."
+    },
+    {
+      "id": "CONF-02",
+      "topic": "Uniqueness vs stability of the fallback ID",
+      "side_a": {
+        "claim": "The fallback ID must be random and unique per browser so it can never collide.",
+        "source": "JIRA:TIB-5460 comment 51220 item 1"
+      },
+      "side_b": {
+        "claim": "The fallback ID must stay consistent for the same visitor across page reloads, otherwise a reload resets the quota.",
+        "source": "JIRA:TIB-5460 comment 51220 Test step 2"
+      },
+      "resolution": "NOT_RESOLVED. Not strictly contradictory - both hold if the value is persisted - but the ticket never says it is, and the description states persistence is unreliable in private browsing. This is AMB-01 and gates TF-06."
+    },
+    {
+      "id": "CONF-03",
+      "topic": "Scope of SDK changes in the predecessor ticket",
+      "side_a": {
+        "claim": "TIB-5341 constrained itself to 'server-side only - no API client (SDK) changes required'.",
+        "source": "JIRA:TIB-5341 description, Constraints"
+      },
+      "side_b": {
+        "claim": "TIB-5341's implementation comment describes a teeinblue-sdk branch changing ThumbmarkService to fetch-then-fallback.",
+        "source": "JIRA:TIB-5341 comment 48900"
+      },
+      "resolution": "NOT_RESOLVED, and not this ticket's to resolve. Recorded because the SDK fallback that TIB-5460 now fixes entered through a change the predecessor's own constraints said would not occur - useful when judging how much of TIB-5341's stated scope can be trusted as context here."
+    }
+  ],
+  "blocking_issues": [],
+  "gate": {
+    "decision": "CONDITIONAL_PASS",
+    "gate_id": "D1",
+    "readiness": "PARTIALLY_READY",
+    "blocking_findings": [],
+    "conditions": [
+      "AMB-01 unanswered: do NOT write acceptance test cases asserting fallback-ID stability in a private-browsing context (TF-06, and the reload half of TF-02). Raise the question instead.",
+      "AMB-03 unanswered: do NOT write a cross-product acceptance case (TF-10).",
+      "AMB-05 unanswered: TF-09 expected results must be left as 'confirm with dev', not invented copy.",
+      "AMB-02 unanswered: TF-07's legacy-format case may be re-run as regression, but its expected result is sourced from TIB-5341 (supplementary), not from TIB-5460, and must be labelled as such.",
+      "Per agent definition gate D1: ambiguous areas get questions and blockers, not acceptance test cases. TF-01 through TF-05 and TF-07 are clear enough to generate against."
+    ],
+    "allowed_next_steps": [
+      "qa-context-retriever",
+      "impact analysis",
+      "gen-testcase (TF-01..TF-05, TF-07 only) - NOT executed in this DRY_RUN"
+    ]
+  }
+}

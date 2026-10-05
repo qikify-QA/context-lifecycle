@@ -1,0 +1,387 @@
+{
+  "schema_version": "1.0",
+  "artifact_type": "ProductKBCandidate",
+  "artifact_id": "PKBC-CTX-20260926-01-001",
+  "workflow_id": "CTX-20260926-01",
+  "producer": "qa-knowledge-normalizer",
+  "source_refs": [
+    { "type": "code_ref", "path": "contracts/qa-context-contract.md", "note": "global rules, knowledge kind, conflict handling, redaction" },
+    { "type": "code_ref", "path": "runs/context/2026-09-26/CTX-20260926-01/run-manifest.json", "note": "toàn bộ lịch sử quyết định orchestrator cho run này (CCR CBS-004/TIB-004)" },
+    { "type": "code_ref", "path": "runs/context/2026-09-26/CTX-20260926-01/input/bootstrap-request.json", "note": "object_target, environment=staging (operator directive), mutation_policy" },
+    { "type": "code_ref", "path": "runs/context/2026-09-26/CTX-20260926-01/intermediate/api/action-api-map.json", "note": "APICAP-CTX-20260926-01-001 - 6 operation có ACT-ID, 1 unmapped (pdf-upload), 1 conflict nội bộ" },
+    { "type": "code_ref", "path": "runs/context/2026-09-26/CTX-20260926-01/raw/portal/portal-evidence.json", "note": "FDA-CTX-20260926-01-portal-01 - 3 SCN/ACT với capture UI thật" },
+    { "type": "code_ref", "path": "knowledge/products/teeinblue/objects/artwork/kb.json", "note": "đọc để xác định KB-ID tiếp theo (max hiện tại KB-125), KHÔNG đụng nội dung cũ" },
+    { "type": "code_ref", "path": "knowledge/products/teeinblue/objects/asset-category/kb.json", "note": "đọc để xác định KB-ID tiếp theo (max hiện tại KB-034), KHÔNG đụng 34 item cũ" }
+  ],
+  "upstream_artifact_ids": ["APICAP-CTX-20260926-01-001", "FDA-CTX-20260926-01-portal-01"],
+  "status": "PARTIAL",
+  "confidence": "MEDIUM",
+  "observations": [
+    "6 operation có ACT-ID đầy đủ (APIOP-001/003/004/005/006/008) đủ điều kiện tạo kb_candidate theo §4 (API/DB evidence bắt buộc map ACT-ID).",
+    "3 operation (APIOP-001/003/004) có 2 nguồn evidence độc lập ở 2 layer khác nhau (API trực tiếp + UI/network capture qua portal-explorer dispatch #2) -> confidence HIGH cho giá trị limit.",
+    "3 operation (APIOP-005/006/008) TÁI DÙNG ACT-ID có sẵn từ run cũ (CTX-20260914-02/CTX-20260921-03) để gắn oracle rate-limit MỚI của run này - route/UI entry point là evidence cũ, số liệu rate-limit là evidence mới, chỉ 1 layer (API) -> confidence MEDIUM.",
+    "APIOP-002 (pdf-upload) verify runtime khớp CCR nhưng KHÔNG có ACT-ID sau 2 dispatch liên tiếp -> KHÔNG tạo kb_candidate, chỉ coverage_gap/unmapped_evidence theo đúng §4.",
+    "Object sdk KHÔNG nhận kb_candidate nào trong run này (chỉ đạo phân bổ rõ) - layer 2 GenAI backstop chỉ xác nhận sự tồn tại cơ chế, không có ACT-ID/số liệu verify được."
+  ],
+  "assumptions": [],
+  "unknowns": [
+    "Nguyên nhân x-ratelimit-remaining của layer_image (APIOP-004) không giảm ở request 422 nhưng giảm ở request 201 - chỉ 1 sample mỗi phía, mỗi phía khác status code, KHÔNG suy causal rule. Xem conflicts[].",
+    "Window 24h thật của layer 3 (layer_image/clipart/clipart_category) chưa verify runtime - chỉ verify giá trị LIMIT qua header.",
+    "Layer 2 numeric threshold (10/10min IP, 5/5min thumbmark) - không có ACT-ID, không verify runtime trong run này, không đưa vào kb_candidate nào theo chỉ đạo.",
+    "pdf-upload (APIOP-002) UI entry point thật vẫn chưa xác định sau 2 dispatch (api-explorer + portal-explorer phạm vi hẹp)."
+  ],
+  "conflicts": [
+    {
+      "conflict_id": "CONF-CBS004-001",
+      "topic": "x-ratelimit-remaining behavior cho POST /api/layer-images/svg (layer 3, resource layer_image) không nhất quán giữa 2 nguồn evidence",
+      "sides": [
+        {
+          "statement": "Khi gọi POST /api/layer-images/svg lặp lại 3 lần liên tiếp với request THIẾU field 'file' bắt buộc (422 mỗi lần), ở role merchant/owner môi trường staging, x-ratelimit-remaining giữ nguyên = 1000 (không giảm) qua cả 3 lần, dù x-ratelimit-limit=1000 hiển thị đúng mỗi lần.",
+          "source": "api-explorer dispatch #1 - direct API test trực tiếp, không qua UI/ACT-ID",
+          "evidence_refs": [{ "type": "api_response", "path": "raw/api/APIOP-004-layer-images-svg.json" }],
+          "confidence": "LOW"
+        },
+        {
+          "statement": "Khi merchant (role merchant/owner 'Linh explorer') upload 1 file .svg THÀNH CÔNG (201) vào thư viện 'Static Vector' qua UI thật (Layer picker > Vector > Static Vector > tab 'Upload a vector'), ở môi trường staging, x-ratelimit-remaining = 999 (giảm 1 so với limit=1000) trên request đó.",
+          "source": "portal-explorer dispatch #2, ACT-02-01-001",
+          "evidence_refs": [{ "type": "api_response", "path": "raw/network/ACT-02-01-001.json", "act_id": "ACT-02-01-001" }],
+          "confidence": "LOW"
+        }
+      ],
+      "resolution": "UNRESOLVED",
+      "needs": "Cần thêm sample ở cả 2 status code (422 và 201) để xác định remaining counter chỉ tăng khi request THÀNH CÔNG (pass validation) hay theo quy tắc khác. Hiện tại mỗi phía chỉ có 1 sample, mỗi phía ở 1 status code khác nhau - không đủ để khẳng định causal rule. CCR ref: CBS-004. KHÔNG publish làm oracle behavior 'remaining' cho tới khi giải quyết."
+    }
+  ],
+  "blocking_issues": [],
+  "payload": {
+    "kb_context": {
+      "product": "teeinblue",
+      "object_id": "artwork + asset-category (cross-object CCR CBS-004; object sdk được orchestrator giao phân bổ nhưng KHÔNG nhận kb_candidate trong run này - xem coverage_gaps)",
+      "kb_version": "candidate-CTX-20260926-01",
+      "mode": "INCREMENTAL_UPDATE"
+    },
+    "kb_candidates": [
+      {
+        "kb_id": "KB-126",
+        "object_key": "artwork",
+        "ccr_ref": "CBS-004",
+        "topic": "Layer 1 route throttle - POST /api/merchant/{platform}/vector-upload (buyer-facing OPT vector-upload)",
+        "statement": "Khi buyer (mô phỏng qua merchant Live-preview, role merchant/owner 'Linh explorer') chọn file .svg hợp lệ để điền field cá nhân hoá 'OPT vector-upload' trên artwork, ở môi trường staging, quan sát thấy response 201 kèm header x-ratelimit-limit=4; gọi lặp lại liên tiếp cùng route (test trực tiếp, không qua UI) cho thấy x-ratelimit-remaining giảm dần 3->2->1->0 rồi request thứ 5 trả 429 'Too Many Attempts' kèm Retry-After giảm dần theo thời gian thực. Giá trị limit=4 khớp ở cả 2 nguồn độc lập (UI-driven + API trực tiếp).",
+        "knowledge_kind": "OBSERVED_CURRENT",
+        "scope": {
+          "environment": "staging",
+          "role": "merchant/owner (Linh explorer, id=266) mô phỏng buyer flow qua Live-preview",
+          "object_state": "artwork #4087 (fixture QA), field OPT vector-upload từ rỗng -> có giá trị (thumbnail)",
+          "surface": "api"
+        },
+        "feature_id": "FEAT-01",
+        "act_ids": ["ACT-01-01-001"],
+        "apiop_ids": ["APIOP-001"],
+        "ent_ids": [],
+        "evidence_refs": [
+          { "type": "api_response", "path": "raw/network/ACT-01-01-001.json", "act_id": "ACT-01-01-001", "note": "UI-driven request thành công 201, limit=4 remaining=3" },
+          { "type": "api_response", "path": "raw/api/APIOP-001-vector-upload-burst.json", "note": "direct API burst test dispatch #1, remaining 3->2->1->0 rồi 429 từ request thứ 5, retry-after giảm dần theo thời gian thực" }
+        ],
+        "observed_count": 2,
+        "confidence": "HIGH",
+        "freshness": { "observed_at": "2026-09-26", "run_id": "CTX-20260926-01" },
+        "confirmation_source": null
+      },
+      {
+        "kb_id": "KB-127",
+        "object_key": "artwork",
+        "ccr_ref": "CBS-004",
+        "topic": "Layer 1 route throttle - POST /api/merchant/{platform}/upload-error-logs (client tự động gửi log lỗi upload)",
+        "statement": "Khi route vector-upload trả lỗi 500 (file .svg content garbage) trong luồng buyer-facing (mô phỏng qua Live-preview, role merchant/owner 'Linh explorer'), ở môi trường staging, client TỰ ĐỘNG gọi POST /api/merchant/{platform}/upload-error-logs (không phải hành động người dùng bấm trực tiếp) và quan sát thấy response 204 kèm header x-ratelimit-limit=6 (khác giá trị 4 của nhóm route vector-upload/pdf-upload); gọi lặp lại trực tiếp cùng route cho thấy remaining giảm dần rồi request thứ 7 trả 429. Giá trị limit=6 khớp ở cả 2 nguồn độc lập.",
+        "knowledge_kind": "OBSERVED_CURRENT",
+        "scope": {
+          "environment": "staging",
+          "role": "merchant/owner (Linh explorer, id=266) mô phỏng buyer flow qua Live-preview",
+          "object_state": "artwork #4087, field OPT vector-upload vừa nhận file .svg content garbage -> lỗi 500 phía server",
+          "surface": "api"
+        },
+        "feature_id": "FEAT-01",
+        "act_ids": ["ACT-01-03-001"],
+        "apiop_ids": ["APIOP-003"],
+        "ent_ids": [],
+        "evidence_refs": [
+          { "type": "api_response", "path": "raw/network/ACT-01-03-001.json", "act_id": "ACT-01-03-001", "note": "UI-driven, client tự fire sau lỗi 500 của vector-upload, 204, limit=6 remaining=5" },
+          { "type": "api_response", "path": "raw/api/APIOP-003-upload-error-logs-burst.json", "note": "direct API burst test dispatch #1, remaining 5->4->3->2->1->0 rồi 429 từ request thứ 7" }
+        ],
+        "observed_count": 2,
+        "confidence": "HIGH",
+        "freshness": { "observed_at": "2026-09-26", "run_id": "CTX-20260926-01" },
+        "confirmation_source": null
+      },
+      {
+        "kb_id": "KB-128",
+        "object_key": "artwork",
+        "ccr_ref": "CBS-004",
+        "topic": "Layer 3 user_rate_limiter:layer_image - POST /api/layer-images/svg (merchant upload Static Vector layer, route riêng biệt với /api/cliparts/svg)",
+        "statement": "Khi merchant (role merchant/owner 'Linh explorer') upload 1 file .svg vào thư viện 'Static Vector' qua Layer picker > category Vector > 'Static Vector' > tab 'Upload a vector' (route POST /api/layer-images/svg - KHÁC route /api/cliparts/svg dùng cho Clipart, KHÔNG gộp 2 route), ở môi trường staging, quan sát thấy header x-ratelimit-limit=1000 và x-ratelimit-reset=86400 (giây, tức 24h). Giá trị LIMIT=1000 khớp ở cả 2 nguồn độc lập (API trực tiếp 422 + UI-driven 201). Hành vi giảm của x-ratelimit-remaining giữa 2 nguồn KHÔNG nhất quán (xem conflicts[] CONF-CBS004-001) - statement này KHÔNG bao gồm kết luận nào về remaining.",
+        "knowledge_kind": "OBSERVED_CURRENT",
+        "scope": {
+          "environment": "staging",
+          "role": "merchant/owner (Linh explorer, id=266)",
+          "object_state": "layer_image library asset mới (qa-test-vector, id=10516) được tạo, chưa gắn vào layer/template nào - đã cleanup (DONE) sau khi capture evidence",
+          "surface": "api"
+        },
+        "feature_id": "FEAT-02",
+        "act_ids": ["ACT-02-01-001"],
+        "apiop_ids": ["APIOP-004"],
+        "ent_ids": [],
+        "evidence_refs": [
+          { "type": "api_response", "path": "raw/network/ACT-02-01-001.json", "act_id": "ACT-02-01-001", "note": "UI-driven, 201, limit=1000 remaining=999 reset=86400" },
+          { "type": "api_response", "path": "raw/api/APIOP-004-layer-images-svg.json", "note": "direct API test dispatch #1, 3x422, limit=1000 remaining=1000 (không đổi)" }
+        ],
+        "observed_count": 2,
+        "confidence": "HIGH",
+        "freshness": { "observed_at": "2026-09-26", "run_id": "CTX-20260926-01" },
+        "confirmation_source": null
+      },
+      {
+        "kb_id": "KB-035",
+        "object_key": "asset-category",
+        "ccr_ref": "CBS-004",
+        "topic": "Layer 3 user_rate_limiter:clipart - POST /api/cliparts/svg (upload clipart .svg)",
+        "statement": "Khi gọi POST /api/cliparts/svg (route tạo Clipart, role merchant/owner 'Linh explorer') lặp lại 3 lần liên tiếp ở môi trường staging (mỗi lần thiếu field 'file' bắt buộc, trả 422), quan sát thấy header x-ratelimit-limit=4000 giữ nguyên qua cả 3 lần. ACT-ID 'ACT-AC2-ITEM-CHK009-VECTOR-UPLOAD' được TÁI DÙNG từ evidence cũ (run CTX-20260914-02) để gắn oracle rate-limit MỚI này - route/UI entry point là evidence cũ, giá trị rate-limit limit=4000 là quan sát MỚI của run này, KHÔNG phải quan sát cũ dán nhãn lại.",
+        "knowledge_kind": "OBSERVED_CURRENT",
+        "scope": {
+          "environment": "staging",
+          "role": "merchant/owner (Linh explorer, id=266)",
+          "object_state": "request 422 (thiếu field file, chưa tạo clipart nào trong run này)",
+          "surface": "api"
+        },
+        "feature_id": "",
+        "mapping_note": "feature_id chưa xác định trong run này (không có portal-explorer evidence mới cho asset-category) - cần feature-profile-builder map theo canon hiện có (asset-category-crud / asset-category-item-management, liên hệ checklist CHK-009).",
+        "act_ids": ["ACT-AC2-ITEM-CHK009-VECTOR-UPLOAD"],
+        "apiop_ids": ["APIOP-005"],
+        "ent_ids": [],
+        "evidence_refs": [
+          { "type": "api_response", "path": "raw/api/APIOP-005-cliparts-svg.json", "act_id": "ACT-AC2-ITEM-CHK009-VECTOR-UPLOAD", "note": "evidence MỚI run này: 3x422, limit header=4000" },
+          { "type": "api_response", "path": "runs/context/2026-09-14/CTX-20260914-02/raw/network/ACT-AC2-ITEM-CHK009-VECTOR-UPLOAD.json", "act_id": "ACT-AC2-ITEM-CHK009-VECTOR-UPLOAD", "note": "REUSED - evidence cũ xác nhận route/UI entry point, KHÔNG chứa rate-limit header (capture trước khi CCR CBS-004 tồn tại)" }
+        ],
+        "observed_count": 3,
+        "confidence": "MEDIUM",
+        "freshness": { "observed_at": "2026-09-26", "run_id": "CTX-20260926-01" },
+        "confirmation_source": null
+      },
+      {
+        "kb_id": "KB-036",
+        "object_key": "asset-category",
+        "ccr_ref": "CBS-004",
+        "topic": "Layer 3 user_rate_limiter:clipart_category - POST /api/clipart-categories (tạo Clipart Category)",
+        "statement": "Khi gọi POST /api/clipart-categories (role merchant/owner 'Linh explorer') lặp lại 3 lần liên tiếp ở môi trường staging (mỗi lần thiếu field bắt buộc, trả 422), quan sát thấy header x-ratelimit-limit=1000 giữ nguyên qua cả 3 lần. ACT-ID 'ACT-05-01-001' được TÁI DÙNG từ evidence cũ (run CTX-20260921-03) để gắn oracle rate-limit MỚI này - route/UI entry point là evidence cũ (request thành công 201), giá trị rate-limit limit=1000 là quan sát MỚI của run này.",
+        "knowledge_kind": "OBSERVED_CURRENT",
+        "scope": {
+          "environment": "staging",
+          "role": "merchant/owner (Linh explorer, id=266)",
+          "object_state": "request 422 (thiếu field name + 1 field khác chưa xác định tên)",
+          "surface": "api"
+        },
+        "feature_id": "",
+        "mapping_note": "feature_id chưa xác định trong run này - cần feature-profile-builder map theo canon hiện có, liên hệ ACT-05-01-001 (run CTX-20260921-03).",
+        "act_ids": ["ACT-05-01-001"],
+        "apiop_ids": ["APIOP-006"],
+        "ent_ids": [],
+        "evidence_refs": [
+          { "type": "api_response", "path": "raw/api/APIOP-006-clipart-categories-post.json", "act_id": "ACT-05-01-001", "note": "evidence MỚI run này: 3x422, limit header=1000" },
+          { "type": "api_response", "path": "runs/context/2026-09-21/CTX-20260921-03/raw/network/ACT-05-01-001.json", "act_id": "ACT-05-01-001", "note": "REUSED - evidence gốc xác nhận cùng route, request thành công 201 với body đầy đủ, KHÔNG chứa rate-limit header (trước CCR CBS-004)" }
+        ],
+        "observed_count": 3,
+        "confidence": "MEDIUM",
+        "freshness": { "observed_at": "2026-09-26", "run_id": "CTX-20260926-01" },
+        "confirmation_source": null
+      },
+      {
+        "kb_id": "KB-037",
+        "object_key": "asset-category",
+        "ccr_ref": "CBS-004",
+        "topic": "POST /api/users/{user_id}/temporary-files/upload-url - CCR khai báo KHÔNG có rate-limit middleware riêng",
+        "statement": "Khi gọi POST /api/users/266/temporary-files/upload-url lặp lại 3 lần liên tiếp trong vài giây (role merchant/owner 'Linh explorer', môi trường staging), mỗi lần thiếu field 'filename' bắt buộc (422), quan sát thấy KHÔNG có bất kỳ header x-ratelimit-* nào trong response, và KHÔNG bị 429/403 - nhất quán với claim CCR CBS-004 'endpoint này không có rate-limit middleware riêng' trong phạm vi mẫu nhỏ này. Mẫu chỉ 3 request/vài giây - KHÔNG loại trừ khả năng có WAF/CDN chặn ở ngưỡng cao hơn chưa quan sát được, KHÔNG tổng quát hoá thành 'endpoint này không bao giờ bị giới hạn'. ACT-ID 'ACT-AC2-ITEM-CHK009-CLIPART-UPLOAD' và 'ACT-AC2-ITEM-CHK013-UPLOAD' được TÁI DÙNG từ evidence cũ (run CTX-20260914-02) để gắn oracle negative-finding MỚI này.",
+        "knowledge_kind": "OBSERVED_CURRENT",
+        "scope": {
+          "environment": "staging",
+          "role": "merchant/owner (Linh explorer, id=266), user_id khớp acting user",
+          "object_state": "request 422 (thiếu field filename, không tạo temporary file nào trong run này)",
+          "surface": "api"
+        },
+        "feature_id": "",
+        "mapping_note": "feature_id chưa xác định trong run này - cần feature-profile-builder map theo canon hiện có, liên hệ ACT-AC2-ITEM-CHK009-CLIPART-UPLOAD / ACT-AC2-ITEM-CHK013-UPLOAD (run CTX-20260914-02).",
+        "act_ids": ["ACT-AC2-ITEM-CHK009-CLIPART-UPLOAD", "ACT-AC2-ITEM-CHK013-UPLOAD"],
+        "apiop_ids": ["APIOP-008"],
+        "ent_ids": [],
+        "evidence_refs": [
+          { "type": "api_response", "path": "raw/api/APIOP-007-to-009-no-rate-limit-claim.json", "act_id": "ACT-AC2-ITEM-CHK013-UPLOAD", "note": "evidence MỚI run này: 3x422, không có rate-limit header, không 429/403" },
+          { "type": "api_response", "path": "runs/context/2026-09-14/CTX-20260914-02/raw/network/ACT-AC2-ITEM-CHK013-UPLOAD.json", "act_id": "ACT-AC2-ITEM-CHK013-UPLOAD", "note": "REUSED - evidence gốc, request thành công 201" },
+          { "type": "api_response", "path": "runs/context/2026-09-14/CTX-20260914-02/raw/network/ACT-AC2-ITEM-CHK009-CLIPART-UPLOAD.json", "act_id": "ACT-AC2-ITEM-CHK009-CLIPART-UPLOAD", "note": "REUSED - cross-check evidence cùng route" }
+        ],
+        "observed_count": 3,
+        "confidence": "MEDIUM",
+        "freshness": { "observed_at": "2026-09-26", "run_id": "CTX-20260926-01" },
+        "confirmation_source": null
+      }
+    ],
+    "cross_layer_evidence_map": [
+      {
+        "act_id": "ACT-01-01-001",
+        "ui_refs": ["raw/portal/screenshots/ACT-01-01-001-before.png", "raw/portal/screenshots/ACT-01-01-001-after.png", "raw/portal/dom/ACT-01-01-001-before.json"],
+        "api_refs": ["raw/network/ACT-01-01-001.json", "raw/api/APIOP-001-vector-upload-burst.json"],
+        "db_refs": [],
+        "storefront_refs": [],
+        "code_refs": []
+      },
+      {
+        "act_id": "ACT-01-03-001",
+        "ui_refs": ["raw/portal/screenshots/ACT-01-03-001-after.png", "raw/portal/dom/ACT-01-03-001-after.json"],
+        "api_refs": ["raw/network/ACT-01-03-001.json", "raw/api/APIOP-003-upload-error-logs-burst.json"],
+        "db_refs": [],
+        "storefront_refs": [],
+        "code_refs": []
+      },
+      {
+        "act_id": "ACT-02-01-001",
+        "ui_refs": ["raw/portal/screenshots/ACT-02-01-001-after.png", "raw/portal/dom/ACT-02-01-001-before.json"],
+        "api_refs": ["raw/network/ACT-02-01-001.json", "raw/api/APIOP-004-layer-images-svg.json"],
+        "db_refs": [],
+        "storefront_refs": [],
+        "code_refs": []
+      },
+      {
+        "act_id": "ACT-AC2-ITEM-CHK009-VECTOR-UPLOAD",
+        "ui_refs": ["runs/context/2026-09-14/CTX-20260914-02/raw/network/ACT-AC2-ITEM-CHK009-VECTOR-UPLOAD.json (evidence cũ, UI action gốc)"],
+        "api_refs": ["raw/api/APIOP-005-cliparts-svg.json (evidence MỚI, rate-limit oracle run này)"],
+        "db_refs": [],
+        "storefront_refs": [],
+        "code_refs": []
+      },
+      {
+        "act_id": "ACT-05-01-001",
+        "ui_refs": ["runs/context/2026-09-21/CTX-20260921-03/raw/network/ACT-05-01-001.json (evidence cũ, UI action gốc)"],
+        "api_refs": ["raw/api/APIOP-006-clipart-categories-post.json (evidence MỚI, rate-limit oracle run này)"],
+        "db_refs": [],
+        "storefront_refs": [],
+        "code_refs": []
+      },
+      {
+        "act_id": "ACT-AC2-ITEM-CHK013-UPLOAD",
+        "ui_refs": ["runs/context/2026-09-14/CTX-20260914-02/raw/network/ACT-AC2-ITEM-CHK013-UPLOAD.json (evidence cũ, UI action gốc)"],
+        "api_refs": ["raw/api/APIOP-007-to-009-no-rate-limit-claim.json (evidence MỚI, negative-finding oracle run này)"],
+        "db_refs": [],
+        "storefront_refs": [],
+        "code_refs": []
+      },
+      {
+        "act_id": "ACT-AC2-ITEM-CHK009-CLIPART-UPLOAD",
+        "ui_refs": ["runs/context/2026-09-14/CTX-20260914-02/raw/network/ACT-AC2-ITEM-CHK009-CLIPART-UPLOAD.json (evidence cũ, cross-check)"],
+        "api_refs": ["raw/api/APIOP-007-to-009-no-rate-limit-claim.json (evidence MỚI, negative-finding oracle run này)"],
+        "db_refs": [],
+        "storefront_refs": [],
+        "code_refs": []
+      }
+    ],
+    "duplicates_merged": [
+      {
+        "merged_into": "KB-126",
+        "sources": ["raw/api/APIOP-001-vector-upload-burst.json (dispatch #1, direct API test)", "raw/network/ACT-01-01-001.json (dispatch #2, UI-driven, portal-explorer)"],
+        "reason": "Cùng phát biểu ngữ nghĩa: route vector-upload giới hạn 4/phút ở staging - 2 nguồn độc lập (API trực tiếp + UI/network capture) cho cùng giá trị limit, gộp thành 1 statement, nâng confidence lên HIGH."
+      },
+      {
+        "merged_into": "KB-127",
+        "sources": ["raw/api/APIOP-003-upload-error-logs-burst.json", "raw/network/ACT-01-03-001.json"],
+        "reason": "Cùng phát biểu: route upload-error-logs giới hạn 6/phút ở staging - 2 nguồn độc lập khớp giá trị, gộp."
+      },
+      {
+        "merged_into": "KB-128",
+        "sources": ["raw/api/APIOP-004-layer-images-svg.json", "raw/network/ACT-02-01-001.json"],
+        "reason": "Cùng phát biểu về giá trị LIMIT=1000/24h cho resource layer_image - gộp phần LIMIT (khớp 2 nguồn). KHÔNG gộp phần hành vi remaining (khác nhau giữa 2 nguồn, 2 status code khác nhau) - giữ riêng ở conflicts[] CONF-CBS004-001, đúng nguyên tắc 'gộp hai behavior khác nhau là gate FAIL'."
+      },
+      {
+        "merged_into": "KB-035",
+        "sources": ["raw/api/APIOP-005-cliparts-svg.json (evidence MỚI run này)", "runs/context/2026-09-14/CTX-20260914-02/raw/network/ACT-AC2-ITEM-CHK009-VECTOR-UPLOAD.json (evidence CŨ, reuse ACT-ID)"],
+        "reason": "REUSE ACT-ID cũ để xác nhận route/entry-point UI, gắn oracle rate-limit MỚI (limit=4000/24h) - liên kết cross-layer (UI cũ ↔ API oracle mới) cho cùng capability, KHÔNG phải merge 2 quan sát cùng nội dung rate-limit."
+      },
+      {
+        "merged_into": "KB-036",
+        "sources": ["raw/api/APIOP-006-clipart-categories-post.json", "runs/context/2026-09-21/CTX-20260921-03/raw/network/ACT-05-01-001.json"],
+        "reason": "REUSE ACT-ID cũ (ACT-05-01-001) để gắn oracle rate-limit MỚI (limit=1000/24h) cho route clipart-categories POST."
+      },
+      {
+        "merged_into": "KB-037",
+        "sources": ["raw/api/APIOP-007-to-009-no-rate-limit-claim.json", "runs/context/2026-09-14/CTX-20260914-02/raw/network/ACT-AC2-ITEM-CHK013-UPLOAD.json", "runs/context/2026-09-14/CTX-20260914-02/raw/network/ACT-AC2-ITEM-CHK009-CLIPART-UPLOAD.json"],
+        "reason": "REUSE 2 ACT-ID cũ để gắn oracle MỚI (không có rate-limit riêng) cho route temporary-files/upload-url."
+      }
+    ],
+    "conflicts": [
+      {
+        "conflict_id": "CONF-CBS004-001",
+        "topic": "x-ratelimit-remaining behavior cho POST /api/layer-images/svg (layer 3, resource layer_image) không nhất quán giữa 2 nguồn evidence",
+        "sides": [
+          {
+            "statement": "Khi gọi POST /api/layer-images/svg lặp lại 3 lần liên tiếp với request THIẾU field 'file' bắt buộc (422 mỗi lần), ở role merchant/owner môi trường staging, x-ratelimit-remaining giữ nguyên = 1000 (không giảm) qua cả 3 lần, dù x-ratelimit-limit=1000 hiển thị đúng mỗi lần.",
+            "source": "api-explorer dispatch #1 - direct API test trực tiếp, không qua UI/ACT-ID",
+            "evidence_refs": [{ "type": "api_response", "path": "raw/api/APIOP-004-layer-images-svg.json" }],
+            "confidence": "LOW"
+          },
+          {
+            "statement": "Khi merchant (role merchant/owner 'Linh explorer') upload 1 file .svg THÀNH CÔNG (201) vào thư viện 'Static Vector' qua UI thật, ở môi trường staging, x-ratelimit-remaining = 999 (giảm 1 so với limit=1000) trên request đó.",
+            "source": "portal-explorer dispatch #2, ACT-02-01-001",
+            "evidence_refs": [{ "type": "api_response", "path": "raw/network/ACT-02-01-001.json", "act_id": "ACT-02-01-001" }],
+            "confidence": "LOW"
+          }
+        ],
+        "resolution": "UNRESOLVED",
+        "needs": "Cần thêm sample ở cả 2 status code (422 và 201) để xác định remaining counter chỉ tăng khi request THÀNH CÔNG (pass validation) hay theo quy tắc khác. Hiện tại mỗi phía chỉ có 1 sample, mỗi phía ở 1 status code khác nhau - không đủ để khẳng định causal rule. CCR ref: CBS-004. KHÔNG publish làm oracle behavior 'remaining' cho tới khi giải quyết."
+      }
+    ],
+    "stale_candidates": [],
+    "unmapped_evidence": [
+      {
+        "note": "POST /api/merchant/{platform}/pdf-upload (APIOP-002) - runtime verify khớp CCR (limit=4/phút staging) qua raw/api/APIOP-002-pdf-upload-burst.json nhưng KHÔNG có ACT-ID sau 2 dispatch liên tiếp (api-explorer trực tiếp + portal-explorer UI phạm vi hẹp, thử 5 vị trí hợp lý: OPT route-maps, 7 category layer-type picker, '+Import' Artworks-list, '+Import' Layers-panel, text-search 'Boundless').",
+        "action_taken": "KHÔNG dùng làm KB oracle theo đúng §4. KHÔNG tạo kb_candidate cho route này. Xem coverage_gaps."
+      },
+      {
+        "note": "POST /api/artworks/upload-psd và POST /api/instances/{instance}/customer-uploads - verify claim 'không có rate-limit riêng' đúng trong mẫu nhỏ (raw/api/APIOP-007-to-009-no-rate-limit-claim.json), nhưng KHÔNG có ACT-ID hiện có nào map tới trong run này.",
+        "action_taken": "KHÔNG tạo kb_candidate. Ghi coverage_gap."
+      },
+      {
+        "note": "POST /api/merchant/{platform}/photo-upload (layer 2, buyer-facing GenAI backstop, thuộc phạm vi object sdk theo phân bổ) - chỉ verify sự tồn tại của guard X-Thumbmark-ID (raw/api/APIOP-010-photo-upload-layer2-partial.json: lỗi 'X-Thumbmark-ID header is required' rồi 'Invalid thumbmark'), KHÔNG có ACT-ID, KHÔNG có số liệu ngưỡng (10/10min, 5/5min) verify được.",
+        "action_taken": "KHÔNG tạo kb_candidate cho object sdk theo đúng chỉ đạo phân bổ (object sdk không nhận kb_candidate nào trong run này). Ghi coverage_gap."
+      },
+      {
+        "note": "Cột 'Prod' trong 3 bảng rate-limit của CCR CBS-004 (ví dụ vector-upload Prod=20/phút theo code/CCR) - CCR có nêu số liệu này nhưng KHÔNG verify runtime trong run này theo chỉ thị operator (chỉ verify/quan sát staging).",
+        "action_taken": "KHÔNG gắn bất kỳ knowledge_kind nào cho giá trị Prod. Ngoài scope run này, không đưa vào bất kỳ kb_candidate."
+      },
+      {
+        "note": "4 endpoint layer 1 còn lại trong nhóm CCR chưa test trong budget run này: gpx-upload, strava-upload, upload-url (merchant), customer-uploads/{customer_upload_id}/uploaded-at.",
+        "action_taken": "KHÔNG tạo kb_candidate - chưa có evidence runtime nào trong run này."
+      }
+    ],
+    "coverage_gaps": [
+      "Object sdk: CCR CBS-004 có liên quan Layer 2 (upload_rate_limiter GenAI backstop, route buyer-facing photo-upload/customer-uploads/*) nhưng KHÔNG có ACT-ID, KHÔNG có số liệu verify runtime trong run này (chỉ xác nhận SỰ TỒN TẠI cơ chế qua lỗi 'X-Thumbmark-ID header is required' / 'Invalid thumbmark') - KHÔNG đủ evidence để tạo kb_candidate cho object sdk. next_recommended_scope: cần storefront-explorer thật (browser + SDK JS sinh thumbmark hợp lệ) hoặc dev xác nhận thuật toán thumbmark trước khi thử lại.",
+      "pdf-upload (POST /api/merchant/{platform}/pdf-upload, liên quan object artwork): runtime verify khớp CCR (limit=4/phút staging) nhưng KHÔNG có ACT-ID sau 2 dispatch. KHÔNG publish làm oracle. next_recommended_scope: cần code/dev xác nhận đúng UI surface (Product Base / Campaign print-file attachment / Boundless instance provisioning - account 'Linh explorer' hiện boundless_instances_count=0).",
+      "Layer 1: 4 endpoint còn lại trong nhóm CCR (gpx-upload, strava-upload, upload-url merchant, customer-uploads/{id}/uploaded-at) CHƯA test trong run này.",
+      "Layer 3: window thật 24h CHƯA verify runtime (chỉ verify giá trị LIMIT qua header ở cả 3 resource layer_image/clipart/clipart_category) - chủ đích tránh tải không cần thiết lên staging dùng chung, theo đúng chỉ thị brief.",
+      "Layer 2 numeric threshold (10/10min theo IP, 5/5min theo thumbmark, theo CCR/code) - KHÔNG verify runtime, KHÔNG có ACT-ID trong run này. Theo chỉ đạo, KHÔNG tạo kb_candidate (OBSERVED_CURRENT hay INFERRED) cho bất kỳ object nào (kể cả sdk) trong run này.",
+      "Cột 'Prod' trong 3 bảng CCR CBS-004 hoàn toàn KHÔNG verify trong run này theo chỉ thị operator (chỉ verify staging) - KHÔNG gắn bất kỳ knowledge_kind nào cho giá trị Prod, ngoài scope run này.",
+      "POST /api/artworks/upload-psd và POST /api/instances/{instance}/customer-uploads ('không có rate-limit riêng' theo CCR) - verify đúng trong mẫu nhỏ nhưng không có ACT-ID hiện có, chưa đủ evidence để tạo kb_candidate riêng."
+    ]
+  },
+  "gate": {
+    "decision": "PASS",
+    "blocking_findings": [],
+    "conditions": [
+      "6 kb_candidate (KB-126/127/128 cho artwork, KB-035/036/037 cho asset-category) đều có provenance (evidence_refs + ACT-ID + APIOP-ID), knowledge_kind=OBSERVED_CURRENT (không có item nào bị nâng từ observed/inferred lên confirmed), và scope (environment/role/object_state/surface) đầy đủ.",
+      "KB-035/036/037 REUSE ACT-ID cũ để gắn oracle rate-limit MỚI - đã ghi rõ trong statement + mapping_note + duplicates_merged, KHÔNG nhầm lẫn với quan sát mới độc lập.",
+      "conflict CONF-CBS004-001 (x-ratelimit-remaining behavior APIOP-004) được giữ nguyên CẢ HAI phía, KHÔNG tự resolve, KHÔNG bị mất khi merge phần LIMIT vào KB-128.",
+      "pdf-upload (APIOP-002) và layer 2 (numeric threshold, mọi object bao gồm sdk) KHÔNG có kb_candidate nào - đúng chỉ đạo, ghi đầy đủ ở unmapped_evidence/coverage_gaps, KHÔNG bịa ACT-ID hay hạ chuẩn evidence để lấp gap.",
+      "Cột Prod của CCR không được gắn knowledge_kind nào - đúng ràng buộc operator.",
+      "feature_id của 3 item asset-category (KB-035/036/037) để trống + mapping_note vì run này không có portal-explorer evidence mới cho object asset-category - feature-profile-builder cần tự map theo canon."
+    ],
+    "allowed_next_steps": [
+      "feature-profile-builder: dùng KB-126/127/128 để cập nhật feature-summary/checklist FEAT-01 (buyer vector-upload) và FEAT-02 (merchant Static Vector) của object artwork; dùng KB-035/036/037 để cập nhật feature/checklist liên quan clipart/clipart-category/temporary-file của object asset-category (tự map feature_id theo canon hiện có).",
+      "context-quality-reviewer: xử lý conflicts[] CONF-CBS004-001 (x-ratelimit-remaining của layer_image) - quyết định resolution hoặc giữ mở, KHÔNG tự chọn bên.",
+      "orchestrator: quyết định next_recommended_scope cho pdf-upload (dispatch code-config-explorer hoặc hỏi dev) và cho layer 2/sdk (cần storefront-explorer thật hoặc dev xác nhận thuật toán thumbmark) trước khi mở round tiếp theo cho CBS-004."
+    ]
+  }
+}

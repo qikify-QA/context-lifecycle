@@ -1,0 +1,237 @@
+{
+  "schema_version": "1.0",
+  "artifact_type": "FeatureProfileCandidate",
+  "artifact_id": "FPC-CTX-20260921-02-dynamic-translations",
+  "workflow_id": "CTX-20260921-02",
+  "producer": "feature-profile-builder",
+  "source_refs": [
+    { "type": "code_ref", "path": "contracts/qa-context-contract.md", "note": "shared contract, esp. §8 Conflict handling" },
+    { "type": "code_ref", "path": "runs/context/2026-09-21/CTX-20260921-02/candidate/product-kb.json", "note": "KB-007..KB-012, KB-016, KB-019, CONFLICT-001" },
+    { "type": "code_ref", "path": "runs/context/2026-09-21/CTX-20260921-02/raw/portal/portal-evidence.json", "note": "OBS-006..OBS-009, OBS-011, OBS-013" },
+    { "type": "code_ref", "path": "runs/context/2026-09-21/CTX-20260921-02/raw/storefront/storefront-evidence.json", "note": "SF-OBS-006, conflicts[]" },
+    { "type": "code_ref", "path": "runs/context/2026-09-21/CTX-20260921-02/intermediate/api/action-api-map.json", "note": "APIOP-003, APIOP-004, APIOP-006" }
+  ],
+  "upstream_artifact_ids": [
+    "PKC-CTX-20260921-02-translation",
+    "FDA-CTX-20260921-02-translation-portal",
+    "SDA-CTX-20260921-02-translation-storefront",
+    "ACA-CTX-20260921-02-translation-api"
+  ],
+  "status": "PARTIAL",
+  "confidence": "LOW",
+  "observations": [
+    "kb_version=1, first bootstrap. All portal-side capabilities (create/save/delete entries) are consistently OBSERVED_CURRENT and confirmed working end-to-end on the portal.",
+    "Storefront propagation for this feature is UNRESOLVED (CONFLICT-001) — this profile deliberately does NOT assert propagation succeeds or fails as a general rule; see conflicts handling below."
+  ],
+  "assumptions": [],
+  "unknowns": [
+    "Whether Dynamic Translations propagate to storefront for the 'Option Title in the personalization form' or 'Variants name' sub-scopes — campaign 2595 (the only campaign tested) has no free-text Option Title field, so only the 'Product base name' sub-scope was exercised.",
+    "GET /api/translations (APIOP-004) full response schema was not captured on first reference (KB-011, INFERRED); it was later confirmed by OBS-013 as the load-existing-entries endpoint returning a flat array — but this later confirmation happened only during a cleanup/delete-verification step (single sample), not independently re-verified.",
+    "Whether an unobserved separate action (e.g. a 'sync to Shopify' / republish step) is required for Dynamic Translations to reach the storefront, distinct from Product Page Content's apparently-immediate propagation.",
+    "Whether GET /api/instances/{instanceId}/shop-locales is a live Shopify Admin API pass-through or a teeinblue-cached copy."
+  ],
+  "conflicts": [
+    {
+      "conflict_id": "CONFLICT-001",
+      "topic": "Does Dynamic Translations (merchant-entered content, e.g. Product base name) propagate/display on the storefront?",
+      "status": "UNRESOLVED — carried forward unchanged from product-kb.json. This profile does NOT choose a side and does NOT resolve this conflict; resolution authority belongs to reviewer/orchestrator per contract §8.",
+      "sides": [
+        {
+          "statement": "Business context provided by the user in bootstrap-request.json (input hypothesis, NOT an authority source, not verified): 'Cả 2 loại translation (Product Page Content và Dynamic Translations) đều hiển thị ra storefront.'",
+          "source": "input/bootstrap-request.json",
+          "confidence": "LOW"
+        },
+        {
+          "statement": "Directly observed (SF-OBS-006, ACT-05-01-005): with Dynamic Translation record id=69 saved ('Vertical Framed Poster' -> 'Áp phích khung dọc QA-TEST-CTX20260921-02', locale=vi) on the portal, the buyer-facing storefront page at locale=vi still shows 'Vertical Framed Poster' in English, both in the DOM (native Shopify <variant-selects> component) and in the GET /api/merchant/campaigns/{productId}.json response (byte-identical between en/vi locales). The Vietnamese translation does not appear anywhere on the rendered page.",
+          "source": "storefront-explorer (SF-OBS-006) + api-explorer (APIOP-006 state_delta)",
+          "confidence": "LOW"
+        }
+      ],
+      "needs": "Authority (PO/Dev confirmation, spec, or backend code) to determine by-design vs. defect, PLUS re-testing on a campaign with a genuine free-text Option Title to rule out a field-specific cause before generalizing across all Dynamic Translations sub-scopes.",
+      "kb_ref": "CONFLICT-001 in product-kb.json"
+    }
+  ],
+  "blocking_issues": [],
+  "payload": {
+    "feature_profiles": [
+      {
+        "feature_id": "FEAT-03-06-dynamic-translations",
+        "feature_key": "dynamic-translations",
+        "name": "Translate merchant-entered dynamic content (Option Title, Product base name, Variants name)",
+        "user_goal": "As a merchant (owner), translate content I typed myself — personalization Option Titles, Product base names, Variants names — into another store language, either by typing pairs manually or importing them, so buyers see it in their language.",
+        "stable_since_version": "1",
+        "actors": [
+          {
+            "role": "owner (merchant, portal)",
+            "permission_observed": "user_id=266 (Linh explorer) successfully created, viewed and deleted entries via authenticated cookie session + x-xsrf-token + x-acting-user-id header. No cross-tenant/forbidden-token test performed.",
+            "kb_refs": ["KB-007", "KB-010", "KB-012"]
+          }
+        ],
+        "entry_points": [
+          {
+            "path": "Portal sidebar > Extras > Dynamic Translations (/artwork-translations)",
+            "precondition": "role=owner, authenticated portal session",
+            "kb_refs": ["KB-007"]
+          }
+        ],
+        "capabilities": [
+          {
+            "name": "Declared field scope (self-stated by UI)",
+            "description": "Info banner on the page states verbatim the supported scope: 'Currently support translating: Option Title in the personalization form, Product base and Variants name.' No mention of 'layer placeholder', 'artwork custom name', or 'campaign custom name/label' was observed anywhere on the page — narrower/differently-worded than the initial business-context assumption. Absence of these terms is recorded as NOT_OBSERVED, not confirmed-unsupported.",
+            "kb_refs": ["KB-007"],
+            "act_ids": ["ACT-03-01-004"]
+          },
+          {
+            "name": "Manual entry table (Default -> target locale)",
+            "description": "2-column table: 'Default' (free-text source) and the currently selected locale's name (target). Trash-can icon deletes a row (client-side only until Save); '+ Add new translation' appends a blank row; a 'Search...' box and 'Auto translate' button sit above the table (Auto translate not tested); Import/Export buttons top-right.",
+            "kb_refs": ["KB-008"],
+            "act_ids": ["ACT-03-01-004"]
+          },
+          {
+            "name": "Import is file-upload, not an entity picker",
+            "description": "Clicking 'Import' opens a native OS file-chooser immediately (upload control), NOT a dropdown to pick source entities from Artworks/Product Base/Campaigns list pages, contradicting the initial business-context assumption that import pulls from those list pages. No file was submitted in this run (stopped at safe checkpoint per mutation policy) — actual upload behavior is untested.",
+            "kb_refs": ["KB-009"],
+            "act_ids": ["ACT-03-02-006"]
+          },
+          {
+            "name": "Save: create entry via bulk endpoint, free-text key",
+            "description": "Save sends POST /api/translations/bulk with body {translations:[{locale, name, data:{<free-text Default source>: <translation>}}]}. Response 200 returns the created record ({id, user_id, is_default, locale, data, created_at, updated_at, name}). Storage key is the literal source string the merchant typed, NOT a fixed semantic key (contrast with Product Page Content's config-translations).",
+            "kb_refs": ["KB-010", "KB-019"],
+            "act_ids": ["ACT-05-01-005"]
+          },
+          {
+            "name": "Load existing entries (GET /api/translations)",
+            "description": "GET /api/translations fires on page load; first observed instance (KB-011) had no captured response body (role INFERRED). A later observation during cleanup (OBS-013) captured the response as a flat array of translation records for the currently selected locale, confirming the load role — but this is a single later sample, not independently re-verified across multiple runs.",
+            "kb_refs": ["KB-011"],
+            "act_ids": ["ACT-05-01-005"]
+          },
+          {
+            "name": "Delete entry via full-set replace, not delete-by-id",
+            "description": "Deleting a row (trash-can + confirm dialog + Save) does NOT call a delete-by-id endpoint. Instead, Save sends POST /api/translations/bulk with the FULL remaining entry set for the selected locale (observed: {translations:[]} when the only entry was removed). Response echoes the new full set. Only the targeted locale's entries are affected; other locales/entries are untouched (verified in the single-entry case only).",
+            "kb_refs": ["KB-012"],
+            "act_ids": ["ACT-05-08-008"]
+          }
+        ],
+        "state_transitions": [
+          {
+            "from": "no entry exists for a given source string + locale",
+            "to": "entry created and persisted (portal database)",
+            "trigger": "owner fills Default + target-locale text in the manual entry table and clicks Save",
+            "condition": "POST /api/translations/bulk returns 200 with the created record",
+            "kb_refs": ["KB-010"]
+          },
+          {
+            "from": "1+ entries exist for the selected locale",
+            "to": "targeted entry removed, remaining entries (if any) preserved",
+            "trigger": "owner clicks trash-can icon on a row, confirms 'Are you sure to remove <text>?', then clicks page-level Save",
+            "condition": "POST /api/translations/bulk with the full remaining set returns 200",
+            "kb_refs": ["KB-012"]
+          },
+          {
+            "from": "entry saved on portal side only",
+            "to": "entry visible to buyers on storefront in that locale",
+            "trigger": "buyer requests the product page under the overridden locale's URL prefix",
+            "condition": "UNRESOLVED — CONFLICT-001. For the ONE sub-scope tested (Product base name, campaign 2595), this transition was observed as NOT happening: the source text still renders in English at both the DOM layer (Shopify-native <variant-selects>) and the teeinblue campaign-config API layer, with no vi-locale variant appearing anywhere. This does NOT confirm the transition fails for the other declared sub-scopes ('Option Title in the personalization form', 'Variants name'), which had no testable field on the one campaign used in this run. See conflicts[] — this transition is deliberately recorded as UNRESOLVED, not as a confirmed negative or positive rule.",
+            "kb_refs": ["KB-016", "CONFLICT-001"]
+          }
+        ],
+        "confirmed_rules": [],
+        "observed_behavior": [
+          "Selecting a different locale in the 'Languages from <store>' combobox on this page follows the same pattern as on /product-page-content: no extra network request, no change to portal UI display language, only changes which locale's content is edited. (See language-locale-switcher profile, KB-004, KB-010's locale field.)",
+          "The teeinblue campaign-config API (GET /api/merchant/campaigns/{productId}.json) never surfaced the saved Dynamic Translation, in either locale, across 2 samples (en/vi) — the record appears not to leave the portal's database via this data path, for the one sub-scope tested."
+        ],
+        "observed_validations": [],
+        "permissions": [
+          "Only role=owner (user_id=266) exercised for create/delete in this run. No PERMISSION/cross-tenant test (TIB_USER_B, TIB_FORBIDDEN_TOKEN) was performed against POST /api/translations/bulk or GET /api/translations."
+        ],
+        "surface_mapping": {
+          "portal": ["/artwork-translations (sidebar: Extras > Dynamic Translations)"],
+          "storefront": ["NOT_OBSERVED for the one sub-scope tested (Product base name) — see CONFLICT-001; no confirmed storefront surface for this feature in this run"],
+          "api": [
+            "GET /api/instances/{instanceId}/shop-locales (APIOP-001, shared with product-page-content-translation)",
+            "POST /api/translations/bulk (APIOP-003) — create and delete both use this same endpoint",
+            "GET /api/translations (APIOP-004) — role INFERRED, later corroborated once (OBS-013)",
+            "GET /api/merchant/campaigns/{productId}.json (APIOP-006) — negative evidence only, does not carry Dynamic Translation content for the tested field"
+          ],
+          "data": ["translations table/collection: records keyed by {id, user_id, is_default, locale, data (free-text-source-keyed map), created_at, updated_at, name}"],
+          "code": []
+        },
+        "dependencies": [
+          "Depends on the store's published Shopify locale list (shop-locales, KB-003) shared with language-locale-switcher profile.",
+          "Depends on language-locale-switcher profile's 'portal edit-context locale selector' capability to determine which locale a save/delete targets.",
+          "Storefront delivery (if any) is architecturally dependent on whatever mechanism carries Product Page Content translations to the storefront (product-page-content-translation profile) — but this dependency is UNCONFIRMED; the two features are NOT verified to share the same delivery path, and evidence in this run suggests they may NOT (Product Page Content propagated, Dynamic Translations did not, for the fields tested).",
+          "Resolution of CONFLICT-001 depends on closing a coverage gap: testing on a campaign with a genuine free-text Option Title (campaign 2595 lacks one)."
+        ],
+        "risks": [
+          "CONFLICT-001 (UNRESOLVED): if Dynamic Translations are by-design NOT propagated to storefront, any QA checklist or merchant-facing expectation assuming propagation will produce false-positive defect reports. If it IS a defect, merchants creating Dynamic Translation entries currently get zero buyer-facing effect for at least the 'Product base name' sub-scope, with no error/warning shown in the portal UI to indicate this. Either interpretation is currently unverified — treat both as open until authority resolves. See conflicts[] for full evidence on both sides.",
+          "Delete uses full-set-replace (KB-012) rather than delete-by-id — a race condition between two concurrent editors of the same locale (one saving while another deletes) could silently drop unrelated entries; untested (single-entry scenario only in this run)."
+        ],
+        "freshness": { "observed_at": "2026-09-21", "run_id": "CTX-20260921-02" },
+        "unknown_areas": [
+          {
+            "question": "Do Dynamic Translations for 'Option Title in the personalization form' or 'Variants name' propagate to storefront, independent of the 'Product base name' result?",
+            "why_it_matters": "CONFLICT-001 was only tested against one of three declared sub-scopes. Generalizing the NOT_OBSERVED result to all three would be an unsupported inference; a regression checklist must treat these as separate open questions."
+          },
+          {
+            "question": "Does Dynamic Translations propagation require an additional, unobserved step (e.g. sync/republish) not triggered by a plain Save in this run?",
+            "why_it_matters": "Directly affects whether CONFLICT-001 resolves as 'defect' or 'by-design, missing step' — changes both the fix and the merchant-facing documentation/UX implication."
+          },
+          {
+            "question": "What is the full response schema of GET /api/translations, and is its 'load existing entries' role reliably true across repeated saves/reloads (only corroborated once, during a cleanup step)?",
+            "why_it_matters": "A checklist that asserts 'existing entries reload correctly' needs a confirmed contract to assert against, not a single incidental observation."
+          },
+          {
+            "question": "What does the actual file-upload submission for Import do (format, entity matching, overwrite behavior)?",
+            "why_it_matters": "Import was never exercised past opening the file-chooser; merchant-facing bulk-import behavior (including collisions with existing entries) is completely unverified."
+          }
+        ]
+      }
+    ],
+    "profile_relationships": [
+      { "feature_key": "dynamic-translations", "related_feature_key": "language-locale-switcher", "relationship": "depends_on", "note": "Uses the portal edit-context locale selector to determine save/delete target locale." },
+      { "feature_key": "dynamic-translations", "related_feature_key": "product-page-content-translation", "relationship": "sibling_under_same_object_diverging_behavior", "note": "Same Translation object, different storage model (KB-019) and, per CONFLICT-001, an unresolved difference in storefront propagation outcome — do NOT assume these two features behave the same way on storefront." }
+    ],
+    "coverage_matrix": [
+      { "feature_id": "FEAT-03-06-dynamic-translations", "layer": "portal-ui", "role": "owner", "state": "no-entries (empty)", "environment": "staging", "covered": true },
+      { "feature_id": "FEAT-03-06-dynamic-translations", "layer": "portal-ui", "role": "owner", "state": "entry-created", "environment": "staging", "covered": true },
+      { "feature_id": "FEAT-03-06-dynamic-translations", "layer": "portal-ui", "role": "owner", "state": "entry-deleted", "environment": "staging", "covered": true },
+      { "feature_id": "FEAT-03-06-dynamic-translations", "layer": "portal-ui", "role": "owner", "state": "multi-entry table (>1 row)", "environment": "staging", "covered": false },
+      { "feature_id": "FEAT-03-06-dynamic-translations", "layer": "api", "role": "owner", "state": "save/delete (POST translations/bulk)", "environment": "staging", "covered": true },
+      { "feature_id": "FEAT-03-06-dynamic-translations", "layer": "api", "role": "owner", "state": "import (real file upload)", "environment": "staging", "covered": false },
+      { "feature_id": "FEAT-03-06-dynamic-translations", "layer": "storefront", "role": "GUEST buyer", "state": "propagation, sub-scope=Product base name", "environment": "staging", "covered": true },
+      { "feature_id": "FEAT-03-06-dynamic-translations", "layer": "storefront", "role": "GUEST buyer", "state": "propagation, sub-scope=Option Title", "environment": "staging", "covered": false },
+      { "feature_id": "FEAT-03-06-dynamic-translations", "layer": "storefront", "role": "GUEST buyer", "state": "propagation, sub-scope=Variants name", "environment": "staging", "covered": false },
+      { "feature_id": "FEAT-03-06-dynamic-translations", "layer": "api", "role": "cross-tenant / forbidden-token", "state": "permission boundary", "environment": "staging", "covered": false },
+      { "feature_id": "FEAT-03-06-dynamic-translations", "layer": "db", "role": "n/a", "state": "n/a", "environment": "staging", "covered": false }
+    ],
+    "unassigned_kb_items": [],
+    "profile_conflicts": [
+      {
+        "conflict_id": "CONFLICT-001",
+        "topic": "Does Dynamic Translations propagate to storefront?",
+        "resolution": "UNRESOLVED",
+        "note": "Mirrored unchanged from product-kb.json; feature-profile-builder did not resolve or take a side. See payload.feature_profiles[0].state_transitions (3rd entry) and .risks for how this is represented inside the profile itself."
+      }
+    ],
+    "profile_change_summary": [
+      "kb_version=1: initial bootstrap creation of this profile, no prior version to diff against."
+    ],
+    "kb_trace_complete": true
+  },
+  "gate": {
+    "decision": "CONDITIONAL_PASS",
+    "blocking_findings": [],
+    "conditions": [
+      "Every field traces to a kb_id (KB-007..KB-012, KB-016, KB-019) — no invented expected behavior.",
+      "CONFLICT-001 is preserved UNRESOLVED with both sides' evidence intact, inside state_transitions and risks, and mirrored in top-level conflicts[] and profile_conflicts[] — feature-profile-builder did not pick a side.",
+      "Coverage is explicitly PARTIAL: only 1 of 3 declared sub-scopes (Product base name) was tested for storefront propagation; Option Title and Variants name remain open (coverage_matrix, unknown_areas).",
+      "Sufficient for regression discovery of the CURRENT observed portal-side behavior (create/save/delete all confirmed working); NOT sufficient as an oracle for storefront propagation expectations until CONFLICT-001 is resolved by an authority."
+    ],
+    "allowed_next_steps": [
+      "Handoff to qa-checklist-builder — checklist MUST treat CONFLICT-001 as an open question (e.g. generate both 'if propagation is expected' and 'if propagation is not expected' checklist branches, or flag it for manual triage), not a fixed oracle.",
+      "Handoff to knowledge-diff-analyzer.",
+      "Escalate CONFLICT-001 to context-quality-reviewer / orchestrator for authority resolution (PO/Dev/spec) before any oracle is finalized for this feature.",
+      "Recommend a follow-up run testing on a campaign with a genuine free-text Option Title to close the sub-scope coverage gap."
+    ]
+  }
+}

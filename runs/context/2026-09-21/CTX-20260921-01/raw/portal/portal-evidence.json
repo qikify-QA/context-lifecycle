@@ -1,0 +1,282 @@
+{
+  "schema_version": "1.0",
+  "artifact_type": "FeatureDiscoveryArtifact",
+  "artifact_id": "portal-evidence-CTX-20260921-01",
+  "workflow_id": "CTX-20260921-01",
+  "producer": "portal-explorer",
+  "source_refs": [
+    { "type": "code_ref", "path": "runs/context/2026-09-21/CTX-20260921-01/input/bootstrap-request.json" },
+    { "type": "code_ref", "path": "knowledge/portal-login.md" },
+    { "type": "code_ref", "path": "knowledge/products/teeinblue/objects/sdk/feature-summary.md" }
+  ],
+  "upstream_artifact_ids": [],
+  "status": "PARTIAL",
+  "confidence": "MEDIUM",
+  "observations": [
+    "See payload.observations[] for the full per-control OBS-ID inventory (67 entries).",
+    "Login verified: sidebar shows 'Linh explorer / linh-explorer.myshopify.com / Blue (Test)', heading 'Welcome to teeinblue, Linh explorer!', request header x-acting-user-id: 266 -- matches the account 'Linh explorer' (user_id 266) per memory, NOT 'Linh Pham' (sub=2). Note: staging no longer exposes a JWT in localStorage (confirmed again this run) -- session is cookie-based (Sanctum SPA), so the historical 'verify sub=273 in JWT' step could not be performed; verified by sidebar text + x-acting-user-id header instead, consistent with the 2026-09-14 login-methodology update already on file.",
+    "Route /product-page-settings exists, renders under Store Settings sidebar submenu, has 2 tabs (Elements & Behaviors, Styles & Colors) plus a global For-store banner with its own '(Switch store?)' link, separate from the sidebar '.user-switcher' widget.",
+    "'.user-switcher' located and confirmed via DOM query: sidebar top block ('LE' avatar + account/store name), class present on 2 DOM nodes (wrapper .user-switcher, inner .user-switcher-toggle). Clicking it opens a floating 'Switch to:' panel with a search box and the list of connected stores.",
+    "Store switcher lists exactly 2 stores for this account: linh-explorer.myshopify.com and linh-explorer-2.myshopify.com -- matches TIB_STORE_URL_1 / TIB_STORE_URL_2. No other stores found (TASK-3 fully covered, nothing left in unexplored_areas for store enumeration).",
+    "Switching store via the switcher redirects to '/' (Home), not back to /product-page-settings -- had to re-navigate manually each time.",
+    "MAJOR FINDING (current_behavior_only): across BOTH tabs (Elements & Behaviors, Styles & Colors), every control's default/current value observed on store1 (instance 609) was IDENTICAL to the corresponding control on store2 (instance 613) -- same option set, same labels, same help text, same checked/selected state. No SDK-version-conditional option or default-value difference was found on this page in this run.",
+    "Network evidence (GET /api/instances?trashed) shows the underlying `config` object for instance 609 and instance 613 is byte-identical, AND the `sdk_version` field is 2 for BOTH instances -- not 1 vs 2 as the task's premise (carried over from prior knowledge base) assumed. See conflicts[].",
+    "GET /api/instances?trashed returns instances for the WHOLE account (both stores), not filtered to 'current' store -- this is the strongest APIOP candidate backing the Product Page Settings form; handed to api-explorer.",
+    "GET /api/settings is a large (~36KB), account-wide generic config/registry dictionary (currencies, country list, a schema of available config keys under config_registry, demo products, banners, etc.) that fires on this page but was NOT confirmed to directly back any specific Elements & Behaviors / Styles & Colors control -- classified 'unknown', not 'mapped'."
+  ],
+  "assumptions": [
+    "Assumed the store1/store2 config values observed via GET /api/instances?trashed (instance.config) are what the Elements & Behaviors / Styles & Colors form fields render from, based on strong correlation between config key names/values and visible UI state (e.g. load_gallery_immediately:true <-> 'Load gallery immediately' checked). NOT confirmed via a code reference or explicit field-by-field binding -- left for api-explorer / code-config-explorer to verify.",
+    "Assumed GET /api/settings response for store1's own page load (ACT-01-01-001 seq 12) is byte-identical to the one captured in full during the store2 pass (ACT-01-04-001-settings-response-raw.json) based on a manual visual scan, not a byte diff -- flagged as an assumption in raw/network/ACT-01-01-001.json."
+  ],
+  "unknowns": [
+    "Whether the observed sdk_version:2 for both instances reflects a real, current runtime state (i.e. store1 was migrated from SDK v1 to v2 since the last FEAT-07 run on 2026-09-12), or whether sdk_version is a config flag decoupled from the actual bundle served to buyers, or whether the prior FEAT-07 evidence was incorrect. Needs a fresh storefront-explorer pass on store1 to resolve.",
+    "Exact hex values behind the ~13 color-picker fields on Styles & Colors (both stores) -- accessibility snapshot exposes them as swatch controls, not readable text.",
+    "Exact selected option for the icon-only swatch controls (Font size, Toggle style, Alignment, Field's border radius) -- accessibility tree does not label the individual icons; only screenshots capture their visual state.",
+    "What the other 'Store Settings' sub-pages (General Settings, Product Page Content, Customization Image, Shipping Methods, Inventory Locations, SKU Mapping) contain -- out of this run's object_target scope, not explored.",
+    "Whether options differ under a different role (only 'owner' role tested)."
+  ],
+  "conflicts": [
+    {
+      "conflict_id": "CONFLICT-PORTAL-001",
+      "description": "SDK version per store: prior knowledge base (knowledge/products/teeinblue/objects/sdk/feature-summary.md, FEAT-07) asserts store1 (linh-explorer.myshopify.com) runs storefront SDK v1 and store2 (linh-explorer-2.myshopify.com) runs SDK v2, based on direct storefront runtime observation (different personalization mechanics: nested radiogroup ~10 clipart vs grouped_clipart grid ~9 clipart; static lightbox mockup vs live SVG mockup) as of runs up to CTX-20260912-05. This run's portal-side evidence (GET /api/instances?trashed) shows field `sdk_version` = 2 for BOTH instance 609 (store1) and instance 613 (store2), captured 2026-09-21.",
+      "evidence_a": { "type": "code_ref", "path": "knowledge/products/teeinblue/objects/sdk/feature-summary.md", "note": "FEAT-07 capabilities #2, #3, #6 -- store1=SDK v1, store2=SDK v2, from storefront runtime observation" },
+      "evidence_b": { "type": "api_response", "path": "raw/network/ACT-01-01-001.json", "note": "seq 4, and raw/network/ACT-01-04-001.json seq 3 -- GET /api/instances?trashed, sdk_version:2 for both instance 609 and 613" },
+      "resolution": "NOT RESOLVED by portal-explorer. Handed to orchestrator/reviewer. Recommend a fresh storefront-explorer runtime check on store1 before trusting either source as current."
+    }
+  ],
+  "blocking_issues": [],
+  "payload": {
+    "portal_context": {
+      "environment": "staging",
+      "role": "owner (Linh explorer, user_id 266, staff record confirmed via x-acting-user-id header and sidebar text -- JWT `sub` could not be read this run because staging now uses cookie-session auth, not localStorage JWT; see observations)",
+      "object_id": "product-page-settings",
+      "object_type": "ProductPageSettings",
+      "initial_state": "Portal config page controlling how Teeinblue renders/behaves on the Shopify product page for a given connected store (instance). Account has exactly 2 connected stores.",
+      "verified_by": [
+        "sidebar text 'Linh explorer / linh-explorer.myshopify.com / Blue (Test)'",
+        "heading 'Welcome to teeinblue, Linh explorer!'",
+        "request header x-acting-user-id: 266 on staging-api.teeinblue.com calls",
+        "route /product-page-settings resolved (not 404), breadcrumb 'Home / Product page settings'"
+      ]
+    },
+    "observations": [
+      { "observation_id": "OBS-001", "surface": "Elements & Behaviors > Gallery & Mockup", "element": "checkbox 'Show Gallery & live preview'", "observed_result": "checked, on both store1 (609) and store2 (613)", "evidence_refs": [{"type":"dom_snapshot","path":"raw/portal/dom/ACT-01-01-001-after.txt","act_id":"ACT-01-01-001"},{"type":"dom_snapshot","path":"raw/portal/dom/ACT-01-04-001-after.txt","act_id":"ACT-01-04-001"},{"type":"screenshot","path":"raw/portal/screenshots/ACT-01-01-001-before.png","act_id":"ACT-01-01-001"}], "knowledge_kind": "OBSERVED_CURRENT" },
+      { "observation_id": "OBS-002", "surface": "Elements & Behaviors > Gallery & Mockup", "element": "checkbox 'Load gallery immediately' (help: If disabled, Teeinblue's gallery with live preview only show up when customers start personalizing)", "observed_result": "checked, both stores", "evidence_refs": [{"type":"dom_snapshot","path":"raw/portal/dom/ACT-01-01-001-after.txt","act_id":"ACT-01-01-001"},{"type":"dom_snapshot","path":"raw/portal/dom/ACT-01-04-001-after.txt","act_id":"ACT-01-04-001"}], "knowledge_kind": "OBSERVED_CURRENT" },
+      { "observation_id": "OBS-003", "surface": "Elements & Behaviors > Gallery & Mockup", "element": "checkbox 'Show only one Mockup image' (help: If enabled, the gallery will only show the first mockup image)", "observed_result": "unchecked, both stores", "evidence_refs": [{"type":"dom_snapshot","path":"raw/portal/dom/ACT-01-01-001-after.txt","act_id":"ACT-01-01-001"}], "knowledge_kind": "OBSERVED_CURRENT" },
+      { "observation_id": "OBS-004", "surface": "Elements & Behaviors > Gallery & Mockup", "element": "checkbox 'Zoom gallery' (help: Only work on desktop & Android mobiles...)", "observed_result": "unchecked, both stores", "evidence_refs": [{"type":"dom_snapshot","path":"raw/portal/dom/ACT-01-01-001-after.txt","act_id":"ACT-01-01-001"}], "knowledge_kind": "OBSERVED_CURRENT" },
+      { "observation_id": "OBS-005", "surface": "Elements & Behaviors > Gallery & Mockup", "element": "checkbox 'Show navigation numbers on gallery'", "observed_result": "unchecked, both stores", "evidence_refs": [{"type":"dom_snapshot","path":"raw/portal/dom/ACT-01-01-001-after.txt","act_id":"ACT-01-01-001"}], "knowledge_kind": "OBSERVED_CURRENT" },
+      { "observation_id": "OBS-006", "surface": "Elements & Behaviors > Gallery & Mockup", "element": "checkbox 'Show only the assigned images of the selected variant'", "observed_result": "unchecked, both stores", "evidence_refs": [{"type":"dom_snapshot","path":"raw/portal/dom/ACT-01-01-001-after.txt","act_id":"ACT-01-01-001"}], "knowledge_kind": "OBSERVED_CURRENT" },
+      { "observation_id": "OBS-007", "surface": "Elements & Behaviors > Gallery & Mockup", "element": "radio group 'Display of Gallery's Thumbnails' (Static / Live preview / Hide thumbnails; note: Live preview can make page load slower)", "observed_result": "'Static (exclude real-time change)' selected, both stores", "evidence_refs": [{"type":"dom_snapshot","path":"raw/portal/dom/ACT-01-01-001-after.txt","act_id":"ACT-01-01-001"}], "knowledge_kind": "OBSERVED_CURRENT" },
+      { "observation_id": "OBS-008", "surface": "Elements & Behaviors > Personalization Form", "element": "dropdown 'Form type (for Campaign by Shopify)' (Direct form on page / Open form in a popup / Expand/collapse form)", "observed_result": "'Direct form on page (no trigger button)' selected, both stores. Other 2 options NOT explored (would need a client-side change + revert to see if they expose sub-fields -- see unexplored_areas)", "evidence_refs": [{"type":"dom_snapshot","path":"raw/portal/dom/ACT-01-01-001-after.txt","act_id":"ACT-01-01-001"}], "knowledge_kind": "OBSERVED_CURRENT" },
+      { "observation_id": "OBS-009", "surface": "Elements & Behaviors > Personalization Form", "element": "checkbox 'Show options of the first template by default' (help: If disabled, form will not show personalization options until customers select a template...)", "observed_result": "unchecked, both stores", "evidence_refs": [{"type":"dom_snapshot","path":"raw/portal/dom/ACT-01-01-001-after.txt","act_id":"ACT-01-01-001"}], "knowledge_kind": "OBSERVED_CURRENT" },
+      { "observation_id": "OBS-010", "surface": "Elements & Behaviors > Personalization Form", "element": "checkbox 'Search in Dropdown list of clipart sub-category name'", "observed_result": "unchecked, both stores", "evidence_refs": [{"type":"dom_snapshot","path":"raw/portal/dom/ACT-01-01-001-after.txt","act_id":"ACT-01-01-001"}], "knowledge_kind": "OBSERVED_CURRENT" },
+      { "observation_id": "OBS-011", "surface": "Elements & Behaviors > Personalization Form", "element": "checkbox 'Search in Dropdown list of cliparts'", "observed_result": "unchecked, both stores", "evidence_refs": [{"type":"dom_snapshot","path":"raw/portal/dom/ACT-01-01-001-after.txt","act_id":"ACT-01-01-001"}], "knowledge_kind": "OBSERVED_CURRENT" },
+      { "observation_id": "OBS-012", "surface": "Elements & Behaviors > Personalization Form", "element": "checkbox \"Sync customer's selection between same title options\" (help: What customers select or type in an option will be applied for all other options...)", "observed_result": "checked, both stores", "evidence_refs": [{"type":"dom_snapshot","path":"raw/portal/dom/ACT-01-01-001-after.txt","act_id":"ACT-01-01-001"}], "knowledge_kind": "OBSERVED_CURRENT" },
+      { "observation_id": "OBS-013", "surface": "Elements & Behaviors > Personalization Form", "element": "checkbox 'Auto-select the first clipart when switching to a sub-category' (help text present)", "observed_result": "unchecked, both stores", "evidence_refs": [{"type":"dom_snapshot","path":"raw/portal/dom/ACT-01-01-001-after.txt","act_id":"ACT-01-01-001"}], "knowledge_kind": "OBSERVED_CURRENT" },
+      { "observation_id": "OBS-014", "surface": "Elements & Behaviors > Personalization Form", "element": "checkbox 'Show form header'", "observed_result": "checked, both stores", "evidence_refs": [{"type":"dom_snapshot","path":"raw/portal/dom/ACT-01-01-001-after.txt","act_id":"ACT-01-01-001"}], "knowledge_kind": "OBSERVED_CURRENT" },
+      { "observation_id": "OBS-015", "surface": "Elements & Behaviors > Personalization Form", "element": "checkbox \"Use Teeinblue's Date Picker instead of browser's\" (help text present)", "observed_result": "unchecked, both stores", "evidence_refs": [{"type":"dom_snapshot","path":"raw/portal/dom/ACT-01-01-001-after.txt","act_id":"ACT-01-01-001"}], "knowledge_kind": "OBSERVED_CURRENT" },
+      { "observation_id": "OBS-016", "surface": "Elements & Behaviors > Personalization Form", "element": "checkbox \"Use Teeinblue's Time Picker instead of browser's\"", "observed_result": "unchecked, both stores", "evidence_refs": [{"type":"dom_snapshot","path":"raw/portal/dom/ACT-01-01-001-after.txt","act_id":"ACT-01-01-001"}], "knowledge_kind": "OBSERVED_CURRENT" },
+      { "observation_id": "OBS-017", "surface": "Elements & Behaviors > Personalization Form", "element": "checkbox 'Enable Text Reposition on main gallery' (help text present)", "observed_result": "unchecked, both stores", "evidence_refs": [{"type":"dom_snapshot","path":"raw/portal/dom/ACT-01-01-001-after.txt","act_id":"ACT-01-01-001"}], "knowledge_kind": "OBSERVED_CURRENT" },
+      { "observation_id": "OBS-018", "surface": "Elements & Behaviors > Personalization Form", "element": "checkbox 'Auto-zoom to the text when focusing on text input'", "observed_result": "unchecked, both stores", "evidence_refs": [{"type":"dom_snapshot","path":"raw/portal/dom/ACT-01-01-001-after.txt","act_id":"ACT-01-01-001"}], "knowledge_kind": "OBSERVED_CURRENT" },
+      { "observation_id": "OBS-019", "surface": "Elements & Behaviors > Personalization Form", "element": "checkbox 'Enable Clear all for text options' (help text present)", "observed_result": "unchecked, both stores", "evidence_refs": [{"type":"dom_snapshot","path":"raw/portal/dom/ACT-01-01-001-after.txt","act_id":"ACT-01-01-001"}], "knowledge_kind": "OBSERVED_CURRENT" },
+      { "observation_id": "OBS-020", "surface": "Elements & Behaviors > Upload Photo", "element": "checkbox 'Show re-upload photo button in photo popup'", "observed_result": "unchecked, both stores", "evidence_refs": [{"type":"dom_snapshot","path":"raw/portal/dom/ACT-01-01-001-after.txt","act_id":"ACT-01-01-001"}], "knowledge_kind": "OBSERVED_CURRENT" },
+      { "observation_id": "OBS-021", "surface": "Elements & Behaviors > Upload Photo", "element": "checkbox 'Photo Reposition on Mockup' (help: If disabled, photo reposition works on Artwork)", "observed_result": "checked, both stores", "evidence_refs": [{"type":"dom_snapshot","path":"raw/portal/dom/ACT-01-01-001-after.txt","act_id":"ACT-01-01-001"}], "knowledge_kind": "OBSERVED_CURRENT" },
+      { "observation_id": "OBS-022", "surface": "Elements & Behaviors > Upload Photo", "element": "checkbox 'Allow buyers to choose previous processed images' (help: kept for a short time, 72-hour window)", "observed_result": "checked, both stores", "evidence_refs": [{"type":"dom_snapshot","path":"raw/portal/dom/ACT-01-01-001-after.txt","act_id":"ACT-01-01-001"}], "knowledge_kind": "OBSERVED_CURRENT" },
+      { "observation_id": "OBS-023", "surface": "Elements & Behaviors > Upload Photo", "element": "checkbox 'Auto-zoom to the uploaded photo'", "observed_result": "unchecked, both stores", "evidence_refs": [{"type":"dom_snapshot","path":"raw/portal/dom/ACT-01-01-001-after.txt","act_id":"ACT-01-01-001"}], "knowledge_kind": "OBSERVED_CURRENT" },
+      { "observation_id": "OBS-024", "surface": "Elements & Behaviors > Cross-sell Personalization", "element": "checkbox 'Show Cross-sell Personalization' (help: Let buyers personalize and add an extra item together with the main product)", "observed_result": "unchecked, both stores", "evidence_refs": [{"type":"dom_snapshot","path":"raw/portal/dom/ACT-01-01-001-after.txt","act_id":"ACT-01-01-001"}], "knowledge_kind": "OBSERVED_CURRENT" },
+      { "observation_id": "OBS-025", "surface": "Elements & Behaviors > Preview button", "element": "checkbox 'Show \"Preview\" button'", "observed_result": "checked, both stores", "evidence_refs": [{"type":"dom_snapshot","path":"raw/portal/dom/ACT-01-01-001-after.txt","act_id":"ACT-01-01-001"}], "knowledge_kind": "OBSERVED_CURRENT" },
+      { "observation_id": "OBS-026", "surface": "Elements & Behaviors > Preview button", "element": "radio group 'Image to show in Preview popup' (All mockups from gallery / Show only artworks / Show only the first mockup containing the correct printarea)", "observed_result": "'All mockups form gallery' selected, both stores", "evidence_refs": [{"type":"dom_snapshot","path":"raw/portal/dom/ACT-01-01-001-after.txt","act_id":"ACT-01-01-001"}], "knowledge_kind": "OBSERVED_CURRENT" },
+      { "observation_id": "OBS-027", "surface": "Elements & Behaviors > Preview button", "element": "checkbox 'Show Close text' (help: Recommend for iOS users)", "observed_result": "checked, both stores", "evidence_refs": [{"type":"dom_snapshot","path":"raw/portal/dom/ACT-01-01-001-after.txt","act_id":"ACT-01-01-001"}], "knowledge_kind": "OBSERVED_CURRENT" },
+      { "observation_id": "OBS-028", "surface": "Elements & Behaviors > Preview button", "element": "checkbox 'Block Preview if required fields are empty' (help text present)", "observed_result": "unchecked, both stores", "evidence_refs": [{"type":"dom_snapshot","path":"raw/portal/dom/ACT-01-01-001-after.txt","act_id":"ACT-01-01-001"}], "knowledge_kind": "OBSERVED_CURRENT" },
+      { "observation_id": "OBS-029", "surface": "Elements & Behaviors > ATC button", "element": "checkbox 'Show Confirmation checkbox' (help: Customers will need to check the box to be able to proceed)", "observed_result": "unchecked, both stores", "evidence_refs": [{"type":"dom_snapshot","path":"raw/portal/dom/ACT-01-01-001-after.txt","act_id":"ACT-01-01-001"}], "knowledge_kind": "OBSERVED_CURRENT" },
+      { "observation_id": "OBS-030", "surface": "Elements & Behaviors > Addon Charge", "element": "checkbox 'Show addon price warning message' (help: Required to enable by Shopify. Contact support to change.)", "observed_result": "checked AND disabled (not togglable from this UI), both stores", "evidence_refs": [{"type":"dom_snapshot","path":"raw/portal/dom/ACT-01-01-001-after.txt","act_id":"ACT-01-01-001"}], "knowledge_kind": "OBSERVED_CURRENT" },
+      { "observation_id": "OBS-031", "surface": "Elements & Behaviors > Addon Charge", "element": "checkbox 'Show addon price on options' (help: Add to option of Dropdown, Inline Button, Checkbox, Radio)", "observed_result": "unchecked, both stores", "evidence_refs": [{"type":"dom_snapshot","path":"raw/portal/dom/ACT-01-01-001-after.txt","act_id":"ACT-01-01-001"}], "knowledge_kind": "OBSERVED_CURRENT" },
+      { "observation_id": "OBS-032", "surface": "Elements & Behaviors > Mobile", "element": "checkbox 'Show \"Personalize\" button on mobile' (help text present)", "observed_result": "checked, both stores", "evidence_refs": [{"type":"dom_snapshot","path":"raw/portal/dom/ACT-01-01-001-after.txt","act_id":"ACT-01-01-001"}], "knowledge_kind": "OBSERVED_CURRENT" },
+      { "observation_id": "OBS-033", "surface": "Elements & Behaviors > Mobile", "element": "checkbox 'Show gallery navigation arrows on mobile'", "observed_result": "checked, both stores", "evidence_refs": [{"type":"dom_snapshot","path":"raw/portal/dom/ACT-01-01-001-after.txt","act_id":"ACT-01-01-001"}], "knowledge_kind": "OBSERVED_CURRENT" },
+      { "observation_id": "OBS-034", "surface": "Elements & Behaviors > Mobile", "element": "checkbox \"Show gallery's thumbnails on mobile\"", "observed_result": "checked, both stores", "evidence_refs": [{"type":"dom_snapshot","path":"raw/portal/dom/ACT-01-01-001-after.txt","act_id":"ACT-01-01-001"}], "knowledge_kind": "OBSERVED_CURRENT" },
+      { "observation_id": "OBS-035", "surface": "Elements & Behaviors > Extras", "element": "checkbox 'Collapse description block'", "observed_result": "unchecked, both stores", "evidence_refs": [{"type":"dom_snapshot","path":"raw/portal/dom/ACT-01-01-001-after.txt","act_id":"ACT-01-01-001"}], "knowledge_kind": "OBSERVED_CURRENT" },
+      { "observation_id": "OBS-036", "surface": "Elements & Behaviors > Extras", "element": "checkbox 'Enable skeleton loader' (help: Show a skeleton loader while loading the form)", "observed_result": "unchecked, both stores", "evidence_refs": [{"type":"dom_snapshot","path":"raw/portal/dom/ACT-01-01-001-after.txt","act_id":"ACT-01-01-001"}], "knowledge_kind": "OBSERVED_CURRENT" },
+      { "observation_id": "OBS-037", "surface": "Elements & Behaviors > Extras", "element": "checkbox 'Block inspecting clipart' (help: Turn on to protect resource from web inspector)", "observed_result": "unchecked, both stores", "evidence_refs": [{"type":"dom_snapshot","path":"raw/portal/dom/ACT-01-01-001-after.txt","act_id":"ACT-01-01-001"}], "knowledge_kind": "OBSERVED_CURRENT" },
+      { "observation_id": "OBS-038", "surface": "Elements & Behaviors > Extras", "element": "checkbox 'Load scripts on all page outside of product page' (help: can affect loading speed of all pages)", "observed_result": "unchecked, both stores", "evidence_refs": [{"type":"dom_snapshot","path":"raw/portal/dom/ACT-01-01-001-after.txt","act_id":"ACT-01-01-001"}], "knowledge_kind": "OBSERVED_CURRENT" },
+      { "observation_id": "OBS-039", "surface": "Elements & Behaviors > Logo", "element": "button 'Upload logo'", "observed_result": "present, both stores; NOT clicked (would open an upload flow with no confirmed easy revert -- excluded per SAFE_REVERSIBLE_ONLY, see skipped_actions). No existing logo thumbnail visible.", "evidence_refs": [{"type":"dom_snapshot","path":"raw/portal/dom/ACT-01-01-001-after.txt","act_id":"ACT-01-01-001"}], "knowledge_kind": "OBSERVED_CURRENT" },
+      { "observation_id": "OBS-040", "surface": "Product Page Settings > page header", "element": "button 'Save'", "observed_result": "present, enabled; NOT clicked (forbidden_actions)", "evidence_refs": [{"type":"dom_snapshot","path":"raw/portal/dom/ACT-01-01-001-after.txt","act_id":"ACT-01-01-001"}], "knowledge_kind": "OBSERVED_CURRENT" },
+      { "observation_id": "OBS-041", "surface": "Product Page Settings > page header", "element": "button 'Reset'", "observed_result": "present, enabled; NOT clicked", "evidence_refs": [{"type":"dom_snapshot","path":"raw/portal/dom/ACT-01-01-001-after.txt","act_id":"ACT-01-01-001"}], "knowledge_kind": "OBSERVED_CURRENT" },
+      { "observation_id": "OBS-042", "surface": "Product Page Settings > page header", "element": "heading 'For store: <store> | <domain>' + link '(Switch store?)'", "observed_result": "a SECOND store-switch entry point exists directly on this page (distinct DOM element from the sidebar .user-switcher), updates to reflect current store after switching. Its own click behavior was not separately tested -- the sidebar .user-switcher was used instead for the actual switch in this run.", "evidence_refs": [{"type":"dom_snapshot","path":"raw/portal/dom/ACT-01-01-001-after.txt","act_id":"ACT-01-01-001"},{"type":"dom_snapshot","path":"raw/portal/dom/ACT-01-04-001-after.txt","act_id":"ACT-01-04-001"}], "knowledge_kind": "OBSERVED_CURRENT" },
+      { "observation_id": "OBS-043", "surface": "Product Page Settings > page header", "element": "tab buttons 'Elements & Behaviors' / 'Styles & Colors'", "observed_result": "2 tabs, client-side switch (no page reload), 'Elements & Behaviors' is the default active tab on load", "evidence_refs": [{"type":"dom_snapshot","path":"raw/portal/dom/ACT-01-01-001-after.txt","act_id":"ACT-01-01-001"}], "knowledge_kind": "OBSERVED_CURRENT" },
+      { "observation_id": "OBS-044", "surface": "Product Page Settings > right pane", "element": "'Preview' live panel showing a fixed demo campaign labeled '[Do not edit] Campaign preview for PPS'", "observed_result": "present on both tabs (shared, not tab-specific), shows a hardcoded demo product ('Bella'/'The Best Therapist' mug) with its own 'Number of Dogs*' radiogroup and a 'Preview' button -- appears to be a static demo/sandbox campaign for previewing settings, not the merchant's real campaign data", "evidence_refs": [{"type":"dom_snapshot","path":"raw/portal/dom/ACT-01-01-001-after.txt","act_id":"ACT-01-01-001"}], "knowledge_kind": "OBSERVED_CURRENT" },
+      { "observation_id": "OBS-045", "surface": "Styles & Colors > Theme", "element": "radio group 'Choose a Theme:' (Classic / Modern / Dark)", "observed_result": "'Modern' selected, both stores", "evidence_refs": [{"type":"dom_snapshot","path":"raw/portal/dom/ACT-01-02-001-after.txt","act_id":"ACT-01-02-001"},{"type":"dom_snapshot","path":"raw/portal/dom/ACT-01-05-001-after.txt","act_id":"ACT-01-05-001"}], "knowledge_kind": "OBSERVED_CURRENT" },
+      { "observation_id": "OBS-046", "surface": "Styles & Colors > Theme", "element": "'Font size:' -- 3 icon-only swatch buttons", "observed_result": "present, both stores; exact selected size not distinguishable via accessibility tree (icon-only, no text label) -- see unexplored_areas", "evidence_refs": [{"type":"dom_snapshot","path":"raw/portal/dom/ACT-01-02-001-after.txt","act_id":"ACT-01-02-001"}], "knowledge_kind": "OBSERVED_CURRENT" },
+      { "observation_id": "OBS-047", "surface": "Styles & Colors > Personalization form", "element": "\"Header's background color:\" color-picker textbox", "observed_result": "present, both stores; swatch-based, hex value not read this pass", "evidence_refs": [{"type":"dom_snapshot","path":"raw/portal/dom/ACT-01-02-001-after.txt","act_id":"ACT-01-02-001"}], "knowledge_kind": "OBSERVED_CURRENT" },
+      { "observation_id": "OBS-048", "surface": "Styles & Colors > Personalization form", "element": "\"Header's text color:\" color-picker textbox", "observed_result": "present, both stores; hex not read", "evidence_refs": [{"type":"dom_snapshot","path":"raw/portal/dom/ACT-01-02-001-after.txt","act_id":"ACT-01-02-001"}], "knowledge_kind": "OBSERVED_CURRENT" },
+      { "observation_id": "OBS-049", "surface": "Styles & Colors > Personalization form", "element": "'Form background color:' color-picker textbox", "observed_result": "present, both stores; hex not read", "evidence_refs": [{"type":"dom_snapshot","path":"raw/portal/dom/ACT-01-02-001-after.txt","act_id":"ACT-01-02-001"}], "knowledge_kind": "OBSERVED_CURRENT" },
+      { "observation_id": "OBS-050", "surface": "Styles & Colors > Personalization form", "element": "'Toggle style:' -- 2 icon-only swatch buttons", "observed_result": "present, both stores; exact selection not distinguishable via accessibility tree", "evidence_refs": [{"type":"dom_snapshot","path":"raw/portal/dom/ACT-01-02-001-after.txt","act_id":"ACT-01-02-001"}], "knowledge_kind": "OBSERVED_CURRENT" },
+      { "observation_id": "OBS-051", "surface": "Styles & Colors > Personalization form", "element": "radio group 'Thumbnails per row:' (Auto / 4 / 5 / 6 / 7 / 8)", "observed_result": "'Auto' selected, both stores", "evidence_refs": [{"type":"dom_snapshot","path":"raw/portal/dom/ACT-01-02-001-after.txt","act_id":"ACT-01-02-001"}], "knowledge_kind": "OBSERVED_CURRENT" },
+      { "observation_id": "OBS-052", "surface": "Styles & Colors > Personalization form", "element": "'Alignment:' -- 3 icon-only swatch buttons", "observed_result": "present, both stores; exact selection not distinguishable via accessibility tree", "evidence_refs": [{"type":"dom_snapshot","path":"raw/portal/dom/ACT-01-02-001-after.txt","act_id":"ACT-01-02-001"}], "knowledge_kind": "OBSERVED_CURRENT" },
+      { "observation_id": "OBS-053", "surface": "Styles & Colors > Personalization form", "element": "'Active color:' color-picker textbox", "observed_result": "present, both stores; hex not read", "evidence_refs": [{"type":"dom_snapshot","path":"raw/portal/dom/ACT-01-02-001-after.txt","act_id":"ACT-01-02-001"}], "knowledge_kind": "OBSERVED_CURRENT" },
+      { "observation_id": "OBS-054", "surface": "Styles & Colors > Personalization form", "element": "\"Field's border radius:\" -- 3 icon-only swatch buttons", "observed_result": "present, both stores; exact selection not distinguishable via accessibility tree", "evidence_refs": [{"type":"dom_snapshot","path":"raw/portal/dom/ACT-01-02-001-after.txt","act_id":"ACT-01-02-001"}], "knowledge_kind": "OBSERVED_CURRENT" },
+      { "observation_id": "OBS-055", "surface": "Styles & Colors > Personalization form", "element": "\"Addon charge's warning color:\" color-picker textbox", "observed_result": "present, both stores; hex not read", "evidence_refs": [{"type":"dom_snapshot","path":"raw/portal/dom/ACT-01-02-001-after.txt","act_id":"ACT-01-02-001"}], "knowledge_kind": "OBSERVED_CURRENT" },
+      { "observation_id": "OBS-056", "surface": "Styles & Colors > Colors", "element": "section note", "observed_result": "text 'Some options only work with Campaigns by Product base.' -- both stores", "evidence_refs": [{"type":"dom_snapshot","path":"raw/portal/dom/ACT-01-02-001-after.txt","act_id":"ACT-01-02-001"}], "knowledge_kind": "OBSERVED_CURRENT" },
+      { "observation_id": "OBS-057", "surface": "Styles & Colors > Colors", "element": "'Primary color (Including color of price, ATC button, selected options.):' color-picker textbox", "observed_result": "present, both stores; hex not read", "evidence_refs": [{"type":"dom_snapshot","path":"raw/portal/dom/ACT-01-02-001-after.txt","act_id":"ACT-01-02-001"}], "knowledge_kind": "OBSERVED_CURRENT" },
+      { "observation_id": "OBS-058", "surface": "Styles & Colors > Colors", "element": "\"'Preview' button's background color:\" color-picker textbox", "observed_result": "present, both stores; hex not read", "evidence_refs": [{"type":"dom_snapshot","path":"raw/portal/dom/ACT-01-02-001-after.txt","act_id":"ACT-01-02-001"}], "knowledge_kind": "OBSERVED_CURRENT" },
+      { "observation_id": "OBS-059", "surface": "Styles & Colors > Colors", "element": "\"'Preview' button's text color:\" color-picker textbox", "observed_result": "present, both stores; hex not read", "evidence_refs": [{"type":"dom_snapshot","path":"raw/portal/dom/ACT-01-02-001-after.txt","act_id":"ACT-01-02-001"}], "knowledge_kind": "OBSERVED_CURRENT" },
+      { "observation_id": "OBS-060", "surface": "Styles & Colors > Colors", "element": "\"'Preview' button's text color on hover:\" color-picker textbox", "observed_result": "present, both stores; hex not read", "evidence_refs": [{"type":"dom_snapshot","path":"raw/portal/dom/ACT-01-02-001-after.txt","act_id":"ACT-01-02-001"}], "knowledge_kind": "OBSERVED_CURRENT" },
+      { "observation_id": "OBS-061", "surface": "Styles & Colors > Colors", "element": "\"'Personalize' button's background:\" color-picker textbox", "observed_result": "present, both stores; hex not read", "evidence_refs": [{"type":"dom_snapshot","path":"raw/portal/dom/ACT-01-02-001-after.txt","act_id":"ACT-01-02-001"}], "knowledge_kind": "OBSERVED_CURRENT" },
+      { "observation_id": "OBS-062", "surface": "Styles & Colors > Colors", "element": "\"'Personalize' button's text color:\" color-picker textbox", "observed_result": "present, both stores; hex not read", "evidence_refs": [{"type":"dom_snapshot","path":"raw/portal/dom/ACT-01-02-001-after.txt","act_id":"ACT-01-02-001"}], "knowledge_kind": "OBSERVED_CURRENT" },
+      { "observation_id": "OBS-063", "surface": "Styles & Colors > Colors", "element": "\"'Personalize' button's background on hover:\" color-picker textbox", "observed_result": "present, both stores; hex not read", "evidence_refs": [{"type":"dom_snapshot","path":"raw/portal/dom/ACT-01-02-001-after.txt","act_id":"ACT-01-02-001"}], "knowledge_kind": "OBSERVED_CURRENT" },
+      { "observation_id": "OBS-064", "surface": "Styles & Colors > Colors", "element": "\"'Personalize' button's text color on hover:\" color-picker textbox", "observed_result": "present, both stores; hex not read", "evidence_refs": [{"type":"dom_snapshot","path":"raw/portal/dom/ACT-01-02-001-after.txt","act_id":"ACT-01-02-001"}], "knowledge_kind": "OBSERVED_CURRENT" },
+      { "observation_id": "OBS-065", "surface": "Styles & Colors > Colors", "element": "'Error response message color:' color-picker textbox", "observed_result": "present, both stores; hex not read", "evidence_refs": [{"type":"dom_snapshot","path":"raw/portal/dom/ACT-01-02-001-after.txt","act_id":"ACT-01-02-001"}], "knowledge_kind": "OBSERVED_CURRENT" },
+      { "observation_id": "OBS-066", "surface": "Styles & Colors > Colors", "element": "'Invalid field message color:' color-picker textbox", "observed_result": "present, both stores; hex not read", "evidence_refs": [{"type":"dom_snapshot","path":"raw/portal/dom/ACT-01-02-001-after.txt","act_id":"ACT-01-02-001"}], "knowledge_kind": "OBSERVED_CURRENT" },
+      { "observation_id": "OBS-067", "surface": "Global sidebar", "element": "'.user-switcher' / '.user-switcher-toggle' widget (top of sidebar, avatar + account/store name)", "observed_result": "clicking opens a floating panel: 'Switch to:' label, search textbox (placeholder 'Search..'), current store shown as a header row, exactly 2 switchable stores listed (linh-explorer-2.myshopify.com, linh-explorer.myshopify.com), and a button 'Install app on new stores' below the list. Switching navigates to '/' (Home), not back to the page you switched from.", "evidence_refs": [{"type":"dom_snapshot","path":"raw/portal/dom/ACT-01-03-001-after.txt","act_id":"ACT-01-03-001"}], "knowledge_kind": "OBSERVED_CURRENT" }
+    ],
+    "feature_candidates": [
+      {
+        "feature_id": "FEAT-01-product-page-display-config",
+        "name": "Cấu hình hiển thị campaign trên storefront product page",
+        "user_goal": "Merchant (owner) muốn kiểm soát cách Teeinblue hiển thị và cách form cá nhân hoá hoạt động trên trang sản phẩm Shopify của một store cụ thể -- gallery/mockup, form cá nhân hoá, upload ảnh, cross-sell, nút Preview, nút ATC, phụ phí addon, hành vi mobile, và style/màu sắc -- riêng cho từng store (instance) đã kết nối với account.",
+        "entry_point": "Portal sidebar > Store Settings > Product Page Settings (/product-page-settings), 2 tabs: 'Elements & Behaviors' and 'Styles & Colors'. Store context switchable via sidebar '.user-switcher' or the page's own '(Switch store?)' link.",
+        "observation_ids": ["OBS-001","OBS-002","OBS-003","OBS-004","OBS-005","OBS-006","OBS-007","OBS-008","OBS-009","OBS-010","OBS-011","OBS-012","OBS-013","OBS-014","OBS-015","OBS-016","OBS-017","OBS-018","OBS-019","OBS-020","OBS-021","OBS-022","OBS-023","OBS-024","OBS-025","OBS-026","OBS-027","OBS-028","OBS-029","OBS-030","OBS-031","OBS-032","OBS-033","OBS-034","OBS-035","OBS-036","OBS-037","OBS-038","OBS-039","OBS-040","OBS-041","OBS-042","OBS-043","OBS-044","OBS-045","OBS-046","OBS-047","OBS-048","OBS-049","OBS-050","OBS-051","OBS-052","OBS-053","OBS-054","OBS-055","OBS-056","OBS-057","OBS-058","OBS-059","OBS-060","OBS-061","OBS-062","OBS-063","OBS-064","OBS-065","OBS-066","OBS-067"],
+        "scenarios": [
+          {
+            "scn_id": "SCN-01-01",
+            "objective": "Login to portal staging as owner (Linh explorer), navigate to /product-page-settings on the current default store (store1, linh-explorer.myshopify.com, instance 609), inventory every control on the 'Elements & Behaviors' tab with its current value and help text.",
+            "actions": [
+              {
+                "act_id": "ACT-01-01-001",
+                "description": "Navigate to https://staging-portal.teeinblue.com/product-page-settings (store1 context) and capture the rendered Elements & Behaviors tab",
+                "input": { "url": "https://staging-portal.teeinblue.com/product-page-settings" },
+                "before": { "screenshot": "raw/portal/screenshots/ACT-01-01-001-before.png", "dom": "raw/portal/dom/ACT-01-01-001-before.txt", "object_state": { "note": "pre-render 'Initializing...' loading state" } },
+                "after": { "screenshot": "raw/portal/screenshots/ACT-01-01-001-before.png", "dom": "raw/portal/dom/ACT-01-01-001-after.txt", "object_state": { "store": "linh-explorer.myshopify.com", "instance_id": 609, "tab": "Elements & Behaviors" }, "messages": [] },
+                "network_ref": "raw/network/ACT-01-01-001.json",
+                "network_entry_labels": { "mapped": 1, "polling": 1, "unrelated": 10, "unknown": 1 },
+                "console_errors": ["Failed to load resource: the server responded with a status of 404 () @ https://gravatar.com/avatar/...  (cosmetic avatar 404, unrelated to page settings)"],
+                "mutation": false,
+                "cleanup_result": "NOT_NEEDED",
+                "outcome": "SUCCESS"
+              }
+            ]
+          },
+          {
+            "scn_id": "SCN-01-02",
+            "objective": "On the same store1 context, click the 'Styles & Colors' tab and inventory every control there.",
+            "actions": [
+              {
+                "act_id": "ACT-01-02-001",
+                "description": "Click tab 'Styles & Colors' (store1 context)",
+                "input": { "element": "Styles & Colors tab button" },
+                "before": { "screenshot": "raw/portal/screenshots/ACT-01-01-001-before.png", "dom": "raw/portal/dom/ACT-01-01-001-after.txt", "object_state": { "store": "linh-explorer.myshopify.com", "instance_id": 609, "tab": "Elements & Behaviors" } },
+                "after": { "screenshot": "raw/portal/screenshots/ACT-01-02-001-styles.png", "dom": "raw/portal/dom/ACT-01-02-001-after.txt", "object_state": { "store": "linh-explorer.myshopify.com", "instance_id": 609, "tab": "Styles & Colors" }, "messages": [] },
+                "network_ref": null,
+                "network_entry_labels": { "mapped": 0, "polling": 0, "unrelated": 0, "unknown": 0 },
+                "console_errors": [],
+                "mutation": false,
+                "cleanup_result": "NOT_NEEDED",
+                "outcome": "SUCCESS"
+              }
+            ]
+          },
+          {
+            "scn_id": "SCN-01-03",
+            "objective": "Locate and open the store switcher to enumerate every store visible to this account, per TASK-3.",
+            "actions": [
+              {
+                "act_id": "ACT-01-03-001",
+                "description": "Click the sidebar '.user-switcher' / '.user-switcher-toggle' element (confirmed via DOM class query) to open the store-switch panel",
+                "input": { "element": ".user-switcher-toggle (sidebar top block)" },
+                "before": { "screenshot": "raw/portal/screenshots/ACT-01-02-001-styles.png", "dom": "raw/portal/dom/ACT-01-02-001-after.txt", "object_state": { "store": "linh-explorer.myshopify.com", "tab": "Styles & Colors", "switcher_panel": "closed" } },
+                "after": { "screenshot": null, "dom": "raw/portal/dom/ACT-01-03-001-after.txt", "object_state": { "switcher_panel": "open", "stores_listed": ["linh-explorer-2.myshopify.com", "linh-explorer.myshopify.com"] }, "messages": [] },
+                "network_ref": null,
+                "network_entry_labels": { "mapped": 0, "polling": 0, "unrelated": 0, "unknown": 0 },
+                "console_errors": [],
+                "mutation": false,
+                "cleanup_result": "NOT_NEEDED",
+                "outcome": "SUCCESS"
+              }
+            ]
+          },
+          {
+            "scn_id": "SCN-01-04",
+            "objective": "Select store2 (linh-explorer-2.myshopify.com) in the switcher, re-navigate to /product-page-settings, and inventory the 'Elements & Behaviors' tab there for comparison against store1 (TASK-2, TASK-4).",
+            "actions": [
+              {
+                "act_id": "ACT-01-04-001",
+                "description": "Click 'linh-explorer-2 | linh-explorer-2.myshopify.com' entry in the open switcher panel, then (since it redirected to Home) navigate back to /product-page-settings",
+                "input": { "selected_store": "linh-explorer-2.myshopify.com" },
+                "before": { "screenshot": null, "dom": "raw/portal/dom/ACT-01-03-001-after.txt", "object_state": { "store": "linh-explorer.myshopify.com", "switcher_panel": "open" } },
+                "after": { "screenshot": "raw/portal/screenshots/ACT-01-04-001-styles.png", "dom": "raw/portal/dom/ACT-01-04-001-after.txt", "object_state": { "store": "linh-explorer-2.myshopify.com", "instance_id": 613, "tab": "Elements & Behaviors" }, "messages": [] },
+                "network_ref": "raw/network/ACT-01-04-001.json",
+                "network_entry_labels": { "mapped": 1, "polling": 1, "unrelated": 7, "unknown": 1 },
+                "console_errors": [],
+                "mutation": false,
+                "cleanup_result": "NOT_NEEDED",
+                "outcome": "SUCCESS"
+              }
+            ]
+          },
+          {
+            "scn_id": "SCN-01-05",
+            "objective": "On store2 context, click 'Styles & Colors' and inventory it for comparison against store1 (TASK-4).",
+            "actions": [
+              {
+                "act_id": "ACT-01-05-001",
+                "description": "Click tab 'Styles & Colors' (store2 context)",
+                "input": { "element": "Styles & Colors tab button" },
+                "before": { "screenshot": "raw/portal/screenshots/ACT-01-04-001-styles.png", "dom": "raw/portal/dom/ACT-01-04-001-after.txt", "object_state": { "store": "linh-explorer-2.myshopify.com", "instance_id": 613, "tab": "Elements & Behaviors" } },
+                "after": { "screenshot": "raw/portal/screenshots/ACT-01-05-001-styles.png", "dom": "raw/portal/dom/ACT-01-05-001-after.txt", "object_state": { "store": "linh-explorer-2.myshopify.com", "instance_id": 613, "tab": "Styles & Colors" }, "messages": [] },
+                "network_ref": null,
+                "network_entry_labels": { "mapped": 0, "polling": 0, "unrelated": 0, "unknown": 0 },
+                "console_errors": [],
+                "mutation": false,
+                "cleanup_result": "NOT_NEEDED",
+                "outcome": "SUCCESS"
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    "comparison_result_TASK-4_TASK-5": {
+      "summary": "current_behavior_only -- no conclusion about which store/config is 'correct'.",
+      "stores_compared": [
+        { "store": "linh-explorer.myshopify.com", "instance_id": 609, "sdk_version_field_from_api": 2 },
+        { "store": "linh-explorer-2.myshopify.com", "instance_id": 613, "sdk_version_field_from_api": 2 }
+      ],
+      "options_only_in_store1": [],
+      "options_only_in_store2": [],
+      "options_with_different_default_value": [],
+      "options_identical_in_both": "ALL 67 observed controls (OBS-001..OBS-067) -- option set, labels, help text, and default/current value were identical between store1 and store2 in this run.",
+      "caveat": "This result directly conflicts with this run's task premise (options expected to differ by SDK v1 vs v2 per prior FEAT-07 storefront evidence). See conflicts[] CONFLICT-PORTAL-001. Also caveat: color-picker hex values and icon-only swatch selections (Font size, Toggle style, Alignment, Field's border radius -- OBS-046,050,052,054) were not read at pixel/value level in either store, only their presence/structure was compared -- a difference could theoretically exist there undetected."
+    },
+    "permissions_observed": [
+      "Only 1 role tested this run: owner (Linh explorer, user_id 266). Save/Reset buttons were visible and enabled (not clicked, per policy) -- no permission restriction observed for this role on this page. No second role/account available to compare (TIB_USER_A_*/TIB_USER_B_* not present in current .env per knowledge/portal-login.md) -- permission variance NOT_OBSERVED."
+    ],
+    "skipped_actions": [
+      { "description": "Click 'Save' or 'Reset' on /product-page-settings", "reason": "forbidden_actions: 'save/apply thay đổi config trên /product-page-settings' per bootstrap-request exploration_policy" },
+      { "description": "Click 'Upload logo' and complete an upload", "reason": "No confirmed simple revert path for an uploaded logo asset within SAFE_REVERSIBLE_ONLY without risking a Save; excluded to stay within cleanup_required guarantee" },
+      { "description": "Change 'Form type' dropdown to 'Open form in a popup' / 'Expand/collapse form' to see if they reveal additional sub-fields", "reason": "Time-boxed out of this pass, not a hard policy block (a dropdown change without Save is a pure client-side, revertible action) -- listed in unexplored_areas instead of here since it was not attempted at all, not stopped mid-action" }
+    ],
+    "unexplored_areas": [
+      "Exact hex values behind ~13 color-picker fields on Styles & Colors, both stores",
+      "Exact selected option for icon-only swatch controls: Font size, Toggle style, Alignment, Field's border radius (OBS-046, 050, 052, 054)",
+      "Alternate 'Form type' dropdown values (popup / expand-collapse) and any sub-fields they might reveal",
+      "'Upload logo' flow and current logo state",
+      "Save/Reset click behavior and any validation on save (forbidden this run)",
+      "Other 'Store Settings' sibling pages seen in the sidebar (General Settings, Product Page Content, Customization Image, Shipping Methods, Inventory Locations, SKU Mapping) -- out of this run's object_target",
+      "Role/permission variance on this page (only owner role available)",
+      "Whether a 3rd+ store could appear in the switcher for a different account -- this account (Linh explorer) has exactly 2, confirmed exhaustively",
+      "Exact request/response contract of GET /api/instances?trashed and whether a per-instance write endpoint (e.g. PUT /api/instances/{id}) is what 'Save' calls -- Save was never clicked, so the write endpoint was not observed at all"
+    ],
+    "current_behavior_only": true,
+    "redaction_applied": true
+  },
+  "gate": {
+    "decision": "CONDITIONAL_PASS",
+    "blocking_findings": [],
+    "conditions": [
+      "context-quality-reviewer / orchestrator must review CONFLICT-PORTAL-001 (sdk_version:2 for both instances vs prior FEAT-07 store1=v1/store2=v2 claim) before this evidence is used to assert any SDK-version-conditional behavior for /product-page-settings",
+      "qa-knowledge-normalizer must NOT collapse the 'options identical in both stores' finding into a claim that these settings are SDK-version-independent by design -- it is current_behavior_only for 2 specific instances at this point in time, and the sdk_version conflict is unresolved",
+      "api-explorer should confirm whether GET /api/instances?trashed (or a narrower per-instance endpoint) is truly what the Product Page Settings form binds to, and should capture the write-path (Save) contract separately if that action is ever authorized",
+      "storefront-explorer recommended for a fresh runtime check on store1 to help resolve CONFLICT-PORTAL-001 before publish"
+    ],
+    "allowed_next_steps": ["qa-knowledge-normalizer (product-kb-from-observation)", "api-explorer (runtime-trace on network_ref files)"]
+  }
+}

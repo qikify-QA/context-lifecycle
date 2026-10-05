@@ -1,0 +1,206 @@
+{
+  "schema_version": "1.0",
+  "artifact_type": "FeatureProfileCandidate",
+  "artifact_id": "FPCAND-CTX-20261002-01-payout-import-populate-reconcile-late-data",
+  "workflow_id": "CTX-20261002-01",
+  "producer": "feature-profile-builder",
+  "source_refs": [
+    { "type": "doc_ref", "path": "candidate/product-kb/populate-reconcile-late-data.json" },
+    { "type": "doc_ref", "path": "candidate/product-kb/_object-level.payout-import.json" }
+  ],
+  "upstream_artifact_ids": [
+    "KBCAND-CTX-20261002-01-payout-import-populate-reconcile-late-data",
+    "KBCAND-CTX-20261002-01-payout-import-_object-level.payout-import"
+  ],
+  "status": "READY",
+  "confidence": "MEDIUM",
+  "observations": [
+    "DOC_BOOTSTRAP: không có quan sát runtime nào. observed_validations[] RỖNG và act_ids RỖNG theo 2 ràng buộc tuyệt đối của run này — bằng chứng chỉ dùng kb_refs.",
+    "feature_id dùng nguyên feature_key ('populate-reconcile-late-data') — chưa có FEAT-ID chính thức do orchestrator/normalizer mint cho object payout-import.",
+    "5 KB known_defect (KB-002, KB-005, KB-011, KB-018, KB-019) đưa vào risks[], KHÔNG đưa vào confirmed_rules — gồm cả KB-018 (bất đối xứng hành vi lỗi so với payout-csv-upload) dù bản thân KB-017 mô tả hành vi populate là CONFIRMED_EXPECTED.",
+    "KB-003/KB-004/KB-020 là INFERRED + hedged (tài liệu tự ghi 'chưa xác nhận') — đưa vào unknown_areas, KHÔNG đưa vào confirmed_rules dù nội dung mô tả hành vi.",
+    "KB-017 (Populate: 1 dòng lỗi chặn toàn bộ import) đối lập trực tiếp với KB-034 của feature payout-csv-upload (Upload: 1 dòng lỗi chỉ skip, tiếp tục) — ghi rõ ở dependencies/risks là 1 sự BẤT ĐỐI XỨNG đã được tài liệu tự nêu (KB-018), KHÔNG coi là 1 DCONF (không phải 2 phát biểu trái ngược về CÙNG 1 hành vi, mà là 2 hành vi CÓ THẬT khác nhau ở 2 màn hình khác nhau)."
+  ],
+  "assumptions": [],
+  "unknowns": [
+    "Giá trị thực tế của config('cache.conversion_time') (thời hạn khoá idempotent) không được tài liệu nêu.",
+    "Granularity của charge_creation_time trong khoá khớp của populate (theo ngày hay timestamp đầy đủ) không được nêu."
+  ],
+  "conflicts": [],
+  "blocking_issues": [],
+  "payload": {
+    "feature_profiles": [
+      {
+        "feature_id": "populate-reconcile-late-data",
+        "feature_key": "populate-reconcile-late-data",
+        "name": "Populate/reconcile — đối soát dữ liệu Shopify gửi trễ cho kỳ đã import",
+        "user_goal": "Với vai trò admin/Ops, cập nhật lại các Conversion ĐÃ TẠO trước đó cho 1 kỳ payout khi Shopify gửi lại/chốt dữ liệu muộn (settle muộn) cho đúng kỳ đó — khác với việc tạo Conversion mới lần đầu (xem feature payout-csv-upload).",
+        "stable_since_version": "v1",
+        "actors": [
+          {
+            "role": "admin",
+            "permission_observed": "Admin/Ops chọn màn hình Populate/reconcile (route riêng admin/conversion/form-upload-populate) khi Shopify gửi lại dữ liệu cho 1 kỳ đã import trước đó. Quyền truy cập route này cho role nào trong admin panel KHÔNG được tài liệu xác nhận (cùng gap với payout-csv-upload, xem unknown_areas của feature đó).",
+            "kb_refs": ["KB-001", "KB-006"]
+          }
+        ],
+        "entry_points": [
+          {
+            "path": "admin/conversion/form-upload-populate",
+            "precondition": "Kỳ payout này ĐÃ được import trước đó qua Upload payout file (có Conversion sẵn có); Shopify gửi lại/cập nhật dữ liệu cho đúng kỳ đó.",
+            "kb_refs": ["KB-001", "KB-006"]
+          }
+        ],
+        "capabilities": [
+          {
+            "name": "Chọn đúng màn hình khi Shopify gửi lại dữ liệu cho kỳ đã import",
+            "description": "Khi Shopify gửi lại/cập nhật dữ liệu cho 1 kỳ đã import trước đó (dữ liệu settle muộn), dùng màn hình Populate/reconcile — chỉ cập nhật Conversion đã có, không tạo mới. Màn hình có route riêng (admin/conversion/form-upload-populate), KHÔNG dùng lại màn hình upload thường.",
+            "kb_refs": ["KB-001", "KB-006"]
+          },
+          {
+            "name": "Cập nhật Conversion đã có theo khoá khớp riêng của populate",
+            "description": "Với mỗi dòng trong file populate, hệ thống KHÔNG tạo Conversion mới; chỉ tìm Conversion đã có khớp theo (customer_id, payout_date, charge_creation_time, date_from, date_to). Nếu khớp, cập nhật lại các field: partner_share, charge_creation_time, charge_type, charge_id, và tính lại percentage (= amount hiện có / partner_share mới × 100). Dòng không khớp Conversion nào thì không có tác dụng gì, không tạo mới.",
+            "kb_refs": ["KB-007", "KB-008", "KB-009", "KB-010", "KB-016"]
+          },
+          {
+            "name": "Chống cập nhật lặp trong 1 khoảng thời gian (idempotent)",
+            "description": "Mỗi Conversion chỉ được phép cập nhật qua populate 1 lần trong 1 khoảng thời gian nhất định, dùng khoá cache dạng conversion_id:{id} với thời hạn cấu hình ở config('cache.conversion_time') (giá trị cụ thể không được nêu). Nếu Ops chạy lại đúng file populate đó lần 2 trong cùng khoảng thời gian, các dòng đã cập nhật ở lần 1 sẽ không bị cập nhật lại lần nữa.",
+            "kb_refs": ["KB-012", "KB-013", "KB-014", "KB-015"]
+          },
+          {
+            "name": "Hành vi lỗi: dừng toàn bộ import ngay khi gặp 1 dòng lỗi (all-or-nothing)",
+            "description": "Ở màn hình Populate/reconcile, 1 dòng bị lỗi validate làm toàn bộ import dừng lại ngay lập tức (throw exception) — các dòng chưa xử lý tới trong file sẽ KHÔNG được cập nhật. Đối lập trực tiếp với hành vi của Upload payout file (1 dòng lỗi chỉ skip âm thầm, các dòng khác vẫn tiếp tục — xem KB-034 của feature payout-csv-upload); sự bất đối xứng này là có thật (xem risks).",
+            "kb_refs": ["KB-017"]
+          }
+        ],
+        "state_transitions": [
+          {
+            "from": "late_data_row_received",
+            "to": "conversion_updated",
+            "trigger": "Dòng trong file populate khớp (customer_id, payout_date, charge_creation_time, date_from, date_to) với 1 Conversion sẵn có",
+            "condition": "Khớp đủ khoá khớp của populate.",
+            "kb_refs": ["KB-008", "KB-009", "KB-010"]
+          },
+          {
+            "from": "late_data_row_received",
+            "to": "no_effect_no_match",
+            "trigger": "Dòng không khớp Conversion nào",
+            "condition": "Không có Conversion nào khớp khoá khớp của populate.",
+            "kb_refs": ["KB-016"]
+          },
+          {
+            "from": "conversion_updated_once",
+            "to": "update_locked_idempotent",
+            "trigger": "Chạy lại đúng file populate lần 2 trong cùng khoảng thời gian (trong hạn cache conversion_id:{id})",
+            "condition": "Khoá cache chưa hết hạn.",
+            "kb_refs": ["KB-012", "KB-013", "KB-014", "KB-015"]
+          },
+          {
+            "from": "processing_populate_file",
+            "to": "import_halted_partial_update",
+            "trigger": "1 dòng bị lỗi validate (ví dụ thiếu charge_creation_time)",
+            "condition": "Toàn bộ import dừng ngay lập tức (throw exception); các dòng chưa xử lý tới KHÔNG được cập nhật, kể cả khi hợp lệ.",
+            "kb_refs": ["KB-017", "KB-019"]
+          }
+        ],
+        "confirmed_rules": [
+          { "statement": "KB-001: Khi Shopify gửi lại/cập nhật dữ liệu cho 1 kỳ đã import trước đó, dùng màn hình Populate/reconcile (chỉ cập nhật, không tạo mới).", "kb_refs": ["KB-001"] },
+          { "statement": "KB-006: Populate/reconcile có route riêng admin/conversion/form-upload-populate, KHÔNG dùng lại màn hình upload thường.", "kb_refs": ["KB-006"] },
+          { "statement": "KB-007: Với mỗi dòng trong file mới, hệ thống KHÔNG tạo Conversion mới.", "kb_refs": ["KB-007"] },
+          { "statement": "KB-008: Populate chỉ tìm Conversion khớp theo (customer_id, payout_date, charge_creation_time, date_from, date_to).", "kb_refs": ["KB-008"] },
+          { "statement": "KB-009: Khi khớp, populate cập nhật lại partner_share, charge_creation_time, charge_type, charge_id.", "kb_refs": ["KB-009"] },
+          { "statement": "KB-010: Populate tính lại percentage (= amount hiện có / partner_share mới × 100).", "kb_refs": ["KB-010"] },
+          { "statement": "KB-012: Mỗi Conversion chỉ được phép cập nhật qua populate 1 lần trong 1 khoảng thời gian nhất định.", "kb_refs": ["KB-012"] },
+          { "statement": "KB-013/KB-014: Khoá chống lặp là cache key conversion_id:{id}, thời hạn cấu hình ở config('cache.conversion_time') (giá trị cụ thể không nêu).", "kb_refs": ["KB-013", "KB-014"] },
+          { "statement": "KB-015: Chạy lại populate lần 2 trong cùng window: idempotent, không cập nhật lại.", "kb_refs": ["KB-015"] },
+          { "statement": "KB-016: Dòng populate không khớp Conversion nào: không có tác dụng gì, không tạo mới.", "kb_refs": ["KB-016"] },
+          { "statement": "KB-017: 1 dòng lỗi validate ở Populate/reconcile làm toàn bộ import dừng lại ngay lập tức (throw exception), các dòng chưa xử lý tới KHÔNG được cập nhật.", "kb_refs": ["KB-017"] }
+        ],
+        "observed_behavior": [],
+        "observed_validations": [],
+        "permissions": [],
+        "surface_mapping": {
+          "portal": ["admin/conversion/form-upload-populate (KB-006)"],
+          "storefront": [],
+          "api": [],
+          "data": ["Conversion (cập nhật — KB-007, KB-008, KB-009, KB-010, KB-016)"],
+          "code": ["Khoá cache conversion_id:{id}, TTL config('cache.conversion_time') (KB-013, KB-014, IMPLIED_BY_CODE_ARTIFACT)"]
+        },
+        "dependencies": [
+          "payout-csv-upload: counterpart trực tiếp — dùng cho kỳ ĐÃ import, trong khi feature kia dùng cho LẦN ĐẦU của 1 kỳ. Hành vi lỗi của 2 màn hình bất đối xứng (xem risks, KB-018).",
+          "customer-matching-and-dedup: khoá khớp của populate dùng customer_id (đã được xác định qua cơ chế của feature kia), dù granularity charge_creation_time của populate khác của dedup chưa được xác nhận (xem unknown_areas).",
+          "charge-type-classification: populate cập nhật lại charge_type của Conversion — dùng chung cơ chế phân loại của feature đó."
+        ],
+        "risks": [
+          { "risk": "KNOWN_DEFECT (KB-002): Rất dễ nhầm giữa 2 màn hình Upload payout file và Populate/reconcile — 2 màn hình gần giống nhau trên cùng menu Conversion.", "kb_refs": ["KB-002"] },
+          { "risk": "KNOWN_DEFECT (KB-005): Nếu dùng lại màn hình Upload payout file (tạo mới) cho lần export sau của cùng kỳ, cơ chế dedup của màn hình đó không nhận ra đây là dữ liệu cần cập nhật (vì partner_share đã đổi, vượt sai số 0.005) — hệ thống hiểu nhầm là dòng mới hoàn toàn và tạo Conversion trùng.", "kb_refs": ["KB-005"] },
+          { "risk": "KNOWN_DEFECT (KB-011): amount (số tiền hoa hồng affiliate đã nhận) KHÔNG được tính lại khi populate, chỉ percentage hiển thị được cập nhật lại cho khớp partner_share mới — chưa xác nhận có quy trình bù trừ nào cho chênh lệch này.", "kb_refs": ["KB-011"] },
+          { "risk": "KNOWN_DEFECT (KB-018): Sự bất đối xứng hành vi lỗi giữa Upload payout file (skip âm thầm, tiếp tục — KB-034 của feature payout-csv-upload) và Populate/reconcile (dừng toàn bộ ngay lập tức — KB-017) là có thật; tài liệu tự đề nghị PO xác nhận có đúng chủ đích hay không.", "kb_refs": ["KB-018"] },
+          { "risk": "KNOWN_DEFECT (KB-019): 1 dòng lỗi trong file populate (ví dụ thiếu charge_creation_time do lỗi export) chặn đứng việc cập nhật TOÀN BỘ các dòng hợp lệ khác phía sau nó trong file, kể cả khi phần lớn file hoàn toàn hợp lệ.", "kb_refs": ["KB-019"] }
+        ],
+        "freshness": {
+          "observed_at": null,
+          "run_id": "CTX-20261002-01"
+        },
+        "unknown_areas": [
+          {
+            "question": "Giá trị thực tế (thời hạn) của config('cache.conversion_time') là bao nhiêu?",
+            "why_it_matters": "Đây là cửa sổ idempotency của populate (KB-012/KB-013/KB-014) — không biết giá trị thì không viết được test 'chạy lại sau N phút thì có cập nhật lại hay không'."
+          },
+          {
+            "question": "Có quy trình bù trừ nào để chỉnh lại amount khi partner_share được settle lại khác số liệu tạm không?",
+            "why_it_matters": "Populate chỉ cập nhật percentage, giữ nguyên amount (KB-011) — số tiền affiliate đã nhận có thể lệch với số liệu Shopify chốt. Tài liệu tự ghi chưa xác nhận có quy trình bù trừ."
+          },
+          {
+            "question": "Ở màn hình Populate/reconcile, charge_creation_time trong khoá khớp được so theo NGÀY hay theo timestamp đầy đủ?",
+            "why_it_matters": "Dedup của màn hình tạo mới được nêu rõ so theo NGÀY, nhưng khoá khớp của populate (KB-008) không nêu granularity — khác granularity thì dòng settle muộn có thể không khớp Conversion nào và lặng lẽ không có tác dụng (KB-016)."
+          },
+          {
+            "question": "Màn hình Populate/reconcile có validate sự tồn tại của cột Charge Creation Time và có sort dòng trước khi xử lý như màn hình Upload payout file không?",
+            "why_it_matters": "2 hành vi này được nêu rõ cho màn hình tạo mới nhưng không được phát biểu cho populate; không suy ra là có hay không."
+          },
+          {
+            "question": "date_from/date_to của Conversion (2 field trong khoá khớp của populate) được xác định từ đâu trong file CSV?",
+            "why_it_matters": "Không biết nguồn của 2 field này thì không dựng được test data cho populate khớp đúng (KB-008)."
+          },
+          {
+            "question": "Mức độ phổ biến thật của việc Shopify gửi dữ liệu trễ/chưa hoàn chỉnh cho 1-2 kỳ gần nhất, và việc partner_share chưa chính xác ở lần export đầu, là bao nhiêu?",
+            "why_it_matters": "KB-003/KB-004 đều hedged, tài liệu tự ghi chưa xác nhận với PO/dev — ảnh hưởng mức độ ưu tiên test case cho kịch bản settle muộn."
+          },
+          {
+            "question": "Khi populate báo lỗi, có công cụ nào xác định chính xác dòng nào đã cập nhật và dòng nào chưa (trước khi sửa và chạy lại)?",
+            "why_it_matters": "KB-020 (hedged) chỉ suy đoán 'có thể chỉ 1 phần đầu file đã cập nhật' — chưa xác nhận cách Ops xác định ranh giới đó trong thực tế."
+          }
+        ]
+      }
+    ],
+    "profile_relationships": [
+      { "from": "populate-reconcile-late-data", "to": "payout-csv-upload", "relation": "MUTUALLY_EXCLUSIVE_SCOPE", "note": "Dùng cho kỳ ĐÃ import (settle muộn); feature kia dùng cho LẦN ĐẦU. Hành vi lỗi 2 màn hình bất đối xứng (KB-018)." },
+      { "from": "populate-reconcile-late-data", "to": "customer-matching-and-dedup", "relation": "DEPENDS_ON", "note": "Dùng customer_id đã xác định qua cơ chế khớp Customer của feature kia." },
+      { "from": "populate-reconcile-late-data", "to": "charge-type-classification", "relation": "DEPENDS_ON", "note": "Cập nhật lại charge_type của Conversion, dùng chung cơ chế phân loại." }
+    ],
+    "coverage_matrix": [
+      { "feature_id": "populate-reconcile-late-data", "layer": "portal", "role": "admin", "state": "already_imported_period_late_data", "environment": "documented", "covered": true },
+      { "feature_id": "populate-reconcile-late-data", "layer": "db", "role": "unspecified", "state": "already_imported_period_late_data", "environment": "documented", "covered": true },
+      { "feature_id": "populate-reconcile-late-data", "layer": "code", "role": "unspecified", "state": "already_imported_period_late_data", "environment": "documented", "covered": true },
+      { "feature_id": "populate-reconcile-late-data", "layer": "api", "role": "unspecified", "state": "any", "environment": "documented", "covered": false },
+      { "feature_id": "populate-reconcile-late-data", "layer": "portal", "role": "affiliate", "state": "any", "environment": "documented", "covered": false }
+    ],
+    "unassigned_kb_items": [],
+    "profile_conflicts": [],
+    "profile_change_summary": [
+      "Profile mới tạo ở run CTX-20261002-01 (DOC_BOOTSTRAP), chưa có version trước để so sánh."
+    ],
+    "kb_trace_complete": true
+  },
+  "gate": {
+    "decision": "CONDITIONAL_PASS",
+    "blocking_findings": [],
+    "conditions": [
+      "observed_validations[] rỗng và act_ids rỗng trên toàn bộ profile, đúng 2 ràng buộc tuyệt đối của DOC_BOOTSTRAP cho run này.",
+      "5 KB known_defect (KB-002, KB-005, KB-011, KB-018, KB-019) chỉ nằm trong risks[], không xuất hiện ở confirmed_rules.",
+      "3 KB hedged/INFERRED (KB-003, KB-004, KB-020) chỉ nằm trong unknown_areas, không được tổng quát hoá thành rule.",
+      "Đủ cho regression discovery (toàn bộ capability/state/risk đã map về kb_id), nhưng oracle cho giá trị TTL cache và granularity charge_creation_time còn thiếu — CONDITIONAL_PASS là kết quả bình thường của bootstrap lần đầu."
+    ],
+    "allowed_next_steps": ["qa-checklist-builder", "knowledge-diff-analyzer"]
+  }
+}

@@ -7,6 +7,24 @@ Bạn là `portal-explorer`. Bạn ghi lại **những gì thực sự xảy ra*
 
 Đọc `contracts/qa-context-contract.md` trước tiên, rồi `input/bootstrap-request.json`. Khi skill `qa-product-discovery` tồn tại, nạp nó ở mode `portal`; hiện chưa có — dùng hướng dẫn dưới đây.
 
+## Ops board status
+
+Khi bắt đầu explore, khi thiếu input/BLOCKED, và trước handoff, trả payload `board_update` để board hiển thị đúng state/input/output:
+
+```json
+{
+  "agent_id": "portal-explorer",
+  "state": "idle|running|blocked|review|done|failed",
+  "current_task": "",
+  "inputs": [],
+  "outputs": [],
+  "blocked_by": [],
+  "last_event": ""
+}
+```
+
+`inputs` phải nêu target portal/environment/role/object/mutation policy đang dùng. `outputs` phải nêu artifact path thực tế đã tạo hoặc còn thiếu. Nếu có board API, PATCH `/api/agents/portal-explorer`; nếu không, emit payload cho orchestrator/board ingester cập nhật.
+
 Mode bootstrap: `portal-action-capture`.
 
 ## Quyền ghi

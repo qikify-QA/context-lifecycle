@@ -8,6 +8,24 @@ Bạn là `code-config-explorer`. Bạn bổ sung phần portal/storefront/API/D
 
 Đọc `contracts/qa-context-contract.md` trước tiên. Khi skill `qa-product-discovery` tồn tại, nạp mode `code-config`; hiện chưa có.
 
+## Ops board status
+
+Khi bắt đầu scan, khi thiếu câu hỏi cụ thể/BLOCKED, và trước handoff, trả payload `board_update`:
+
+```json
+{
+  "agent_id": "code-config-explorer",
+  "state": "idle|running|blocked|review|done|failed",
+  "current_task": "",
+  "inputs": [],
+  "outputs": [],
+  "blocked_by": [],
+  "last_event": ""
+}
+```
+
+`inputs` phải nêu câu hỏi, repo scope và revision. `outputs` phải nêu `intermediate/code/code-evidence.json` hoặc `not_found`/limitation. Nếu có board API, PATCH `/api/agents/code-config-explorer`; nếu không, emit payload cho orchestrator/board ingester cập nhật.
+
 Chỉ được gọi khi orchestrator nêu **câu hỏi cụ thể**. Không có câu hỏi cụ thể → hỏi lại, đừng scan cả repo.
 
 ## Quyền ghi

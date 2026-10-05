@@ -1,0 +1,919 @@
+{
+  "schema_version": "1.0",
+  "artifact_type": "DocumentationEvidenceArtifact",
+  "artifact_id": "DOCEV-CTX-20261002-01-DOC-10",
+  "workflow_id": "CTX-20261002-01",
+  "producer": "doc-ingest-explorer",
+  "source_refs": [
+    {
+      "type": "doc_ref",
+      "doc_id": "DOC-10",
+      "path": "input/docs/DOC-10/02-dedup-and-reconciliation.md",
+      "note": "Bản copy verbatim đã redact ở C0; sha256 đối chiếu input/doc-manifest.json."
+    },
+    {
+      "type": "doc_ref",
+      "doc_id": "DOC-09",
+      "path": "input/docs/DOC-09/01-charge-type-reference.md",
+      "note": "Chỉ dùng cho phía thứ 2 của DCONF-PAYOUT-001 (quote nguyên văn), không dùng để gộp claim."
+    },
+    {
+      "type": "doc_ref",
+      "doc_id": "DOC-10",
+      "path": "input/doc-manifest.json",
+      "note": "Nguồn version/generated_at/sha256/bytes."
+    }
+  ],
+  "upstream_artifact_ids": [
+    "DOCSET-CTX-20261002-01",
+    "SCOPE-CTX-20261002-01"
+  ],
+  "status": "READY",
+  "confidence": "HIGH",
+  "observations": [
+    "Tài liệu tách rõ 2 màn hình: 'Upload payout file' (tạo mới, route admin/conversion/form-upload) và 'Populate/reconcile' (chỉ cập nhật, route admin/conversion/form-upload-populate).",
+    "Cơ chế (khớp Customer 2 điều kiện, dedup 5 điều kiện, idempotent theo cache) được gán capability/validation_rule; các hạn chế đã biết (không log dòng bị bỏ, amount không tính lại, 1 dòng lỗi chặn cả file populate, dùng sai màn hình gây Conversion trùng) được gán known_defect — 4 vùng này tách khỏi nhau, không gộp.",
+    "Có 1 căng thẳng cross-doc về vai trò của charge_id trong dedup (DOC-09 vs DOC-10) — ghi nguyên 2 phía ở doc_internal_conflicts, KHÔNG chọn bên."
+  ],
+  "assumptions": [
+    "subject lấy từ input/scope-plan.json: payout-import/customer-matching-and-dedup và payout-import/populate-reconcile-late-data; invoice-payout/balance-accrual cho ảnh hưởng balance. CLM-10-007 là claim vocabulary mức product nên object_candidate=null."
+  ],
+  "unknowns": [
+    "Giá trị thời hạn thực tế của `config('cache.conversion_time')` (tài liệu chỉ nêu tên key).",
+    "Populate khớp `charge_creation_time` theo ngày hay theo timestamp đầy đủ (tài liệu nêu granularity theo NGÀY cho dedup nhưng không nói cho populate)."
+  ],
+  "conflicts": [
+    {
+      "conflict_id": "DCONF-PAYOUT-001",
+      "note": "Vai trò của `charge_id` trong dedup: DOC-09 nêu dedup 'không dùng charge_id làm khoá chính cho các dòng loại này' (refund/downgrade); DOC-10 liệt kê `charge_id` giống nhau là 1 trong các điều kiện khớp bắt buộc (kèm xử lý rỗng = NULL). Giữ cả 2 phía, resolution UNRESOLVED — chi tiết ở payload.doc_internal_conflicts."
+    }
+  ],
+  "blocking_issues": [],
+  "payload": {
+    "doc_context": {
+      "docset_id": "DOCSET-CTX-20261002-01",
+      "doc_id": "DOC-10",
+      "logical_name": "qikfiliate/payout - dedup and reconciliation (02-dedup-and-reconciliation.md)",
+      "type": "markdown_feature_doc",
+      "version": "v1",
+      "generated_at": "2026-08-20",
+      "generated_from_commit": null,
+      "source": "qa-hub:project-context",
+      "path": "input/docs/DOC-10/02-dedup-and-reconciliation.md",
+      "sha256": "9487412ddd7e8aa12b31f52348e72b7b67f206a91e784f81a26b3b351c94d136",
+      "sha256_match": true,
+      "bytes": 8869,
+      "readable": true
+    },
+    "sections": [
+      {
+        "dsec_id": "DSEC-10-001",
+        "locator": {
+          "kind": "heading_lines",
+          "heading_path": ["Dedup & Reconciliation"],
+          "line_start": 1,
+          "line_end": 4
+        },
+        "title": "Dedup & Reconciliation (H1 + blockquote mở đầu)"
+      },
+      {
+        "dsec_id": "DSEC-10-002",
+        "locator": {
+          "kind": "heading_lines",
+          "heading_path": ["Dedup & Reconciliation", "Vì sao cần cơ chế khớp dữ liệu — không có ID chung giữa 2 hệ thống"],
+          "line_start": 5,
+          "line_end": 8
+        },
+        "title": "Vì sao cần cơ chế khớp dữ liệu — không có ID chung giữa 2 hệ thống"
+      },
+      {
+        "dsec_id": "DSEC-10-003",
+        "locator": {
+          "kind": "heading_lines",
+          "heading_path": ["Dedup & Reconciliation", "Cách khớp `Customer` cho 1 dòng payout mới"],
+          "line_start": 9,
+          "line_end": 18
+        },
+        "title": "Cách khớp `Customer` cho 1 dòng payout mới"
+      },
+      {
+        "dsec_id": "DSEC-10-004",
+        "locator": {
+          "kind": "heading_lines",
+          "heading_path": ["Dedup & Reconciliation", "Cơ chế chống trùng (dedup) khi re-upload"],
+          "line_start": 19,
+          "line_end": 31
+        },
+        "title": "Cơ chế chống trùng (dedup) khi re-upload"
+      },
+      {
+        "dsec_id": "DSEC-10-005",
+        "locator": {
+          "kind": "heading_lines",
+          "heading_path": ["Dedup & Reconciliation", "Màn hình \"Populate/reconcile\" — đối soát dữ liệu Shopify gửi trễ"],
+          "line_start": 32,
+          "line_end": 37
+        },
+        "title": "Màn hình \"Populate/reconcile\" — đối soát dữ liệu Shopify gửi trễ"
+      },
+      {
+        "dsec_id": "DSEC-10-006",
+        "locator": {
+          "kind": "heading_lines",
+          "heading_path": ["Dedup & Reconciliation", "Màn hình \"Populate/reconcile\" — đối soát dữ liệu Shopify gửi trễ", "Kịch bản cụ thể: đối soát dữ liệu settle muộn cho kỳ tháng 7"],
+          "line_start": 38,
+          "line_end": 46
+        },
+        "title": "Kịch bản cụ thể: đối soát dữ liệu settle muộn cho kỳ tháng 7"
+      },
+      {
+        "dsec_id": "DSEC-10-007",
+        "locator": {
+          "kind": "heading_lines",
+          "heading_path": ["Dedup & Reconciliation", "Màn hình \"Populate/reconcile\" — đối soát dữ liệu Shopify gửi trễ", "Khác biệt hành vi lỗi — điểm QA cần đặc biệt lưu ý"],
+          "line_start": 47,
+          "line_end": 54
+        },
+        "title": "Khác biệt hành vi lỗi — điểm QA cần đặc biệt lưu ý"
+      }
+    ],
+    "claims": [
+      {
+        "claim_id": "CLM-10-001",
+        "dsec_ids": ["DSEC-10-002"],
+        "statement": "Tài liệu `payout - dedup and reconciliation` §`Vì sao cần cơ chế khớp dữ liệu — không có ID chung giữa 2 hệ thống` nêu rằng Shopify và Qikfiliate là 2 hệ thống độc lập, không chia sẻ khoá chính nào cho 1 charge.",
+        "quote": "Shopify và Qikfiliate là 2 hệ thống độc lập, không chia sẻ khoá chính nào cho \"1 charge\".",
+        "claim_kind": "integration",
+        "normativity": "EXPLICIT",
+        "hedged": false,
+        "brand_scope": null,
+        "defect_severity_stated": null,
+        "repro_stated": false,
+        "subject": { "object_candidate": "payout-import", "feature_candidate": "customer-matching-and-dedup" },
+        "surface": "unspecified",
+        "role_stated": "unspecified",
+        "product_level": false,
+        "related_claim_ids": ["CLM-10-002"]
+      },
+      {
+        "claim_id": "CLM-10-002",
+        "dsec_ids": ["DSEC-10-002"],
+        "statement": "Tài liệu `payout - dedup and reconciliation` §`Vì sao cần cơ chế khớp dữ liệu — không có ID chung giữa 2 hệ thống` nêu rằng hệ thống phải suy luận `Customer` của 1 dòng CSV bằng cách khớp theo tổ hợp field có sẵn trong CSV.",
+        "quote": "hệ thống phải **suy luận** bằng cách khớp theo tổ hợp field có sẵn trong CSV",
+        "claim_kind": "capability",
+        "normativity": "EXPLICIT",
+        "hedged": false,
+        "brand_scope": null,
+        "defect_severity_stated": null,
+        "repro_stated": false,
+        "subject": { "object_candidate": "payout-import", "feature_candidate": "customer-matching-and-dedup" },
+        "surface": "unspecified",
+        "role_stated": "unspecified",
+        "product_level": false,
+        "related_claim_ids": ["CLM-10-001", "CLM-10-003"]
+      },
+      {
+        "claim_id": "CLM-10-003",
+        "dsec_ids": ["DSEC-10-003"],
+        "statement": "Tài liệu `payout - dedup and reconciliation` §`Cách khớp Customer cho 1 dòng payout mới` nêu rằng việc khớp `Customer` phải thoả 2 điều kiện cùng lúc.",
+        "quote": "Khớp `Customer` theo **2 điều kiện cùng lúc**:",
+        "claim_kind": "validation_rule",
+        "normativity": "EXPLICIT",
+        "hedged": false,
+        "brand_scope": null,
+        "defect_severity_stated": null,
+        "repro_stated": false,
+        "subject": { "object_candidate": "payout-import", "feature_candidate": "customer-matching-and-dedup" },
+        "surface": "unspecified",
+        "role_stated": "unspecified",
+        "product_level": false,
+        "related_claim_ids": ["CLM-10-004", "CLM-10-005"]
+      },
+      {
+        "claim_id": "CLM-10-004",
+        "dsec_ids": ["DSEC-10-003"],
+        "statement": "Tài liệu `payout - dedup and reconciliation` §`Cách khớp Customer cho 1 dòng payout mới` nêu điều kiện thứ nhất: `Customer.name` bằng cột `Shop` trong CSV.",
+        "quote": "1. `Customer.name` = cột `Shop` trong CSV",
+        "claim_kind": "validation_rule",
+        "normativity": "EXPLICIT",
+        "hedged": false,
+        "brand_scope": null,
+        "defect_severity_stated": null,
+        "repro_stated": false,
+        "subject": { "object_candidate": "payout-import", "feature_candidate": "customer-matching-and-dedup" },
+        "surface": "db",
+        "role_stated": "unspecified",
+        "product_level": false,
+        "related_claim_ids": ["CLM-10-003", "CLM-10-005"]
+      },
+      {
+        "claim_id": "CLM-10-005",
+        "dsec_ids": ["DSEC-10-003"],
+        "statement": "Tài liệu `payout - dedup and reconciliation` §`Cách khớp Customer cho 1 dòng payout mới` nêu điều kiện thứ hai: `Program.slug` của `Customer.program_id` bằng cột `app_slug` trong CSV.",
+        "quote": "2. `Customer.program_id` → `Program.slug` = cột `app_slug` trong CSV",
+        "claim_kind": "validation_rule",
+        "normativity": "EXPLICIT",
+        "hedged": false,
+        "brand_scope": null,
+        "defect_severity_stated": null,
+        "repro_stated": false,
+        "subject": { "object_candidate": "payout-import", "feature_candidate": "customer-matching-and-dedup" },
+        "surface": "db",
+        "role_stated": "unspecified",
+        "product_level": false,
+        "related_claim_ids": ["CLM-10-003", "CLM-10-004"]
+      },
+      {
+        "claim_id": "CLM-10-006",
+        "dsec_ids": ["DSEC-10-003"],
+        "statement": "Tài liệu `payout - dedup and reconciliation` §`Cách khớp Customer cho 1 dòng payout mới` nêu rằng 1 shop có thể cài nhiều app khác nhau của Ownego cùng lúc và mỗi app là 1 `Program` riêng.",
+        "quote": "1 shop có thể cài nhiều app khác nhau của Ownego cùng lúc (ví dụ vừa dùng app Upsell vừa dùng app Slide Cart) — mỗi app là 1 `Program` riêng",
+        "claim_kind": "data_model",
+        "normativity": "EXPLICIT",
+        "hedged": false,
+        "brand_scope": null,
+        "defect_severity_stated": null,
+        "repro_stated": false,
+        "subject": { "object_candidate": "customer-shop", "feature_candidate": null },
+        "surface": "db",
+        "role_stated": "unspecified",
+        "product_level": false,
+        "related_claim_ids": ["CLM-10-005", "CLM-10-007"]
+      },
+      {
+        "claim_id": "CLM-10-007",
+        "dsec_ids": ["DSEC-10-003"],
+        "statement": "Tài liệu `payout - dedup and reconciliation` §`Cách khớp Customer cho 1 dòng payout mới` nêu rằng mỗi record `Customer` đại diện cho quan hệ \"shop X dùng app Y\".",
+        "quote": "mỗi `Customer` record đại diện cho quan hệ \"shop X dùng app Y\"",
+        "claim_kind": "vocabulary",
+        "normativity": "EXPLICIT",
+        "hedged": false,
+        "brand_scope": null,
+        "defect_severity_stated": null,
+        "repro_stated": false,
+        "subject": { "object_candidate": null, "feature_candidate": null },
+        "surface": "unspecified",
+        "role_stated": "unspecified",
+        "product_level": true,
+        "related_claim_ids": ["CLM-10-006"]
+      },
+      {
+        "claim_id": "CLM-10-008",
+        "dsec_ids": ["DSEC-10-003"],
+        "statement": "Tài liệu `payout - dedup and reconciliation` §`Cách khớp Customer cho 1 dòng payout mới` nêu rằng nếu không tìm thấy `Customer` nào khớp cả 2 điều kiện thì dòng đó bị bỏ qua hoàn toàn và không tạo Conversion.",
+        "quote": "dòng đó bị bỏ qua hoàn toàn, không tạo Conversion, không log",
+        "claim_kind": "validation_rule",
+        "normativity": "EXPLICIT",
+        "hedged": false,
+        "brand_scope": null,
+        "defect_severity_stated": null,
+        "repro_stated": false,
+        "subject": { "object_candidate": "payout-import", "feature_candidate": "customer-matching-and-dedup" },
+        "surface": "unspecified",
+        "role_stated": "unspecified",
+        "product_level": false,
+        "related_claim_ids": ["CLM-10-003", "CLM-10-009"]
+      },
+      {
+        "claim_id": "CLM-10-009",
+        "dsec_ids": ["DSEC-10-003"],
+        "statement": "Tài liệu `payout - dedup and reconciliation` §`Cách khớp Customer cho 1 dòng payout mới` nêu rằng dòng bị bỏ qua vì không khớp `Customer` không được ghi log.",
+        "quote": "dòng đó bị bỏ qua hoàn toàn, không tạo Conversion, không log",
+        "claim_kind": "known_defect",
+        "normativity": "EXPLICIT",
+        "hedged": false,
+        "brand_scope": null,
+        "defect_severity_stated": null,
+        "repro_stated": false,
+        "subject": { "object_candidate": "payout-import", "feature_candidate": "customer-matching-and-dedup" },
+        "surface": "unspecified",
+        "role_stated": "unspecified",
+        "product_level": false,
+        "related_claim_ids": ["CLM-10-008", "CLM-08-025"],
+        "classification_note": "DOC-10 nêu 'không log' bằng giọng trung tính (không dán nhãn rủi ro). Gán known_defect là phán đoán của ingest: cùng khoảng trống này được DOC-08 §Journey (CLM-08-025/026) nêu rõ là observability gap + rủi ro vận hành. Không gộp 2 tài liệu vào 1 claim; reviewer có thể hạ xuống nếu không đồng ý."
+      },
+      {
+        "claim_id": "CLM-10-010",
+        "dsec_ids": ["DSEC-10-004"],
+        "statement": "Tài liệu `payout - dedup and reconciliation` §`Cơ chế chống trùng (dedup) khi re-upload` nêu rằng 1 dòng CSV bị coi là đã tồn tại (bỏ qua, không tạo Conversion mới) nếu tìm thấy 1 Conversion sẵn có của đúng `Customer` đó khớp toàn bộ các điều kiện được liệt kê.",
+        "quote": "Hệ thống coi 1 dòng CSV là \"đã tồn tại\" (bỏ qua, không tạo Conversion mới) nếu tìm thấy 1 Conversion sẵn có của đúng `Customer` đó khớp **toàn bộ** các điều kiện sau:",
+        "claim_kind": "validation_rule",
+        "normativity": "EXPLICIT",
+        "hedged": false,
+        "brand_scope": null,
+        "defect_severity_stated": null,
+        "repro_stated": false,
+        "subject": { "object_candidate": "payout-import", "feature_candidate": "customer-matching-and-dedup" },
+        "surface": "unspecified",
+        "role_stated": "unspecified",
+        "product_level": false,
+        "related_claim_ids": ["CLM-10-011", "CLM-10-012", "CLM-10-013", "CLM-10-014", "CLM-10-015"]
+      },
+      {
+        "claim_id": "CLM-10-011",
+        "dsec_ids": ["DSEC-10-004"],
+        "statement": "Tài liệu `payout - dedup and reconciliation` §`Cơ chế chống trùng (dedup) khi re-upload` nêu `payout_date` giống nhau là một trong các điều kiện dedup.",
+        "quote": "- `payout_date` giống nhau",
+        "claim_kind": "validation_rule",
+        "normativity": "EXPLICIT",
+        "hedged": false,
+        "brand_scope": null,
+        "defect_severity_stated": null,
+        "repro_stated": false,
+        "subject": { "object_candidate": "payout-import", "feature_candidate": "customer-matching-and-dedup" },
+        "surface": "db",
+        "role_stated": "unspecified",
+        "product_level": false,
+        "related_claim_ids": ["CLM-10-010"]
+      },
+      {
+        "claim_id": "CLM-10-012",
+        "dsec_ids": ["DSEC-10-004"],
+        "statement": "Tài liệu `payout - dedup and reconciliation` §`Cơ chế chống trùng (dedup) khi re-upload` nêu `charge_type` giống nhau là một trong các điều kiện dedup.",
+        "quote": "- `charge_type` giống nhau",
+        "claim_kind": "validation_rule",
+        "normativity": "EXPLICIT",
+        "hedged": false,
+        "brand_scope": null,
+        "defect_severity_stated": null,
+        "repro_stated": false,
+        "subject": { "object_candidate": "payout-import", "feature_candidate": "customer-matching-and-dedup" },
+        "surface": "db",
+        "role_stated": "unspecified",
+        "product_level": false,
+        "related_claim_ids": ["CLM-10-010"]
+      },
+      {
+        "claim_id": "CLM-10-013",
+        "dsec_ids": ["DSEC-10-004"],
+        "statement": "Tài liệu `payout - dedup and reconciliation` §`Cơ chế chống trùng (dedup) khi re-upload` nêu rằng `charge_creation_time` được so theo NGÀY, không so theo giờ/phút/giây, vì cột này trong DB bị cast về đầu ngày khi đọc.",
+        "quote": "- `charge_creation_time` giống nhau **theo NGÀY** (không so theo giờ/phút/giây — vì cột này trong DB bị cast về đầu ngày khi đọc, còn giá trị gốc trong CSV là timestamp đầy đủ)",
+        "claim_kind": "enum_or_boundary",
+        "normativity": "EXPLICIT",
+        "hedged": false,
+        "brand_scope": null,
+        "defect_severity_stated": null,
+        "repro_stated": false,
+        "subject": { "object_candidate": "payout-import", "feature_candidate": "customer-matching-and-dedup" },
+        "surface": "db",
+        "role_stated": "unspecified",
+        "product_level": false,
+        "related_claim_ids": ["CLM-10-010", "CLM-10-024"]
+      },
+      {
+        "claim_id": "CLM-10-014",
+        "dsec_ids": ["DSEC-10-004"],
+        "statement": "Tài liệu `payout - dedup and reconciliation` §`Cơ chế chống trùng (dedup) khi re-upload` nêu rằng `partner_share` được so trong sai số 0.005 chứ không so bằng tuyệt đối.",
+        "quote": "- `partner_share` giống nhau **trong sai số 0.005** (không so bằng tuyệt đối — vì số thực (float) khi lưu vào DB không đảm bảo khớp bit-for-bit với giá trị gốc trong CSV, ví dụ `-4.31` có thể lưu thành `-4.309999...`)",
+        "claim_kind": "enum_or_boundary",
+        "normativity": "EXPLICIT",
+        "hedged": false,
+        "brand_scope": null,
+        "defect_severity_stated": null,
+        "repro_stated": false,
+        "subject": { "object_candidate": "payout-import", "feature_candidate": "customer-matching-and-dedup" },
+        "surface": "db",
+        "role_stated": "unspecified",
+        "product_level": false,
+        "related_claim_ids": ["CLM-10-010", "CLM-10-021"]
+      },
+      {
+        "claim_id": "CLM-10-015",
+        "dsec_ids": ["DSEC-10-004"],
+        "statement": "Tài liệu `payout - dedup and reconciliation` §`Cơ chế chống trùng (dedup) khi re-upload` nêu `charge_id` giống nhau là một trong các điều kiện dedup.",
+        "quote": "- `charge_id` giống nhau",
+        "claim_kind": "validation_rule",
+        "normativity": "EXPLICIT",
+        "hedged": false,
+        "brand_scope": null,
+        "defect_severity_stated": null,
+        "repro_stated": false,
+        "subject": { "object_candidate": "payout-import", "feature_candidate": "customer-matching-and-dedup" },
+        "surface": "db",
+        "role_stated": "unspecified",
+        "product_level": false,
+        "related_claim_ids": ["CLM-10-010", "CLM-10-016"],
+        "conflict_refs": ["DCONF-PAYOUT-001"]
+      },
+      {
+        "claim_id": "CLM-10-016",
+        "dsec_ids": ["DSEC-10-004"],
+        "statement": "Tài liệu `payout - dedup and reconciliation` §`Cơ chế chống trùng (dedup) khi re-upload` nêu rằng riêng trường hợp `charge_id` rỗng thì được coi là NULL khi so sánh, không so `=` với chuỗi rỗng.",
+        "quote": "**riêng trường hợp `charge_id` rỗng** (các dòng downgrade/credit của Shopify không có Charge ID) thì được coi là `NULL` khi so sánh, không so `=` với chuỗi rỗng",
+        "claim_kind": "validation_rule",
+        "normativity": "EXPLICIT",
+        "hedged": false,
+        "brand_scope": null,
+        "defect_severity_stated": null,
+        "repro_stated": false,
+        "subject": { "object_candidate": "payout-import", "feature_candidate": "customer-matching-and-dedup" },
+        "surface": "db",
+        "role_stated": "unspecified",
+        "product_level": false,
+        "related_claim_ids": ["CLM-10-015", "CLM-10-017"],
+        "conflict_refs": ["DCONF-PAYOUT-001"]
+      },
+      {
+        "claim_id": "CLM-10-017",
+        "dsec_ids": ["DSEC-10-004"],
+        "statement": "Tài liệu `payout - dedup and reconciliation` §`Cơ chế chống trùng (dedup) khi re-upload` nêu rằng các dòng downgrade/credit của Shopify không có Charge ID.",
+        "quote": "(các dòng downgrade/credit của Shopify không có Charge ID)",
+        "claim_kind": "data_model",
+        "normativity": "EXPLICIT",
+        "hedged": false,
+        "brand_scope": null,
+        "defect_severity_stated": null,
+        "repro_stated": false,
+        "subject": { "object_candidate": "payout-import", "feature_candidate": "customer-matching-and-dedup" },
+        "surface": "unspecified",
+        "role_stated": "unspecified",
+        "product_level": false,
+        "related_claim_ids": ["CLM-10-016"]
+      },
+      {
+        "claim_id": "CLM-10-018",
+        "dsec_ids": ["DSEC-10-004"],
+        "statement": "Tài liệu `payout - dedup and reconciliation` §`Cơ chế chống trùng (dedup) khi re-upload` nêu trong ví dụ minh hoạ rằng khi upload lại đúng file cũ, banner báo \"0 conversions created\" (hoặc số nhỏ hơn hẳn số dòng thật nếu chỉ 1 phần bị trùng) và đây là hành vi đúng, không phải lỗi.",
+        "quote": "Kết quả: banner báo \"0 conversions created\" (hoặc số nhỏ hơn hẳn số dòng thật trong file, nếu chỉ 1 phần bị trùng) — đây là hành vi ĐÚNG, không phải lỗi.",
+        "claim_kind": "capability",
+        "normativity": "EXAMPLE_ONLY",
+        "hedged": false,
+        "brand_scope": null,
+        "defect_severity_stated": null,
+        "repro_stated": false,
+        "subject": { "object_candidate": "payout-import", "feature_candidate": "customer-matching-and-dedup" },
+        "surface": "portal",
+        "role_stated": "admin",
+        "product_level": false,
+        "related_claim_ids": ["CLM-10-010", "CLM-08-021"]
+      },
+      {
+        "claim_id": "CLM-10-019",
+        "dsec_ids": ["DSEC-10-005"],
+        "statement": "Tài liệu `payout - dedup and reconciliation` §`Màn hình \"Populate/reconcile\" — đối soát dữ liệu Shopify gửi trễ` nêu rằng Shopify có thể gửi dữ liệu payout muộn hoặc chưa hoàn chỉnh cho 1-2 kỳ gần nhất.",
+        "quote": "Shopify có thể gửi dữ liệu payout **muộn hoặc chưa hoàn chỉnh** cho 1-2 kỳ gần nhất (cộng đồng Shopify từng báo cáo hiện tượng trễ/đóng băng dữ liệu ở kỳ mới nhất).",
+        "claim_kind": "integration",
+        "normativity": "EXPLICIT",
+        "hedged": true,
+        "brand_scope": null,
+        "defect_severity_stated": null,
+        "repro_stated": false,
+        "subject": { "object_candidate": "payout-import", "feature_candidate": "populate-reconcile-late-data" },
+        "surface": "unspecified",
+        "role_stated": "unspecified",
+        "product_level": false,
+        "related_claim_ids": ["CLM-10-020"]
+      },
+      {
+        "claim_id": "CLM-10-020",
+        "dsec_ids": ["DSEC-10-005"],
+        "statement": "Tài liệu `payout - dedup and reconciliation` §`Màn hình \"Populate/reconcile\" — đối soát dữ liệu Shopify gửi trễ` nêu rằng ở lần upload đầu của 1 kỳ, một số dòng có thể có `partner_share` chưa chính xác hoặc thiếu, và Shopify sẽ chốt lại số liệu đúng ở lần export sau.",
+        "quote": "khi Ops upload file lần đầu cho 1 kỳ, một số dòng có thể có `partner_share` chưa chính xác (hoặc thiếu), và Shopify sẽ \"chốt\" lại số liệu đúng ở lần export sau",
+        "claim_kind": "integration",
+        "normativity": "EXPLICIT",
+        "hedged": true,
+        "brand_scope": null,
+        "defect_severity_stated": null,
+        "repro_stated": false,
+        "subject": { "object_candidate": "payout-import", "feature_candidate": "populate-reconcile-late-data" },
+        "surface": "unspecified",
+        "role_stated": "unspecified",
+        "product_level": false,
+        "related_claim_ids": ["CLM-10-019", "CLM-10-021"]
+      },
+      {
+        "claim_id": "CLM-10-021",
+        "dsec_ids": ["DSEC-10-005"],
+        "statement": "Tài liệu `payout - dedup and reconciliation` §`Màn hình \"Populate/reconcile\" — đối soát dữ liệu Shopify gửi trễ` nêu rằng nếu dùng lại màn hình \"Upload payout file\" cho lần export sau thì dedup không nhận ra đây là dữ liệu cần cập nhật (vì `partner_share` đã đổi quá sai số 0.005) và hệ thống sẽ tạo Conversion trùng.",
+        "quote": "Nếu dùng lại đúng màn hình \"Upload payout file\" (tạo mới) cho lần export sau, cơ chế dedup ở trên sẽ **không nhận ra đây là dữ liệu cần cập nhật** — vì rất có thể `partner_share` đã đổi (vượt quá sai số 0.005 cho phép), nên hệ thống sẽ hiểu nhầm là 1 dòng mới hoàn toàn và tạo Conversion trùng.",
+        "claim_kind": "known_defect",
+        "normativity": "EXPLICIT",
+        "hedged": true,
+        "brand_scope": null,
+        "defect_severity_stated": null,
+        "repro_stated": false,
+        "subject": { "object_candidate": "payout-import", "feature_candidate": "populate-reconcile-late-data" },
+        "surface": "portal",
+        "role_stated": "admin",
+        "product_level": false,
+        "related_claim_ids": ["CLM-10-014", "CLM-10-020", "CLM-08-032"]
+      },
+      {
+        "claim_id": "CLM-10-022",
+        "dsec_ids": ["DSEC-10-006"],
+        "statement": "Tài liệu `payout - dedup and reconciliation` §`Kịch bản cụ thể: đối soát dữ liệu settle muộn cho kỳ tháng 7` nêu rằng màn hình \"Populate/reconcile\" có route riêng `admin/conversion/form-upload-populate` và không dùng lại màn hình upload thường.",
+        "quote": "chọn màn hình **\"Populate/reconcile\"** (route riêng `admin/conversion/form-upload-populate`, KHÔNG dùng lại màn hình upload thường)",
+        "claim_kind": "capability",
+        "normativity": "EXPLICIT",
+        "hedged": false,
+        "brand_scope": null,
+        "defect_severity_stated": null,
+        "repro_stated": false,
+        "subject": { "object_candidate": "payout-import", "feature_candidate": "populate-reconcile-late-data" },
+        "surface": "portal",
+        "role_stated": "admin",
+        "product_level": false,
+        "related_claim_ids": ["CLM-08-031", "CLM-10-023"]
+      },
+      {
+        "claim_id": "CLM-10-023",
+        "dsec_ids": ["DSEC-10-006"],
+        "statement": "Tài liệu `payout - dedup and reconciliation` §`Kịch bản cụ thể: đối soát dữ liệu settle muộn cho kỳ tháng 7` nêu rằng với mỗi dòng trong file populate, hệ thống không tạo Conversion mới.",
+        "quote": "Với mỗi dòng trong file mới, hệ thống **KHÔNG tạo Conversion mới**",
+        "claim_kind": "capability",
+        "normativity": "EXPLICIT",
+        "hedged": false,
+        "brand_scope": null,
+        "defect_severity_stated": null,
+        "repro_stated": false,
+        "subject": { "object_candidate": "payout-import", "feature_candidate": "populate-reconcile-late-data" },
+        "surface": "unspecified",
+        "role_stated": "unspecified",
+        "product_level": false,
+        "related_claim_ids": ["CLM-10-022", "CLM-10-024"]
+      },
+      {
+        "claim_id": "CLM-10-024",
+        "dsec_ids": ["DSEC-10-006"],
+        "statement": "Tài liệu `payout - dedup and reconciliation` §`Kịch bản cụ thể: đối soát dữ liệu settle muộn cho kỳ tháng 7` nêu rằng populate chỉ tìm Conversion đã có khớp theo (customer_id, payout_date, charge_creation_time, date_from, date_to).",
+        "quote": "chỉ tìm Conversion đã có khớp theo `(customer_id, payout_date, charge_creation_time, date_from, date_to)`",
+        "claim_kind": "validation_rule",
+        "normativity": "EXPLICIT",
+        "hedged": false,
+        "brand_scope": null,
+        "defect_severity_stated": null,
+        "repro_stated": false,
+        "subject": { "object_candidate": "payout-import", "feature_candidate": "populate-reconcile-late-data" },
+        "surface": "db",
+        "role_stated": "unspecified",
+        "product_level": false,
+        "related_claim_ids": ["CLM-10-023", "CLM-10-032"]
+      },
+      {
+        "claim_id": "CLM-10-025",
+        "dsec_ids": ["DSEC-10-006"],
+        "statement": "Tài liệu `payout - dedup and reconciliation` §`Kịch bản cụ thể: đối soát dữ liệu settle muộn cho kỳ tháng 7` nêu rằng khi tìm thấy Conversion khớp, populate cập nhật lại các field `partner_share`, `charge_creation_time`, `charge_type`, `charge_id`.",
+        "quote": "Nếu tìm thấy, **cập nhật lại** đúng các field: `partner_share`, `charge_creation_time`, `charge_type`, `charge_id`",
+        "claim_kind": "capability",
+        "normativity": "EXPLICIT",
+        "hedged": false,
+        "brand_scope": null,
+        "defect_severity_stated": null,
+        "repro_stated": false,
+        "subject": { "object_candidate": "payout-import", "feature_candidate": "populate-reconcile-late-data" },
+        "surface": "db",
+        "role_stated": "unspecified",
+        "product_level": false,
+        "related_claim_ids": ["CLM-10-024", "CLM-10-026", "CLM-10-027"]
+      },
+      {
+        "claim_id": "CLM-10-026",
+        "dsec_ids": ["DSEC-10-006"],
+        "statement": "Tài liệu `payout - dedup and reconciliation` §`Kịch bản cụ thể: đối soát dữ liệu settle muộn cho kỳ tháng 7` nêu rằng populate tính lại `percentage` bằng amount hiện có chia `partner_share` mới nhân 100.",
+        "quote": "tính lại `percentage` (= `amount hiện có / partner_share mới × 100`",
+        "claim_kind": "capability",
+        "normativity": "EXPLICIT",
+        "hedged": false,
+        "brand_scope": null,
+        "defect_severity_stated": null,
+        "repro_stated": false,
+        "subject": { "object_candidate": "payout-import", "feature_candidate": "populate-reconcile-late-data" },
+        "surface": "db",
+        "role_stated": "unspecified",
+        "product_level": false,
+        "related_claim_ids": ["CLM-10-025", "CLM-10-027"]
+      },
+      {
+        "claim_id": "CLM-10-027",
+        "dsec_ids": ["DSEC-10-006"],
+        "statement": "Tài liệu `payout - dedup and reconciliation` §`Kịch bản cụ thể: đối soát dữ liệu settle muộn cho kỳ tháng 7` nêu rằng `amount` (số tiền hoa hồng affiliate đã nhận) KHÔNG bị tính lại khi populate, chỉ `percentage` hiển thị được cập nhật cho khớp `partner_share` mới.",
+        "quote": "**`amount` (số tiền hoa hồng affiliate đã nhận) KHÔNG bị tính lại**, chỉ `percentage` hiển thị được cập nhật lại cho khớp với `partner_share` mới",
+        "claim_kind": "known_defect",
+        "normativity": "EXPLICIT",
+        "hedged": false,
+        "brand_scope": null,
+        "defect_severity_stated": null,
+        "repro_stated": false,
+        "subject": { "object_candidate": "payout-import", "feature_candidate": "populate-reconcile-late-data" },
+        "surface": "db",
+        "role_stated": "unspecified",
+        "product_level": false,
+        "related_claim_ids": ["CLM-10-025", "CLM-10-026", "CLM-10-033"],
+        "classification_note": "Tài liệu nêu hành vi này bằng 'lưu ý:' + bold và nói ngay rằng muốn đúng số tiền thì cần thao tác thủ công khác, chưa xác nhận có quy trình bù trừ (cần hỏi PO) -> giữ ở dạng known_defect, không để thành hành vi đúng. Câu hỏi về quy trình bù trừ ghi ở not_documented."
+      },
+      {
+        "claim_id": "CLM-10-028",
+        "dsec_ids": ["DSEC-10-006"],
+        "statement": "Tài liệu `payout - dedup and reconciliation` §`Kịch bản cụ thể: đối soát dữ liệu settle muộn cho kỳ tháng 7` nêu rằng mỗi Conversion chỉ được phép cập nhật qua màn hình populate 1 lần trong 1 khoảng thời gian nhất định.",
+        "quote": "mỗi Conversion chỉ được phép cập nhật qua màn hình populate **1 lần trong 1 khoảng thời gian nhất định**",
+        "claim_kind": "capability",
+        "normativity": "EXPLICIT",
+        "hedged": false,
+        "brand_scope": null,
+        "defect_severity_stated": null,
+        "repro_stated": false,
+        "subject": { "object_candidate": "payout-import", "feature_candidate": "populate-reconcile-late-data" },
+        "surface": "unspecified",
+        "role_stated": "unspecified",
+        "product_level": false,
+        "related_claim_ids": ["CLM-10-029", "CLM-10-030", "CLM-10-031"]
+      },
+      {
+        "claim_id": "CLM-10-029",
+        "dsec_ids": ["DSEC-10-006"],
+        "statement": "Tài liệu `payout - dedup and reconciliation` §`Kịch bản cụ thể: đối soát dữ liệu settle muộn cho kỳ tháng 7` nêu rằng khoá chống lặp của populate là khoá cache dạng `conversion_id:{id}`.",
+        "quote": "(khoá cache `conversion_id:{id}`, thời hạn cấu hình ở `config('cache.conversion_time')`)",
+        "claim_kind": "data_model",
+        "normativity": "IMPLIED_BY_CODE_ARTIFACT",
+        "hedged": false,
+        "brand_scope": null,
+        "defect_severity_stated": null,
+        "repro_stated": false,
+        "subject": { "object_candidate": "payout-import", "feature_candidate": "populate-reconcile-late-data" },
+        "surface": "code",
+        "role_stated": "unspecified",
+        "product_level": false,
+        "related_claim_ids": ["CLM-10-028", "CLM-10-030"]
+      },
+      {
+        "claim_id": "CLM-10-030",
+        "dsec_ids": ["DSEC-10-006"],
+        "statement": "Tài liệu `payout - dedup and reconciliation` §`Kịch bản cụ thể: đối soát dữ liệu settle muộn cho kỳ tháng 7` nêu rằng thời hạn của khoá cache này được cấu hình ở `config('cache.conversion_time')`; tài liệu KHÔNG nêu giá trị cụ thể của thời hạn đó.",
+        "quote": "thời hạn cấu hình ở `config('cache.conversion_time')`",
+        "claim_kind": "config_default",
+        "normativity": "IMPLIED_BY_CODE_ARTIFACT",
+        "hedged": false,
+        "brand_scope": null,
+        "defect_severity_stated": null,
+        "repro_stated": false,
+        "subject": { "object_candidate": "payout-import", "feature_candidate": "populate-reconcile-late-data" },
+        "surface": "code",
+        "role_stated": "unspecified",
+        "product_level": false,
+        "related_claim_ids": ["CLM-10-028", "CLM-10-029"]
+      },
+      {
+        "claim_id": "CLM-10-031",
+        "dsec_ids": ["DSEC-10-006"],
+        "statement": "Tài liệu `payout - dedup and reconciliation` §`Kịch bản cụ thể: đối soát dữ liệu settle muộn cho kỳ tháng 7` nêu rằng nếu Ops chạy lại đúng file populate lần thứ 2 trong cùng khoảng thời gian thì các dòng đã cập nhật ở lần 1 không bị cập nhật lại lần nữa.",
+        "quote": "Nếu Ops chạy lại đúng file populate đó lần thứ 2 trong cùng khoảng thời gian, các dòng đã cập nhật ở lần 1 sẽ **không bị cập nhật lại lần nữa** (idempotent)",
+        "claim_kind": "capability",
+        "normativity": "EXPLICIT",
+        "hedged": false,
+        "brand_scope": null,
+        "defect_severity_stated": null,
+        "repro_stated": false,
+        "subject": { "object_candidate": "payout-import", "feature_candidate": "populate-reconcile-late-data" },
+        "surface": "portal",
+        "role_stated": "admin",
+        "product_level": false,
+        "related_claim_ids": ["CLM-10-028"]
+      },
+      {
+        "claim_id": "CLM-10-032",
+        "dsec_ids": ["DSEC-10-006"],
+        "statement": "Tài liệu `payout - dedup and reconciliation` §`Kịch bản cụ thể: đối soát dữ liệu settle muộn cho kỳ tháng 7` nêu rằng dòng trong file populate không khớp được Conversion nào thì không có tác dụng gì và không tạo mới.",
+        "quote": "dòng đó chỉ đơn giản không có tác dụng gì — không tạo mới.",
+        "claim_kind": "validation_rule",
+        "normativity": "EXPLICIT",
+        "hedged": false,
+        "brand_scope": null,
+        "defect_severity_stated": null,
+        "repro_stated": false,
+        "subject": { "object_candidate": "payout-import", "feature_candidate": "populate-reconcile-late-data" },
+        "surface": "unspecified",
+        "role_stated": "unspecified",
+        "product_level": false,
+        "related_claim_ids": ["CLM-10-024"]
+      },
+      {
+        "claim_id": "CLM-10-033",
+        "dsec_ids": ["DSEC-10-006"],
+        "statement": "Tài liệu `payout - dedup and reconciliation` §`Kịch bản cụ thể: đối soát dữ liệu settle muộn cho kỳ tháng 7` nêu trong kịch bản minh hoạ rằng với số liệu tạm thời, hệ thống vẫn tạo Conversion bình thường và affiliate đã thấy số tiền tạm đó cộng vào balance của họ.",
+        "quote": "hệ thống vẫn tạo Conversion bình thường với số liệu tạm này — affiliate đã thấy số tiền (tạm) này cộng vào balance của họ",
+        "claim_kind": "side_effect",
+        "normativity": "EXAMPLE_ONLY",
+        "hedged": false,
+        "brand_scope": null,
+        "defect_severity_stated": null,
+        "repro_stated": false,
+        "subject": { "object_candidate": "invoice-payout", "feature_candidate": "balance-accrual" },
+        "surface": "portal",
+        "role_stated": "affiliate",
+        "product_level": false,
+        "related_claim_ids": ["CLM-10-020", "CLM-10-027"]
+      },
+      {
+        "claim_id": "CLM-10-034",
+        "dsec_ids": ["DSEC-10-007"],
+        "statement": "Tài liệu `payout - dedup and reconciliation` §`Khác biệt hành vi lỗi — điểm QA cần đặc biệt lưu ý` nêu rằng ở màn hình Upload payout file, 1 dòng bị lỗi validate bị bỏ qua âm thầm và hệ thống tiếp tục xử lý các dòng còn lại.",
+        "quote": "| 1 dòng bị lỗi validate (thiếu field bắt buộc) | Bỏ qua âm thầm dòng đó, **tiếp tục xử lý các dòng còn lại**, không log | **Toàn bộ import dừng lại ngay lập tức** (throw exception) — các dòng chưa xử lý tới trong file sẽ KHÔNG được cập nhật |",
+        "claim_kind": "validation_rule",
+        "normativity": "EXPLICIT",
+        "hedged": false,
+        "brand_scope": null,
+        "defect_severity_stated": null,
+        "repro_stated": false,
+        "subject": { "object_candidate": "payout-import", "feature_candidate": "payout-csv-upload" },
+        "surface": "unspecified",
+        "role_stated": "unspecified",
+        "product_level": false,
+        "related_claim_ids": ["CLM-10-035", "CLM-10-009"]
+      },
+      {
+        "claim_id": "CLM-10-035",
+        "dsec_ids": ["DSEC-10-007"],
+        "statement": "Tài liệu `payout - dedup and reconciliation` §`Khác biệt hành vi lỗi — điểm QA cần đặc biệt lưu ý` nêu rằng ở màn hình Populate/reconcile, 1 dòng bị lỗi validate làm toàn bộ import dừng lại ngay lập tức bằng throw exception và các dòng chưa xử lý tới sẽ không được cập nhật.",
+        "quote": "**Toàn bộ import dừng lại ngay lập tức** (throw exception) — các dòng chưa xử lý tới trong file sẽ KHÔNG được cập nhật",
+        "claim_kind": "validation_rule",
+        "normativity": "EXPLICIT",
+        "hedged": false,
+        "brand_scope": null,
+        "defect_severity_stated": null,
+        "repro_stated": false,
+        "subject": { "object_candidate": "payout-import", "feature_candidate": "populate-reconcile-late-data" },
+        "surface": "unspecified",
+        "role_stated": "unspecified",
+        "product_level": false,
+        "related_claim_ids": ["CLM-10-034", "CLM-10-036", "CLM-10-037"]
+      },
+      {
+        "claim_id": "CLM-10-036",
+        "dsec_ids": ["DSEC-10-007"],
+        "statement": "Tài liệu `payout - dedup and reconciliation` §`Khác biệt hành vi lỗi — điểm QA cần đặc biệt lưu ý` nêu rằng sự bất đối xứng hành vi lỗi giữa 2 màn hình là có thật và nên được PO xác nhận có đúng ý định hay không.",
+        "quote": "Đây là 1 sự bất đối xứng có thật trong hành vi — **nên được PO xác nhận có đúng ý định hay không**",
+        "claim_kind": "known_defect",
+        "normativity": "EXPLICIT",
+        "hedged": true,
+        "brand_scope": null,
+        "defect_severity_stated": null,
+        "repro_stated": false,
+        "subject": { "object_candidate": "payout-import", "feature_candidate": "populate-reconcile-late-data" },
+        "surface": "unspecified",
+        "role_stated": "unspecified",
+        "product_level": false,
+        "related_claim_ids": ["CLM-10-034", "CLM-10-035", "CLM-10-037"]
+      },
+      {
+        "claim_id": "CLM-10-037",
+        "dsec_ids": ["DSEC-10-007"],
+        "statement": "Tài liệu `payout - dedup and reconciliation` §`Khác biệt hành vi lỗi — điểm QA cần đặc biệt lưu ý` nêu rằng 1 dòng lỗi trong file populate (ví dụ thiếu `charge_creation_time` do lỗi export) chặn đứng việc cập nhật toàn bộ các dòng hợp lệ khác phía sau nó trong file.",
+        "quote": "1 dòng lỗi trong file populate (ví dụ 1 dòng thiếu `charge_creation_time` do lỗi export) sẽ chặn đứng việc cập nhật toàn bộ các dòng hợp lệ khác phía sau nó trong file, kể cả khi phần lớn file đó hoàn toàn hợp lệ.",
+        "claim_kind": "known_defect",
+        "normativity": "EXPLICIT",
+        "hedged": false,
+        "brand_scope": null,
+        "defect_severity_stated": null,
+        "repro_stated": true,
+        "subject": { "object_candidate": "payout-import", "feature_candidate": "populate-reconcile-late-data" },
+        "surface": "unspecified",
+        "role_stated": "unspecified",
+        "product_level": false,
+        "related_claim_ids": ["CLM-10-035", "CLM-10-036", "CLM-10-038"]
+      },
+      {
+        "claim_id": "CLM-10-038",
+        "dsec_ids": ["DSEC-10-007"],
+        "statement": "Tài liệu `payout - dedup and reconciliation` §`Khác biệt hành vi lỗi — điểm QA cần đặc biệt lưu ý` nêu rằng nếu import populate báo lỗi thì có thể chỉ 1 phần đầu file đã được cập nhật, phần sau chưa, và cần chạy lại sau khi sửa dòng lỗi.",
+        "quote": "nếu import populate báo lỗi, hiểu rằng có thể chỉ 1 phần đầu file đã được cập nhật, phần sau chưa — cần chạy lại sau khi sửa dòng lỗi",
+        "claim_kind": "side_effect",
+        "normativity": "EXPLICIT",
+        "hedged": true,
+        "brand_scope": null,
+        "defect_severity_stated": null,
+        "repro_stated": false,
+        "subject": { "object_candidate": "payout-import", "feature_candidate": "populate-reconcile-late-data" },
+        "surface": "unspecified",
+        "role_stated": "admin",
+        "product_level": false,
+        "related_claim_ids": ["CLM-10-035", "CLM-10-037"]
+      }
+    ],
+    "api_operations": [],
+    "data_entities": [],
+    "doc_internal_conflicts": [
+      {
+        "conflict_id": "DCONF-PAYOUT-001",
+        "topic": "Vai trò của `charge_id` trong cơ chế dedup đối với các dòng refund/downgrade: 'không dùng làm khoá chính cho các dòng loại này' (DOC-09) so với 'charge_id giống nhau là 1 trong các điều kiện khớp bắt buộc, có xử lý riêng khi rỗng' (DOC-10).",
+        "conflict_scope": "cross_doc",
+        "sides": [
+          {
+            "claim_id": "CLM-09-029",
+            "doc_id": "DOC-09",
+            "dsec_id": "DSEC-09-006",
+            "quote": "Đây là lý do tại sao cơ chế chống trùng lặp (dedup) không dùng `charge_id` làm khoá chính cho các dòng loại này",
+            "generated_at": "2026-08-20",
+            "generated_from_commit": null
+          },
+          {
+            "claim_id": "CLM-10-015",
+            "doc_id": "DOC-10",
+            "dsec_id": "DSEC-10-004",
+            "quote": "- `charge_id` giống nhau",
+            "generated_at": "2026-08-20",
+            "generated_from_commit": null
+          },
+          {
+            "claim_id": "CLM-10-016",
+            "doc_id": "DOC-10",
+            "dsec_id": "DSEC-10-004",
+            "quote": "**riêng trường hợp `charge_id` rỗng** (các dòng downgrade/credit của Shopify không có Charge ID) thì được coi là `NULL` khi so sánh, không so `=` với chuỗi rỗng",
+            "generated_at": "2026-08-20",
+            "generated_from_commit": null
+          }
+        ],
+        "resolution": "UNRESOLVED",
+        "needs": "Dev/PO xác nhận: với dòng refund/downgrade (charge_id rỗng hoặc khác charge gốc), `charge_id` có tham gia điều kiện dedup hay bị loại khỏi điều kiện? Hai doc cùng version v1 / cùng generated_at 2026-08-20 và không có generated_from_commit nên không có cơ sở nào để chọn bên; ingest KHÔNG hoà giải. Hệ quả nếu hiểu sai: hoặc bỏ sót dòng refund thật (coi là trùng), hoặc tạo Conversion refund trùng — cả hai đều là lỗi tài chính."
+      }
+    ],
+    "superseded": [],
+    "discarded": [
+      {
+        "dsec_id": "DSEC-10-001",
+        "reason": "non_normative",
+        "note": "Blockquote mở đầu là tóm tắt/điều hướng sang 00-overview-and-upload-journey.md, không phát biểu hành vi."
+      },
+      {
+        "dsec_id": "DSEC-10-004",
+        "reason": "non_normative",
+        "note": "Đoạn 'Tình huống cần chống trùng' là lập luận về vì sao cần dedup (hệ quả giả định nhân đôi hoa hồng nếu không có cơ chế) — không phải hành vi kiểm được của hệ thống hiện tại."
+      },
+      {
+        "dsec_id": "DSEC-10-006",
+        "reason": "duplicate_of_CLM-10-020",
+        "note": "Bước 2 của kịch bản (Shopify export lại dữ liệu đã settle, payout_period giống hệt, partner_share đổi) trùng nội dung CLM-10-020 ở dạng EXPLICIT; không nhân bản thành claim EXAMPLE_ONLY."
+      },
+      {
+        "dsec_id": "DSEC-10-006",
+        "reason": "duplicate_of_CLM-08-030",
+        "note": "Bước 1 của kịch bản ('Ops upload file Payout kỳ tháng 7 qua màn hình Upload payout file như bình thường') trùng claim chọn màn hình ở DOC-08 §Khi nào dùng..."
+      },
+      {
+        "dsec_id": "DSEC-10-007",
+        "reason": "non_normative",
+        "note": "Khuyến nghị quy trình cho Ops ('(a) kiểm tra kỹ file trước khi chạy populate') là hướng dẫn vận hành, không phải hành vi hệ thống; phần hệ quả kiểm được đã giữ ở CLM-10-038."
+      }
+    ],
+    "not_documented": [
+      {
+        "question": "Thời hạn thực tế (giá trị) của `config('cache.conversion_time')` là bao nhiêu?",
+        "why_it_matters": "Đây là cửa sổ idempotency của populate (CLM-10-028/030): không biết giá trị thì không viết được test 'chạy lại sau N phút thì có cập nhật lại hay không'. Tài liệu chỉ nêu tên config key, không nêu giá trị — không tự gán số.",
+        "searched": ["DOC-08", "DOC-09", "DOC-10"]
+      },
+      {
+        "question": "Có quy trình bù trừ nào để chỉnh lại `amount` khi `partner_share` được settle lại khác số liệu tạm không?",
+        "why_it_matters": "Populate chỉ cập nhật `percentage` mà giữ nguyên `amount` (CLM-10-027), nghĩa là số tiền affiliate đã nhận lệch với số liệu Shopify chốt. Tài liệu tự ghi 'chưa xác nhận có quy trình bù trừ nào cho việc này — cần hỏi PO'.",
+        "searched": ["DOC-08", "DOC-09", "DOC-10"]
+      },
+      {
+        "question": "Ở màn hình Populate/reconcile, `charge_creation_time` trong khoá khớp được so theo NGÀY hay theo timestamp đầy đủ?",
+        "why_it_matters": "Dedup của màn hình tạo mới được nêu rõ là so theo NGÀY (CLM-10-013), nhưng khoá khớp của populate (CLM-10-024) không nêu granularity. Khác granularity thì dòng settle muộn có thể không khớp được Conversion nào và lặng lẽ không có tác dụng (CLM-10-032).",
+        "searched": ["DOC-08", "DOC-09", "DOC-10"]
+      },
+      {
+        "question": "Màn hình Populate/reconcile có validate sự tồn tại của cột `Charge Creation Time` và có sort dòng trước khi xử lý như màn hình Upload payout file không?",
+        "why_it_matters": "Hai hành vi này được nêu rõ cho màn hình tạo mới (DOC-08) nhưng không được phát biểu cho màn hình populate; không suy ra là có hay không. Ảnh hưởng trực tiếp tới việc một file populate lỗi cột sẽ dừng ở đâu.",
+        "searched": ["DOC-08", "DOC-09", "DOC-10"]
+      },
+      {
+        "question": "`date_from`/`date_to` của Conversion (2 field trong khoá khớp của populate) được xác định từ đâu trong file CSV?",
+        "why_it_matters": "Không biết nguồn của 2 field này thì không dựng được test data cho populate khớp đúng. Tài liệu chỉ liệt kê chúng trong khoá khớp (CLM-10-024) mà không định nghĩa.",
+        "searched": ["DOC-08", "DOC-09", "DOC-10"]
+      },
+      {
+        "question": "Dòng bị dedup bỏ qua và dòng populate không khớp có được ghi lại ở đâu để đối soát không (báo cáo, log, export)?",
+        "why_it_matters": "Cả 2 nhánh đều kết thúc bằng 'bỏ qua/không có tác dụng' mà tài liệu không nêu nơi ghi nhận; đây là điều kiện để QA/Ops kiểm chứng kết quả một lần import tiền. Tài liệu chỉ nói 'không log' cho nhánh không khớp Customer.",
+        "searched": ["DOC-08", "DOC-09", "DOC-10"]
+      }
+    ],
+    "coverage_limitations": [
+      "`data_entities[]` rỗng có chủ đích: tài liệu này nêu nhiều field của Conversion (payout_date, charge_type, charge_creation_time, partner_share, charge_id, customer_id, date_from, date_to, amount, percentage) và Customer (name, program_id), nhưng field-level entity thuộc tài liệu domain-entities (DOC-02, shard agent khác) và 6 shard doc-ingest chạy song song nên mint `ENT-<nnn>` ở đây sẽ đụng namespace. Các field trên đã nằm trong claim dạng validation_rule/data_model kèm quote.",
+      "`api_operations[]` rỗng: tài liệu chỉ nêu route màn hình admin (`admin/conversion/form-upload-populate`), không có API contract nào.",
+      "DCONF-PAYOUT-001 được ghi 1 lần duy nhất ở file này (không nhân bản sang DOC-09.json) để reviewer không đếm trùng; DOC-09.json có con trỏ tới nó trong envelope `conflicts[]`."
+    ],
+    "brand_scope_scan": {
+      "docs_written_from_instance": "koin",
+      "signals_searched": [
+        "câu dạng 'riêng cho brand X' / 'chỉ áp dụng cho X'",
+        "config key chứa tên brand (đã soi `config('cache.conversion_time')` — không chứa tên brand)",
+        "literal tên brand trong điều kiện dedup/khớp Customer",
+        "tên brand trong route/tên file/template",
+        "ghi chú lịch sử tách brand"
+      ],
+      "findings": "Không thấy dấu hiệu brand-conditional nào. Tên app ví dụ (Upsell, Slide Cart) là app của Ownego dùng minh hoạ việc 1 shop cài nhiều app, không phải điều kiện áp dụng. Toàn bộ claim brand_scope=null."
+    }
+  },
+  "gate": {
+    "decision": "PASS",
+    "blocking_findings": [],
+    "conditions": [
+      "DCONF-PAYOUT-001 để UNRESOLVED: normalizer/reviewer không được coi một phía là đúng mà không có nguồn thẩm quyền mới.",
+      "Mọi quote là substring nguyên văn 1 dòng của file được cite (DOC-10, và DOC-09 cho đúng 1 phía của conflict), ≤300 ký tự.",
+      "Không sinh ACT-ID/SCN-ID/OBS-ID/SF-OBS-ID/DBDELTA-ID; không field hàm ý quan sát runtime."
+    ],
+    "allowed_next_steps": [
+      "qa-knowledge-normalizer (mode product-kb-from-doc)",
+      "context-quality-reviewer (C1-DOC/C2-DOC)"
+    ]
+  }
+}

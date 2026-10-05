@@ -1,0 +1,230 @@
+[
+  {
+    "kb_id": "KB-049",
+    "topic": "Thao tác trong editor (thêm/sửa/xoá layer) không gọi API; artwork chỉ ghi DB khi Save & Close",
+    "statement": "Add/edit/delete layer, mở accordion, duplicate layer trong artwork editor KHÔNG sinh ra API call nào (đo bằng page.on('requestfinished') lọc staging-api/staging-graphql). Artwork chỉ thực sự được ghi vào DB khi bấm 'Save & Close' (hoặc 'Save'), qua PUT /api/artworks/{id}. Hệ quả: toàn bộ thao tác dựng layer trong một phiên chưa save không để lại dấu vết nào trong DB nếu đóng editor mà không save.",
+    "knowledge_kind": "OBSERVED_CURRENT",
+    "confidence": "HIGH",
+    "scope": {
+      "environment": "staging (staging-portal.teeinblue.com)",
+      "role": "store owner / staff account Linh explorer (linh-explorer.myshopify.com, staff sub=273, user_id=266, plan Blue (Test))",
+      "surface": "portal"
+    },
+    "last_updated": {
+      "date": "2026-09-10",
+      "ccr_ref": "bootstrap"
+    }
+  },
+  {
+    "kb_id": "KB-050",
+    "topic": "Save & Close thành công luôn theo đúng 1 trình tự: validate-default-value (204) rồi PUT (200)",
+    "statement": "Mọi lần Save & Close (hoặc Save) thành công đều gọi đúng 2 request theo thứ tự cố định: POST /api/artworks/{artworkId}/validate-default-value (luôn 204 No Content trong mọi sample) rồi PUT /api/artworks/{artworkId} (200, ghi toàn bộ artwork). Quan sát nhất quán ở 10/10 sample trải trên 2 run độc lập (R2: 4 lần thành công; R3: 6 lần gọi validate-default-value, trong đó 4 lần PUT thực sự được gửi và 2 lần bị chặn ở bước kế tiếp trước khi PUT — xem KB-024). Đây là behavior tin cậy cao vì có cả bằng chứng UI (trước/sau, screenshot) lẫn network capture (API).",
+    "knowledge_kind": "OBSERVED_CURRENT",
+    "confidence": "HIGH",
+    "scope": {
+      "environment": "staging (staging-portal.teeinblue.com)",
+      "role": "store owner / staff account Linh explorer (linh-explorer.myshopify.com, staff sub=273, user_id=266, plan Blue (Test))",
+      "surface": "portal"
+    },
+    "last_updated": {
+      "date": "2026-09-10",
+      "ccr_ref": "bootstrap"
+    }
+  },
+  {
+    "kb_id": "KB-051",
+    "topic": "8/35 layer type không save được ở trạng thái mặc định — cần cấu hình field bắt buộc trước",
+    "statement": "Khi Save & Close một artwork chứa layer ở trạng thái mặc định (chưa cấu hình gì), client-side validation chặn save cho đúng 8/35 layer type, xác nhận độc lập ở 2 run khác nhau (2 artwork khác nhau, cùng danh sách 8 type): Clipart Category›1 Clipart Category ('Select one clipart category is required'), Clipart Category›Group of clipart categories ('Select a group of clipart categories is required'), Vector Category ('Select one vector category is required'), Font ('Select one font category is required'), Dynamic Clipart by Text›Manual Placement ('Select one clipart category is required' + 'Select a source text option is required'), Dynamic Clipart by Text›Auto Placement (cùng 2 message), Text to Image (AI) và Photo Upload›Multiple Uploads (cả 2 báo 'GenAI service is required'). Điều tra sâu hơn ở R2 cho thấy Text to Image (AI) và Multiple Uploads thực ra cần TỚI 2 field tuần tự: chọn GenAI service trước, sau đó field 'Prompt the image you want'/'Prompt the result you want' MỚI xuất hiện trong DOM và cũng bắt buộc — validate 2 tầng, lần validate đầu chỉ báo field đầu tiên.",
+    "knowledge_kind": "OBSERVED_CURRENT",
+    "confidence": "MEDIUM",
+    "scope": {
+      "environment": "staging (staging-portal.teeinblue.com)",
+      "role": "store owner / staff account Linh explorer (linh-explorer.myshopify.com, staff sub=273, user_id=266, plan Blue (Test))",
+      "surface": "portal"
+    },
+    "last_updated": {
+      "date": "2026-09-10",
+      "ccr_ref": "bootstrap"
+    }
+  },
+  {
+    "kb_id": "KB-052",
+    "topic": "PUT /api/artworks/{id} là full-replace, không phải patch từng layer",
+    "statement": "PUT /api/artworks/{artworkId} ghi đè toàn bộ artwork trong 1 lần gọi: body gửi lên chứa đầy đủ tất cả layer hiện có (không phải chỉ layer vừa đổi). Trong sample có full body capture (35 layer), response ECHO chính xác từng field/giá trị của cả 35 layer so với request — 0 khác biệt giá trị khi diff. Đây là quan sát trên 1 sample có full-body; các lần PUT khác chỉ có method/status, không có body để đối chiếu độc lập.",
+    "knowledge_kind": "OBSERVED_CURRENT",
+    "confidence": "MEDIUM",
+    "scope": {
+      "environment": "staging (staging-portal.teeinblue.com)",
+      "role": "store owner / staff account Linh explorer (linh-explorer.myshopify.com, staff sub=273, user_id=266, plan Blue (Test))",
+      "surface": "portal"
+    },
+    "last_updated": {
+      "date": "2026-09-10",
+      "ccr_ref": "bootstrap"
+    }
+  },
+  {
+    "kb_id": "KB-053",
+    "topic": "PUT request body — field cấp artwork (top-level)",
+    "statement": "Request body của PUT /api/artworks/{id} có các field cấp artwork: name (string), width/height (integer), design_format (string, chỉ thấy 'rgb'), artwork_category_id (chỉ thấy null), template_settings (chỉ thấy null), global_option_ids (chỉ thấy mảng rỗng []), schema_version (chỉ thấy 2), và templates[] (mảng object, mỗi phần tử có id dạng 'template-<6 số>' sinh bởi client, name, addons (chỉ thấy []), charge_enabled (boolean), positions (mảng layer id theo thứ tự render), layers (mảng object không đồng nhất theo layer.type)). Chỉ 1 sample có full body -> mọi kiểu dữ liệu ở mức observed_count=1, không suy required/optional.",
+    "knowledge_kind": "OBSERVED_CURRENT",
+    "confidence": "LOW",
+    "scope": {
+      "environment": "staging (staging-portal.teeinblue.com)",
+      "role": "store owner / staff account Linh explorer (linh-explorer.myshopify.com, staff sub=273, user_id=266, plan Blue (Test))",
+      "surface": "portal"
+    },
+    "last_updated": {
+      "date": "2026-09-10",
+      "ccr_ref": "bootstrap"
+    }
+  },
+  {
+    "kb_id": "KB-054",
+    "topic": "PUT response — field bổ sung so với request, và 2 field 'biến mất'",
+    "statement": "Response của PUT bổ sung so với request: id (artwork id), description (chỉ thấy null), thumbnail (chỉ thấy null), is_locked (chỉ thấy null), current_version_id (integer, tăng sau mỗi save thành công), status (chỉ thấy 0). Đáng chú ý: response KHÔNG có artwork_category_id / global_option_ids ở top-level dù request có gửi (cả 2 đều null/[] trong request) — chưa rõ 2 field này có được persist ở nơi khác hay bị loại khỏi serialization đọc lại; đây là unknown, không phải lỗi đã xác nhận.",
+    "knowledge_kind": "OBSERVED_CURRENT",
+    "confidence": "LOW",
+    "scope": {
+      "environment": "staging (staging-portal.teeinblue.com)",
+      "role": "store owner / staff account Linh explorer (linh-explorer.myshopify.com, staff sub=273, user_id=266, plan Blue (Test))",
+      "surface": "portal"
+    },
+    "last_updated": {
+      "date": "2026-09-10",
+      "ccr_ref": "bootstrap"
+    }
+  },
+  {
+    "kb_id": "KB-055",
+    "topic": "Layer object trong templates[].layers[] có 7 field 'common envelope'",
+    "statement": "Trong sample PUT có full body (35 layer), đúng 7 field xuất hiện ở CẢ 35/35 layer bất kể type: id (dạng 'layer-<6 số>'), type, name, locked, visible, customization_type, schema_version. Đây là tín hiệu 'common envelope' của layer object nhất quán giữa DOM/UI (config panel luôn có cùng khung Layer name/Custom class ở hầu hết type — xem KB-002/KB-007) và JSON thực lưu (API) — 2 layer bằng chứng khác nhau cho cùng 1 kết luận. Vẫn chỉ 1 sample cấp operation (1 lần PUT có full body) nên KHÔNG được coi là required/schema chính thức.",
+    "knowledge_kind": "OBSERVED_CURRENT",
+    "confidence": "MEDIUM",
+    "scope": {
+      "environment": "staging (staging-portal.teeinblue.com)",
+      "role": "store owner / staff account Linh explorer (linh-explorer.myshopify.com, staff sub=273, user_id=266, plan Blue (Test))",
+      "surface": "portal"
+    },
+    "last_updated": {
+      "date": "2026-09-10",
+      "ccr_ref": "bootstrap"
+    }
+  },
+  {
+    "kb_id": "KB-056",
+    "topic": "GET /api/artworks/{id} không được hỗ trợ — artwork/layer/template chỉ đọc được qua GraphQL",
+    "statement": "GET /api/artworks/{artworkId} trả về 405 với message 'The GET method is not supported... Supported methods: PUT, DELETE.' GET /api/artworks (list) trả về row KHÔNG có field templates (và data=null). Toàn bộ layer/template data (bao gồm dependency, retrieval_*) chỉ đọc được qua Hasura GraphQL, cột artworks.templates kiểu jsonb — đây là đường mà portal editor thực sự dùng để đọc lại dữ liệu.",
+    "knowledge_kind": "OBSERVED_CURRENT",
+    "confidence": "LOW",
+    "scope": {
+      "environment": "staging (staging-portal.teeinblue.com)",
+      "role": "store owner / staff account Linh explorer (linh-explorer.myshopify.com, staff sub=273, user_id=266, plan Blue (Test))",
+      "surface": "portal"
+    },
+    "last_updated": {
+      "date": "2026-09-10",
+      "ccr_ref": "bootstrap"
+    },
+    "conflict_group": "CONF-007",
+    "status": "UNRESOLVED"
+  },
+  {
+    "kb_id": "KB-057",
+    "topic": "Không có OpenAPI/spec tĩnh nào cho Artwork API trên staging",
+    "statement": "9 path OpenAPI/swagger/docs thử trên TIB_OPENAPI_BASE và các biến thể chuẩn đều trả 404 dạng HTML (không phải JSON): /openapi/v1, /openapi/v1/openapi.json, /openapi/v1/docs, /openapi.json, /v1/openapi.json, /docs, /api/documentation, /swagger.json, /api/swagger.json. Không có OpenAPI token nào (TIB_API_TOKEN, TIB_FORBIDDEN_TOKEN, TIB_INVALID_TOKEN...) tồn tại trong.env như brief giả định.",
+    "knowledge_kind": "OBSERVED_CURRENT",
+    "confidence": "LOW",
+    "scope": {
+      "environment": "staging (staging-portal.teeinblue.com)",
+      "role": "store owner / staff account Linh explorer (linh-explorer.myshopify.com, staff sub=273, user_id=266, plan Blue (Test))",
+      "surface": "portal"
+    },
+    "last_updated": {
+      "date": "2026-09-10",
+      "ccr_ref": "bootstrap"
+    },
+    "conflict_group": "CONF-005",
+    "status": "UNRESOLVED"
+  },
+  {
+    "kb_id": "KB-058",
+    "topic": "JWT portal chứa cả staff id (sub) và tenant/user id (user_id) — 2 claim khác nghĩa",
+    "statement": "JWT của portal (localStorage.teeinblue_token[0].token) chứa claim sub='273' (staffs.id, người đăng nhập) và claim riêng user_id=266 (users.id, store/tenant sở hữu dữ liệu) trong cùng 1 token. Xác nhận chéo qua GraphQL: artworks row có {user_id: 266, staff_id: 273}. Đây không phải mâu thuẫn/bug — path asset dùng users/266/..., Hasura row-level authorization scope theo user_id=266.",
+    "knowledge_kind": "OBSERVED_CURRENT",
+    "confidence": "MEDIUM",
+    "scope": {
+      "environment": "staging (staging-portal.teeinblue.com)",
+      "role": "store owner / staff account Linh explorer (linh-explorer.myshopify.com, staff sub=273, user_id=266, plan Blue (Test))",
+      "surface": "portal"
+    },
+    "last_updated": {
+      "date": "2026-09-10",
+      "ccr_ref": "bootstrap"
+    }
+  },
+  {
+    "kb_id": "KB-059",
+    "topic": "localStorage.teeinblue_token là mảng JSON, không phải chuỗi JWT trần",
+    "statement": "localStorage['teeinblue_token'] có dạng mảng JSON [{\"token\": \"<JWT>\", \"expiredAt\": <ms>}], không phải chuỗi JWT trần. Gửi nguyên chuỗi mảng làm 'Authorization: Bearer' cho GraphQL vẫn trả HTTP 200 nhưng body {\"errors\":[{\"extensions\":{\"code\":\"unexpected\"},\"message\":\"Invalid response from authorization hook\"}]}. Phải lấy đúng [0].token.",
+    "knowledge_kind": "OBSERVED_CURRENT",
+    "confidence": "LOW",
+    "scope": {
+      "environment": "staging (staging-portal.teeinblue.com)",
+      "role": "store owner / staff account Linh explorer (linh-explorer.myshopify.com, staff sub=273, user_id=266, plan Blue (Test))",
+      "surface": "portal"
+    },
+    "last_updated": {
+      "date": "2026-09-10",
+      "ccr_ref": "bootstrap"
+    }
+  },
+  {
+    "kb_id": "KB-060",
+    "topic": "GraphQL trả HTTP 200 kèm errors[] khi không có auth, không trả 401",
+    "statement": "Gọi POST /v1/graphql không kèm Authorization vẫn trả HTTP 200 với body chứa errors[] ('Invalid response from authorization hook'), khác với REST (thiếu/token rác -> 401). Do đó status code KHÔNG dùng được để assert authz trên GraphQL — phải assert errors[] trong body.",
+    "knowledge_kind": "OBSERVED_CURRENT",
+    "confidence": "LOW",
+    "scope": {
+      "environment": "staging (staging-portal.teeinblue.com)",
+      "role": "store owner / staff account Linh explorer (linh-explorer.myshopify.com, staff sub=273, user_id=266, plan Blue (Test))",
+      "surface": "portal"
+    },
+    "last_updated": {
+      "date": "2026-09-10",
+      "ccr_ref": "bootstrap"
+    }
+  },
+  {
+    "kb_id": "KB-061",
+    "topic": "Rate-limit header được CORS-expose trên PUT nhưng chưa quan sát được giá trị thật",
+    "statement": "Response header access-control-expose-headers của PUT /api/artworks/{id} liệt kê tên các header Retry-After, X-RateLimit-Limit, X-RateLimit-Remaining, X-RateLimit-Reset — cho thấy hạ tầng rate-limit tồn tại ở tầng nào đó, nhưng giá trị thực của các header này KHÔNG xuất hiện trong bất kỳ capture nào. Chưa đủ evidence để kết luận có rate-limit thực thi hay ngưỡng bao nhiêu.",
+    "knowledge_kind": "INFERRED",
+    "confidence": "LOW",
+    "scope": {
+      "environment": "staging (staging-portal.teeinblue.com)",
+      "role": "store owner / staff account Linh explorer (linh-explorer.myshopify.com, staff sub=273, user_id=266, plan Blue (Test))",
+      "surface": "portal"
+    },
+    "last_updated": {
+      "date": "2026-09-10",
+      "ccr_ref": "bootstrap"
+    }
+  },
+  {
+    "kb_id": "KB-062",
+    "topic": "validate-default-value luôn 204 trong mọi sample quan sát được, chạy trước circular-check và trước PUT",
+    "statement": "POST /api/artworks/{artworkId}/validate-default-value luôn trả 204 No Content trong TẤT CẢ 10 lần gọi quan sát được trên 2 run (R2: 4 lần, R3: 6 lần — bao gồm cả 2 lần mà save sau đó vẫn bị chặn bởi circular-dependency check ở bước kế tiếp). Không có sample nào validate-default-value trả lỗi. Thứ tự luôn cố định: validate-default-value (server round-trip) -> [circular-dependency check, chạy client-side, không sinh network call] -> PUT (chỉ gửi nếu không bị chặn).",
+    "knowledge_kind": "OBSERVED_CURRENT",
+    "confidence": "HIGH",
+    "scope": {
+      "environment": "staging (staging-portal.teeinblue.com)",
+      "role": "store owner / staff account Linh explorer (linh-explorer.myshopify.com, staff sub=273, user_id=266, plan Blue (Test))",
+      "surface": "portal"
+    },
+    "last_updated": {
+      "date": "2026-09-10",
+      "ccr_ref": "bootstrap"
+    }
+  }
+]

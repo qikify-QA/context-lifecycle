@@ -1,0 +1,328 @@
+{
+  "schema_version": "1.0",
+  "artifact_type": "FeatureProfileCandidate",
+  "artifact_id": "FPCAND-CTX-20261002-01-invoice-payout-payout-request-cancellation",
+  "workflow_id": "CTX-20261002-01",
+  "producer": "feature-profile-builder",
+  "source_refs": [
+    {
+      "type": "doc_ref",
+      "doc_id": "`qikfiliate/admin - invoices and payment methods`",
+      "path": "candidate/product-kb/payout-request-cancellation.json"
+    },
+    {
+      "type": "doc_ref",
+      "doc_id": "`qikfiliate/Domain Entities`",
+      "path": "candidate/product-kb/_object-level.invoice-payout.json"
+    }
+  ],
+  "upstream_artifact_ids": [
+    "PKC-CTX-20261002-01-payout-request-cancellation",
+    "PKC-CTX-20261002-01-object-invoice-payout"
+  ],
+  "status": "READY",
+  "confidence": "MEDIUM",
+  "observations": [
+    "DOC_BOOTSTRAP: không có quan sát runtime. act_ids[] rỗng theo luật.",
+    "KB-003 là KNOWN DEFECT C1 (mất balance thực khi huỷ từ approved) — được 3 tài liệu độc lập (`qikfiliate/admin - invoices and payment methods`, `qikfiliate/invoicing payment - payout request journey`, `qikfiliate/known issues edge cases`) đồng thuận xác nhận là hành vi HIỆN TẠI của hệ thống. Theo chỉ thị: đưa vào risks[] với mức độ nghiêm trọng rõ ràng, giữ knowledge_kind=OBSERVED_CURRENT, KHÔNG đưa vào confirmed_rules, KHÔNG dùng làm oracle PASS.",
+    "obj:KB-001 (định nghĩa Invoice) được gán vào confirmed_rules làm bối cảnh nền — feature này thao tác trực tiếp trên entity Invoice."
+  ],
+  "assumptions": [],
+  "unknowns": [
+    "Huỷ invoice từ trạng thái completed thì sao (tài liệu không nêu).",
+    "Affiliate có tự huỷ được invoice khi đã approved hay chỉ Ops làm được.",
+    "Ma trận chuyển trạng thái hợp lệ đầy đủ của Invoice.",
+    "Có thông báo/email nào gửi cho affiliate khi invoice bị cancel từ approved không (và khi chuyển sang approved)?"
+  ],
+  "conflicts": [],
+  "blocking_issues": [],
+  "payload": {
+    "feature_profiles": [
+      {
+        "feature_id": "FEAT-04-payout-request-cancellation",
+        "feature_key": "payout-request-cancellation",
+        "name": "Huỷ yêu cầu thanh toán",
+        "user_goal": "Affiliate (khi còn pending) hoặc Ops/admin (ở trạng thái khác) huỷ một yêu cầu thanh toán đã gửi, với kỳ vọng balance được xử lý đúng theo trạng thái lúc huỷ.",
+        "stable_since_version": "v1",
+        "actors": [
+          {
+            "role": "affiliate",
+            "permission_observed": "Affiliate CHỈ huỷ được yêu cầu thanh toán khi còn ở trạng thái pending; nút huỷ biến mất ngay khi admin đã chuyển sang approved (hoặc các trạng thái sau đó). Không có evidence khẳng định affiliate có thể huỷ invoice đã approved (xem unknown_areas).",
+            "kb_refs": [
+              "KB-002"
+            ]
+          },
+          {
+            "role": "admin",
+            "permission_observed": "Ops/admin được xác nhận có thể huỷ 1 Invoice đã ở trạng thái approved (dẫn tới known defect KB-003); tài liệu không nêu rõ vai trò/phân quyền cụ thể cho hành động này.",
+            "kb_refs": [
+              "KB-003",
+              "KB-004"
+            ]
+          }
+        ],
+        "entry_points": [
+          {
+            "path": "Portal dashboard — nút 'Huỷ yêu cầu' (Bước 5, dành cho affiliate khi còn pending)",
+            "precondition": "Invoice đang ở trạng thái pending",
+            "kb_refs": [
+              "KB-002"
+            ]
+          },
+          {
+            "path": "PUT /invoices/{id} chuyển status = \"cancel\"",
+            "precondition": "Tuỳ theo role và trạng thái hiện tại của Invoice (pending hoặc approved)",
+            "kb_refs": [
+              "KB-001"
+            ]
+          }
+        ],
+        "capabilities": [
+          {
+            "name": "Huỷ khi còn pending — hoàn balance đầy đủ, an toàn",
+            "description": "Khi affiliate (hoặc Ops) huỷ 1 Invoice đang ở trạng thái pending (chuyển sang cancel), balance của affiliate được hoàn lại ĐẦY ĐỦ đúng số tiền của invoice đó — an toàn. Affiliate nhận email 'Yêu cầu đã bị huỷ'.",
+            "kb_refs": [
+              "KB-001"
+            ],
+            "act_ids": []
+          },
+          {
+            "name": "Giới hạn quyền huỷ của affiliate theo trạng thái",
+            "description": "Affiliate chỉ huỷ được khi còn pending; nút huỷ biến mất ngay khi admin đã chuyển sang approved trở đi.",
+            "kb_refs": [
+              "KB-002"
+            ],
+            "act_ids": []
+          },
+          {
+            "name": "Quy trình bù khuyết thủ công sau known defect C1",
+            "description": "Nếu Ops huỷ 1 invoice đã approved mà chưa thực sự chi tiền, CẦN tự tay cộng lại balance cho affiliate ở màn hình User — nếu không affiliate sẽ mất số tiền đó khỏi số dư mà không hề nhận được thanh toán. Đây là quy trình vận hành THỦ CÔNG (không phải cơ chế tự động của hệ thống) để bù khuyết cho known defect C1 (xem risks[]).",
+            "kb_refs": [
+              "KB-004"
+            ],
+            "act_ids": []
+          },
+          {
+            "name": "Theo dõi trạng thái yêu cầu thanh toán",
+            "description": "Affiliate thấy trạng thái từng yêu cầu thanh toán thuộc 1 trong 4 giá trị: pending / approved / completed / cancel.",
+            "kb_refs": [
+              "KB-005"
+            ],
+            "act_ids": []
+          },
+          {
+            "name": "Ghi lý do huỷ",
+            "description": "Field cancellation_reason lưu lý do huỷ, được dùng khi status = cancel.",
+            "kb_refs": [
+              "KB-006"
+            ],
+            "act_ids": []
+          }
+        ],
+        "state_transitions": [
+          {
+            "from": "pending",
+            "to": "cancel",
+            "trigger": "Affiliate (hoặc Ops) bấm Huỷ yêu cầu",
+            "condition": "Invoice đang pending",
+            "kb_refs": [
+              "KB-001",
+              "KB-002"
+            ]
+          },
+          {
+            "from": "approved",
+            "to": "cancel",
+            "trigger": "Ops huỷ Invoice đã approved",
+            "condition": "Invoice đang approved (Ops đã duyệt nhưng chưa thực chi tiền)",
+            "kb_refs": [
+              "KB-003"
+            ]
+          }
+        ],
+        "confirmed_rules": [
+          {
+            "statement": "Huỷ từ pending → balance hoàn lại ĐẦY ĐỦ, an toàn; affiliate nhận email 'Yêu cầu đã bị huỷ'.",
+            "knowledge_kind": "CONFIRMED_EXPECTED",
+            "confidence": "HIGH",
+            "kb_refs": [
+              "KB-001"
+            ]
+          },
+          {
+            "statement": "Affiliate chỉ huỷ được khi còn pending; nút huỷ biến mất từ approved trở đi.",
+            "knowledge_kind": "CONFIRMED_EXPECTED",
+            "confidence": "MEDIUM",
+            "kb_refs": [
+              "KB-002"
+            ]
+          },
+          {
+            "statement": "Nếu Ops huỷ invoice đã approved mà chưa chi tiền thực, PHẢI tự tay cộng lại balance ở màn hình User (quy trình thủ công bù khuyết cho known defect C1).",
+            "knowledge_kind": "CONFIRMED_EXPECTED",
+            "confidence": "MEDIUM",
+            "kb_refs": [
+              "KB-004"
+            ]
+          },
+          {
+            "statement": "Trạng thái yêu cầu thanh toán thuộc 1 trong 4 giá trị: pending/approved/completed/cancel.",
+            "knowledge_kind": "CONFIRMED_EXPECTED",
+            "confidence": "MEDIUM",
+            "kb_refs": [
+              "KB-005"
+            ]
+          },
+          {
+            "statement": "cancellation_reason lưu lý do huỷ khi status = cancel.",
+            "knowledge_kind": "CONFIRMED_EXPECTED",
+            "confidence": "LOW",
+            "kb_refs": [
+              "KB-006"
+            ]
+          },
+          {
+            "statement": "Bối cảnh ví dụ minh hoạ C1/C2: affiliate có balance = $120, tạo Invoice amount = $120 → balance về $0, làm tiền đề để xét 2 biến thể huỷ.",
+            "knowledge_kind": "CONFIRMED_EXPECTED",
+            "confidence": "MEDIUM",
+            "kb_refs": [
+              "KB-007"
+            ]
+          },
+          {
+            "statement": "Invoice là yêu cầu/thanh toán hoa hồng từ Ownego cho affiliate.",
+            "knowledge_kind": "CONFIRMED_EXPECTED",
+            "confidence": "MEDIUM",
+            "kb_refs": [
+              "obj:KB-001"
+            ]
+          }
+        ],
+        "observed_behavior": [
+          "KB-003 (OBSERVED_CURRENT, xem risks[] để biết đầy đủ mức độ nghiêm trọng): khi 1 Invoice ĐÃ ở trạng thái approved bị đổi sang cancel, balance của affiliate KHÔNG được hoàn lại tự động — cơ chế hoàn balance chỉ áp dụng cho đúng nhánh pending → cancel."
+        ],
+        "observed_validations": [],
+        "permissions": [
+          "Affiliate: chỉ huỷ được khi pending (KB-002).",
+          "Admin/Ops: huỷ được Invoice đã approved (KB-003, KB-004) — vai trò chính xác và điều kiện phân quyền không được tài liệu nêu rõ (xem unknown_areas)."
+        ],
+        "surface_mapping": {
+          "portal": [
+            "Nút Huỷ yêu cầu (KB-002)",
+            "Quy trình bù khuyết thủ công qua màn hình User (KB-004)",
+            "Hiển thị 4 trạng thái yêu cầu (KB-005)"
+          ],
+          "storefront": [],
+          "api": [
+            "PUT /invoices/{id} chuyển status = cancel (KB-001)"
+          ],
+          "data": [
+            "balance hoàn lại khi pending→cancel (KB-001); KHÔNG hoàn khi approved→cancel (KB-003, known defect)",
+            "cancellation_reason (KB-006)"
+          ],
+          "code": []
+        },
+        "dependencies": [
+          "Theo sau payout-request-submission (huỷ một Invoice đã được tạo pending).",
+          "Chồng lấp với admin-invoice-processing (Ops thao tác trên cùng Invoice ở trạng thái approved) — xem known defect KB-014 của feature đó (tiền chỉ lấy lại được nếu Ops tự tay điều chỉnh balance)."
+        ],
+        "risks": [
+          {
+            "risk": "KNOWN_DEFECT C1 — SEVERITY: CRITICAL (mất tiền thực của affiliate). Huỷ Invoice từ trạng thái approved KHÔNG hoàn lại balance tự động. Cơ chế hoàn balance CHỈ áp dụng cho đúng nhánh pending → cancel. Hệ quả: affiliate vừa KHÔNG nhận được tiền vừa KHÔNG lấy lại được balance, trừ khi Ops tự tay cộng lại balance thủ công qua màn hình User (quy trình bù khuyết, KB-004). Đây là hành vi HIỆN TẠI của hệ thống (knowledge_kind=OBSERVED_CURRENT, confidence=LOW theo đúng KB gốc) — KHÔNG phải expected result, KHÔNG được dùng làm oracle PASS cho test case 'huỷ invoice luôn hoàn balance'. Được 3 tài liệu độc lập (admin - invoices and payment methods, invoicing payment - payout request journey, known issues edge cases) đồng thuận xác nhận.",
+            "kb_refs": [
+              "KB-003",
+              "KB-004"
+            ],
+            "severity": "CRITICAL"
+          }
+        ],
+        "freshness": {
+          "observed_at": null,
+          "run_id": "CTX-20261002-01"
+        },
+        "unknown_areas": [
+          {
+            "question": "Huỷ invoice từ trạng thái completed thì sao (có cho huỷ không, balance xử lý thế nào)?",
+            "why_it_matters": "Tài liệu chỉ nêu 2 nhánh pending→cancel và approved→cancel; nhánh completed→cancel rất có thể bấm được trên UI nhưng hậu quả chưa được định nghĩa."
+          },
+          {
+            "question": "Affiliate có được tự huỷ invoice khi nó đã ở approved không, hay chỉ Ops làm được?",
+            "why_it_matters": "Nếu affiliate cũng huỷ được ở approved thì defect mất balance có thể do chính affiliate tự gây ra — khác hẳn về mức rủi ro so với chỉ Ops gây ra."
+          },
+          {
+            "question": "Ma trận chuyển trạng thái hợp lệ đầy đủ của Invoice là gì (pending->?, approved->?, completed->?, cancel->?)?",
+            "why_it_matters": "Tài liệu chỉ cho thấy 4 giá trị rải rác qua vài ví dụ; không có ma trận thì không test được các chuyển trạng thái bị cấm, mà chính vùng này đã có 1 defect."
+          },
+          {
+            "question": "Có thông báo/email nào gửi cho affiliate khi invoice bị cancel từ approved không (và khi chuyển sang approved)?",
+            "why_it_matters": "Tài liệu chỉ nêu email 'Payment completed' và Slack cho Ops; im lặng về 2 trường hợp này."
+          }
+        ]
+      }
+    ],
+    "profile_relationships": [
+      {
+        "from": "FEAT-04-payout-request-cancellation",
+        "to": "FEAT-03-payout-request-submission",
+        "relation": "FOLLOWS"
+      },
+      {
+        "from": "FEAT-04-payout-request-cancellation",
+        "to": "FEAT-05-admin-invoice-processing",
+        "relation": "OVERLAPS_WITH"
+      }
+    ],
+    "coverage_matrix": [
+      {
+        "feature_id": "FEAT-04-payout-request-cancellation",
+        "layer": "portal",
+        "role": "affiliate",
+        "state": "pending",
+        "environment": "documented",
+        "covered": true
+      },
+      {
+        "feature_id": "FEAT-04-payout-request-cancellation",
+        "layer": "portal",
+        "role": "admin",
+        "state": "approved",
+        "environment": "documented",
+        "covered": true
+      },
+      {
+        "feature_id": "FEAT-04-payout-request-cancellation",
+        "layer": "data",
+        "role": "unspecified",
+        "state": "any",
+        "environment": "documented",
+        "covered": true
+      },
+      {
+        "feature_id": "FEAT-04-payout-request-cancellation",
+        "layer": "portal",
+        "role": "admin",
+        "state": "completed",
+        "environment": "documented",
+        "covered": false
+      }
+    ],
+    "unassigned_kb_items": [],
+    "profile_conflicts": [],
+    "profile_change_summary": [
+      "Profile mới tạo ở run CTX-20261002-01 (DOC_BOOTSTRAP), chưa có version trước."
+    ],
+    "kb_trace_complete": true
+  },
+  "gate": {
+    "decision": "CONDITIONAL_PASS",
+    "blocking_findings": [],
+    "conditions": [
+      "KB-003 (known defect C1, OBSERVED_CURRENT) nằm trong observed_behavior[] + risks[] với severity CRITICAL, KHÔNG nằm trong confirmed_rules.",
+      "observed_validations[] rỗng, act_ids[] rỗng theo luật DOC_BOOTSTRAP."
+    ],
+    "allowed_next_steps": [
+      "qa-checklist-builder",
+      "knowledge-diff-analyzer"
+    ]
+  }
+}

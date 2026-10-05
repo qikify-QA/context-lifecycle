@@ -1,0 +1,361 @@
+{
+  "schema_version": "1.0",
+  "artifact_type": "FeatureProfileCandidate",
+  "artifact_id": "FPCAND-CTX-20261002-01-invoice-payout-payout-request-eligibility",
+  "workflow_id": "CTX-20261002-01",
+  "producer": "feature-profile-builder",
+  "source_refs": [
+    {
+      "type": "doc_ref",
+      "doc_id": "`qikfiliate/invoicing payment - payout request journey`",
+      "path": "candidate/product-kb/payout-request-eligibility.json"
+    },
+    {
+      "type": "doc_ref",
+      "doc_id": "`qikfiliate/Domain Entities`",
+      "path": "candidate/product-kb/_object-level.invoice-payout.json"
+    }
+  ],
+  "upstream_artifact_ids": [
+    "PKC-CTX-20261002-01-payout-request-eligibility",
+    "PKC-CTX-20261002-01-object-invoice-payout"
+  ],
+  "status": "READY",
+  "confidence": "MEDIUM",
+  "observations": [
+    "DOC_BOOTSTRAP: không có quan sát runtime. act_ids[] rỗng theo luật.",
+    "_object-level.invoice-payout.json không được gán vào profile này — 3 KB item của nó nói về entity Invoice (định nghĩa, quan hệ, code unique), không nói về điều kiện canCreateByUser.",
+    "KB-006/KB-007 là 2 PHÍA ĐỐI LẬP của conflict intra_doc OQ-invoice-payout-003 đã được doc-ingest-explorer ghi nhận từ trước — giữ NGUYÊN trong profile_conflicts[], KHÔNG hoà giải, KHÔNG chọn phía, KHÔNG đưa vào confirmed_rules.",
+    "Cross-link: KB-010 ở đây (điều kiện thật luôn là InvoiceService::canCreateByUser, không phụ thuộc payment_method_id) là tiền đề quan trọng cho risk hardcode ID ở feature affiliate-payment-info-setup (object payment-method) — xem risks[]."
+  ],
+  "assumptions": [],
+  "unknowns": [
+    "transfer_fee thực tế của từng payment method là bao nhiêu và cấu hình ở đâu.",
+    "Đơn vị tiền tệ của balance và ngưỡng $50.",
+    "Affiliate có thể có nhiều Invoice pending cùng lúc không.",
+    "POST /api/invoices trả về status/body gì khi bị middleware check_can_create_invoice chặn.",
+    "Rút một phần (gửi amount nhỏ hơn balance) có ràng buộc tối thiểu/tối đa nào không."
+  ],
+  "conflicts": [
+    {
+      "conflict_id": "OQ-invoice-payout-003",
+      "topic": "Tiêu chí đếm 'số shop' trong điều kiện bổ sung thứ nhất của canCreateByUser: 'shop có ít nhất 1 Conversion (bất kỳ loại)' hay 'shop trả phí'?",
+      "status": "UNRESOLVED",
+      "note": "Giữ cả 2 phía nguyên văn trong profile_conflicts[] của payload. KHÔNG chọn phía ở đây."
+    }
+  ],
+  "blocking_issues": [],
+  "payload": {
+    "feature_profiles": [
+      {
+        "feature_id": "FEAT-02-payout-request-eligibility",
+        "feature_key": "payout-request-eligibility",
+        "name": "Điều kiện để affiliate được tạo yêu cầu thanh toán (canCreateByUser)",
+        "user_goal": "Affiliate biết, và hệ thống enforce, điều kiện cần/đủ để được phép bấm 'Request Payment' — qua đó được phép tạo 1 Invoice yêu cầu thanh toán hoa hồng.",
+        "stable_since_version": "v1",
+        "actors": [
+          {
+            "role": "affiliate",
+            "permission_observed": "canCreateByUser được tính theo context của chính affiliate đang đăng nhập (balance, payment info, is_vip, số shop có Conversion của affiliate đó). Không có evidence về admin tạo invoice hộ affiliate qua cùng điều kiện này.",
+            "kb_refs": [
+              "KB-001",
+              "KB-002",
+              "KB-003",
+              "KB-004",
+              "KB-005",
+              "KB-008"
+            ]
+          }
+        ],
+        "entry_points": [
+          {
+            "path": "Portal dashboard — nút 'Request Payment' (ẩn/hiện hoặc disable theo điều kiện)",
+            "precondition": "Affiliate đã đăng nhập; đã có payment_method_id + formatted_payment_info hợp lệ",
+            "kb_refs": [
+              "KB-001",
+              "KB-009"
+            ]
+          },
+          {
+            "path": "POST /invoices (gọi trực tiếp API)",
+            "precondition": "Không có precondition riêng ở tầng gọi — vẫn bị middleware check_can_create_invoice chặn nếu không đủ điều kiện, nên không thể bypass qua đây",
+            "kb_refs": [
+              "KB-009"
+            ]
+          }
+        ],
+        "capabilities": [
+          {
+            "name": "Kiểm tra điều kiện chung (payment info hợp lệ + balance > transfer_fee)",
+            "description": "điều_kiện_chung = affiliate có payment method + payment info hợp lệ (hasPaymentInfo()) VÀ balance > transfer_fee (strict, không phải >=) của payment method đã chọn. Không thoả điều_kiện_chung → canCreateByUser = false ngay, không xét 2 điều kiện bổ sung.",
+            "kb_refs": [
+              "KB-001",
+              "KB-002",
+              "KB-003"
+            ],
+            "act_ids": []
+          },
+          {
+            "name": "Áp ngoại lệ cho affiliate VIP",
+            "description": "Nếu affiliate.is_vip = true và đã thoả điều_kiện_chung, canCreateByUser trả về true ngay, bỏ qua hoàn toàn 2 điều kiện bổ sung (số shop và ngưỡng balance $50).",
+            "kb_refs": [
+              "KB-004"
+            ],
+            "act_ids": []
+          },
+          {
+            "name": "Kiểm tra 2 điều kiện bổ sung cho affiliate không VIP",
+            "description": "Nếu không phải VIP, cần thêm CẢ HAI (phép VÀ, không phải một trong hai): (1) điều kiện bổ sung #1 — tiêu chí đếm số shop, ĐANG CONFLICT (OQ-invoice-payout-003, xem profile_conflicts) nên KHÔNG dùng làm oracle đơn lẻ cho tới khi PO/dev xác nhận; (2) điều kiện bổ sung #2 — balance >= min_balance_to_create_invoice (mặc định $50, cấu hình qua MIN_BALANCE_TO_CREATE_INVOICE/.env).",
+            "kb_refs": [
+              "KB-005",
+              "KB-006",
+              "KB-007",
+              "KB-008"
+            ],
+            "act_ids": []
+          },
+          {
+            "name": "Chặn bypass qua API bằng middleware check_can_create_invoice",
+            "description": "Điều kiện được kiểm tra cả ở giao diện lẫn backend (middleware check_can_create_invoice); affiliate không thể lách bằng cách gọi thẳng POST /invoices.",
+            "kb_refs": [
+              "KB-009"
+            ],
+            "act_ids": []
+          },
+          {
+            "name": "Điều kiện thật luôn là InvoiceService::canCreateByUser, không phụ thuộc ID payment method",
+            "description": "Điều kiện thực để được tạo yêu cầu thanh toán luôn là InvoiceService::canCreateByUser như mô tả ở trên, áp dụng như nhau cho mọi payment method bất kể ID cụ thể — khác với điều kiện HIỂN THỊ trên UI có thể bị hardcode sai (xem known defect ở feature affiliate-payment-info-setup, object payment-method).",
+            "kb_refs": [
+              "KB-010"
+            ],
+            "act_ids": []
+          }
+        ],
+        "state_transitions": [],
+        "confirmed_rules": [
+          {
+            "statement": "Điều kiện chung #1: affiliate phải có payment_method_id + formatted_payment_info hợp lệ.",
+            "knowledge_kind": "CONFIRMED_EXPECTED",
+            "confidence": "HIGH",
+            "kb_refs": [
+              "KB-001"
+            ]
+          },
+          {
+            "statement": "Điều kiện chung #2: balance phải LỚN HƠN (strict) transfer_fee của payment method đã chọn.",
+            "knowledge_kind": "CONFIRMED_EXPECTED",
+            "confidence": "HIGH",
+            "kb_refs": [
+              "KB-002"
+            ]
+          },
+          {
+            "statement": "Không thoả điều_kiện_chung → canCreateByUser = false, không xét tiếp điều kiện bổ sung.",
+            "knowledge_kind": "CONFIRMED_EXPECTED",
+            "confidence": "MEDIUM",
+            "kb_refs": [
+              "KB-003"
+            ]
+          },
+          {
+            "statement": "affiliate.is_vip = true + đã thoả điều kiện chung → true ngay, bỏ qua 2 điều kiện bổ sung.",
+            "knowledge_kind": "CONFIRMED_EXPECTED",
+            "confidence": "HIGH",
+            "kb_refs": [
+              "KB-004"
+            ]
+          },
+          {
+            "statement": "Affiliate không VIP cần thoả CẢ HAI điều kiện bổ sung (không phải một trong hai).",
+            "knowledge_kind": "CONFIRMED_EXPECTED",
+            "confidence": "HIGH",
+            "kb_refs": [
+              "KB-005"
+            ]
+          },
+          {
+            "statement": "Điều kiện bổ sung #2: balance >= min_balance_to_create_invoice (mặc định $50, cấu hình qua MIN_BALANCE_TO_CREATE_INVOICE).",
+            "knowledge_kind": "CONFIRMED_EXPECTED",
+            "confidence": "HIGH",
+            "kb_refs": [
+              "KB-008"
+            ]
+          },
+          {
+            "statement": "Điều kiện được kiểm tra cả giao diện lẫn backend (middleware check_can_create_invoice); không lách được qua gọi API trực tiếp.",
+            "knowledge_kind": "CONFIRMED_EXPECTED",
+            "confidence": "HIGH",
+            "kb_refs": [
+              "KB-009"
+            ]
+          },
+          {
+            "statement": "Điều kiện thật (InvoiceService::canCreateByUser) không phụ thuộc payment_method_id cụ thể, áp dụng như nhau cho mọi method.",
+            "knowledge_kind": "CONFIRMED_EXPECTED",
+            "confidence": "MEDIUM",
+            "kb_refs": [
+              "KB-010"
+            ]
+          }
+        ],
+        "observed_behavior": [],
+        "observed_validations": [],
+        "permissions": [
+          "canCreateByUser chỉ được tính và áp dụng trong context của chính affiliate đang đăng nhập (KB-001..005, KB-008) — không có evidence về việc actor khác tính/ghi đè điều kiện này hộ affiliate."
+        ],
+        "surface_mapping": {
+          "portal": [
+            "Nút 'Request Payment' ẩn/hiện theo canCreateByUser (KB-001..005, KB-008)",
+            "Ví dụ minh hoạ dùng thuật ngữ 'shop trả phí' — 1 phía của OQ-invoice-payout-003 (KB-007)"
+          ],
+          "storefront": [],
+          "api": [
+            "middleware check_can_create_invoice chặn POST /invoices nếu không đủ điều kiện (KB-009)",
+            "Công thức canCreateByUser (KB-001..005, KB-008, KB-010)"
+          ],
+          "data": [],
+          "code": []
+        },
+        "dependencies": [
+          "Phụ thuộc balance-accrual (giá trị balance hiện tại).",
+          "Phụ thuộc affiliate-payment-info-setup (payment_method_id + formatted_payment_info hợp lệ).",
+          "Phụ thuộc payment-method-catalog (giá trị transfer_fee của payment method đã chọn).",
+          "Là cổng chặn (gate) cho payout-request-submission."
+        ],
+        "risks": [
+          {
+            "risk": "OQ-invoice-payout-003 chưa ngã ngũ: nếu test case dựng theo 1 trong 2 cách đếm 'số shop' mà PO/dev xác nhận điều ngược lại, mọi test case điều kiện bổ sung #1 sẽ sai oracle hàng loạt.",
+            "kb_refs": [
+              "KB-006",
+              "KB-007"
+            ],
+            "severity": "MEDIUM"
+          },
+          {
+            "risk": "KB-010 xác nhận điều kiện thật không phụ thuộc payment_method_id, nhưng UI của feature khác (affiliate-payment-info-setup) hardcode ID 1/2 để hiển thị điều kiện — rủi ro hiển thị sai nằm ở feature đó, không ở backend của feature này (xem affiliate-payment-info-setup KB-007/KB-008/KB-010).",
+            "kb_refs": [
+              "KB-010"
+            ],
+            "severity": "LOW"
+          }
+        ],
+        "freshness": {
+          "observed_at": null,
+          "run_id": "CTX-20261002-01"
+        },
+        "unknown_areas": [
+          {
+            "question": "transfer_fee thực tế của từng payment method là bao nhiêu, và nó do admin cấu hình ở đâu?",
+            "why_it_matters": "Điều kiện chung là balance > transfer_fee; không có giá trị thực thì không dựng được test data cho biên của điều kiện này."
+          },
+          {
+            "question": "Đơn vị tiền tệ của balance và của ngưỡng $50 là gì (USD?), và có xử lý đa tiền tệ không?",
+            "why_it_matters": "Ký hiệu $ không đủ để kết luận currency; sai currency ở vùng tiền là lỗi nghiêm trọng."
+          },
+          {
+            "question": "Affiliate có thể có nhiều Invoice pending cùng lúc không, hay chỉ 1?",
+            "why_it_matters": "balance bị trừ ngay khi tạo yêu cầu; nếu cho tạo nhiều yêu cầu song song thì phải biết luật để kiểm số dư."
+          },
+          {
+            "question": "POST /api/invoices trả về status/body gì khi bị middleware check_can_create_invoice chặn?",
+            "why_it_matters": "Tài liệu khẳng định không lách được qua API nhưng không nêu mã lỗi; không có expected response thì không kiểm được rào backend."
+          },
+          {
+            "question": "Rút một phần (gửi amount nhỏ hơn balance) có ràng buộc tối thiểu/tối đa nào không?",
+            "why_it_matters": "Mọi ví dụ đều rút tròn balance; không có biên nào cho ca rút một phần."
+          }
+        ]
+      }
+    ],
+    "profile_relationships": [
+      {
+        "from": "FEAT-02-payout-request-eligibility",
+        "to": "FEAT-01-balance-accrual",
+        "relation": "CONSUMES"
+      },
+      {
+        "from": "FEAT-02-payout-request-eligibility",
+        "to": "payment-method:FEAT-01-affiliate-payment-info-setup",
+        "relation": "CONSUMES"
+      },
+      {
+        "from": "FEAT-02-payout-request-eligibility",
+        "to": "payment-method:FEAT-02-payment-method-catalog",
+        "relation": "CONSUMES"
+      },
+      {
+        "from": "FEAT-02-payout-request-eligibility",
+        "to": "FEAT-03-payout-request-submission",
+        "relation": "GATES"
+      }
+    ],
+    "coverage_matrix": [
+      {
+        "feature_id": "FEAT-02-payout-request-eligibility",
+        "layer": "api",
+        "role": "affiliate",
+        "state": "any",
+        "environment": "documented",
+        "covered": true
+      },
+      {
+        "feature_id": "FEAT-02-payout-request-eligibility",
+        "layer": "portal",
+        "role": "affiliate",
+        "state": "any",
+        "environment": "documented",
+        "covered": true
+      },
+      {
+        "feature_id": "FEAT-02-payout-request-eligibility",
+        "layer": "data",
+        "role": "affiliate",
+        "state": "any",
+        "environment": "documented",
+        "covered": false
+      }
+    ],
+    "unassigned_kb_items": [],
+    "profile_conflicts": [
+      {
+        "conflict_id": "OQ-invoice-payout-003",
+        "topic": "Tiêu chí đếm 'số shop' trong điều kiện bổ sung thứ nhất của canCreateByUser: 'shop có ít nhất 1 Conversion (bất kỳ loại)' hay 'shop trả phí'?",
+        "conflict_scope": "intra_doc",
+        "sides": [
+          {
+            "statement": "KB-006: điều kiện bổ sung thứ nhất là số shop có ít nhất 1 Conversion (BẤT KỲ LOẠI) >= min_total_paid_customers (mặc định 3, cấu hình qua MIN_TOTAL_PAID_CUSTOMERS/.env).",
+            "kb_refs": [
+              "KB-006"
+            ],
+            "confidence": "LOW"
+          },
+          {
+            "statement": "KB-007: các ví dụ số liệu minh hoạ điều kiện bổ sung thứ nhất bằng thuật ngữ 'shop TRẢ PHÍ' — một khái niệm có thể hẹp hơn 'bất kỳ Conversion' nếu tồn tại Conversion không-phải-subscription (usage charge, refund...).",
+            "kb_refs": [
+              "KB-007"
+            ],
+            "confidence": "LOW"
+          }
+        ],
+        "resolution": "UNRESOLVED",
+        "needs": "Xác nhận với PO/dev: điều kiện bổ sung thứ nhất của canCreateByUser đếm shop có BẤT KỲ Conversion (kể cả usage/refund) hay chỉ đếm shop 'trả phí' (subscription). KHÔNG được tự hoà giải, KHÔNG chọn bên xuất hiện sau."
+      }
+    ],
+    "profile_change_summary": [
+      "Profile mới tạo ở run CTX-20261002-01 (DOC_BOOTSTRAP), chưa có version trước."
+    ],
+    "kb_trace_complete": true
+  },
+  "gate": {
+    "decision": "CONDITIONAL_PASS",
+    "blocking_findings": [],
+    "conditions": [
+      "OQ-invoice-payout-003 giữ nguyên ở profile_conflicts[], không được dùng làm oracle đơn lẻ cho đến khi có xác nhận PO/dev.",
+      "observed_validations[] rỗng, act_ids[] rỗng theo luật DOC_BOOTSTRAP."
+    ],
+    "allowed_next_steps": [
+      "qa-checklist-builder",
+      "knowledge-diff-analyzer"
+    ]
+  }
+}

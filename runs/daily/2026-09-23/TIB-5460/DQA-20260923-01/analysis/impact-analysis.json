@@ -1,0 +1,1059 @@
+{
+  "schema_version": "1.0",
+  "artifact_type": "ImpactAnalysis",
+  "artifact_id": "IMPACT-DQA-20260923-01",
+  "workflow_id": "daily-test",
+  "producer": "qa-change-impact-analyzer",
+  "source_refs": [
+    "runs/daily/2026-09-23/TIB-5460/DQA-20260923-01/input/task-intake.json",
+    "runs/daily/2026-09-23/TIB-5460/DQA-20260923-01/input/source-snapshot.json",
+    "runs/daily/2026-09-23/TIB-5460/DQA-20260923-01/analysis/requirement-analysis.json",
+    "runs/daily/2026-09-23/TIB-5460/DQA-20260923-01/analysis/context-slice.json",
+    "knowledge/products/teeinblue/objects/sdk/checklists/storefront-buyer-facing.json (read-only, via context slice selection)",
+    "knowledge/products/teeinblue/objects/sdk/features/storefront-buyer-facing/profile.json (read-only, via context slice selection)"
+  ],
+  "upstream_artifact_ids": [
+    "REQ-DQA-20260923-01",
+    "TASK-DQA-20260923-01",
+    "CTXSLICE-DQA-20260923-01"
+  ],
+  "status": "PARTIAL",
+  "confidence": "MEDIUM",
+  "confidence_note": "MEDIUM, and the reason is asymmetric. Confidence is HIGH in the delta itself (the change is enumerated verbatim in JIRA:TIB-5460 comment 51220) and HIGH in the negative finding that no regression baseline exists (CTXSLICE headline: 'NO ORACLE AVAILABLE', GAP-01..GAP-05). Confidence is LOW on the server-side half of the radius, because the affected code (ValidateThumbmark, the quota counter, the thumbmark issuance endpoint) has no object in the registry at all (GAP-05) and TIB-5460 never states whether teeinblue-api changed (AMB-06). The overall rating is therefore MEDIUM.",
+  "observations": [
+    {
+      "id": "OBS-IMP-01",
+      "text": "The change is client-side but its effect is server-side. TIB-5460 changes the VALUE of the identity key that a server-side quota counter buckets on. Nothing in the SDK enforces the limit; the SDK only decides what identity is presented. Every high-severity consequence of this task therefore lands on a surface the knowledge base does not model (GAP-02, GAP-05), which is why the blast radius cannot be bounded by comparison.",
+      "source": "JIRA:TIB-5460 comment 51220 'the SDK sends a thumbmark (visitor ID) with every upload so the backend knows which visitor's quota to count against' + CTXSLICE payload.backend_api_object_coverage"
+    },
+    {
+      "id": "OBS-IMP-02",
+      "text": "The two canonical checks the change most directly disturbs are not upload checks at all - they are page-load checks. CHK-023 asserts that NO teeinblue localStorage key exists at initial page load (keys appear only on first personalization interaction) and CHK-031 asserts ZERO XHR/fetch to teeinblue-owned hosts during personalization, with server sync only at add-to-cart. Fix part (b) writes a key at page load and fires a network request at page load. Both baselines become incomplete in scope even though neither check mentions upload.",
+      "source": "knowledge/.../sdk/checklists/storefront-buyer-facing.json CHK-023, CHK-031; CTXSLICE behavior_change_candidates BC-01/BC-02"
+    },
+    {
+      "id": "OBS-IMP-03",
+      "text": "The dev note's own verification step for fix part (b) is not discriminating while CTX-CONF-02 is open. translation/kb.json KB-017 recorded the thumbmark request firing on plain page load on 2026-09-21 - i.e. observing 'GET /thumbmark on page load' after the fix reproduces an observation that already existed before it. See payload.ctx_conf_02_carry_forward for what that leaves as usable evidence.",
+      "source": "CTXSLICE conflicts[CTX-CONF-02]; JIRA:TIB-5460 comment 51220 Test step 3"
+    },
+    {
+      "id": "OBS-IMP-04",
+      "text": "The FEAT-07 regression radius is bundle-level, not mechanism-level. Of 38 published checks, exactly two (CHK-023, CHK-031) share a mechanism with the change; a third group (CHK-001, CHK-027, CHK-033/038) shares a lifecycle moment (page load / reload / which bundle is served). The remaining ~31 checks - variant + pricing, 2-level personalization dependency, grouped_clipart 2-step, inline validation, preview/mockup, cart line-item shape, multi-store publish pre-flight - have no path to ThumbmarkService and are covered adequately by one bundle smoke rather than by re-running them.",
+      "source": "knowledge/.../sdk/checklists/storefront-buyer-facing.json (38 checks) + CTXSLICE guidance_for_downstream.for_change_impact_analyzer"
+    },
+    {
+      "id": "OBS-IMP-05",
+      "text": "This is the second consecutive ticket to modify teeinblue-sdk ThumbmarkService, and the first ticket (TIB-5341) shipped the defect while its own Constraints said it would make no SDK change (CONF-03). That makes the predecessor's stated scope an unreliable boundary for judging what TIB-5460 can reach, and is an independent argument for re-running TIB-5341's own checks rather than trusting either ticket's scope statement.",
+      "source": "SNAP F41-08; REQ CONF-03; rules/rate-limit-public-endpoints.md via REQ RISK-08"
+    }
+  ],
+  "assumptions": [
+    {
+      "id": "ASM-IMP-01",
+      "text": "Inherited from REQ/TASK: comment 51220 is the dev implementation note (ASM-01 / U-01). The entire task_delta below rests on it. If it is a QA-authored guide instead, D-03/D-04/D-05 drop to INFERRED and the delta shrinks to D-01/D-02 (the description's one-part Solution).",
+      "impact_if_wrong": "Impacted layers L1 and L3 survive; L2 (page-load timing) and the retry/timeout half of L4 lose their basis."
+    },
+    {
+      "id": "ASM-IMP-02",
+      "text": "TIB-5460 is SDK-only and does not change teeinblue-api. Nothing in the ticket says so; it is inferred from the fact that all three enumerated fix parts are client-side and that the only API-side item mentioned ('Known follow-up') is explicitly deferred (CR-11).",
+      "impact_if_wrong": "If teeinblue-api did change, the ValidateThumbmark / quota-counter surfaces move from 'contract exposure only' to 'changed code', and the blast radius argument below understates the API layer."
+    },
+    {
+      "id": "ASM-IMP-03",
+      "text": "The AI-effect routes named in TIB-5341 (photo-upload, photo-base64-upload, apply-effects, image-filter-effects(/async), customer-uploads/generate, generate-from-multiple-images) are the routes carrying the limit TIB-5460 talks about. TIB-5460 names no route. Inherited from REQ ASM-REQ-02 / SNAP F41-03.",
+      "impact_if_wrong": "The route-level blast radius (L4c, L4d) is mis-scoped."
+    },
+    {
+      "id": "ASM-IMP-04",
+      "text": "'The same SDK bundle ships all FEAT-07 capabilities', i.e. the storefront personalization widget is one deployable artefact. Inferred from CHK-033 (a single script src + widget root class identifies the bundle serving campaign 2595). Not stated anywhere.",
+      "impact_if_wrong": "If the SDK is code-split, the bundle-level regression argument (RS-06) over-scopes and the smoke check can be dropped."
+    }
+  ],
+  "unknowns": [
+    {
+      "id": "U-IMP-01",
+      "text": "Where the new random fallback ID is stored and how long it lives (REQ AMB-01 / U-REQ-01). This single unknown decides whether the change is a fix (persisted) or a silent removal of rate limiting (not persisted). No canonical context and no Jira statement covers it.",
+      "needs": "Dev answer."
+    },
+    {
+      "id": "U-IMP-02",
+      "text": "Whether ValidateThumbmark still accepts unsigned values (TIB-5341 soft-transition window) on staging and production (REQ AMB-02 / SNAP F41-02, F41-06).",
+      "needs": "Dev answer. Determines whether a 401 seen on the fallback path is expected or a defect."
+    },
+    {
+      "id": "U-IMP-03",
+      "text": "Which bundle carries the fix (TASK U-03 / REQ AMB-06) and which bundle each store serves (CTX-CONF-01, UNRESOLVED). Without either, an execution result cannot be attributed to pre- or post-fix code.",
+      "needs": "Build/PR reference from dev; served-bundle read at execution time (technique from CHK-033/KB-033, value CONFLICTED)."
+    },
+    {
+      "id": "U-IMP-04",
+      "text": "Whether 'Allow buyers to choose previous processed images' (72h window, KB-027) is keyed on the same visitor identity this task changes. Help text read off the portal UI, never exercised.",
+      "needs": "Dev answer, or a Flow 1 storefront capture of the previous-processed-images path."
+    },
+    {
+      "id": "U-IMP-05",
+      "text": "Whether Text-to-Image and the customer-uploads/generate path (global-option KB-031, UNPUBLISHED) hit the same quota counter as a plain photo upload, and whether a GenAI effect counts once or twice.",
+      "needs": "Dev answer. KB-031 records only a success path, at 1 sample, in an unpublished object."
+    },
+    {
+      "id": "U-IMP-06",
+      "text": "Whether fetch-at-page-load was already live before this fix (CTX-CONF-02). Unresolved; carried forward, not decided here."
+    }
+  ],
+  "conflicts": [
+    {
+      "id": "IMP-CONF-01",
+      "topic": "Carried forward unresolved from CTX-CONF-02: is fetch-at-page-load new in TIB-5460?",
+      "side_a": {
+        "claim": "Fetch-at-page-load is new behaviour introduced by this fix.",
+        "source": "JIRA:TIB-5460 comment 51220 item 2",
+        "quote": "The SDK fetches the visitor ID as soon as the page loads instead of waiting until the first upload"
+      },
+      "side_b": {
+        "claim": "The thumbmark request was already observed firing on plain product page load on 2026-09-21, before this fix was reported as shipped.",
+        "source": "knowledge/products/teeinblue/objects/translation/kb.json KB-017 (OBSERVED_CURRENT, MEDIUM, observed_count 2, observed_at 2026-09-21), via CTXSLICE conflicts[CTX-CONF-02]"
+      },
+      "resolution": "NOT_RESOLVED, and not this agent's to resolve (contract §8). Kept open as a question for dev. Impact consequence is recorded in payload.ctx_conf_02_carry_forward: the positive half of dev Test step 3 is non-discriminating, so fix part (b) cannot be verified as a DELTA from that observation alone."
+    },
+    {
+      "id": "IMP-CONF-02",
+      "topic": "Inherited CONF-01 / CONF-INTAKE-01: one-part fix vs three-part fix.",
+      "side_a": {
+        "claim": "One change (random fallback ID). Fetching earlier is a seller workaround that 'does not eliminate the collision on its own'.",
+        "source": "JIRA:TIB-5460 description, Solution"
+      },
+      "side_b": {
+        "claim": "Three parts: random fallback ID, fetch at page load, resilient fetch.",
+        "source": "JIRA:TIB-5460 comment 51220"
+      },
+      "resolution": "NOT_RESOLVED. This analysis maps the UNION (D-01..D-05) and tags each delta with the side it comes from, so the radius can be trimmed if the union reading is rejected."
+    },
+    {
+      "id": "IMP-CONF-03",
+      "topic": "Inherited CTX-CONF-01 / CONFLICT-PORTAL-001: which SDK bundle each store serves.",
+      "side_a": {
+        "claim": "Three mutually inconsistent evidence sides exist (storefront observation 2026-09-12, portal GET /api/instances sdk_version, storefront re-check 2026-09-21).",
+        "source": "CTXSLICE conflicts[CTX-CONF-01], sdk/kb.json CONFLICT-PORTAL-001, status UNRESOLVED, priority P1"
+      },
+      "side_b": {
+        "claim": "n/a - single-sided constraint, not a two-sided factual dispute for this task.",
+        "source": "n/a"
+      },
+      "resolution": "HONOURED, NOT RESOLVED. No per-store SDK-version claim is made anywhere in this artifact. Consequence recorded as R-10 and as a precondition in regression_conditions RC-07."
+    }
+  ],
+  "blocking_issues": [],
+  "payload": {
+    "task_id": "TIB-5460",
+    "daily_run_id": "DQA-20260923-01",
+    "mode": "DRY_RUN",
+    "headline": "HIGH blast radius. The change is three lines of client behaviour that together redefine the key of a server-side, money-spending quota, on a surface with ZERO regression baseline. Four layers are touched (storefront SDK, browser storage, backend API contract, portal config as applicability-only), two registry objects (sdk HIGH, artwork MEDIUM) plus campaign as test data, and two server-side code surfaces that have no knowledge object at all. The change is also the second consecutive ticket on ThumbmarkService/ValidateThumbmark, which per the rule library drags TIB-5341's own checks back into scope. The dominant risk is NOT the reported bug recurring - it is the opposite failure, an unstable random ID silently disabling rate limiting on paid AI calls, for which neither canonical context nor Jira supplies an oracle.",
+    "oracle_posture": {
+      "verdict_inherited": "NO ORACLE AVAILABLE (CTXSLICE payload.headline)",
+      "how_this_artifact_uses_the_slice": "REGRESSION-RADIUS MAP ONLY. Every canonical reference below is used to answer 'what existing storefront behaviour could this disturb', never 'what should the changed code do'. No kb_id, check_id or feature profile in this artifact is cited as an expected result.",
+      "prohibitions_honoured": [
+        "artwork KB-061 is NOT used as a rate-limit oracle anywhere in this artifact. It appears only in coverage_limitations CL-02 as the reason the knowledge base LOOKS like it has rate-limit content and does not.",
+        "No per-store SDK-version claim is made while CONFLICT-PORTAL-001 (CTX-CONF-01) is UNRESOLVED; the bundle identity question is recorded as a risk (R-10) and a precondition (RC-07), not answered.",
+        "global-option KB-029/KB-031 are treated as non-canonical (object never published, OBS-CTX-07); KB-031 is used only to raise an impact QUESTION (U-IMP-05), not to assert anything.",
+        "CTX-CONF-02 is carried forward unresolved (IMP-CONF-01) rather than decided."
+      ]
+    },
+    "task_delta": [
+      {
+        "id": "D-01",
+        "type": "CHANGE",
+        "description": "Fallback visitor ID generation changes from a device-info-derived fingerprint (phone model, screen size, language, timezone, OS version) to a random value unique per browser.",
+        "source_ref": "JIRA:TIB-5460 description Solution + comment 51220 item 1",
+        "quote": "The fallback ID is random and unique per browser (not derived from device info anymore), so it can no longer collide between different customers.",
+        "requirement_ids": ["CR-01", "BR-03", "BR-04"],
+        "authority": "CONFIRMED_EXPECTED",
+        "present_in_both_conflict_sides": true
+      },
+      {
+        "id": "D-02",
+        "type": "REMOVE",
+        "description": "The device-info fingerprint derivation is removed from teeinblue-sdk ThumbmarkService. This is the code path TIB-5341 introduced (F41-05).",
+        "source_ref": "JIRA:TIB-5460 description Solution; SNAP F41-05",
+        "quote": "Remove the device-info-based fallback ID and generate a random ID per browser instead, so different visitors never share the same quota.",
+        "requirement_ids": ["CR-01"],
+        "authority": "CONFIRMED_EXPECTED",
+        "present_in_both_conflict_sides": true
+      },
+      {
+        "id": "D-03",
+        "type": "CHANGE",
+        "description": "Thumbmark fetch timing moves from first-upload to page load.",
+        "source_ref": "JIRA:TIB-5460 comment 51220 item 2",
+        "quote": "The SDK fetches the visitor ID as soon as the page loads instead of waiting until the first upload",
+        "requirement_ids": ["CR-02", "BR-06"],
+        "authority": "CONFIRMED_EXPECTED per comment 51220; DISPUTED AS NEW by IMP-CONF-01 (translation KB-017) and demoted to a workaround by the description (IMP-CONF-02)",
+        "present_in_both_conflict_sides": false
+      },
+      {
+        "id": "D-04",
+        "type": "CHANGE",
+        "description": "Thumbmark fetch timeout raised 3s -> 8s.",
+        "source_ref": "JIRA:TIB-5460 comment 51220 item 3; prior value from SNAP F41-05",
+        "quote": "longer timeout (3s -> 8s, safe since it's a background page-load fetch, not something blocking the upload button)",
+        "requirement_ids": ["CR-03", "BR-07"],
+        "authority": "CONFIRMED_EXPECTED per comment 51220 only",
+        "present_in_both_conflict_sides": false
+      },
+      {
+        "id": "D-05",
+        "type": "ADD",
+        "description": "A retry policy is added to the thumbmark fetch: exactly one retry on network error or 5xx; explicitly NO retry on 429.",
+        "source_ref": "JIRA:TIB-5460 comment 51220 item 3",
+        "quote": "one retry on a network error/5xx before giving up (not on a 429, retrying into a rate limit can't help)",
+        "requirement_ids": ["CR-03", "BR-07"],
+        "authority": "CONFIRMED_EXPECTED per comment 51220 only",
+        "present_in_both_conflict_sides": false
+      },
+      {
+        "id": "D-06",
+        "type": "ADD",
+        "description": "IMPLIED, NOT STATED: a persistence site for the random fallback ID. CR-01 (unique per browser) and CR-08 (stable across reloads) can only both hold if the random value is written somewhere durable, so this delta must exist in the code - but the ticket never names the storage medium or lifetime.",
+        "source_ref": "Derived from CR-01 + CR-08; gap recorded as REQ AMB-01, CONF-02, OBS-REQ-03",
+        "quote": "This confirms the fallback ID stays consistent for the same visitor across page reloads instead of resetting.",
+        "requirement_ids": ["CR-08", "BR-05"],
+        "authority": "INFERRED - no source states it. This is the single most consequential unknown in the task (U-IMP-01).",
+        "present_in_both_conflict_sides": false
+      },
+      {
+        "id": "D-07",
+        "type": "NOT_CHANGED (explicit boundary)",
+        "description": "The thumbmark-issuance endpoint's own IP-keyed rate limit is explicitly NOT raised by this ticket. Recorded as a delta entry because the boundary matters for attributing failures: load pressure on that endpoint increases (D-03) while its limit stays put.",
+        "source_ref": "JIRA:TIB-5460 comment 51220 'Known follow-up'; SNAP F41-01 (30/min per IP)",
+        "quote": "The thumbmark-issuance endpoint's own rate limit is keyed by IP only (not per-shop) ... We may raise that limit in a follow-up teeinblue-api PR",
+        "requirement_ids": ["CR-11"],
+        "authority": "CONFIRMED_EXPECTED"
+      },
+      {
+        "id": "D-08",
+        "type": "NOT_CHANGED (silent boundary)",
+        "description": "The AI-route IP backstop of 50/hour (TIB-5341 F41-03) and the server-side per-visitor+per-product quota counter are untouched. TIB-5460 does not mention either. Recorded because 'unchanged' is an assumption here (ASM-IMP-02), not a statement.",
+        "source_ref": "SNAP F41-03; absence of any statement in JIRA:TIB-5460",
+        "requirement_ids": ["CR-11"],
+        "authority": "INFERRED / Needs dev confirmation (REQ AMB-06, RISK-03)"
+      }
+    ],
+    "impacted_layers": [
+      {"layer": "storefront_sdk", "rating": "HIGH", "classification": "Confirmed"},
+      {"layer": "browser_storage", "rating": "HIGH", "classification": "Mixed - key name Confirmed, fallback-ID storage Needs dev confirmation"},
+      {"layer": "backend_api", "rating": "MEDIUM_HIGH", "classification": "Needs dev confirmation - contract exposure, no code change claimed"},
+      {"layer": "portal_config_artwork_campaign", "rating": "LOW", "classification": "Confirmed as applicability/test-data only, not a changed surface"},
+      {"layer": "add_to_cart_cart", "rating": "LOW", "classification": "Assumption - bundle-level exposure only"},
+      {"layer": "fulfilment_order", "rating": "UNKNOWN", "classification": "Not assessable - object 'order' is outside the slice"}
+    ],
+    "impacted_surfaces_by_layer": [
+      {
+        "id": "L1",
+        "layer": "storefront_sdk",
+        "surface": "teeinblue-sdk ThumbmarkService - fallback ID generation, fetch timing, timeout, retry",
+        "classification": "Confirmed",
+        "deltas": ["D-01", "D-02", "D-03", "D-04", "D-05", "D-06"],
+        "rests_on": {
+          "artifact": "JIRA:TIB-5460 comment 51220 (via source-snapshot.json comments[51220])",
+          "quote": "Fix has three parts now: 1. The fallback ID is random and unique per browser ... 2. The SDK fetches the visitor ID as soon as the page loads ... 3. The fetch itself is now more resilient"
+        },
+        "corroboration": "SNAP F41-05 identifies ThumbmarkService with its 3s timeout and fingerprint fallback as the exact code TIB-5460 replaces.",
+        "canonical_context": "NONE. 'thumbmark' appears twice in all of knowledge/ and both are explicitly non-canonical asides (OBS-CTX-05).",
+        "note": "This is the only surface where the change is unambiguously located."
+      },
+      {
+        "id": "L2",
+        "layer": "storefront_sdk",
+        "surface": "Storefront page-load sequence of the personalization widget - every campaign product page load now issues a network request and (per D-06) may write storage, before any buyer interaction",
+        "classification": "Confirmed by ticket; novelty Needs dev confirmation (IMP-CONF-01)",
+        "deltas": ["D-03"],
+        "rests_on": {
+          "artifact": "requirement-analysis.json CR-02 / impacted_areas 'Storefront personalization widget: every product page load now issues a thumbmark request' (classification Confirmed)",
+          "quote": "The SDK fetches the visitor ID as soon as the page loads instead of waiting until the first upload"
+        },
+        "canonical_neighbours_disturbed": ["sdk CHK-031", "sdk CHK-023", "sdk CHK-001"],
+        "note": "This is the surface with the largest number of already-modelled neighbours, and therefore the main source of real regression candidates."
+      },
+      {
+        "id": "L3a",
+        "layer": "browser_storage",
+        "surface": "localStorage key teeinblue_signed_thumbmark - written at page load, no expiry, reused so no second GET fires",
+        "classification": "Confirmed (key name, caching semantics)",
+        "deltas": ["D-03"],
+        "rests_on": {
+          "artifact": "JIRA:TIB-5460 comment 51220 'Before you start'",
+          "quote": "the signed thumbmark is cached in localStorage (key teeinblue_signed_thumbmark) with no expiry once successfully fetched"
+        },
+        "canonical_context": "Incomplete by construction. sdk KB-015 enumerates the localStorage keys context knows - teeinblue-customizations and teeinblue-global-options (hyphen style) - and teeinblue_signed_thumbmark (underscore style) is absent. CTXSLICE GAP-07 notes the naming divergence suggests a second, separately-owned storage area never mapped.",
+        "behaviour_change_candidate": "BC-01 (targets sdk KB-014, KB-015, CHK-023)"
+      },
+      {
+        "id": "L3b",
+        "layer": "browser_storage",
+        "surface": "Storage site and lifetime of the NEW random fallback ID",
+        "classification": "Needs dev confirmation - BLOCKING",
+        "deltas": ["D-06"],
+        "rests_on": {
+          "artifact": "requirement-analysis.json AMB-01 (severity BLOCKING_FOR_THIS_AREA) + CONF-02 + OBS-REQ-03",
+          "quote": "CR-01 (unique per browser) and CR-08 (stable across reloads) can only both hold if the value is persisted. If it is persisted in localStorage, then in the incognito/ITP case the description itself calls out, it is not persisted, and CR-08 silently fails."
+        },
+        "canonical_context": "NONE, and none possible - GAP-01 records that the word 'visitor' appears 0 times in knowledge/.",
+        "note": "This is the hinge of the whole task. Unresolved, it makes the single highest-value assertion (R-01) unassertable."
+      },
+      {
+        "id": "L4a",
+        "layer": "backend_api",
+        "surface": "teeinblue-api ValidateThumbmark middleware - must accept the new unsigned random fallback value",
+        "classification": "Needs dev confirmation",
+        "deltas": ["D-01"],
+        "rests_on": {
+          "artifact": "requirement-analysis.json impacted_areas (classification 'Need Dev/PO confirmation') + SNAP F41-02 / F41-06",
+          "quote": "ValidateThumbmark verifies the signature but ALSO accepts the legacy unsigned format during a soft-transition window, logged via thumbmark.validation.legacy_format_used."
+        },
+        "why_impacted": "The random fallback is an unsigned value. Its acceptance depends entirely on a transition window owned by a different ticket, whose closing criteria TIB-5460 never mentions (TASK U-04, REQ AMB-02). If that window has closed, EVERY fallback upload becomes 401 and the fix makes the reported symptom worse.",
+        "canonical_context": "NONE - GAP-05: the registry has no backend/API object at all."
+      },
+      {
+        "id": "L4b",
+        "layer": "backend_api",
+        "surface": "Server-side per-visitor(+per-product)+per-window upload quota counter - the key it buckets on changes shape and distribution",
+        "classification": "Needs dev confirmation (code unchanged is ASM-IMP-02, not a statement)",
+        "deltas": ["D-01", "D-06", "D-08"],
+        "rests_on": {
+          "artifact": "JIRA:TIB-5460 description root cause (via source-snapshot.json)",
+          "quote": "the upload limit is counted per visitor + product + 1 hour"
+        },
+        "why_impacted": "The counter's behaviour is a function of the identity values it receives. Before: few distinct values, colliding across buyers (false positives). After: many distinct values - and if D-06 is not durable, a NEW value per page load (false negatives, i.e. unmetered paid AI calls). The counter code need not change for its observable behaviour to change completely.",
+        "caveat": "The per-PRODUCT dimension appears only in the TIB-5460 description, not in comment 51220 nor in TIB-5341 (REQ BR-02 caveat / AMB-03). Treated as INFERRED here.",
+        "canonical_context": "NONE - GAP-02, U-CTX-02: zero canonical statements about the quota, its window, the default of 5, the error string, or the HTTP status."
+      },
+      {
+        "id": "L4c",
+        "layer": "backend_api",
+        "surface": "GET /merchant/{platform}/thumbmark issuance endpoint - request-volume profile shifts from 'per upload attempt' to 'per page view'",
+        "classification": "Assumption (derived from D-03; endpoint code itself Confirmed out of scope by CR-11)",
+        "deltas": ["D-03", "D-07"],
+        "rests_on": {
+          "artifact": "requirement-analysis.json impacted_areas (classification Assumption) + SNAP F41-01",
+          "quote": "It issues a server-signed identity of the form {id}.{signature} and is itself throttled 30/min per IP."
+        },
+        "why_impacted": "Product page views that never upload now consume the endpoint's 30/min-per-IP budget. Office networks, carrier NAT and crawlers can exhaust it without anyone uploading, pushing MORE visitors onto the fallback path - the opposite of fix part (b)'s intent (REQ RISK-04). The dev note's own 'Known follow-up' concedes the endpoint limit is IP-keyed and problematic on CGNAT, then defers it.",
+        "canonical_context": "NONE - U-CTX-01: no captured response, no status codes, no contract."
+      },
+      {
+        "id": "L4d",
+        "layer": "backend_api",
+        "surface": "AI-effect route IP backstop of 50/hour (photo-upload, apply-effects, image-filter-effects(/async), customer-uploads/generate, generate-from-multiple-images)",
+        "classification": "Needs dev confirmation (untouched, but co-located failure mode)",
+        "deltas": ["D-08"],
+        "rests_on": {
+          "artifact": "SNAP F41-03 / requirement-analysis.json RISK-03",
+          "quote": "AI-effect routes ... carry an IP backstop of 50/hour IN ADDITION to the existing per-thumbmark limit."
+        },
+        "why_impacted": "Not changed, but it produces the SAME buyer-visible symptom through a different mechanism. After this fix, two buyers behind one carrier NAT can still block each other. Any test suite must state that it verifies the collision mechanism, not the end-to-end absence of the customer-reported symptom.",
+        "scope_boundary": "Whether this is in scope for TIB-5460 is an open question for dev (REQ open_questions_for_po_dev item 3)."
+      },
+      {
+        "id": "L5",
+        "layer": "portal_config_artwork_campaign",
+        "surface": "Artwork layer config (photo / multiple-uploads / text-to-image) with an Image effect / GenAI service enabled, published through a campaign",
+        "classification": "Confirmed as APPLICABILITY + TEST-DATA dependency, NOT a changed surface",
+        "deltas": [],
+        "rests_on": {
+          "artifact": "JIRA:TIB-5460 comment 51220 'Before you start' + task-intake object_hints[artwork].caveat",
+          "quote": "Rate limiting only applies to uploads that use an AI effect ... A plain upload with no effect is never limited, so pick a product/campaign field that has one of these effects turned on."
+        },
+        "why_impacted": "Portal config decides WHETHER the changed code path is reachable at all. It gates every observation of the fix. It is not edited by the change.",
+        "canonical_context_available": "Config inventory only, and thin: artwork KB-017 (photo PERSONALIZATION SETTINGS incl. 'Image effects: Add new'), KB-018 (multiple-uploads, 'GenAI service*' mandatory), KB-019 (text-to-image) - all observed 2026-09-10, 13 days old, observed_count 1-2, and the 'Image effects' sub-flow was NEVER opened, so the available effect names were never enumerated. campaign KB-010/KB-012 give the publish chain.",
+        "impact_finding": "The fixture the whole suite depends on cannot be specified from canonical context: nobody has ever verified that 'Remove Background' or 'AI Enhance' actually appear under 'Image effects: Add new'. The fixture step is itself a discovery step.",
+        "open_question": "artwork KB-019's own note: Text-to-Image GENERATES rather than uploads an image, so whether an 'upload' rate limit even reaches it is unanswered (U-IMP-05)."
+      },
+      {
+        "id": "L6",
+        "layer": "add_to_cart_cart",
+        "surface": "Add-to-cart and cart line-item handoff for AI-effect campaigns",
+        "classification": "Assumption - no mechanism link, bundle-level exposure only",
+        "deltas": [],
+        "rests_on": {
+          "artifact": "requirement-analysis.json impacted_areas 'Add-to-cart conversion for AI-effect campaigns' (classification Assumption, source rules/rate-limit-public-endpoints.md) + CTXSLICE guidance_for_downstream.for_change_impact_analyzer",
+          "quote": "every storefront personalization capability shipped in the same SDK bundle (FEAT-07's 8 capabilities) is exposed to a bundle-level regression, even though none of them concerns upload"
+        },
+        "why_impacted": "Two weak paths, both worth stating rather than testing broadly: (a) commercial - a false-positive block on upload means the buyer never reaches ATC at all (the rule library's 'chan nham shopper -> mat don hang'); (b) technical - ATC ships in the same bundle as the changed code (ASM-IMP-04).",
+        "hard_constraint": "CTX-CONF-03: add-to-cart on store1/SDK v1 has NEVER been completed in any run (CONFLICT-001/CONFLICT-003, UNRESOLVED). Any upload check carried through to cart must run on store2, or stop short of ATC. A failure at ATC on store1 is unattributable."
+      },
+      {
+        "id": "L7",
+        "layer": "fulfilment_order",
+        "surface": "Order / fulfilment consumption of the uploaded, effect-processed image",
+        "classification": "NOT ASSESSABLE",
+        "deltas": [],
+        "rests_on": {
+          "artifact": "CTXSLICE OBS-CTX-01 - object 'order' exists in the registry but was not an object_hint and was not retrieved",
+          "quote": "no object outside the 4 hints was retrieved as an applicable slice"
+        },
+        "reasoning": "There is no evidence path from this change to fulfilment. The only conceivable link is that a changed visitor identity orphans a buyer's previously processed images (L6-adjacent, KB-027 / U-IMP-04), which would be visible before ATC, not after. Declared UNKNOWN rather than dismissed, because the knowledge base has never traced an uploaded image from storefront to order."
+      }
+    ],
+    "impacted_profiles": [
+      {
+        "object_key": "sdk",
+        "feature_id": "FEAT-07-storefront-buyer-facing",
+        "path": "knowledge/products/teeinblue/objects/sdk/features/storefront-buyer-facing/profile.json",
+        "context_version": 3,
+        "impact_type": "REGRESSION_RADIUS + BEHAVIOR_CHANGE_CANDIDATE",
+        "severity": "HIGH",
+        "evidence_class": "Confirmed (that the profile is disturbed) / Assumption (how far)",
+        "reason": "Same surface, same bundle, same lifecycle moment. The profile's page-load network baseline and its localStorage-lifecycle capability both become incomplete after D-03/D-06. Its own limits make the impact worse rather than better: zero occurrences of 'upload' in the profile, and actor coverage is guest + desktop + US/USD/en only - while the bug is a mobile / same-device-model / incognito / CGNAT bug (GAP-06, declared twice as a gap in sdk CHK-020 and artwork CHK-019 and never closed).",
+        "behavior_change_candidates": ["BC-01", "BC-02"],
+        "oracle_status": "NOT_AN_ORACLE (all OBSERVED_CURRENT)"
+      },
+      {
+        "object_key": "sdk",
+        "feature_id": "FEAT-08-product-page-settings-config",
+        "path": "knowledge/products/teeinblue/objects/sdk/features/product-page-settings-config/profile.json",
+        "context_version": 3,
+        "impact_type": "DEPENDENCY_QUESTION",
+        "severity": "MEDIUM",
+        "evidence_class": "Assumption",
+        "reason": "Holds KB-027, the only mention of buyer photo upload anywhere in knowledge/ - a portal config panel of 4 controls. One of them, 'Allow buyers to choose previous processed images' (help text: 72-hour window), is a per-buyer, time-windowed feature that plausibly keys off the very visitor identity this task changes. If it does, a regenerated random fallback ID orphans a buyer's earlier processed images. Never exercised; the 72h figure is help text read off the UI.",
+        "checklist_gap_candidate": "CG-06",
+        "oracle_status": "NOT_AN_ORACLE"
+      },
+      {
+        "object_key": "artwork",
+        "feature_id": "FEAT-13-layer-config-image",
+        "path": "knowledge/products/teeinblue/objects/artwork/features/layer-config-image/profile.json",
+        "context_version": 3,
+        "impact_type": "TEST_DATA_DEPENDENCY / APPLICABILITY_GATE",
+        "severity": "MEDIUM",
+        "evidence_class": "Confirmed as a dependency, not as an impacted code surface",
+        "reason": "Portal config for the IMAGE layer group is what decides whether a field carries an AI effect, and therefore whether the rate limit - and thus the whole change - is reachable (CR-04). The inventory is 13 days old at observed_count 1-2 and the 'Image effects' sub-flow was never opened, so the fixture cannot be fully specified from context.",
+        "oracle_status": "NOT_AN_ORACLE"
+      },
+      {
+        "object_key": "artwork",
+        "feature_id": "FEAT-19-clipart-category-storefront-behavior",
+        "path": "knowledge/products/teeinblue/objects/artwork/features/clipart-category-storefront-behavior/profile.json",
+        "context_version": 3,
+        "impact_type": "TECHNIQUE_SOURCE (freshest storefront localStorage model)",
+        "severity": "LOW",
+        "evidence_class": "Assumption",
+        "reason": "Freshest storefront runtime observations (2026-09-21) of localStorage write-on-every-change and re-hydration after reload - the technique transfers to observing the new thumbmark key. Not a behaviour that the change disturbs: clipart selection has no identity or page-load-network dependency. Included for technique only; note its fixture no longer exists ('RESIDUAL STATE') and it carries an unrelated CRITICAL finding (KB-112).",
+        "oracle_status": "NOT_AN_ORACLE"
+      },
+      {
+        "object_key": "artwork",
+        "feature_id": "FEAT-03-save-artwork",
+        "path": "knowledge/products/teeinblue/objects/artwork/features/artwork-save-persist/profile.json",
+        "context_version": 3,
+        "impact_type": "NOT_IMPACTED - fenced off",
+        "severity": "NONE",
+        "evidence_class": "Confirmed not impacted",
+        "reason": "Portal artwork save (PUT /api/artworks/{id}) is a different surface from the storefront upload path. Listed ONLY to record that its KB-061 must not be pulled into this task as a rate-limit oracle; see coverage_limitations CL-02.",
+        "oracle_status": "EXPLICITLY_FORBIDDEN_AS_RATE_LIMIT_ORACLE"
+      },
+      {
+        "object_key": "campaign",
+        "feature_id": "FEAT-01-create-campaign-by-product-base",
+        "path": "knowledge/products/teeinblue/objects/campaign/features/create-campaign-by-product-base/profile.json",
+        "context_version": "1 per file / 3 per kb.json (GAP-08 inconsistency, untouched)",
+        "impact_type": "TEST_DATA_DEPENDENCY",
+        "severity": "LOW",
+        "evidence_class": "Confirmed as a dependency chain, not an impacted surface",
+        "reason": "Supplies the fixture chain - create campaign -> attach artwork with the AI-effect field -> multi-store publish -> buyer URL. KB-012 also warns publish has an asynchronous mockup tail, which matters when timing a page-load fetch observation.",
+        "oracle_status": "NOT_AN_ORACLE"
+      },
+      {
+        "object_key": "global-option",
+        "feature_id": "FEAT-06-storefront-share-value",
+        "path": "knowledge/products/teeinblue/objects/global-option/features/artwork-personalization-global-option-link/profile.json",
+        "context_version": null,
+        "impact_type": "IMPACT_QUESTION_ONLY",
+        "severity": "LOW",
+        "evidence_class": "Assumption on non-canonical material",
+        "reason": "KB-031 is the only trace in knowledge/ of the storefront AI pipeline actually running, and it names a 'customer-uploads/generate' endpoint with status polling - the nearest pointer to where an upload quota would be enforced, and one of the AI-effect routes TIB-5341 listed (F41-03). Raises U-IMP-05: does a GenAI generate count against the same counter, possibly twice?",
+        "oracle_status": "NOT_CANONICAL - object never published (OBS-CTX-07), 1 sample, success path only. Used to raise a question, nothing more."
+      },
+      {
+        "object_key": "translation",
+        "feature_id": "n/a - KB-017 only",
+        "path": "knowledge/products/teeinblue/objects/translation/kb.json",
+        "context_version": "1 (CTX-20260921-02)",
+        "impact_type": "CONFLICT_CARRIER",
+        "severity": "MEDIUM",
+        "evidence_class": "Confirmed observation, contested interpretation",
+        "reason": "Outside the object_hints and deliberately not retrieved as a slice, but it carries the ONLY canonical datum touching fix part (b). Recorded here as the carrier of IMP-CONF-01; not treated as an impacted profile in the ownership sense.",
+        "oracle_status": "NOT_AN_ORACLE"
+      }
+    ],
+    "dependency_blast_radius": [
+      {
+        "id": "BR-CHAIN-01",
+        "chain": "portal artwork layer config (Image effect / GenAI service ON) -> campaign publish -> storefront product page -> AI-effect upload field -> rate-limited route",
+        "direction": "gates reachability of the change",
+        "evidence_class": "Confirmed",
+        "source": "JIRA:TIB-5460 comment 51220 'Before you start'; artwork KB-017/KB-018/KB-019; campaign KB-010/KB-012",
+        "consequence": "No AI effect configured = the changed code path is never exercised and every check silently passes for the wrong reason. The applicability gate is a portal config, two objects away from the code that changed."
+      },
+      {
+        "id": "BR-CHAIN-02",
+        "chain": "ThumbmarkService fallback value (D-01/D-06) -> X-Thumbmark-ID on upload request -> ValidateThumbmark (signature vs legacy-unsigned acceptance) -> per-thumbmark quota counter -> buyer-facing success or 'Upload limit exceeded'",
+        "direction": "the change propagates forward into two server components it does not own",
+        "evidence_class": "Confirmed chain, Needs dev confirmation at each server hop",
+        "source": "SNAP F41-01, F41-02, F41-04, F41-06; JIRA:TIB-5460 description root cause",
+        "consequence": "A client-side change alters the input to a server-side authorisation check AND a server-side counter. Two failure modes at different hops produce the SAME buyer-visible string, so a failed test is not self-diagnosing: 401-from-middleware and 429-from-counter must be distinguished at the network layer, not at the UI."
+      },
+      {
+        "id": "BR-CHAIN-03",
+        "chain": "D-03 (fetch at page load) -> more requests to GET /merchant/{platform}/thumbmark -> its 30/min-per-IP limit (F41-01) -> 429 -> D-05 forbids retry on 429 -> SDK falls back -> fallback path used MORE than before",
+        "direction": "self-defeating feedback loop introduced by the fix itself",
+        "evidence_class": "Assumption (mechanism is sound; the volumes are unmeasured)",
+        "source": "REQ RISK-04 (CR-02 vs F41-01); CR-03; CR-11 (endpoint limit explicitly not raised)",
+        "consequence": "Fix part (b) is supposed to make the fallback path rarer. On shared-IP populations it can make it more common. Note the design is internally coherent (not retrying a 429 is correct), so this is an architectural exposure, not a coding defect - but it is the exposure the 'Known follow-up' concedes and defers."
+      },
+      {
+        "id": "BR-CHAIN-04",
+        "chain": "D-03/D-06 (page-load network + storage write) -> FEAT-07 page-load baseline (CHK-023: no teeinblue localStorage key at initial load; CHK-031: 0 XHR/fetch during personalization)",
+        "direction": "the change invalidates the SCOPE of two published checks",
+        "evidence_class": "Confirmed (that the baselines no longer describe page load completely)",
+        "source": "CTXSLICE BC-01, BC-02; sdk CHK-023, CHK-031",
+        "consequence": "A tester reading CHK-023 today forms a false expectation about page-load storage state. CHK-031's '0 XHR during field filling' is additionally fragile because an 8s timeout plus one retry (D-04/D-05) can put a thumbmark request on the wire well INTO the field-filling window, not only at t=0."
+      },
+      {
+        "id": "BR-CHAIN-05",
+        "chain": "visitor identity (D-01) -> 'Allow buyers to choose previous processed images' (72h, per-buyer, sdk KB-027)",
+        "direction": "sideways - an unmodelled neighbour that may key off the same identity",
+        "evidence_class": "Assumption / open question (U-IMP-04)",
+        "source": "sdk KB-027 (OBSERVED_CURRENT config snapshot, help text never exercised); CTXSLICE CG-06 and guidance_for_downstream",
+        "consequence": "If previous-processed-images is keyed on the visitor ID, a regenerated fallback ID orphans a buyer's own earlier images mid-session - a silent data-visibility regression with no check anywhere. This is the clearest example of 'the blast radius extends into a feature nobody has modelled'."
+      },
+      {
+        "id": "BR-CHAIN-06",
+        "chain": "TIB-5341 (ThumbmarkService + ValidateThumbmark + per-route buckets) -> TIB-5460 (second ticket on the same two components)",
+        "direction": "cross-ticket, backwards",
+        "evidence_class": "Confirmed by rule library, with a Jira traceability gap",
+        "source": "REQ RISK-08 citing rules/rate-limit-public-endpoints.md section 'Chuoi nhan qua giua cac ticket cung sua thumbmark/identity'; TASK OBS-INTAKE-04",
+        "consequence": "Three TIB-5341 checks re-enter scope: legacy unsigned format still accepted, tampered signature returns 401, per-route buckets remain independent (F41-02, F41-06, F41-07). Aggravating factor: TIB-5341's Constraints said 'server-side only - no API client (SDK) changes required' yet it shipped the SDK fallback that this ticket fixes (F41-08 / CONF-03), so neither ticket's scope statement can be trusted to bound the radius. Aggravating factor 2: Jira has NO link between the two issues in either direction - the causal chain was found only in the QA rule library."
+      },
+      {
+        "id": "BR-CHAIN-07",
+        "chain": "fix ships in the SDK bundle -> which bundle a given store serves is CONFLICTED (CONFLICT-PORTAL-001) -> no build/PR reference exists (U-03)",
+        "direction": "undermines attribution of every observation",
+        "evidence_class": "Confirmed constraint (the conflict is real and UNRESOLVED); no claim made about its resolution",
+        "source": "CTXSLICE CTX-CONF-01, sdk CHK-033/CHK-038, TASK U-03, REQ AMB-06",
+        "consequence": "Every result from an execution run is unattributable unless the served bundle is read at execution time (technique from CHK-033) AND dev supplies the build that carries the fix. This is a radius amplifier, not a behaviour: it means a PASS cannot be claimed for the fix, only for whatever bundle happened to be served."
+      }
+    ],
+    "regression_surface": {
+      "principle": "Selection rule applied: a published check enters the regression surface only if it shares a MECHANISM (identity, page-load network, browser storage) or a LIFECYCLE MOMENT (page load, reload, bundle load) with the change. Sharing only the bundle is covered by ONE smoke check, not by re-running the bundle's whole checklist. 6 of 38 FEAT-07 checks qualify; the other 32 are listed as excluded with reasons.",
+      "in_scope": [
+        {
+          "rank": 1,
+          "check_id": "sdk CHK-023",
+          "title": "localStorage draft ('teeinblue-customizations'/'teeinblue-global-options') does NOT exist at initial load, created only on first personalization interaction",
+          "layer": "storefront",
+          "why": "Directly disturbed. After D-03/D-06 the SDK writes teeinblue_signed_thumbmark at page load, BEFORE any interaction. The check's own assertions about the two draft keys remain true, but its enumeration and the page-load storage picture it paints become wrong. A tester using it as the page-load storage baseline will misread the new key as an anomaly.",
+          "severity": "HIGH",
+          "traces_to": ["CR-06", "BC-01", "GAP-07", "CG-04"],
+          "note": "Regression CHECK and behaviour-change proposal at once: re-run it AND propose widening it (BC-01/CG-04) after execution."
+        },
+        {
+          "rank": 2,
+          "check_id": "sdk CHK-031",
+          "title": "Server sync (APIOP-051) only at Add-to-cart; ZERO XHR/fetch to teeinblue hosts while filling fields",
+          "layer": "api",
+          "why": "Directly disturbed, in two ways. (a) The page-load thumbmark request adds a teeinblue-host call to a page the baseline described as network-silent until ATC. (b) Worse for the check's letter: with an 8s timeout plus one retry (D-04/D-05), a retried thumbmark request can land ON the wire seconds into the field-filling window, i.e. inside the exact interval CHK-031 asserts is silent. Also the closest existing technique for the 'no SECOND fetch at upload' assertion (CR-09).",
+          "severity": "HIGH",
+          "traces_to": ["CR-02", "CR-03", "CR-09", "BC-02", "CG-03"]
+        },
+        {
+          "rank": 3,
+          "check_id": "sdk CHK-001",
+          "title": "Pass the password gate and the product page renders fully after publish (both stores)",
+          "layer": "storefront",
+          "why": "Cheapest, broadest bundle smoke, and it now carries a real mechanism: an 8-second-timeout fetch has been moved INTO page load. The dev note asserts this is 'safe since it's a background page-load fetch, not something blocking the upload button' - that assertion is untested (RISK-06). If widget init awaits the fetch on a slow or blocked network, the failure shows up here first, as a slow or incomplete render, on every campaign page - not only on AI-effect ones.",
+          "severity": "HIGH (cheap, high information)",
+          "traces_to": ["CR-02", "CR-03", "RISK-06"],
+          "note": "Run at least once with the thumbmark URL blocked, so the 8s-timeout path is actually exercised."
+        },
+        {
+          "rank": 4,
+          "check_id": "sdk CHK-027 (with CHK-019 / KB-019 as the statement behind it)",
+          "title": "Reload: localStorage draft survives byte-identical BUT the DOM form does not restore selections",
+          "layer": "storefront",
+          "why": "Shares the reload lifecycle moment that CR-08 depends on. It is the only reload-persistence check in existence, and the fix adds a second thing that must survive a reload (the identity) with a DIFFERENT expectation from the draft (must be stable AND must not be re-fetched, CR-06/CR-09). Re-run it to confirm the draft path is unaffected, and use its technique - not its expected result - for the identity assertion.",
+          "severity": "MEDIUM",
+          "traces_to": ["CR-06", "CR-08", "BR-05", "AMB-01"]
+        },
+        {
+          "rank": 5,
+          "check_id": "sdk CHK-033 + CHK-038",
+          "title": "SDK bundle/version marker for campaign 2595 (script src + widget root class) / CONFLICT-PORTAL-001 UNRESOLVED",
+          "layer": "storefront",
+          "why": "Not a behaviour that regresses - a PRECONDITION that must be re-established before any other result means anything, because the fix ships in the bundle and no build reference exists. CHK-038 exists precisely to stop anyone asserting which store serves which bundle; it is honoured, not resolved.",
+          "severity": "MEDIUM (blocking for attribution)",
+          "traces_to": ["U-03", "AMB-06", "CTX-CONF-01"],
+          "constraint": "Read the served bundle at execution time. Make no per-store SDK-version claim."
+        },
+        {
+          "rank": 6,
+          "check_id": "sdk CHK-008 (store2 only) - and explicitly NOT CHK-007",
+          "title": "Add-to-cart completes end to end after personalization is filled (SDK v2, store2)",
+          "layer": "storefront",
+          "why": "One end-of-flow bundle smoke, on store2 only, to confirm the change did not break the widget's commercial path. Kept to a single check rather than the whole ATC/cart group because no mechanism connects ThumbmarkService to cart handoff (ASM-IMP-04 is the only link).",
+          "severity": "LOW-MEDIUM",
+          "traces_to": ["CR-10"],
+          "hard_constraint": "CTX-CONF-03: do NOT use CHK-007 (store1/SDK v1 ATC) - it has never completed in any run (CONFLICT-001/CONFLICT-003 UNRESOLVED), so a failure there is unattributable between the new change, the old conflict and an automation artefact."
+        }
+      ],
+      "out_of_scope_and_why": [
+        {
+          "checks": ["CHK-002 (variant selection updates price)", "CHK-009 (quantity -> total_price linear)", "CHK-010 (cart line-item contains only '_'-prefixed internal refs)"],
+          "reason": "Pricing/variant/cart data shape. No dependency on visitor identity, on page-load network, or on browser storage touched by this change. No plausible mechanism, and none is suggested by any artifact. Excluded."
+        },
+        {
+          "checks": ["CHK-003", "CHK-005", "CHK-006", "CHK-017", "CHK-026", "CHK-034", "CHK-036", "CHK-004"],
+          "reason": "Personalization dependency logic (2-level, parent-child as one required unit, grouped_clipart 2-step) and client-side inline validation. Pure form-state logic with no path to ThumbmarkService. Their only exposure is 'same bundle', which is covered once by CHK-001 + CHK-008 rather than by eight re-runs. Excluded as a group."
+        },
+        {
+          "checks": ["CHK-011", "CHK-012", "CHK-035"],
+          "reason": "Preview / mockup rendering (static lightbox on v1, live SVG on v2, img+overlay on template 1). Rendering pipeline, no identity or page-load-network dependency. Excluded unless the CHK-001 bundle smoke fails, in which case they become follow-up triage, not planned regression."
+        },
+        {
+          "checks": ["CHK-013", "CHK-014", "CHK-015", "CHK-021", "CHK-022"],
+          "reason": "Portal-side multi-store publish, app-block pre-flight and pre-publish preview. Upstream of the storefront runtime and unrelated to SDK behaviour. Relevant only as the fixture chain (BR-CHAIN-01), not as regression."
+        },
+        {
+          "checks": ["CHK-024", "CHK-025", "CHK-028", "CHK-029", "CHK-030"],
+          "reason": "Fine-grained localStorage DRAFT write semantics (write-on-click, write-on-blur, remount pre-fill, post-ATC persistence). Same storage API, different keys and a different writer. Included implicitly by re-running CHK-023/CHK-027; re-running all five adds cost without adding a distinct failure mode. Excluded, but flagged: if CHK-023 fails after the change, this group becomes the triage set."
+        },
+        {
+          "checks": ["CHK-016 (bootstrap config endpoint requires no auth)"],
+          "reason": "Retained by the slice (KB-013) only as a STRUCTURAL ANALOGUE for 'the thumbmark call is probably also public'. That is an inference about a different endpoint and licenses no claim (KB-013 oracle_warning). Not a regression check."
+        },
+        {
+          "checks": ["CHK-018", "CHK-020", "CHK-032", "CHK-037"],
+          "reason": "Declared gaps and conflict placeholders, not executable baselines. CHK-020 is nonetheless the most important of them for this task - see coverage_limitations CL-06 - but as a gap statement, not as a check to re-run."
+        }
+      ],
+      "regression_surface_verdict": "6 of 38 checks in scope; 2 of those (CHK-023, CHK-031) are directly disturbed by the change rather than merely adjacent. The honest summary is that the FEAT-07 regression surface is SMALL, and that this is bad news rather than good: the smallness is a symptom of GAP-04 (the buyer upload flow has no baseline at all), not evidence that the change is contained."
+    },
+    "blast_radius_rating": {
+      "overall": "HIGH",
+      "per_layer": {
+        "storefront_sdk": "HIGH",
+        "browser_storage": "HIGH",
+        "backend_api": "MEDIUM_HIGH",
+        "portal_config": "LOW",
+        "add_to_cart_cart": "LOW",
+        "fulfilment_order": "UNKNOWN"
+      },
+      "reasoning": [
+        "SPAN: four layers, two registry objects (sdk HIGH, artwork MEDIUM) plus campaign as test data, and two server-side code surfaces (ValidateThumbmark, the quota counter) that the registry has no object for at all (GAP-05). A change whose consequences land where the knowledge model has no place to hold them cannot be rated lower than HIGH.",
+        "SEMANTICS: the change redefines the KEY of a shared server-side counter. The counter's code need not change for its observable behaviour to change completely (L4b). That is a bigger semantic move than the three-line client diff suggests.",
+        "BIDIRECTIONAL FAILURE: under-correction leaves real buyers blocked on their first upload (revenue loss, the reported symptom); over-correction - a random ID regenerated per page load - silently disables rate limiting on calls TIB-5341 records as carrying real $ cost. Both failure directions are live because D-06 (where the ID is persisted) is unstated. A change that can fail in opposite directions with the same code is high-radius by construction.",
+        "CROSS-TICKET: this is the SECOND consecutive ticket modifying teeinblue-sdk ThumbmarkService and the first to depend on TIB-5341's ValidateThumbmark acceptance rules. The rule library (rules/rate-limit-public-endpoints.md, via REQ RISK-08) requires re-running the predecessor's critical checks - legacy unsigned format still accepted (F41-02/F41-06), tampered signature returns 401 (F41-06), per-route buckets independent (F41-07). Two aggravators: (a) TIB-5341's own Constraints said it would make no SDK change yet it shipped the SDK fallback this ticket fixes (F41-08/CONF-03), so scope statements are not a reliable boundary; (b) Jira contains NO link between the two issues in either direction (TASK OBS-INTAKE-03/04), so the dependency is invisible to anyone not reading the QA rule library.",
+        "AMPLIFIER - NO BASELINE: the four core topics are MISSING from canonical context (GAP-01..GAP-04): 0 of 38 FEAT-07 checks upload anything, 'upload' appears 0 times in the FEAT-07 profile, 'visitor' appears 0 times in knowledge/, and the gap is not even listed among sdk kb.json's 21 declared coverage_gaps. Any post-fix upload observation is a FIRST observation, not a comparison - so the radius cannot be bounded by regression evidence, only by reasoning.",
+        "AMPLIFIER - UNOBSERVED POPULATION: all storefront knowledge is guest + desktop + US/USD/en (GAP-06, declared twice as a gap in sdk CHK-020 and artwork CHK-019). The bug's population is mobile, same device model/region, private browsing, shared carrier IP. The population most affected is exactly the one never observed.",
+        "AMPLIFIER - UNATTRIBUTABLE BUILD: no fixVersion, no PR, no commit (U-03), and which bundle each store serves is a P1 UNRESOLVED conflict (CTX-CONF-01). Nothing binds an observation to the fix."
+      ],
+      "what_would_LOWER_the_rating": [
+        "A dev answer to U-IMP-01 confirming the random fallback ID is persisted, and where - this collapses the over-correction half of the bidirectional failure and removes the blocker on the highest-value assertion.",
+        "A dev answer to U-IMP-02 confirming the legacy-unsigned acceptance window is open on staging and production, with a closing date - this removes the 401-on-every-fallback-upload scenario (R-02).",
+        "A build/PR reference (U-03) plus a dev answer to CTX-CONF-02 - together these make observations attributable and make fix part (b) verifiable as a delta.",
+        "Confirmation that teeinblue-api was not touched (ASM-IMP-02) - this holds the API layer at contract exposure rather than changed code."
+      ],
+      "what_does_NOT_lower_it": "The small number of impacted published checks (6 of 38). That smallness reflects GAP-04, not containment."
+    },
+    "risks": [
+      {
+        "id": "R-01",
+        "rank": 1,
+        "severity": "P0",
+        "title": "Over-correction: rate limiting silently disabled by an unstable random ID",
+        "layer": "browser_storage -> backend_api quota counter",
+        "evidence_class": "Reasoned from two CONFIRMED requirements that cannot both hold without an unstated mechanism",
+        "reason": "CR-01 requires the fallback ID to be unique per browser; CR-08 requires it to be stable across reloads within the window. Both hold only if the value is persisted (D-06), and no source says it is. In the private/incognito case the ticket itself highlights, the description says the ID 'may not be stored'. If the ID is regenerated per page load, every reload hands the visitor a fresh quota and the limit stops existing for anyone willing to press F5 - on calls TIB-5341 records as carrying real $ cost.",
+        "traces_to": ["CR-01", "CR-08", "BR-05", "CONF-02", "RISK-01", "AMB-01", "CG-02", "GAP-01"],
+        "oracle_available": false,
+        "blocked_by": "U-IMP-01 (dev answer required). This risk cannot be turned into an acceptance assertion; REQ gate D1 already forbids writing one."
+      },
+      {
+        "id": "R-02",
+        "rank": 2,
+        "severity": "P0",
+        "title": "ValidateThumbmark rejects the new unsigned random fallback -> 401 on every fallback upload",
+        "layer": "backend_api",
+        "evidence_class": "Needs dev confirmation (sourced from TIB-5341, SUPPLEMENTARY)",
+        "reason": "The random fallback is unsigned. TIB-5341 made the server verify signatures and accept legacy unsigned values only during a soft-transition window (F41-02/F41-06). TIB-5460 never mentions that window. If it has closed, the fix converts 'some buyers blocked' into 'every fallback upload fails with 401' - strictly worse than the bug. Second-order: a 401 seen during the collision test will be misread as an SDK defect.",
+        "traces_to": ["CR-01", "RISK-02", "AMB-02", "U-04", "GAP-05"],
+        "oracle_available": "Only from TIB-5341 (supplementary), and only as regression, never as TIB-5460 acceptance criteria.",
+        "blocked_by": "U-IMP-02 - must be answered BEFORE execution, not during."
+      },
+      {
+        "id": "R-03",
+        "rank": 3,
+        "severity": "P0",
+        "title": "The collision fix does not actually work - or appears to work for the wrong reason",
+        "layer": "storefront_sdk",
+        "evidence_class": "Confirmed oracle exists (dev Test step 1)",
+        "reason": "The core assertion: with the thumbmark endpoint blocked, two independent browser contexts must each get their own quota, so the second context's FIRST upload succeeds. Twin hazards: (a) two incognito windows of the same browser share a process and may share storage, so the setup may not faithfully simulate two customers (RISK-09); (b) a warm teeinblue_signed_thumbmark from earlier staging testing silently skips the fallback path altogether, producing a false PASS (RISK-05) - the dev note flags the stale key for step 3 only, but it poisons steps 1 and 2 just as badly.",
+        "traces_to": ["CR-01", "BR-04", "TF-01", "RISK-05", "RISK-09", "CG-01"],
+        "oracle_available": true,
+        "mitigation_note": "Cache-clear must be a PRECONDITION on every fallback-path case, and the result should be corroborated with two different browsers or profiles, not two incognito windows of one browser."
+      },
+      {
+        "id": "R-04",
+        "rank": 4,
+        "severity": "P1",
+        "title": "Page-load fetch changes the storefront page-load baseline and can degrade widget init",
+        "layer": "storefront_sdk / browser_storage",
+        "evidence_class": "Confirmed (baselines disturbed) + Assumption (init degradation)",
+        "reason": "D-03/D-06 add a network call and a storage write to page load, invalidating the scope of CHK-023 and CHK-031 (BR-CHAIN-04). Beyond bookkeeping, the dev note's claim that an 8s timeout is 'safe since it's a background page-load fetch' is an untested assertion: if widget init awaits it, a blocked or slow network delays or breaks render on EVERY campaign page, including ones with no AI effect and no upload at all. That is the widest-reaching failure mode in this list.",
+        "traces_to": ["CR-02", "CR-03", "RISK-06", "BC-01", "BC-02", "CG-04"],
+        "oracle_available": "Partly - the CHK-001 render baseline exists; the 'is init blocked' question has no oracle."
+      },
+      {
+        "id": "R-05",
+        "rank": 5,
+        "severity": "P1",
+        "title": "Fix part (b) inverts itself on shared-IP populations",
+        "layer": "backend_api",
+        "evidence_class": "Assumption (mechanism sound, volumes unmeasured)",
+        "reason": "Fetching at page load multiplies traffic to an endpoint throttled 30/min per IP (F41-01), whose limit this ticket explicitly declines to raise (CR-11). Office networks, carrier NAT and crawlers can exhaust it without anyone uploading; each exhausted visitor is pushed onto the fallback path - the opposite of part (b)'s intent. The dev note's own 'Known follow-up' concedes the exposure on CGNAT and defers it.",
+        "traces_to": ["CR-02", "CR-11", "RISK-04", "BR-CHAIN-03"],
+        "oracle_available": false,
+        "suggested_evidence": "One measurement, not a pass/fail: how many thumbmark requests a normal browsing session of N product pages generates."
+      },
+      {
+        "id": "R-06",
+        "rank": 6,
+        "severity": "P1",
+        "title": "Retry policy implemented in the wrong direction (retry on 429, or retry more than once)",
+        "layer": "storefront_sdk -> backend_api",
+        "evidence_class": "Confirmed oracle (CR-03) - this is one of the few fully assertable items",
+        "reason": "A retry on 429 amplifies load against the endpoint's own IP-keyed limit, compounding R-05. 'No retry on 429' is stated explicitly and is unambiguously new behaviour, which also makes it one of the few signatures that can DISTINGUISH the fixed bundle from the old one (see ctx_conf_02_carry_forward).",
+        "traces_to": ["CR-03", "BR-07", "TF-05", "CG-03"],
+        "oracle_available": true
+      },
+      {
+        "id": "R-07",
+        "rank": 7,
+        "severity": "P1",
+        "title": "'Previous processed images' (72h, per-buyer) orphaned by the identity change",
+        "layer": "storefront_sdk / backend_api - unmodelled neighbour",
+        "evidence_class": "Assumption / open question",
+        "reason": "sdk KB-027 records the portal toggle 'Allow buyers to choose previous processed images' enabled on both stores, with 72-hour help text. If that gallery is keyed on the visitor identity this task changes, a buyer whose fallback ID differs from their earlier one loses sight of their own processed images - a silent data-visibility regression with no check anywhere, and the clearest instance of the radius reaching a feature nobody modelled.",
+        "traces_to": ["CR-01", "CG-06", "U-IMP-04"],
+        "oracle_available": false
+      },
+      {
+        "id": "R-08",
+        "rank": 8,
+        "severity": "P1",
+        "title": "The reported customer symptom persists after the fix, via the 50/hour-per-IP AI-route backstop",
+        "layer": "backend_api",
+        "evidence_class": "Needs dev confirmation (scope question)",
+        "reason": "F41-03's IP backstop is untouched (D-08). Two buyers behind one carrier NAT can still block each other on a first upload. The suite must therefore claim to verify the COLLISION MECHANISM, not the end-to-end absence of the reported symptom - otherwise a customer re-report after this ships reads as a failed fix.",
+        "traces_to": ["RISK-03", "CR-11", "GAP-05"],
+        "oracle_available": false,
+        "note": "This is a reporting/claim-scope risk as much as a product risk."
+      },
+      {
+        "id": "R-09",
+        "rank": 9,
+        "severity": "P2",
+        "title": "Multi-tab race at page load",
+        "layer": "storefront_sdk / browser_storage",
+        "evidence_class": "Assumption",
+        "reason": "Moving the fetch to page load makes concurrent fetches from two tabs far more likely than the old fetch-on-first-upload timing did. Two tabs can interleave writes to teeinblue_signed_thumbmark or to the fallback value, producing two identities for one visitor (quota split) or a torn write.",
+        "traces_to": ["CR-02", "RISK-07"],
+        "oracle_available": false
+      },
+      {
+        "id": "R-10",
+        "rank": 10,
+        "severity": "P1_FOR_PROCESS",
+        "title": "The bundle under test cannot be identified, so no result is attributable",
+        "layer": "cross-cutting",
+        "evidence_class": "Confirmed constraint",
+        "reason": "No fixVersion, no PR, no commit (U-03), and CONFLICT-PORTAL-001 over which store serves which bundle is UNRESOLVED at P1 with three mutually inconsistent evidence sides. Ranked as a process risk rather than a product risk because it does not break buyers - it breaks the claim that anything was verified.",
+        "traces_to": ["U-03", "AMB-06", "CTX-CONF-01", "BR-CHAIN-07"],
+        "oracle_available": false,
+        "constraint_honoured": "No per-store SDK-version claim is made in this artifact."
+      },
+      {
+        "id": "R-11",
+        "rank": 11,
+        "severity": "P2",
+        "title": "TIB-5341 regression debt on the shared components",
+        "layer": "backend_api",
+        "evidence_class": "Confirmed requirement from the rule library; oracle is supplementary",
+        "reason": "Second ticket on ThumbmarkService/ValidateThumbmark triggers re-running the predecessor's checks: legacy unsigned still accepted (F41-02), tampered signature -> 401 (F41-06), per-route buckets independent (F41-07). Ranked below R-02 because R-02 is the subset of this that can actively break the fix; the rest is genuine regression.",
+        "traces_to": ["RISK-08", "TF-07", "F41-02", "F41-06", "F41-07", "BR-CHAIN-06"],
+        "oracle_available": "From JIRA:TIB-5341 only, labelled SUPPLEMENTARY - must be marked as such and confirmed with dev before being treated as acceptance criteria for TIB-5460."
+      },
+      {
+        "id": "R-12",
+        "rank": 12,
+        "severity": "P2",
+        "title": "GenAI paths may double-count, or may not be reachable by an 'upload' limit at all",
+        "layer": "backend_api / artwork config",
+        "evidence_class": "Assumption on non-canonical material",
+        "reason": "Text-to-Image GENERATES rather than uploads an image (artwork KB-019's own note), so whether an upload rate limit reaches it is unanswered - yet comment 51220 lists Text-to-Image among the rate-limited AI effects. Separately, global-option KB-031 names a customer-uploads/generate path with status polling that may share the counter, so a GenAI effect could be a second hit against a quota whose identity mechanism just changed.",
+        "traces_to": ["CR-04", "BR-01", "U-IMP-05"],
+        "oracle_available": false,
+        "constraint": "KB-031 sits in an UNPUBLISHED object at 1 sample; used to raise the question only."
+      }
+    ],
+    "regression_conditions": [
+      {
+        "id": "RC-01",
+        "condition": "The fixture MUST be an artwork field with an AI effect / GenAI service enabled, published through a campaign to a staging store. Without it, the changed code path is unreachable and every check passes vacuously.",
+        "traces_to": ["CR-04", "BR-01", "BR-CHAIN-01"],
+        "context_trace": "artwork KB-017 ('Image effects: Add new'), KB-018 ('GenAI service*' mandatory on multiple-uploads), KB-019 (text-to-image); campaign KB-010/KB-012 (multi-store publish, async mockup tail); artwork CHK-004/005/007; sdk FEAT-08 CHK-005",
+        "caveat": "The 'Image effects' sub-flow was NEVER opened in any run and the available effect names were never enumerated (KB-017 oracle_warning, observed 2026-09-10, 1 sample). Do not assume 'Remove Background' or 'AI Enhance' appear there - verify in the portal when building the fixture."
+      },
+      {
+        "id": "RC-02",
+        "condition": "Every fallback-path observation MUST start from a cleared teeinblue_signed_thumbmark (or a genuinely fresh private context). A warm cache skips the fallback path entirely and produces a PASS that proves nothing.",
+        "traces_to": ["CR-06", "RISK-05", "TF-01", "TF-02"],
+        "context_trace": "sdk CHK-023/CHK-027 supply the localStorage inspection technique; the requirement itself comes from JIRA comment 51220 'Before you start'.",
+        "note": "The dev note attaches this warning to step 3 only. It applies to steps 1 and 2 with equal force - that widening is a finding, not a restatement."
+      },
+      {
+        "id": "RC-03",
+        "condition": "Run on staging (5-minute window). Production targeting is a stop condition per contract §14.",
+        "traces_to": ["CR-05", "TASK payload.environment"],
+        "context_trace": "task-intake environment.evidence_quote; contract §14. Note the description's admin.teeinblue.com production URL must not be visited."
+      },
+      {
+        "id": "RC-04",
+        "condition": "Distinguish 401 (ValidateThumbmark rejection) from 429 (quota exceeded) at the NETWORK layer. Both can surface to the buyer as a failed upload, and attributing the wrong one inverts the conclusion about whether the fix works.",
+        "traces_to": ["R-02", "RISK-02", "BR-CHAIN-02"],
+        "context_trace": "Technique family exists (sdk CHK-031 asserts which calls fire/do not fire); the status-code semantics come from SNAP F41-04/F41-06, not from knowledge/."
+      },
+      {
+        "id": "RC-05",
+        "condition": "Re-establish the FEAT-07 page-load baseline AFTER the change: which localStorage keys exist at t=0 (CHK-023) and which teeinblue-host requests fire before the first interaction (CHK-031). These two are the regression core.",
+        "traces_to": ["R-04", "BC-01", "BC-02", "CG-04"],
+        "context_trace": "sdk CHK-023, CHK-031, both BASELINE status, published context_version 3."
+      },
+      {
+        "id": "RC-06",
+        "condition": "Keep upload checks SHORT OF add-to-cart on store1, or run the ATC leg on store2 only.",
+        "traces_to": ["CTX-CONF-03", "L6"],
+        "context_trace": "sdk CHK-007 (CONFLICT-001, ATC on store1 never completed), CHK-032 (CONFLICT-003), CTXSLICE context_conflicts[CTX-CONF-03]. A failure at ATC on store1 is unattributable."
+      },
+      {
+        "id": "RC-07",
+        "condition": "Read the served SDK bundle at execution time (script src + widget root class) and record it with the result. Make no per-store SDK-version claim.",
+        "traces_to": ["R-10", "CTX-CONF-01", "U-03"],
+        "context_trace": "sdk CHK-033 (technique, value CONFLICTED), CHK-038 (CONFLICT-PORTAL-001 placeholder, oracle_strength NONE by design)."
+      },
+      {
+        "id": "RC-08",
+        "condition": "Any TIB-5341-sourced expectation (legacy unsigned accepted, tampered -> 401, per-route buckets independent) MUST be labelled SUPPLEMENTARY and confirmed with dev before it is treated as acceptance criteria for TIB-5460.",
+        "traces_to": ["R-11", "RISK-08", "TF-07", "BR-CHAIN-06"],
+        "context_trace": "SNAP related_sources_supplementary.authority_note; REQ gate D1 condition 4."
+      },
+      {
+        "id": "RC-09",
+        "condition": "State in the suite's own scope note that it verifies the COLLISION MECHANISM, not the end-to-end disappearance of the customer-reported symptom (the 50/h IP backstop is untouched).",
+        "traces_to": ["R-08", "RISK-03", "D-08"],
+        "context_trace": "SNAP F41-03; JIRA comment 51220 'Known follow-up'."
+      },
+      {
+        "id": "RC-10",
+        "condition": "Do NOT assert fallback-ID stability in a private-browsing context, and do not invent the buyer-facing error copy. These are already gated by REQ gate D1 (AMB-01, AMB-05) and that gating carries into impact-driven regression too.",
+        "traces_to": ["R-01", "AMB-01", "AMB-05", "TF-06", "TF-09"],
+        "context_trace": "requirement-analysis.json gate conditions 1 and 3."
+      }
+    ],
+    "ctx_conf_02_carry_forward": {
+      "status": "OPEN - carried forward, not resolved (contract §8). Recorded as IMP-CONF-01.",
+      "restatement": "translation/kb.json KB-017 (OBSERVED_CURRENT, MEDIUM, observed_count 2, observed_at 2026-09-21, published CTX-20260921-02) recorded the thumbmark request firing on a plain product page load, across two page loads. Comment 51220 (created 2026-09-17, last edited 2026-09-18) presents fetch-at-page-load as new in TIB-5460.",
+      "three_live_readings_inherited_from_the_retriever": [
+        "(a) the 2026-09-21 observation was already made against a post-fix bundle on staging;",
+        "(b) fetch-at-page-load is not as new as comment 51220 implies (it may predate the ticket);",
+        "(c) the observation is of a different trigger that happens to look like page load."
+      ],
+      "what_it_implies_for_verifying_fix_part_b": [
+        "The POSITIVE half of dev Test step 3 - 'you should see a request to /merchant/{platform}/thumbmark fire immediately on page load' - is NOT DISCRIMINATING. Canonical context already recorded that same observation twice, two days ago, with no known connection to this fix. Observing it again after the fix confirms nothing about the delta, only about the current state. Any test case built solely on it would be an OBSERVED_CURRENT restatement dressed as verification.",
+        "Evidence that IS discriminating, in descending strength: (1) the NEGATIVE half of step 3 - after the page-load fetch succeeds, an upload must fire NO second GET /thumbmark (CR-09) - which is a statement about the upload-time path that KB-017 says nothing about; (2) the retry/timeout signature from D-04/D-05 - an 8s ceiling and exactly one retry on 5xx with zero retries on 429 - which is unambiguously new behaviour and observable in DevTools; (3) the fallback-ID shape itself (random vs device-derived), which is the actual fix and is independent of timing.",
+        "Therefore fix part (b) should be verified through CR-09 plus the resilience signature, and the page-load observation recorded as CORROBORATING STATE, explicitly annotated with KB-017 so nobody later reads it as proof of the delta.",
+        "The cheap resolution is external, not analytical: a build/PR reference (U-03) binding the 2026-09-21 staging bundle to pre- or post-fix code would collapse readings (a) and (b) immediately. That is one question to dev, and it also resolves R-10. It is the single highest-leverage question in this run."
+      ],
+      "explicitly_not_done": "This agent did not choose between (a), (b) and (c), did not edit translation/kb.json, and did not downgrade comment 51220's claim. The conflict travels forward to gen-testcase and to the orchestrator's KCP triage attached to BC-02."
+    },
+    "coverage_limitations": [
+      {
+        "id": "CL-01",
+        "surface": "Server-side upload quota counter (window, default of 5, per-product keying, error string, HTTP status)",
+        "limitation": "CANNOT BE ASSERTED AGAINST CANONICAL CONTEXT. Zero canonical statements exist (GAP-02, U-CTX-02) and the registry has no backend/API object to hold them (GAP-05, backend_api_object_coverage: 'CONFIRMED -- your reading of _registry.json is correct. It does NOT.'). The only oracle is JIRA comment 51220, which is a PRESUMED dev note (ASM-01/U-01). Per-product keying is weaker still: it appears only in the TIB-5460 description, not in comment 51220 nor in TIB-5341 (AMB-03)."
+      },
+      {
+        "id": "CL-02",
+        "surface": "Rate limiting in general, as seen from the knowledge base",
+        "limitation": "The knowledge base APPEARS to contain rate-limit content and does not. artwork KB-061 is the only rate-limit-adjacent statement in all of knowledge/, and it is INFERRED / confidence LOW / 1 sample / 13 days old, about a PORTAL endpoint (PUT /api/artworks/{id}), recording only that header NAMES were exposed - never a value or a threshold. Its own source profile carries a verbatim prohibition against using it as a rate-limit oracle, and the context slice's gate makes such use a FAIL condition. It is cited here solely to fence it off; no expected behaviour in this artifact derives from it."
+      },
+      {
+        "id": "CL-03",
+        "surface": "GET /merchant/{platform}/thumbmark - response body, status codes, timing contract, its own limit",
+        "limitation": "ENTIRELY UNKNOWN to knowledge/ (U-CTX-01). 'thumbmark' appears exactly twice in the whole tree and both are explicitly non-canonical asides with no captured response (OBS-CTX-05). Everything known about the endpoint (signed {id}.{signature} form, 30/min per IP) comes from TIB-5341, i.e. SUPPLEMENTARY authority about a different ticket's state, unverified as still true."
+      },
+      {
+        "id": "CL-04",
+        "surface": "Storefront image upload flow and its error states, including 'Upload limit exceeded'",
+        "limitation": "NO BASELINE OF ANY KIND (GAP-04). 0 of 38 FEAT-07 checks upload an image; 'upload' appears 0 times in the FEAT-07 profile; the gap is not even listed among sdk kb.json's 21 declared coverage_gaps. Consequently there is nothing to regress against, and the exact buyer-facing copy and widget state at the limit cannot be asserted (AMB-05) - REQ gate D1 already forbids inventing it."
+      },
+      {
+        "id": "CL-05",
+        "surface": "Storage site and lifetime of the new random fallback ID",
+        "limitation": "NO CANONICAL CONTEXT AND NO JIRA STATEMENT. This is the only limitation in this list where BOTH authority sources are silent, which is why R-01 - the highest-ranked risk - has no oracle at all and TF-06 plus the reload half of TF-02 are gated (AMB-01, U-IMP-01)."
+      },
+      {
+        "id": "CL-06",
+        "surface": "The affected population: mobile/tablet viewports, non-US market/locale/currency, logged-in buyers, private browsing, shared/CGNAT carrier IPs",
+        "limitation": "NEVER OBSERVED (GAP-06). All storefront knowledge is guest + desktop + US/USD/en. Declared as a gap twice (sdk CHK-020, artwork CHK-019) and never closed. The bug is defined by device model and shared-IP characteristics, so the population that produced it is precisely the population canonical context has no data on - no regression comparison is possible for the conditions that matter most."
+      },
+      {
+        "id": "CL-07",
+        "surface": "Which SDK bundle is served per store, and which bundle carries the fix",
+        "limitation": "CONFLICTED AND UNANSWERABLE HERE. CONFLICT-PORTAL-001 is UNRESOLVED at P1 with three mutually inconsistent evidence sides, and there is no fixVersion/PR/commit (U-03). Honoured, not resolved: no per-store SDK-version claim is made. Consequence is R-10 / RC-07."
+      },
+      {
+        "id": "CL-08",
+        "surface": "Whether fetch-at-page-load is genuinely new (fix part b)",
+        "limitation": "CANNOT BE VERIFIED AS A DELTA from the observation the dev note proposes, while CTX-CONF-02 is open. See payload.ctx_conf_02_carry_forward for the discriminating evidence that IS available."
+      },
+      {
+        "id": "CL-09",
+        "surface": "Add-to-cart on store1 / SDK v1 for any upload-carrying flow",
+        "limitation": "UNATTRIBUTABLE. ATC on store1 has never completed in any run (CONFLICT-001 / CONFLICT-003, UNRESOLVED, CTX-CONF-03). A failure there cannot be separated from the new change, the old conflict, or an automation artefact."
+      },
+      {
+        "id": "CL-10",
+        "surface": "Fulfilment / order consumption of an uploaded, effect-processed image",
+        "limitation": "OUT OF ASSESSABLE SCOPE. Object 'order' exists in the registry but was not an object_hint and was not retrieved, and no evidence path connects this change to fulfilment. Declared UNKNOWN rather than dismissed; the knowledge base has never traced an uploaded image from storefront to order."
+      },
+      {
+        "id": "CL-11",
+        "surface": "Text-to-Image / GenAI generate paths",
+        "limitation": "The only trace of the storefront AI pipeline running (global-option KB-031) lives in an object that was NEVER PUBLISHED (status PARTIAL, no publish block, OBS-CTX-07), records a success path only, at 1 sample. It cannot support any claim; it supports one question (U-IMP-05)."
+      }
+    ],
+    "analysis_gaps": [
+      {
+        "id": "AG-01",
+        "gap": "Where the random fallback ID is persisted and for how long (U-IMP-01 / AMB-01). Blocks R-01, the highest-ranked risk.",
+        "needs": "Dev answer. Cannot be closed by any amount of context retrieval."
+      },
+      {
+        "id": "AG-02",
+        "gap": "Whether ValidateThumbmark's legacy-unsigned acceptance window is still open on staging and production, and its closing criteria (U-IMP-02 / AMB-02 / U-04). Blocks R-02 and makes 401s during testing ambiguous.",
+        "needs": "Dev answer, BEFORE execution."
+      },
+      {
+        "id": "AG-03",
+        "gap": "Whether teeinblue-api changed at all in this ticket, and which build/PR carries the fix (ASM-IMP-02 / U-IMP-03 / AMB-06 / U-03). Blocks attribution of every observation and keeps CTX-CONF-02 open.",
+        "needs": "Dev answer / PR reference."
+      },
+      {
+        "id": "AG-04",
+        "gap": "No canonical model exists for the backend surface at all - thumbmark issuance and the quota counter have nowhere to live in the registry (GAP-05). This is a STRUCTURAL gap in the knowledge model, not a retrieval miss, and it recurs on every task whose oracle is partly server-side.",
+        "needs": "A registry object for the backend/API surface. Only qa-context-lifecycle-orchestrator may create it; the orchestrator has already raised it as a KCP candidate."
+      },
+      {
+        "id": "AG-05",
+        "gap": "No regression baseline for the storefront upload flow (GAP-04) and no observation of the affected population (GAP-06). The impact radius is therefore reasoned rather than measured, and this artifact's confidence on 'what could break' outside the six named checks is LOW by construction.",
+        "needs": "A Flow 1 run producing a storefront photo-upload feature profile, incl. mobile viewport and private browsing."
+      },
+      {
+        "id": "AG-06",
+        "gap": "Whether 'Allow buyers to choose previous processed images' (72h) and the customer-uploads/generate path key off the same visitor identity (U-IMP-04, U-IMP-05). Determines whether R-07 and R-12 are real or empty.",
+        "needs": "Dev answer, or a Flow 1 storefront capture."
+      },
+      {
+        "id": "AG-07",
+        "gap": "Jira traceability: TIB-5460 has no link to TIB-5341 in either direction, and the causal chain exists only in the QA rule library. Anyone reading either ticket alone will miss the dependency that generates R-02 and R-11.",
+        "needs": "Team/process action - link the issues. Already raised in REQ open_questions_for_po_dev."
+      },
+      {
+        "id": "AG-08",
+        "gap": "Not explored by design (DRY_RUN + this agent's read-only mandate): no portal, no API call, no DB query, no browser. Every statement above is derived from the four upstream artifacts plus read-only knowledge/ files selected by the context slice. No live verification of any impacted surface was attempted.",
+        "needs": "n/a - policy, recorded for transparency."
+      }
+    ],
+    "recommended_follow_up_agents": [
+      {
+        "agent": "qa-daily-test-orchestrator",
+        "action": "Put AG-01, AG-02 and AG-03 to dev as blocking questions before any execution run is scheduled. AG-03 (build reference) is the highest-leverage single question: it resolves R-10 and collapses CTX-CONF-02.",
+        "priority": "P0",
+        "why": "Three of the top four risks are blocked on dev answers, not on more context."
+      },
+      {
+        "agent": "storefront-explorer (Flow 1)",
+        "action": "Bootstrap the missing storefront photo-upload + visitor-identity feature: page-load network and localStorage at t=0, upload with an AI effect, the limit error state, and the same on a mobile viewport and in private browsing.",
+        "priority": "P1",
+        "why": "Closes GAP-04, GAP-06, GAP-07 and gives objects sdk/FEAT-07 its first upload baseline. Supports BC-01, BC-02, BC-03 and CG-01..CG-05."
+      },
+      {
+        "agent": "api-explorer (Flow 1)",
+        "action": "Capture GET /merchant/{platform}/thumbmark (response shape, status codes, its own limit headers) and the AI-effect upload route's 429/401 responses, mapped to ACT-IDs per contract §4.",
+        "priority": "P1",
+        "why": "Closes U-CTX-01 / CL-03 and supplies the network-layer evidence RC-04 depends on to tell 401 from 429."
+      },
+      {
+        "agent": "qa-context-lifecycle-orchestrator",
+        "action": "Create the missing backend/API object in _registry.json (AG-04 / GAP-05), and triage BC-02 (highest-value KCP - it would give the thumbmark endpoint its first canonical home) together with BC-01 and CG-01..CG-06.",
+        "priority": "P1",
+        "why": "Only this agent may write knowledge/ or the registry. The structural gap recurs on every server-side task."
+      },
+      {
+        "agent": "gen-testcase",
+        "action": "EXCLUDED from this DRY_RUN. When it does run, generate only TF-01..TF-05 and TF-07 per REQ gate D1, cite JIRA only as oracle, and inherit regression_conditions RC-01..RC-10 as preconditions. The six in-scope FEAT-07 checks are regression inputs, not sources of expected results.",
+        "priority": "n/a - deferred",
+        "why": "Contract §2.6 and REQ gate D1: ambiguous areas get questions, not acceptance cases."
+      },
+      {
+        "agent": "test-suite-reviewer",
+        "action": "When a suite exists, verify that no expected result cites a kb_id/check_id from the context slice, that artwork KB-061 is absent, that no per-store SDK-version claim appears, and that the suite's scope note carries RC-09 (collision mechanism, not end-to-end symptom).",
+        "priority": "P2",
+        "why": "These are the four prohibitions most likely to be violated by a suite written against an oracle-less slice."
+      }
+    ],
+    "not_done_by_this_agent": [
+      "No test cases were written (gen-testcase's responsibility; excluded from this DRY_RUN).",
+      "No live exploration: no portal, no API call, no DB query, no browser session.",
+      "No conflict was resolved: IMP-CONF-01 (CTX-CONF-02), IMP-CONF-02 (CONF-01), IMP-CONF-03 (CONFLICT-PORTAL-001) all travel forward unresolved.",
+      "No file under knowledge/ was created, modified or deleted; every knowledge/ path was opened read-only.",
+      "No upstream artifact was edited."
+    ],
+    "write_scope_attestation": {
+      "knowledge_writes": "NONE. All knowledge/ access was read-only, limited to files the context slice had already selected.",
+      "files_written_by_this_agent": [
+        "runs/daily/2026-09-23/TIB-5460/DQA-20260923-01/analysis/impact-analysis.json"
+      ],
+      "contract_refs": ["contracts/qa-context-contract.md §5.1", "contracts/qa-context-contract.md §8", "contracts/qa-context-contract.md §6"],
+      "redaction": "No credentials, tokens, emails, buyer names or PII reproduced. The production admin URL present in the Jira description was not visited and is not repeated as an actionable target."
+    }
+  },
+  "gate": {
+    "decision": "CONDITIONAL_PASS",
+    "gate_id": "D2-impact-analysis",
+    "blocking_findings": [],
+    "conditions": [
+      "Every P0/P1 impact above carries evidence or explicit reasoning, and every regression candidate traces to a named check_id/kb_id in the context slice or to a CR-/RISK-/GAP- id upstream. No impact entry rests on keyword matching alone.",
+      "CONDITIONAL, not full PASS, because three of the top four risks (R-01, R-02, R-10) are blocked on dev answers (AG-01..AG-03) and the server-side half of the radius has no canonical model to check against (AG-04). The radius is reasoned, not measured.",
+      "NO ORACLE is inherited and preserved: nothing in this artifact may be used as an expected result for TIB-5460. Downstream expected results must cite JIRA:TIB-5460 only.",
+      "artwork KB-061 is NOT used as a rate-limit oracle (cited only in CL-02 as a fence). Any downstream use of it as an oracle converts this gate to FAIL.",
+      "No per-store SDK-version claim is made while CONFLICT-PORTAL-001 is UNRESOLVED; the served bundle must be read at execution time (RC-07).",
+      "CTX-CONF-02 is carried forward as IMP-CONF-01 with its verification consequence stated (payload.ctx_conf_02_carry_forward), not resolved.",
+      "gen-testcase remains excluded in this DRY_RUN; when run, it inherits REQ gate D1 conditions plus regression_conditions RC-01..RC-10."
+    ],
+    "allowed_next_steps": [
+      "qa-daily-test-orchestrator (put AG-01..AG-03 to dev; triage BC-01/BC-02/CG-01..CG-06 as KCP candidates)",
+      "gen-testcase (TF-01..TF-05, TF-07 only) - NOT in this DRY_RUN"
+    ]
+  }
+}

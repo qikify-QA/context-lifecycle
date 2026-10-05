@@ -1,0 +1,151 @@
+{
+  "run_id": "CTX-20260921-01",
+  "status": "PUBLISHED",
+  "published_context_version": "3",
+  "mode": "ZERO_DOC_BOOTSTRAP (feature-level, chuyển thành INCREMENTAL_UPDATE ở object level vì object sdk đã published v2)",
+  "product": "teeinblue",
+  "object_target": {
+    "object_type": "ProductPageSettings",
+    "object_key": "product-page-settings",
+    "object_id_or_url": "https://staging-portal.teeinblue.com/product-page-settings",
+    "published_into_object": "OBJ-SDK (knowledge/products/teeinblue/objects/sdk/) — orchestrator quyết định gộp feature mới vào object sdk hiện có thay vì tạo object riêng, vì config này trực tiếp điều khiển hiển thị SDK ở storefront (cùng phạm vi 'SDK' theo quy ước dự án)"
+  },
+  "gate_c0": {
+    "decision": "PASS",
+    "note": "product=teeinblue, object_target=/product-page-settings (ProductPageSettings), environment=staging, role=owner (Linh explorer, sub=273), mutation_policy=SAFE_REVERSIBLE_ONLY đều đầy đủ trong input/bootstrap-request.json — không hỏi lại."
+  },
+  "orchestrator_actions": [
+    {
+      "step": "init (phiên orchestrator này)",
+      "note": "Nhận bàn giao: toàn bộ explore (portal-explorer, api-explorer, storefront-explorer) đã hoàn tất ở phiên trước. Orchestrator này KHÔNG chạy lại explore, KHÔNG spawn qa-context-scope-planner. Đọc contract, đọc input/bootstrap-request.json, raw/portal/portal-evidence.json (67 OBS-ID, CONFLICT-PORTAL-001 UNRESOLVED), intermediate/api/action-api-map.json (APIOP-001/002, MISMATCH-001/002), raw/storefront/storefront-evidence.json, và knowledge/products/teeinblue/objects/sdk/kb.json hiện có (published_context_version=2, 22 kb_candidates, feature FEAT-07-storefront-buyer-facing, 3 conflict UNRESOLVED sẵn: CONFLICT-001/002/003). Ghi run-manifest.json này. Vào thẳng bước 8 (qa-knowledge-normalizer) theo bảng điều phối ZERO_DOC_BOOTSTRAP."
+    },
+    {
+      "step": "qa-knowledge-normalizer (fan-in)",
+      "note": "Fan-in portal-evidence.json + action-api-map.json + storefront-evidence.json. Output candidate/product-kb.json: 22 kb_candidate mới (KB-023..044) — KB-023..039 cho feature MỚI FEAT-08-product-page-settings-config (17 item, 67 OBS-ID gộp theo section UI), KB-040..044 bổ sung cho FEAT-07-storefront-buyer-facing hiện có (không sửa/xoá 22 item cũ). 5 conflict trong candidate: CONFLICT-PORTAL-001 (mới, 3-sides, UNRESOLVED), CONFLICT-KB-MISMATCH-001 (mới, từ MISMATCH-001 api-explorer, scope FEAT-08), CONFLICT-001/002/003 (cũ, chỉ reference dạng rút gọn trỏ về kb.json, KHÔNG sửa nội dung gốc). Gate PASS (có 4 condition, chủ yếu nhắc downstream không tự resolve CONFLICT-PORTAL-001 và không dùng KB-038/KB-039 như data contract đã xác nhận). status PARTIAL, confidence MEDIUM."
+    },
+    {
+      "step": "feature-profile-builder",
+      "note": "Đọc profile FEAT-07 đã publish (v2) làm baseline, UPDATE (deep-copy + append) thành candidate/feature-profiles/storefront-buyer-facing.json (20 capability = 15 cũ + 5 mới, verify script xác nhận 15 capability cũ + 3 profile_conflicts cũ nguyên vẹn byte-identical, thêm profile_conflicts CONFLICT-PORTAL-001). Tạo MỚI candidate/feature-profiles/product-page-settings-config.json (15 capability, FEAT-08, từ KB-023..039). CONFLICT-PORTAL-001 nêu bật ở cả 2 file, KHÔNG đánh dấu 5 capability cũ (KB-004/005/007/010/011) là stale. KB-038 giữ INFERRED xuyên suốt. Gate CONDITIONAL_PASS cả 2 file (lý do: còn oracle/unknown thật — write-path, CONFLICT-PORTAL-001, hex/icon values chưa đọc được — đúng bản chất bootstrap lần đầu, không phải lỗi cấu trúc)."
+    },
+    {
+      "step": "qa-checklist-builder",
+      "note": "Đọc checklist FEAT-07 đã publish (32 check, CHK-001..032) làm baseline, verify giữ byte-identical, APPEND CHK-033..038 (6 check mới, gồm CHK-038 dedicated NEEDS_CONFIRMATION cho CONFLICT-PORTAL-001). Tạo MỚI checklist FEAT-08 (23 check, CHK-001..023, 16 READY/7 NEEDS_CONFIRMATION gồm CHK-020 mismatch-config, CHK-021 CONFLICT-PORTAL-001 reference, CHK-018 binding INFERRED). Gate CONDITIONAL_PASS cả 2 file. Output candidate/checklists/."
+    },
+    {
+      "step": "knowledge-diff-analyzer (bước 11, bắt buộc vì OBJ-SDK đã version 2)",
+      "note": "So candidate (v3) với canonical (v2). Kết quả: added=22 (KB-023..044), changed=0 (không có item published nào bị silently overwrite), conflicted=2 (CONFLICT-PORTAL-001 HIGH impact requires_human_decision=true, CONFLICT-KB-MISMATCH-001 MEDIUM impact scope FEAT-08). Verify CONFLICT-001/002/003 (cũ) không bị sửa nội dung — chỉ nhận thêm 1 data point không-giải-quyết (KB-043) cho CONFLICT-001, khác kịch bản nên không đóng conflict. Blast radius CONFLICT-PORTAL-001 (nếu resolve theo hướng store1 đã upgrade): KB-004/005/007/010/011, feature-summary.md FEAT-07 #2/#3/#6, 5 capability profile.json, CHK-002/003/004/005/006/007/011/012. recommended_version_change: MINOR (thêm feature không breaking; sẽ thành MAJOR nếu CONFLICT-PORTAL-001 được resolve trước publish — không xảy ra ở run này, giữ UNRESOLVED). Output review/knowledge-diff.json, gate PASS."
+    },
+    {
+      "step": "context-quality-reviewer (round 1)",
+      "note": "REJECTED, publish_allowed=false. Đúng 1 blocking finding hẹp (FIND-CTX20260921-01-R01, gate C1): 2 giá trị 'token' thật chưa redact trong raw/storefront/_sdk-runtime-deep-check-raw.json (dòng 33, 87, Shopify cart.js session token hex32). C0/C2/C3/C4/C5 và mọi nội dung tri thức khác đã PASS/CONDITIONAL_PASS — verify: CONFLICT-PORTAL-001 UNRESOLVED xuyên suốt mọi layer, KB-038 vẫn INFERRED, CONFLICT-001/002/003 không bị sửa, coverage trung thực, freshness/version consistency đúng (OBJ-SDK v2->v3, FEAT-07 identity không đổi, FEAT-08 feature_id mới không trùng)."
+    },
+    {
+      "step": "orchestrator - tự verify độc lập finding trước khi dispatch fix",
+      "note": "grep trực tiếp raw/storefront/_sdk-runtime-deep-check-raw.json xác nhận đúng 2 giá trị token thật tại dòng 33/87 — không chỉ tin báo cáo reviewer."
+    },
+    {
+      "step": "storefront-explorer (rework hẹp, đúng bảng retry 'Evidence còn secret/PII -> DỪNG publish, bắt redact lại')",
+      "note": "Sửa CHỈ 2 giá trị token trong CHỈ 1 file thành '[REDACTED]', giữ nguyên shape/field khác, không đụng file nào khác. Tự grep lại toàn bộ raw/storefront/ (29 file) xác nhận không còn file thứ 2 nào bị sót. Verify JSON hợp lệ."
+    },
+    {
+      "step": "orchestrator - tự verify độc lập fix trước khi re-dispatch reviewer",
+      "note": "grep + python json.load xác nhận 2 giá trị đã sạch (\"[REDACTED]\"), JSON hợp lệ."
+    },
+    {
+      "step": "context-quality-reviewer (round 2, chỉ re-check C1+C6, không re-run C0/C2-C5)",
+      "note": "APPROVED_WITH_CONDITIONS, publish_allowed=true. Grep lại toàn bộ cây run (mọi file .json/.txt/.md/.mjs/.html) cho đủ pattern §6 — 0 vi phạm còn sót (4 chuỗi 'STORE_PASSWORD' trong _scratch/scripts/*.mjs là process.env reference hợp lệ theo §12, không phải giá trị thật). 4 publish_conditions: (1) CONFLICT-PORTAL-001 publish UNRESOLVED đủ 3 sides, không chọn phía; (2) CONFLICT-KB-MISMATCH-001 publish UNRESOLVED; (3) KB-038 publish INFERRED, không trình bày như contract đã xác nhận; (4) CHK-002/003/004/007/011 (FEAT-07) giữ nguyên nội dung, chỉ bổ sung tham chiếu CONFLICT-PORTAL-001. Output review/gate-results.json + review/verdict.json (round 2 supersede round 1, giữ round_1_reference)."
+    },
+    {
+      "step": "orchestrator - đọc trực tiếp verdict.json trước khi publish",
+      "note": "Xác nhận publish_allowed=true, decision=APPROVED_WITH_CONDITIONS, 4 publish_conditions, trước khi tiến hành publish (không chỉ tin báo cáo tóm tắt của agent)."
+    },
+    {
+      "step": "PUBLISH — kb.json (merge, không copy đè)",
+      "note": "Viết script Python merge: 22 kb_candidate cũ (KB-001..022) + 22 mới (KB-023..044) = 44, verify 0 overlap ID. 3 conflict cũ (CONFLICT-001/002/003, FULL content nguyên bản từ v2 — không dùng bản rút gọn trong candidate) + 2 conflict mới (CONFLICT-PORTAL-001, CONFLICT-KB-MISMATCH-001, full content) = 5 tổng. Merge cross_layer_evidence_map/duplicates_merged/unmapped_evidence/coverage_gaps (append). Cập nhật coverage_summary (44 total, 2 feature, confidence_distribution tính lại). kb_context.kb_version='3', mode=INCREMENTAL_UPDATE. Cập nhật publish block (published_context_version=3, review_ref/gate_results_ref/run_manifest_ref trỏ CTX-20260921-01, publish_conditions_applied theo đúng verdict round 2)."
+    },
+    {
+      "step": "PUBLISH — feature profiles + checklists (candidate đã là bản đầy đủ, chỉ thêm publish block)",
+      "note": "candidate/feature-profiles/storefront-buyer-facing.json (20 capability, đã merge sẵn bởi feature-profile-builder) -> knowledge/.../features/storefront-buyer-facing/profile.json (ghi đè, thêm publish block v3). candidate/feature-profiles/product-page-settings-config.json -> knowledge/.../features/product-page-settings-config/profile.json (MỚI, tạo thư mục). Tương tự cho 2 checklist -> knowledge/.../checklists/storefront-buyer-facing.json (ghi đè) và checklists/product-page-settings-config.json (mới)."
+    },
+    {
+      "step": "PUBLISH — feature-summary.md",
+      "note": "Cập nhật published_context_version=3, thêm banner CONFLICT-PORTAL-001 ở đầu file, thêm 5 capability mới (#15-19) + điều kiện gate mới vào section FEAT-07, thêm toàn bộ section FEAT-08 mới (goal/entry points/15 capability/coverage/risks/gate), cập nhật bảng Gaps ở cấp Object (thêm CONFLICT-PORTAL-001, CONFLICT-KB-MISMATCH-001, FEAT-08 write-path/hex-icon gaps)."
+    },
+    {
+      "step": "Final verification",
+      "note": "python3 json.load toàn bộ 5 file published: hợp lệ, published_context_version=3 nhất quán. Grep redaction sweep độc lập trên toàn bộ knowledge/products/teeinblue/objects/sdk/: sạch, 0 vi phạm."
+    }
+  ],
+  "artifacts": {
+    "product_kb_refs": ["knowledge/products/teeinblue/objects/sdk/kb.json"],
+    "feature_profile_refs": [
+      "knowledge/products/teeinblue/objects/sdk/features/storefront-buyer-facing/profile.json",
+      "knowledge/products/teeinblue/objects/sdk/features/product-page-settings-config/profile.json"
+    ],
+    "checklist_refs": [
+      "knowledge/products/teeinblue/objects/sdk/checklists/storefront-buyer-facing.json",
+      "knowledge/products/teeinblue/objects/sdk/checklists/product-page-settings-config.json"
+    ],
+    "feature_summary_ref": "knowledge/products/teeinblue/objects/sdk/feature-summary.md"
+  },
+  "coverage": {
+    "objects": [
+      "sdk (OBJ-SDK, v3) — portal: /product-page-settings, 67/67 control inventoried trên 2 store instance (609, 613), giá trị hiện tại only, write-path chưa test; storefront: SDK runtime re-check trên cả 2 store (không lặp lại full personalization/ATC flow, chỉ verify bundle/marker + 1 data point ATC-block đối xứng)"
+    ],
+    "roles": [
+      "portal: owner (Linh explorer, sub=273)",
+      "storefront: guest, US/en/USD, desktop"
+    ],
+    "surfaces": ["portal", "api", "storefront"],
+    "unexplored_areas": [
+      "FEAT-08 write-path (Save/Reset) trên /product-page-settings — chưa từng click (forbidden_actions), 0 evidence",
+      "~13 hex color-picker values + 4 nhóm icon-swatch (Font size/Toggle style/Alignment/Border radius) — chỉ biết hiện diện, chưa đọc được giá trị đang chọn",
+      "Role/permission variance trên /product-page-settings — chỉ test owner",
+      "Entry point '(Switch store?)' link riêng trên trang — chưa test, chỉ dùng sidebar switcher",
+      "Template option 1/3 (campaign 2595) — cả FEAT-07 và FEAT-08 đều chỉ test template 2",
+      "CONFLICT-PORTAL-001 chưa resolve — cần thêm evidence độc lập (deploy log, hoặc re-run storefront-explorer cách vài ngày)",
+      "CONFLICT-KB-MISMATCH-001 chưa resolve — cần code-config-explorer",
+      "CONFLICT-001 (ATC store1, kế thừa từ v1) vẫn hoàn toàn mở, KB-043 chỉ là data point khác kịch bản",
+      "Cơ chế artwork preview mới quan sát (img+tee-printarea, không SVG layer-id) chưa đối chiếu dứt khoát với mô tả v1/v2 cũ",
+      "Buyer logged-in, non-US market/locale/currency, mobile/tablet viewport — 0% coverage toàn object"
+    ]
+  },
+  "gate_results": [
+    { "gate": "C0", "decision": "PASS" },
+    { "gate": "C3", "decision": "PASS", "note": "qa-knowledge-normalizer: 22 candidate mới có đủ knowledge_kind/evidence/scope/confidence/freshness; 5 conflict giữ nguyên/thêm mới đúng §8." },
+    { "gate": "C4", "decision": "CONDITIONAL_PASS", "note": "feature-profile-builder: 2 file, kb_trace_complete=true cả 2, còn nhiều unknown thật (write-path, hex values, CONFLICT-PORTAL-001) — đúng bản chất, không phải lỗi cấu trúc." },
+    { "gate": "C5", "decision": "CONDITIONAL_PASS", "note": "qa-checklist-builder: FEAT-07 38 check (32 cũ + 6 mới), FEAT-08 23 check mới; oracle_strength/NEEDS_CONFIRMATION đúng theo knowledge_kind." },
+    { "gate": "C2 (diff)", "decision": "PASS", "note": "knowledge-diff-analyzer: added=22, changed=0, conflicted=2 (CONFLICT-PORTAL-001, CONFLICT-KB-MISMATCH-001), lineage PASS, blast radius CONFLICT-PORTAL-001 nêu đầy đủ." },
+    { "gate": "C1", "decision": "PASS (sau 1 round redaction rework)", "note": "Round 1 FAIL (2 giá trị token chưa redact trong 1 file raw/storefront/), round 2 PASS (reviewer tự grep toàn bộ run folder, 0 secret thật còn sót)." },
+    { "gate": "C6", "decision": "PASS (round 2)", "note": "APPROVED_WITH_CONDITIONS, publish_allowed=true, 4 publish_conditions — đã tuân thủ khi publish (CONFLICT-PORTAL-001 và CONFLICT-KB-MISMATCH-001 publish UNRESOLVED, KB-038 giữ INFERRED, checklist v1/v2 cũ không bị sửa)." }
+  ],
+  "conflicts": [
+    { "conflict_id": "CONFLICT-PORTAL-001", "status": "UNRESOLVED (mới, v3, P1) — 3 evidence sides: (a) KB cũ v2 2026-09-12 store1=SDK v1/store2=SDK v2 (HIGH tại thời điểm ghi nhận); (b) portal API sdk_version=2 cho cả 2 instance, 2026-09-21 (LOW, 1 sample); (c) storefront runtime re-check 2026-09-21, cả 2 store hiện serve app-v2.js/tee-campaign-v2 (HIGH, 2 pass độc lập, hội tụ với (b)). Implicate trực tiếp KB-004/005/007/010/011 đã publish. Cần orchestrator/reviewer quyết resolution với thêm evidence độc lập, KHÔNG tự chọn phía trong run này." },
+    { "conflict_id": "CONFLICT-KB-MISMATCH-001", "status": "UNRESOLVED (mới, v3, scope FEAT-08) — config_registry schema (~38 key, GET /api/settings) vs instance.config thực tế (~27 key, GET /api/instances), chỉ 1 tên trùng. Cần code-config-explorer." },
+    { "conflict_id": "CONFLICT-001", "status": "UNRESOLVED (kế thừa từ v1) — SDK v1 (store1) add-to-cart chưa rõ hoàn tất được hay không. KB-043 (mới, v3) thêm 1 data point ATC-block đối xứng nhưng KHÁC kịch bản (field để trống, không phải điền đủ) — KHÔNG đóng conflict." },
+    { "conflict_id": "CONFLICT-002", "status": "UNRESOLVED (kế thừa từ v1) — nhãn heading cha 'dog' vs field con 'cat' (store2) không khớp. Không đổi ở v3." },
+    { "conflict_id": "CONFLICT-003", "status": "UNRESOLVED (kế thừa từ v2) — timing ATC store2 lần đầu fail thật do thiếu click con grouped_clipart, mâu thuẫn khung 'known-working' cũ. Không đổi ở v3." }
+  ],
+  "evidence_refs": [
+    { "type": "code_ref", "path": "input/bootstrap-request.json" },
+    { "type": "code_ref", "path": "raw/portal/portal-evidence.json", "note": "67 OBS-ID, CONFLICT-PORTAL-001" },
+    { "type": "code_ref", "path": "intermediate/api/action-api-map.json", "note": "APIOP-001/002, MISMATCH-001/002" },
+    { "type": "code_ref", "path": "raw/storefront/storefront-evidence.json" },
+    { "type": "code_ref", "path": "candidate/product-kb.json" },
+    { "type": "code_ref", "path": "candidate/feature-profiles/storefront-buyer-facing.json" },
+    { "type": "code_ref", "path": "candidate/feature-profiles/product-page-settings-config.json" },
+    { "type": "code_ref", "path": "candidate/checklists/storefront-buyer-facing.json" },
+    { "type": "code_ref", "path": "candidate/checklists/product-page-settings-config.json" },
+    { "type": "code_ref", "path": "review/knowledge-diff.json" },
+    { "type": "code_ref", "path": "review/gate-results.json" },
+    { "type": "code_ref", "path": "review/verdict.json" }
+  ],
+  "next_recommended_scope": [
+    "Resolve CONFLICT-PORTAL-001: cần re-run storefront-explorer trên store1 cách vài ngày (hoặc lấy deploy log từ team dev) để xác định store1 đã migrate v1->v2 thật hay 2 nguồn evidence chỉ đơn giản không nhất quán — ưu tiên P1 vì implicate 5 KB item + nhiều checklist item đã publish.",
+    "Route CONFLICT-KB-MISMATCH-001 sang code-config-explorer để xác định quan hệ giữa config_registry schema và instance.config thực tế.",
+    "Nếu CONFLICT-PORTAL-001 resolve theo hướng 'store1 đã migrate' — cần REFRESH mode cho FEAT-07 để supersede (không xoá) KB-004/005/007/010/011 với ghi chú version-history rõ ràng, khả năng nâng version change lên MAJOR.",
+    "FEAT-08: cần round riêng test write-path (Save/Reset) trên /product-page-settings với mutation_policy REAL_MUTATION_WITH_CLEANUP (khác run này, vốn SAFE_REVERSIBLE_ONLY cấm save/apply) để lấp gap oracle lớn nhất của feature.",
+    "FEAT-08: đọc giá trị hex color-picker + icon-swatch selection qua cách khác (không dựa accessibility tree, có thể cần computed style hoặc DOM attribute trực tiếp).",
+    "Test role khác owner trên /product-page-settings để xác nhận permission variance."
+  ]
+}

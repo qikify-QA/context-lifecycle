@@ -1,0 +1,260 @@
+{
+  "schema_version": "1.0",
+  "artifact_type": "APICapabilityArtifact",
+  "artifact_id": "APICAP-CTX-20260925-01",
+  "workflow_id": "CTX-20260925-01",
+  "producer": "api-explorer",
+  "source_refs": [
+    "contracts/qa-context-contract.md",
+    "runs/context/2026-09-25/CTX-20260925-01/input/bootstrap-request.json",
+    "runs/context/2026-09-25/CTX-20260925-01/raw/portal/portal-evidence.json",
+    "runs/context/2026-09-25/CTX-20260925-01/raw/network/ACT-01-04-002.json",
+    "runs/context/2026-09-25/CTX-20260925-01/raw/network/session-requests-list.txt"
+  ],
+  "upstream_artifact_ids": ["FDA-CTX-20260925-01-portal", "CBS-003"],
+  "status": "PARTIAL",
+  "confidence": "LOW",
+  "observations": [
+    "TIB_OPENAPI_BASE (host staging-api.teeinblue.com, path from env) returned HTTP 404 (generic Laravel 'Not Found' HTML page) on the exact configured URL and on 8 additional common spec-path variants tried (.json, /swagger.json, /openapi.json, /api-docs, /docs, /api/openapi, /openapi/v1.json, /json, -json). No OpenAPI document was retrievable in this run — 'OpenAPI > observed sample' authority ordering from Process step 1 collapses to observed-sample-only for this CCR.",
+    "The only network-captured business-API operation in scope is POST /api/artworks (ACT-01-04-002) — creation/save of artwork 4416 with the 3 GenAI-cluster layers. All other portal actions in portal-evidence.json have network_ref=null (client-side/config-only, no server round trip captured), and TIB-5146/TIB-5339/TIB-5188's underlying endpoints do not appear anywhere in session-requests-list.txt (78 entries, checked in full) — they were never invoked in this session.",
+    "TIB-5302: retrieval_layer / retrieval_value verified verbatim in the REQUEST body of ACT-01-04-002 (not paraphrased): destination layer 'body' has retrieval_value_enabled=true, retrieval_layer='layer-703775' (= source layer 'top' id), retrieval_value='{{input.1}}'. This confirms the field NAMES and this SHAPE exist server-side (the API accepted and echoed status 201), directly corroborating portal UI evidence (OBS-014/015). No separate 'resolve'/render endpoint for this token was found anywhere in the captured traffic or in the (inaccessible) spec.",
+    "TIB-5326: scanned the full layer-schema shape captured in ACT-01-04-002 request body (multiple-uploads, text-to-image, photo layer types) for any field resembling 'history'/'previous'/'reuse'/'choose'/'share'. None present. This is a single-sample negative finding on a SAVE payload only (a config write), not a generate-response payload — absence here does not rule out a field that only appears in a GenAI generate response or effect-picker payload, neither of which was captured.",
+    "Schema shape note: the 3 layer types share a common base field set (type, schema_version, visible, locked, name, top, left, width, height, id, url, rotate, shadow_display, direct_upload_style, fit_mode, direct_clipart_style, customization_type, required) but diverge afterward — text-to-image is the only one of the three WITHOUT photo_editor/photo_replace fields. Confirms polymorphic-by-type request schema, single sample.",
+    "Fixture input mismatch (not a documented-vs-observed mismatch, since no doc exists to compare): portal-explorer recorded the UI selection as design_format='PNG_RGB' (ACT-01-01-001 input) but the actual wire payload in ACT-01-04-002 shows design_format='rgb'. Left in unknowns for the normalizer — could be a simple UI-label-to-wire-value mapping, not evidence of a bug."
+  ],
+  "assumptions": [
+    "TIB_API_BASE resolved to https://staging-api.teeinblue.com by reading observed request URLs in the existing captures (ACT-01-04-002.json, session-requests-list.txt), not by printing the env var value, per contract §14.",
+    "TIB_OPENAPI_BASE host also resolves to staging-api.teeinblue.com (same env family) — inferred only from host consistency with TIB_API_BASE observed above, env var value itself not printed."
+  ],
+  "unknowns": [
+    "TIB-5146: whether POST .../customer-uploads/generate-from-multiple-images exists at all, its response shape, and whether it is 202+polling via image-filter-effects/status as CCR describes — completely unverified, no spec, no capture.",
+    "TIB-5339: whether a photo-upload-fallback route exists, and whether it is sync or async (job id + status) — completely unverified, no spec, no capture. May be difficult to ever verify via black-box API observation since it requires a genuine presigned-S3 failure to trigger.",
+    "TIB-5188: minimum-resolution validation error response shape (error field names, any resize/crop-order hint) — completely unverified; 'Set minimum size' toggle was never turned ON in this session (OBS-003 shows default OFF), so the validation path was never exercised.",
+    "Whether any endpoint exists to 'resolve'/render a retrieval_value token (e.g. {{input.1}}) server-side outside of a live generate call — not found in captured traffic; may only happen inline during the (unobserved) generate/render pipeline.",
+    "Whether the response body of POST /api/artworks genuinely echoes the full layers array field-for-field — portal-explorer's capture (ACT-01-04-002.json) contains a paraphrase note ('mirrors request body... omitted here to avoid duplication') rather than the verbatim response JSON for `response.body.templates`/layers. I did not independently re-capture this, per api-runtime-trace mode (no self-issued requests) — treat response layer-echo as UNVERIFIED, not confirmed, despite portal-explorer's assertion.",
+    "design_format wire value 'rgb' vs UI-recorded input 'PNG_RGB' — mapping not confirmed, could be normal UI-label-to-enum translation.",
+    "Whether 'Image effects after generating' (empty in this fixture) serializes as an explicit empty array field or is omitted entirely when empty — not observed, since the fixture never populated it.",
+    "x-acting-user-id=266 was NOT redacted (matches upstream portal-evidence.json handling, not in contract §6 redaction list) — flagging so normalizer/reviewer can confirm this is acceptable (internal id, not the 'sub' JWT claim, not PII per §6's list) rather than silently deciding it themselves."
+  ],
+  "conflicts": [],
+  "blocking_issues": [
+    "OpenAPI spec inaccessible: TIB_OPENAPI_BASE and 8 additional common spec-path variants under the same host all return HTTP 404 (generic framework 'Not Found' page). No contract-source (spec) available for ANY operation in this CCR — every operation below is OBSERVED_CURRENT from a single sample, never CONFIRMED_EXPECTED.",
+    "TIB-5146 (generate-from-multiple-images): no ACT-ID / network capture exists. Per api-runtime-trace mode this agent does not self-issue requests against product business endpoints (only read the already-inaccessible spec URL, which is a documentation fetch, not a product mutation). This operation requires a buyer-facing generate action on a Multiple Uploads layer — needs storefront-explorer (buyer-context/cookie) to capture, per bootstrap-request.json's own routing note.",
+    "TIB-5339 (photo-upload fallback route): no ACT-ID / network capture exists anywhere in session-requests-list.txt. Requires an actual presigned-S3 failure to observe — not reliably triggerable from black-box API probing alone; recommend storefront-explorer attempt first, flag to orchestrator if still unreproducible.",
+    "TIB-5188 (minimum-resolution validation): no ACT-ID / network capture exists. 'Set minimum size' toggle was left OFF in the only fixture built this run (OBS-003) — needs storefront-explorer to upload a real undersized image with the toggle ON."
+  ],
+  "payload": {
+    "api_context": {
+      "environment": "staging",
+      "auth_role": "owner/staff — account 'Linh explorer', user_id=266 (x-acting-user-id header), cookie-based session (__Secure-teeinblue_staging_session) + x-xsrf-token (redacted)",
+      "base_url": "https://staging-api.teeinblue.com (resolved from observed request URLs, not from printing TIB_API_BASE)"
+    },
+    "operations": [
+      {
+        "operation_id": "APIOP-001",
+        "protocol": "REST",
+        "method_or_type": "POST",
+        "path_or_operation": "/api/artworks",
+        "observed_paths": ["https://staging-api.teeinblue.com/api/artworks"],
+        "business_object": "Artwork",
+        "capability": "Create/save an artwork template with its full layer tree (incl. GenAI layer config and populate-content wiring)",
+        "act_ids": ["ACT-01-04-002"],
+        "scn_ids": ["SCN-04-01"],
+        "feature_ids": [
+          "FEAT-01-multiple-uploads-genai",
+          "FEAT-02-text-to-image-ai",
+          "FEAT-03-populate-content-from-genai-source",
+          "FEAT-04-artwork-save-persistence"
+        ],
+        "auth": {
+          "mechanism": "cookie session + XSRF token header",
+          "headers_observed": {
+            "x-acting-user-id": "numeric string, observed '266' (staff user id, not redacted — see unknowns)",
+            "x-xsrf-token": "[REDACTED] (contract §6)",
+            "content-type": "application/json;charset=UTF-8",
+            "referer": "https://staging-portal.teeinblue.com/"
+          },
+          "observed_count": 1,
+          "confidence": "LOW"
+        },
+        "request_contract": {
+          "shape": {
+            "name": "string",
+            "width": "number",
+            "height": "number",
+            "design_format": "string enum, observed value 'rgb'",
+            "artwork_category_id": "nullable, observed null",
+            "global_option_ids": "array, observed empty",
+            "schema_version": "number, observed 2",
+            "templates": [
+              {
+                "id": "string, observed format 'template-<digits>'",
+                "name": "string",
+                "charge_enabled": "boolean, observed false",
+                "addons": "array, observed empty",
+                "positions": "array of layer id strings (ordering)",
+                "layers": {
+                  "note": "polymorphic array, discriminated by `type` field. Common base fields observed on ALL 3 sampled layer types (multiple-uploads, text-to-image, photo): type, schema_version, visible, locked, name, top, left, width, height, id (format 'layer-<digits>'), url, rotate, shadow_display, direct_upload_style, fit_mode, direct_clipart_style, customization_type, required (boolean).",
+                  "type=multiple-uploads additional fields": {
+                    "output_type": "string enum, observed 'single'",
+                    "max_photos": "number, observed 3",
+                    "photo_editor": "string, observed 'static'",
+                    "photo_replace": "boolean, observed true",
+                    "multi_image_provider": "string enum, observed 'gemini'",
+                    "multi_image_prompt": "string"
+                  },
+                  "type=text-to-image additional fields": {
+                    "text_to_image_provider": "string enum, observed 'gemini'",
+                    "form_label": "string (Option Title)",
+                    "text_to_image_prompt": "string",
+                    "note": "unlike the other two sampled types, has NO photo_editor/photo_replace fields"
+                  },
+                  "type=photo additional fields (used here as populate-content destination)": {
+                    "photo_editor": "string, observed 'static'",
+                    "photo_replace": "boolean, observed true",
+                    "retrieval_value_enabled": "boolean, observed true",
+                    "retrieval_layer": "string, source layer id ref, observed 'layer-703775'",
+                    "retrieval_value": "string, token placeholder, observed literal '{{input.1}}'"
+                  }
+                }
+              }
+            ]
+          },
+          "observed_count": 1,
+          "confidence": "LOW"
+        },
+        "response_contract": {
+          "shape": {
+            "id": "number, observed 4416",
+            "name": "string, echoed",
+            "width": "number, echoed",
+            "height": "number, echoed",
+            "current_version_id": "number, observed 12291",
+            "design_format": "string, echoed 'rgb'",
+            "status": "number, observed 0 (enum meaning unknown)",
+            "schema_version": "number, echoed 2",
+            "layers/templates echo": "UNVERIFIED — upstream capture (ACT-01-04-002.json) contains only a paraphrase claiming the layer array mirrors the request; verbatim response JSON for this part was not captured in this run (see unknowns)"
+          },
+          "observed_count": 1,
+          "confidence": "LOW"
+        },
+        "error_contract": [],
+        "observed_status": [201],
+        "observed_count": 1,
+        "state_delta": [
+          {
+            "field": "artwork.id",
+            "before": "(none — new artwork, no prior id)",
+            "after": "4416",
+            "confidence": "MEDIUM"
+          },
+          {
+            "field": "artwork.current_version_id",
+            "before": "(none)",
+            "after": "12291",
+            "confidence": "MEDIUM"
+          },
+          {
+            "field": "artwork.status",
+            "before": "(none)",
+            "after": "0",
+            "confidence": "LOW"
+          }
+        ],
+        "source_refs": [
+          "raw/network/ACT-01-04-002.json",
+          "raw/portal/portal-evidence.json#OBS-017"
+        ],
+        "observed_request_refs": ["raw/network/ACT-01-04-002.json"],
+        "knowledge_kind": "OBSERVED_CURRENT"
+      }
+    ],
+    "documented_observed_mismatches": [],
+    "background_traffic": [
+      { "normalized_route": "GET /api/staff", "kind": "polling", "note": "seen twice in session; session/permission bootstrap, unrelated to GenAI cluster" },
+      { "normalized_route": "GET /api/user", "kind": "unrelated", "note": "used only for account-scope verification (OBS-001), not a GenAI-cluster operation" },
+      { "normalized_route": "GET /api/instances?trashed", "kind": "unrelated", "note": "portal bootstrap listing" },
+      { "normalized_route": "GET /api/instances/{instanceId}/popup-messages", "kind": "unrelated", "note": "observed as /api/instances/609/popup-messages" },
+      { "normalized_route": "GET /api/settings", "kind": "unrelated", "note": "portal bootstrap" },
+      { "normalized_route": "GET /api/staff-options", "kind": "unrelated", "note": "portal bootstrap" },
+      { "normalized_route": "GET /api/design-format-options", "kind": "unrelated", "note": "seen twice; feeds the new-artwork modal's design-format dropdown" },
+      { "normalized_route": "GET /api/layer-image-categories?type=clipart", "kind": "polling", "note": "seen 4x, re-fetched as layer picker was reopened" },
+      { "normalized_route": "POST /api/graphql", "kind": "unrelated", "note": "seen 7x, generic GraphQL surface, no request/response body captured, cannot trace to a specific ACT-ID without body content — see unmapped_endpoints" },
+      { "normalized_route": "POST /api/graphql/relay", "kind": "unrelated", "note": "seen 4x, same limitation as /api/graphql" },
+      { "normalized_route": "GET /sanctum/csrf-cookie", "kind": "unrelated", "note": "session bootstrap, Laravel Sanctum CSRF cookie issuance" },
+      { "normalized_route": "POST https://cloudflareinsights.com/cdn-cgi/rum", "kind": "unrelated", "note": "third-party RUM telemetry, not teeinblue API" },
+      { "normalized_route": "POST https://www.google-analytics.com/g/collect", "kind": "unrelated", "note": "third-party analytics, not teeinblue API" },
+      { "normalized_route": "GET https://gravatar.com/avatar/{hash}", "kind": "unrelated", "note": "avatar image, not teeinblue API" }
+    ],
+    "security_surfaces": [
+      {
+        "surface": "POST /api/artworks",
+        "auth_role_tested": "owner/staff only (Linh explorer, user_id=266)",
+        "negative_auth_tested": false,
+        "note": "No TIB_FORBIDDEN_TOKEN / TIB_INVALID_TOKEN fixtures present in .env for this environment (checked keys only, no values printed) and no TIB_USER_B API-level cross-tenant call was made in this run — PERMISSION/cross-tenant behavior for this endpoint is untested, not just unobserved."
+      },
+      {
+        "surface": "TIB_OPENAPI_BASE",
+        "auth_role_tested": "unauthenticated GET",
+        "negative_auth_tested": false,
+        "note": "Endpoint returns 404 without requiring auth (generic framework not-found page, not an auth challenge) — spec is simply not present at this path, not access-restricted, as far as can be told from a 404 alone."
+      }
+    ],
+    "unmapped_endpoints": [
+      { "method": "GET", "normalized_route": "/api/staff", "protocol": "REST", "note": "no distinct ACT-ID; generic session bootstrap" },
+      { "method": "GET", "normalized_route": "/api/user", "protocol": "REST", "note": "used for account-scope verification only, not a tested capability" },
+      { "method": "GET", "normalized_route": "/api/instances", "protocol": "REST", "note": "portal bootstrap listing" },
+      { "method": "GET", "normalized_route": "/api/instances/{instanceId}/popup-messages", "protocol": "REST", "note": "portal bootstrap" },
+      { "method": "GET", "normalized_route": "/api/settings", "protocol": "REST", "note": "portal bootstrap" },
+      { "method": "GET", "normalized_route": "/api/staff-options", "protocol": "REST", "note": "portal bootstrap" },
+      { "method": "GET", "normalized_route": "/api/design-format-options", "protocol": "REST", "note": "feeds new-artwork modal dropdown, tangential to CCR scope" },
+      { "method": "GET", "normalized_route": "/api/layer-image-categories", "protocol": "REST", "note": "clipart category picker, tangential to CCR scope" },
+      { "method": "POST", "normalized_route": "/api/graphql", "protocol": "GRAPHQL", "note": "operation name/body not captured in session-requests-list.txt (status-only log); cannot determine which GraphQL operation(s) or map to an ACT-ID without body capture" },
+      { "method": "POST", "normalized_route": "/api/graphql/relay", "protocol": "GRAPHQL", "note": "same limitation as /api/graphql" },
+      { "method": "GET", "normalized_route": "/sanctum/csrf-cookie", "protocol": "REST", "note": "session/CSRF bootstrap, not a business operation" }
+    ],
+    "unexplored_operations": [
+      {
+        "related_question": "TIB-5146",
+        "description": "POST .../customer-uploads/generate-from-multiple-images (exact path unconfirmed) — GenAI generate trigger for a Multiple Uploads layer, and its claimed 202+polling via image-filter-effects/status",
+        "reason": "No capture exists; requires buyer-facing generate action. Per api-runtime-trace mode this agent does not self-issue product-business requests. Route to storefront-explorer (buyer-context/cookie available there)."
+      },
+      {
+        "related_question": "TIB-5339",
+        "description": "Fallback upload route (name near 'photo-upload') used when presigned S3 upload fails; whether it is sync or async (job id + status polling)",
+        "reason": "No capture exists in session-requests-list.txt. Requires triggering an actual presigned-S3 failure — not reliably reproducible from black-box API observation alone. Route to storefront-explorer first; may need dev-provided repro steps if still unreproducible."
+      },
+      {
+        "related_question": "TIB-5188",
+        "description": "Minimum-resolution validation error response (error field names, resize/crop-order hint)",
+        "reason": "No capture exists. 'Set minimum size' toggle was left OFF in the only fixture built this run (portal-evidence.json OBS-003). Requires a real undersized image through buyer flow with the toggle ON. Route to storefront-explorer per bootstrap-request.json's own instruction."
+      },
+      {
+        "related_question": "TIB-5302 (resolve/render mechanism)",
+        "description": "Whether any API operation 'resolves'/renders a retrieval_value token (e.g. '{{input.1}}') server-side, and what triggers the destination layer's own effect chain on the populated value",
+        "reason": "Field names/shape on the SAVE request are confirmed (APIOP-001), but no resolve/render endpoint or generate-time trace was found. Requires a live generate execution captured on the buyer/storefront side."
+      }
+    ],
+    "coverage_limitations": [
+      "Only 1 business-API operation (POST /api/artworks) had a full request/response capture available in this run; every other portal action in portal-evidence.json was config-only with network_ref=null.",
+      "No OpenAPI/spec source was reachable at TIB_OPENAPI_BASE (404) — every field in APIOP-001 is a single-sample OBSERVED_CURRENT, never CONFIRMED_EXPECTED.",
+      "4 of the 5 questions handed down from code-config-explorer (TIB-5146, TIB-5339, TIB-5188, and TIB-5302's resolve mechanism) could not be answered with runtime API evidence in this run and are routed onward via unexplored_operations/blocking_issues.",
+      "No DB evidence available (bootstrap-request.json db_observation.enabled=false, no TIB_DB_* vars) — customer_uploads.source_customer_upload_ids and similar DB-level claims in the CCR remain entirely unverified from this agent's vantage point.",
+      "No negative-auth / cross-tenant (TIB_USER_B) API-level test was performed for POST /api/artworks in this run."
+    ],
+    "redaction_applied": true
+  },
+  "gate": {
+    "decision": "CONDITIONAL_PASS",
+    "blocking_findings": [
+      "TIB-5146, TIB-5339, TIB-5188 remain unanswered at the API layer — no capture exists and this agent cannot self-issue the underlying buyer-facing requests under api-runtime-trace mode.",
+      "OpenAPI spec source is inaccessible (404) — no contract-source authority exists for any operation in this CCR, only single-sample observation."
+    ],
+    "conditions": [
+      "storefront-explorer must attempt to capture: (1) an actual GenAI generate call on a Multiple Uploads layer (TIB-5146), (2) a presigned-S3-failure fallback if reproducible (TIB-5339), (3) an undersized-image upload with 'Set minimum size' ON (TIB-5188), (4) a live generate execution that exercises the destination layer's retrieval_value populate mechanism (TIB-5302 resolve step) — using the scoped_publish_live_exception already granted in bootstrap-request.json for this run's fixture.",
+      "qa-knowledge-normalizer must keep APIOP-001's fields as OBSERVED_CURRENT (single sample, LOW confidence) and must not upgrade to CONFIRMED_EXPECTED — no authoritative spec exists to confirm against.",
+      "If storefront-explorer produces new network captures for the 4 unexplored operations, api-explorer should be re-invoked to extend this artifact rather than another agent guessing endpoint shapes."
+    ],
+    "allowed_next_steps": ["storefront-explorer", "qa-knowledge-normalizer", "feature-profile-builder"]
+  }
+}

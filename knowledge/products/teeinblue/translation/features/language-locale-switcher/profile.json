@@ -1,0 +1,188 @@
+{
+  "feature_id": "FEAT-02-04-language-locale-switcher",
+  "feature_key": "language-locale-switcher",
+  "name": "Language/locale selection mechanisms across Translation surfaces",
+  "user_goal": "As a merchant editing translations, choose which of the store's published languages I am currently entering/viewing translated text for, without changing the portal's own display language. As a buyer, choose which published language I browse the storefront in (a native Shopify Markets/locale mechanism, not a teeinblue-built widget), which in turn determines which locale's Product Page Content / Dynamic Translations content I would see.",
+  "actors": [
+    {
+      "role": "owner (merchant, portal)",
+      "permission_observed": "user_id=266 successfully switched the edit-context locale on both /product-page-content and /artwork-translations without any additional auth/permission gate beyond the normal portal session.",
+      "kb_refs": ["KB-003", "KB-004"]
+    },
+    {
+      "role": "GUEST buyer (storefront)",
+      "permission_observed": "Unauthenticated buyer successfully switched storefront locale via the header switcher with no login required (public Shopify /localization endpoint).",
+      "kb_refs": ["KB-013", "KB-014"]
+    }
+  ],
+  "entry_points": [
+    {
+      "path": "'Languages from <store>' combobox, identical component at the top of both /product-page-content and /artwork-translations (portal)",
+      "precondition": "role=owner, authenticated portal session",
+      "kb_refs": ["KB-003", "KB-004"]
+    },
+    {
+      "path": "Header 'Language' localization-form (desktop, mobile, and footer instances) on any storefront page (Shopify Dawn theme's stock <localization-form> component)",
+      "precondition": "buyer viewing any storefront page; store has >=2 published Shopify locales",
+      "kb_refs": ["KB-013"]
+    }
+  ],
+  "capabilities": [
+    {
+      "name": "Portal: locale list sourced from Shopify shop-locales",
+      "description": "Both translation pages populate their 'Languages from <store>' combobox from GET /api/instances/{instanceId}/shop-locales, which returned exactly 2 entries (en=primary, vi=non-primary), both marked published:true. The same locale count/codes were independently observed on the storefront switcher, indicating both surfaces draw from the same underlying Shopify locale publish state (mechanism-level link unconfirmed, count/code match confirmed).",
+      "kb_refs": ["KB-003"]
+    },
+    {
+      "name": "Portal: edit-context locale selector, does not change portal UI language",
+      "description": "Selecting a non-default locale in the combobox changes ONLY which locale's translation values are shown/edited in the form (e.g. Form header field switches to show the vi override, if any). It does NOT change the portal's own UI language — sidebar menu items, page heading, and Save/Reset button labels remain in English regardless of the selected editing locale. Confirmed identically on both /product-page-content and /artwork-translations.",
+      "kb_refs": ["KB-004"]
+    },
+    {
+      "name": "Storefront: header switcher is Shopify's native Markets/locale mechanism, not a teeinblue widget",
+      "description": "The header language switcher is Shopify Dawn theme's own <localization-form> component (4 instances: desktop/mobile header, desktop/mobile footer) — confirmed NOT a teeinblue-built toggle. Selecting a language submits a multipart POST https://<shop>.myshopify.com/localization (form_type=localization, _method=put, locale_code=<code>) directly to Shopify; server responds 302, redirecting to the same path with the new locale prefixed (e.g. /vi/...). This directly answers the initial business-context question: the storefront language mechanism IS Shopify's own market/locale system.",
+      "kb_refs": ["KB-013"]
+    },
+    {
+      "name": "Storefront: locale carried via URL path prefix, consistent across pages",
+      "description": "After switching, the locale is carried as a URL path prefix (e.g. /vi, /vi/products/...) — not a query param or purely client-side cookie toggle. Confirmed consistent between the storefront home page and the campaign 2595 product page in the same session.",
+      "kb_refs": ["KB-014"]
+    }
+  ],
+  "state_transitions": [
+    {
+      "from": "portal: locale=English selected in edit-context combobox",
+      "to": "portal: locale=Vietnamese selected in edit-context combobox",
+      "trigger": "owner selects 'Vietnamese' from the 'Languages from <store>' combobox",
+      "condition": "no network request triggered by the selection itself (client-side state change only); portal UI language is unaffected",
+      "kb_refs": ["KB-004"]
+    },
+    {
+      "from": "storefront: buyer locale=en (no path prefix)",
+      "to": "storefront: buyer locale=vi (/vi/ path prefix)",
+      "trigger": "buyer clicks 'Tiếng việt' in the header localization-form",
+      "condition": "POST /localization returns 302, browser follows redirect to the locale-prefixed URL",
+      "kb_refs": ["KB-013", "KB-014"]
+    }
+  ],
+  "confirmed_rules": [],
+  "observed_behavior": [
+    "Portal combobox's display label capitalization ('Vietnamese') differs from the storefront switcher's own localized label ('Tiếng việt') — expected, since these are two independently-implemented pieces of UI text, not a shared component.",
+    "Country/region (market) selector sits alongside the storefront Language switcher on the same localization-form component but is a separate control — switching Language in this run did not change Country/region (observed staying 'United States')."
+  ],
+  "observed_validations": [],
+  "permissions": [
+    "Neither switcher required any permission check beyond the ambient session (owner session for portal, none/GUEST for storefront) in this run. No PERMISSION/cross-tenant test performed."
+  ],
+  "surface_mapping": {
+    "portal": [
+      "'Languages from <store>' combobox on /product-page-content and /artwork-translations"
+    ],
+    "storefront": [
+      "Header/footer 'Language' localization-form (desktop + mobile), Dawn theme, on any storefront page"
+    ],
+    "api": [
+      "GET /api/instances/{instanceId}/shop-locales — feeds the portal combobox",
+      "POST https://<shop>.myshopify.com/localization — Shopify-owned, outside teeinblue's backend; feeds the storefront switcher"
+    ],
+    "data": [],
+    "code": []
+  },
+  "dependencies": [
+    "product-page-content-translation profile depends on this profile's portal edit-context selector to determine save target locale, and (indirectly, via buyer's chosen locale) on the storefront switcher to determine which override a buyer sees.",
+    "dynamic-translations profile depends on this profile's portal edit-context selector to determine save/delete target locale."
+  ],
+  "risks": [
+    "The portal combobox and storefront switcher are independently implemented and NOT confirmed to be driven by the exact same backend locale source (portal: possibly-cached shop-locales; storefront: Shopify's own Markets config directly) — if they ever diverge (e.g. a locale published in one system but not synced to the other), the portal could offer editing a locale buyers can never select, or vice versa. Unverified in this run (store only has 2 locales, both consistent)."
+  ],
+  "last_updated": {
+    "date": "2026-09-21",
+    "ccr_ref": "bootstrap"
+  },
+  "unknown_areas": [
+    {
+      "question": "Is GET /api/instances/{instanceId}/shop-locales a live pass-through of Shopify's locale API, or a teeinblue-side cache?",
+      "why_it_matters": "If cached, the portal combobox could show a stale locale list after a merchant changes published locales directly in Shopify Admin, causing a mismatch between what merchants can edit and what buyers can select."
+    },
+    {
+      "question": "How do both switchers behave when a store has more than 2 published locales?",
+      "why_it_matters": "Only a 2-option case was tested; UI patterns like scrolling comboboxes, search-within-list, or per-locale completeness indicators are unverified and could reveal layout/usability issues at scale."
+    },
+    {
+      "question": "Does the storefront switcher behave the same on mobile viewport as desktop?",
+      "why_it_matters": "Only the mobile DOM element was inventoried, not interacted with — mobile-specific interaction bugs (e.g. touch target size, disclosure widget behavior) are unverified."
+    }
+  ],
+  "profile_relationships": [
+    {
+      "feature_key": "language-locale-switcher",
+      "related_feature_key": "product-page-content-translation",
+      "relationship": "depended_on_by",
+      "note": "Both switcher halves feed into which locale is edited (portal) or seen (storefront) for this feature."
+    },
+    {
+      "feature_key": "language-locale-switcher",
+      "related_feature_key": "dynamic-translations",
+      "relationship": "depended_on_by",
+      "note": "Portal edit-context selector determines save/delete target locale for Dynamic Translations."
+    }
+  ],
+  "coverage_matrix": [
+    {
+      "feature_id": "FEAT-02-04-language-locale-switcher",
+      "layer": "portal-ui",
+      "role": "owner",
+      "state": "select non-default edit-context locale",
+      "environment": "staging",
+      "covered": true
+    },
+    {
+      "feature_id": "FEAT-02-04-language-locale-switcher",
+      "layer": "portal-ui",
+      "role": "owner",
+      "state": ">2 published locales",
+      "environment": "staging",
+      "covered": false
+    },
+    {
+      "feature_id": "FEAT-02-04-language-locale-switcher",
+      "layer": "api",
+      "role": "owner",
+      "state": "GET shop-locales",
+      "environment": "staging",
+      "covered": true
+    },
+    {
+      "feature_id": "FEAT-02-04-language-locale-switcher",
+      "layer": "storefront",
+      "role": "GUEST buyer",
+      "state": "desktop switch en->vi",
+      "environment": "staging",
+      "covered": true
+    },
+    {
+      "feature_id": "FEAT-02-04-language-locale-switcher",
+      "layer": "storefront",
+      "role": "GUEST buyer",
+      "state": "mobile viewport interaction",
+      "environment": "staging",
+      "covered": false
+    },
+    {
+      "feature_id": "FEAT-02-04-language-locale-switcher",
+      "layer": "api",
+      "role": "GUEST buyer",
+      "state": "POST /localization",
+      "environment": "staging",
+      "covered": true
+    },
+    {
+      "feature_id": "FEAT-02-04-language-locale-switcher",
+      "layer": "db",
+      "role": "n/a",
+      "state": "n/a",
+      "environment": "staging",
+      "covered": false
+    }
+  ]
+}

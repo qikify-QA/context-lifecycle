@@ -1,0 +1,301 @@
+{
+  "feature_id": "FEAT-07-product-base-lifecycle",
+  "feature_key": "product-base-lifecycle",
+  "name": "Vong doi Product Base (Archive / Duplicate / Delete)",
+  "user_goal": "La owner, quan ly vong doi cua mot product base: archive/unarchive, nhan ban (duplicate), hoac xoa han khi khong con dung.",
+  "actors": [
+    {
+      "role": "owner (Linh explorer, sub=273)",
+      "permission_observed": "Archive, unarchive, duplicate, delete product base thanh cong (tren 3202/3203/3234/3236), khong gap access-denied.",
+      "kb_refs": [
+        "KB-064"
+      ]
+    }
+  ],
+  "entry_points": [
+    {
+      "path": "/products (row menu '...')",
+      "precondition": "dang o list /products, tab Active hoac Archived",
+      "kb_refs": [
+        "KB-011",
+        "KB-054"
+      ]
+    }
+  ],
+  "capabilities": [
+    {
+      "name": "Archive product base",
+      "description": "status 0->1 qua POST /api/products/{id}/archive, khong dialog xac nhan.",
+      "kb_refs": [
+        "KB-054",
+        "KB-055"
+      ]
+    },
+    {
+      "name": "Unarchive",
+      "description": "POST /api/products/{id}/unarchive, tra 200; status 1->0. Da duoc thuc thi that va xac nhan trong lần khảo sát (lan dau tien co evidence cho endpoint nay).",
+      "kb_refs": [
+        "KB-090"
+      ]
+    },
+    {
+      "name": "Duplicate product base (clone)",
+      "description": "Deep-copy printarea/variant/mockup/display settings sang ban ghi moi.",
+      "kb_refs": [
+        "KB-056",
+        "KB-057"
+      ]
+    },
+    {
+      "name": "Delete product base",
+      "description": "Goi GET deletion-check truoc. Neu allowed: dialog xac nhan 'Delete Product' -> DELETE that su chay qua REST, tra 204. Neu blocked (IN_CAMPAIGNS): dialog Warning huong dan 'View campaigns list'/'Cancel', KHONG co request DELETE nao duoc gui qua UI. Xac nhan doc lap bang cach goi thang DELETE bypass UI tren product dang IN_CAMPAIGNS: server tra 403 Forbidden {\"message\":\"Product cannot be deleted due to policy restrictions or invalid confirmation token\"}, product KHONG bi xoa - server THUC SU chan (khong chi la goi y/an nut phia UI).",
+      "kb_refs": [
+        "KB-054",
+        "KB-058",
+        "KB-059",
+        "KB-088"
+      ]
+    },
+    {
+      "name": "Xoa product base ACTIVE (chua tung archive)",
+      "description": "GET deletion-check tra allowed, DELETE tra 204 - HANH VI GIONG HET product da archive; khong bat buoc phai archive truoc khi xoa.",
+      "kb_refs": [
+        "KB-089"
+      ]
+    }
+  ],
+  "state_transitions": [
+    {
+      "from": "status=active(0)",
+      "to": "status=archived(1)",
+      "trigger": "chon 'Mark as archive'",
+      "condition": "POST /api/products/{id}/archive, khong dialog xac nhan",
+      "kb_refs": [
+        "KB-054",
+        "KB-055"
+      ]
+    },
+    {
+      "from": "status=archived(1)",
+      "to": "status=active(0)",
+      "trigger": "chon 'Unarchive'",
+      "condition": "POST /api/products/{id}/unarchive tra 200; campaign_products/need_sync KHONG doi qua ca archive lan unarchive",
+      "kb_refs": [
+        "KB-090"
+      ]
+    },
+    {
+      "from": "product base goc (3203)",
+      "to": "ban sao moi (3206, title += ' copy')",
+      "trigger": "chon 'Duplicate product'",
+      "condition": "deep-copy printarea/variant/mockup/display settings voi ID moi; SKU giu nguyen; label/internal_tags giu nguyen",
+      "kb_refs": [
+        "KB-057"
+      ]
+    },
+    {
+      "from": "product base ton tai, khong campaign nao dung (bat ke da/chua archive)",
+      "to": "da xoa han",
+      "trigger": "Delete Product -> confirm dialog",
+      "condition": "deletion-check.policy='allowed', DELETE tra 204 khong body",
+      "kb_refs": [
+        "KB-058",
+        "KB-059",
+        "KB-089"
+      ]
+    },
+    {
+      "from": "product base ton tai, DANG duoc campaign dung",
+      "to": "KHONG doi (khong xoa)",
+      "trigger": "bam Delete Product (hoac goi thang DELETE bypass UI)",
+      "condition": "deletion-check.policy='blocked' reason='IN_CAMPAIGNS'; qua UI: dialog Warning 'View campaigns list'/'Cancel', KHONG co DELETE nao duoc gui. Xac nhan doc lap bang DELETE bypass UI truc tiep: server tra 403 Forbidden {\"message\":\"Product cannot be deleted due to policy restrictions or invalid confirmation token\"}, product khong bi xoa - day la chan server-side thuc su, khong chi la UI an nut.",
+      "kb_refs": [
+        "KB-088"
+      ]
+    }
+  ],
+  "confirmed_rules": [
+    {
+      "statement": "[CHK-07-004] Server THUC SU CHAN (khong chi la UI an nut) viec DELETE mot product base dang duoc it nhat 1 campaign su dung. Hai duong bang chung doc lap dan toi cung ket luan: (1) qua UI - deletion-check.policy='blocked', reason='IN_CAMPAIGNS', dialog Warning huong dan 'View campaigns list'/'Cancel', KHONG co request DELETE nao duoc gui di; (2) bypass UI - goi thang DELETE tren product IN_CAMPAIGNS, server tra ve 403 Forbidden voi body {\"message\":\"Product cannot be deleted due to policy restrictions or invalid confirmation token\"}, product KHONG bi xoa.",
+      "kb_refs": [
+        "KB-088"
+      ]
+    },
+    {
+      "statement": "[CHK-07-005] DELETE duoc chap nhan tren Product Base dang ACTIVE, CHUA TUNG archive - hanh vi giong het product da archive truoc do; KHONG bat buoc phai archive truoc khi xoa.",
+      "kb_refs": [
+        "KB-089"
+      ]
+    },
+    {
+      "statement": "[CHK-07-009, business decision] Muc dich that su cua field 'token' trong response deletion-check (luon null o moi sample) hien KHONG anh huong chuc nang; day la known-limitation duoc PO chap nhan, ghi lai nhu open issue, KHONG can dieu tra them o thoi diem nay.",
+      "kb_refs": [
+        "KB-091"
+      ]
+    }
+  ],
+  "observed_behavior": [
+    {
+      "statement": "Muc xac nhan truoc thao tac pha huy/nhan ban khong nhat quan: xoa printarea - chay ngay; archive - khong hoi; duplicate - khong hoi; delete product base - CO dialog + deletion-check truoc.",
+      "kb_refs": [
+        "KB-054"
+      ]
+    },
+    {
+      "statement": "Response archive tra full record, lo 2 field chua tung thay o response khac (variants_position, print_provider_id).",
+      "kb_refs": [
+        "KB-055"
+      ]
+    },
+    {
+      "statement": "Response clone (POST /clone) la chinh record NGUON (3203), khong phai ban sao (3206) - portal phai refetch list de biet id ban sao, khong dieu huong sang ban sao.",
+      "kb_refs": [
+        "KB-056"
+      ]
+    },
+    {
+      "statement": "Clone copy title kem hau to ' copy'; label/internal_tags GIU NGUYEN; deep-copy 1 printarea + 2 variant (SKU giu nguyen) + 1 mockup + toan bo Display settings voi ID moi.",
+      "kb_refs": [
+        "KB-057"
+      ]
+    },
+    {
+      "statement": "[CHK-07-006] Archive roi Unarchive tren product dang lien ket 1 campaign: status quay ve dung gia tri ban dau (0->1->0); campaign_products (id=4057) va campaign_instances.need_sync HOAN TOAN KHONG DOI qua ca archive lan unarchive. PO chi de nghi 'thuc hien va kiem tra' (khong assert truoc ket qua cu the) nen giu OBSERVED_CURRENT, du ket qua phu hop voi ky vong ngam cua PO.",
+      "kb_refs": [
+        "KB-090"
+      ]
+    }
+  ],
+  "observed_validations": [],
+  "permissions": [
+    {
+      "statement": "Chi quan sat duoc 1 role (owner); chua biet role khac co bi gioi han archive/unarchive/duplicate/delete hay khong.",
+      "kb_refs": [
+        "KB-064"
+      ]
+    }
+  ],
+  "surface_mapping": {
+    "portal": [
+      {
+        "item": "/products, row menu '...' (Mark as archive/Unarchive/Delete/Duplicate)",
+        "kb_refs": [
+          "KB-011",
+          "KB-054"
+        ]
+      }
+    ],
+    "storefront": [],
+    "api": [
+      {
+        "item": "POST /api/products/{id}/archive",
+        "kb_refs": [
+          "KB-055"
+        ]
+      },
+      {
+        "item": "POST /api/products/{id}/unarchive",
+        "kb_refs": [
+          "KB-090"
+        ]
+      },
+      {
+        "item": "GET /api/products/{id}/deletion-check (2 branch: allowed / blocked+reason=IN_CAMPAIGNS, server-enforced)",
+        "kb_refs": [
+          "KB-058",
+          "KB-088"
+        ]
+      },
+      {
+        "item": "DELETE /api/products/{id} (chap nhan tren ca active lan archived, khi allowed; tra 403 Forbidden {\"message\":\"Product cannot be deleted due to policy restrictions or invalid confirmation token\"} khi bi chan boi policy IN_CAMPAIGNS - xac nhan bang bypass UI goi thang endpoint nay, khong chi suy tu hanh vi UI)",
+        "kb_refs": [
+          "KB-059",
+          "KB-089",
+          "KB-088"
+        ]
+      },
+      {
+        "item": "POST /api/products/{id}/clone",
+        "kb_refs": [
+          "KB-056",
+          "KB-057"
+        ]
+      }
+    ],
+    "data": [
+      {
+        "item": "products.status (archive/unarchive toggle); ban sao deep-copy printareas/variants/mockups/display settings voi ID moi",
+        "kb_refs": [
+          "KB-055",
+          "KB-057",
+          "KB-090"
+        ]
+      }
+    ],
+    "code": []
+  },
+  "dependencies": [
+    {
+      "target_feature": "FEAT-01-product-base-browse",
+      "relation": "entry point (row menu tren list)",
+      "kb_refs": [
+        "KB-011",
+        "KB-054"
+      ]
+    },
+    {
+      "target_feature": "FEAT-08-product-base-campaign-link",
+      "relation": "deletion-check tra 'IN_CAMPAIGNS' khi product base dang duoc campaign dung, server thuc su chan; archive/unarchive khong doi campaign_products",
+      "kb_refs": [
+        "KB-058",
+        "KB-088",
+        "KB-090"
+      ]
+    }
+  ],
+  "risks": [
+    {
+      "risk": "Response clone (/clone) tra ve record NGUON thay vi ban sao - bat ky consumer nao goi API clone truc tiep (ngoai portal) se khong lay duoc id vua tao tu response, de dan toi loi logic o integration khac.",
+      "severity": "MEDIUM",
+      "category": "api-contract-mismatch",
+      "kb_refs": [
+        "KB-056"
+      ]
+    },
+    {
+      "risk": "Muc xac nhan truoc hanh dong pha huy/nhan ban khong nhat quan (archive/duplicate/unarchive khong hoi, chi delete moi hoi) - rui ro thao tac nham khong the hoan tac cho archive/duplicate/unarchive.",
+      "severity": "MEDIUM",
+      "category": "destructive-action-inconsistent-confirm",
+      "kb_refs": [
+        "KB-054"
+      ]
+    },
+    {
+      "risk": "[Known limitation - business decision PO, xem KB-091] Muc dich that su cua field 'token' trong deletion-check van chua ro, luon null o moi sample - PO xac nhan hien khong anh huong chuc nang, ghi lai nhu open issue, khong can fix ngay.",
+      "severity": "LOW",
+      "category": "unclear-contract (accepted)",
+      "kb_refs": [
+        "KB-058",
+        "KB-091"
+      ]
+    },
+    {
+      "risk": "Response archive tra full record lo them field chua thay o response khac (variants_position, print_provider_id) - be mat du lieu tra ve khong nhat quan giua cac endpoint.",
+      "severity": "LOW",
+      "category": "api-response-inconsistency",
+      "kb_refs": [
+        "KB-055"
+      ]
+    }
+  ],
+  "unknown_areas": [
+    {
+      "question": "UI hien thi gi khi deletion-check tra policy='blocked' tren cac ngu canh khac (nhieu campaign cung dung, hoac campaign da archived)?",
+      "why_it_matters": "CHK-07-004 chi test 1 campaign dang active dung san pham; chua kiem tra cac bien the khac cua dieu kien blocked."
+    }
+  ],
+  "last_updated": {
+    "date": "2026-09-14",
+    "ccr_ref": "bootstrap"
+  }
+}

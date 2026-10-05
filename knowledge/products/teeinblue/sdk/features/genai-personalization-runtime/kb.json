@@ -1,0 +1,146 @@
+[
+  {
+    "kb_id": "KB-045",
+    "topic": "[sdk, feature mới FEAT-09] Async job + polling — cơ chế dùng chung giữa Multiple Uploads và Text-to-Image generate (buyer-facing)",
+    "statement": "Khi tester (qua Live Preview widget, staff-authenticated, proxy cho buyer — artwork 4416, env staging) bấm 'Generate image' trên layer Multiple Uploads ('top'), POST /api/merchant/shopify/customer-uploads/generate-from-multiple-images trả 202 kèm {id:25552, status:0} (job reference, không phải ảnh); client poll GET /api/merchant/shopify/customer-uploads/25552/image-filter-effects/status 2 lần cách nhau ~2s: lần 1 status=1 (processing, master/url/original null), lần 2 status=2 (completed, các field ảnh đã điền). CÙNG cơ chế 202+job-id+polling này cũng xảy ra khi bấm 'Generate image' trên layer Text to Image (AI) ('hair'), nhưng qua endpoint khởi tạo KHÁC: POST /api/merchant/shopify/customer-uploads/generate (số ít, không phải 'generate-from-multiple-images'); 1 lần poll đã trả status=2 ngay, effects.prompt khớp verbatim prompt đã lưu ở portal. Vì layer này không render prompt editable trong Live Preview, generate dùng prompt ĐÃ LƯU, không test được nhập prompt mới qua surface này.",
+    "knowledge_kind": "OBSERVED_CURRENT",
+    "confidence": "MEDIUM",
+    "scope": {
+      "environment": "staging (staging-portal.teeinblue.com / staging-api.teeinblue.com)",
+      "role": "staff 'Linh explorer' dùng Live Preview widget (proxy cho buyer, KHÔNG phải guest session thật)",
+      "object_state": "artwork 4416: layer 'top' có 2 ảnh upload thành công; layer 'hair' đã có prompt đã lưu từ portal",
+      "surface": "storefront"
+    },
+    "last_updated": {
+      "date": "2026-09-25",
+      "ccr_ref": "bootstrap"
+    },
+    "related_kb_ids": []
+  },
+  {
+    "kb_id": "KB-046",
+    "topic": "[sdk, feature mới FEAT-09] Minimum-filesize validation server-side sau khi client tự re-encode ảnh + tồn tại route fallback multipart",
+    "statement": "Khi tester (Live Preview widget, layer Multiple Uploads, env staging) chọn 2 ảnh trong 1 lần: ảnh gốc trên đĩa 17217 byte nhưng client TỰ re-encode xuống 9598 byte trước khi gọi upload — POST /api/merchant/shopify/upload-url trả 422 {\"message\":\"The filesize field must be at least 10000.\"}; ảnh còn lại re-encode xuống 29193 byte thì pass. Sau khi presigned-URL request thất bại, client tự động thử route fallback POST /api/merchant/shopify/photo-upload (multipart, KHÔNG phải presigned-S3) cho đúng ảnh lỗi đó, nhưng CŨNG 422 với 'The file field must be at least 10 kilobytes' (cùng nguyên nhân gốc). Vì cả 2 route đều fail cùng lý do, KHÔNG so sánh được route fallback này có chuyển GenAI generate từ sync sang async hay không (câu hỏi gốc TIB-5339 về so sánh sync/async giữa 2 route CHƯA trả lời được — chỉ xác nhận route fallback multipart THẬT SỰ TỒN TẠI và được tự động thử khi route chính lỗi). Đây là finding độc lập với TIB-5188 (TIB-5188 nói về pipeline resize/crop của ẢNH GENAI SINH RA, không phải business rule filesize khi buyer upload ảnh gốc).",
+    "knowledge_kind": "OBSERVED_CURRENT",
+    "confidence": "LOW",
+    "scope": {
+      "environment": "staging (staging-portal.teeinblue.com / staging-api.teeinblue.com)",
+      "role": "staff 'Linh explorer' dùng Live Preview widget (proxy cho buyer, KHÔNG phải guest session thật)",
+      "object_state": "artwork 4416, layer 'top', Set minimum size=OFF (mặc định)",
+      "surface": "storefront"
+    },
+    "last_updated": {
+      "date": "2026-09-25",
+      "ccr_ref": "bootstrap"
+    },
+    "related_kb_ids": []
+  },
+  {
+    "kb_id": "KB-047",
+    "topic": "[sdk, feature mới FEAT-09] 'Select a previously generated image' xuất hiện SAU generate thành công đầu tiên; 'Duplicate & Share' KHÔNG tìm thấy ở storefront",
+    "statement": "Trên cả layer Multiple Uploads ('top') và Text to Image (AI) ('hair') trong Live Preview widget (env staging, staff-authenticated proxy cho buyer), nút 'Select a previously generated image' (kèm thumbnail lịch sử nhỏ) CHỈ xuất hiện SAU KHI layer đó đã có ít nhất 1 lần generate thành công — KHÔNG có mặt trước đó. Với chỉ 1 item lịch sử, bấm nút này KHÔNG mở gallery/modal riêng biệt quan sát được (chưa thử tạo 2 kết quả để ép mở gallery nhiều item — ngoài ngân sách run này). KHÔNG tìm thấy control 'Duplicate & Share' nào ở bất kỳ đâu trong panel Live Preview này (khớp với portal-explorer cũng không tìm thấy trong portal editor — xem open-questions.md).",
+    "knowledge_kind": "OBSERVED_CURRENT",
+    "confidence": "MEDIUM",
+    "scope": {
+      "environment": "staging (staging-portal.teeinblue.com / staging-api.teeinblue.com)",
+      "role": "staff 'Linh explorer' dùng Live Preview widget (proxy cho buyer, KHÔNG phải guest session thật)",
+      "object_state": "artwork 4416: cả 2 layer 'top'/'hair' đã có >=1 generate thành công",
+      "surface": "storefront"
+    },
+    "last_updated": {
+      "date": "2026-09-25",
+      "ccr_ref": "bootstrap"
+    },
+    "related_kb_ids": []
+  },
+  {
+    "kb_id": "KB-048",
+    "topic": "[sdk, feature mới FEAT-09] Ngưỡng enable nút Generate của Multiple Uploads — nghi ngờ >=2 ảnh, chưa xác nhận (1 sample)",
+    "statement": "Trên layer Multiple Uploads (env staging, Live Preview widget, Maximum photos=3), nút 'Generate image' ở trạng thái disabled khi mới có 1 ảnh upload thành công, và chuyển sang enabled ngay sau khi ảnh thứ 2 upload thành công. Quan sát 1 lần duy nhất — CHƯA phân biệt được đây là ngưỡng thật (>=2 ảnh bắt buộc bất kể Maximum photos config) hay chỉ là hiện tượng render-lag nhất thời tại thời điểm có 1 ảnh. KHÔNG suy thành validation rule tổng quát.",
+    "knowledge_kind": "OBSERVED_CURRENT",
+    "confidence": "LOW",
+    "scope": {
+      "environment": "staging (staging-portal.teeinblue.com / staging-api.teeinblue.com)",
+      "role": "staff 'Linh explorer' dùng Live Preview widget (proxy cho buyer, KHÔNG phải guest session thật)",
+      "object_state": "artwork 4416, layer 'top', Maximum photos=3",
+      "surface": "storefront"
+    },
+    "last_updated": {
+      "date": "2026-09-25",
+      "ccr_ref": "bootstrap"
+    },
+    "related_kb_ids": []
+  },
+  {
+    "kb_id": "KB-049",
+    "topic": "[sdk, FEAT-09-genai-personalization-runtime] Rate-limit buyer-facing cho AI-effect upload — root cause: collision fallback-ID theo device-info (bug TIB-5460, CHƯA fix)",
+    "statement": "Theo mô tả trong Jira TIB-5460 (description + comment id 51194, huyenntk, 2026-09-17/18, https://ownego.atlassian.net/browse/TIB-5460; ticket status QA Review, resolutiondate null tại thời điểm ghi nhận 2026-09-28) — CHƯA được re-explore/reproduce độc lập trong run này (Gate C0.5 fast-path=false cho claim này; operator chỉ đạo không cố tái hiện bug trên môi trường thật vì thiếu fixture nhiều device/visitor an toàn trong phạm vi run CCR): khi buyer ở storefront upload ảnh dùng AI effect (Remove Background, AI Enhance/Image Filter, Text-to-Image) TRƯỚC KHI 'thumbmark' (signed visitor ID, fetch từ GET /merchant/{platform}/thumbmark) kịp fetch xong, SDK dùng 1 ID fallback sinh từ device info (model máy, kích thước màn hình, ngôn ngữ, timezone, OS). ID fallback này CÓ THỂ COLLIDE giữa các visitor khác nhau dùng chung/tương tự thiết bị và khu vực, khiến họ share chung 1 quota rate-limit và bị chặn (blocked) ngay ở lần upload đầu tiên. Vai trò kỹ thuật cụ thể của người xác nhận (huyenntk) trong Jira KHÔNG được ghi rõ (dev/PM không phân biệt) — ghi nhận OBSERVED_CURRENT dựa trên nội dung CCR/Jira như một quan sát báo cáo (không phải quan sát trực tiếp của chính run này), cần NEEDS_CONFIRMATION độc lập trước khi dùng làm oracle cho test case.",
+    "knowledge_kind": "OBSERVED_CURRENT",
+    "confidence": "LOW",
+    "scope": {
+      "environment": "staging (chính sách dự án mặc định) — hành vi được Jira mô tả áp dụng chung, không phân biệt riêng theo case trong phạm vi run này",
+      "role": "n/a — không có live session portal/storefront trong run này; nguồn là nội dung Jira do CCR CBS-005 trích dẫn (submitted by u-jm)",
+      "object_state": "n/a — Jira không gắn 1 artwork/campaign cụ thể; mô tả hành vi chung của toàn bộ buyer-facing GenAI upload flow trước khi fix TIB-5460",
+      "surface": "code"
+    },
+    "last_updated": {
+      "date": "2026-09-28",
+      "ccr_ref": "CBS-005"
+    },
+    "related_kb_ids": []
+  },
+  {
+    "kb_id": "KB-050",
+    "topic": "[sdk, FEAT-09-genai-personalization-runtime] Fix 3 phần cho TIB-5460 (fallback ID random-per-browser + fetch-thumbmark sớm + retry non-429) — ĐANG QA Review, CHƯA SHIP, CHƯA re-verify",
+    "statement": "Theo Jira TIB-5460 (status QA Review, resolutiondate null tại 2026-09-28, https://ownego.atlassian.net/browse/TIB-5460), một fix ĐANG ĐƯỢC ĐỀ XUẤT/code review cho hiện tượng collision fallback-ID (KB-049), gồm 3 phần: (1) đổi cách sinh fallback ID sang random-per-browser thay vì suy từ device info; (2) fetch thumbmark SỚM HƠN (ngay khi page load thay vì lazy); (3) retry 1 lần khi network-error/5xx lúc fetch thumbmark thất bại (KHÔNG retry khi 429). Testlane task TIB-116 đã có sẵn 13 test case (TC-TIB-3296..TC-TIB-3308) để re-verify các thay đổi này, nhưng TOÀN BỘ 13/13 test case NOT-RUN tại thời điểm ghi nhận (2026-09-28) — CHƯA có bất kỳ bằng chứng PASS nào. Đây là mô tả 1 THAY ĐỔI DỰ KIẾN CHƯA XẢY RA trên bất kỳ môi trường thật nào (staging lẫn production) tại thời điểm ghi nhận — không tồn tại để quan sát trực tiếp trong run này, không được coi là hành vi hiện hành. Điều kiện để bất kỳ phần nào trong 3 phần fix này được xét nâng lên CONFIRMED_EXPECTED (ở run sau, không phải run này): TIB-5460 phải chuyển sang trạng thái deploy/resolved VÀ ít nhất 1/13 test case Testlane TIB-116 phải được chạy và PASS đúng hành vi tương ứng.",
+    "knowledge_kind": "PROPOSED",
+    "confidence": "LOW",
+    "scope": {
+      "environment": "n/a — hành vi mô tả CHƯA tồn tại ở bất kỳ môi trường thật nào (staging/production) tại thời điểm ghi nhận 2026-09-28",
+      "role": "n/a",
+      "object_state": "n/a — thay đổi ở mức code, chưa gắn 1 object/campaign cụ thể, chưa deploy",
+      "surface": "code"
+    },
+    "last_updated": {
+      "date": "2026-09-28",
+      "ccr_ref": "CBS-005"
+    },
+    "related_kb_ids": []
+  },
+  {
+    "kb_id": "KB-051",
+    "topic": "[sdk, FEAT-09-genai-personalization-runtime] Cấu hình rate-limit hiện tại: chỉ áp AI-effect upload, default 5/window, window staging=5'/production=1h, cache thumbmark localStorage không expiry",
+    "statement": "Dev confirm nguyên văn (Jira TIB-5460, comment id 51220, huyenntk, 2026-09-17, https://ownego.atlassian.net/browse/TIB-5460): \"Rate limiting only applies to uploads that use an AI effect (Remove Background, AI Enhance/Image Filter, Text-to-Image, etc.). A plain upload with no effect is never limited... Default limit: 5 uploads per window per visitor... Test on staging — the throttle window there is 5 minutes instead of 1 hour in production... the signed thumbmark is cached in localStorage (key `teeinblue_signed_thumbmark`) with no expiry once successfully fetched.\" Ghi nhận cấu hình hiện tại (tại 2026-09-28, KHÔNG re-verify độc lập qua storefront/API trong run này — Gate C0.5 đánh giá claim này fastpath=true dựa trên đúng Dev confirm này): rate-limit CHỈ áp dụng cho upload dùng AI effect (Remove Background/AI Enhance/Image Filter/Text-to-Image); upload KHÔNG dùng effect KHÔNG bị giới hạn; default limit quan sát/khai báo = 5 upload/window/visitor; window = 5 phút trên staging, 1 giờ trên production (giá trị production được ghi nhận NHƯ MỘT PHẦN của cùng mô tả cấu hình do Dev confirm, KHÔNG tách thành case riêng và KHÔNG dùng làm oracle riêng biệt cho Prod); signed thumbmark được cache tại localStorage key `teeinblue_signed_thumbmark`, KHÔNG có expiry sau khi fetch thành công lần đầu. Vai trò kỹ thuật của huyenntk (dev/PM) KHÔNG được Jira ghi rõ, và đây là 1 comment kỹ thuật trong ticket còn ở trạng thái QA Review (CHƯA qua PO business sign-off) — theo quyết định operator cho run CTX-20260928-01, giữ nguyên OBSERVED_CURRENT, KHÔNG nâng CONFIRMED_EXPECTED dù có trích dẫn nguyên văn + link.",
+    "knowledge_kind": "OBSERVED_CURRENT",
+    "confidence": "LOW",
+    "scope": {
+      "environment": "staging (mô tả kèm giá trị production=1h như 1 phần của cùng cấu hình Dev confirm, không tách case Prod riêng, không dùng làm oracle riêng biệt)",
+      "role": "n/a — không có live session portal/storefront/API trong run này; nguồn là Dev comment trên Jira do CCR CBS-005 trích dẫn nguyên văn",
+      "object_state": "n/a — cấu hình runtime chung của feature (rate-limit theo visitor+product+window), không gắn 1 object/campaign cụ thể",
+      "surface": "code"
+    },
+    "last_updated": {
+      "date": "2026-09-28",
+      "ccr_ref": "CBS-005"
+    },
+    "related_kb_ids": []
+  },
+  {
+    "kb_id": "KB-052",
+    "topic": "[sdk, FEAT-09-genai-personalization-runtime] Follow-up chưa có ticket con: thumbmark-issuance endpoint rate-limit theo IP (không theo shop) — nguy cơ CGNAT/mobile carrier vẫn occasionally rơi fallback dù đã fix",
+    "statement": "Dev tự nêu (trong cùng thread Jira TIB-5460, https://ownego.atlassian.net/browse/TIB-5460 — không có comment id riêng được CCR trích dẫn cho phần này) một follow-up NGOÀI phạm vi PR fix hiện tại (KB-050), CHƯA có ticket con: endpoint issuance thumbmark (GET /merchant/{platform}/thumbmark) hiện rate-limit theo IP (không theo shop/visitor); do đó buyer đứng sau CGNAT hoặc mobile carrier share IP có thể VẪN OCCASIONALLY rơi vào dùng ID fallback (KB-049) dù fix TIB-5460 (KB-050) đã ship — vì lần đó chính request fetch thumbmark bị endpoint issuance từ chối do rate-limit theo IP, không phải do collision fallback-ID tái diễn. Đây là RISK do dev tự cảnh báo (hedged, dùng từ 'occasionally'), CHƯA có ticket con Jira để theo dõi, CHƯA được verify độc lập bằng bất kỳ test case nào ở Testlane TIB-116 — không suy diễn thành hành vi đã xác nhận đang xảy ra trong thực tế.",
+    "knowledge_kind": "OBSERVED_CURRENT",
+    "confidence": "LOW",
+    "scope": {
+      "environment": "n/a — risk hạ tầng lý thuyết (CGNAT/mobile carrier), không gắn 1 environment cụ thể",
+      "role": "n/a",
+      "object_state": "n/a — follow-up chưa có ticket con, chưa gắn object/campaign nào",
+      "surface": "code"
+    },
+    "last_updated": {
+      "date": "2026-09-28",
+      "ccr_ref": "CBS-005"
+    },
+    "related_kb_ids": []
+  }
+]

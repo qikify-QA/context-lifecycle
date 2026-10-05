@@ -1,0 +1,447 @@
+{
+  "schema_version": "1.0",
+  "artifact_type": "RegressionChecklistCandidate",
+  "artifact_id": "CHKL-CTX-20261002-01-refund-and-downgrade-adjustment",
+  "workflow_id": "CTX-20261002-01",
+  "producer": "qa-checklist-builder",
+  "source_refs": [
+    {
+      "type": "doc_ref",
+      "path": "candidate/feature-profiles/refund-and-downgrade-adjustment.json",
+      "note": "Feature Profile candidate, CONDITIONAL_PASS, 0 conflict trong profile_conflicts (OQ-commission-calculation-005/002 không subject feature này)."
+    },
+    {
+      "type": "doc_ref",
+      "path": "candidate/product-kb/refund-and-downgrade-adjustment.json",
+      "note": "Shard KB chính, 8 kb_candidates (6 CONFIRMED_EXPECTED gồm 1 HIGH, 2 EXAMPLE_ONLY)."
+    },
+    {
+      "type": "doc_ref",
+      "path": "candidate/product-kb/_object-level.commission-calculation.json",
+      "note": "Object-level commission-calculation, kb_candidates=[] (chủ đích)."
+    },
+    {
+      "type": "doc_ref",
+      "path": "candidate/product-kb/usage-charge-commission.json",
+      "note": "Đọc chéo cho check INTEGRATION (ranh giới literal charge_type refund usage-charge, KB-011 ở shard đó)."
+    }
+  ],
+  "upstream_artifact_ids": [
+    "FP-CAND-CTX-20261002-01-refund-and-downgrade-adjustment",
+    "KBCAND-CTX-20261002-01-refund-and-downgrade-adjustment",
+    "KBCAND-CTX-20261002-01-OBJECT-LEVEL"
+  ],
+  "status": "READY",
+  "confidence": "MEDIUM",
+  "observations": [
+    "Quy ước kb_id: tên trần \"KB-0xx\" = thuộc shard refund-and-downgrade-adjustment.json. Tham chiếu sang shard khác dùng \"<feature-key>:KB-0xx\".",
+    "OQ-commission-calculation-005/OQ-commission-calculation-006 KHÔNG có side nào thuộc feature này (profile_conflicts=[]) — không tạo check NEEDS_CONFIRMATION cho 2 conflict đó ở đây; xem checklist commission-decision-flow/recurring-commission/first-month-commission.",
+    "KB-007, KB-008 (EXAMPLE_ONLY, INFERRED) chỉ dùng thiết kế số liệu minh hoạ cho CHK-RDA-001/CHK-RDA-005/CHK-RDA-006, không phải oracle độc lập — oracle thật là KB-001/KB-004/KB-005.",
+    "OQ-payout-import-021 (object payout-import, ngoài phạm vi object commission-calculation) chỉ được nêu như dependency risk ở CHK-RDA-010, KHÔNG tạo entry trong conflicts[] của envelope này vì conflict đó không thuộc object này.",
+    "Không có KB item nào trong shard này mang derivation=code_artifact — mọi oracle STRONG ở đây đều từ confirmation_source.derivation=prose."
+  ],
+  "assumptions": [],
+  "unknowns": [
+    "Lý do nghiệp vụ đằng sau quy tắc cap 2 chiều không được tài liệu phát biểu tường minh (chỉ có rationale chung) — không ảnh hưởng expected result của CHK-RDA-001/CHK-RDA-002, chỉ ảnh hưởng việc suy luận biên edge-case khác.",
+    "Literal charge_type thật cho refund usage-charge chưa quan sát — xem CHK-RDA-009 (dùng chung với usage-charge-commission:CHK-UCC-016)."
+  ],
+  "conflicts": [],
+  "blocking_issues": [],
+  "payload": {
+    "checklists": [
+      {
+        "feature_id": "refund-and-downgrade-adjustment",
+        "feature_key": "refund-and-downgrade-adjustment",
+        "checklist_version": "v1",
+        "checks": [
+          {
+            "check_id": "CHK-RDA-001",
+            "dimension": "CORE",
+            "layer": "db",
+            "title": "Cap per-row áp dụng 2 chiều cho recurring/first-month: số âm bị chặn dưới ở -|max|, đối xứng với cap dương",
+            "applicability": {
+              "role": "system",
+              "state": "dòng payout nhánh recurring/first-month, amount tính ra âm vượt ngưỡng",
+              "environment": "documented",
+              "theme_or_device": ""
+            },
+            "precondition": "ProgramCommission.maximum_amount = $50; dòng downgrade/refund với partner_share=-$400, rate=15% (amount_raw=-$60, vượt ngưỡng -50).",
+            "steps": [
+              "Cấu hình maximum_amount=$50, rate=15%.",
+              "Tạo dòng downgrade/refund với partner_share=-$400.",
+              "Chạy pipeline tính hoa hồng."
+            ],
+            "observation_point": "amount cuối cùng của Conversion.",
+            "expected_result": "amount_raw = -400×0.15 = -$60; sau clamp 2 chiều: amount = max(-60, -|50|) = -$50 — bị chặn lại ở -$50, không âm hơn nữa, đối xứng với cap dương $50.",
+            "oracle": {
+              "kb_ids": [
+                "KB-001"
+              ],
+              "oracle_strength": "BASELINE"
+            },
+            "status": "NEEDS_CONFIRMATION",
+            "open_question_draft": "Oracle STRONG cua check 'CHK-RDA-001' hien chi dua tren KB item nguon dev_doc (toan bo KB cua run nay khong co spec_doc/po_dev_confirm/test_case nao). Theo luat C5, dev_doc khong duoc la oracle STRONG duy nhat cho check priority P1 (mat du lieu/tien/permission). Ha xuong BASELINE cho toi khi co test_case PASS xac nhan hanh vi, hoac PO/Dev xac nhan truc tiep (po_dev_confirm).",
+            "risk_refs": [],
+            "priority": "P1",
+            "act_ids": [],
+            "evidence_refs": [],
+            "automation_suitability": "SUITABLE"
+          },
+          {
+            "check_id": "CHK-RDA-002",
+            "dimension": "BOUNDARY",
+            "layer": "db",
+            "title": "Clamp 2 chiều: biên đúng tại amount_raw == -|max| (chưa vượt, không bị cắt) vs amount_raw vừa vượt qua",
+            "applicability": {
+              "role": "system",
+              "state": "amount âm ở sát ngưỡng -|max|",
+              "environment": "documented",
+              "theme_or_device": ""
+            },
+            "precondition": "maximum_amount=$50 (nên ngưỡng dưới là -$50).",
+            "steps": [
+              "Tạo dòng downgrade/refund với amount_raw tính ra đúng -$50.",
+              "Tạo dòng khác với amount_raw = -$50.000001 (vượt ngưỡng dù rất nhỏ).",
+              "Chạy pipeline cho cả 2 dòng."
+            ],
+            "observation_point": "amount cuối cùng của mỗi dòng.",
+            "expected_result": "Dòng amount_raw == -50: amount = -50 (max(-50,-50)=-50, không bị cắt thêm). Dòng amount_raw < -50 (vượt ngưỡng): amount = -50 (bị chặn).",
+            "oracle": {
+              "kb_ids": [
+                "KB-001"
+              ],
+              "oracle_strength": "STRONG"
+            },
+            "status": "READY",
+            "open_question_draft": null,
+            "risk_refs": [],
+            "priority": "P2",
+            "act_ids": [],
+            "evidence_refs": [],
+            "automation_suitability": "SUITABLE"
+          },
+          {
+            "check_id": "CHK-RDA-003",
+            "dimension": "CORE",
+            "layer": "db",
+            "title": "Usage-charge: dòng refund/downgrade (raw_amount<=0) cộng thẳng vào already_earned, KHÔNG dùng cap 2 chiều per-row",
+            "applicability": {
+              "role": "system",
+              "state": "dòng usage-charge refund, raw_amount<=0",
+              "environment": "documented",
+              "theme_or_device": ""
+            },
+            "precondition": "Dòng payout là refund/downgrade của usage-charge (charge_type chứa \"usage\"), raw_amount âm.",
+            "steps": [
+              "Tạo dòng usage-charge refund với raw_amount=-$10.",
+              "Chạy pipeline tính hoa hồng.",
+              "So sánh với cơ chế 2 chiều của CHK-RDA-001 (áp cho recurring/first-month)."
+            ],
+            "observation_point": "amount cuối cùng, và cơ chế áp dụng (có qua clamp 2 chiều per-row hay không).",
+            "expected_result": "amount = raw_amount nguyên vẹn (-$10), KHÔNG qua clamp 2 chiều per-row — cộng thẳng vào already_earned của cap lifetime usage-charge, khác hẳn cơ chế per-row 2 chiều của CHK-RDA-001.",
+            "oracle": {
+              "kb_ids": [
+                "KB-002"
+              ],
+              "oracle_strength": "BASELINE"
+            },
+            "status": "NEEDS_CONFIRMATION",
+            "open_question_draft": "Oracle STRONG cua check 'CHK-RDA-003' hien chi dua tren KB item nguon dev_doc (toan bo KB cua run nay khong co spec_doc/po_dev_confirm/test_case nao). Theo luat C5, dev_doc khong duoc la oracle STRONG duy nhat cho check priority P1 (mat du lieu/tien/permission). Ha xuong BASELINE cho toi khi co test_case PASS xac nhan hanh vi, hoac PO/Dev xac nhan truc tiep (po_dev_confirm).",
+            "risk_refs": [],
+            "priority": "P1",
+            "act_ids": [],
+            "evidence_refs": [],
+            "automation_suitability": "SUITABLE"
+          },
+          {
+            "check_id": "CHK-RDA-004",
+            "dimension": "CORE",
+            "layer": "db",
+            "title": "Refund/downgrade là 1 dòng payout hoàn toàn mới, Charge Type khác dòng gốc, mọi cột tiền đảo dấu âm",
+            "applicability": {
+              "role": "system",
+              "state": "Shopify phát hành refund/downgrade cho 1 charge đã có trước đó",
+              "environment": "documented",
+              "theme_or_device": ""
+            },
+            "precondition": "Có 1 charge dương gốc đã xử lý trước đó; Shopify phát hành refund/downgrade cho charge đó.",
+            "steps": [
+              "Quan sát cấu trúc dòng payout refund/downgrade trong file export của Shopify.",
+              "So sánh Charge Type, các cột tiền với dòng charge gốc."
+            ],
+            "observation_point": "Charge Type và dấu của các cột tiền trong dòng refund/downgrade.",
+            "expected_result": "Dòng refund/downgrade là 1 dòng HOÀN TOÀN MỚI (không phải sửa dòng gốc), Charge Type khác dòng gốc (vd \"App refund\"/\"App downgrade\"), và TOÀN BỘ các cột tiền bị đảo dấu âm.",
+            "oracle": {
+              "kb_ids": [
+                "KB-003"
+              ],
+              "oracle_strength": "STRONG"
+            },
+            "status": "READY",
+            "open_question_draft": null,
+            "risk_refs": [],
+            "priority": "P2",
+            "act_ids": [],
+            "evidence_refs": [],
+            "automation_suitability": "SUITABLE"
+          },
+          {
+            "check_id": "CHK-RDA-005",
+            "dimension": "CORE",
+            "layer": "db",
+            "title": "\"App refund\" và \"App downgrade\" (không chứa usage/one-time) đi nhánh Recurring dạng clawback",
+            "applicability": {
+              "role": "system",
+              "state": "charge_type là \"App refund\" hoặc \"App downgrade\"",
+              "environment": "documented",
+              "theme_or_device": ""
+            },
+            "precondition": "Dòng payout có charge_type = \"App refund\" hoặc \"App downgrade\" (không chứa \"usage\"/\"one-time\").",
+            "steps": [
+              "Tạo dòng payout với charge_type=\"App refund\".",
+              "Tạo dòng payout khác với charge_type=\"App downgrade\".",
+              "Chạy pipeline cho cả 2 dòng."
+            ],
+            "observation_point": "Nhánh xử lý được gán cho mỗi dòng.",
+            "expected_result": "Cả 2 charge_type đều đi vào nhánh Recurring (clawback) — \"App refund\" là hoàn tiền toàn phần/một phần cho charge trước đó, \"App downgrade\" là credit khi merchant hạ gói.",
+            "oracle": {
+              "kb_ids": [
+                "KB-004"
+              ],
+              "oracle_strength": "BASELINE"
+            },
+            "status": "NEEDS_CONFIRMATION",
+            "open_question_draft": "Oracle STRONG cua check 'CHK-RDA-005' hien chi dua tren KB item nguon dev_doc (toan bo KB cua run nay khong co spec_doc/po_dev_confirm/test_case nao). Theo luat C5, dev_doc khong duoc la oracle STRONG duy nhat cho check priority P1 (mat du lieu/tien/permission). Ha xuong BASELINE cho toi khi co test_case PASS xac nhan hanh vi, hoac PO/Dev xac nhan truc tiep (po_dev_confirm).",
+            "risk_refs": [],
+            "priority": "P1",
+            "act_ids": [],
+            "evidence_refs": [],
+            "automation_suitability": "SUITABLE"
+          },
+          {
+            "check_id": "CHK-RDA-006",
+            "dimension": "NEGATIVE",
+            "layer": "db",
+            "title": "Dòng refund KHÔNG mang charge_id của charge gốc — hệ thống xử lý độc lập, dùng rate/formula HIỆN TẠI của Customer",
+            "applicability": {
+              "role": "system",
+              "state": "dòng refund không có liên kết tới charge gốc",
+              "environment": "documented",
+              "theme_or_device": ""
+            },
+            "precondition": "Customer đã đổi Level (và do đó đổi rate) GIỮA lúc charge gốc xảy ra và lúc dòng refund của chính charge đó xuất hiện.",
+            "steps": [
+              "Tạo charge gốc dương cho Customer ở Level L1, rate R1.",
+              "Thăng Customer lên Level L2, rate R2 (khác R1).",
+              "Tạo dòng refund của chính charge gốc đó (không mang charge_id liên kết).",
+              "Chạy pipeline tính hoa hồng cho dòng refund."
+            ],
+            "observation_point": "Rate thực tế dùng để tính amount của dòng refund — R1 (rate lúc charge gốc) hay R2 (rate hiện tại của Customer).",
+            "expected_result": "Dòng refund được tính bằng rate HIỆN TẠI của Customer (R2 ở Level L2), KHÔNG dùng lại rate R1 của charge gốc — vì Shopify không cung cấp charge_id liên kết, hệ thống không biết chính xác charge gốc là dòng nào và xử lý refund như 1 dòng độc lập.",
+            "oracle": {
+              "kb_ids": [
+                "KB-005"
+              ],
+              "oracle_strength": "BASELINE"
+            },
+            "status": "NEEDS_CONFIRMATION",
+            "open_question_draft": "Oracle STRONG cua check 'CHK-RDA-006' hien chi dua tren KB item nguon dev_doc (toan bo KB cua run nay khong co spec_doc/po_dev_confirm/test_case nao). Theo luat C5, dev_doc khong duoc la oracle STRONG duy nhat cho check priority P1 (mat du lieu/tien/permission). Ha xuong BASELINE cho toi khi co test_case PASS xac nhan hanh vi, hoac PO/Dev xac nhan truc tiep (po_dev_confirm).",
+            "risk_refs": [],
+            "priority": "P1",
+            "act_ids": [],
+            "evidence_refs": [],
+            "automation_suitability": "SUITABLE"
+          },
+          {
+            "check_id": "CHK-RDA-007",
+            "dimension": "CORE",
+            "layer": "db",
+            "title": "Dòng downgrade/refund ĐẦU TIÊN của shop, trong 30 ngày kể từ charge đầu -> vẫn is_first_month=true",
+            "applicability": {
+              "role": "system",
+              "state": "dòng âm đầu tiên của shop, trong mốc 30 ngày",
+              "environment": "documented",
+              "theme_or_device": ""
+            },
+            "precondition": "Shop có charge đầu tiên dương; dòng âm (downgrade/refund) ĐẦU TIÊN của shop này xảy ra trong 30 ngày kể từ charge đầu, với partner_share=-$80, first_month_percentage=30%.",
+            "steps": [
+              "Tạo charge đầu tiên dương cho shop.",
+              "Tạo dòng downgrade đầu tiên của shop, 19 ngày sau charge đầu, partner_share=-$80.",
+              "Chạy pipeline tính hoa hồng."
+            ],
+            "observation_point": "is_first_month và amount của dòng downgrade.",
+            "expected_result": "is_first_month=true cho dòng downgrade này; amount = -80 × 0.30 = -$24, tính theo first_month_percentage (không phải percentage thường).",
+            "oracle": {
+              "kb_ids": [
+                "KB-006"
+              ],
+              "oracle_strength": "BASELINE"
+            },
+            "status": "NEEDS_CONFIRMATION",
+            "open_question_draft": "Oracle STRONG cua check 'CHK-RDA-007' hien chi dua tren KB item nguon dev_doc (toan bo KB cua run nay khong co spec_doc/po_dev_confirm/test_case nao). Theo luat C5, dev_doc khong duoc la oracle STRONG duy nhat cho check priority P1 (mat du lieu/tien/permission). Ha xuong BASELINE cho toi khi co test_case PASS xac nhan hanh vi, hoac PO/Dev xac nhan truc tiep (po_dev_confirm).",
+            "risk_refs": [],
+            "priority": "P1",
+            "act_ids": [],
+            "evidence_refs": [],
+            "automation_suitability": "SUITABLE"
+          },
+          {
+            "check_id": "CHK-RDA-008",
+            "dimension": "CORE",
+            "layer": "db",
+            "title": "Dòng downgrade/refund THỨ 2 của shop luôn is_first_month=false, dù có trong 30 ngày hay không",
+            "applicability": {
+              "role": "system",
+              "state": "dòng âm thứ 2 của shop",
+              "environment": "documented",
+              "theme_or_device": ""
+            },
+            "precondition": "Shop đã có 1 dòng downgrade/refund trước đó (dòng âm đầu tiên); phát sinh thêm 1 dòng âm thứ 2.",
+            "steps": [
+              "Sau dòng downgrade đầu tiên của shop (xem CHK-RDA-007), tạo thêm 1 dòng downgrade/refund thứ 2, dù rơi trong hoặc ngoài 30 ngày kể từ charge đầu.",
+              "Chạy pipeline cho dòng thứ 2."
+            ],
+            "observation_point": "is_first_month của dòng thứ 2.",
+            "expected_result": "is_first_month=false cho dòng thứ 2, LUÔN LUÔN — dù có nằm trong 30 ngày hay không; dòng này tính theo percentage (rate recurring) thay vì first_month_percentage.",
+            "oracle": {
+              "kb_ids": [
+                "KB-006"
+              ],
+              "oracle_strength": "BASELINE"
+            },
+            "status": "NEEDS_CONFIRMATION",
+            "open_question_draft": "Oracle STRONG cua check 'CHK-RDA-008' hien chi dua tren KB item nguon dev_doc (toan bo KB cua run nay khong co spec_doc/po_dev_confirm/test_case nao). Theo luat C5, dev_doc khong duoc la oracle STRONG duy nhat cho check priority P1 (mat du lieu/tien/permission). Ha xuong BASELINE cho toi khi co test_case PASS xac nhan hanh vi, hoac PO/Dev xac nhan truc tiep (po_dev_confirm).",
+            "risk_refs": [],
+            "priority": "P1",
+            "act_ids": [],
+            "evidence_refs": [],
+            "automation_suitability": "SUITABLE"
+          },
+          {
+            "check_id": "CHK-RDA-009",
+            "dimension": "INTEGRATION",
+            "layer": "db",
+            "title": "[NEEDS_CONFIRMATION] Literal charge_type thật của Shopify cho refund usage-charge chưa quan sát — ranh giới với usage-charge-commission",
+            "applicability": {
+              "role": "system",
+              "state": "dòng refund của 1 usage charge",
+              "environment": "documented",
+              "theme_or_device": ""
+            },
+            "precondition": "Cần dữ liệu thật hoặc xác nhận dev về literal charge_type Shopify dùng khi refund 1 usage charge.",
+            "steps": [
+              "Thu thập/yêu cầu 1 mẫu payout thật có dòng refund của usage charge.",
+              "Kiểm tra charge_type thật của dòng đó có chứa \"usage\" hay không.",
+              "Chạy pipeline, quan sát dòng này có bị xử lý bằng cơ chế cap 2 chiều của feature này (nếu charge_type KHÔNG chứa \"usage\") hay bằng already_earned của usage-charge-commission (nếu CÓ chứa \"usage\")."
+            ],
+            "observation_point": "charge_type thật của dòng refund, và nhánh/cơ chế xử lý thực tế.",
+            "expected_result": "CHƯA CÓ oracle. Nếu charge_type KHÔNG chứa \"usage\", dòng rơi vào phạm vi feature này (cơ chế cap 2 chiều, rate recurring/first-month hiện tại của Customer — có thể SAI so với rate/cap usage gốc). Nếu CHỨA \"usage\", dòng thuộc usage-charge-commission (already_earned, không cap 2 chiều). Chưa có dữ liệu thật xác nhận literal nào đúng — xem cùng open question ở checklist usage-charge-commission (CHK-UCC-016).",
+            "oracle": {
+              "kb_ids": [
+                "usage-charge-commission:KB-011"
+              ],
+              "oracle_strength": "NONE"
+            },
+            "status": "NEEDS_CONFIRMATION",
+            "open_question_draft": "Literal charge_type thật mà Shopify dùng cho refund của 1 usage charge là gì — có chứa \"usage\" hay không? Nếu KHÔNG, refund đó rơi vào nhánh recurring/first-month (feature này) với rate/cap khác hẳn rate/cap usage gốc — sai hướng nào cũng là trả sai tiền.",
+            "risk_refs": [
+              "usage-refund-literal-chargetype-unknown"
+            ],
+            "priority": "P1",
+            "act_ids": [],
+            "evidence_refs": [],
+            "automation_suitability": "UNKNOWN"
+          },
+          {
+            "check_id": "CHK-RDA-010",
+            "dimension": "INTEGRATION",
+            "layer": "db",
+            "title": "[NEEDS_CONFIRMATION] Dedup charge_id cho dòng refund/downgrade có mâu thuẫn cross-doc ở object payout-import, ảnh hưởng dữ liệu đầu vào của feature này",
+            "applicability": {
+              "role": "system",
+              "state": "dòng refund/downgrade đi qua bước dedup trước khi vào pipeline tính hoa hồng",
+              "environment": "documented",
+              "theme_or_device": ""
+            },
+            "precondition": "File payout có khả năng chứa dòng refund/downgrade mà charge_id trùng hoặc không trùng với dòng khác đã import trước đó (tuỳ cách dedup thực tế vận hành).",
+            "steps": [
+              "Import 1 file payout có dòng refund/downgrade mà charge_id (nếu Shopify có cung cấp ở mức dedup, khác với liên kết charge gốc đã biết là không có ở KB-005) trùng với 1 dòng đã import trước.",
+              "Quan sát dòng refund có bị dedup (bỏ qua) nhầm hay được xử lý đúng."
+            ],
+            "observation_point": "Dòng refund/downgrade có bị dedup bỏ qua nhầm hay không trước khi tới bước tính hoa hồng của feature này.",
+            "expected_result": "CHƯA CÓ oracle — OQ-payout-import-021 (object payout-import, ngoài phạm vi object commission-calculation) mâu thuẫn giữa \"không dùng charge_id làm khoá chính cho dòng loại này\" (`qikfiliate/payout - charge type reference`) và \"charge_id giống nhau là 1 điều kiện khớp bắt buộc\" (`qikfiliate/payout - dedup and reconciliation`). Đây là dependency risk, không phải conflict của feature này, nhưng ảnh hưởng trực tiếp dữ liệu đầu vào.",
+            "oracle": {
+              "kb_ids": [],
+              "oracle_strength": "NONE"
+            },
+            "status": "NEEDS_CONFIRMATION",
+            "open_question_draft": "Cơ chế dedup/đối chiếu charge_id cho dòng refund/downgrade (object payout-import, OQ-payout-import-021) hoạt động thế nào — charge_id có được dùng làm điều kiện khớp bắt buộc hay không? Nếu dedup sai, dòng refund/downgrade có thể bị bỏ sót hoặc trùng lặp trước khi vào pipeline tính hoa hồng của feature này, gây sai số tiền trừ.",
+            "risk_refs": [
+              "dconf-payout-001-dedup-chargeid"
+            ],
+            "priority": "P1",
+            "act_ids": [],
+            "evidence_refs": [],
+            "automation_suitability": "UNKNOWN"
+          }
+        ]
+      }
+    ],
+    "coverage_by_feature_and_risk": [
+      {
+        "feature_id": "refund-and-downgrade-adjustment",
+        "risk": "usage-refund-literal-chargetype-unknown",
+        "covered_by": [
+          "CHK-RDA-009"
+        ]
+      },
+      {
+        "feature_id": "refund-and-downgrade-adjustment",
+        "risk": "dconf-payout-001-dedup-chargeid",
+        "covered_by": [
+          "CHK-RDA-010"
+        ]
+      }
+    ],
+    "checks_needing_confirmation": [
+      {
+        "check_id": "CHK-RDA-009",
+        "open_question_draft": "Literal charge_type thật của Shopify cho refund usage-charge là gì?",
+        "reason": "Chia sẻ gap với usage-charge-commission:KB-011, chưa có dữ liệu thật xác nhận; quyết định ranh giới giữa 2 feature."
+      },
+      {
+        "check_id": "CHK-RDA-010",
+        "open_question_draft": "Cơ chế dedup charge_id cho dòng refund/downgrade hoạt động thế nào?",
+        "reason": "OQ-payout-import-021 UNRESOLVED ở object payout-import (ngoài phạm vi object này), nhưng ảnh hưởng trực tiếp dữ liệu đầu vào của feature này."
+      }
+    ],
+    "duplicates_removed": [],
+    "excluded_dimensions": [
+      {
+        "dimension": "PERMISSION",
+        "reason": "Feature này là bước tính toán nội bộ của engine khi gặp dòng payout âm; không có UI hay phân quyền riêng theo role được tài liệu mô tả trong phạm vi shard này."
+      },
+      {
+        "dimension": "STATE_DATA",
+        "reason": "Trạng thái tích lũy duy nhất liên quan (already_earned của cap lifetime usage-charge, chạm tới ở KB-002) thuộc sở hữu của feature usage-charge-commission và đã được kiểm persistence đầy đủ ở đó (CHK-UCC-006/007/008) — không có state/persistence riêng cần test thêm ở feature này ngoài phạm vi đã phủ."
+      },
+      {
+        "dimension": "REGRESSION",
+        "reason": "Không có KB item status=KNOWN_DEFECT hoặc behavior change từ diff analyzer trong shard refund-and-downgrade-adjustment.json ở run này; regression watch cho object commission-calculation đã gán cho commission-decision-flow (KB-012), first-month-commission (KB-012) và usage-charge-commission (KB-010, KB-012)."
+      }
+    ]
+  },
+  "gate": {
+    "decision": "CONDITIONAL_PASS",
+    "blocking_findings": [],
+    "conditions": [
+      "KB-007, KB-008 (EXAMPLE_ONLY) chỉ dùng thiết kế test data, không phải oracle độc lập.",
+      "OQ-payout-import-021 chỉ được nêu như dependency risk ở CHK-RDA-010, không tự tạo entry conflicts[] cho object ngoài phạm vi (payout-import).",
+      "Mọi check CORE/BOUNDARY/NEGATIVE còn lại trace về kb_id CONFIRMED_EXPECTED derivation=prose của shard này (STRONG)."
+    ],
+    "allowed_next_steps": [
+      "knowledge-diff-analyzer theo dõi khi literal charge_type refund usage-charge (CHK-RDA-009) và OQ-payout-import-021 (CHK-RDA-010) được xác nhận.",
+      "context-quality-reviewer audit C4 + open-question completeness cho 2 check NEEDS_CONFIRMATION."
+    ]
+  }
+}

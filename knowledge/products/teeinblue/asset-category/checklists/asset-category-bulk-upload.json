@@ -1,0 +1,384 @@
+{
+  "checklists": [
+    {
+      "feature_id": "FEAT-04-bulk-upload-zip",
+      "feature_key": "asset-category-bulk-upload",
+      "checks": [
+        {
+          "check_id": "CHK-001",
+          "dimension": "CORE",
+          "layer": "api",
+          "title": "Upload 1 file zip hợp lệ và job hoàn tất thành công (luồng 5 bước end-to-end)",
+          "applicability": {
+            "role": "owner (sub=273)",
+            "state": "chưa có job/category nào cho zip này",
+            "environment": "staging",
+            "theme_or_device": "n/a"
+          },
+          "precondition": "Đã đăng nhập role owner, ở /cliparts/bulk-upload; có sẵn job cũ từ phiên trước, không đụng vào.",
+          "steps": [
+            "Click 'Upload zip', chọn 1 file zip hợp lệ chứa 1 top-level folder gồm nhiều ảnh clipart.",
+            "Theo dõi network: GET /api/clipart-category-bulk-uploads (list job) -> POST /api/clipart-category-bulk-uploads/users/{userId}/start (xin presigned URL, trả job id) -> PUT binary lên storage presigned URL -> POST /api/clipart-category-bulk-uploads/{jobId}/complete -> GET /api/clipart-category-bulk-uploads/{jobId} (poll).",
+            "Quan sát status cuối cùng của job và category mới được tạo."
+          ],
+          "observation_point": "network 5 bước + trạng thái job + category/item mới tạo",
+          "expected_result": "Toàn bộ 5 bước network thành công; job đạt status.value=3/status.description='Done'; hệ thống tự tạo 1 category mới (tên = tên top-level folder trong zip) chứa các clipart item, log ghi 'N/N Success enqueue'. Đây là baseline từ 1 sample thành công (KB-016, 1 sample, confidence LOW) - chưa tổng quát hoá cho mọi kích thước/cấu trúc zip.",
+          "oracle": {
+            "kb_ids": [
+              "KB-016"
+            ],
+            "oracle_strength": "BASELINE"
+          },
+          "status": "READY",
+          "risk_refs": [],
+          "priority": "P2",
+          "automation_suitability": "HYBRID"
+        },
+        {
+          "check_id": "CHK-002",
+          "dimension": "CORE",
+          "layer": "api",
+          "title": "Trang bulk-upload hiển thị danh sách job cũ mà không đụng vào job đã có",
+          "applicability": {
+            "role": "owner (sub=273)",
+            "state": "có sẵn job cũ từ phiên trước",
+            "environment": "staging",
+            "theme_or_device": "n/a"
+          },
+          "precondition": "Có sẵn ít nhất 1 job cũ trong danh sách.",
+          "steps": [
+            "Mở /cliparts/bulk-upload.",
+            "Quan sát GET /api/clipart-category-bulk-uploads trả danh sách job.",
+            "Xác nhận job cũ vẫn còn nguyên (status, tên) không bị thay đổi bởi hành động xem trang."
+          ],
+          "observation_point": "response GET list job",
+          "expected_result": "Danh sách job cũ hiển thị đầy đủ, không bị mutate chỉ vì mở trang xem.",
+          "oracle": {
+            "kb_ids": [
+              "KB-016"
+            ],
+            "oracle_strength": "BASELINE"
+          },
+          "status": "READY",
+          "risk_refs": [],
+          "priority": "P3",
+          "automation_suitability": "SUITABLE"
+        },
+        {
+          "check_id": "CHK-003",
+          "dimension": "CORE",
+          "layer": "portal",
+          "title": "Banner giới hạn dung lượng/số file hiển thị trên trang bulk-upload",
+          "applicability": {
+            "role": "owner (sub=273)",
+            "state": "n/a",
+            "environment": "staging",
+            "theme_or_device": "n/a"
+          },
+          "precondition": "Mở /cliparts/bulk-upload.",
+          "steps": [
+            "Quan sát banner text mô tả giới hạn dung lượng/số file cho phép.",
+            "Ghi lại nguyên văn nội dung banner."
+          ],
+          "observation_point": "DOM banner text",
+          "expected_result": "Banner hiển thị đúng nguyên văn nội dung quan sát trong đợt quan sát 2026-09-10: 'Limit max 2GB per zip and can only process max 10 files at a time.' Đây chỉ là quan sát TEXT UI hiện tại, KHÔNG phải xác nhận đây là giới hạn thật thi hành phía server (xem CHK-004 cho phần verify server-side).",
+          "oracle": {
+            "kb_ids": [
+              "KB-016"
+            ],
+            "oracle_strength": "BASELINE"
+          },
+          "status": "READY",
+          "risk_refs": [
+            "OQ-asset-category-027"
+          ],
+          "priority": "P3",
+          "automation_suitability": "SUITABLE"
+        },
+        {
+          "check_id": "CHK-004",
+          "dimension": "BOUNDARY",
+          "layer": "api",
+          "title": "Giới hạn (limit) dung lượng/số file zip theo banner UI - giá trị đúng cho plan hiện tại (giới hạn bulk-upload zip (KB-022), RESOLVED_PLAN_DEPENDENT)",
+          "applicability": {
+            "role": "owner (Linh explorer, sub=273, plan Blue (Test))",
+            "state": "trang /cliparts/bulk-upload, chưa upload gì",
+            "environment": "staging",
+            "theme_or_device": "n/a - giá trị PHỤ THUỘC PLAN, chỉ xác nhận cho plan Blue"
+          },
+          "precondition": "Đăng nhập role owner (Linh explorer, plan Blue), ở /cliparts/bulk-upload.",
+          "steps": [
+            "Mở trang /cliparts/bulk-upload.",
+            "Đọc nguyên văn banner giới hạn dung lượng/số file.",
+            "Đối chiếu với plan hiện tại của account (Settings/Billing)."
+          ],
+          "observation_point": "banner text + plan hiện tại của account",
+          "expected_result": "CONFIRMED (PO 2026-09-14, giới hạn bulk-upload zip (KB-022) resolution_update=RESOLVED_PLAN_DEPENDENT; KB-022): với plan Blue (Test, plan hiện tại của Linh explorer), giới hạn ĐÚNG là banner text hiện tại 'Limit max 2GB per zip and can only process max 10 files at a time.' Giá trị này KHÔNG phải hằng số cứng toàn cục - các plan khác CHƯA verify, có thể khác. KHÔNG dùng check này để khẳng định giới hạn server-side thực sự ENFORCE đúng con số banner ghi - đó là phạm vi CHK-005/phần server-enforcement của giới hạn bulk-upload chưa test biên (vẫn NEEDS_CONFIRMATION, chưa test biên qua API, KHÔNG bị đụng trong các đợt quan sát đã có).",
+          "oracle": {
+            "kb_ids": [
+              "KB-022"
+            ],
+            "oracle_strength": "STRONG"
+          },
+          "status": "READY",
+          "risk_refs": [
+            "OQ-asset-category-027"
+          ],
+          "priority": "P2",
+          "automation_suitability": "SUITABLE"
+        },
+        {
+          "check_id": "CHK-005",
+          "dimension": "BOUNDARY",
+          "layer": "api",
+          "title": "Upload zip đúng tại giá trị biên (ngưỡng tối đa) của giới hạn đã được xác nhận",
+          "applicability": {
+            "role": "owner (sub=273)",
+            "state": "phụ thuộc kết quả CHK-004 xác nhận giới hạn thật",
+            "environment": "staging",
+            "theme_or_device": "n/a"
+          },
+          "precondition": "Đã có giới hạn thật được xác nhận từ CHK-004 (hoặc từ PO/Dev) - hiện chưa có nên check này BLOCKED cho tới khi giới hạn bulk-upload zip (KB-022) được resolve.",
+          "steps": [
+            "Chuẩn bị 1 zip đúng bằng ngưỡng tối đa đã xác nhận (vd đúng số file tối đa, đúng dung lượng tối đa).",
+            "Upload và xác nhận job hoàn tất thành công (không bị reject dù ở đúng biên)."
+          ],
+          "observation_point": "response job status khi upload đúng tại biên",
+          "expected_result": "Chưa xác định - phụ thuộc kết quả CHK-004. Không giả định trước ngưỡng nào đúng.",
+          "oracle": {
+            "kb_ids": [],
+            "oracle_strength": "NONE"
+          },
+          "status": "NEEDS_CONFIRMATION",
+          "oq_ref": "OQ-asset-category-024",
+          "risk_refs": [
+            "OQ-asset-category-027"
+          ],
+          "priority": "P3",
+          "automation_suitability": "UNKNOWN"
+        },
+        {
+          "check_id": "CHK-006",
+          "dimension": "NEGATIVE",
+          "layer": "api",
+          "title": "Upload file không phải zip (.txt) vào dropzone bulk-upload - OBSERVED, network-verified 422",
+          "applicability": {
+            "role": "owner (Linh explorer, sub=273)",
+            "state": "trang bulk-upload, chưa upload gì, chọn file.txt",
+            "environment": "staging",
+            "theme_or_device": "n/a"
+          },
+          "precondition": "Ở trang /cliparts/bulk-upload.",
+          "steps": [
+            "Chọn file.txt (bypass HTML accept filter) vào input 'Upload zip'.",
+            "Quan sát network response."
+          ],
+          "observation_point": "response POST /api/clipart-category-bulk-uploads/users/{userId}/start",
+          "expected_result": "Hành vi quan sát được, network-verified, CHƯA có business confirmation (KB-025 hạ từ CONFIRMED_EXPECTED xuống OBSERVED_CURRENT bởi quá trình chuẩn hoá KB - po_answer chỉ là uỷ quyền thực thi, KHÔNG phải xác nhận hành vi đúng): POST /api/clipart-category-bulk-uploads/users/{userId}/start trả 422 {message: 'The selected mimetype is invalid.', errors: {mimetype: [...]}} - server reject, không tạo job. 1 sample network-verified. Lệch khỏi hành vi này khi retest = cần điều tra, không tự động coi là bug.",
+          "oracle": {
+            "kb_ids": [
+              "KB-025"
+            ],
+            "oracle_strength": "BASELINE"
+          },
+          "status": "READY",
+          "risk_refs": [],
+          "priority": "P2",
+          "automation_suitability": "SUITABLE"
+        },
+        {
+          "check_id": "CHK-007",
+          "dimension": "NEGATIVE",
+          "layer": "api",
+          "title": "Upload zip hợp lệ nhưng không chứa ảnh hợp lệ nào - CONFIRMED job Error, không tạo category",
+          "applicability": {
+            "role": "owner (Linh explorer, sub=273)",
+            "state": "zip hợp lệ (dung lượng/format zip đúng) nhưng không chứa file ảnh hợp lệ nào",
+            "environment": "staging",
+            "theme_or_device": "n/a"
+          },
+          "precondition": "Chuẩn bị 1 file zip hợp lệ về định dạng nhưng chỉ chứa file không phải ảnh (vd readme.txt).",
+          "steps": [
+            "Upload zip qua luồng bulk-upload.",
+            "Quan sát status trung gian (POST.../complete).",
+            "Poll GET job detail sau một khoảng thời gian, quan sát trạng thái cuối."
+          ],
+          "observation_point": "status job cuối cùng qua GET poll",
+          "expected_result": "CONFIRMED (PO 2026-09-14 'Upload thành công nhưng unzip sẽ báo không chứa ảnh nào'; KB-026, đợt quan sát 2026-09-14): lúc upload, POST.../complete trả 200 với status trung gian {value:2, description:'Extracting'}; ~34 phút sau, GET job detail xác nhận TRẠNG THÁI CUỐI: status={value:4, description:'Error'}, clipart_category_id=null (KHÔNG tạo category nào), log kết thúc 'Error - No valid entries found'.",
+          "oracle": {
+            "kb_ids": [
+              "KB-026"
+            ],
+            "oracle_strength": "STRONG"
+          },
+          "status": "READY",
+          "risk_refs": [],
+          "priority": "P2",
+          "automation_suitability": "HYBRID"
+        },
+        {
+          "check_id": "CHK-008",
+          "dimension": "STATE_DATA",
+          "layer": "api",
+          "title": "Danh sách status job bulk-upload: Uploading/Extracting/delayed/Done/Error",
+          "applicability": {
+            "role": "owner (Linh explorer, sub=273)",
+            "state": "bảng All uploads /cliparts/bulk-upload, nhiều job (cũ + mới trong đợt quan sát)",
+            "environment": "staging",
+            "theme_or_device": "n/a"
+          },
+          "precondition": "Có sẵn nhiều job ở nhiều trạng thái khác nhau trong bảng All uploads.",
+          "steps": [
+            "Mở /cliparts/bulk-upload, quan sát cột status của bảng All uploads.",
+            "Upload 1 zip hợp lệ để bắt trạng thái Extracting qua network.",
+            "Upload 1 zip không chứa ảnh để bắt trạng thái Error qua network.",
+            "Đối chiếu Uploading/delayed/Done qua UI (không network-verify trực tiếp)."
+          ],
+          "observation_point": "response GET poll job + DOM bảng All uploads",
+          "expected_result": "Danh sách status theo PO: Uploading, Extracting, delayed, Done, Error. đợt quan sát 2026-09-14 (KB-027): CHỈ 2/5 status có network evidence TRỰC TIẾP - Extracting (value=2, POST.../complete lúc upload) và Error (value=4, GET job detail sau ~34 phút). 3/5 status còn lại (Uploading, delayed, Done) CHỈ dựa vào PO-answer + quan sát UI (bảng hiển thị text 'Done'/'Error' từ job cũ) - KHÔNG network-verified trực tiếp trong các đợt quan sát đã có. oracle_strength giữ BASELINE (không STRONG) vì độ tin cậy evidence KHÔNG đồng đều giữa 5 status - không coi cả 5 ngang hàng.",
+          "oracle": {
+            "kb_ids": [
+              "KB-027"
+            ],
+            "oracle_strength": "BASELINE"
+          },
+          "status": "READY",
+          "risk_refs": [
+            "gap-job-error-processing-state"
+          ],
+          "priority": "P2",
+          "automation_suitability": "HYBRID"
+        },
+        {
+          "check_id": "CHK-009",
+          "dimension": "STATE_DATA",
+          "layer": "api",
+          "title": "Zip có cấu trúc folder khác (nested folder, hoặc tên top-level folder trùng category đã tồn tại)",
+          "applicability": {
+            "role": "owner (sub=273)",
+            "state": "đã có ít nhất 1 category tên trùng với top-level folder sẽ upload",
+            "environment": "staging",
+            "theme_or_device": "n/a"
+          },
+          "precondition": "Chuẩn bị được 1 zip có nhiều folder con lồng nhau, và 1 zip khác có tên top-level folder trùng với category đã tồn tại từ trước.",
+          "steps": [
+            "Upload zip có cấu trúc nested folder (nhiều cấp thư mục con), quan sát category/item được tạo ra sao.",
+            "Upload zip có top-level folder trùng tên với 1 category đã tồn tại, quan sát: tạo category mới trùng tên, gộp vào category cũ, hay báo lỗi."
+          ],
+          "observation_point": "category/item được tạo sau job hoàn tất, so với cấu trúc zip đầu vào",
+          "expected_result": null,
+          "oracle": {
+            "kb_ids": [],
+            "oracle_strength": "NONE"
+          },
+          "status": "NEEDS_CONFIRMATION",
+          "oq_ref": "OQ-asset-category-025",
+          "risk_refs": [],
+          "priority": "P3",
+          "automation_suitability": "UNKNOWN"
+        },
+        {
+          "check_id": "CHK-010",
+          "dimension": "INTEGRATION",
+          "layer": "api",
+          "title": "Presigned storage URL cho bước PUT của luồng bulk-upload zip - TTL/scope đã biết, không có finding nghiêm trọng",
+          "applicability": {
+            "role": "owner (sub=273)",
+            "state": "n/a",
+            "environment": "staging",
+            "theme_or_device": "n/a"
+          },
+          "precondition": "n/a.",
+          "steps": [
+            "Lấy 1 presigned URL từ bước POST /api/clipart-category-bulk-uploads/users/{userId}/start.",
+            "Quan sát path của URL có chứa user_id dạng rõ hay không (vd 'users/266/...').",
+            "Thử dùng lại URL đó sau một khoảng thời gian dài để kiểm tra expiry (nếu policy cho phép)."
+          ],
+          "observation_point": "path + response PUT khi dùng lại URL sau thời gian",
+          "expected_result": "OBSERVED (KB-028, đợt quan sát 2026-09-14): presigned URL cho bước PUT bulk-zip (POST.../bulk-uploads/users/{userId}/start) có X-Amz-Expires=600 (TTL 10 phút); X-Amz-SignedHeaders=host (scope ký CHỈ ràng buộc Host header, không ràng buộc content-type/content-length). Host=oe-cdn.sgp1.digitaloceanspaces.com, path UUID/hash-based, không đoán được resource khác. KHÔNG có finding bảo mật nghiêm trọng nào cần escalate thêm trong các đợt quan sát đã có - TTL 10 phút hợp lý cho use-case presigned upload.",
+          "oracle": {
+            "kb_ids": [
+              "KB-028"
+            ],
+            "oracle_strength": "BASELINE"
+          },
+          "status": "NEEDS_CONFIRMATION",
+          "oq_ref": "OQ-asset-category-026",
+          "risk_refs": [
+            "KB-018",
+            "KB-028"
+          ],
+          "priority": "P2",
+          "automation_suitability": "UNKNOWN"
+        }
+      ]
+    }
+  ],
+  "coverage_by_feature_and_risk": [
+    {
+      "feature_id": "FEAT-04-bulk-upload-zip",
+      "risk_ref": "OQ-asset-category-027",
+      "check_ids": [
+        "CHK-003",
+        "CHK-004",
+        "CHK-005"
+      ]
+    },
+    {
+      "feature_id": "FEAT-04-bulk-upload-zip",
+      "risk_ref": "OQ-asset-category-027",
+      "check_ids": [
+        "CHK-004"
+      ]
+    },
+    {
+      "feature_id": "FEAT-04-bulk-upload-zip",
+      "risk_ref": "KB-018",
+      "check_ids": [
+        "CHK-010"
+      ]
+    },
+    {
+      "feature_id": "FEAT-04-bulk-upload-zip",
+      "risk_ref": "gap-job-error-processing-state",
+      "check_ids": [
+        "CHK-008"
+      ]
+    },
+    {
+      "feature_id": "FEAT-04-bulk-upload-zip",
+      "risk_ref": "gap-zip-negative-path",
+      "check_ids": [
+        "CHK-006",
+        "CHK-007"
+      ]
+    },
+    {
+      "feature_id": "FEAT-04-bulk-upload-zip",
+      "risk_ref": "gap-zip-structure-variation",
+      "check_ids": [
+        "CHK-009"
+      ]
+    }
+  ],
+  "checks_needing_confirmation": [
+    "CHK-005",
+    "CHK-009",
+    "CHK-010"
+  ],
+  "excluded_dimensions": [
+    {
+      "dimension": "PERMISSION",
+      "reason": ".env chỉ còn 1 account khả dụng (Linh explorer, sub=273) - không có TIB_USER_B_*/cross-tenant account để test quyền upload/xem job bulk-upload của store khác trong đợt quan sát 2026-09-10."
+    },
+    {
+      "dimension": "REGRESSION",
+      "reason": "Zero-doc bootstrap (đợt quan sát 2026-09-10) là lần chạy đầu tiên cho object Asset Category, chưa có version checklist trước để so sánh regression cho luồng bulk-upload zip."
+    }
+  ],
+  "duplicates_removed": [
+    {
+      "note": "asset-category-item-management::CHK-011 dùng chung KB-028 (TTL/scope presigned URL) với CHK-010 của checklist này - GIỮ 2 check riêng (2 feature/luồng upload khác nhau: item đơn lẻ vs bulk-zip), KHÔNG nhân đôi phân tích, mỗi check ghi rõ note dedupe trỏ sang check kia."
+    }
+  ]
+}

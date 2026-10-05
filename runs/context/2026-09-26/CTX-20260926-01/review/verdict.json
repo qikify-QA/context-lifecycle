@@ -1,0 +1,86 @@
+{
+  "schema_version": "1.0",
+  "artifact_type": "ContextReviewVerdict",
+  "artifact_id": "VERDICT-CTX-20260926-01-review-01",
+  "workflow_id": "CTX-20260926-01",
+  "producer": "context-quality-reviewer",
+  "source_refs": [
+    { "type": "code_ref", "path": "runs/context/2026-09-26/CTX-20260926-01/review/gate-results.json" }
+  ],
+  "upstream_artifact_ids": [
+    "PKBC-CTX-20260926-01-001",
+    "FP-CAND-CTX-20260926-01-artwork-layer-config-vector",
+    "FPC-CTX-20260926-01-asset-category-crud",
+    "FPC-CTX-20260926-01-asset-category-item-management",
+    "CHK-CAND-CTX-20260926-01-layer-config-vector",
+    "CHK-CAND-CTX-20260926-01-asset-category-crud",
+    "CHK-CAND-CTX-20260926-01-asset-category-item-management",
+    "KDA-CTX-20260926-01-CBS-004"
+  ],
+  "status": "READY",
+  "confidence": "HIGH",
+  "observations": [
+    "Xem đầy đủ chi tiết verify trong review/gate-results.json. Tóm tắt: không có blocking finding nào trên bất kỳ candidate. Cả 2 object (artwork, asset-category) đủ điều kiện publish, khác nhau ở loại publish (artwork = version bump thường 4->5; asset-category = publish chính thức LẦN ĐẦU, cần orchestrator tự dựng block `publish` đầy đủ)."
+  ],
+  "assumptions": [],
+  "unknowns": [],
+  "conflicts": [],
+  "blocking_issues": [],
+  "payload": {
+    "decision": "APPROVED_WITH_CONDITIONS",
+    "gate_results": [
+      { "gate": "C0", "status": "PASS", "checks_run": ["product/environment/object_target/role/mutation_policy đủ trong bootstrap-request.json"], "note": "" },
+      { "gate": "C1", "status": "PASS", "checks_run": ["ACT-ID+before/after đầy đủ", "network mapped/unmapped rõ", "redaction sạch (grep trực tiếp)", "mutation SAFE_REVERSIBLE_ONLY + cleanup_result đầy đủ"], "note": "Phát hiện phụ private_config leak xử lý đúng ranh giới, không lọt vào KB." },
+      { "gate": "C2", "status": "PASS", "checks_run": ["6 APIOP có route/status/evidence/ACT-ID trace", "pdf-upload đúng nguyên tắc không oracle khi thiếu ACT-ID", "không suy rule từ 1 sample"], "note": "" },
+      { "gate": "C3", "status": "PASS", "checks_run": ["6 kb_candidate đủ knowledge_kind/evidence/scope/confidence/freshness", "0 item bị nâng CONFIRMED_EXPECTED trái phép", "conflict giữ đúng cả 2 phía"], "note": "Spot-check KB-036 (1000) vs KB-035 (4000) độc lập từ raw — khớp, không lẫn lộn ở bất kỳ file nào." },
+      { "gate": "C4", "status": "PASS", "checks_run": ["mọi nội dung mới trace về kb_id đúng", "feature_id map lại đúng qua tự-verify checklist gốc", "deep-copy canon nguyên vẹn"], "note": "" },
+      { "gate": "C5", "status": "PASS", "checks_run": ["mọi check có oracle+applicability", "CHK-008 đúng chuẩn oracle_strength=NONE/expected_result=null/NEEDS_CONFIRMATION", "0 check trùng lặp canon"], "note": "" },
+      { "gate": "C6", "status": "CONDITIONAL_PASS", "checks_run": ["artwork: publish sẵn sàng, version lineage nguyên vẹn", "asset-category: nội dung đủ chuẩn nhưng cần orchestrator tự tạo block publish đầy đủ (first-time)"], "note": "Không FAIL — điều kiện thủ tục, orchestrator thực hiện khi publish." }
+    ],
+    "findings": [],
+    "coverage_findings": [
+      "Object sdk: 0 candidate trong run này (đúng chỉ đạo phân bổ) — reviewer xác nhận không có gì cần review cho object này.",
+      "pdf-upload (APIOP-002) và Layer 2 numeric threshold (GenAI backstop) vẫn coverage_gap, không publish — đúng, không phải thiếu sót cần rework."
+    ],
+    "assumption_leakage": [],
+    "publish_conditions": [
+      {
+        "object": "artwork",
+        "conditions": [
+          "Object-level published_context_version bump 4 -> 5 (publish event mới cho object artwork, ccr_ref=CBS-004).",
+          "Feature layer-config-vector (profile.json + checklists/layer-config-vector.json) tự bump published_context_version riêng 2 -> 3, ĐỘC LẬP với số object-level — đúng pattern per-capability-freshness đã tồn tại thật trong canon (layer-config-image=v4, populate-values=v3, các feature khác vẫn v2 trong khi object=v4). Reviewer xác nhận pattern này có thật, không phải tiền lệ bịa.",
+          "CONF-CBS004-001 PHẢI publish dưới dạng CONFLICTED (conflicts[] giữ cả 2 phía, kèm mã CBS-004) — TUYỆT ĐỐI KHÔNG dùng hành vi 'x-ratelimit-remaining' của POST /api/layer-images/svg làm oracle ở bất kỳ đâu. Blast radius xác nhận đúng giới hạn ở checklist item layer-config-vector::CHK-008 duy nhất.",
+          "Cột 'Prod' của CCR CBS-004 không được gắn bất kỳ knowledge_kind nào khi publish (giữ đúng operator directive chỉ verify staging)."
+        ]
+      },
+      {
+        "object": "asset-category",
+        "conditions": [
+          "ĐỒNG Ý cho orchestrator tiến hành publish CHÍNH THỨC LẦN ĐẦU cho object này trong run CTX-20260926-01 — nội dung hiện tại (34 kb_candidates trong kb.json, 2 feature profile, 2 checklist, feature-summary.md) đủ chuẩn C0-C6: mọi item có evidence_refs+scope+freshness đầy đủ (0 thiếu), knowledge_kind hợp lệ (27 OBSERVED_CURRENT, 6 CONFIRMED_EXPECTED đều có confirmation_source dẫn PO-answer cụ thể, 1 INFERRED khai báo rõ), 5 conflict cũ được giữ đúng cách (2 RESOLVED có nguồn, 3 UNRESOLVED giữ cả 2 phía), checklist có oracle/applicability đầy đủ. KHÔNG hạ chuẩn vì đây là 'lần đầu'.",
+          "Orchestrator PHẢI tự tạo block `publish` đầy đủ (published_at, published_by, ctx_run_id=CTX-20260926-01, mode=INCREMENTAL_UPDATE, review_ref, knowledge_diff_ref, ccr_ref=CBS-004) cho CẢ 5 file: kb.json, features/asset-category-crud/profile.json, features/asset-category-item-management/profile.json, checklists/asset-category-crud.json, checklists/asset-category-item-management.json — theo đúng schema đã dùng cho object artwork (xem knowledge/products/teeinblue/objects/artwork/kb.json).",
+          "source_ctx_run_ids của block `publish` PHẢI liệt kê ĐỦ lịch sử các run đã góp evidence cho nội dung này, không chỉ run hiện tại: CTX-20260910-06 (kb_version 1 gốc), CTX-20260914-02 (kb_version 2, 15 KB item + reconcile 3 conflict), CTX-20260921-03 (bulk upload status evidence, nếu có góp KB item — orchestrator tự xác nhận danh sách đầy đủ), CTX-20260926-01 (CBS-004, KB-035/036/037). Đây KHÔNG phải bump v1->v2 thông thường — bỏ sót 1 run nguồn trong lineage là provenance loss.",
+          "published_context_version bắt đầu từ '1' (đúng vì đây là publish chính thức đầu tiên, dù nội dung đã tồn tại từ nhiều run trước).",
+          "3 conflict cũ đang UNRESOLVED (CONF-001, CONF-004, CONF-CHK-013-vector-type) PHẢI giữ nguyên UNRESOLVED trong bản publish — không được ngầm coi 'lần publish đầu' là cơ hội tự resolve.",
+          "Nếu orchestrator không chắc đã liệt kê đủ source_ctx_run_ids (vd còn run nào khác giữa CTX-20260910-06 và CTX-20260926-01 có góp evidence cho asset-category mà reviewer chưa thấy trong phạm vi review này) — DỪNG, quét lại runs/context/**/run-manifest.json cho object_key=asset-category trước khi ghi publish block, không đoán."
+        ]
+      }
+    ],
+    "rework_targets": [],
+    "allowed_next_steps": [
+      "qa-context-lifecycle-orchestrator: publish artwork (bump object v4->v5 + feature layer-config-vector v2->v3) theo publish_conditions[object=artwork].",
+      "qa-context-lifecycle-orchestrator: publish asset-category LẦN ĐẦU (tạo block `publish` cho 5 file, published_context_version='1', source_ctx_run_ids đủ lineage) theo publish_conditions[object=asset-category].",
+      "qa-context-lifecycle-orchestrator: trước khi ghi knowledge/ cho CẢ 2 object — quét lại LẦN NỮA runs/context/**/run-manifest.json tìm CTX-RUN-ID khác cùng proposal_id=CBS-004 (§12.4 rule 0, gate thật ngay trước publish, không tin lại kết quả quét đầu run).",
+      "qa-context-lifecycle-orchestrator: sau publish, finish_context_board_proposal(CBS-004, outcome=ACCEPTED, results={summary, published_context_version cho cả 2 object, product_kb_refs, feature_profile_refs, checklist_refs, feature_summary_refs}).",
+      "Không dispatch lại bất kỳ subagent producer nào — không có rework cần thiết trên candidate hiện tại."
+    ],
+    "publish_allowed": true
+  },
+  "gate": {
+    "decision": "CONDITIONAL_PASS",
+    "blocking_findings": [],
+    "conditions": [
+      "Xem payload.publish_conditions — điều kiện riêng cho artwork và asset-category."
+    ],
+    "allowed_next_steps": ["qa-context-lifecycle-orchestrator"]
+  }
+}

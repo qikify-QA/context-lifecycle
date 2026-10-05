@@ -1,0 +1,132 @@
+{
+  "feature_id": "FEAT-01-global-option-instance-management",
+  "feature_key": "global-option-instance-management",
+  "name": "Quản lý Global Option instance (tạo, sửa, nhân bản, xoá, phân loại)",
+  "user_goal": "Là portal staff (owner), tôi muốn tạo và quản lý các Global Option instance tái sử dụng được (7 nhóm / 30 leaf type: text, image, vector, maps & astronomy, puzzles, others, form elements) để dùng lại cùng một cấu hình personalization trên nhiều artwork/campaign mà không phải định nghĩa lại từ đầu mỗi lần.",
+  "actors": [
+    { "role": "owner", "permission_observed": "Full CRUD quan sát được: create (7/7 type test), edit, clone, delete (đầy đủ trên nhóm Text). Mọi request kèm header client-supplied x-acting-user-id.", "kb_refs": ["KB-004", "KB-006", "KB-007", "KB-008", "KB-025"] }
+  ],
+  "entry_points": [
+    { "path": "/global-options (list)", "precondition": "đã đăng nhập role owner", "kb_refs": ["KB-005", "KB-010", "KB-009", "KB-024"] },
+    { "path": "/global-options/create (modal 'Select a layer type')", "precondition": "n/a", "kb_refs": ["KB-001", "KB-002", "KB-003"] },
+    { "path": "/global-options/create/<type-slug> (vd /create/text, /create/text-to-image)", "precondition": "đã chọn 1 trong 30 leaf type ở modal trước đó", "kb_refs": ["KB-004", "KB-011", "KB-013", "KB-014", "KB-015", "KB-019"] },
+    { "path": "/global-options/{id}/edit", "precondition": "instance đã tồn tại", "kb_refs": ["KB-006"] }
+  ],
+  "capabilities": [
+    {
+      "name": "Tạo Global Option instance mới (1 trong 30 leaf type / 7 nhóm)",
+      "description": "Chọn layer type ở modal 2 cấp (7 nhóm, 29 nút cấp 1, 30 leaf thực tạo được), điền form type-specific, Save gọi 1 endpoint chung cho mọi type.",
+      "kb_refs": ["KB-001", "KB-002", "KB-003", "KB-004", "KB-011", "KB-013", "KB-014", "KB-015", "KB-019"]
+    },
+    {
+      "name": "Sửa (edit) Global Option instance đã tồn tại",
+      "description": "Sửa field (vd Option Title) trên instance có sẵn; Save gọi Hasura GraphQL mutation client-dựng, không phải REST PUT.",
+      "kb_refs": ["KB-006"]
+    },
+    {
+      "name": "Nhân bản (clone/duplicate) Global Option instance",
+      "description": "Bấm icon Duplicate, deep-copy 'data', tự đặt tên '<tên gốc> (copy)'.",
+      "kb_refs": ["KB-007"]
+    },
+    {
+      "name": "Xoá (delete) Global Option instance",
+      "description": "Bấm icon Delete, confirm dialog native, gọi REST DELETE, trả 204.",
+      "kb_refs": ["KB-008"]
+    },
+    {
+      "name": "Xem danh sách & làm mới Global Option (list/refresh)",
+      "description": "Trang list gọi Hasura GraphQL query 'getData' (client-controlled where/order_by/offset/limit) mỗi khi load hoặc sau CRUD.",
+      "kb_refs": ["KB-005", "KB-024"]
+    },
+    {
+      "name": "Phân loại theo Category (generic field, dùng chung mọi type)",
+      "description": "Field Category chung cho mọi instance, hiển thị 'Uncategorized' làm display-fallback trên list và 'No category' trên create-form; global_option_category_id quan sát null trên toàn bộ 7/7 sample tạo mới — xem conflict CFL-02.",
+      "kb_refs": ["KB-010", "KB-011", "KB-012"]
+    },
+    {
+      "name": "Phân loại theo Category riêng theo từng type (Additional Option / Vector Category) — INFERRED",
+      "description": "2 type cụ thể (Additional Option, Vector Category) có field Category RIÊNG (khác field Category chung ở trên), picker liệt kê category thật còn sót từ object asset-category cũ; tương quan id gợi ý liên hệ với /additional-options, /vectors nhưng KHÔNG có xác nhận schema/DB. Giữ nguyên INFERRED, không được nâng cấp thành observed/confirmed.",
+      "kb_refs": ["KB-013", "KB-014"]
+    }
+  ],
+  "state_transitions": [
+    { "from": "không tồn tại", "to": "đã tạo (Used=0)", "trigger": "Save trên create form với type-specific required fields hợp lệ", "condition": "type đã chọn ở modal không ở trạng thái Unavailable", "kb_refs": ["KB-004"] },
+    { "from": "đã tạo, Used=0", "to": "đã tạo, Used>0 (icon 'Update campaign' xuất hiện)", "trigger": "instance được 1 artwork layer tham chiếu qua 'Use an existing global option' (xem feature artwork-personalization-global-option-link)", "condition": "quan sát gián tiếp qua so sánh row Used=1 vs Used=0, không tự test transition trực tiếp trong run này", "kb_refs": ["KB-009"] },
+    { "from": "đã tạo", "to": "đã sửa", "trigger": "Save trên edit form", "condition": "n/a", "kb_refs": ["KB-006"] },
+    { "from": "đã tạo", "to": "instance mới, tên '<tên gốc> (copy)'", "trigger": "click icon Duplicate option", "condition": "n/a", "kb_refs": ["KB-007"] },
+    { "from": "đã tạo", "to": "đã xoá", "trigger": "confirm 'Remove' trên dialog", "condition": "n/a — chưa test trường hợp instance đang Used>0 bị xoá, xem unknown_areas", "kb_refs": ["KB-008"] }
+  ],
+  "confirmed_rules": [],
+  "observed_behavior": [
+    { "statement": "Tất cả 7 type đã test tạo qua CÙNG endpoint POST /api/global-options; type là slug ngắn khác label UI; field 'data' polymorphic theo type.", "kb_refs": ["KB-004"] },
+    { "statement": "Modal 'Select a layer type' có 7 nhóm / 29 nút cấp 1 / 30 leaf thực tạo được, khớp với filter dropdown 'Type: Any' trên trang list.", "kb_refs": ["KB-001"] },
+    { "statement": "Nhóm 'Dynamic Clipart by Text' (2 leaf con) hiện Unavailable/disabled, không tạo được — lý do chưa điều tra.", "kb_refs": ["KB-002"] },
+    { "statement": "'Static Image'/'Static Vector' bị disable trong modal khi tạo Global Option, nhưng CÙNG component modal lại enable 2 nút này khi thêm layer cho artwork — chưa rõ nguyên nhân (cross-object với artwork).", "kb_refs": ["KB-003"] },
+    { "statement": "Edit dùng Hasura GraphQL mutation client-dựng 'updateGlobalOption', KHÔNG dùng REST PUT — bất đối xứng so với create.", "kb_refs": ["KB-006"] },
+    { "statement": "Clone dùng REST POST /{id}/clone (không body), đặt tên '<tên gốc> (copy)' — khác convention clone ở object asset-category.", "kb_refs": ["KB-007"] },
+    { "statement": "Delete dùng REST DELETE /{id} trả 204, confirm dialog nguyên văn 'Are you sure to remove <name>?'.", "kb_refs": ["KB-008"] },
+    { "statement": "List/refresh dùng Hasura GraphQL query 'getData', client-controlled where/order_by/offset/limit.", "kb_refs": ["KB-005", "KB-024"] },
+    { "statement": "Icon hành động 'Update campaign' (rocket) chỉ render khi Used>0; Used=0 render placeholder rỗng thay vì nút — mục đích/endpoint thật của action này CHƯA từng được gọi trong run này.", "kb_refs": ["KB-009"] },
+    { "statement": "global_option_category_id quan sát null trên 7/7 sample tạo mới; UI list hiển thị 'Uncategorized' và UI create-form hiển thị 'No category', 0 category thật tồn tại trong store này ở thời điểm quan sát.", "kb_refs": ["KB-010", "KB-011", "KB-012"] },
+    { "statement": "Text to Image (AI) form: field 'Prompt' chỉ xuất hiện SAU KHI chọn 'GenAI service*'; bấm Save trước đó là silent no-op, không network call, không lỗi hiển thị.", "kb_refs": ["KB-015"] },
+    { "statement": "Global Option 862 (text-to-image) tự có data.required=false trong chính payload tạo của nó — quan hệ với layer.required phía artwork (xem feature artwork-personalization-global-option-link) CHƯA xác định.", "kb_refs": ["KB-019"] },
+    { "statement": "[security-observational, chưa kết luận an toàn/không an toàn] Mutation edit + query list là Hasura table/query trực tiếp phơi ra client, cấu trúc where/order_by/offset/limit và object _set do client tự dựng; mọi request kèm header client-supplied x-acting-user-id=266, chưa test forge/cross-tenant.", "kb_refs": ["KB-023", "KB-024", "KB-025"] }
+  ],
+  "observed_validations": [
+    { "input": "Text to Image (AI): bấm Save khi chưa chọn 'GenAI service*' (do đó field Prompt bắt buộc chưa hiện ra)", "message_verbatim": "(không có inline error text nào được capture — silent no-op, không network call)", "observed_count": 1, "rule_confidence": "LOW", "kb_refs": ["KB-015"] }
+  ],
+  "permissions": [
+    { "role": "owner", "capability": "full CRUD (create/edit/clone/delete)", "observed": true, "kb_refs": ["KB-004", "KB-006", "KB-007", "KB-008"] }
+  ],
+  "surface_mapping": {
+    "portal": ["/global-options", "/global-options/create", "/global-options/create/<type-slug>", "/global-options/{id}/edit"],
+    "storefront": [],
+    "api": [
+      "POST /api/global-options (create, generic mọi type)",
+      "POST /api/graphql operationName=getData (list/refresh, Hasura query)",
+      "POST /api/graphql mutation updateGlobalOption (edit, Hasura mutation)",
+      "POST /api/global-options/{id}/clone (clone)",
+      "DELETE /api/global-options/{id} (delete)"
+    ],
+    "data": ["name", "type (slug)", "data (polymorphic theo type; keys quan sát: required, additional_option, clipart, ...)", "global_option_category_id", "id", "updated_at"],
+    "code": []
+  },
+  "dependencies": [
+    { "target": "object: artwork", "direction": "consumed_by", "description": "Global Option instance được artwork layer tham chiếu qua personalization 'Use an existing global option' (customization_type=global_option). Xem feature riêng artwork-personalization-global-option-link. Ảnh hưởng của việc sửa/xoá Global Option đang được artwork tham chiếu CHƯA được test trong run này. Feature artwork-personalization-global-option-link nay có bằng chứng CONFIRMED_EXPECTED (KB-029, product-owner-confirmed) rằng khi 1 instance được nhiều layer/artwork/campaign tham chiếu, giá trị buyer nhập được chia sẻ theo option id — đây là minh chứng business-level trực tiếp cho lý do tồn tại (user_goal) của chính feature quản lý instance này ('tái sử dụng cùng cấu hình trên nhiều artwork/campaign'), dù mới confirmed cho 2/7 type test (text, text-to-image) và CÒN limitation (chưa verify pixel-level design-file). Câu hỏi 'sửa CONFIG của Global Option sau khi đã được tham chiếu có tự động phản ánh không' (khác với 'giá trị buyer nhập có share không') vẫn CHƯA được trả lời — 2 câu hỏi không được gộp lẫn.", "kb_refs": ["KB-009", "KB-017", "KB-018", "KB-029"] },
+    { "target": "object: asset-category (routes /additional-options, /vectors)", "direction": "unclear/INFERRED", "description": "Category picker RIÊNG theo type (Additional Option, Vector Category) liệt kê category thật còn sót từ object asset-category cũ, tương quan id (additional_option=6009, clipart=6007) gợi ý liên hệ nhưng CHƯA có xác nhận schema/FK. Giữ INFERRED, cần db-explorer xác nhận.", "kb_refs": ["KB-013", "KB-014"] }
+  ],
+  "risks": [
+    { "risk": "Category default value UNRESOLVED (conflict CFL-02): bootstrap briefing nói Category mặc định 'Uncategorized', nhưng 7/7 sample tạo mới observed global_option_category_id=null và 0 category thật tồn tại trong store — không rõ đây là briefing lỗi thời hay state khác chưa sample tới. KHÔNG tự hoà giải.", "conflict_id": "CFL-02", "kb_refs": ["KB-010", "KB-011", "KB-012"] },
+    { "risk": "Cross-object: 'Static Image'/'Static Vector' availability khác nhau giữa modal tạo Global Option (disabled) và modal thêm layer artwork (enabled) dùng cùng component — nguyên nhân chưa điều tra.", "kb_refs": ["KB-003"] },
+    { "risk": "'Dynamic Clipart by Text' hoàn toàn không tạo được ở trạng thái hiện tại (feature flag/plan tier/rollout chưa điều tra).", "kb_refs": ["KB-002"] },
+    { "risk": "[security-observational] Hasura table-level mutation/query phơi trực tiếp ra client; tenant scoping dựa trên header client-supplied x-acting-user-id — chưa test forge/cross-tenant, chưa kết luận mức độ rủi ro thật.", "kb_refs": ["KB-023", "KB-024", "KB-025"] },
+    { "risk": "Field-level capture gap: chỉ 3/7 sample tạo có full request_body — giới hạn độ chắc chắn của claim về field bắt buộc phía request.", "kb_refs": ["KB-004"] },
+    { "risk": "Cross-reference: feature artwork-personalization-global-option-link phát sinh 2 conflict liên quan gián tiếp tới object này: campaign.status=0 có thật sự nghĩa 'draft/unlaunched' hay không (ảnh hưởng cách hiểu 'Used' state của Global Option khi campaign đã attach nhưng status ambiguous), và localStorage key naming khác nhau theo type Global Option. Cả 2 giữ UNRESOLVED, không hoà giải ở đây — xem đầy đủ 2 phía trong feature artwork-personalization-global-option-link.", "kb_refs": ["KB-021"] }
+  ],
+  "unknown_areas": [
+    { "question": "Vai trò khác owner (staff hạn chế quyền, hoặc user cross-tenant) có được CRUD Global Option như nhau không?", "why_it_matters": "Chỉ test role owner (Linh explorer, 1 tenant) — permission matrix hoàn toàn chưa rõ, ảnh hưởng test case phân quyền." },
+    { "question": "Category (global_option_category_id) mặc định thật sự là gì — bootstrap briefing nói 'Uncategorized', run này chỉ thấy null?", "why_it_matters": "Ảnh hưởng trực tiếp tới oracle test cho field mặc định; xem conflict CFL-02." },
+    { "question": "23/30 leaf type còn lại (Normal, Custom Shape, Warp Text, Spiral Text, 1 Clipart Category, Group of clipart categories, Single Upload, Vector Upload, Route Maps, Star Maps, Moon Phase, Cross Word, Single-line[scrabble], Word Cloud, Song Search, Calendar, Clock, Toggle Switch, Addon Charge, JSON List, Font, Color) hành xử ra sao khi tạo/sửa?", "why_it_matters": "Hoàn toàn chưa test — có thể có validation/behavior khác 7 type đã test." },
+    { "question": "6/7 fixture mới (862-867) có Edit/Clone/Delete hoạt động giống hệt nhóm Text (860/861) không?", "why_it_matters": "Chỉ giả định generic dựa trên endpoint chung, chưa xác minh trực tiếp theo từng type." },
+    { "question": "Validation/error message thật khi CRUD thất bại (4xx/5xx, trùng tên, thiếu field required) là gì?", "why_it_matters": "0 sample negative trong run này cho bất kỳ operation CRUD nào — không có oracle cho negative test case." },
+    { "question": "Route Maps/Star Maps/Moon Phase lưu type='maps' giống Street Maps hay type string riêng?", "why_it_matters": "Ảnh hưởng test theo filter 'Type', chỉ Street Maps được tạo thực tế." },
+    { "question": "Lý do 'Dynamic Clipart by Text' Unavailable là gì (feature flag/plan tier/rollout)?", "why_it_matters": "Quyết định có nên viết test case chờ nhánh này mở hay bỏ qua." },
+    { "question": "Endpoint/payload thật của action 'Update campaign' (rocket icon) là gì, dùng để làm gì?", "why_it_matters": "Chưa từng được gọi (loại trừ chủ động theo forbidden_actions do blast radius không giới hạn) — hoàn toàn unknown." },
+    { "question": "Có tồn tại REST GET/PUT/PATCH song song cho Global Option hay chỉ có GraphQL (list=getData, edit=updateGlobalOption)?", "why_it_matters": "Ảnh hưởng thiết kế API test — hiện chỉ quan sát REST cho create/clone/delete, GraphQL cho list/edit." },
+    { "question": "Server có validate header x-acting-user-id đối chiếu session thật, hay tin tưởng nguyên trạng giá trị client gửi?", "why_it_matters": "Rủi ro bảo mật tenant-scoping chưa được test, cần security/negative test case." }
+  ],
+  "last_updated": { "date": "2026-09-16", "ccr_ref": "bootstrap" },
+  "profile_relationships": [
+    { "from_feature_id": "FEAT-01-global-option-instance-management", "to_feature_id": "FEAT-02-artwork-personalization-global-option-link", "relationship": "depended_on_by", "description": "Global Option instance được tạo/quản lý bởi feature này là tiền đề bắt buộc để feature artwork-personalization-global-option-link gắn nó vào artwork layer.", "kb_refs": ["KB-017", "KB-018"] }
+  ],
+  "coverage_matrix": [
+    { "feature_id": "FEAT-01-global-option-instance-management", "layer": "portal", "role": "owner", "state": "create (7/7 type), edit/clone/delete (nhóm Text đầy đủ)", "environment": "staging", "covered": true },
+    { "feature_id": "FEAT-01-global-option-instance-management", "layer": "api", "role": "owner", "state": "create (7/7 type), edit/clone/delete (nhóm Text đầy đủ)", "environment": "staging", "covered": true },
+    { "feature_id": "FEAT-01-global-option-instance-management", "layer": "portal", "role": "owner", "state": "23/30 leaf type chưa tạo; 6/7 fixture mới chưa test edit/clone/delete riêng theo type", "environment": "staging", "covered": false },
+    { "feature_id": "FEAT-01-global-option-instance-management", "layer": "portal", "role": "owner", "state": "negative/error (4xx/5xx, trùng tên, thiếu field required)", "environment": "staging", "covered": false },
+    { "feature_id": "FEAT-01-global-option-instance-management", "layer": "portal", "role": "non-owner (staff hạn chế quyền, cross-tenant)", "state": "any", "environment": "staging", "covered": false },
+    { "feature_id": "FEAT-01-global-option-instance-management", "layer": "storefront", "role": "any", "state": "any — feature này không có buyer-facing storefront surface riêng (CRUD portal/API only)", "environment": "staging", "covered": false },
+    { "feature_id": "FEAT-01-global-option-instance-management", "layer": "data (db)", "role": "owner", "state": "n/a — db_observation không bật trong run này", "environment": "staging", "covered": false },
+    { "feature_id": "FEAT-01-global-option-instance-management", "layer": "code", "role": "owner", "state": "n/a — không có code_ref evidence nào trong run này", "environment": "staging", "covered": false }
+  ]
+}

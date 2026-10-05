@@ -1,0 +1,183 @@
+{
+  "feature_id": "FEAT-02-artwork-personalization-global-option-link",
+  "feature_key": "artwork-personalization-global-option-link",
+  "name": "Gắn Global Option vào artwork qua personalization 'Use an existing global option'",
+  "user_goal": "Là portal staff (owner) đang thiết kế 1 layer trên artwork, tôi muốn trỏ personalization của layer đó tới 1 Global Option instance đã tồn tại (thay vì tự định nghĩa lại từ đầu 'Create a new option'), để tái sử dụng cùng một cấu hình personalization trên nhiều artwork/campaign khác nhau.",
+  "actors": [
+    { "role": "owner", "permission_observed": "Đã test full luồng 1 lần: tạo artwork mới, thêm layer text-to-image, chọn 'Use an existing global option', attach artwork vào printarea của campaign draft.", "kb_refs": ["KB-017", "KB-021"] },
+    { "role": "owner", "permission_observed": "Trong editor artwork, thêm 2 text layer CÙNG trỏ 1 Global Option (id=860) trong CÙNG 1 artwork throwaway (id=4171); sửa giá trị default/preview text của 1 layer KHÔNG live-update và KHÔNG chia sẻ sang layer kia (phạm vi portal-editor, tách biệt khỏi business rule storefront ở dưới).", "kb_refs": ["KB-026"] },
+    { "role": "guest (storefront buyer)", "permission_observed": "Điền field personalization storefront gắn Global Option type=text (GO#860, 2 layer/2 artwork Front+Back cùng campaign) — giá trị áp dụng cho MỌI nơi dùng option đó (KB-029); bấm 'Generate image' cho field gắn Global Option type=text-to-image (GO#862) — generate thành công lần đầu tiên (KB-031); add-to-cart thành công (KB-031, KB-032).", "kb_refs": ["KB-027", "KB-028", "KB-029", "KB-031", "KB-032"] }
+  ],
+  "entry_points": [
+    { "path": "/artworks editor > thêm layer mới > panel 'Personalization Settings' > chọn radio 'Use an existing global option'", "precondition": "layer vừa được thêm vào artwork (loại có hỗ trợ personalization, đã test text-to-image); ít nhất 1 Global Option instance CÙNG type với layer đã tồn tại", "kb_refs": ["KB-017", "KB-018"] },
+    { "path": "/campaigns/{id} (draft, status=0) > attach artwork vào 1 printarea", "precondition": "artwork đã có ít nhất 1 layer cấu hình personalization (kể cả layer trỏ Global Option)", "kb_refs": ["KB-021"] },
+    { "path": "storefront product page (campaign 2605) > panel PERSONALIZE (#tee-artwork-form, dedupe theo Global Option id)", "precondition": "campaign có ít nhất 1 artwork/printarea đã attach layer trỏ Global Option; role guest; storefront reachable dù campaign.status nội bộ = 0 (xem conflict CFL-03, KHÔNG coi status=0 là chặn reachability)", "kb_refs": ["KB-027", "KB-028", "KB-029"] }
+  ],
+  "capabilities": [
+    {
+      "name": "Chọn 'Use an existing global option' cho 1 layer artwork, trỏ tới 1 Global Option instance có sẵn",
+      "description": "Trong Personalization Settings của layer, chọn radio 'Use an existing global option', pick 1 instance từ combobox, Save → layer nhận customization_type='global_option', global_option=<id>.",
+      "kb_refs": ["KB-017"]
+    },
+    {
+      "name": "Picker chỉ hiển thị Global Option cùng type với layer hiện tại (lọc ẩn, không báo lỗi)",
+      "description": "Combobox 'Select a global option*' chỉ liệt kê instance có type khớp type của layer; instance type khác đơn giản không xuất hiện, không có thông báo lọc/lỗi nào.",
+      "kb_refs": ["KB-018"]
+    },
+    {
+      "name": "Gắn artwork (có layer trỏ Global Option) vào printarea của campaign",
+      "description": "Attach artwork vào printarea của campaign draft; response trả về full nested tree (printarea + campaign + artwork.data layer, bao gồm cả field customization_type/global_option của layer không đổi so với lúc tạo artwork).",
+      "kb_refs": ["KB-021"]
+    },
+    {
+      "name": "[CONFIRMED business rule] Chia sẻ (share) giá trị personalize của 1 Global Option qua nhiều artwork/campaign khác nhau tham chiếu cùng option id — personalize 1 lần, áp dụng mọi nơi dùng option đó",
+      "description": "Khi cùng 1 Global Option instance (id=860, type=text) được 2 layer khác nhau ở 2 artwork/printarea (Front layer-558994/artwork 4167, Back layer-929347/artwork 4172) trong campaign 2605 tham chiếu, buyer chỉ cần nhập giá trị 1 lần ở storefront; giá trị đó là nguồn cho MỌI usage của Global Option đó, không phải theo từng layer/artwork riêng. Đây là business rule có thẩm quyền (CONFIRMED_EXPECTED) — statement đầy đủ + limitation BẮT BUỘC (chưa verify pixel-level) nằm trong confirmed_rules bên dưới, không lặp lại rút gọn ở đây để tránh mất limitation khi trích dẫn.",
+      "kb_refs": ["KB-029", "KB-028", "KB-030", "KB-032"]
+    },
+    {
+      "name": "[observed_behavior] Cấu trúc storefront: 1 trang sản phẩm duy nhất render nhiều artwork/printarea cùng trong 1 panel PERSONALIZE",
+      "description": "Campaign có nhiều artwork (Front id=4167/printarea 13959, Back id=4172/printarea 14026) KHÔNG tạo nhiều trang/side/tab riêng trên storefront — cả 2 artwork render đồng thời, field cộng dồn trong CÙNG 1 #tee-artwork-form. Quan sát lặp lại độc lập ở round 2 và round 3 (sau khi thêm layer thứ 2). Đây là fact về cấu trúc trang, KHÔNG phải business rule — không có confirmation_source.",
+      "kb_refs": ["KB-027"]
+    }
+  ],
+  "state_transitions": [
+    { "from": "layer chưa cấu hình personalization (hoặc mặc định 'Create a new option')", "to": "layer.customization_type='global_option', layer.global_option=<id>", "trigger": "chọn radio 'Use an existing global option' + pick 1 instance từ picker + Save", "condition": "phải tồn tại ít nhất 1 Global Option cùng type với layer để picker có lựa chọn (xem KB-018)", "kb_refs": ["KB-017", "KB-018"] },
+    { "from": "artwork chưa gắn vào campaign nào", "to": "artwork gắn vào 1 printarea của campaign (campaign.status quan sát = 0 tại thời điểm này)", "trigger": "action attach artwork-to-printarea trên campaign draft", "condition": "campaign chưa launch; diễn giải status=0='draft/unlaunched' là suy diễn của portal-explorer, CHƯA xác nhận qua enum chính thức — diễn giải này nay bị conflict CFL-03 tranh chấp trực tiếp (UI hiển thị 'Published on current store', storefront reachable/buyable độc lập cả 3 round dù status=0 không đổi). KHÔNG dùng status=0 làm điều kiện chặn reachability.", "kb_refs": ["KB-021", "KB-027"] },
+    { "from": "field storefront (Global Option 860, type=text) trống, chưa có giá trị buyer nhập ở BẤT KỲ layer/artwork nào tham chiếu option 860", "to": "field storefront có giá trị, áp dụng cho MỌI layer/artwork tham chiếu cùng option id 860 (không chỉ layer vừa nhập)", "trigger": "buyer nhập giá trị vào field storefront gắn Global Option 860", "condition": "CONFIRMED business rule (KB-029, product-owner-confirmed) — LIMITATION: evidence hiện tại là structural (localStorage/network/cart-property shape), CHƯA verify pixel-level nội dung 2 file design (403 AccessDenied), CHƯA test 2 field storefront sống đồng thời (chỉ có same-field rehydration-on-reload proxy)", "kb_refs": ["KB-029"] },
+    { "from": "Global Option 862 (text-to-image) chưa generate ảnh", "to": "Global Option 862 có ảnh generate thành công (job status 0->1->2, model='nano_banana')", "trigger": "buyer bấm 'Generate image' với prompt hiện tại ('Generate baby image')", "condition": "Gemini API key đã được cấu hình ngoài agent session (round 1/2 luôn lỗi 'No gemini API key configured'; round 3 thành công lần đầu tiên) — 1 sample duy nhất, LOW, KHÔNG tổng quát hoá", "kb_refs": ["KB-031"] }
+  ],
+  "confirmed_rules": [
+    {
+      "statement": "1 Global Option instance (đã test: id=860, type=text) được dùng ở nhiều artwork/campaign khác nhau (2 layer, 2 printarea Front/Back trong campaign 2605) chỉ cần buyer personalize (nhập giá trị) MỘT LẦN — giá trị customer-entered đó áp dụng cho MỌI nơi dùng Global Option đó, thay vì phải nhập riêng theo từng layer/artwork/printarea.",
+      "confirmation_source": "product owner, 2026-09-15/16 (phát biểu trực tiếp) — quyết định CÓ THẨM QUYỀN, không phải tự nâng cấp bởi feature-profile-builder hay qa-knowledge-normalizer.",
+      "limitation": "BẮT BUỘC đọc kèm statement: run này CHƯA verify trực tiếp bằng mắt (pixel-level) nội dung của 2 file thiết kế thật ('_tib_design_link_1' front, '_tib_design_link_2' back) — cả 2 URL đều trả HTTP 403 AccessDenied (S3 bucket 'oe-cdn') ở TẤT CẢ 12 lần thử fetch (kể cả retry với browser-like headers). Evidence hỗ trợ hiện có là STRUCTURAL ĐÚNG SHAPE (localStorage key theo option-id, đúng 1 request/1 key gửi backend, đúng 2 design-link theo printarea trong cart), KHÔNG PHẢI xác nhận visual rằng giá trị buyer nhập thực sự nằm trong CẢ HAI file render. Ngoài ra, run này CHƯA quan sát 2 field storefront SỐNG ĐỒNG THỜI để xác nhận live cross-field sync thật — chỉ có 1 same-field rehydration-on-reload proxy (không phải bằng chứng two-field trực tiếp). Downstream (checklist, knowledge-diff) KHÔNG được lược bỏ limitation này khi trích dẫn rule.",
+      "kb_refs": ["KB-029"]
+    }
+  ],
+  "observed_behavior": [
+    { "statement": "Layer trỏ Global Option có customization_type='global_option', global_option=<id> — xác nhận ĐỘC LẬP 3 lần: 1 lần UI (Personalization Settings panel), 2 lần API (response tạo artwork POST /api/artworks, và response attach POST /api/campaign-artworks ở bước sau không đổi).", "kb_refs": ["KB-017"] },
+    { "statement": "Picker 'Use an existing global option' CHỈ hiện instance có type khớp type của layer hiện tại (test với 7 instance trải 7 nhóm, layer text-to-image chỉ thấy đúng 1 lựa chọn cùng type); 6 instance loại khác hoàn toàn không xuất hiện, không có thông báo lỗi/lọc.", "kb_refs": ["KB-018"] },
+    { "statement": "Response attach campaign-artwork chứa full nested printarea+campaign+artwork.data layer tree; campaign.status quan sát = 0 (diễn giải draft/unlaunched, chưa xác nhận enum chính thức) tại thời điểm artwork vừa gắn.", "kb_refs": ["KB-021"] },
+    { "statement": "Trên campaign draft (status=0), 2 nút liên quan preview đều KHÔNG cho xem trang storefront thật: 'Preview' chỉ mở modal trong-portal hiển thị ảnh mockup tĩnh (không có form personalization, không URL storefront, không network call mới); 'Listing info' là form 'Edit campaign info' với helper text xác nhận publish sẽ tạo product Shopify/Etsy MỚI — nghĩa là chưa có product/storefront nào tồn tại cho campaign chưa launch tại thời điểm quan sát này.", "kb_refs": ["KB-022"] },
+    { "statement": "Global Option 862 (text-to-image) tự có data.required=false trong chính payload tạo của nó, trong khi layer artwork trỏ tới nó lại có required=true trong response tạo artwork — 2 field nằm trên 2 entity khác nhau, quan hệ/kế thừa giữa chúng CHƯA xác định. KHÔNG kết luận đây là mâu thuẫn/bug — chỉ ghi nhận là quan hệ chưa rõ.", "kb_refs": ["KB-019", "KB-020"] },
+    { "statement": "[TÁCH BIỆT khỏi confirmed_rule storefront ở trên — PHẠM VI KHÁC] Trong-CÙNG-1-artwork (id=4171, throwaway), 2 text layer cùng trỏ personalization tới CÙNG 1 Global Option (id=860) KHÔNG live-update và KHÔNG chia sẻ giá trị default/preview text ở tầng portal-editor: sửa text của layer A không tạo network request nào ngay lập tức và layer B vẫn giữ 'Default text'; sau khi Save tường minh, response lưu 2 giá trị ĐỘC LẬP theo từng layer dù cùng global_option=860. Product owner đã xác nhận rõ (2026-09-16) đây là 1 cơ chế/phạm vi KHÁC với business rule 'share value' ở storefront (KB-029, giá trị customer-entered) — KHÔNG được diễn giải là mâu thuẫn với KB-029, và KHÔNG được gộp chung.", "kb_refs": ["KB-026"] },
+    { "statement": "Cấu trúc storefront thật của campaign 2605: 1 trang sản phẩm duy nhất, quét DOM có chủ đích tìm side/tab/view-switcher trả về 0 kết quả; 2 artwork (Front id=4167, Back id=4172) render CÙNG trong 1 #tee-artwork-form, hiển thị đồng thời các field nhập liệu. Xác nhận lặp lại độc lập ở round 2 và round 3 (sau khi thêm layer thứ 2 vào artwork Front).", "kb_refs": ["KB-027"] },
+    { "statement": "Personalization form (CẢ portal campaign editor's PERSONALIZATION FORM lẫn storefront widget) dedupe field theo Global Option id, KHÔNG theo layer: khi Global Option 860 được 2 layer/2 artwork khác nhau tham chiếu, cả 2 tầng chỉ render/liệt kê ĐÚNG 1 field/input cho option đó — không phải 1 field/layer. Xác nhận thêm bằng localStorage (1 entry key='860', không tách theo layer) và network (1 request/1 key 'global-option-860' dù có 2 layer tham chiếu). Đây là fact về CƠ CHẾ RENDER (dedupe theo id), hỗ trợ nhưng KHÔNG đồng nhất với statement business rule KB-029.", "kb_refs": ["KB-028"] },
+    { "statement": "localStorage cho Global Option type=text (id=860) có 2 key: 'teeinblue-global-options' = {\"860\":{value,...}} khoá trực tiếp bởi global_option_id (KHÔNG theo layer_id); và 'teeinblue-customizations' = mảng per-product chứa key literal 'global-option-860'. Đây là cơ chế KHÁC với type=text-to-image (chỉ có key 'teeinblue-text-to-image-gen-state' khoá theo layer_id, quan sát round 1) — 2 cơ chế coexist trên CÙNG 1 trang, khác nhau theo type Global Option. Xem conflict CONFLICT-SF-01 (UNRESOLVED, chỉ 2/~29 type đã test).", "kb_refs": ["KB-030"] },
+    { "statement": "Lần đầu tiên xuyên suốt cả 3 round, Global Option 862 (text-to-image) generate ảnh THÀNH CÔNG (job status 0->1->2->done, error_message=null, model='nano_banana') sau khi Gemini API key được cấu hình ngoài agent session; Add to cart ngay sau đó cũng THÀNH CÔNG lần đầu tiên (item_count=1, không banner lỗi). 1 sample duy nhất — không tổng quát hoá.", "kb_refs": ["KB-031"] },
+    { "statement": "Cart line item sau add-to-cart thành công có ĐÚNG 5 property: '_customization_id' (UUID trùng response POST /api/merchant/shopify/customization), '_customization_image' (URL JPEG composite preview), '_tib_fulfilled_sku', '_tib_design_link_1' (printarea front, id 13959), '_tib_design_link_2' (printarea back, id 14026). KHÔNG có property nào chứa raw text value đã nhập — giá trị personalization CHỈ tồn tại dưới dạng input cho 2 file PNG đã render, 1 file/PRINTAREA (không phải 1 file/Global-Option hay 1 file/layer). 1 sample duy nhất.", "kb_refs": ["KB-032"] },
+    { "statement": "Trên campaign draft/status=0 (KB-021, KB-022), 2 nút Preview/Listing-info trước đây cho thấy KHÔNG có storefront thật — nhưng round 2/3 cho thấy điều ngược lại: storefront product page THẬT tồn tại và reachable/buyable độc lập với campaign.status=0 (xem conflict CFL-03, KHÔNG hoà giải ở đây, chỉ ghi nhận mâu thuẫn với quan sát round 1).", "kb_refs": ["KB-021", "KB-027"] }
+  ],
+  "observed_validations": [],
+  "permissions": [
+    { "role": "owner", "capability": "toàn bộ luồng: thêm layer, chọn Use-existing-global-option, attach vào campaign", "observed": true, "kb_refs": ["KB-017", "KB-021"] },
+    { "role": "owner", "capability": "thêm 2 layer trong CÙNG 1 artwork cùng trỏ 1 Global Option, sửa default/preview text (portal editor only, không live-share — KB-026)", "observed": true, "kb_refs": ["KB-026"] },
+    { "role": "guest (storefront buyer)", "capability": "điền field personalization gắn Global Option (type=text, type=text-to-image), generate AI image, add-to-cart", "observed": true, "kb_refs": ["KB-029", "KB-031", "KB-032"] }
+  ],
+  "surface_mapping": {
+    "portal": ["/artworks editor (panel Personalization Settings của 1 layer)", "/campaigns/{id} (draft, attach artwork vào printarea)", "/campaigns/{id} editor PERSONALIZATION FORM (dedupe theo Global Option id — KB-028)"],
+    "storefront": [
+      "storefront product page campaign 2605 — panel PERSONALIZE / #tee-artwork-form (2 field: GO#860 type=text, GO#862 type=text-to-image)",
+      "cart page (line item properties sau add-to-cart)"
+    ],
+    "api": [
+      "POST /api/artworks (create artwork, trả layer.customization_type/global_option/required)",
+      "POST /api/campaign-artworks (attach artwork vào printarea, trả nested printarea+campaign+artwork tree)",
+      "POST /api/merchant/shopify/customization (submit customization — đúng 1 key 'global-option-860' dù 2 layer tham chiếu — KB-029/KB-028)",
+      "customer-uploads/generate + status poll (GO#862 AI image generate, job 24309 — KB-031)",
+      "GET /cart.js, /cart.json (line item properties sau add-to-cart — KB-032)"
+    ],
+    "data": [
+      "layer.customization_type", "layer.global_option (id, tham chiếu Global Option instance)", "layer.required (khác data.required của chính Global Option — xem KB-019/KB-020)", "campaign.status",
+      "localStorage 'teeinblue-global-options' = {\"<option_id>\":{value,extra,timestamp}} (type=text — KB-030)",
+      "localStorage 'teeinblue-customizations' = mảng per-product, key literal 'global-option-<id>' (type=text — KB-030)",
+      "localStorage 'teeinblue-text-to-image-gen-state' khoá theo layer_id (type=text-to-image, round 1 — xem conflict CONFLICT-SF-01, KHÔNG cùng cơ chế với 2 key trên)",
+      "cart line item properties: _customization_id, _customization_image, _tib_fulfilled_sku, _tib_design_link_1, _tib_design_link_2 (KB-032)"
+    ],
+    "code": []
+  },
+  "dependencies": [
+    { "target": "feature: global-option-instance-management (object global-option)", "direction": "depends_on", "description": "Capability này TIÊU THỤ Global Option instance đã tồn tại — không tự tạo Global Option mới trong luồng này. Ảnh hưởng của việc sửa/xoá Global Option SAU KHI đã được layer trỏ tới hoàn toàn chưa test.", "kb_refs": ["KB-017", "KB-018"] },
+    { "target": "object: artwork (đã publish, knowledge/products/teeinblue/objects/artwork/kb.json)", "direction": "cross-object, bidirectional relevance", "description": "Capability này là 1 phần của luồng cấu hình Personalization Settings vốn thuộc object artwork; có conflict CFL-01 UNRESOLVED giữa quan sát run này (radio hiện 3 option gồm 'No personalization') và KB-019 đã publish của object artwork (chỉ liệt kê 2 option, không có 'No personalization'). LƯU Ý: 'KB-019' ở đây là ID của object artwork (namespace khác), KHÔNG phải KB-019 của object global-option (nói về data.required) — 2 ID trùng số nhưng khác namespace/object, không nhầm lẫn.", "kb_refs": ["KB-017"] },
+    { "target": "object: asset-category (gián tiếp, qua feature global-option-instance-management)", "direction": "indirect/INFERRED", "description": "Nếu Global Option được dùng ở đây thuộc type Additional Option/Vector Category, chuỗi personalization data có thể gián tiếp liên quan tới category cũ của object asset-category — xem KB-013/KB-014 (INFERRED) trong feature global-option-instance-management. Không có evidence trực tiếp nào trong capability này (chỉ test type text-to-image).", "kb_refs": [] },
+    { "target": "external: S3 CDN 'oe-cdn' / backend print-fulfillment rendering pipeline (không có object rõ trong scope run này)", "direction": "blocked/unclear", "description": "2 design-link URL ('_tib_design_link_1'/'_tib_design_link_2') trả 403 AccessDenied ở mọi lần thử (12/12) — storefront-explorer không có quyền/công cụ truy cập backend này. Đề xuất chuyển customization id + 2 URL cho api-explorer/db-explorer round sau để xác nhận pixel-level nội dung, hoàn tất verification cho KB-029.", "kb_refs": ["KB-029"] }
+  ],
+  "risks": [
+    {
+      "risk": "Conflict CFL-01 UNRESOLVED (cross-object): text-to-image layer Personalization Settings quan sát 3 option (bao gồm 'No personalization') trong run này, mâu thuẫn với KB đã publish của object artwork (chỉ 2 option). Nguyên nhân có thể là portal đổi theo thời gian, hoặc state-dependent (base image đã gán hay chưa, schema_version). CHƯA điều tra, CẦN escalate qua orchestrator/reviewer tới owner object artwork.",
+      "conflict_id": "CFL-01",
+      "kb_refs": ["KB-017"]
+    },
+    {
+      "risk": "Quan hệ giữa data.required (Global Option's own, =false) và layer.required (artwork layer trỏ tới nó, =true) CHƯA xác định — không rõ layer kế thừa/độc lập/ghi đè. Quan trọng cho oracle validate required-field khi test storefront (buyer có bắt buộc điền field này khi checkout không?).",
+      "kb_refs": ["KB-019", "KB-020"]
+    },
+    {
+      "risk": "Buyer-facing/storefront effect của capability này mới confirmed cho 2/7 Global Option type (text, text-to-image); 5 fixture còn lại (Additional Option, Vector Category, Maps, Word Search, QR Code) hoàn toàn chưa test storefront.",
+      "kb_refs": ["KB-022"]
+    },
+    {
+      "risk": "campaign.status=0 mới là diễn giải 'draft/unlaunched', chưa xác nhận qua enum chính thức — state_transitions ở trên dùng cách diễn giải này, cần xác nhận lại.",
+      "kb_refs": ["KB-021"]
+    },
+    {
+      "risk": "Toàn bộ capability chỉ test với 1 type (text-to-image) trong 7 nhóm/30 leaf type cho luồng link cơ bản — hành vi filter-theo-type của picker (KB-018) và cơ chế attach có thể khác với type khác, chỉ 1 sample cho KB-018.",
+      "kb_refs": ["KB-018"]
+    },
+    {
+      "risk": "Conflict CFL-03 UNRESOLVED: campaign.status=0 (nội bộ) nhiều lần diễn giải là 'draft/unlaunched', nhưng UI /campaigns list hiển thị Status = 'Published on current store' cho campaign này (và 2 campaign khác có sẵn), và storefront product page độc lập được tìm thấy live/reachable/buyable xuyên suốt round 1-3 dù status=0 không đổi. State_transitions của profile này TRƯỚC ĐÂY giả định status=0='draft' — giả định này nay bị tranh chấp trực tiếp. KHÔNG tự hoà giải.",
+      "conflict_id": "CFL-03",
+      "kb_refs": ["KB-021", "KB-027"]
+    },
+    {
+      "risk": "Conflict CONFLICT-SF-01 UNRESOLVED: localStorage key names khác nhau giữa type=text-to-image (round 1, key 'teeinblue-text-to-image-gen-state' khoá theo layer_id) và type=text (round 2/3, 2 key 'teeinblue-global-options'+'teeinblue-customizations' khoá theo option_id). Giả thuyết 'cơ chế type-dependent, 2 hệ thống coexist' hợp lý nhưng CHƯA được coi là đã giải quyết — chỉ 2/~29 type đã test.",
+      "conflict_id": "CONFLICT-SF-01",
+      "kb_refs": ["KB-030"]
+    },
+    {
+      "risk": "confirmed_rule KB-029 (share value theo option id) mới có evidence STRUCTURAL — CHƯA verify pixel-level: cả 2 URL design-link ('_tib_design_link_1'/'_tib_design_link_2') trả HTTP 403 AccessDenied ở 12/12 lần thử (S3 'oe-cdn'). KHÔNG được dùng KB-029 làm bằng chứng 'visual confirmed' cho tới khi backend/print-fulfillment credential (api-explorer/db-explorer) xác nhận nội dung file thật.",
+      "kb_refs": ["KB-029"]
+    },
+    {
+      "risk": "Preview/mockup (product-page mockup frame, in-portal PREVIEW modal, cart-page line-item thumbnail) LUÔN là khung trắng trống xuyên suốt cả 3 round, KỂ CẢ sau khi GO#862 generate ảnh thành công và GO#860 add-to-cart thành công (round 3). Nguyên nhân (limitation có chủ đích của config campaign này, hay gap/defect riêng) CHƯA xác định — độc lập với business rule share-value (KB-029), không ảnh hưởng đúng/sai của KB-029.",
+      "kb_refs": []
+    },
+    {
+      "risk": "Chỉ 2/7 Global Option fixture (860 type=text, 862 type=text-to-image) được test end-to-end ở storefront; 5 fixture còn lại (863 additional-option, 864 vector-category, 865 maps, 866 word-search, 867 qr-code) hoàn toàn chưa test storefront — business rule KB-029 và cơ chế dedupe KB-028/localStorage KB-030 KHÔNG được coi là tổng quát cho mọi type.",
+      "kb_refs": ["KB-029", "KB-030"]
+    }
+  ],
+  "unknown_areas": [
+    { "question": "[câu hỏi gốc round 1 nay ĐÃ một phần được trả lời qua KB-029 — giữ lại để nhấn mạnh phần CÒN unknown] Buyer thấy gì trên storefront khi mở form personalization của 1 layer trỏ Global Option — giống hệt cấu hình gốc của Global Option, hay khác? Có add-to-cart được không? Kết quả customization lưu ở đâu (localStorage theo Global Option id hay theo layer id)?", "why_it_matters": "Round 2 đã trả lời phần lớn cho type=text/text-to-image (KB-027..032) — nhưng CHƯA trả lời cho 5/7 type khác, và phần pixel-level content vẫn unknown (403)." },
+    { "question": "Pixel-level nội dung của 2 file design ('_tib_design_link_1' front, '_tib_design_link_2' back) có thực sự chứa đúng giá trị buyer đã nhập cho CẢ HAI printarea hay không?", "why_it_matters": "confirmed_rule KB-029 mới chỉ có evidence STRUCTURAL (đúng shape request/response/localStorage/cart-property), CHƯA có xác nhận visual — đây là gap quan trọng nhất để tự tin dùng KB-029 làm oracle test thật. Cả 2 URL trả 403 AccessDenied ở 12/12 lần thử; cần api-explorer/db-explorer với backend/print-fulfillment credential." },
+    { "question": "Vì sao product-page mockup, in-portal PREVIEW modal, và cart-page line-item thumbnail đều LUÔN là khung trắng trống xuyên suốt cả 3 round, kể cả sau khi GO#862 generate ảnh thành công và GO#860 add-to-cart thành công?", "why_it_matters": "Chưa rõ đây là limitation có chủ đích của config campaign 2605, hay 1 gap/defect riêng biệt khỏi business rule share-value — ảnh hưởng tới oracle test cho hiển thị preview/mockup." },
+    { "question": "5/7 Global Option fixture còn lại (863 additional-option, 864 vector-category, 865 maps, 866 word-search, 867 qr-code) hành xử ra sao ở storefront — form hiển thị gì, business rule share-value (KB-029) và dedupe-by-id (KB-028) có áp dụng đồng nhất không?", "why_it_matters": "KB-029/KB-028/KB-030 mới confirmed/observed cho đúng 2/7 type; chưa có cơ sở tổng quát hoá cho 5 type còn lại." },
+    { "question": "Cross-role (staff hạn chế quyền)/cross-tenant ở storefront (buyer đăng nhập, buyer thuộc tenant/store khác) có hành xử khác role GUEST không?", "why_it_matters": "Toàn bộ round 2/3 storefront chỉ test role guest, 1 tenant, 1 session — chưa rõ ảnh hưởng login buyer hay cross-tenant lên business rule share-value hay cơ chế localStorage." },
+    { "question": "campaign.status=0 có thực sự nghĩa là draft/chưa publish hay không, khi storefront độc lập được tìm thấy reachable/buyable và UI hiển thị 'Published on current store'?", "why_it_matters": "Conflict CFL-03 UNRESOLVED — ảnh hưởng toàn bộ giả định state_transition 'attach artwork vào campaign draft' của chính profile này; cần enum chính thức từ dev/PO." },
+    { "question": "localStorage key nào là cơ chế chính thức cho các type Global Option khác ngoài text/text-to-image — theo 1 trong 2 pattern đã thấy hay 1 pattern thứ 3?", "why_it_matters": "Conflict CONFLICT-SF-01 UNRESOLVED, chỉ 2/~29 type đã test cơ chế lưu trữ." },
+    { "question": "Nếu Global Option bị SỬA (data thay đổi) SAU KHI đã có layer/artwork/campaign đang trỏ tới nó, layer có tự động phản ánh thay đổi mới (live reference) hay giữ nguyên snapshot tại thời điểm attach (deep copy)?", "why_it_matters": "Ảnh hưởng lớn tới regression: user sửa 1 Global Option dùng chung nhiều artwork/campaign có thể vô tình đổi hành vi ở nơi khác (hoặc ngược lại, không đổi gì) — hoàn toàn chưa test." },
+    { "question": "Nếu Global Option đang Used>0 (đã có layer trỏ tới) bị XOÁ, điều gì xảy ra với layer/artwork/campaign đang tham chiếu?", "why_it_matters": "Chưa test; có thể là lỗi nghiêm trọng nếu layer trỏ tới 1 Global Option đã bị xoá mà không có ràng buộc/cảnh báo nào." },
+    { "question": "Quan hệ thật giữa data.required của Global Option (KB-019) và layer.required của artwork (KB-020) là gì — kế thừa, override, hay hoàn toàn độc lập?", "why_it_matters": "Ảnh hưởng trực tiếp tới validate required-field ở storefront checkout — cần rõ trước khi viết test case required-field validation." },
+    { "question": "Conflict CFL-01 ('No personalization' option có/không) đúng hay sai phía nào, do thay đổi portal theo thời gian hay do state khác nhau?", "why_it_matters": "Ảnh hưởng trực tiếp tới test case cho danh sách radio option của Personalization Settings — hiện có 2 câu trả lời mâu thuẫn từ 2 nguồn." },
+    { "question": "Hành vi filter-theo-type của picker (KB-018) có áp dụng giống hệt cho cả 7 nhóm/30 leaf type, hay chỉ đúng với text-to-image đã test?", "why_it_matters": "Chỉ 1 sample — chưa đủ để tổng quát hoá thành rule cho mọi type." },
+    { "question": "Layer type nào khác (ngoài text-to-image) hỗ trợ 'Use an existing global option'? Tất cả layer type đều có option này hay chỉ 1 số loại?", "why_it_matters": "Chỉ test 1 layer type trong toàn bộ luồng — phạm vi áp dụng thật của capability chưa rõ." }
+  ],
+  "last_updated": { "date": "2026-09-16", "ccr_ref": "bootstrap" },
+  "profile_relationships": [
+    { "from_feature_id": "FEAT-02-artwork-personalization-global-option-link", "to_feature_id": "FEAT-01-global-option-instance-management", "relationship": "depends_on", "description": "Capability này chỉ vận hành được khi đã có sẵn ít nhất 1 Global Option instance (tạo/quản lý bởi feature global-option-instance-management) cùng type với layer.", "kb_refs": ["KB-017", "KB-018"] }
+  ],
+  "coverage_matrix": [
+    { "feature_id": "FEAT-02-artwork-personalization-global-option-link", "layer": "portal", "role": "owner", "state": "gắn layer (text-to-image) tới Global Option + attach artwork vào campaign draft", "environment": "staging", "covered": true },
+    { "feature_id": "FEAT-02-artwork-personalization-global-option-link", "layer": "api", "role": "owner", "state": "gắn layer (text-to-image) tới Global Option + attach artwork vào campaign draft", "environment": "staging", "covered": true },
+    { "feature_id": "FEAT-02-artwork-personalization-global-option-link", "layer": "portal", "role": "owner", "state": "6 type/nhóm Global Option khác (Additional Option, Vector Category, Maps, Word Search, QR Code, plain Text) chưa test trong luồng liên kết này", "environment": "staging", "covered": false },
+    { "feature_id": "FEAT-02-artwork-personalization-global-option-link", "layer": "portal", "role": "owner", "state": "sửa/xoá Global Option trong khi đang được layer tham chiếu (Used>0)", "environment": "staging", "covered": false },
+    { "feature_id": "FEAT-02-artwork-personalization-global-option-link", "layer": "storefront", "role": "guest", "state": "GO#860 (type=text): điền field ở 2 layer/2 artwork (Front+Back) cùng campaign, xác nhận share-value theo option id (structural, KB-029/KB-028/KB-030)", "environment": "staging", "covered": true },
+    { "feature_id": "FEAT-02-artwork-personalization-global-option-link", "layer": "storefront", "role": "guest", "state": "GO#862 (type=text-to-image): Generate image thành công (job 24309) + Add to cart thành công (KB-031, KB-032)", "environment": "staging", "covered": true },
+    { "feature_id": "FEAT-02-artwork-personalization-global-option-link", "layer": "storefront", "role": "guest", "state": "5 Global Option fixture còn lại (863 additional-option, 864 vector-category, 865 maps, 866 word-search, 867 qr-code) — HOÀN TOÀN CHƯA TEST storefront", "environment": "staging", "covered": false },
+    { "feature_id": "FEAT-02-artwork-personalization-global-option-link", "layer": "storefront", "role": "buyer (mọi state khác GUEST: logged-in, cross-tenant, mobile/tablet, non-US market)", "state": "any", "environment": "staging", "covered": false },
+    { "feature_id": "FEAT-02-artwork-personalization-global-option-link", "layer": "storefront", "role": "guest", "state": "pixel-level content của 2 design-link file — CHƯA verify (403 AccessDenied 12/12 lần); 2-field-live-sync đồng thời — CHƯA test trực tiếp (chỉ same-field rehydration proxy)", "environment": "staging", "covered": false },
+    { "feature_id": "FEAT-02-artwork-personalization-global-option-link", "layer": "storefront", "role": "owner (portal preview)", "state": "round 1 giả định campaign draft/unlaunched KHÔNG có storefront thật (KB-022); round 2/3 tìm thấy NGƯỢC LẠI — storefront reachable/buyable độc lập dù campaign.status=0 (xem conflict CFL-03, UNRESOLVED, KHÔNG hoà giải)", "environment": "staging", "covered": true },
+    { "feature_id": "FEAT-02-artwork-personalization-global-option-link", "layer": "portal", "role": "non-owner", "state": "any", "environment": "staging", "covered": false },
+    { "feature_id": "FEAT-02-artwork-personalization-global-option-link", "layer": "data (db)", "role": "owner", "state": "n/a — db_observation không bật trong run này", "environment": "staging", "covered": false }
+  ]
+}

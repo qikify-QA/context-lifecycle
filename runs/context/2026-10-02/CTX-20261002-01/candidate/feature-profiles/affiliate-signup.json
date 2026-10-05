@@ -1,0 +1,119 @@
+{
+  "schema_version": "1.0",
+  "artifact_type": "FeatureProfileCandidate",
+  "artifact_id": "FP-CTX-20261002-01-affiliate-signup",
+  "workflow_id": "CTX-20261002-01",
+  "producer": "feature-profile-builder",
+  "source_refs": [
+    { "type": "doc_ref", "path": "candidate/product-kb/affiliate-signup.json", "note": "Shard feature chính, 25 kb_candidates (KB-001..KB-025)." },
+    { "type": "doc_ref", "path": "candidate/product-kb/_object-level.affiliate-account.json", "note": "Object-level, 1 kb_candidate (KB-001: User/Affiliate entity, bảng `users`) — áp dụng chung mọi feature của object affiliate-account." },
+    { "type": "doc_ref", "path": "candidate/product-kb/email-verification-and-auto-approval.json", "note": "Đọc để trích dẫn cross-feature cho state_transitions (status=pending ngay sau đăng ký)." }
+  ],
+  "upstream_artifact_ids": ["PKB-CTX-20261002-01-affiliate-signup", "PKB-CTX-20261002-01-object-level-affiliate-account"],
+  "status": "READY",
+  "confidence": "MEDIUM",
+  "observations": [
+    "feature_id dùng lại giá trị feature_key ('affiliate-signup') vì candidate/product-kb/*.json upstream chưa mint FEAT-<nn>-<slug> (scope-plan.json dòng id_minting_boundary nêu rõ việc này thuộc orchestrator/normalizer, chưa xảy ra trong run này) — không tự bịa số nn.",
+    "name/user_goal lấy nguyên văn từ input/scope-plan.json (feature_candidates.affiliate-signup), không tạo mới.",
+    "KB-013/KB-014 (normativity=EXAMPLE_ONLY) không đưa vào confirmed_rules — chỉ minh hoạ cho KB-010/KB-011, đặt trong observed_behavior.",
+    "object-level KB-001 (User entity) được trích dẫn dạng 'object-level:KB-001' để không nhầm với KB-001 của chính shard affiliate-signup (cả hai namespace kb_id là local theo file)."
+  ],
+  "assumptions": [],
+  "unknowns": [],
+  "conflicts": [],
+  "blocking_issues": [],
+  "payload": {
+    "feature_profiles": [
+      {
+        "feature_id": "affiliate-signup",
+        "feature_key": "affiliate-signup",
+        "name": "Dang ky tai khoan affiliate",
+        "user_goal": "Mot nguoi muon tham gia chuong trinh affiliate tao duoc ho so dang ky hop le va biet vi sao bi tu choi input",
+        "stable_since_version": "v1",
+        "actors": [
+          { "role": "unspecified (người muốn trở thành affiliate, chưa có account)", "permission_observed": "submit form đăng ký qua POST /register", "kb_refs": ["KB-001", "KB-002"] }
+        ],
+        "entry_points": [
+          { "path": "/#/signup", "precondition": "chưa có account hoặc chưa đăng nhập", "kb_refs": ["KB-002"] },
+          { "path": "POST /register", "precondition": "điền đủ field bắt buộc của form signup", "kb_refs": ["KB-001"] }
+        ],
+        "capabilities": [
+          { "name": "Submit đăng ký qua 1 form duy nhất", "description": "Affiliate vào trang /#/signup, điền 1 form gộp cả thông tin cá nhân và khảo sát, submit qua POST /register.", "kb_refs": ["KB-001", "KB-002"], "act_ids": [] },
+          { "name": "Validate field bắt buộc (name/email/password/ref)", "description": "name, email (unique), password (tối thiểu 6 ký tự), ref (unique) đều bắt buộc; thiếu hoặc sai sẽ không submit được.", "kb_refs": ["KB-003", "KB-004", "KB-005", "KB-006", "KB-007", "KB-008", "KB-009"], "act_ids": [] },
+          { "name": "Chặn slug `ref` theo blocklist (riêng Koin) và rule prefix `app`", "description": "ref bị regex chặn nếu chứa từ khoá nhạy cảm (koin/free/discount/vip/premium/exclusive/upgrade) hoặc bắt đầu bằng `app`; rule prefix chỉ chặn tiền tố, không chặn substring giữa.", "kb_refs": ["KB-010", "KB-011", "KB-012"], "act_ids": [] },
+          { "name": "Thu thập field tuỳ chọn hồ sơ", "description": "company, companyWebsite, job (radio 4 lựa chọn), country là field tuỳ chọn, không bắt buộc để submit.", "kb_refs": ["KB-015", "KB-016"], "act_ids": [] },
+          { "name": "Thu thập khảo sát 4 câu (riêng brand Koin)", "description": "4 câu khảo sát (kinh nghiệm Shopify, kênh phân phối dự định, nguồn biết đến chương trình, góp ý thêm) lưu JSON vào User.survey; không bắt buộc để submit thành công.", "kb_refs": ["KB-017", "KB-018", "KB-019", "KB-020", "KB-021", "KB-022"], "act_ids": [] }
+        ],
+        "state_transitions": [
+          { "from": "none (chưa tồn tại account)", "to": "pending", "trigger": "POST /register thành công (validate field + ref đều pass)", "condition": "email/ref chưa tồn tại, password đủ 6 ký tự", "kb_refs": ["KB-001", "email-verification-and-auto-approval:KB-003"] }
+        ],
+        "confirmed_rules": [
+          { "statement": "`name`, `email`, `password`, `ref` đều bắt buộc; `email` và `ref` phải unique; `password` tối thiểu 6 ký tự.", "kb_refs": ["KB-003", "KB-004", "KB-005", "KB-006", "KB-007", "KB-008", "KB-009"] },
+          { "statement": "`ref` bị chặn nếu CHỨA từ khoá trong danh sách koin|free|discount|vip|premium|exclusive|upgrade, hoặc BẮT ĐẦU BẰNG `app` (chỉ chặn tiền tố, không chặn substring giữa — ví dụ `theappguru` được chấp nhận).", "kb_refs": ["KB-010", "KB-011", "KB-012"] },
+          { "statement": "Field tuỳ chọn: company, companyWebsite, job (radio Merchant/Freelancer/Services Agency/App or Theme Provider), country.", "kb_refs": ["KB-015", "KB-016"] },
+          { "statement": "Khảo sát 4 câu (riêng Koin) lưu dạng JSON vào `User.survey`, không có validate `required` trên các câu khảo sát.", "kb_refs": ["KB-017", "KB-018", "KB-019", "KB-020", "KB-021", "KB-022"] },
+          { "statement": "`ref` dùng làm self-referral tracking — cho biết ai giới thiệu affiliate này vào hệ thống.", "kb_refs": ["KB-025", "object-level:KB-001"] }
+        ],
+        "observed_behavior": [
+          { "statement": "Ví dụ minh hoạ: `koin-free-app` bị từ chối (chứa 2 từ khoá); `appstore-guru` bị từ chối (bắt đầu bằng app) — minh hoạ cho rule blocklist, không phải rule riêng.", "kb_refs": ["KB-013", "KB-014"] },
+          { "statement": "Form khảo sát từng dùng chung nhiều brand (Qikify, Teeinblue) trước khi repo tách riêng cho Koin; code frontend vẫn lưu vết bộ câu hỏi cũ của brand khác (không còn hiển thị).", "kb_refs": ["KB-023", "KB-024"] }
+        ],
+        "observed_validations": [],
+        "permissions": [],
+        "surface_mapping": {
+          "portal": ["KB-002", "KB-016", "KB-019", "KB-020", "KB-021", "KB-022", "KB-023", "KB-024"],
+          "storefront": [],
+          "api": ["KB-001", "KB-003", "KB-004", "KB-005", "KB-006", "KB-007", "KB-008", "KB-009", "KB-010", "KB-011", "KB-012", "KB-015", "KB-018"],
+          "data": ["KB-017", "KB-025", "object-level:KB-001"],
+          "code": []
+        },
+        "dependencies": [
+          { "feature_key": "email-verification-and-auto-approval", "relation": "downstream — account tạo ở status=pending, chờ xác thực email" },
+          { "feature_key": "affiliate-profile-maintenance", "relation": "dữ liệu survey/company/job thu thập ở đây được sửa sau qua admin edit tay (riêng survey chỉ sửa, không thêm/xoá câu hỏi)" }
+        ],
+        "risks": [
+          { "risk": "Không có response contract (status/body) cho POST /register khi thành công hay khi validate fail — rủi ro checklist API thiếu expected status.", "kb_refs": ["KB-001"] },
+          { "risk": "Không có message lỗi cụ thể khi `ref` bị blocklist chặn — chỉ biết '❌ Từ chối', không kiểm được UX báo lỗi.", "kb_refs": ["KB-010", "KB-011"] }
+        ],
+        "freshness": { "observed_at": "2026-08-20", "run_id": "CTX-20261002-01" },
+        "unknown_areas": [
+          { "question": "Ngoài blocklist từ khoá và prefix `app`, `ref` có ràng buộc độ dài / charset / chữ hoa-thường / ký tự đặc biệt nào?", "why_it_matters": "`ref` nằm trong URL giới thiệu; thiếu ràng buộc min/max/charset thì không biết biên hợp lệ, và không được suy ra từ ví dụ." },
+          { "question": "Password policy ngoài 'tối thiểu 6 ký tự' (chữ/số/ký tự đặc biệt, kiểm tra password phổ biến) là gì?", "why_it_matters": "Chỉ có 1 ràng buộc độ dài được xác nhận; không được tự thêm luật mạnh/yếu nào khác." },
+          { "question": "`POST /register` trả về status code / body gì khi thành công và khi validate fail?", "why_it_matters": "Có bảng ràng buộc field nhưng không có response contract; checklist API không có expected status để so." },
+          { "question": "Thông báo lỗi cụ thể khi `ref` bị blocklist chặn là gì?", "why_it_matters": "Bảng chỉ ghi '❌ Từ chối'; không có message thì chỉ kiểm được 'bị chặn', không kiểm được UX báo lỗi." },
+          { "question": "Route /register (và resend email) có áp captcha hay rate-limit ở tầng request nào ngoài giới hạn 'gửi lại email xác thực 6 lần/phút' đã biết ở feature khác không?", "why_it_matters": "Thiếu thông tin này thì không biết form signup có chống spam/bot hay không — khoảng trống hiển nhiên, không được tự suy." }
+        ]
+      }
+    ],
+    "profile_relationships": [
+      { "from": "affiliate-signup", "to": "email-verification-and-auto-approval", "relation": "sequential — signup tạo account status=pending, verification là bước tiếp theo" },
+      { "from": "affiliate-signup", "to": "affiliate-profile-maintenance", "relation": "data_reused — field thu thập ở signup (survey, company, job...) là dữ liệu được sửa ở profile-maintenance" }
+    ],
+    "coverage_matrix": [
+      { "feature_id": "affiliate-signup", "layer": "api", "role": "unspecified", "state": "none->pending", "environment": "documented", "covered": true },
+      { "feature_id": "affiliate-signup", "layer": "portal", "role": "unspecified", "state": "none", "environment": "documented", "covered": true },
+      { "feature_id": "affiliate-signup", "layer": "data", "role": "affiliate", "state": "pending", "environment": "documented", "covered": true },
+      { "feature_id": "affiliate-signup", "layer": "code", "role": "unspecified", "state": "any", "environment": "documented", "covered": false }
+    ],
+    "unassigned_kb_items": [],
+    "profile_conflicts": [],
+    "profile_change_summary": [
+      { "change": "Tạo mới feature profile lần đầu (bootstrap v1) từ 25 kb_candidates của shard affiliate-signup + 1 kb_candidate object-level affiliate-account." }
+    ],
+    "kb_trace_complete": true
+  },
+  "gate": {
+    "decision": "CONDITIONAL_PASS",
+    "blocking_findings": [],
+    "conditions": [
+      "Mọi field trong feature_profiles[0] trace về ít nhất 1 kb_id thật của candidate/product-kb/affiliate-signup.json hoặc _object-level.affiliate-account.json.",
+      "observed_validations=[] và capabilities[].act_ids=[] đúng luật DOC_BOOTSTRAP (Gate C4).",
+      "5 unknown_areas giữ nguyên từ doc_coverage_gaps của shard nguồn, cộng 1 gap hiển nhiên về rate-limit/captcha route signup — không tự suy thành rule."
+    ],
+    "allowed_next_steps": [
+      "qa-checklist-builder đọc profile này để dựng checklist.",
+      "knowledge-diff-analyzer dùng profile này làm baseline so sánh.",
+      "context-quality-reviewer audit C4 (Feature Profile) trên profile này."
+    ]
+  }
+}

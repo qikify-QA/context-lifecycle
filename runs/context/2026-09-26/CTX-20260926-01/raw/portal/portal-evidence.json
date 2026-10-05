@@ -1,0 +1,264 @@
+{
+  "schema_version": "1.0",
+  "artifact_type": "FeatureDiscoveryArtifact",
+  "artifact_id": "FDA-CTX-20260926-01-portal-01",
+  "workflow_id": "CTX-20260926-01",
+  "producer": "portal-explorer",
+  "source_refs": [
+    { "type": "code_ref", "path": "input/bootstrap-request.json", "note": "Scope directive: bổ sung 4 route CBS-004 (vector-upload/pdf-upload/upload-error-logs/layer-images-svg)" },
+    { "type": "code_ref", "path": "run-manifest.json", "note": "Quyết định dispatch portal-explorer bổ sung, phạm vi hẹp" }
+  ],
+  "upstream_artifact_ids": ["api-explorer-runtime-trace-CTX-20260926-01"],
+  "status": "PARTIAL",
+  "confidence": "HIGH",
+  "observations": [
+    {
+      "observation_id": "OBS-001",
+      "surface": "Portal sidebar (any authenticated page) + GET /api/user response",
+      "element": "Account identity display",
+      "observed_result": "Sidebar shows 'Linh explorer' / 'linh-explorer.myshopify.com' / 'Blue (Test)'. GET /api/user (index 15 & 17 in session capture) returns id=266, name='Linh explorer'. Matches expected identity; confirms memory note that JWT sub-based verification (teeinblue-account-scope.md) is outdated -- infra now Sanctum cookie+XSRF, verify via /api/user id field.",
+      "evidence_refs": [
+        { "type": "api_response", "path": "raw/network/identity-verify.json", "note": "redacted" }
+      ],
+      "knowledge_kind": "OBSERVED_CURRENT"
+    },
+    {
+      "observation_id": "OBS-002",
+      "surface": "Artwork Editor (/artworks?id=4087) > History panel > Preview Options",
+      "element": "Form Mode toggle: 'Preview' vs 'Re-order'; separate top-level toggle 'Edit' vs 'Live preview'",
+      "observed_result": "In top-level 'Edit' mode, the Preview Options form shows every buyer-facing personalization field (OPT vector-upload, OPT photo, OPT route-maps GPX, OPT multiple-uploads, 'Generate image') with file/upload controls DISABLED and annotated 'Upload only works on storefront'. Switching the top-level toggle to 'Live preview' removes that disabled state and makes the same file inputs clickable/functional -- real HTTP upload requests fire from within the portal in this mode.",
+      "evidence_refs": [
+        { "type": "dom_snapshot", "path": "raw/portal/dom/ACT-01-01-001-before.json" }
+      ],
+      "knowledge_kind": "OBSERVED_CURRENT"
+    },
+    {
+      "observation_id": "OBS-003",
+      "surface": "Artwork Editor > Edit mode > Layers panel > '+ Layer' button",
+      "element": "'Select a layer type' dialog, category 'Vector'",
+      "observed_result": "3 vector layer types offered: 'Static Vector', 'Vector Category', 'Vector Upload'. 'Static Vector' is the MERCHANT-side authoring flow (upload one fixed vector to become the layer's static content, from a reusable asset library shared across artworks) -- distinct from 'Vector Upload' (the BUYER-facing personalization field, i.e. OPT vector-upload, tested in OBS-002/FEAT-01).",
+      "evidence_refs": [
+        { "type": "dom_snapshot", "path": "raw/portal/dom/ACT-02-01-001-before.json" }
+      ],
+      "knowledge_kind": "OBSERVED_CURRENT"
+    },
+    {
+      "observation_id": "OBS-004",
+      "surface": "Artwork Editor > Edit mode > OPT vector-upload field (Live preview) and OPT photo field (Live preview)",
+      "element": "Client-side upload validation, before any network call",
+      "observed_result": "OPT vector-upload rejects a .txt file purely client-side with verbatim message 'You must select a file with the extension .svg or .eps.' -- zero network requests fired. Separately, OPT photo (raster image field) rejected the same tiny 100x100 SVG raster with verbatim message 'Cannot upload because the image is too small. Please upload a bigger image' -- also client-side, zero network requests for that attempt.",
+      "evidence_refs": [
+        { "type": "dom_snapshot", "path": "raw/portal/dom/ACT-01-02-001-after.json" },
+        { "type": "har_entry", "path": "raw/network/ACT-01-02-001.json" }
+      ],
+      "knowledge_kind": "OBSERVED_CURRENT"
+    }
+  ],
+  "assumptions": [],
+  "unknowns": [
+    {
+      "topic": "pdf-upload entry point (route 2/4 in scope) -- NOT FOUND",
+      "detail": "Không tìm được UI entry point cho POST /api/merchant/{platform}/pdf-upload trong phạm vi hợp lý đã thử: (1) OPT route-maps field trong Preview Options chỉ có 'Choose a .gpx file' + 'Connect to Strava' -- không có option PDF; (2) layer type picker category 'Maps & Astronomy' chỉ có Street Maps/Route Maps/Star Maps/Moon Phase -- không có type liên quan PDF; (3) '+Import' ở cả 2 cấp (Artworks list header VÀ Layers panel trong artwork editor) chỉ cho 'PSD Single template', 'PSD Group-to-template', 'Bulk upload', 'Import from Canva' -- không có PDF; (4) search text 'Boundless' trên toàn trang artwork editor -- 0 kết quả (dù /api/user trả field 'boundless_instances_count':0, xác nhận khái niệm Boundless có tồn tại nhưng account này không có instance nào để mở flow đó). Dừng tại đây theo đúng chỉ đạo 'không lan man tìm mọi ngóc ngách' -- không mở rộng sang Product Base / Campaign / Store Settings vì ngoài phạm vi artwork-layer hợp lý của route 1/3/4.",
+      "attempted_locations": [
+        "Preview Options form (Edit mode) -- OPT route-maps field",
+        "'+Layer' > 'Select a layer type' dialog -- toàn bộ 7 category (Text/Image/Vector/Maps & Astronomy/Puzzles/Others/Form Elements)",
+        "'+Import' tại Artworks list header (top nav)",
+        "'+Import' tại Layers panel trong artwork editor",
+        "Text search 'Boundless' trên trang"
+      ],
+      "recommendation": "Ghi vào coverage_gap / next_recommended_scope cho orchestrator: có thể pdf-upload chỉ trigger được từ context khác (Product Base setup, Campaign product-print-file attachment, hoặc một Boundless instance riêng chưa provision trên account 'Linh explorer'). Cần thêm thông tin từ dev/code (route file docblock hoặc controller test) để xác định đúng UI surface trước khi thử lại."
+    },
+    {
+      "topic": "SECURITY OBSERVATION (phụ, ngoài scope 4 route được giao, nhưng cần báo) -- POST /api/layer-images/svg response leaks unmasked secrets",
+      "detail": "Response body của POST /api/layer-images/svg (ACT-02-01-001, index 192) embed toàn bộ object 'user' của merchant, bao gồm 'private_config' với các API key bên thứ 3 ở dạng CLEARTEXT KHÔNG MASK (gpt_api_key, gemini_api_key, imagenhub_api_key, flux_kontext_api_key) và field 'token' (account token). Điều này khác với GET /api/user, nơi CÙNG các field này được trả về đã MASK (dạng 'sk-p***...VokA'). Giá trị thật đã xuất hiện tạm thời trong tool output của session này nhưng KHÔNG được ghi vào bất kỳ file nào trong repo (đã redact trước khi lưu raw/network/ACT-02-01-001.json). Đây là finding bảo mật, không phải một phần của 4 route CCR CBS-004 -- KHÔNG tự kết luận severity, chỉ báo cáo observation để orchestrator/reviewer quyết định route (api-explorer verify lại độc lập, hoặc escalate riêng ngoài run này).",
+      "recommendation": "KHÔNG đưa finding này vào KB của CCR CBS-004 (khác chủ đề). Đề xuất orchestrator tạo CCR riêng hoặc escalate trực tiếp cho dev team -- endpoint /api/layer-images/svg (và có thể các endpoint khác cùng pattern trả full User model) nên serialize qua UserResource có mask private_config, giống /api/user."
+    }
+  ],
+  "conflicts": [],
+  "blocking_issues": [],
+  "payload": {
+    "portal_context": {
+      "environment": "staging (staging-portal.teeinblue.com / staging-api.teeinblue.com, verified via TIB_API_BASE + network trace, không có request nào tới production)",
+      "role": "merchant/owner",
+      "object_id": "OBJ-Artwork-4087",
+      "object_type": "artwork (existing fixture 'QA - all layers v3', unpublished, từ run trước CTX-20260925-01 -- KHÔNG tạo artwork mới, tái sử dụng fixture có sẵn để giảm footprint)",
+      "initial_state": "Unpublished artwork, 'Default template', layer list có sẵn 3 layer 'qa-vector' (vector type) từ QA trước -- không sửa/xoá các layer này",
+      "verified_by": ["OBS-001"]
+    },
+    "observations": [
+      { "observation_id": "OBS-001" },
+      { "observation_id": "OBS-002" },
+      { "observation_id": "OBS-003" },
+      { "observation_id": "OBS-004" }
+    ],
+    "feature_candidates": [
+      {
+        "feature_id": "FEAT-01",
+        "name": "Buyer uploads a custom vector file to personalize a vector-upload placeholder",
+        "user_goal": "Buyer (via storefront SDK, simulated here through portal Live-preview) chooses their own vector file (.svg/.eps) to fill a 'vector-upload' personalization option on a product artwork, and sees clear feedback when the file is rejected or the upload fails server-side.",
+        "entry_point": "Artwork Editor (/artworks?id=<id>) > top toggle 'Live preview' > Preview Options form > field rendered from a layer of type 'vector-upload' (label shown here as 'OPT vector-upload') > control 'Choose a vector' / 'Choose another vector'",
+        "observation_ids": ["OBS-002", "OBS-004"],
+        "scenarios": [
+          {
+            "scn_id": "SCN-01-01",
+            "objective": "Quan sát hành vi khi upload 1 file vector hợp lệ (.svg) -- xác nhận route + rate-limit header khớp CCR CBS-004 (4/phút staging).",
+            "actions": [
+              {
+                "act_id": "ACT-01-01-001",
+                "description": "Click 'Choose a vector', chọn file qa-test-vector.svg (2-shape minimal SVG, 195 bytes, tự tạo cho test này)",
+                "input": { "file": "qa-test-vector.svg", "mimetype_intent": "image/svg+xml", "size_bytes": 195 },
+                "before": {
+                  "screenshot": "raw/portal/screenshots/ACT-01-01-001-before.png",
+                  "dom": "raw/portal/dom/ACT-01-01-001-before.json",
+                  "object_state": { "artwork_id": 4087, "field": "OPT vector-upload", "value": "empty" }
+                },
+                "after": {
+                  "screenshot": "raw/portal/screenshots/ACT-01-01-001-after.png",
+                  "dom": "raw/network/ACT-01-01-001.json",
+                  "object_state": { "artwork_id": 4087, "field": "OPT vector-upload", "value": "thumbnail set, control label changed to 'Choose another vector'" },
+                  "messages": []
+                },
+                "network_ref": "raw/network/ACT-01-01-001.json",
+                "network_entry_labels": { "mapped": 1, "polling": 0, "unrelated": 0, "unknown": 0 },
+                "console_errors": [],
+                "mutation": true,
+                "cleanup_result": "NOT_NEEDED",
+                "cleanup_note": "Tạo 1 record upload orphan (id=25563) không gắn campaign/product nào (campaign_id=null); artwork #4087 KHÔNG được Save (đóng bằng Cancel) nên không có thay đổi persist trên artwork. Không có UI portal nào để xoá riêng 1 'customer upload' log entry -- an toàn để lại theo SAFE_REVERSIBLE_ONLY (không visible/không ảnh hưởng tài khoản).",
+                "outcome": "SUCCESS",
+                "apiop_hint": "POST /api/merchant/shopify/vector-upload -> 201, x-ratelimit-limit=4, x-ratelimit-remaining=3 (khớp CHÍNH XÁC CCR CBS-004 '4/phút' staging đã được api-explorer verify runtime trước đó nhưng thiếu ACT-ID -- ACT-ID này lấp gap đó)"
+              }
+            ]
+          },
+          {
+            "scn_id": "SCN-01-02",
+            "objective": "Quan sát validation khi chọn file có extension SAI (.txt) -- xác nhận đây là client-side check, không hit server.",
+            "actions": [
+              {
+                "act_id": "ACT-01-02-001",
+                "description": "Click 'Choose another vector', chọn file qa-invalid-vector.txt (plain text, tự tạo cho test)",
+                "input": { "file": "qa-invalid-vector.txt", "size_bytes": 139 },
+                "before": {
+                  "screenshot": "raw/portal/screenshots/ACT-01-01-001-after.png",
+                  "dom": "raw/network/ACT-01-01-001.json",
+                  "object_state": { "artwork_id": 4087, "field": "OPT vector-upload", "value": "thumbnail set from ACT-01-01-001" }
+                },
+                "after": {
+                  "screenshot": null,
+                  "dom": "raw/portal/dom/ACT-01-02-001-after.json",
+                  "object_state": { "artwork_id": 4087, "field": "OPT vector-upload", "value": "unchanged (upload rejected before submit)" },
+                  "messages": ["You must select a file with the extension .svg or .eps."]
+                },
+                "network_ref": "raw/network/ACT-01-02-001.json",
+                "network_entry_labels": { "mapped": 0, "polling": 0, "unrelated": 0, "unknown": 0 },
+                "console_errors": [],
+                "mutation": false,
+                "cleanup_result": "NOT_NEEDED",
+                "outcome": "BLOCKED",
+                "apiop_hint": "Không có request nào -- validation 100% client-side, không map được operation server nào cho action này (đúng, không phải thiếu evidence)."
+              }
+            ]
+          },
+          {
+            "scn_id": "SCN-01-03",
+            "objective": "Quan sát hành vi khi file có extension ĐÚNG (.svg) nhưng content KHÔNG hợp lệ -- xác nhận đây chính là cách thực tế trigger route upload-error-logs (route 3/4 trong scope).",
+            "actions": [
+              {
+                "act_id": "ACT-01-03-001",
+                "description": "Click 'Choose another vector', chọn file qa-corrupt-vector.svg (.svg extension nhưng content là text garbage, 61 bytes, tự tạo cho test)",
+                "input": { "file": "qa-corrupt-vector.svg", "size_bytes": 61 },
+                "before": {
+                  "screenshot": "raw/portal/screenshots/ACT-01-01-001-after.png",
+                  "dom": "raw/network/ACT-01-01-001.json",
+                  "object_state": { "artwork_id": 4087, "field": "OPT vector-upload", "value": "thumbnail set from ACT-01-01-001" }
+                },
+                "after": {
+                  "screenshot": "raw/portal/screenshots/ACT-01-03-001-after.png",
+                  "dom": "raw/portal/dom/ACT-01-03-001-after.json",
+                  "object_state": { "artwork_id": 4087, "field": "OPT vector-upload", "value": "unchanged (upload failed server-side)" },
+                  "messages": ["Cannot upload. Contact us for more information.: HTTP error! status: 500"]
+                },
+                "network_ref": "raw/network/ACT-01-03-001.json",
+                "network_entry_labels": { "mapped": 2, "polling": 0, "unrelated": 0, "unknown": 0 },
+                "console_errors": [
+                  "Failed to load resource: the server responded with a status of 500 () @ .../api/merchant/shopify/vector-upload?shop=linh-explorer.myshopify.com"
+                ],
+                "mutation": true,
+                "cleanup_result": "NOT_NEEDED",
+                "cleanup_note": "Request thất bại 500 -- không rõ có row nào được ghi phía server hay không, không có UI để kiểm/xoá riêng lẻ. Không lộ secret/PII trong response 500 (đã redact toàn bộ Laravel debug page, không lưu raw). upload-error-logs (204) không tạo entity nào truy vấn được từ portal.",
+                "outcome": "ERROR",
+                "apiop_hint": "POST /api/merchant/shopify/vector-upload -> 500 (x-ratelimit-limit=4, remaining=3 -- cùng bucket route-throttle với ACT-01-01-001, đúng theo CCR). Ngay sau đó, KHÔNG có action thủ công nào khác, client TỰ ĐỘNG gọi POST /api/merchant/shopify/upload-error-logs -> 204 (x-ratelimit-limit=6, remaining=5 -- khớp CHÍNH XÁC CCR CBS-004 '6/phút' staging cho route này). Đây là bằng chứng UI thật cho route 3/4 (upload-error-logs) -- lấp đúng gap mà api-explorer đã nêu."
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "feature_id": "FEAT-02",
+        "name": "Merchant uploads a static vector image to reuse as a design layer",
+        "user_goal": "Merchant, khi đang thiết kế template artwork, thêm 1 layer loại 'Static Vector' bằng cách upload trực tiếp 1 file vector từ máy vào thư viện asset dùng chung của store (khác hoàn toàn với luồng buyer-facing FEAT-01).",
+        "entry_point": "Artwork Editor (/artworks?id=<id>) > top toggle 'Edit' > Layers panel > '+ Layer' > dialog 'Select a layer type' > category 'Vector' > 'Static Vector' > tab 'Upload a vector' > zone 'Drag and drop, or click to upload!'",
+        "observation_ids": ["OBS-003"],
+        "scenarios": [
+          {
+            "scn_id": "SCN-02-01",
+            "objective": "Quan sát request thật khi merchant upload 1 file .svg vào thư viện Static Vector -- xác nhận route + rate-limit header khớp nhóm 'user_rate_limiter:layer_image' đã được api-explorer verify trước đó (1000/24h), lần này có UI entry point + ACT-ID thật.",
+            "actions": [
+              {
+                "act_id": "ACT-02-01-001",
+                "description": "Click vùng 'Drag and drop, or click to upload!', chọn file qa-test-vector.svg (cùng file dùng ở ACT-01-01-001)",
+                "input": { "file": "qa-test-vector.svg", "size_bytes": 195 },
+                "before": {
+                  "screenshot": null,
+                  "dom": "raw/portal/dom/ACT-02-01-001-before.json",
+                  "object_state": { "artwork_id": 4087, "library_assets_named_qa-vector": 1, "library_assets_named_qa-test-vector": 0 }
+                },
+                "after": {
+                  "screenshot": "raw/portal/screenshots/ACT-02-01-001-after.png",
+                  "dom": "raw/network/ACT-02-01-001.json",
+                  "object_state": { "artwork_id": 4087, "library_assets_named_qa-test-vector": 1, "layer_added_to_artwork_template": false },
+                  "messages": []
+                },
+                "network_ref": "raw/network/ACT-02-01-001.json",
+                "network_entry_labels": { "mapped": 1, "polling": 0, "unrelated": 1, "unknown": 0 },
+                "console_errors": [],
+                "mutation": true,
+                "cleanup_result": "DONE",
+                "cleanup_note": "Sau khi capture evidence, đã mở lại thư viện Static Vector, chọn asset 'qa-test-vector' (id=10516), bấm nút xoá -> dialog confirm 'Are you sure to remove qa-test-vector' -> 'Remove' -> DELETE /api/layer-images/10516 -> 200. Đã verify lại thư viện chỉ còn 'qa-vector' gốc. Artwork editor đóng bằng 'Cancel' (không Save) -- không có layer nào thực sự được thêm vào template.",
+                "outcome": "SUCCESS",
+                "apiop_hint": "POST /api/layer-images/svg -> 201, x-ratelimit-limit=1000 x-ratelimit-remaining=999 x-ratelimit-reset=86400 -- khớp nhóm limit 'layer_image' (1000/24h) mà api-explorer đã verify runtime nhưng thiếu ACT-ID. ACT-ID này lấp gap đó. LƯU Ý RIÊNG: response body của chính request này lộ secret cleartext trong field 'user.private_config' -- xem unknowns[] mục SECURITY OBSERVATION, KHÔNG liên quan tới rate-limit topic của CCR này."
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    "permissions_observed": [],
+    "skipped_actions": [
+      {
+        "description": "Tìm UI entry point cho POST /api/merchant/{platform}/pdf-upload (route 2/4 được giao)",
+        "reason": "Không tìm được sau khi thử 5 vị trí hợp lý (xem unknowns[0]) trong phạm vi Artwork Editor + Import menu 2 cấp + text-search 'Boundless'. Dừng theo đúng chỉ đạo không mở rộng tìm kiếm tuỳ tiện. KHÔNG phải forbidden_action -- đơn giản là chưa xác định được surface đúng."
+      }
+    ],
+    "unexplored_areas": [
+      "Product Base setup flow (có thể có bước attach design/print file dạng PDF)",
+      "Campaign product-print-file attachment (nếu có)",
+      "Boundless instance provisioning (account 'Linh explorer' hiện có boundless_instances_count=0, chưa có instance nào để mở flow đó)"
+    ],
+    "current_behavior_only": true,
+    "redaction_applied": true
+  },
+  "gate": {
+    "decision": "CONDITIONAL_PASS",
+    "blocking_findings": [],
+    "conditions": [
+      "3/4 route được giao đã có UI entry point + ACT-ID + network capture đầy đủ, khớp CCR CBS-004 (vector-upload, upload-error-logs, layer-images/svg). Route pdf-upload KHÔNG tìm được entry point trong phạm vi hợp lý -- giữ ở unmapped/coverage_gap, KHÔNG tự bịa UI cho route này.",
+      "SECURITY OBSERVATION phụ (leak secret cleartext ở /api/layer-images/svg response) đã được ghi vào unknowns, KHÔNG đưa vào KB của CCR CBS-004 -- cần orchestrator quyết định routing riêng."
+    ],
+    "allowed_next_steps": [
+      "api-explorer: map 3 ACT-ID mới (ACT-01-01-001, ACT-01-03-001, ACT-02-01-001) vào APIOP-ID tương ứng cho vector-upload/upload-error-logs/layer-images-svg.",
+      "qa-knowledge-normalizer: fan-in 3 feature candidate (FEAT-01, FEAT-02) này cùng evidence api-explorer để build Product KB delta cho object artwork.",
+      "orchestrator: quyết định có publish phần pdf-upload dạng coverage_gap (không có ACT-ID) hay giữ lại chờ code-config-explorer/dev xác nhận đúng UI surface trước.",
+      "orchestrator/reviewer: xử lý riêng SECURITY OBSERVATION (không gộp vào CCR CBS-004)."
+    ]
+  }
+}

@@ -1,0 +1,3 @@
+# CHANGELOG — conversion-ledger
+
+- 2026-10-04 (`bootstrap`, DOC_BOOTSTRAP) — Bootstrap đầu tiên từ bộ tài liệu dev qikfiliate (25 doc, v1, generated 2026-08-20). 3 feature, 1 known defect, 0 conflict mở, 21 câu hỏi cần PO/Dev xác nhận hoặc test_case PASS.

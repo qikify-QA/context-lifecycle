@@ -1,0 +1,271 @@
+{
+  "schema_version": "1.0",
+  "artifact_type": "StorefrontDiscoveryArtifact",
+  "artifact_id": "SDA-CTX-20260925-01-storefront",
+  "workflow_id": "CTX-20260925-01",
+  "producer": "storefront-explorer",
+  "source_refs": [
+    "contracts/qa-context-contract.md",
+    "runs/context/2026-09-25/CTX-20260925-01/input/bootstrap-request.json",
+    "runs/context/2026-09-25/CTX-20260925-01/raw/portal/portal-evidence.json"
+  ],
+  "upstream_artifact_ids": ["FDA-CTX-20260925-01-portal", "CBS-003"],
+  "status": "PARTIAL",
+  "confidence": "MEDIUM",
+  "payload": {
+    "storefront_context": {
+      "shop": "linh-explorer.myshopify.com",
+      "environment": "staging (staging-portal.teeinblue.com, staff-authenticated)",
+      "theme": "N/A - no Shopify theme/product page was reached",
+      "theme_version": "N/A",
+      "product_id": "N/A - no Shopify product/campaign exists for this fixture",
+      "campaign_id": "N/A - none created (see blocking_issues)",
+      "buyer_state": "UNKNOWN",
+      "buyer_state_note": "IMPORTANT CAVEAT: no genuine public guest-buyer session was reached in this run. All observations below come from the Artwork Editor's built-in 'Live preview' mode (artwork id=4416, portal route /artworks?id=4416), accessed while authenticated as staff account 'Linh explorer' (user_id=266). This mode renders the SAME buyer-facing personalization widget code (multi-upload input, GenAI Generate buttons, populate-content behavior) that a real storefront product page would embed, scoped to a single artwork with no product/campaign/cart/checkout context around it. It is the best-effort, non-publish_live preview mechanism described in the run's bootstrap instructions (draft/staff-only preview, not a public URL). Treat all SF-OBS below as evidence about the personalization/GenAI widget's behavior, NOT as confirmation of full buyer journey rendering (theme, PDP layout, pricing display, cart, checkout are all out of reach from this surface).",
+      "market": "N/A - not exercised (no locale/currency selector in this surface)",
+      "locale": "en (portal default)",
+      "currency": "N/A - not exercised",
+      "browser": "Chromium (Playwright MCP, desktop viewport), staging-portal.teeinblue.com",
+      "device_or_viewport": "Desktop only; no responsive/mobile viewport tested"
+    },
+    "surfaces": [
+      "ARTWORK_LIVE_PREVIEW (non-standard surface: staff-authenticated artwork-level buyer-widget preview; closest schema bucket is PERSONALIZATION/PREVIEW)",
+      "PRODUCT_PAGE - NOT_REACHED",
+      "CART_DRAWER - NOT_REACHED",
+      "CART_PAGE - NOT_REACHED",
+      "CHECKOUT_BOUNDARY - NOT_REACHED"
+    ],
+    "observations": [
+      {
+        "observation_id": "SF-OBS-001",
+        "surface": "PREVIEW",
+        "action": "Unarchive artwork 4416 (safe/reversible, forbidden_actions does not include unarchive/archive), open artwork editor, click 'Live preview' toggle (distinct from 'Edit' toggle) in the editor toolbar",
+        "observed_result": "A right-hand personalization panel renders with two visible option groups: 'top*' (Multiple Uploads layer, required, upload tile + 'Generate image' button, initially disabled) and 'body' (plain Photo Upload layer, 'Choose an image' button). The 'hair' layer (Text to Image AI) is NOT shown with any visible label, header, or prompt textarea -- only later found to correspond to a second, unlabeled 'Generate image' button rendered as a bare sibling with no heading (see SF-OBS-006). This is a UI limitation/defect specific to this Live Preview surface: the Text-to-Image layer's own name/prompt-input is not rendered, unlike the portal's own artwork-editor 'Edit' mode (per portal-explorer OBS-004) which does show a full prompt textarea for this layer type.",
+        "state_before": "Artwork archived, editor closed",
+        "state_after": "Live preview panel open, 'top' upload tile empty, 'body' upload tile empty",
+        "act_id": "SF-ACT-001",
+        "evidence_refs": [
+          {"type": "screenshot", "path": "raw/storefront/SF-OBS-001-live-preview-open.png", "act_id": "SF-ACT-001"},
+          {"type": "screenshot", "path": "raw/storefront/probe-artwork-editor-toolbar.png", "act_id": "SF-ACT-001", "note": "shows Edit vs Live preview toggle"}
+        ],
+        "knowledge_kind": "OBSERVED_CURRENT"
+      },
+      {
+        "observation_id": "SF-OBS-002",
+        "surface": "PERSONALIZATION",
+        "action": "Upload 2 non-PII test images (poster.jpg, 2mugs.jpg from test-data/mockups/) to the 'top' (Multiple Uploads) field in a single file-picker selection",
+        "observed_result": "Photo #1 (from poster.jpg) FAILED with inline error 'Cannot upload #1 photo. Please try again.' and a 'Retry' tile; photo #2 (from 2mugs.jpg) succeeded and rendered a thumbnail. Network trace: POST /api/merchant/shopify/upload-url returned 422 for photo #1 with body {\"message\":\"The filesize field must be at least 10000.\"} -- the CLIENT had re-encoded/recompressed poster.jpg down to 9598 bytes (below the API's 10000-byte minimum) before requesting the upload URL, even though the original source file on disk was 17217 bytes. Photo #2's client-side re-encode (29193 bytes) passed. A distinct fallback endpoint POST /api/merchant/shopify/photo-upload (multipart, not presigned-S3) was then automatically attempted for the failed photo, but also 422'd with 'The file field must be at least 10 kilobytes' (same root cause). This confirms (a) a real minimum-filesize business rule enforced server-side, applied AFTER an undocumented client-side re-encode step that can itself push a perfectly valid source image under the threshold, and (b) the existence of a distinct multipart fallback upload route invoked on presigned-upload-url failure (relevant to TIB-5339), though this single event could not isolate whether a SUCCESSFUL fallback changes the downstream GenAI call from sync to async, since both routes failed here for the same underlying reason.",
+        "state_before": "top layer: 0 photos",
+        "state_after": "top layer: 1 successful photo + 1 failed/retry tile",
+        "act_id": "SF-ACT-002",
+        "evidence_refs": [
+          {"type": "screenshot", "path": "raw/storefront/SF-OBS-002-after-multi-upload.png", "act_id": "SF-ACT-002"},
+          {"type": "har_entry", "path": "raw/storefront/network/live-preview-genai-network-log.json", "act_id": "SF-ACT-002", "note": "entries seq 56, 57, 61"}
+        ],
+        "knowledge_kind": "OBSERVED_CURRENT"
+      },
+      {
+        "observation_id": "SF-OBS-003",
+        "surface": "PERSONALIZATION",
+        "action": "After the single successful upload on 'top' (no Generate click yet on 'top'), observe the 'body' field and main canvas",
+        "observed_result": "The 'body' layer's thumbnail AND the main canvas both immediately updated to show the raw uploaded photo (2mugs.jpg), replacing body's default placeholder image -- with NO Generate click having been made on 'top' yet. This directly confirms the CCR's TIB-5302 premise for the RAW-VALUE half of the mechanism: a destination layer wired via Populate Values to {{input.1}} of a source Multiple Uploads layer receives that raw pre-effect upload live/immediately, not gated on the source layer's own Generate action. NOTE: this fixture's 'body' layer has no configured image effect of its own (per portal-explorer OBS-012, only Populate Values was configured), so the SECOND half of TIB-5302's claim -- that the destination layer's OWN effect chain then auto-runs on the populated value -- could not be independently verified in this run; body's canvas rendering showed the populated photo un-transformed, consistent with 'no effect configured' rather than confirming or denying auto-trigger.",
+        "state_before": "body layer showing default placeholder image",
+        "state_after": "body layer showing the raw uploaded mug photo",
+        "act_id": "SF-ACT-003",
+        "evidence_refs": [{"type": "screenshot", "path": "raw/storefront/SF-OBS-003-body-auto-populated-from-top.png", "act_id": "SF-ACT-003"}],
+        "knowledge_kind": "OBSERVED_CURRENT"
+      },
+      {
+        "observation_id": "SF-OBS-004",
+        "surface": "PERSONALIZATION",
+        "action": "Remove the failed photo tile, upload a second successful photo (11-15oz.jpg) to 'top' (now 2 successful photos total)",
+        "observed_result": "The 'Generate image' button under 'top', which was disabled with only 1 successful photo present moments earlier, became enabled after the 2nd successful photo was added. Single sample -- could not isolate whether exactly 1 successful photo is sufficient and the earlier disabled state was a timing/render-lag artifact, or whether the button genuinely requires >=2 photos regardless of Maximum photos=3 config. Flagged as unknown, confidence LOW on the specific threshold.",
+        "state_before": "top layer: 1 successful photo, Generate disabled",
+        "state_after": "top layer: 2 successful photos, Generate enabled",
+        "act_id": "SF-ACT-004",
+        "evidence_refs": [{"type": "screenshot", "path": "raw/storefront/SF-OBS-004-two-photos-uploaded.png", "act_id": "SF-ACT-004"}],
+        "knowledge_kind": "OBSERVED_CURRENT"
+      },
+      {
+        "observation_id": "SF-OBS-005",
+        "surface": "PERSONALIZATION",
+        "action": "Click 'Generate image' under 'top' (Multiple Uploads, GenAI provider = Gemini, per saved artwork config)",
+        "observed_result": "POST /api/merchant/shopify/customer-uploads/generate-from-multiple-images returned HTTP 202 with body {\"id\":25552,\"status\":0} (a job reference, NOT the generated image). The client then polled GET /api/merchant/shopify/customer-uploads/25552/image-filter-effects/status twice, ~2s apart: first poll returned status=1 (processing, master/url/original all null); second poll returned status=2 (completed) with master/url/original populated as Wasabi storage paths. This is direct, reproducible evidence of an ASYNC JOB + POLLING pattern for the GenAI generate step -- directly answering the mechanism half of TIB-5339's question (a job-status endpoint IS polled after generate). The UI then showed 'Image generated' with a checkmark and a new history thumbnail. Provider used: Gemini, model 'nano_banana', per the response body's echoed effects config -- OpenAI/Flux/ImagenHub were NOT triggered (per mutation policy).",
+        "state_before": "top layer: 2 photos, no generated result",
+        "state_after": "top layer: 2 photos + 1 generated result, 'Image generated' badge shown",
+        "act_id": "SF-ACT-005",
+        "evidence_refs": [
+          {"type": "screenshot", "path": "raw/storefront/SF-OBS-005-gemini-generate-complete.png", "act_id": "SF-ACT-005"},
+          {"type": "har_entry", "path": "raw/storefront/network/live-preview-genai-network-log.json", "act_id": "SF-ACT-005", "note": "entries seq 71, 72, 73"}
+        ],
+        "knowledge_kind": "OBSERVED_CURRENT"
+      },
+      {
+        "observation_id": "SF-OBS-006",
+        "surface": "PERSONALIZATION",
+        "action": "Click the second, unlabeled 'Generate image' button in the panel (hypothesized to belong to the un-rendered 'hair' / Text-to-Image layer, see SF-OBS-001)",
+        "observed_result": "POST /api/merchant/shopify/customer-uploads/generate (note: singular 'generate', a DIFFERENT endpoint than the multi-image one) returned 202 with {\"id\":25553,\"status\":0}. One poll of GET .../25553/image-filter-effects/status returned status=2 already, with effects.prompt = 'a simple cartoon style wavy hairstyle, minimal shading, test QA fixture only' -- this is EXACTLY the text_to_image_prompt that portal-explorer saved on the 'hair' layer during artwork creation (portal ACT-01-04-002). This confirms: (1) the unlabeled button genuinely was the 'hair' Text-to-Image layer's Generate control, (2) since no prompt input was rendered/editable in this Live Preview surface for this layer (SF-OBS-001), the generate call used the artwork's SAVED prompt verbatim -- there was no way to test entering a NEW prompt for this layer via Live Preview, (3) the async job+polling pattern (202 + job id + .../image-filter-effects/status) is SHARED between the multiple-uploads and text-to-image generate flows, only the initiating POST path differs. Separately: the generated image itself visibly contained the literal text 'TEST QA FIXTURE ONLY' rendered inside the image (Gemini echoed the prompt's fixture-marker phrase as visual text) -- an incidental GenAI output-quality observation, not a bug in the teeinblue platform itself.",
+        "state_before": "hair layer: no generated result, no visible prompt control",
+        "state_after": "hair layer: 1 generated result ('Image generated' badge)",
+        "act_id": "SF-ACT-006",
+        "evidence_refs": [
+          {"type": "screenshot", "path": "raw/storefront/SF-OBS-006-second-generate-click-result.png", "act_id": "SF-ACT-006"},
+          {"type": "har_entry", "path": "raw/storefront/network/live-preview-genai-network-log.json", "act_id": "SF-ACT-006", "note": "entries seq 75, 76"}
+        ],
+        "knowledge_kind": "OBSERVED_CURRENT"
+      },
+      {
+        "observation_id": "SF-OBS-007",
+        "surface": "PERSONALIZATION",
+        "action": "After each layer ('top' and 'hair') had >=1 successful generate, inspect the panel for new controls; click 'Select a previously generated image' on 'top'",
+        "observed_result": "A 'Select a previously generated image' button (with a small history-preview thumbnail) appeared for BOTH 'top' and 'hair' immediately after their first successful generate -- it was NOT present before any generate (see SF-OBS-001/SF-OBS-004 snapshots). This is direct confirmation that TIB-5326's 'Allow buyers to choose previous processed images' capability exists and is gated on having generated at least once, exactly as the run brief hypothesized. Clicking it with only 1 history item did not visibly open a distinct gallery/modal (likely because a gallery of 1 item has nothing to differentiate) -- generating a 2nd result per layer to force a multi-item gallery view was not attempted (time/mutation budget). NO 'Duplicate & Share' control (button, menu item, or icon) was found anywhere in this Live Preview panel for either GenAI layer, consistent with portal-explorer's own finding (OBS/unexplored_areas) that this control could not be located in the portal editor either -- both agents independently failed to find it, which raises confidence (still MEDIUM, not HIGH) that it may not exist in the current build, or is gated behind a condition neither agent triggered (e.g. multiple generated variants, a specific plan tier, or a real order/cart context).",
+        "state_before": "No 'Select a previously generated image' control visible",
+        "state_after": "Control visible on both top and hair after their respective first generate",
+        "act_id": "SF-ACT-007",
+        "evidence_refs": [{"type": "screenshot", "path": "raw/storefront/SF-OBS-007-previously-generated-images-modal.png", "act_id": "SF-ACT-007"}],
+        "knowledge_kind": "OBSERVED_CURRENT"
+      },
+      {
+        "observation_id": "SF-OBS-008",
+        "surface": "PERSONALIZATION",
+        "action": "Visually scan the entire Live Preview panel (labels, buttons, tooltips) for any 'Beta' badge/text near the GenAI (Multiple Uploads / Text to Image) controls",
+        "observed_result": "No 'Beta' badge or text was found anywhere in this buyer-facing-widget surface for either GenAI layer, corroborating portal-explorer's OBS-006 (no Beta badge in the portal config UI either). Caveat: this surface is still not the genuine public storefront PDP -- residual risk that a Beta badge could exist specifically in the real theme's product-page rendering (different frontend bundle) remains un-eliminated.",
+        "state_before": "N/A",
+        "state_after": "N/A",
+        "act_id": "SF-ACT-008",
+        "evidence_refs": [
+          {"type": "screenshot", "path": "raw/storefront/SF-OBS-005-gemini-generate-complete.png", "act_id": "SF-ACT-008"},
+          {"type": "screenshot", "path": "raw/storefront/SF-OBS-007-previously-generated-images-modal.png", "act_id": "SF-ACT-008"}
+        ],
+        "knowledge_kind": "OBSERVED_CURRENT"
+      },
+      {
+        "observation_id": "SF-OBS-009",
+        "surface": "CHECKOUT_BOUNDARY",
+        "action": "Inspect the full Live Preview panel end-to-end for any Add to Cart / cart / price control",
+        "observed_result": "NONE exists. The Live Preview panel contains only the personalization option fields (top, hair-unlabeled, body) and the artwork editor's own Save & Close/Cancel/History controls -- there is no price display, no Add to Cart button, and no cart drawer/page reachable from this surface, because it is an artwork-level preview with no attached product/campaign. This is a structural, not a policy, limitation: even without any mutation-policy restriction, this specific preview mechanism cannot exercise add-to-cart, quantity, line-item properties, or checkout-boundary behavior (CCR items 5, 6-partially, 7-partially remain unreachable from here). See blocking_issues for why no campaign-backed alternative was reachable either.",
+        "state_before": "N/A",
+        "state_after": "N/A",
+        "act_id": "SF-ACT-009",
+        "evidence_refs": [{"type": "screenshot", "path": "raw/storefront/SF-OBS-007-previously-generated-images-modal.png", "act_id": "SF-ACT-009", "note": "full panel visible, no cart controls"}],
+        "knowledge_kind": "OBSERVED_CURRENT"
+      }
+    ],
+    "feature_candidates": [
+      {
+        "feature_id": "SF-FEAT-01-genai-multi-upload-generate",
+        "name": "Multiple Uploads layer: buyer upload + Gemini generate (async)",
+        "observation_ids": ["SF-OBS-002", "SF-OBS-003", "SF-OBS-004", "SF-OBS-005"]
+      },
+      {
+        "feature_id": "SF-FEAT-02-genai-text-to-image-generate",
+        "name": "Text to Image (AI) layer: Gemini generate using saved prompt (async)",
+        "observation_ids": ["SF-OBS-006"]
+      },
+      {
+        "feature_id": "SF-FEAT-03-select-previous-generated-image",
+        "name": "'Allow buyers to choose previous processed images' control (TIB-5326), gated on >=1 successful generate",
+        "observation_ids": ["SF-OBS-007"]
+      },
+      {
+        "feature_id": "SF-FEAT-04-live-preview-hair-label-gap",
+        "name": "Live Preview surface defect candidate: Text-to-Image layer ('hair') renders as an unlabeled/headerless Generate button with no prompt input, unlike portal Edit mode",
+        "observation_ids": ["SF-OBS-001", "SF-OBS-006"]
+      }
+    ],
+    "variant_and_option_matrix": [],
+    "artwork_preview_observations": [
+      {"note": "See SF-OBS-001 through SF-OBS-007 -- all preview behavior for this artwork was observed through the artwork editor's own 'Live preview' toggle, which is the only non-publish_live buyer-widget preview mechanism found in this portal build."}
+    ],
+    "pricing_observations": [],
+    "cart_handoff_observations": [
+      {"note": "NOT_OBSERVED -- see SF-OBS-009 and blocking_issues. No product/campaign/cart surface was reachable in this run."}
+    ],
+    "portal_to_storefront_mapping": [
+      {
+        "portal_act_id": "ACT-01-01-003",
+        "storefront_observation_id": "SF-OBS-002 / SF-OBS-005",
+        "propagation": "IMMEDIATE",
+        "evidence_refs": [{"type": "screenshot", "path": "raw/storefront/SF-OBS-005-gemini-generate-complete.png"}],
+        "note": "Live Preview reads the artwork's saved layer config directly (same object, no publish/cache step) -- GenAI provider=Gemini set by portal-explorer was immediately usable, no propagation delay observed."
+      },
+      {
+        "portal_act_id": "ACT-01-02-004",
+        "storefront_observation_id": "SF-OBS-006",
+        "propagation": "IMMEDIATE",
+        "evidence_refs": [{"type": "har_entry", "path": "raw/storefront/network/live-preview-genai-network-log.json"}],
+        "note": "hair layer's saved text_to_image_prompt ('a simple cartoon style wavy hairstyle...') appeared verbatim in the generate job's response body with no propagation delay or additional save/publish step."
+      },
+      {
+        "portal_act_id": "ACT-01-03-003",
+        "storefront_observation_id": "SF-OBS-003",
+        "propagation": "IMMEDIATE",
+        "evidence_refs": [{"type": "screenshot", "path": "raw/storefront/SF-OBS-003-body-auto-populated-from-top.png"}],
+        "note": "retrieval_layer/retrieval_value={{input.1}} wiring saved by portal-explorer took effect immediately in Live Preview with no publish step."
+      }
+    ],
+    "theme_device_market_matrix": [
+      {"theme": "N/A (no theme reached)", "device": "Desktop Chromium only", "market": "N/A", "coverage": "NOT_TESTED"}
+    ],
+    "network_observation_refs": [
+      "raw/storefront/network/live-preview-genai-network-log.json"
+    ],
+    "cleanup_results": [
+      {
+        "item": "Artwork 4416 (QA-CTX20260925-GenAI-Cluster-CBS003) unarchive -> use -> re-archive",
+        "cleanup_result": "DONE",
+        "evidence_refs": [{"type": "screenshot", "path": "raw/storefront/cleanup-02-re-archived-confirm.png"}]
+      },
+      {
+        "item": "customer_upload preview records created during Live Preview (ids 25550, 25551, 25552, 25553 -- 2 raw uploads + 2 GenAI-generated results, all under owner account, none tied to any cart/order)",
+        "cleanup_result": "NOT_NEEDED",
+        "note": "No delete UI/endpoint was exposed to this preview surface, and 'delete' is a forbidden_action under the run's mutation policy regardless. These are ephemeral per-artwork preview upload records, not shared/production resources."
+      },
+      {
+        "item": "New Campaign draft (title 'QA-CTX20260925-GenAI-Preview-CBS003') -- creation attempt",
+        "cleanup_result": "NOT_NEEDED",
+        "note": "The 'Save' click on /campaigns/new was denied by the Claude Code auto-mode permission classifier itself (reason '[Production Deploy]') BEFORE any network request fired -- no campaign record was ever created server-side, so there is nothing to clean up."
+      }
+    ],
+    "coverage_limitations": [
+      "No genuine public/guest storefront session was reached in this run -- all buyer-widget evidence comes from the staff-authenticated Artwork 'Live preview' surface, which is functionally close to but not identical to a real Shopify PDP embed (see storefront_context.buyer_state_note).",
+      "Add to Cart, cart drawer/page, quantity/update/remove, line-item property representation, and checkout-boundary behavior: entirely NOT_OBSERVED -- no product/campaign exists to attach a cart to, and creating one was blocked (see blocking_issues).",
+      "TIB-5188 (minimum-resolution-near-threshold crop/resize edge case): NOT tested -- this artwork fixture has 'Set minimum size' OFF by default on the Multiple Uploads layer (per portal-explorer OBS-003); configuring it would require an Edit-mode mutation to the saved artwork layer config, which was judged out of budget for this run given the stronger, already-confirmed findings on TIB-5339/5302/5326. Flagged as unexplored_area for a follow-up run.",
+      "TIB-5302's 'destination layer's own effect chain auto-runs on the populated value' claim: only the RAW-VALUE-propagates-immediately half was confirmed (SF-OBS-003). The fixture's 'body' layer has no image effect configured, so the effect-auto-trigger half remains unconfirmed.",
+      "'Duplicate & Share' (TIB-5326): not found by either portal-explorer or storefront-explorer independently -- raises but does not confirm suspicion that it may not exist in this build, or requires a condition neither agent triggered (e.g. a real cart/order, multiple generated variants, or a specific plan).",
+      "No responsive/mobile viewport, no alternate browser engine, no locale/currency/market variation was tested -- single desktop Chromium session only.",
+      "Beta-badge absence (CCR item 7) confirmed only on this preview surface and on the portal config UI (portal-explorer OBS-006), not on a genuine public theme-rendered PDP."
+    ],
+    "current_behavior_only": true,
+    "redaction_applied": true
+  },
+  "assumptions": [
+    "Assumed the second, unlabeled 'Generate image' button in the Live Preview panel corresponded to the 'hair' (Text-to-Image) layer, based on the saved prompt text returned in its generate job's response body matching exactly the hair_prompt portal-explorer had saved -- this was not confirmed via any explicit UI label, only via network-response correlation.",
+    "Assumed the 202+job-id+polling pattern observed here (staff Live Preview surface) is representative of what a genuine public storefront buyer session would also see, since both surfaces are expected to call the same '/api/merchant/shopify/customer-uploads/*' endpoints -- not independently verified against a real public session in this run."
+  ],
+  "unknowns": [
+    "Whether the multi-upload 'Generate image' button truly requires >=2 successful photos to enable, or whether the disabled state seen with exactly 1 photo was a transient render-lag artifact (single sample, see SF-OBS-004).",
+    "Whether a SUCCESSFUL fallback-route upload (the /api/merchant/shopify/photo-upload multipart endpoint) changes the downstream GenAI generate call from async-with-polling to something else -- in this run the fallback route also failed (same root cause as the presigned route), so this comparison could not be made.",
+    "Whether 'Duplicate & Share' (TIB-5326) exists anywhere in the current build, and if so under what gating condition -- not found in either the portal editor (portal-explorer) or this Live Preview surface (storefront-explorer).",
+    "Whether the client-side image re-encode step (which shrank poster.jpg from 17217 to 9598 bytes, triggering the 10000-byte-minimum rejection) is a general-purpose resize-before-upload behavior that could similarly reject other borderline-small-but-valid source images on a real storefront -- only 2 sample images tested."
+  ],
+  "conflicts": [],
+  "blocking_issues": [
+    {
+      "description": "No existing draft/preview mechanism could produce a real, cart-capable buyer product page without violating the run's mutation policy. Two preview paths were investigated: (1) creating a NEW draft Campaign (by Product Base) attached to this artwork -- the 'Save' action on /campaigns/new (even with only a title filled, before any Shopify publish step) was refused by the Claude Code auto-mode permission classifier itself, reason '[Production Deploy]', before any network request could fire. This is a harness-level guardrail, separate from and stricter than the CCR's own forbidden_actions list (which only bars 'delete', 'publish_live', 'charge', 'send_notification' -- creating an unpublished draft campaign is not literally publish_live). Per instructions this denial was respected and NOT worked around via any alternate method (e.g. direct API calls). (2) Reusing an existing already-published campaign on the Linh explorer account to attach GenAI layers -- 3 such campaigns exist (2605 'QA-CTX15 Global Option Test Campaign', 2595 'QA Explore Campaign PB 01', 2592 '[Sample campaign] Woman and Dog Clipart - Poster'), all pre-dating this run and all serving OTHER established test purposes (global-option KB fixtures, sample catalog demo) -- mutating any of them to add unrelated GenAI layers was judged unsafe per the run's own guidance ('KHONG sua doi campaign live cua nguoi khac/dang dung cho muc dich khac ma khong chac an toan revert') and was not attempted.",
+      "resolution_used": "Found and used a THIRD path not initially obvious: the Artwork Editor's own 'Live preview' toggle (distinct from 'Edit'), which renders the actual buyer-facing personalization widget scoped to a single artwork with no product/campaign/publish step at all. This produced strong evidence for GenAI generate/polling/populate-content/select-previous-image behavior (SF-OBS-002 through SF-OBS-008), but CANNOT exercise Add to Cart, cart, or checkout-boundary surfaces because no product/cart context exists in it (SF-OBS-009).",
+      "consequence": "CCR items 5 (Add to Cart before/after generate) and the cart/order-gated portions of items 6-7 remain fully unreachable in this run. This is reported as a coverage gap (status PARTIAL), not as a failure to find a workaround -- see coverage_limitations."
+    }
+  ],
+  "gate": {
+    "decision": "CONDITIONAL_PASS",
+    "blocking_findings": [],
+    "conditions": [
+      "Consumers (qa-knowledge-normalizer, feature-profile-builder) must NOT upgrade any OBSERVED_CURRENT finding here to CONFIRMED_EXPECTED -- none of the 6 Jira tickets referenced in the run brief constitute authority per contract §2 rule 1.",
+      "The async-job-plus-polling evidence for TIB-5339 (SF-OBS-005, SF-OBS-006, raw/storefront/network/live-preview-genai-network-log.json) should be handed to code-config-explorer/api-explorer to correlate with source code for the fallback-route-specific sub-question, which this run could not isolate (see unknowns).",
+      "Add-to-cart/cart/checkout coverage gap (SF-OBS-009, blocking_issues) must be preserved in the KB as a known limitation, not silently dropped.",
+      "TIB-5188 remains entirely unexplored -- must be flagged as an open coverage gap for a future run, not inferred either way."
+    ],
+    "allowed_next_steps": ["qa-knowledge-normalizer", "feature-profile-builder", "api-explorer"]
+  }
+}

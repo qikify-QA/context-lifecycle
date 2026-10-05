@@ -1,0 +1,61 @@
+{
+  "note": "All measurements via browser_evaluate reading naturalWidth/naturalHeight (actual decoded pixel dimensions of the fetched file) and getBoundingClientRect/computedStyle (actual on-screen CSS px). Category 6202: Thumbnail size CHANGED 100->300px (test mutation); Preview size left at default 500px.",
+  "measurements": [
+    {
+      "measurement_id": "SZ-01",
+      "target": "Personalization form picker thumbnail, clipart-category layer 'cat1' (both no1 and no2)",
+      "file_variant": "_thumbnail.webp",
+      "source_url_pattern": "cdn.ownego.com/teeinblue-staging/users/266/cliparts/6202/<hash>_thumbnail.webp",
+      "natural_px": { "no1": [300, 300], "no2": [300, 300] },
+      "rendered_css_px": { "no1": [46, 46], "no2": [44, 44] },
+      "object_fit": "fill",
+      "compare_to_category_setting": "Thumbnail size = 300px (changed from default 100)",
+      "finding": "naturalWidth/Height of the fetched thumbnail file EXACTLY matches the category's Thumbnail size setting (300). The on-screen rendered box (~44-46 CSS px) is fixed by widget CSS and is MUCH smaller than the source file -- i.e. 'Thumbnail size' controls the pre-generated FILE resolution (retina/quality headroom), not the visible picker box size.",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "confidence": "MEDIUM (single category, single pair of items -- not tested against a category left at default 100px in the same session for a controlled before/after; portal-side ACT-05-01-001 confirms the setting change server-side, so the correlation is strong but not a repeated-sample confirmation)"
+    },
+    {
+      "measurement_id": "SZ-02",
+      "target": "Clipart item asset used for canvas/print compositing pipeline, clipart-category layer (no1, no2)",
+      "file_variant": "_large.webp",
+      "natural_px": { "no1": [250, 250], "no2": [250, 250] },
+      "compare_to_category_setting": "Preview size = 500px (default, unchanged)",
+      "finding": "naturalWidth/Height (250) does NOT match the Preview size setting (500) -- it is exactly half. Hypothesis (LOW confidence, single sample, not confirmed against source file resolution): the '_large' variant may be capped at the ORIGINAL uploaded file's own resolution and never upscaled beyond it, so if the no1.png/no2.png test fixtures were originally <=250px, the configured 500px 'Preview size' ceiling is simply not reached. This is NOT confirmed -- original upload resolution of no1/no2 was not independently verified in this run. Recorded as unknown, not asserted as a rule.",
+      "knowledge_kind": "OBSERVED_CURRENT + one INFERRED hypothesis (flagged)"
+    },
+    {
+      "measurement_id": "SZ-03",
+      "target": "Image layer 'cat1' (url-pick, raw uploaded image via 'Upload an image' tab -- NOT a clipart-category item)",
+      "file_variant": "_large.webp",
+      "source": "cdn.ownego.com/teeinblue-staging/users/266/image-layers/6a5ddc965c162_large.webp",
+      "natural_px": [1600, 1600],
+      "finding": "Matches the ARTWORK canvas size (1600x1600, as created by portal-explorer). Confirms 'Preview size'/'Thumbnail size' are CATEGORY-scoped settings that only apply to clipart-category item assets, not to raw image-layer uploads (which instead scale to the artwork's own canvas resolution).",
+      "knowledge_kind": "OBSERVED_CURRENT"
+    },
+    {
+      "measurement_id": "SZ-04",
+      "target": "Base product mockup template asset shown in the storefront 'Preview' modal AND as the flattened cart-page 'Preview design' customization image",
+      "source": "cdn.ownego.com/teeinblue-staging/users/266/mockup-layers/6a630ff4784cc_large.webp (Preview modal) == cdn.ownego.com/teeinblue-staging/customizations/<uuid>.jpg (cart 'Preview design', naturalWidth/Height identical: 960x960)",
+      "natural_px": [960, 960],
+      "rendered_css_px_in_preview_modal": [677, 677],
+      "rendered_css_px_in_cart_lightbox": [108, 108],
+      "finding": "960x960 does not match Preview size (500) or Thumbnail size (300) -- this pipeline (product mockup template) is a SEPARATE asset family unrelated to the clipart-category size settings; likely governed by the product-base/mockup generation config, out of this run's scope.",
+      "knowledge_kind": "OBSERVED_CURRENT"
+    },
+    {
+      "measurement_id": "SZ-05",
+      "target": "Cart page line-item thumbnail (main product image cell, NOT the 'Preview design' lightbox)",
+      "source": "cdn.shopify.com .../6ab1357455977.webp (Shopify variant featured_image, a static campaign-level mockup asset generated at publish time)",
+      "finding": "Uses the STATIC campaign product image (same for every order of this variant/color), not the buyer's live customization. The buyer's actual customization is only reachable via the separate 'Preview design' link/lightbox (see SZ-04).",
+      "knowledge_kind": "OBSERVED_CURRENT"
+    }
+  ],
+  "critical_cross_cutting_finding": {
+    "id": "SF-FINDING-CANVAS-CLIPART-NOT-COMPOSITED",
+    "summary": "In this test artwork/campaign (artwork 4339, campaign 2626), NEITHER the storefront 'Preview' modal NOR the final server-generated '_customization_image' (shown via cart page 'Preview design') visually contains the chosen clipart-category item (no1/no2 digit graphic) at all -- both only render the plain base mockup template (bald cartoon character), reproduced identically across: (a) initial page load with default_value pre-selected ('no2'), (b) after explicitly selecting 'no1' and clicking Preview, and (c) the server-side flattened design image saved at Add to cart time. The underlying clipart _large.webp files (no1, no2) and the image-layer 'cat1' file ARE fetched by the browser (confirmed via network log) but do not appear composited into any of the three visual outputs observed.",
+    "correlation_note": "This is observed on the SAME test artwork/category (6202) where portal-explorer already found a 3-surface category/item-listing anomaly (empty [] responses from GET /api/layer-image-categories?type=clipart, empty inline search, empty group default-value combobox) and where the group-clipart-categories layer's storefront dropdown is ALSO empty (see SF-OBS group finding). A shared root cause across the listing anomaly and this compositing gap is PLAUSIBLE but NOT confirmed here -- per contract this agent does not diagnose backend/DB causes; flagged for api-explorer/db-explorer cross-check.",
+    "knowledge_kind": "OBSERVED_CURRENT",
+    "confidence": "MEDIUM-HIGH (reproduced 3 times across 2 distinct rendering surfaces -- in-page Preview modal and server-generated cart customization image -- with 2 different selection states, in this single session/artwork; not tested against a DIFFERENT artwork/campaign to rule out an artwork-specific layer-placement mistake by portal-explorer's quickly-created test fixture, e.g. layer positioned outside visible canvas bounds)",
+    "explicitly_not_claimed": "This agent does NOT conclude this is a confirmed product defect vs. a test-fixture-specific layer placement issue (e.g. layer z-order/position/opacity on the 1600x1600 test canvas). Both remain open per current_behavior_only policy."
+  }
+}

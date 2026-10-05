@@ -1,0 +1,329 @@
+{
+  "schema_version": "1.0",
+  "artifact_type": "FeatureProfileCandidate",
+  "artifact_id": "FPCAND-CTX-20261002-01-invoice-payout-payout-request-submission",
+  "workflow_id": "CTX-20261002-01",
+  "producer": "feature-profile-builder",
+  "source_refs": [
+    {
+      "type": "doc_ref",
+      "doc_id": "`qikfiliate/dashboard - payment and payout request`",
+      "path": "candidate/product-kb/payout-request-submission.json"
+    },
+    {
+      "type": "doc_ref",
+      "doc_id": "`qikfiliate/Domain Entities`",
+      "path": "candidate/product-kb/_object-level.invoice-payout.json"
+    }
+  ],
+  "upstream_artifact_ids": [
+    "PKC-CTX-20261002-01-payout-request-submission",
+    "PKC-CTX-20261002-01-object-invoice-payout"
+  ],
+  "status": "READY",
+  "confidence": "MEDIUM",
+  "observations": [
+    "DOC_BOOTSTRAP: không có quan sát runtime. act_ids[] rỗng theo luật.",
+    "Cả 3 KB item của _object-level.invoice-payout.json ÁP DỤNG cho profile này (đây là feature 'tạo Invoice' — object-level nói về định nghĩa Invoice, quan hệ User-Invoice, Invoice.code unique, đều là bối cảnh trực tiếp) — được gán vào confirmed_rules với tiền tố 'obj:'.",
+    "3 claim hedged (CLM-24-042/043/044, lý giải suy luận từ code về VÌ SAO balance bị trừ ngay lúc pending) đã bị normalizer loại khỏi KB candidate — KHÔNG được coi là rule ở profile này; câu hỏi gốc giữ lại ở unknown_areas."
+  ],
+  "assumptions": [],
+  "unknowns": [
+    "Hệ thống có chặn affiliate tạo nhiều invoice pending cùng lúc không (tài liệu chỉ suy luận, không xác nhận).",
+    "Rút một phần có ràng buộc tối thiểu/tối đa nào không."
+  ],
+  "conflicts": [],
+  "blocking_issues": [],
+  "payload": {
+    "feature_profiles": [
+      {
+        "feature_id": "FEAT-03-payout-request-submission",
+        "feature_key": "payout-request-submission",
+        "name": "Gửi yêu cầu thanh toán (tạo Invoice)",
+        "user_goal": "Affiliate (đã đủ điều kiện, xem payout-request-eligibility) gửi yêu cầu rút tiền — tạo 1 Invoice mới ở trạng thái pending — và nhận xác nhận ngay (modal + email), với balance bị trừ ngay lập tức.",
+        "stable_since_version": "v1",
+        "actors": [
+          {
+            "role": "affiliate",
+            "permission_observed": "Chỉ affiliate đã đủ điều kiện canCreateByUser (feature payout-request-eligibility) mới gửi yêu cầu thành công; nếu không đủ điều kiện, bị middleware chặn ở backend.",
+            "kb_refs": [
+              "KB-001",
+              "KB-004"
+            ]
+          }
+        ],
+        "entry_points": [
+          {
+            "path": "Portal dashboard — modal xác nhận gửi yêu cầu thanh toán (Bước 4)",
+            "precondition": "Affiliate đã đủ điều kiện canCreateByUser",
+            "kb_refs": [
+              "KB-001",
+              "KB-003"
+            ]
+          },
+          {
+            "path": "POST /api/invoices",
+            "precondition": "Gửi qua modal xác nhận sau khi affiliate bấm xác nhận; vẫn bị check điều kiện ở backend nếu gọi trực tiếp",
+            "kb_refs": [
+              "KB-004"
+            ]
+          }
+        ],
+        "capabilities": [
+          {
+            "name": "Tạo Invoice mới trạng thái pending",
+            "description": "Khi affiliate xác nhận gửi yêu cầu thanh toán, hệ thống tạo 1 Invoice mới với status = \"pending\".",
+            "kb_refs": [
+              "KB-001"
+            ],
+            "act_ids": []
+          },
+          {
+            "name": "Trừ balance ngay lập tức khi tạo Invoice",
+            "description": "Ngay sau khi tạo yêu cầu, balance bị trừ NGAY đúng số tiền yêu cầu — dù Invoice còn ở trạng thái pending và chưa thanh toán thực.",
+            "kb_refs": [
+              "KB-002"
+            ],
+            "act_ids": []
+          },
+          {
+            "name": "Modal xác nhận hiển thị đầy đủ thông tin trước khi gửi",
+            "description": "Modal xác nhận hiện phương thức thanh toán, thông tin thanh toán, số dư, phí (nếu có) và số tiền thực nhận dự kiến.",
+            "kb_refs": [
+              "KB-003"
+            ],
+            "act_ids": []
+          },
+          {
+            "name": "Chọn số tiền yêu cầu (mặc định hoặc tự nhập)",
+            "description": "Không nhập amount → mặc định lấy toàn bộ balance hiện tại. Tự nhập amount → giá trị đó phải LỚN HƠN phí (transfer_fee) và không vượt quá balance hiện tại.",
+            "kb_refs": [
+              "KB-005",
+              "KB-006"
+            ],
+            "act_ids": []
+          },
+          {
+            "name": "Xác nhận qua email và Invoice.code tự sinh",
+            "description": "Ngay sau khi tạo yêu cầu thành công, affiliate nhận email 'đã gửi yêu cầu thanh toán' (event RequestInvoice). Invoice.code được tự sinh theo dạng \"{ref-của-affiliate}-{số-thứ-tự}\".",
+            "kb_refs": [
+              "KB-007",
+              "KB-008"
+            ],
+            "act_ids": []
+          },
+          {
+            "name": "Affiliate tự chủ động gửi yêu cầu — không có cron tự động",
+            "description": "Invoice KHÔNG do hệ thống tự sinh định kỳ; không có cron job/service nào tự động tổng hợp và xuất Invoice theo chu kỳ. Affiliate tự chủ động bấm 'Request Payment' khi muốn, miễn đủ điều kiện. Mỗi khoản rút tạo ra đúng 1 Invoice duy nhất.",
+            "kb_refs": [
+              "KB-011",
+              "KB-012"
+            ],
+            "act_ids": []
+          }
+        ],
+        "state_transitions": [
+          {
+            "from": "(chưa có Invoice)",
+            "to": "pending",
+            "trigger": "Affiliate xác nhận gửi yêu cầu thanh toán (modal → POST /api/invoices)",
+            "condition": "canCreateByUser = true (xem payout-request-eligibility)",
+            "kb_refs": [
+              "KB-001",
+              "KB-004"
+            ]
+          }
+        ],
+        "confirmed_rules": [
+          {
+            "statement": "Xác nhận gửi yêu cầu → tạo 1 Invoice mới, status = pending.",
+            "knowledge_kind": "CONFIRMED_EXPECTED",
+            "confidence": "HIGH",
+            "kb_refs": [
+              "KB-001"
+            ]
+          },
+          {
+            "statement": "Balance bị trừ NGAY đúng số tiền yêu cầu, dù Invoice còn pending.",
+            "knowledge_kind": "CONFIRMED_EXPECTED",
+            "confidence": "HIGH",
+            "kb_refs": [
+              "KB-002"
+            ]
+          },
+          {
+            "statement": "Không nhập amount → mặc định lấy toàn bộ balance.",
+            "knowledge_kind": "CONFIRMED_EXPECTED",
+            "confidence": "HIGH",
+            "kb_refs": [
+              "KB-005"
+            ]
+          },
+          {
+            "statement": "Tự nhập amount phải > phí và không vượt balance.",
+            "knowledge_kind": "CONFIRMED_EXPECTED",
+            "confidence": "MEDIUM",
+            "kb_refs": [
+              "KB-006"
+            ]
+          },
+          {
+            "statement": "Invoice.amount lưu số tiền hoa hồng yêu cầu thanh toán.",
+            "knowledge_kind": "CONFIRMED_EXPECTED",
+            "confidence": "LOW",
+            "kb_refs": [
+              "KB-009"
+            ]
+          },
+          {
+            "statement": "payment_method_name/payment_info trên Invoice là snapshot thông tin thanh toán tại thời điểm tạo invoice (không đọc live từ User sau này, trừ khi trống).",
+            "knowledge_kind": "CONFIRMED_EXPECTED",
+            "confidence": "LOW",
+            "kb_refs": [
+              "KB-010"
+            ]
+          },
+          {
+            "statement": "Invoice là yêu cầu/thanh toán hoa hồng từ Ownego cho affiliate (chiều ngược lại so với Payout của Shopify trả cho Ownego).",
+            "knowledge_kind": "CONFIRMED_EXPECTED",
+            "confidence": "MEDIUM",
+            "kb_refs": [
+              "obj:KB-001"
+            ]
+          },
+          {
+            "statement": "1 User (affiliate) có quan hệ 1-N với Invoice.",
+            "knowledge_kind": "CONFIRMED_EXPECTED",
+            "confidence": "LOW",
+            "kb_refs": [
+              "obj:KB-002"
+            ]
+          },
+          {
+            "statement": "Invoice.code là mã invoice, giá trị unique.",
+            "knowledge_kind": "CONFIRMED_EXPECTED",
+            "confidence": "LOW",
+            "kb_refs": [
+              "obj:KB-003"
+            ]
+          }
+        ],
+        "observed_behavior": [],
+        "observed_validations": [],
+        "permissions": [
+          "Chỉ affiliate đã đủ điều kiện canCreateByUser (feature payout-request-eligibility) mới gửi được yêu cầu thành công; không đủ điều kiện sẽ bị middleware check_can_create_invoice chặn ở backend."
+        ],
+        "surface_mapping": {
+          "portal": [
+            "Modal xác nhận gửi yêu cầu thanh toán (KB-003)",
+            "Affiliate tự chủ động bấm Request Payment, không cron (KB-011, KB-012)"
+          ],
+          "storefront": [],
+          "api": [
+            "POST /api/invoices (KB-004)",
+            "amount mặc định = balance nếu bỏ trống; tự nhập phải > phí và <= balance (KB-005, KB-006)"
+          ],
+          "data": [
+            "Invoice.status = pending khi tạo (KB-001)",
+            "balance bị trừ ngay khi tạo Invoice (KB-002)",
+            "Invoice.code tự sinh {ref}-{số thứ tự} (KB-008)",
+            "Invoice.amount (KB-009), payment_method_name/payment_info snapshot (KB-010)"
+          ],
+          "code": []
+        },
+        "dependencies": [
+          "Phụ thuộc và bị chặn bởi payout-request-eligibility (gate canCreateByUser).",
+          "Consume giá trị balance từ balance-accrual.",
+          "Chuyển giao Invoice pending cho admin-invoice-processing (Ops xử lý).",
+          "Là tiền đề cho payout-request-cancellation (hành động huỷ diễn ra sau khi đã submit)."
+        ],
+        "risks": [
+          {
+            "risk": "Invoice vừa tạo (pending) nếu bị Ops chuyển sang approved rồi huỷ sẽ gặp KNOWN_DEFECT mất balance ở feature payout-request-cancellation (KB-003 của feature đó) — rủi ro nằm ở bước SAU của journey, không ở bước tạo invoice này, nhưng QA cần biết trình tự này khi dựng test case end-to-end.",
+            "kb_refs": [],
+            "severity": "INFO"
+          }
+        ],
+        "freshness": {
+          "observed_at": null,
+          "run_id": "CTX-20261002-01"
+        },
+        "unknown_areas": [
+          {
+            "question": "Hệ thống có chặn affiliate tạo nhiều invoice pending cùng lúc không?",
+            "why_it_matters": "Tài liệu chỉ SUY LUẬN rằng việc trừ balance ngay lúc pending ngăn được chuyện này (hedged, chưa xác nhận PO). Nếu không có chặn tường minh thì vẫn cần test case nhiều invoice mở song song."
+          },
+          {
+            "question": "Rút một phần (gửi amount nhỏ hơn balance) có ràng buộc tối thiểu/tối đa nào không?",
+            "why_it_matters": "Mọi ví dụ đều rút tròn balance; không có biên nào cho ca rút một phần."
+          }
+        ]
+      }
+    ],
+    "profile_relationships": [
+      {
+        "from": "FEAT-03-payout-request-submission",
+        "to": "FEAT-02-payout-request-eligibility",
+        "relation": "GATED_BY"
+      },
+      {
+        "from": "FEAT-03-payout-request-submission",
+        "to": "FEAT-01-balance-accrual",
+        "relation": "CONSUMES"
+      },
+      {
+        "from": "FEAT-03-payout-request-submission",
+        "to": "FEAT-05-admin-invoice-processing",
+        "relation": "HANDED_OFF_TO"
+      },
+      {
+        "from": "FEAT-03-payout-request-submission",
+        "to": "FEAT-04-payout-request-cancellation",
+        "relation": "PRECEDES"
+      }
+    ],
+    "coverage_matrix": [
+      {
+        "feature_id": "FEAT-03-payout-request-submission",
+        "layer": "portal",
+        "role": "affiliate",
+        "state": "pending",
+        "environment": "documented",
+        "covered": true
+      },
+      {
+        "feature_id": "FEAT-03-payout-request-submission",
+        "layer": "api",
+        "role": "affiliate",
+        "state": "pending",
+        "environment": "documented",
+        "covered": true
+      },
+      {
+        "feature_id": "FEAT-03-payout-request-submission",
+        "layer": "data",
+        "role": "affiliate",
+        "state": "pending",
+        "environment": "documented",
+        "covered": true
+      }
+    ],
+    "unassigned_kb_items": [],
+    "profile_conflicts": [],
+    "profile_change_summary": [
+      "Profile mới tạo ở run CTX-20261002-01 (DOC_BOOTSTRAP), chưa có version trước."
+    ],
+    "kb_trace_complete": true
+  },
+  "gate": {
+    "decision": "PASS",
+    "blocking_findings": [],
+    "conditions": [
+      "observed_validations[] rỗng, act_ids[] rỗng theo luật DOC_BOOTSTRAP."
+    ],
+    "allowed_next_steps": [
+      "qa-checklist-builder",
+      "knowledge-diff-analyzer"
+    ]
+  }
+}

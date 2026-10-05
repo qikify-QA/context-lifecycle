@@ -1,0 +1,216 @@
+{
+  "schema_version": "1.0",
+  "artifact_type": "FeatureProfileCandidate",
+  "artifact_id": "FPCAND-CTX-20261002-01-integration-api-customer-event-reporting-api",
+  "workflow_id": "CTX-20261002-01",
+  "producer": "feature-profile-builder",
+  "source_refs": [
+    {
+      "type": "doc_ref",
+      "doc_id": "`qikfiliate/integration api - overview and auth`",
+      "path": "candidate/product-kb/customer-event-reporting-api.json"
+    },
+    {
+      "type": "doc_ref",
+      "doc_id": "`qikfiliate/integration api - customer lifecycle api`",
+      "path": "candidate/product-kb/customer-event-reporting-api.json"
+    },
+    {
+      "type": "doc_ref",
+      "doc_id": "`qikfiliate/integration api - overview and auth`",
+      "path": "candidate/product-kb/_object-level.integration-api.json"
+    }
+  ],
+  "upstream_artifact_ids": [
+    "KBCAND-CTX-20261002-01-integration-api-customer-event-reporting-api",
+    "KBCAND-CTX-20261002-01-integration-api-object-level"
+  ],
+  "status": "READY",
+  "confidence": "MEDIUM",
+  "observations": [
+    "User goal duy nhất: client app ghi nhận 1 sự kiện vòng đời (installed/uninstalled/reinstalled/subscribed/upgraded/canceled) cho 1 shop để hiển thị trạng thái — tách biệt khỏi provisioning (tồn tại/soft-delete) ở FEAT-02 và khỏi số tiền hoa hồng (KB-001, luồng CSV Payout riêng).",
+    "KB-003 (6 giá trị hợp lệ ở mức model) và KB-007 (request KHÔNG chặn giá trị ngoài danh sách, known_defect) được tách bạch rõ ràng trong 2 KB riêng — profile giữ nguyên sự tách bạch này, không hợp nhất thành 1 rule 'enum được validate'. Đây đúng là tín hiệu cross-doc dễ gây hiểu lầm mà normalizer đã raise NEEDS_CONFIRMATION, không phải conflict.",
+    "KB-007 vào risks[], không vào confirmed_rules — dù claim_kind là 1 defect liên tiếp hợp nhất từ 4 claim gốc."
+  ],
+  "assumptions": [],
+  "unknowns": [
+    "KB-003 dễ bị hiểu nhầm là enum được enforce ở tầng request nếu chỉ đọc bảng endpoint `qikfiliate/integration api - overview and auth` — cần xác nhận chính thức (spec/PO) rằng enum này KHÔNG được validate ở request.",
+    "KB-006 (hedged): có thể gọi POST /api/customer-events(reinstalled) sau khi restore — chưa rõ đây là bước bắt buộc hay tuỳ chọn trong luồng cài lại.",
+    "Không rõ POST /api/customer-events có cho phép name rỗng không, và có chặn gửi trùng lặp cùng 1 sự kiện 2 lần không — tài liệu đặt câu hỏi này cho QA nhưng không trả lời."
+  ],
+  "conflicts": [],
+  "blocking_issues": [],
+  "payload": {
+    "feature_profiles": [
+      {
+        "feature_id": "FEAT-03-customer-event-reporting-api",
+        "feature_key": "customer-event-reporting-api",
+        "name": "Báo cáo sự kiện vòng đời của shop (installed/subscribed/upgraded/uninstalled/reinstalled/canceled)",
+        "user_goal": "Với vai trò client app, ghi nhận 1 sự kiện vòng đời của shop (ví dụ 'vừa cài app', 'vừa nâng cấp gói trả phí', 'vừa gỡ cài') để Qikfiliate đổi trạng thái hiển thị của Customer đó — tách biệt hoàn toàn khỏi luồng tính/nạp tiền hoa hồng (CSV Payout, ngoài phạm vi nhóm API này).",
+        "stable_since_version": "v1",
+        "actors": [
+          {
+            "role": "client_app",
+            "permission_observed": "Được phép gọi POST /api/customer-events cho 1 Customer xác định qua (program_slug, related_id), với điều kiện đã xác thực theo FEAT-01.",
+            "kb_refs": [
+              "KB-002"
+            ]
+          }
+        ],
+        "entry_points": [
+          {
+            "path": "POST /api/customer-events",
+            "precondition": "Customer đã tồn tại, khớp được theo cặp (program_slug, related_id) — tức đã trải qua bước tạo ở FEAT-02 trước đó.",
+            "kb_refs": [
+              "KB-002",
+              "KB-004"
+            ]
+          }
+        ],
+        "capabilities": [
+          {
+            "name": "Ghi nhận sự kiện vòng đời shop",
+            "description": "POST /api/customer-events tìm Customer theo cặp (program_slug, related_id) rồi tạo 1 bản ghi CustomerEvent. Model CustomerEvent định nghĩa đúng 6 giá trị hợp lệ (chữ thường): installed, uninstalled, reinstalled, subscribed, upgraded, canceled (KB-003). Payload mẫu: customer_related_id, program_slug, name (KB-004, EXAMPLE_ONLY). Sự kiện không mang theo số tiền, chỉ đổi trạng thái hiển thị (KB-005).",
+            "kb_refs": [
+              "KB-002",
+              "KB-003",
+              "KB-004",
+              "KB-005"
+            ],
+            "act_ids": []
+          },
+          {
+            "name": "Báo lại trạng thái sau khi shop cài lại (reinstalled)",
+            "description": "Theo KB-006 (hedged, chưa xác nhận bắt buộc), sau khi restore Customer qua PUT /api/trashed-customers (FEAT-02), client app có thể gọi tiếp POST /api/customer-events với name=\"reinstalled\" để cập nhật trạng thái hiển thị.",
+            "kb_refs": [
+              "KB-006"
+            ],
+            "act_ids": []
+          }
+        ],
+        "state_transitions": [
+          {
+            "from": "Customer tồn tại (trạng thái hiển thị bất kỳ)",
+            "to": "trạng thái hiển thị = name gửi lên (installed/uninstalled/reinstalled/subscribed/upgraded/canceled dự kiến, nhưng KHÔNG được request-layer enforce — xem risk KB-007)",
+            "trigger": "POST /api/customer-events thành công",
+            "condition": "Customer tìm được theo (program_slug, related_id)",
+            "kb_refs": [
+              "KB-002",
+              "KB-003"
+            ]
+          }
+        ],
+        "confirmed_rules": [
+          "KB-001: Số tiền hoa hồng KHÔNG đi qua nhóm API tích hợp này; đến từ file CSV Payout do Shopify xuất, admin tải lên thủ công, độc lập với luồng API báo trạng thái shop.",
+          "KB-002: POST /api/customer-events tìm Customer theo (program_slug, related_id) rồi tạo 1 CustomerEvent.",
+          "KB-003: Model CustomerEvent định nghĩa đúng 6 giá trị hợp lệ: installed, uninstalled, reinstalled, subscribed, upgraded, canceled (chữ thường). KHÔNG tài liệu nào phát biểu rằng tầng request chặn giá trị ngoài danh sách này — xem KB-007 ở risks.",
+          "KB-005: Sự kiện vòng đời không mang theo số tiền, chỉ đổi trạng thái hiển thị."
+        ],
+        "observed_behavior": [],
+        "observed_validations": [],
+        "permissions": [
+          "client_app đã xác thực theo FEAT-01 được phép gọi POST /api/customer-events cho bất kỳ Customer khớp (program_slug, related_id)."
+        ],
+        "surface_mapping": {
+          "portal": [],
+          "storefront": [],
+          "api": [
+            "POST /api/customer-events (APIOP-21-005, APIOP-22-005)"
+          ],
+          "data": [
+            "CustomerEvent — model định nghĩa 6 giá trị enum name hợp lệ (KB-003), nhưng request layer không enforce (KB-007)",
+            "Customer — tra cứu qua cặp (program_slug, related_id)"
+          ],
+          "code": []
+        },
+        "dependencies": [
+          "FEAT-01-api-key-authentication: request phải xác thực X-API-Key trước.",
+          "FEAT-02-customer-provisioning-api: Customer phải đã được tạo (POST /api/customers) trước khi có thể ghi CustomerEvent cho nó; KB-012 ở FEAT-02 liên kết lệnh DELETE /api/customers với POST /api/customer-events(uninstalled)."
+        ],
+        "risks": [
+          {
+            "risk": "KNOWN_DEFECT (KB-007): request POST /api/customer-events chỉ validate required cho name, KHÔNG có luật in:... Gửi name gõ sai (vd 'subcribed') vẫn trả 200/201, giá trị sai lưu nguyên văn vào DB, không cảnh báo cho client app.",
+            "kb_refs": [
+              "KB-007"
+            ]
+          }
+        ],
+        "freshness": {
+          "observed_at": null,
+          "run_id": "CTX-20261002-01"
+        },
+        "unknown_areas": [
+          {
+            "question": "POST /api/customer-events có cho phép name rỗng không, và có chặn gửi trùng lặp cùng 1 sự kiện 2 lần không?",
+            "why_it_matters": "Tài liệu đặt đúng câu hỏi này cho QA nhưng không trả lời — không dựng được test case cho 2 tình huống này."
+          },
+          {
+            "question": "Client app có BẮT BUỘC gọi POST /api/customer-events(reinstalled) sau khi restore qua PUT /api/trashed-customers, hay đây chỉ là bước tuỳ chọn?",
+            "why_it_matters": "Quyết định liệu trạng thái hiển thị 'reinstalled' có đáng tin cậy làm oracle test hay không."
+          },
+          {
+            "question": "Enum 6 giá trị (KB-003) có cần được xác nhận chính thức là KHÔNG validate ở tầng request (để tránh checklist dựng sai expected result theo KB-007)?",
+            "why_it_matters": "`qikfiliate/integration api - overview and auth` liệt kê 6 giá trị như thể là tập giá trị API enforce; người chỉ đọc `qikfiliate/integration api - overview and auth` dễ hiểu lầm, dẫn tới test case sai kỳ vọng."
+          }
+        ]
+      }
+    ],
+    "profile_relationships": [
+      {
+        "from": "FEAT-03-customer-event-reporting-api",
+        "to": "FEAT-01-api-key-authentication",
+        "relation": "DEPENDS_ON"
+      },
+      {
+        "from": "FEAT-03-customer-event-reporting-api",
+        "to": "FEAT-02-customer-provisioning-api",
+        "relation": "DEPENDS_ON"
+      }
+    ],
+    "coverage_matrix": [
+      {
+        "feature_id": "FEAT-03-customer-event-reporting-api",
+        "layer": "api",
+        "role": "client_app",
+        "state": "n/a",
+        "environment": "documented",
+        "covered": true
+      },
+      {
+        "feature_id": "FEAT-03-customer-event-reporting-api",
+        "layer": "data",
+        "role": "client_app",
+        "state": "n/a",
+        "environment": "documented",
+        "covered": true
+      },
+      {
+        "feature_id": "FEAT-03-customer-event-reporting-api",
+        "layer": "portal",
+        "role": "client_app",
+        "state": "n/a",
+        "environment": "documented",
+        "covered": false
+      }
+    ],
+    "unassigned_kb_items": [],
+    "profile_conflicts": [],
+    "profile_change_summary": [
+      "Profile mới tạo ở run CTX-20261002-01 (DOC_BOOTSTRAP), chưa có version trước."
+    ],
+    "kb_trace_complete": true
+  },
+  "gate": {
+    "decision": "PASS",
+    "blocking_findings": [],
+    "conditions": [
+      "KB-007 chỉ nằm trong risks[], không xuất hiện ở confirmed_rules/permissions.",
+      "KB-003 giữ nguyên caveat trỏ sang KB-007, không được hiểu/diễn đạt lại thành 'request enforce enum'.",
+      "observed_validations[] rỗng, act_ids chỉ chứa APIOP-ID doc-scoped."
+    ],
+    "allowed_next_steps": [
+      "qa-checklist-builder",
+      "knowledge-diff-analyzer"
+    ]
+  }
+}

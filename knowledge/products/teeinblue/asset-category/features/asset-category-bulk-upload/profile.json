@@ -1,0 +1,344 @@
+{
+  "feature_profiles": [
+    {
+      "feature_id": "FEAT-04-bulk-upload-zip",
+      "feature_key": "asset-category-bulk-upload",
+      "name": "Bulk-upload zip clipart",
+      "user_goal": "Nạp nhiều clipart cùng lúc bằng cách upload 1 file zip; hệ thống tự tạo 1 category mới theo tên top-level folder trong zip và enqueue từng item bên trong.",
+      "actors": [
+        {
+          "role": "owner (Linh explorer, sub=273)",
+          "permission_observed": "upload 1 file zip hợp lệ và job hoàn tất thành công (status Done). [MỚI] Cũng đã test: upload file.txt (bị reject 422), upload zip hợp lệ nhưng không chứa ảnh (job kết thúc Error, không tạo category), xem trạng thái list job (2/5 status network-verified).",
+          "kb_refs": [
+            "KB-016",
+            "KB-025",
+            "KB-026",
+            "KB-027"
+          ]
+        }
+      ],
+      "entry_points": [
+        {
+          "path": "/cliparts/bulk-upload",
+          "precondition": "đã đăng nhập role owner; có sẵn nhiều job cũ từ session/đợt quan sát trước (không đụng vào)",
+          "kb_refs": [
+            "KB-016",
+            "KB-022",
+            "KB-025",
+            "KB-026",
+            "KB-027"
+          ]
+        }
+      ],
+      "capabilities": [
+        {
+          "name": "Upload file zip và theo dõi job",
+          "description": "Luồng: GET /api/clipart-category-bulk-uploads (list job) -> POST /api/clipart-category-bulk-uploads/users/{userId}/start (xin presigned URL, trả job id) -> PUT binary lên storage presigned URL -> POST /api/clipart-category-bulk-uploads/{jobId}/complete (status ban đầu 'Extracting') -> GET /api/clipart-category-bulk-uploads/{jobId} (poll, trả status.value/status.description). [MỚI] Trạng thái cuối có thể là 'Done' (KB-016) hoặc 'Error' (KB-026, khi zip không chứa ảnh hợp lệ).",
+          "kb_refs": [
+            "KB-016",
+            "KB-026",
+            "KB-027"
+          ]
+        },
+        {
+          "name": "Tự tạo category theo tên folder trong zip",
+          "description": "Job tự tạo 1 category mới (id 6020, tên 'valid-images 2' = tên top-level folder trong zip) chứa 5 clipart item khi zip hợp lệ VÀ có ảnh. [MỚI] Khi zip hợp lệ nhưng KHÔNG chứa ảnh nào (chỉ có readme.txt), job KHÔNG tạo category nào (clipart_category_id=null), kết thúc status Error với log 'No valid entries found' - xem KB-026.",
+          "kb_refs": [
+            "KB-016",
+            "KB-026"
+          ]
+        },
+        {
+          "name": "[MỚI, bulk::CHK-006] Validate file không phải.zip",
+          "description": "Khi chọn file.txt (bypass HTML accept filter của input) vào 'Upload zip', POST /api/clipart-category-bulk-uploads/users/{userId}/start trả 422 {message: 'The selected mimetype is invalid.', errors: {mimetype: [...]}} - server reject rõ ràng NGAY TỪ BƯỚC start, không tạo job, không xin presigned URL.",
+          "kb_refs": [
+            "KB-025"
+          ]
+        },
+        {
+          "name": "[MỚI, bulk::CHK-007] Zip hợp lệ nhưng rỗng ảnh -> job Error, không tạo category",
+          "description": "Upload 1 file zip đúng định dạng nhưng không chứa file ảnh hợp lệ nào (chỉ readme.txt): luồng vẫn qua được các bước start/PUT/complete (trạng thái trung gian 'Extracting'), nhưng job cuối cùng chuyển status='Error' (~34 phút sau), clipart_category_id=null, KHÔNG tạo category rỗng nào, log kết thúc 'Error - No valid entries found'.",
+          "kb_refs": [
+            "KB-026"
+          ]
+        },
+        {
+          "name": "[MỚI, bulk::CHK-008] Danh sách status job",
+          "description": "Status job theo PO: Uploading, Extracting, delayed, Done, Error. Trong đợt quan sát đó, CHỈ 2/5 status có network evidence TRỰC TIẾP (Extracting value=2, Error value=4 - xem KB-026). 3/5 status còn lại (Uploading/delayed/Done) CHỈ dựa vào PO-answer + quan sát UI bảng 'All uploads' (job cũ hiển thị text Done/Error), KHÔNG network-verified trực tiếp trong các đợt quan sát đã có.",
+          "kb_refs": [
+            "KB-027"
+          ]
+        },
+        {
+          "name": "[MỚI, bulk::CHK-010] Presigned storage URL cho luồng zip: TTL + scope",
+          "description": "Presigned URL trả về từ POST /api/clipart-category-bulk-uploads/users/{id}/start có X-Amz-Expires=600 (TTL 10 phút) - khác TTL=300s (5 phút) của luồng upload item đơn lẻ (asset-category-item-management). X-Amz-SignedHeaders=host (scope ký CHỈ ràng buộc Host header, không ràng buộc content-type/content-length). Host = oe-cdn.sgp1.digitaloceanspaces.com, path UUID/hash-based. KHÔNG có finding bảo mật nghiêm trọng cần escalate; chưa có negative test (dùng URL sau khi hết TTL).",
+          "kb_refs": [
+            "KB-028"
+          ]
+        }
+      ],
+      "state_transitions": [
+        {
+          "from": "chưa có job/category cho zip này",
+          "to": "job status='Done', category mới (id tự sinh) chứa các item từ zip",
+          "trigger": "upload 1 file zip hợp lệ, có ảnh, qua nút 'Upload zip'",
+          "condition": "toàn bộ 5 bước network thành công - chỉ verify được với 1 sample end-to-end thành công",
+          "kb_refs": [
+            "KB-016"
+          ]
+        },
+        {
+          "from": "chưa có job/category cho zip này",
+          "to": "job status='Error', KHÔNG có category nào được tạo (clipart_category_id=null)",
+          "trigger": "upload 1 file zip hợp lệ định dạng nhưng KHÔNG chứa ảnh hợp lệ nào",
+          "condition": "POST.../complete thành công (200, trạng thái trung gian Extracting), nhưng job cuối cùng chuyển Error sau khi xử lý xong",
+          "kb_refs": [
+            "KB-026"
+          ]
+        },
+        {
+          "from": "chưa có job",
+          "to": "không tạo job (bị chặn ngay từ bước start)",
+          "trigger": "chọn file.txt (không phải.zip) vào input 'Upload zip'",
+          "condition": "POST.../start trả 422",
+          "kb_refs": [
+            "KB-025"
+          ]
+        }
+      ],
+      "confirmed_rules": [
+        {
+          "statement": "[MỚI, KB-022, CONFIRMED_EXPECTED theo PO-answer 2026-09-14, CHỈ cho plan Blue] Giới hạn bulk-upload zip hiển thị trên banner UI = '2GB per zip, max 10 files' cho plan Blue - đây là banner TĨNH phía client, KHÔNG có endpoint API nào trong 14 operation đã map cấu hình con số này. KHÔNG áp dụng như giá trị cứng toàn cục cho mọi plan khác (chưa verify). Server-side enforcement thực sự CHƯA test biên - xem phần server-enforcement của giới hạn bulk-upload chưa test biên.",
+          "kb_refs": [
+            "KB-022"
+          ]
+        },
+        {
+          "statement": "[MỚI, KB-026, CONFIRMED_EXPECTED, 1 sample] Zip đúng định dạng nhưng không chứa ảnh hợp lệ nào -> job kết thúc status Error, KHÔNG tạo category rỗng nào (clipart_category_id=null). Khớp đúng PO-answer.",
+          "kb_refs": [
+            "KB-026"
+          ]
+        }
+      ],
+      "observed_behavior": [
+        {
+          "statement": "KB-016 (1 sample, confidence LOW theo KB gốc): luồng 5 bước end-to-end thành công cho 1 file zip hợp lệ, job tự tạo category + 5 item, enqueue 5/5 thành công.",
+          "kb_refs": [
+            "KB-016"
+          ]
+        },
+        {
+          "statement": "[MỚI, KB-027, OBSERVED_CURRENT theo KB gốc mặc dù có nguồn thẩm quyền (PO xác nhận danh sách tên status, nhưng chỉ 2/5 network-verified TRỰC TIẾP), 2 sample, confidence MEDIUM] Danh sách 5 status (Uploading/Extracting/delayed/Done/Error) - CHỈ Extracting và Error có bằng chứng network trực tiếp trong các đợt quan sát đã có; 3 status còn lại dựa vào PO-answer + quan sát UI, KHÔNG coi ngang hàng về độ tin cậy evidence khi viết checklist assertion.",
+          "kb_refs": [
+            "KB-027"
+          ]
+        },
+        {
+          "statement": "[MỚI, KB-028, OBSERVED_CURRENT, 4 sample, confidence MEDIUM] Presigned URL luồng bulk zip có TTL=600s, scope ký chỉ ràng buộc Host header - không có finding bảo mật nghiêm trọng, nhưng chưa test negative (URL hết hạn).",
+          "kb_refs": [
+            "KB-028"
+          ]
+        },
+        {
+          "statement": "File không phải.zip (vd.txt, bypass HTML accept filter) bị server reject ngay ở bước POST.../start với 422 'The selected mimetype is invalid.' - không tạo job. PO-answer 'tạo sample và chạy thử' cho bulk::CHK-006 chỉ là UỶ QUYỀN THỰC THI test, KHÔNG PHẢI xác nhận trước kết quả 422 này là hành vi đúng/mong đợi - không có nguồn thẩm quyền xác nhận. KHÔNG coi là confirmed rule.",
+          "kb_refs": [
+            "KB-025"
+          ]
+        }
+      ],
+      "observed_validations": [
+        {
+          "input": "File.txt (không phải.zip) vào input 'Upload zip', bypass HTML accept filter",
+          "message_verbatim": "The selected mimetype is invalid.",
+          "observed_count": 1,
+          "rule_confidence": "LOW",
+          "kb_refs": [
+            "KB-025"
+          ]
+        }
+      ],
+      "permissions": [
+        {
+          "role": "owner (sub=273)",
+          "note": "1 sample thành công (Done); [MỚI] thêm 1 sample lỗi mimetype (422, KB-025) và 1 sample zip hợp lệ nhưng rỗng ảnh (Error, KB-026). Chưa có sample vượt giới hạn dung lượng/số file thật (2GB/10 file).",
+          "kb_refs": [
+            "KB-016",
+            "KB-025",
+            "KB-026"
+          ]
+        }
+      ],
+      "surface_mapping": {
+        "portal": [
+          "/cliparts/bulk-upload - banner giới hạn dung lượng/số file (KB-016, KB-022, CHỈ verify cho plan Blue), nút 'Upload zip' (KB-016), bảng 'All uploads' hiển thị status job (KB-027)"
+        ],
+        "storefront": [],
+        "api": [
+          "GET /api/clipart-category-bulk-uploads (KB-016)",
+          "POST /api/clipart-category-bulk-uploads/users/{userId}/start (KB-016, KB-018, KB-025, KB-028)",
+          "PUT binary lên storage presigned URL (KB-018, KB-028)",
+          "POST /api/clipart-category-bulk-uploads/{jobId}/complete (KB-016, KB-026)",
+          "GET /api/clipart-category-bulk-uploads/{jobId} poll (KB-016, KB-026, KB-027)"
+        ],
+        "data": [],
+        "code": []
+      },
+      "dependencies": [
+        {
+          "depends_on": "FEAT-03-asset-item-management",
+          "relationship": "dùng chung pattern presigned storage URL (KB-018, KB-028) với luồng upload item đơn lẻ, nhưng tự tạo category thay vì thêm vào category có sẵn; TTL presigned URL KHÁC nhau giữa 2 luồng (600s bulk vs 300s item đơn lẻ)",
+          "kb_refs": [
+            "KB-018",
+            "KB-028"
+          ]
+        }
+      ],
+      "risks": [
+        {
+          "risk": "Security surface: PUT binary gửi thẳng tới oe-cdn.sgp1.digitaloceanspaces.com bằng presigned URL thay vì header authorization JWT app. [MỚI] KB-028 đã inspect kỹ hơn: TTL=600s, scope ký chỉ ràng buộc Host header - KHÔNG có finding nghiêm trọng, nhưng scope hẹp (không ràng buộc content-type/length) và chưa có negative test URL hết hạn.",
+          "severity": "MEDIUM",
+          "kb_refs": [
+            "KB-018",
+            "KB-028"
+          ]
+        },
+        {
+          "risk": "[MỚI] giới hạn bulk-upload zip (đã resolve: tuỳ plan, xem KB-022): KB cũ ghi giới hạn 'max 512MB/zip, tối đa 2 file'; banner UI hiện tại (plan Blue) ghi '2GB per zip, tối đa 10 file'. PO xác nhận '2GB/10 file' ĐÚNG cho plan Blue (KB-022) - phần 'giá trị nào đúng' coi như đã trả lời (tuỳ plan). PHẦN CÒN LẠI CHƯA đóng: server có thực sự ENFORCE đúng con số banner ghi hay không (test biên >2GB hoặc >10 file) - 0 sample vượt ngưỡng trong bất kỳ đợt quan sát nào. sides[] gốc GIỮ NGUYÊN, không tự đóng phần server-enforcement.",
+          "severity": "MEDIUM",
+          "kb_refs": [
+            "KB-016",
+            "KB-022"
+          ]
+        },
+        {
+          "risk": "[MỚI, KB-027] Chỉ 2/5 status job (Extracting, Error) có network evidence trực tiếp - checklist/assertion dựa trên 3 status còn lại (Uploading/delayed/Done) cần gắn nhãn độ tin cậy thấp hơn (dựa PO-answer + UI quan sát, không phải network-verified).",
+          "severity": "LOW",
+          "kb_refs": [
+            "KB-027"
+          ]
+        }
+      ],
+      "last_updated": {
+        "date": "2026-09-15",
+        "ccr_ref": "bootstrap"
+      },
+      "unknown_areas": [
+        {
+          "question": "Giới hạn thật của dung lượng/số file zip là bao nhiêu?",
+          "why_it_matters": "[ĐÃ LẤP MỘT PHẦN] 'Giá trị nào đúng' đã trả lời: 2GB/10 file cho plan Blue (KB-022, giới hạn bulk-upload zip (KB-022) RESOLVED_PLAN_DEPENDENT). NHƯNG 'server có enforce đúng con số này qua API hay không' VẪN CHƯA test biên - xem phần server-enforcement của giới hạn bulk-upload chưa test biên, chưa đóng. Các plan khác ngoài Blue cũng chưa verify."
+        },
+        {
+          "question": "Trạng thái job 'Uploading', 'delayed', 'Done' qua API trông như thế nào (network-verified trực tiếp)?",
+          "why_it_matters": "[ĐÃ LẤP MỘT PHẦN] Extracting và Error nay đã network-verified (KB-026/027). 3/5 status còn lại chỉ dựa vào PO-answer + quan sát UI cũ - cần sample network trực tiếp để đối chứng đầy đủ, đặc biệt Done (job KB-016 trả Done ngay ở lần GET đầu, không có sample intermediate)."
+        },
+        {
+          "question": "Điều gì xảy ra nếu zip có cấu trúc folder khác (nhiều folder con, tên trùng category cũ)?",
+          "why_it_matters": "Chỉ test 1 zip với 1 top-level folder hợp lệ (KB-016) và 1 zip rỗng ảnh (KB-026, không tạo category) - case tên trùng hoặc cấu trúc phức tạp hơn chưa được quan sát."
+        },
+        {
+          "question": "[MỚI] Các định dạng file sai khác ngoài.txt (ví dụ.rar,.7z,.tar.gz) khi upload vào 'Upload zip' có nhận cùng message 422 'invalid mimetype' không?",
+          "why_it_matters": "KB-025 chỉ test 1 định dạng sai (.txt) - chưa rõ message/status có nhất quán cho các định dạng sai khác hay có case đặc biệt nào (ví dụ.rar client-side accept nhưng server reject khác cách)."
+        }
+      ]
+    }
+  ],
+  "profile_relationships": [
+    {
+      "from_feature_id": "FEAT-04-bulk-upload-zip",
+      "to_feature_id": "FEAT-03-asset-item-management",
+      "relationship": "related_to",
+      "note": "Dùng chung cơ chế presigned storage URL (KB-018, KB-028) với upload item đơn lẻ, TTL khác nhau (600s vs 300s).",
+      "kb_refs": [
+        "KB-018",
+        "KB-028"
+      ]
+    }
+  ],
+  "coverage_matrix": [
+    {
+      "feature_id": "FEAT-04-bulk-upload-zip",
+      "layer": "api",
+      "role": "owner",
+      "state": "upload zip hợp lệ, luồng end-to-end thành công (Done)",
+      "environment": "staging",
+      "covered": true,
+      "kb_refs": [
+        "KB-016"
+      ]
+    },
+    {
+      "feature_id": "FEAT-04-bulk-upload-zip",
+      "layer": "api",
+      "role": "owner",
+      "state": "upload zip vượt giới hạn dung lượng/số file (error path, test biên thật)",
+      "environment": "staging",
+      "covered": false,
+      "kb_refs": [
+        "KB-016",
+        "KB-022"
+      ],
+      "note": "Vẫn chưa test biên >2GB hoặc >10 file - xem phần server-enforcement của giới hạn bulk-upload chưa test biên"
+    },
+    {
+      "feature_id": "FEAT-04-bulk-upload-zip",
+      "layer": "api",
+      "role": "owner",
+      "state": "upload file không phải.zip (sai mimetype)",
+      "environment": "staging",
+      "covered": true,
+      "kb_refs": [
+        "KB-025"
+      ],
+      "note": "[MỚI] 422, chỉ test.txt"
+    },
+    {
+      "feature_id": "FEAT-04-bulk-upload-zip",
+      "layer": "api",
+      "role": "owner",
+      "state": "job status Error (zip hợp lệ, rỗng ảnh)",
+      "environment": "staging",
+      "covered": true,
+      "kb_refs": [
+        "KB-026"
+      ],
+      "note": "[MỚI] network-verified"
+    },
+    {
+      "feature_id": "FEAT-04-bulk-upload-zip",
+      "layer": "api",
+      "role": "owner",
+      "state": "job status Uploading/delayed/Done (network-verified trực tiếp)",
+      "environment": "staging",
+      "covered": false,
+      "kb_refs": [
+        "KB-027"
+      ],
+      "note": "[MỚI] chỉ dựa PO-answer + UI, chưa network-verified trực tiếp"
+    },
+    {
+      "feature_id": "FEAT-04-bulk-upload-zip",
+      "layer": "api",
+      "role": "owner",
+      "state": "presigned storage URL cho luồng zip (TTL/scope)",
+      "environment": "staging",
+      "covered": true,
+      "kb_refs": [
+        "KB-018",
+        "KB-028"
+      ],
+      "note": "[MỚI] KB-028 bổ sung chi tiết TTL=600s, scope Host-only"
+    },
+    {
+      "feature_id": "FEAT-04-bulk-upload-zip",
+      "layer": "api",
+      "role": "owner",
+      "state": "zip cấu trúc folder phức tạp (nhiều folder con, tên trùng category cũ)",
+      "environment": "staging",
+      "covered": false,
+      "kb_refs": [
+        "KB-016",
+        "KB-026"
+      ]
+    }
+  ]
+}

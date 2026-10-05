@@ -47,11 +47,14 @@ export async function loginToPortal(page: Page, user: PortalUser): Promise<void>
   await page.getByRole('button', { name: 'Log in' }).click();
 
   // Login thành công → redirect về `/` và sidebar render.
-  // Sidebar có thể đang collapse (viewport hẹp) nên chỉ chờ `attached`, và
-  // xác nhận session bằng `teeinblue_token` trong localStorage.
+  // Sidebar có thể đang collapse (viewport hẹp) nên chỉ chờ `attached`.
+  // App không còn lưu `teeinblue_token` trong localStorage kể từ ~2026-09-14
+  // (session giờ qua cookie httpOnly) → verify session đã set bằng account/shop block
+  // render trong sidebar thay vì đọc localStorage.
   await page.waitForURL(`${PORTAL_BASE}/`, { timeout: 30_000 });
   await page.locator('a[href="/orders"]').first().waitFor({ state: 'attached', timeout: 30_000 });
-  await page.waitForFunction(() => !!localStorage.getItem('teeinblue_token'), null, {
+  await page.locator('a[href="/subscriptions"]').first().waitFor({
+    state: 'attached',
     timeout: 30_000,
   });
 }

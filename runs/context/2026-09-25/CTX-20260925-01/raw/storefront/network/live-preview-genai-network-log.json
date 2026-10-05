@@ -1,0 +1,92 @@
+{
+  "schema_version": "1.0",
+  "capture_context": {
+    "surface": "Artwork editor > Live preview (staff-authenticated, portal domain staging-portal.teeinblue.com)",
+    "artwork_id": 4416,
+    "captured_via": "playwright-mcp browser_network_requests / browser_network_request",
+    "redaction_applied": true,
+    "redaction_note": "No Authorization/Cookie/Set-Cookie headers were ever exposed to the page fetch layer (Sanctum session cookie is HttpOnly); AWS S3 presigned query params (X-Amz-Credential, X-Amz-Signature) redacted per contract §6 'signature' field rule. x-thumbmark-id device-fingerprint header left as-is (not a listed redact target) but noted as a fingerprint value, not a session secret."
+  },
+  "entries": [
+    {
+      "seq": 56,
+      "method": "POST",
+      "url": "https://staging-api.teeinblue.com/api/merchant/shopify/upload-url?shop=linh-explorer.myshopify.com",
+      "status": 422,
+      "request_body": {"filename": "image.jpeg", "filesize": 9598, "mimetype": "image/jpeg", "strategy": "any", "width": 1024, "height": 768},
+      "response_body": {"message": "The filesize field must be at least 10000.", "errors": {"filesize": ["The filesize field must be at least 10000."]}},
+      "note": "Photo #1 (poster.jpg source, client re-encoded to 9598 bytes) rejected by presigned-upload-url route for being under the 10000-byte minimum filesize business rule."
+    },
+    {
+      "seq": 57,
+      "method": "POST",
+      "url": "https://staging-api.teeinblue.com/api/merchant/shopify/upload-url?shop=linh-explorer.myshopify.com",
+      "status": 200,
+      "request_body": {"filename": "image.jpeg", "filesize": 29193, "mimetype": "image/jpeg", "strategy": "any", "width": 1024, "height": 637},
+      "note": "Photo #2 (2mugs.jpg source, client re-encoded to 29193 bytes) succeeded; response contained presigned S3 PUT URL (redacted below)."
+    },
+    {
+      "seq": 60,
+      "method": "PUT",
+      "url": "https://s3.us-east-1.wasabisys.com/teeinblue-cdn-staging/wa/customers/uploads/260925_NX4uwQAD4HXqN76T.jpeg?X-Amz-Content-Sha256=UNSIGNED-PAYLOAD&X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=[REDACTED]&X-Amz-Date=20260925T164534Z&X-Amz-SignedHeaders=host&X-Amz-Expires=300&X-Amz-Signature=[REDACTED]",
+      "status": 200,
+      "note": "Direct-to-S3(Wasabi) presigned PUT for the successful photo (#2)."
+    },
+    {
+      "seq": 61,
+      "method": "POST",
+      "url": "https://staging-api.teeinblue.com/api/merchant/shopify/photo-upload?shop=linh-explorer.myshopify.com",
+      "status": 422,
+      "content_type": "multipart/form-data",
+      "response_body": {"message": "The file field must be at least 10 kilobytes.", "errors": {"file": ["The file field must be at least 10 kilobytes."]}},
+      "note": "Distinct FALLBACK endpoint (multipart direct upload, not presigned-S3) automatically invoked by the client for the photo that failed at seq 56. Confirms existence of a separate fallback upload route triggered on upload-url failure (relevant to TIB-5339), though in this run the fallback also failed because the root cause (file under 10KB minimum) applies to both routes equally -- so this single event does not by itself prove whether a fallback-route SUCCESS changes the downstream GenAI generate call from sync to async."
+    },
+    {
+      "seq": 62,
+      "method": "POST",
+      "url": "https://staging-api.teeinblue.com/api/merchant/shopify/customer-uploads/25550/uploaded-at?shop=linh-explorer.myshopify.com",
+      "status": 204,
+      "note": "Finalizes successful photo #2 as customer_upload id=25550."
+    },
+    {
+      "seq": 71,
+      "method": "POST",
+      "url": "https://staging-api.teeinblue.com/api/merchant/shopify/customer-uploads/generate-from-multiple-images?shop=linh-explorer.myshopify.com",
+      "status": 202,
+      "response_body": {"id": 25552, "status": 0},
+      "note": "Multiple Uploads (layer 'top') Generate click. HTTP 202 + a job-like resource {id, status=0} confirms ASYNC job pattern, not synchronous inline generation."
+    },
+    {
+      "seq": 72,
+      "method": "GET",
+      "url": "https://staging-api.teeinblue.com/api/merchant/shopify/customer-uploads/25552/image-filter-effects/status?shop=linh-explorer.myshopify.com",
+      "status": 200,
+      "response_body": {"id": 25552, "status": 1, "master": null, "url": null, "original": null, "effects": {"effects": [{"type": "image_generate", "prompt": "turn these uploaded photos into a simple flat sticker style, test QA fixture only", "provider": "gemini", "size": "1600x1600", "model": "nano_banana", "quality": "medium"}]}, "error_message": null},
+      "note": "First poll: status=1 (processing)."
+    },
+    {
+      "seq": 73,
+      "method": "GET",
+      "url": "https://staging-api.teeinblue.com/api/merchant/shopify/customer-uploads/25552/image-filter-effects/status?shop=linh-explorer.myshopify.com",
+      "status": 200,
+      "response_body": {"id": 25552, "status": 2, "master": "ws:customers/uploads/260925_Slsi8ki5yjMAOmaz_master.png", "url": "ws:customers/uploads/260925_Slsi8ki5yjMAOmaz_large.webp", "original": "ws:customers/uploads/260925_Slsi8ki5yjMAOmaz.png", "error_message": null},
+      "note": "Second poll (~2s after the first): status=2 (completed), master/url/original populated. Confirms polling job-status pattern for TIB-5339: POST returns 202+job id, GET .../image-filter-effects/status is polled until status reaches 2."
+    },
+    {
+      "seq": 75,
+      "method": "POST",
+      "url": "https://staging-api.teeinblue.com/api/merchant/shopify/customer-uploads/generate?shop=linh-explorer.myshopify.com",
+      "status": 202,
+      "response_body": {"id": 25553, "status": 0},
+      "note": "Text to Image (AI) layer ('hair') Generate click -- uses a DIFFERENT initiating endpoint ('generate', singular, no '-from-multiple-images' suffix) than the multiple-uploads layer, but returns the same 202 + {id,status=0} async job shape."
+    },
+    {
+      "seq": 76,
+      "method": "GET",
+      "url": "https://staging-api.teeinblue.com/api/merchant/shopify/customer-uploads/25553/image-filter-effects/status?shop=linh-explorer.myshopify.com",
+      "status": 200,
+      "response_body": {"id": 25553, "status": 2, "master": "ws:customers/uploads/260925_FRz0fOdjReZlfGWb_master.png", "url": "ws:customers/uploads/260925_FRz0fOdjReZlfGWb_large.png", "original": null, "effects": {"effects": [{"type": "image_generate", "prompt": "a simple cartoon style wavy hairstyle, minimal shading, test QA fixture only", "provider": "gemini", "model": "nano_banana", "quality": "medium"}]}, "error_message": null},
+      "note": "Only ONE poll needed before status=2 -- confirms 'hair' (Text-to-Image) layer's Generate button (unlabeled in the Live Preview panel, see SF-OBS-006) uses the artwork's saved text_to_image_prompt, and shares the exact same polling status endpoint shape as the multiple-uploads flow (.../customer-uploads/{id}/image-filter-effects/status)."
+    }
+  ]
+}

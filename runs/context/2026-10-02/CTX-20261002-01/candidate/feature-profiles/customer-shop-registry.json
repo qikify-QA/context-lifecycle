@@ -1,0 +1,135 @@
+{
+  "schema_version": "1.0",
+  "artifact_type": "FeatureProfileCandidate",
+  "artifact_id": "FPCAND-CTX-20261002-01-customer-shop-registry",
+  "workflow_id": "CTX-20261002-01",
+  "producer": "feature-profile-builder",
+  "source_refs": [
+    { "type": "artifact_ref", "path": "candidate/product-kb/customer-shop-registry.json", "artifact_id": "KBCAND-CTX-20261002-01-customer-shop-registry" },
+    { "type": "artifact_ref", "path": "candidate/product-kb/_object-level.customer-shop.json", "artifact_id": "KBCAND-CTX-20261002-01-object-level-customer-shop" },
+    { "type": "artifact_ref", "path": "candidate/product-kb/customer-lifecycle-state.json", "artifact_id": "KBCAND-CTX-20261002-01-customer-lifecycle-state", "note": "Đọc chéo: trigger soft-delete (shop gỡ app) được mô tả chi tiết ở feature đó." }
+  ],
+  "upstream_artifact_ids": [
+    "KBCAND-CTX-20261002-01-customer-shop-registry",
+    "KBCAND-CTX-20261002-01-object-level-customer-shop",
+    "KBCAND-CTX-20261002-01-customer-lifecycle-state"
+  ],
+  "status": "READY",
+  "confidence": "MEDIUM",
+  "observations": [
+    "Mode DOC_BOOTSTRAP: observed_validations[] và act_ids[] rỗng.",
+    "KB-001 của _object-level.customer-shop.json (soft-delete vẫn tính vào cap lifetime usage-charge) là fact cross-cutting quan trọng nhất của object customer-shop — được normalizer chủ động re-route về object-level dù claim gốc gắn feature khác; profile này THAM CHIẾU kb_id đó (không di chuyển lại) ở đúng chỗ liên quan tới soft-delete."
+  ],
+  "assumptions": [
+    "feature_id dùng nguyên feature_key 'customer-shop-registry'.",
+    "kb_refs '_object-level:KB-00X' trỏ về _object-level.customer-shop.json; 'customer-lifecycle-state:KB-00X' trỏ về shard feature khác cùng object."
+  ],
+  "unknowns": [
+    "Admin có hành động xoá/khôi phục Customer trực tiếp từ UI không, hay soft-delete chỉ xảy ra tự động khi shop gỡ app.",
+    "Xoá (soft-delete) 1 Customer từ admin có ảnh hưởng gì tới Conversion đã có và tới cap lifetime usage của affiliate — không được tài liệu nhóm admin trả lời trực tiếp."
+  ],
+  "conflicts": [],
+  "blocking_issues": [],
+  "payload": {
+    "feature_profiles": [
+      {
+        "feature_id": "customer-shop-registry",
+        "feature_key": "customer-shop-registry",
+        "name": "Danh bạ Customer (Shop Registry)",
+        "user_goal": "Admin quản lý registry các shop Shopify (Customer) đã được affiliate giới thiệu — xem thông tin shop, biết thuộc affiliate/program nào, tra cứu theo tên hoặc theo affiliate, và hiểu vòng đời soft-delete của shop.",
+        "stable_since_version": "v1",
+        "actors": [
+          { "role": "admin", "permission_observed": "Tra cứu Customer theo tên shop hoặc theo ref affiliate; xem 2 bảng con (Conversion, CustomerEvent) ở trang Show.", "kb_refs": ["KB-009", "KB-010"] }
+        ],
+        "entry_points": [
+          { "path": "Admin > Customer screen", "precondition": "role=admin", "kb_refs": ["KB-006", "KB-009"] }
+        ],
+        "capabilities": [
+          { "name": "Định nghĩa Customer", "description": "Customer là một shop Shopify được 1 affiliate giới thiệu vào 1 Program.", "kb_refs": ["KB-002"], "act_ids": [] },
+          { "name": "Mỗi Customer gắn 1 affiliate và 1 Program", "description": "program_id/user_id cho biết shop thuộc Program nào và do affiliate nào giới thiệu; quan hệ Customer N-1 User.", "kb_refs": ["KB-001", "KB-005"], "act_ids": [] },
+          { "name": "related_id định danh shop phía client app", "description": "related_id là ID định danh shop bên phía client app (unique), hiển thị dạng QR code trên danh sách Customer.", "kb_refs": ["KB-004", "KB-007"], "act_ids": [] },
+          { "name": "Hiển thị thông tin shop cơ bản", "description": "name, email, source_url là thông tin shop hiển thị trên admin.", "kb_refs": ["KB-006"], "act_ids": [] },
+          { "name": "skip_first_month", "description": "skip_first_month làm bỏ qua ưu đãi first-month và tính recurring ngay từ dòng đầu.", "kb_refs": ["KB-008"], "act_ids": [] },
+          { "name": "Tra cứu Customer theo tên shop hoặc theo ref affiliate", "description": "Trên màn hình Customer, admin tìm theo tên shop hoặc lọc theo ref của affiliate để xem toàn bộ shop affiliate đó giới thiệu.", "kb_refs": ["KB-009"], "act_ids": [] },
+          { "name": "Trang Show có 2 bảng con", "description": "Trang Chi tiết (Show) của Customer có 2 bảng con: Conversion và CustomerEvent.", "kb_refs": ["KB-010"], "act_ids": [] },
+          { "name": "Soft-delete (SoftDeletes trait)", "description": "Customer lưu ở bảng customers, có trait SoftDeletes — xoá mềm, không xoá hẳn.", "kb_refs": ["KB-003"], "act_ids": [] },
+          { "name": "Soft-delete không xoá lịch sử Conversion/CustomerEvent", "description": "Sau khi soft-delete (DELETE /api/customers), lịch sử Conversion/CustomerEvent của shop vẫn còn nguyên.", "kb_refs": ["KB-011"], "act_ids": [] },
+          { "name": "Soft-deleted Customer vẫn tính vào cap lifetime usage-charge", "description": "Fact object-level dùng chung: một Customer (shop) đã soft-delete (deleted_at set) VẪN được tính vào cap lifetime của usage-charge (withTrashed() trong UsageCommissionCapper), dù shop đã 'biến mất' khỏi danh sách active trên admin/dashboard.", "kb_refs": ["_object-level:KB-001"], "act_ids": [] }
+        ],
+        "state_transitions": [
+          { "from": "Customer active", "to": "Customer soft-deleted (deleted_at set)", "trigger": "shop gỡ cài app", "condition": "trigger chi tiết xem feature customer-lifecycle-state", "kb_refs": ["customer-lifecycle-state:KB-006"] },
+          { "from": "Customer soft-deleted", "to": "Customer soft-deleted, vẫn tính vào cap lifetime usage-charge", "trigger": "invariant hệ thống (không phải hành động người dùng)", "condition": "deleted_at set", "kb_refs": ["_object-level:KB-001"] }
+        ],
+        "confirmed_rules": [
+          { "statement": "Customer là một shop Shopify được 1 affiliate giới thiệu vào 1 Program.", "kb_refs": ["KB-002"] },
+          { "statement": "Nhiều Customer có thể thuộc về 1 User (affiliate) — quan hệ N-1.", "kb_refs": ["KB-001"] },
+          { "statement": "related_id là ID định danh shop phía client app (unique).", "kb_refs": ["KB-004"] },
+          { "statement": "program_id/user_id xác định Program và affiliate giới thiệu.", "kb_refs": ["KB-005"] },
+          { "statement": "name, email, source_url là thông tin shop hiển thị trên admin.", "kb_refs": ["KB-006"] },
+          { "statement": "related_id hiển thị dạng QR code trên danh sách Customer.", "kb_refs": ["KB-007"] },
+          { "statement": "skip_first_month bỏ qua ưu đãi first-month, tính recurring ngay từ dòng đầu.", "kb_refs": ["KB-008"] },
+          { "statement": "Admin tra cứu Customer theo tên shop hoặc lọc theo ref affiliate.", "kb_refs": ["KB-009"] },
+          { "statement": "Trang Show có 2 bảng con: Conversion và CustomerEvent.", "kb_refs": ["KB-010"] },
+          { "statement": "Customer có trait SoftDeletes (bảng customers).", "kb_refs": ["KB-003"] },
+          { "statement": "Soft-delete không xoá lịch sử Conversion/CustomerEvent của shop.", "kb_refs": ["KB-011"] },
+          { "statement": "Customer soft-deleted vẫn tính vào cap lifetime usage-charge (withTrashed trong UsageCommissionCapper) — fact object-level dùng chung.", "kb_refs": ["_object-level:KB-001"] }
+        ],
+        "observed_behavior": [],
+        "observed_validations": [],
+        "permissions": [
+          { "role": "admin", "capability": "xem/tra cứu Customer", "allowed": true, "kb_refs": ["KB-009"] },
+          { "role": "admin", "capability": "xoá tay Customer trực tiếp từ UI", "allowed": "unknown", "kb_refs": ["KB-003"] }
+        ],
+        "surface_mapping": {
+          "portal": ["Admin > Customer screen (list, show với 2 bảng con) — KB-006..KB-010"],
+          "storefront": [],
+          "api": ["DELETE /api/customers (soft-delete trigger, Bước 5) — KB-011"],
+          "data": [
+            "customers.related_id — KB-004",
+            "customers.program_id/user_id — KB-005",
+            "customers.name/email/source_url — KB-006",
+            "customers.skip_first_month — KB-008",
+            "customers.deleted_at (SoftDeletes) — KB-003"
+          ],
+          "code": []
+        },
+        "dependencies": [
+          { "type": "same_object_feature", "feature_key": "customer-lifecycle-state", "note": "CustomerEvent (lifecycle status) và trigger soft-delete (shop gỡ app) thuộc feature đó; customer-shop-registry chỉ lưu/tra cứu Customer.", "kb_refs": ["KB-010"] },
+          { "type": "object_level", "object_key": "customer-shop", "note": "Fact cross-cutting: soft-delete vẫn tính vào cap lifetime usage-charge — áp dụng bất kể feature nào đụng Customer.", "kb_refs": ["_object-level:KB-001"] },
+          { "type": "external_object", "object_key": "usage-charge-commission", "note": "Nơi thực sự tính cap lifetime dùng withTrashed() trên Customer.", "kb_refs": ["_object-level:KB-001"] }
+        ],
+        "risks": [
+          { "risk": "Xoá (soft-delete) 1 Customer từ admin có ảnh hưởng gì tới Conversion đã có và tới cap lifetime usage của affiliate không được tài liệu nhóm admin trả lời trực tiếp (KB-011 chỉ xác nhận lịch sử Conversion/CustomerEvent giữ nguyên, không nói rõ góc nhìn 'admin xoá' so với 'client app uninstall').", "severity": "MEDIUM", "kb_refs": ["KB-011"] }
+        ],
+        "freshness": { "observed_at": null, "run_id": "CTX-20261002-01" },
+        "unknown_areas": [
+          { "question": "Admin có hành động xoá/khôi phục Customer trực tiếp từ UI không, hay soft-delete chỉ xảy ra tự động khi shop gỡ app?", "why_it_matters": "Nếu admin có quyền xoá tay, cần test case khác với trigger tự động; tài liệu hiện chỉ nói rõ trigger tự động (gỡ app)." }
+        ]
+      }
+    ],
+    "profile_relationships": [
+      { "from": "customer-shop-registry", "to": "customer-lifecycle-state", "relation": "shares_entity", "note": "Cùng entity Customer; lifecycle-state quản lý CustomerEvent và trigger soft-delete." }
+    ],
+    "coverage_matrix": [
+      { "feature_id": "customer-shop-registry", "layer": "portal", "role": "admin", "state": "active", "environment": "documented", "covered": true },
+      { "feature_id": "customer-shop-registry", "layer": "portal", "role": "admin", "state": "soft_deleted", "environment": "documented", "covered": true },
+      { "feature_id": "customer-shop-registry", "layer": "data", "role": "unspecified", "state": "soft_deleted", "environment": "documented", "covered": true },
+      { "feature_id": "customer-shop-registry", "layer": "api", "role": "client_app", "state": "delete_customer", "environment": "documented", "covered": true },
+      { "feature_id": "customer-shop-registry", "layer": "portal", "role": "admin", "state": "delete_from_ui", "environment": "documented", "covered": false }
+    ],
+    "unassigned_kb_items": [],
+    "profile_conflicts": [],
+    "profile_change_summary": [
+      { "version": "v1", "change": "Initial profile tạo từ DOC_BOOTSTRAP run CTX-20261002-01." }
+    ],
+    "kb_trace_complete": true
+  },
+  "gate": {
+    "decision": "CONDITIONAL_PASS",
+    "blocking_findings": [],
+    "conditions": [
+      "_object-level:KB-001 chỉ được tham chiếu (kb_refs), không được coi là sở hữu riêng của feature này — KHÔNG di chuyển hay sao chép statement vào shard feature."
+    ],
+    "allowed_next_steps": ["qa-checklist-builder", "knowledge-diff-analyzer"]
+  }
+}

@@ -1,0 +1,278 @@
+{
+  "schema_version": "1.0",
+  "artifact_type": "StorefrontDiscoveryArtifact",
+  "artifact_id": "SDA-CTX-20260921-03-storefront",
+  "workflow_id": "CTX-20260921-03",
+  "producer": "storefront-explorer",
+  "source_refs": [
+    "runs/context/2026-09-21/CTX-20260921-03/input/bootstrap-request.json",
+    "runs/context/2026-09-21/CTX-20260921-03/raw/portal/portal-evidence.json"
+  ],
+  "upstream_artifact_ids": ["FDA-CTX-20260921-03-portal"],
+  "status": "PARTIAL",
+  "confidence": "MEDIUM",
+  "payload": {
+    "storefront_context": {
+      "shop": "linh-explorer.myshopify.com",
+      "environment": "staging (Shopify store password-protected; unlocked via ephemeral local password-relay so TIB_STORE_PASSWORD value never appeared in any tool call, file, or log -- see coverage_limitations for method note)",
+      "theme": "not identified by name (default Shopify theme, Dawn-family based on markup/class names observed)",
+      "theme_version": "NOT_OBSERVED",
+      "product_id": "8485807292515 (Shopify product gid numeric id) / handle qa-test-clipart-category-campaign-ctx20260921-03",
+      "campaign_id": "2626 (teeinblue campaign, per portal handoff)",
+      "buyer_state": "GUEST",
+      "market": "United States (default storefront market shown; not explicitly switched)",
+      "locale": "en (English, default)",
+      "currency": "USD",
+      "browser": "Chromium 153 (Playwright MCP, headless-off default profile), macOS UA string",
+      "device_or_viewport": "Desktop viewport, default Playwright window size (~1660px wide observed in screenshots)"
+    },
+    "surfaces": [
+      "PRODUCT_PAGE (personalization form: clipart-category radiogroup 'cat1', group-clipart-categories select 'body')",
+      "PREVIEW (teeinblue in-page 'Preview' modal, .tee-dialog-gallery)",
+      "CART_PAGE (/cart, line item + 'Preview design' lightbox)"
+    ],
+    "observations": [
+      {
+        "observation_id": "SF-OBS-001",
+        "surface": "PRODUCT_PAGE",
+        "action": "Load product page fresh (no prior interaction), inspect 'Select your clipart' (clipart-category, single) and 'Select your clipart group' (group-clipart-categories) widgets before any click",
+        "observed_result": "clipart-category renders as a RADIOGROUP of img+label items: 'no1' and 'no2' (both real category items, thumbnails load correctly). Radio 'no2' is PRE-CHECKED on first load with no user interaction -- 'no2' is exactly the layer.default_value item set in portal (ACT-01-01-005). group-clipart-categories renders as a native <select> combobox with ONLY one disabled placeholder option 'Choose a design' (the configured Placeholder text) -- ZERO selectable clipart items, despite category 6202 having 2 confirmed items.",
+        "state_before": "Fresh page load, no localStorage entry yet for this productId",
+        "state_after": "Same (read-only observation)",
+        "act_id": "SF-ACT-01",
+        "evidence_refs": [
+          {"type":"screenshot","path":"raw/storefront/screens/01-product-page-loaded.png"},
+          {"type":"screenshot","path":"raw/storefront/screens/03-gallery-recheck.png"},
+          {"type":"dom_snapshot","path":".playwright-mcp/page-2026-09-21T14-18-21-202Z.yml (see agent transcript; accessibility tree captured radiogroup + combobox structure)"}
+        ],
+        "knowledge_kind": "OBSERVED_CURRENT"
+      },
+      {
+        "observation_id": "SF-OBS-002",
+        "surface": "PRODUCT_PAGE",
+        "action": "Click 'Preview' button with NO prior manual selection (i.e. only the server-rendered default 'no2' pre-check active)",
+        "observed_result": "Preview modal (.tee-dialog-gallery) opens showing ONLY the plain base product mockup image (bald cartoon character, plain white t-shirt) -- fetched from cdn.ownego.com/.../mockup-layers/6a630ff4784cc_large.webp. NEITHER the url-pick image ('cat1'/image-layers/6a5ddc965c162) NOR the default_value pick ('no2'/cliparts/6202/...jhjwt4...) is visibly composited onto this image, even though network logs show both no1's and no2's _large.webp AND the image-layers _large.webp being fetched by the browser around this time.",
+        "state_before": "no2 pre-checked (server default), no manual interaction",
+        "state_after": "Preview modal open, same base mockup shown",
+        "act_id": "SF-ACT-02",
+        "evidence_refs": [
+          {"type":"screenshot","path":"raw/storefront/screens/04-after-preview-click-default-no2.png"},
+          {"type":"har_entry","path":"raw/storefront/sizing-measurements.json#SZ-04"}
+        ],
+        "knowledge_kind": "OBSERVED_CURRENT",
+        "relates_to_conflict": "CONF-CTX20260921-03-02"
+      },
+      {
+        "observation_id": "SF-OBS-003",
+        "surface": "PRODUCT_PAGE",
+        "action": "Manually click radio 'no1' (explicit buyer choice, different from both url-pick 'cat1' and default_value 'no2'), then read localStorage immediately (no Preview click yet)",
+        "observed_result": "Selection UI updates instantly (radio 'no1' now checked, no1 box gets blue border) -- purely client-side, ZERO network requests fired to any teeinblue/ownego endpoint at the moment of selection (confirmed via browser_network_requests filter). 'teeinblue-customizations' localStorage key gains/updates an entry keyed by productId 8485807292515 with 'layer-896632': '.../260921_St1o3yBWjDCllpyr_large.webp' (no1's file) WITHIN THE SAME EVENT LOOP TURN as the click -- i.e. write-on-every-change, not write-on-leave/on-add-to-cart.",
+        "state_before": "no2 checked, no localStorage entry for this productId",
+        "state_after": "no1 checked, localStorage entry present",
+        "act_id": "SF-ACT-03",
+        "evidence_refs": [
+          {"type":"screenshot","path":"raw/storefront/screens/05-after-select-no1.png"},
+          {"type":"code_ref","path":"raw/storefront/localstorage-checkpoints.json#LS-02-after-selecting-no1"}
+        ],
+        "knowledge_kind": "OBSERVED_CURRENT"
+      },
+      {
+        "observation_id": "SF-OBS-004",
+        "surface": "PREVIEW",
+        "action": "Click 'Preview' again after the explicit 'no1' selection",
+        "observed_result": "Identical result to SF-OBS-002 -- same plain base mockup image, no visible clipart overlay, no visible difference between the 'no2' and 'no1' preview states. Confirms this is not merely a 'stale default, needs a click to sync' issue; the live/manual selection ALSO fails to render in this Preview surface for this test artwork.",
+        "act_id": "SF-ACT-04",
+        "evidence_refs": [{"type":"screenshot","path":"raw/storefront/screens/06-preview-after-select-no1.png"}],
+        "knowledge_kind": "OBSERVED_CURRENT",
+        "relates_to_conflict": "CONF-CTX20260921-03-02"
+      },
+      {
+        "observation_id": "SF-OBS-005",
+        "surface": "PRODUCT_PAGE",
+        "action": "Full page reload (hard navigation) after SF-OBS-003, before any further interaction",
+        "observed_result": "localStorage entry for productId 8485807292515 persists byte-identical across reload. The personalization form re-hydrates its checked radio FROM localStorage: 'no1' is now checked on load (NOT the server-side layer.default_value 'no2'). The buyer's own prior client-side choice takes precedence over the merchant-configured default on a return visit within the same browser/session.",
+        "act_id": "SF-ACT-05",
+        "evidence_refs": [{"type":"code_ref","path":"raw/storefront/localstorage-checkpoints.json#LS-03-after-full-page-reload"}],
+        "knowledge_kind": "OBSERVED_CURRENT"
+      },
+      {
+        "observation_id": "SF-OBS-006",
+        "surface": "PRODUCT_PAGE",
+        "action": "Click 'Add to cart' with the group-clipart-categories field left completely unselected (only the disabled placeholder available -- SF-OBS-001)",
+        "observed_result": "Add-to-cart SUCCEEDED (HTTP 200 on /cart/add) -- NOT blocked by any client-side validation for the empty group field. DOM inspection of the <select> for that field shows required=false and no aria-required attribute, i.e. it is not enforced as a required HTML field on this render, regardless of whatever 'Mark as required' state was configured portal-side for this layer.",
+        "act_id": "SF-ACT-06",
+        "evidence_refs": [
+          {"type":"screenshot","path":"raw/storefront/screens/07-after-add-to-cart-click.png"},
+          {"type":"api_response","path":"raw/storefront/network/add-to-cart-network-redacted.json"}
+        ],
+        "knowledge_kind": "OBSERVED_CURRENT"
+      },
+      {
+        "observation_id": "SF-OBS-007",
+        "surface": "CART_PAGE",
+        "action": "Open /cart after add-to-cart, inspect line item display",
+        "observed_result": "Line item shows: (1) main thumbnail = the STATIC campaign product image (same for every order of this variant, not buyer-specific), (2) text fields = standard Shopify variant options only ('Available Product: Vertical Framed Poster', 'Color: Black', 'Size: 12″ x 18″') -- NONE of the underscore-prefixed teeinblue properties (_customization_id/_customization_image/_tib_fulfilled_sku/_tib_design_link_1) are shown as visible text, and (3) a distinct '🔍 Preview design' link/lightbox that opens the flattened '_customization_image' JPG. Clicking it reproduces the SAME plain base-mockup image as SF-OBS-002/004 (naturalWidth/Height 960x960, identical pixel dims to the mockup-layers asset) -- i.e. the server-generated, order-bound design artifact also lacks the clipart overlay.",
+        "act_id": "SF-ACT-07",
+        "evidence_refs": [
+          {"type":"screenshot","path":"raw/storefront/screens/08-cart-page.png"},
+          {"type":"screenshot","path":"raw/storefront/screens/09-cart-preview-design-modal.png"},
+          {"type":"code_ref","path":"raw/storefront/sizing-measurements.json#critical_cross_cutting_finding"}
+        ],
+        "knowledge_kind": "OBSERVED_CURRENT"
+      },
+      {
+        "observation_id": "SF-OBS-008",
+        "surface": "CART_DRAWER",
+        "action": "Remove the cart line item via the cart page 'Remove' link (cleanup)",
+        "observed_result": "Line removed; /cart.js confirms item_count: 0 after removal.",
+        "act_id": "SF-ACT-08",
+        "evidence_refs": [],
+        "knowledge_kind": "OBSERVED_CURRENT",
+        "mutation": true,
+        "cleanup_result": "DONE"
+      }
+    ],
+    "feature_candidates": [
+      {
+        "feature_id": "FEAT-13-layer-config-image",
+        "name": "Storefront rendering of Clipart Category layer (clipart-category + group-clipart-categories)",
+        "storefront_observation_ids": ["SF-OBS-001","SF-OBS-002","SF-OBS-003","SF-OBS-004","SF-OBS-005","SF-OBS-006","SF-OBS-007","SF-OBS-008"],
+        "note": "Extends portal-only FEAT-13 evidence (surface_mapping.storefront was [] before this run) with confirmed storefront rendering, personalization UI mode, localStorage persistence, and cart handoff for the single-clipart sub-type. Group sub-type storefront coverage is limited to 'field renders but is empty' due to the upstream item-listing anomaly."
+      }
+    ],
+    "variant_and_option_matrix": [
+      {
+        "layer": "cat1 (clipart-category, single)",
+        "storefront_widget": "radiogroup of img+text-label items",
+        "display_mode_configured_portal_side": "Thumbnail Images (default)",
+        "display_mode_observed_storefront": "Thumbnail Images -- matches configured mode: each option = clickable thumbnail image + visible name label below it",
+        "items_available": ["no1", "no2"],
+        "default_selected_on_fresh_load": "no2",
+        "search_or_filter_by_subcategory": "NOT_OBSERVED (only 2 flat items in this test category, no sub-category nesting was created, so search/filter UI presence could not be tested)"
+      },
+      {
+        "layer": "body (group-clipart-categories)",
+        "storefront_widget": "native <select> combobox",
+        "display_mode_configured_portal_side": "N/A (category-level 'Display options' setting observed portal-side applies to the single-type Design Settings default-value picker; unclear if it is meant to apply to the group widget at all -- group widget is ALWAYS a select/combobox regardless of the category's Thumbnail-Images/Dropdown/Radio/etc. setting, at least in this sample)",
+        "display_mode_observed_storefront": "Dropdown/select only -- no thumbnail grid variant was ever offered for the group layer type in this session",
+        "items_available": [],
+        "default_selected_on_fresh_load": "none (disabled placeholder 'Choose a design' only)",
+        "note": "Directly reproduces the anomaly portal-explorer found (empty group default-value combobox) -- see conflicts[] / portal_to_storefront_mapping below. Because the field is not required client-side (SF-OBS-006), a buyer can complete checkout WITHOUT ever being able to choose a design for this layer."
+      }
+    ],
+    "artwork_preview_observations": [
+      {
+        "id": "SF-PREV-01",
+        "surface": "PREVIEW (in-page modal) and CART_PAGE ('Preview design' lightbox)",
+        "observed": "Both surfaces render the SAME plain base-mockup image (960x960 px) regardless of which clipart item is selected (default 'no2', explicit 'no1', or the url-pick 'cat1' original upload) -- see sizing-measurements.json#critical_cross_cutting_finding for full detail and caveats.",
+        "response_time_or_reload_behavior": "No explicit loading delay/spinner was needed to observe the (lack of) change -- the same static image is returned effectively immediately on each Preview click / cart page load; no 'Do not close this page while uploading / use Reload button' warning was encountered because no true generation/upload step surfaced in this flow.",
+        "knowledge_kind": "OBSERVED_CURRENT"
+      }
+    ],
+    "pricing_observations": [
+      {
+        "note": "No price/add-on delta was observed between clipart choices -- product price stayed $55.99 USD across no1/no2 selections and after add-to-cart. Clipart-category selection in this test campaign carries no visible price impact. Not tested with a price-modifying option (out of this run's scope)."
+      }
+    ],
+    "cart_handoff_observations": [
+      {
+        "id": "SF-CART-01",
+        "line_item_properties_sent": ["_customization_id", "_customization_image", "_tib_fulfilled_sku", "_tib_design_link_1"],
+        "line_item_properties_visible_to_buyer_on_cart_page": [],
+        "buyer_visible_alternative": "'Preview design' link/lightbox (image-based, not text) sourced from _customization_image",
+        "clipart_identity_recoverable_from_cart_data": "NOT via plain text (no clipart name/id/category exposed as a readable property) -- only via the flattened preview image render or by an operator/api-explorer decoding the _tib_design_link_1 / _customization_id against the teeinblue backend.",
+        "evidence_refs": [{"type":"api_response","path":"raw/storefront/network/add-to-cart-network-redacted.json"}],
+        "knowledge_kind": "OBSERVED_CURRENT"
+      }
+    ],
+    "portal_to_storefront_mapping": [
+      {
+        "portal_act_id": "ACT-05-01-001 (Thumbnail size 100->300px)",
+        "storefront_observation_id": "SF-OBS-001 / sizing-measurements.json#SZ-01",
+        "propagation": "IMMEDIATE",
+        "evidence_refs": [{"type":"code_ref","path":"raw/storefront/sizing-measurements.json#SZ-01"}],
+        "note": "No republish/cache-invalidation step was needed between portal-side category save and storefront thumbnail file resolution reflecting 300px -- observed on first storefront load after the portal change, no separate campaign republish was performed for this specific setting."
+      },
+      {
+        "portal_act_id": "ACT-01-01-005 (default_value = no2) / ACT-01-01-002 (url-pick = cat1)",
+        "storefront_observation_id": "SF-OBS-001, SF-OBS-002",
+        "propagation": "IMMEDIATE",
+        "evidence_refs": [{"type":"screenshot","path":"raw/storefront/screens/01-product-page-loaded.png"}],
+        "note": "Answers open question CONF-CTX20260921-03-02 for the FORM WIDGET's pre-selected state: layer.default_value ('no2') is what shows CHECKED in the storefront radiogroup on first load, not layer.url ('cat1', which is not even a selectable option in the radiogroup since it isn't a category item). However, for the CANVAS/PREVIEW rendering, NEITHER value visibly appears (SF-OBS-002) -- see conflicts[] below for the consolidated, still-open record."
+      },
+      {
+        "portal_act_id": "ACT-01-02-003 (group default-value combobox showed 'List is empty.' portal-side)",
+        "storefront_observation_id": "SF-OBS-001 (group select), variant_and_option_matrix[1]",
+        "propagation": "IMMEDIATE",
+        "evidence_refs": [{"type":"dom_snapshot","path":".playwright-mcp snapshot, group <select> with 1 disabled option"}],
+        "note": "Direct reproduction on storefront of the SAME anomaly portal saw admin-side -- answers open question 2 from the handoff: storefront personalization form for group-clipart-categories ALSO fails to load the category's item list (matches, does not diverge from, the portal-side anomaly)."
+      }
+    ],
+    "theme_device_market_matrix": [
+      {
+        "theme": "default/unidentified storefront theme",
+        "device_or_viewport": "Desktop only (~1660px)",
+        "market": "United States / USD / en",
+        "coverage": "Only this single combination was tested. Mobile viewport, other locales/markets/currencies, and other themes were NOT tested (time-boxed)."
+      }
+    ],
+    "network_observation_refs": [
+      "raw/storefront/network/add-to-cart-network-redacted.json",
+      "raw/storefront/sizing-measurements.json (CDN asset URLs for _thumbnail/_large variants, mockup-layers, image-layers, customizations flattened jpg -- for api-explorer to cross-reference against backend size-generation logic if relevant)"
+    ],
+    "cleanup_results": [
+      { "act_id": "SF-ACT-08", "description": "Removed the 1 test cart line item (QA-TEST-clipart-category-campaign-CTX20260921-03, variant 46223895298147) added during TASK-3c", "cleanup_result": "DONE", "verified_by": "GET /cart.js -> item_count: 0" },
+      { "act_id": "N/A", "description": "No other storefront-side mutations were made (no account created, no checkout/payment reached, no theme/shared config touched). Campaign 2626, artwork 4339, and category 6202 were left LIVE as instructed -- their cleanup is explicitly deferred to portal-explorer's TASK-7 pass per bootstrap-request.json and portal-evidence.json payload_pending_cleanup.", "cleanup_result": "NOT_NEEDED" }
+    ],
+    "coverage_limitations": [
+      "Store-password bypass used a locally-scripted, loopback-only relay (a throwaway Node HTTP server reading TIB_STORE_PASSWORD from process.env, serving it only to the same-origin page via fetch, then the page natively submitted the real Shopify password form) specifically so the credential value never appeared as a literal string in any tool call, transcript, or written file -- documented here as a method note per contract §12, not as a value.",
+      "Only 1 browser/theme/viewport/market/locale combination tested (Desktop Chromium, USD/en/US). Mobile, other browsers, other markets/currencies/locales: NOT_OBSERVED.",
+      "Only 2 clipart items (no1, no2) existed in the test category; sub-category search/filter UI and multi-page/large-category pagination behavior could not be exercised.",
+      "group-clipart-categories widget could only be observed in its BROKEN/empty state (upstream anomaly) -- its intended thumbnail/dropdown rendering when populated, and its Placeholder-text-vs-single-type UI diff in a WORKING state, remain unverified.",
+      "'Show option name on hover' toggle (portal-side, OFF/default) was not exercised via an actual mouse-hover simulation in this run -- the persistent visible name caption under each thumbnail was observed regardless, but whether the toggle adds a SEPARATE on-hover tooltip was not directly tested.",
+      "Only the 'Thumbnail Images' display mode (category default) was observed; the other 4 configured modes (Dropdown, Dropdown+Thumbnail, Inline button, Radio) were NOT switched on and tested on storefront in this run (would require a portal-side setting change + republish, out of this agent's write scope).",
+      "The critical cross-cutting compositing finding (SF-FINDING-CANVAS-CLIPART-NOT-COMPOSITED) was only tested on ONE test artwork (4339) that was created quickly by portal-explorer without a documented, deliberate layer-placement step -- this agent cannot rule out an artwork-specific layer positioning/z-order mistake as an alternative explanation to a product-wide defect.",
+      "No other product/campaign with a KNOWN-WORKING clipart-category layer was tested for comparison in this run (would help isolate whether the compositing gap is specific to this fixture or general)."
+    ],
+    "redaction_applied": true
+  },
+  "assumptions": [],
+  "unknowns": [
+    "Whether the '_large.webp' clipart-item variant (250px, observed) is capped by the ORIGINAL uploaded file's native resolution (hypothesis, not confirmed) rather than by the category's 'Preview size' setting (500px) directly -- see sizing-measurements.json#SZ-02.",
+    "Purpose of the server-added 'artwork-4339': 11533 numeric key that appears in the POST /api/merchant/shopify/customization response but was NOT present in the pre-submit client localStorage value.",
+    "Whether the group-clipart-categories widget, if the item-listing anomaly were fixed, would render as a thumbnail grid (matching the category's 'Display options' setting like the single type) or would remain a dropdown regardless -- only the broken/empty state was observable this session.",
+    "Whether SF-FINDING-CANVAS-CLIPART-NOT-COMPOSITED is a product-wide defect or specific to this quickly-created test artwork's layer placement -- explicitly not resolved here, flagged for api-explorer/db-explorer and for a possible follow-up run against a known-good artwork."
+  ],
+  "conflicts": [
+    {
+      "conflict_id": "CONF-CTX20260921-03-02",
+      "topic": "TASK-2c / storefront half: which value drives the layer's shown clipart on the storefront, and does either drive the visible CANVAS render at all",
+      "carried_forward_from": "portal-evidence.json conflicts[0] (CONF-CTX20260921-03-02)",
+      "side_a_portal": "layer.url ('cat1', add-layer-time pick) drives the PORTAL editor canvas render (both immediately and after reopen).",
+      "side_b_portal": "layer.default_value ('no2', category default-value picker) is stored separately and does NOT drive the portal canvas.",
+      "new_storefront_evidence": {
+        "form_widget_initial_state": "layer.default_value ('no2') is what shows pre-CHECKED in the storefront personalization radiogroup on first load (SF-OBS-001) -- 'cat1' (the url-pick) is not even a selectable radio option since it is not a category item.",
+        "canvas_preview_state": "NEITHER value (nor the buyer's own explicit 'no1' pick) visibly renders in the storefront Preview modal OR the final server-generated cart customization image -- all three show only the plain base mockup with no clipart overlay at all (SF-OBS-002, SF-OBS-004, SF-OBS-007).",
+        "evidence_refs": [
+          {"type":"screenshot","path":"raw/storefront/screens/01-product-page-loaded.png"},
+          {"type":"screenshot","path":"raw/storefront/screens/04-after-preview-click-default-no2.png"},
+          {"type":"screenshot","path":"raw/storefront/screens/09-cart-preview-design-modal.png"}
+        ]
+      },
+      "resolution": "NOT RESOLVED. Both portal-side and storefront-side observations are kept as-is per contract §8. Orchestrator/reviewer decide.",
+      "note": "This is a THREE-way finding now, not a simple 'A vs B': the form widget picks default_value, but no compositing surface renders EITHER candidate value -- a third, previously-unconsidered outcome."
+    }
+  ],
+  "blocking_issues": [],
+  "gate": {
+    "decision": "CONDITIONAL_PASS",
+    "blocking_findings": [],
+    "conditions": [
+      "The SF-FINDING-CANVAS-CLIPART-NOT-COMPOSITED finding (sizing-measurements.json) must be treated as OBSERVED_CURRENT only -- not yet attributable to a specific root cause (artwork fixture vs. product-wide defect) -- and should be prioritized for a db-explorer/api-explorer cross-check before any checklist/business-rule conclusion is drawn from it.",
+      "CONF-CTX20260921-03-02 remains open with a new storefront-side data point added; must not be silently resolved by downstream normalizer/profile-builder.",
+      "group-clipart-categories storefront coverage is limited to its broken/empty state; a working-state observation is still needed (blocked upstream, not by this agent).",
+      "Cart line item test cleaned up (DONE); campaign/artwork/category test entities intentionally left live per orchestrator instruction, pending portal-explorer TASK-7."
+    ],
+    "allowed_next_steps": ["qa-knowledge-normalizer", "feature-profile-builder", "api-explorer"]
+  }
+}

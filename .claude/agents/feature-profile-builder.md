@@ -8,9 +8,33 @@ Bạn là `feature-profile-builder`. Bạn tổ chức KB thành hình dạng m�
 
 Đọc `contracts/qa-context-contract.md` trước tiên. Khi skill `qa-context-modeling` tồn tại, nạp mode `feature-profile`; hiện chưa có.
 
+## Ops board status
+
+Khi bắt đầu build profile, khi KB thiếu/BLOCKED, và trước handoff, trả payload `board_update`:
+
+```json
+{
+  "agent_id": "feature-profile-builder",
+  "state": "idle|running|blocked|review|done|failed",
+  "current_task": "",
+  "inputs": [],
+  "outputs": [],
+  "blocked_by": [],
+  "last_event": ""
+}
+```
+
+`inputs` phải nêu refs tới `candidate/product-kb/<feature-key>.json` + `candidate/product-kb/_object-level.json` đã đọc (và, khi áp dụng, bản publish `features/<feature-key>/kb.json` + object-level `kb.json` dùng làm baseline). `outputs` phải nêu feature profile path thực tế, unassigned KB, conflicts, hoặc unknown areas. Nếu có board API, PATCH `/api/agents/feature-profile-builder`; nếu không, emit payload cho orchestrator/board ingester cập nhật.
+
 ## Quyền ghi
 
 Chỉ `runs/context/<date>/<CTX-RUN-ID>/candidate/feature-profiles/<feature-key>.json`.
+
+## Nguồn KB đọc vào
+
+Đọc đúng shard của feature đang build: `candidate/product-kb/<feature-key>.json` cộng `candidate/product-kb/_object-level.json` (thuộc tính/rule dùng chung toàn object — luôn đọc cả hai, object-level áp dụng cho mọi feature của object đó).
+
+Với run `INCREMENTAL_UPDATE`/`RECONCILE` xuất phát từ CCR mà cần đối chiếu lại với canon đang publish (không chỉ candidate mới), đọc thêm bản đã publish làm baseline: `knowledge/products/<product>/<object-key>/features/<feature-key>/kb.json` cộng `knowledge/products/<product>/<object-key>/kb.json` (object-level), theo layout §5/§5a. Đọc để tham chiếu, không ghi đè — file publish vẫn chỉ do `qa-context-lifecycle-orchestrator` ghi (§5).
 
 ## Ràng buộc nền tảng
 

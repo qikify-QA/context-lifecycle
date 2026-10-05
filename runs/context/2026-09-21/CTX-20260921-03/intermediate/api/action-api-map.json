@@ -1,0 +1,490 @@
+{
+  "schema_version": "1.0",
+  "artifact_type": "APICapabilityArtifact",
+  "artifact_id": "API-CTX-20260921-03-01",
+  "workflow_id": "CTX-20260921-03",
+  "producer": "api-explorer",
+  "source_refs": [
+    "runs/context/2026-09-21/CTX-20260921-03/input/bootstrap-request.json",
+    "runs/context/2026-09-21/CTX-20260921-03/raw/portal/portal-evidence.json",
+    "runs/context/2026-09-21/CTX-20260921-03/raw/network/ACT-01-01-006.json",
+    "runs/context/2026-09-21/CTX-20260921-03/raw/network/ACT-01-02-004.json",
+    "runs/context/2026-09-21/CTX-20260921-03/raw/network/ACT-05-01-001.json",
+    "runs/context/2026-09-21/CTX-20260921-03/raw/network/ACT-05-01-002.json",
+    "runs/context/2026-09-21/CTX-20260921-03/raw/network/ACT-05-01-003.json",
+    "runs/context/2026-09-21/CTX-20260921-03/raw/network/ACT-06-01-002.json"
+  ],
+  "upstream_artifact_ids": ["FDA-CTX-20260921-03-portal"],
+  "status": "PARTIAL",
+  "confidence": "LOW",
+  "observations": [
+    "ZERO_DOC_BOOTSTRAP mode: no OpenAPI/static contract found anywhere in scope for these endpoints. Every 'contract' field below is OBSERVED_CURRENT from a single runtime sample unless stated otherwise -- treat as baseline, not as confirmed required/optional shape.",
+    "portal-evidence.json cites the SAME network capture file (raw/network/ACT-01-01-006.json) for two different ACT-IDs (ACT-01-01-001 'create artwork' and ACT-01-01-006 'Save & Close'). Only one POST /api/artworks entry exists in that file. Treated as one operation mapped to both ACT-IDs; likely portal-explorer attached the same evidence file to both steps of one logical create-then-save flow rather than two separate HTTP calls -- not independently confirmed.",
+    "raw/network/ACT-05-01-003.json bundles evidence for 4 distinct UI surfaces related to clipart-category listing, only 2 of which have an actual captured HTTP/GraphQL request. The other 2 (the working 'Search' modal, and the group layer's 'Group's default value' combobox) have no method/URL captured at all -- moved to unexplored_operations rather than fabricated.",
+    "No request body was captured for POST /api/artworks, PUT /api/artworks/{id}, POST /api/artworks/{id}/validate-default-value, POST /api/users/{id}/temporary-files/upload-url, or POST /api/cliparts/by-temporary-file in any provided network file -- only response bodies (and for validate-default-value, only status). Request contracts for these are marked unknown, not inferred from the response.",
+    "Every operation in this batch has observed_count of 1 or 2 (max). Per counting rule, no field is marked always_present anywhere in this artifact."
+  ],
+  "assumptions": [
+    "Auth header shape (authorization + cookie, both redacted bearer/session; x-xsrf-token redacted CSRF token; x-acting-user-id: '266' plain acting-user marker) is assumed identical across all same-session REST calls in this run, based only on the 2 entries where headers were explicitly shown in full (ACT-01-01-006.json POST /api/artworks, ACT-05-01-001.json POST /api/clipart-categories). Not independently verified for POST .../validate-default-value, POST .../temporary-files/upload-url, POST /api/cliparts/by-temporary-file, or the campaign calls in ACT-06-01-002.json."
+  ],
+  "unknowns": [
+    "Whether GET /api/layer-image-categories?type=clipart is also invoked when opening the add-layer asset picker for a group-clipart-categories layer (ACT-01-02-001) -- no network_ref was attached to that action, so only the clipart-category (single) add-layer flow (ACT-01-01-002) is confirmed to trigger this endpoint.",
+    "Exact request/response shape of the working 'Search' category-picker modal (distinct from the broken inline 'Search top-level category' textbox) -- functionally confirmed to return categories with thumbnails (per portal-explorer qualitative note) but no method/URL/body was captured for it in any provided file.",
+    "Exact request/response shape (or even whether any network call fires) behind the group-clipart-categories layer's 'Group's default value' combobox showing 'List is empty.' -- no distinguishing request was isolated in the capture.",
+    "Whether the ACT-01-02-004.json PUT /api/artworks/4339 response omitting fields (url, required, fit_mode, direct_upload_style, direct_clipart_style, shadow_display, schema_version) on the 'cat1' (clipart-category) layer -- present in the earlier ACT-01-01-006.json response for the same layer -- reflects an actual server-side field removal/change, or is simply a partial/trimmed capture by portal-explorer when writing the evidence file. Not enough evidence to conclude either way; recorded as a LOW-confidence state_delta, not a confirmed field removal.",
+    "Whether category field `show_clipart_name` (observed null, POST /api/clipart-categories response) is in fact the backing field for the UI toggle 'Show option name on hover' documented by portal-explorer -- plausible name correspondence only, never toggled/tested in this run, so mapping is INFERRED not confirmed.",
+    "Whether 'Preview size' (clipart_max_width) and 'Thumbnail size' (clipart_thumbnail_size) are stored/interpreted as raw pixel integers by the API, or whether the API applies any unit conversion -- the API payload itself carries no unit; px is only asserted by the UI select labels observed by portal-explorer, not by the API contract.",
+    "No PUT/update endpoint for an EXISTING clipart-category was observed in this run's network captures -- the Thumbnail size 100->300 change was submitted as part of the category's initial POST /api/clipart-categories (create) call, not as a subsequent update to an already-created category. The 'category update endpoint when changing Thumbnail size 100->300' requested in TASK-6 item 4 could not be located in the provided evidence; it may not have been captured (portal-explorer changed the value in the create form before first submit, rather than editing after creation).",
+    "No dedicated 'generate/return image variant by size' endpoint was observed. Only static, already-generated URL path suffixes were seen embedded in artwork/layer JSON: master (no suffix), '<hash>_large.webp', '<hash>_thumbnail.webp'. Whether these 3 variants are generated synchronously at upload time, on first request, or via a background job is not observable from the API evidence provided (would require inspecting the temporary-files/upload-url or by-temporary-file response bodies in full, which were not captured beyond status + a few top-level fields)."
+  ],
+  "conflicts": [
+    {
+      "conflict_id": "CONF-CTX20260921-03-01",
+      "topic": "Custom class field presence for clipart-category (single) sub-type (carried forward from portal-evidence, API-level corroboration added)",
+      "side_a": {
+        "source": "knowledge/products/teeinblue/objects/artwork/features/layer-config-image/profile.json (FEAT-13) + knowledge/artwork/layer-image.md",
+        "claim": "clipart-category sub-type has a 'Custom class:' field as part of baseline PERSONALIZATION SETTINGS."
+      },
+      "side_b": {
+        "source": "portal-evidence.json ACT-01-01-011..015 (UI) AND this artifact's API observation of raw/network/ACT-01-01-006.json + raw/network/ACT-01-02-004.json (POST /api/artworks, PUT /api/artworks/4339 response bodies)",
+        "claim": "No `custom_class` key appears anywhere in the persisted layer JSON for either the clipart-category (single) layer ('cat1') or the group-clipart-categories layer ('body') in either captured API response."
+      },
+      "note": "API evidence is consistent with side_b but is only 1-2 samples of a single artwork; does not resolve whether the field genuinely does not exist server-side or simply was never set/returned in this sample. Not resolved here."
+    },
+    {
+      "conflict_id": "CONF-CTX20260921-03-02",
+      "topic": "TASK-2c: which stored value (layer.url vs layer.default_value) drives the layer's shown clipart (carried forward from portal-evidence, exact API field shapes added)",
+      "side_a": {
+        "source": "raw/network/ACT-01-01-006.json (POST /api/artworks response, layer id layer-896632)",
+        "claim": "layer.url = 'users/266/image-layers/6a5ddc9f0ca7b_large.webp' (the 'cat1' image picked via the 'Upload an image' tab at add-layer time). This is the field the portal canvas rendered, both immediately and after Save & Close + reopen."
+      },
+      "side_b": {
+        "source": "same file, same layer object",
+        "claim": "layer.default_value = 'users/266/cliparts/6202/260921_jhjwt4MBWSB35CyG_large.webp' (item 'no2', explicitly chosen via the 'Clipart category's default value' picker). Coexists as a separate JSON key on the same layer object and did NOT override or get reflected in canvas rendering in this sample."
+      },
+      "note": "Both keys are independently settable and independently persisted server-side (confirmed at the API/response level, not just UI). Which one the STOREFRONT buyer-facing form actually uses as initial value is out of api-explorer's scope this run (portal-side only, per task boundary) -- handed to storefront-explorer per portal-explorer's existing handoff note. Not resolved here."
+    },
+    {
+      "conflict_id": "CONF-API-CTX20260921-03-01",
+      "topic": "Two data sources for 'clipart category list' disagree for the same user/session",
+      "side_a": {
+        "source": "raw/network/ACT-05-01-003.json entry 1 -- GET /api/layer-image-categories?type=clipart",
+        "claim": "Returns response_status 200 with body `[]` (empty array), fired when opening the add-layer asset picker's 'Choose from clipart category' tab."
+      },
+      "side_b": {
+        "source": "raw/network/ACT-05-01-003.json entry 2 -- POST /api/graphql, query aliased `categories: clipart_categories(where: {type: clipart, deleted_at: null, parent_id: null}, limit: 25)`",
+        "claim": "Returns response_status 200 with 10 rows for the same user in roughly the same time window (sample includes ids 6029, 6020, 5999 with real names)."
+      },
+      "note": "Both calls were captured as part of the same UI interaction (ACT-01-01-002, opening the asset-picker tab). This is an observed REST-vs-GraphQL divergence on what looks like the same underlying `clipart_categories` table, not a documented-vs-observed mismatch (no static doc exists to compare against in this ZERO_DOC_BOOTSTRAP run). Root cause (filter difference on the REST endpoint, e.g. a hidden flag/FK the GraphQL query does not filter on, vs a staging data/cache issue) is NOT diagnosed here -- see documented_observed_mismatches and payload.unexplored_operations; db-explorer follow-up recommended per portal-evidence's own note."
+    }
+  ],
+  "blocking_issues": [],
+  "payload": {
+    "api_context": {
+      "environment": "staging",
+      "auth_role": "owner (Linh explorer, sub=273/user_id=266) -- verified via x-acting-user-id: 266 header on captured requests",
+      "base_url": "https://staging-api.teeinblue.com"
+    },
+    "operations": [
+      {
+        "operation_id": "APIOP-001",
+        "protocol": "REST",
+        "method_or_type": "POST",
+        "path_or_operation": "/api/artworks",
+        "observed_paths": ["/api/artworks"],
+        "business_object": "Artwork / ArtworkLayer",
+        "capability": "artwork-create-with-layer-config (clipart-category layer)",
+        "act_ids": ["ACT-01-01-001", "ACT-01-01-006"],
+        "scn_ids": ["SCN-01-01"],
+        "feature_ids": ["FEAT-13-layer-config-image"],
+        "auth": {
+          "headers": ["authorization: [REDACTED]", "cookie: [REDACTED]", "x-xsrf-token: [REDACTED]", "x-acting-user-id: 266 (plain, acting-user marker)"],
+          "confidence": "MEDIUM (directly observed on this exact call)"
+        },
+        "request_contract": { "shape": "unknown -- request body not captured in any provided network file, only request_headers and response_body were recorded" },
+        "response_contract": {
+          "id": "int",
+          "name": "string",
+          "width": "int",
+          "height": "int",
+          "design_format": "string enum (observed: 'rgb')",
+          "schema_version": "int (observed: 2)",
+          "data": [
+            {
+              "id": "string (template id, observed 'template-567084')",
+              "name": "string (observed 'Default template')",
+              "layers": [
+                {
+                  "id": "string (layer id, observed 'layer-896632')",
+                  "type": "string enum (observed: 'clipart-category')",
+                  "name": "string (observed 'cat1')",
+                  "url": "string, storage path (observed 'users/266/image-layers/<hash>_large.webp')",
+                  "clipart": "int (category id, observed 6202)",
+                  "customization_type": "string enum (observed: 'normal', corresponds to UI 'Create a new option')",
+                  "required": "bool (observed false)",
+                  "form_label": "string (observed 'Select your clipart')",
+                  "default_value": "string, storage path (observed 'users/266/cliparts/6202/<hash>_large.webp')",
+                  "fit_mode": "string enum (observed: 'contain')",
+                  "direct_upload_style": "string enum (observed: 'contain')",
+                  "direct_clipart_style": "string enum (observed: 'contain')",
+                  "shadow_display": "string enum (observed: 'mockup_order')",
+                  "schema_version": "int (observed 2)"
+                }
+              ],
+              "positions": ["array of layer id strings"]
+            }
+          ]
+        },
+        "error_contract": [],
+        "observed_status": [201],
+        "observed_count": 1,
+        "state_delta": [],
+        "source_refs": ["raw/network/ACT-01-01-006.json"],
+        "observed_request_refs": ["raw/network/ACT-01-01-006.json"],
+        "knowledge_kind": "OBSERVED_CURRENT"
+      },
+      {
+        "operation_id": "APIOP-002",
+        "protocol": "REST",
+        "method_or_type": "POST",
+        "path_or_operation": "/api/artworks/{artworkId}/validate-default-value",
+        "observed_paths": ["/api/artworks/4339/validate-default-value"],
+        "business_object": "ArtworkLayer",
+        "capability": "layer-default-value-validation (pre-save check, fired before the PUT save)",
+        "act_ids": ["ACT-01-02-004"],
+        "scn_ids": ["SCN-01-02"],
+        "feature_ids": ["FEAT-13-layer-config-image"],
+        "auth": { "headers": "not individually captured for this entry; assumed same-session pattern (see envelope assumptions)", "confidence": "LOW" },
+        "request_contract": { "shape": "unknown -- body not captured" },
+        "response_contract": { "shape": "empty (204 No Content)" },
+        "error_contract": [],
+        "observed_status": [204],
+        "observed_count": 1,
+        "state_delta": [],
+        "source_refs": ["raw/network/ACT-01-02-004.json"],
+        "observed_request_refs": ["raw/network/ACT-01-02-004.json"],
+        "knowledge_kind": "OBSERVED_CURRENT"
+      },
+      {
+        "operation_id": "APIOP-003",
+        "protocol": "REST",
+        "method_or_type": "PUT",
+        "path_or_operation": "/api/artworks/{artworkId}",
+        "observed_paths": ["/api/artworks/4339"],
+        "business_object": "Artwork / ArtworkLayer",
+        "capability": "artwork-update-layers (persist both clipart-category and group-clipart-categories layers together)",
+        "act_ids": ["ACT-01-02-004"],
+        "scn_ids": ["SCN-01-02"],
+        "feature_ids": ["FEAT-13-layer-config-image"],
+        "auth": {
+          "headers": ["authorization: [REDACTED]", "cookie: [REDACTED]", "x-xsrf-token: [REDACTED]", "x-acting-user-id: 266"],
+          "confidence": "MEDIUM (directly observed on this exact call)"
+        },
+        "request_contract": { "shape": "unknown -- request body not captured, only response body recorded" },
+        "response_contract": {
+          "id": "int",
+          "name": "string",
+          "current_version_id": "int (observed 11533)",
+          "schema_version": "int (observed 2)",
+          "data[].layers[] (clipart-category, single)": {
+            "id": "string", "type": "string enum ('clipart-category')", "name": "string",
+            "clipart": "int (category id)", "form_label": "string",
+            "default_value": "string path | null", "customization_type": "string enum"
+          },
+          "data[].layers[] (group-clipart-categories)": {
+            "id": "string", "type": "string enum ('group-clipart-categories')", "name": "string",
+            "url": "string path", "grouped_clipart": "int (category id, DIFFERENT key name from single type's 'clipart')",
+            "form_label": "string", "form_placeholder": "string (group-only key, no equivalent on single type)",
+            "default_value": "null observed (picker was non-functional for this layer, see conflicts)",
+            "grouped_reposition": "array, empty observed -- purpose unexplored",
+            "customization_type": "string enum", "required": "bool",
+            "fit_mode": "string enum", "direct_upload_style": "string enum", "direct_clipart_style": "string enum",
+            "shadow_display": "string enum", "schema_version": "int"
+          }
+        },
+        "error_contract": [],
+        "observed_status": [200],
+        "observed_count": 1,
+        "state_delta": [
+          { "field": "data[].layers[] count", "before": "1 (cat1 only, per ACT-01-01-006 response)", "after": "2 (cat1 + body)", "confidence": "HIGH" },
+          { "field": "layer 'cat1' field set returned by API (url, required, fit_mode, direct_upload_style, direct_clipart_style, shadow_display, schema_version)", "before": "all present, per ACT-01-01-006 response", "after": "absent from this response's 'cat1' object", "confidence": "LOW (may be evidence-capture truncation by portal-explorer rather than an actual server-side field removal -- see unknowns)" }
+        ],
+        "source_refs": ["raw/network/ACT-01-02-004.json"],
+        "observed_request_refs": ["raw/network/ACT-01-02-004.json"],
+        "knowledge_kind": "OBSERVED_CURRENT"
+      },
+      {
+        "operation_id": "APIOP-004",
+        "protocol": "REST",
+        "method_or_type": "GET",
+        "path_or_operation": "/api/layer-image-categories",
+        "observed_paths": ["/api/layer-image-categories?type=clipart"],
+        "business_object": "ClipartCategory",
+        "capability": "layer-image-category-list (asset-picker 'Choose from clipart category' tab tree, add-layer time)",
+        "act_ids": ["ACT-01-01-002"],
+        "scn_ids": ["SCN-01-01"],
+        "feature_ids": ["FEAT-13-layer-config-image"],
+        "auth": { "headers": "not captured for this entry", "confidence": "LOW" },
+        "request_contract": { "type": "query param, string enum (only 'clipart' observed)" },
+        "response_contract": { "shape": "array (item shape never observed -- only an empty array was returned in this sample despite 10+ backend rows existing per parallel GraphQL query)" },
+        "error_contract": [],
+        "observed_status": [200],
+        "observed_count": 1,
+        "state_delta": [],
+        "source_refs": ["raw/network/ACT-05-01-003.json"],
+        "observed_request_refs": ["raw/network/ACT-05-01-003.json"],
+        "knowledge_kind": "OBSERVED_CURRENT"
+      },
+      {
+        "operation_id": "APIOP-005",
+        "protocol": "GRAPHQL",
+        "method_or_type": "query (anonymous, field alias 'categories')",
+        "path_or_operation": "/api/graphql :: categories: clipart_categories(where: {type: clipart, deleted_at: null, parent_id: null}, order_by: {created_at: desc}, limit: 25)",
+        "observed_paths": ["/api/graphql"],
+        "business_object": "ClipartCategory",
+        "capability": "clipart-category-list (alternate/parallel data source, fired near the same UI event as APIOP-004)",
+        "act_ids": ["ACT-01-01-002"],
+        "scn_ids": ["SCN-01-01"],
+        "feature_ids": ["FEAT-13-layer-config-image"],
+        "auth": { "headers": "not captured for this entry", "confidence": "LOW" },
+        "request_contract": { "query_shape": "where: {type, deleted_at, parent_id}, order_by: {created_at: desc}, limit: int (observed 25)" },
+        "response_contract": { "categories": [{ "id": "int", "type": "string", "parent_id": "int | null", "label": "string (aliased from 'name')", "__typename": "string" }] },
+        "error_contract": [],
+        "observed_status": [200],
+        "observed_count": 1,
+        "state_delta": [],
+        "source_refs": ["raw/network/ACT-05-01-003.json"],
+        "observed_request_refs": ["raw/network/ACT-05-01-003.json"],
+        "knowledge_kind": "OBSERVED_CURRENT"
+      },
+      {
+        "operation_id": "APIOP-006",
+        "protocol": "OTHER",
+        "method_or_type": "NONE_OBSERVED",
+        "path_or_operation": "n/a -- inline 'Search top-level category' textbox in Bulk Edit Design Settings invokes NO endpoint",
+        "observed_paths": [],
+        "business_object": "ClipartCategory",
+        "capability": "layer-image-category-inline-search (Bulk Edit Design Settings field, distinct surface from APIOP-004/005)",
+        "act_ids": ["ACT-01-01-005"],
+        "scn_ids": ["SCN-01-01"],
+        "feature_ids": ["FEAT-13-layer-config-image"],
+        "auth": {},
+        "request_contract": {},
+        "response_contract": { "shape": "n/a -- confirmed via browser_network_requests diff before/after typing that ZERO network requests fire from this input. This is a distinct failure mode from APIOP-004 (which DOES call an endpoint, just gets an empty result)." },
+        "error_contract": [],
+        "observed_status": [],
+        "observed_count": 1,
+        "state_delta": [],
+        "source_refs": ["raw/network/ACT-05-01-003.json"],
+        "observed_request_refs": ["raw/network/ACT-05-01-003.json"],
+        "knowledge_kind": "OBSERVED_CURRENT"
+      },
+      {
+        "operation_id": "APIOP-007",
+        "protocol": "REST",
+        "method_or_type": "POST",
+        "path_or_operation": "/api/clipart-categories",
+        "observed_paths": ["/api/clipart-categories"],
+        "business_object": "ClipartCategory",
+        "capability": "clipart-category-create (includes Preview size / Thumbnail size / display settings)",
+        "act_ids": ["ACT-05-01-001"],
+        "scn_ids": ["SCN-05-01"],
+        "feature_ids": [],
+        "auth": {
+          "headers": ["authorization: [REDACTED]", "cookie: [REDACTED]", "x-xsrf-token: [REDACTED]", "x-acting-user-id: 266", "content-type: application/json"],
+          "confidence": "MEDIUM (directly observed on this exact call)"
+        },
+        "request_contract": {
+          "name": "string", "description": "string (observed empty string)", "parent_id": "int | null (observed null)",
+          "display_type": "string enum (observed: 'image' == UI radio 'Thumbnail Images'; other 4 UI options -- Dropdown list of Clipart name / Dropdown list of Clipart name + Thumbnail / Inline button of Clipart name / Radio of Clipart name -- not observed as values, LOW confidence on full enum)",
+          "children_display_type": "int (observed 0, meaning unconfirmed)",
+          "placeholder": "string | null (observed null)",
+          "clipart_max_width": "int -- this is the 'Preview size' UI field. Observed value: 500. UI select enum: 100/150/200/250/300/400/500(default)/700/1000/1600 -- unit (px) asserted only by UI label, not by API payload itself.",
+          "clipart_thumbnail_size": "int -- this is the 'Thumbnail size' UI field. Observed value: 300 (changed from UI default 100 in the create form BEFORE first submit -- see documented_observed_mismatches/unknowns re: no separate update call observed). UI select enum: 100(default)/300/500.",
+          "type": "string enum (observed: 'clipart')",
+          "position": "int (observed 0)"
+        },
+        "response_contract": {
+          "id": "int", "user_id": "int", "name": "string", "description": "string | null",
+          "parent_id": "int | null", "position": "int", "type": "string enum",
+          "thumbnail": "null observed", "display_type": "string enum",
+          "children_display_type": "int", "show_clipart_name": "null observed (INFERRED possible correspondence to UI 'Show option name on hover' toggle -- unconfirmed)",
+          "placeholder": "string | null", "custom_class": "null observed (category-level Custom class, distinct from the missing layer-level Custom class in CONF-CTX20260921-03-01)",
+          "clipart_max_width": "int", "clipart_thumbnail_size": "int", "v": "null observed (purpose unknown)",
+          "created_at": "ISO8601 string", "updated_at": "ISO8601 string",
+          "children": { "aggregate": { "count": "int" } }
+        },
+        "error_contract": [],
+        "observed_status": [201],
+        "observed_count": 1,
+        "state_delta": [],
+        "source_refs": ["raw/network/ACT-05-01-001.json"],
+        "observed_request_refs": ["raw/network/ACT-05-01-001.json"],
+        "knowledge_kind": "OBSERVED_CURRENT"
+      },
+      {
+        "operation_id": "APIOP-008",
+        "protocol": "REST",
+        "method_or_type": "POST",
+        "path_or_operation": "/api/users/{userId}/temporary-files/upload-url",
+        "observed_paths": ["/api/users/266/temporary-files/upload-url"],
+        "business_object": "TemporaryFile",
+        "capability": "file-upload-presign (used for clipart item image upload)",
+        "act_ids": ["ACT-05-01-002"],
+        "scn_ids": ["SCN-05-01"],
+        "feature_ids": [],
+        "auth": { "headers": "not individually captured; assumed same-session pattern", "confidence": "LOW" },
+        "request_contract": { "shape": "unknown -- not captured" },
+        "response_contract": { "shape": "presigned S3-compatible PUT URL (qualitative only -- exact JSON keys not captured)" },
+        "error_contract": [],
+        "observed_status": [201],
+        "observed_count": 2,
+        "state_delta": [],
+        "source_refs": ["raw/network/ACT-05-01-002.json"],
+        "observed_request_refs": ["raw/network/ACT-05-01-002.json"],
+        "knowledge_kind": "OBSERVED_CURRENT"
+      },
+      {
+        "operation_id": "APIOP-009",
+        "protocol": "REST",
+        "method_or_type": "POST",
+        "path_or_operation": "/api/cliparts/by-temporary-file",
+        "observed_paths": ["/api/cliparts/by-temporary-file"],
+        "business_object": "ClipartItem",
+        "capability": "clipart-item-create-from-upload",
+        "act_ids": ["ACT-05-01-002"],
+        "scn_ids": ["SCN-05-01"],
+        "feature_ids": [],
+        "auth": { "headers": "not individually captured; assumed same-session pattern", "confidence": "LOW" },
+        "request_contract": { "shape": "unknown -- not captured; plausibly references the temporary file + target clipart_category_id but this is NOT confirmed from evidence, do not treat as contract" },
+        "response_contract": { "name": "string", "id": "int", "clipart_category_id": "int", "position": "int (observed 1 then 2, sequential -- consistent with upload order, but only 2 samples)" },
+        "error_contract": [],
+        "observed_status": [201],
+        "observed_count": 2,
+        "state_delta": [
+          { "field": "clipart_category(6202).items", "before": "0 items (items_count:0, per portal-evidence object_state before ACT-05-01-002)", "after": "2 items: no1(id 42387, position 1), no2(id 42388, position 2)", "confidence": "HIGH" }
+        ],
+        "source_refs": ["raw/network/ACT-05-01-002.json"],
+        "observed_request_refs": ["raw/network/ACT-05-01-002.json"],
+        "knowledge_kind": "OBSERVED_CURRENT"
+      },
+      {
+        "operation_id": "APIOP-010",
+        "protocol": "OTHER",
+        "method_or_type": "POST (paraphrased by portal-explorer as 'form submit'; not a clean captured network entry -- no headers/body/status recorded)",
+        "path_or_operation": "/campaigns/new",
+        "observed_paths": ["/campaigns/new"],
+        "business_object": "Campaign",
+        "capability": "campaign-create",
+        "act_ids": ["ACT-06-01-002"],
+        "scn_ids": ["SCN-06-01"],
+        "feature_ids": [],
+        "auth": {},
+        "request_contract": { "shape": "unknown" },
+        "response_contract": { "shape": "unknown -- only qualitative note 'Created campaign id=2626' recorded, no actual response body/status captured" },
+        "error_contract": [],
+        "observed_status": [],
+        "observed_count": 1,
+        "state_delta": [],
+        "source_refs": ["raw/network/ACT-06-01-002.json"],
+        "observed_request_refs": ["raw/network/ACT-06-01-002.json"],
+        "knowledge_kind": "OBSERVED_CURRENT"
+      },
+      {
+        "operation_id": "APIOP-011",
+        "protocol": "OTHER",
+        "method_or_type": "UNKNOWN -- no method/URL captured, only UI dialog result text",
+        "path_or_operation": "unknown (campaign publish/launch action, target store 'linh-explorer')",
+        "observed_paths": [],
+        "business_object": "Campaign",
+        "capability": "campaign-launch-publish",
+        "act_ids": ["ACT-06-01-002"],
+        "scn_ids": ["SCN-06-01"],
+        "feature_ids": [],
+        "auth": {},
+        "request_contract": { "shape": "unknown" },
+        "response_contract": { "shape": "unknown -- only qualitative UI outcome captured: message 'Content is published. Mockups are still publishing.' and a resulting published_url" },
+        "error_contract": [],
+        "observed_status": [],
+        "observed_count": 1,
+        "state_delta": [
+          { "field": "campaign(2626).published_state", "before": "unpublished/draft", "after": "published to store 'linh-explorer' (mockups still generating async at capture time)", "confidence": "MEDIUM" }
+        ],
+        "source_refs": ["raw/network/ACT-06-01-002.json"],
+        "observed_request_refs": ["raw/network/ACT-06-01-002.json"],
+        "knowledge_kind": "OBSERVED_CURRENT"
+      }
+    ],
+    "documented_observed_mismatches": [
+      {
+        "topic": "Clipart category listing: REST endpoint vs GraphQL query disagree on same underlying data",
+        "side_a": "GET /api/layer-image-categories?type=clipart -> 200, body `[]` (APIOP-004)",
+        "side_b": "POST /api/graphql clipart_categories query -> 200, 10 rows for same user (APIOP-005)",
+        "note": "Not a documented-vs-observed mismatch in the strict sense (no static spec exists in this ZERO_DOC_BOOTSTRAP run) -- recorded here as the clearest api-level manifestation of the 3-surface anomaly portal-explorer flagged. Root cause not diagnosed (db-explorer follow-up recommended). See also conflicts[] CONF-API-CTX20260921-03-01."
+      },
+      {
+        "topic": "Category 'Thumbnail size' change (100->300) has no observed dedicated update call",
+        "side_a": "TASK-6 item 4 expected a 'category update endpoint when changing Thumbnail size 100->300 (category id 6202)'",
+        "side_b": "Observed evidence (ACT-05-01-001.json) shows the value 300 was already present in the single POST /api/clipart-categories create-call request body -- the UI-level 100->300 change happened in the unsaved create form before first submit, not via a later PUT/update on an existing category id",
+        "note": "No PUT/PATCH to /api/clipart-categories/6202 (or similar) was present in any provided network file. Cannot confirm the shape of a category-update endpoint from this run's evidence."
+      }
+    ],
+    "background_traffic": [
+      {
+        "normalized_route": "https://oe-cdn.sgp1.digitaloceanspaces.com/{bucket}/temporary-files/{path}",
+        "kind": "unrelated",
+        "note": "S3-compatible presigned PUT upload of raw clipart image bytes to DigitalOcean Spaces CDN, part of the clipart upload flow (ACT-05-01-002) triggered right after APIOP-008. Infrastructure/storage step, not a teeinblue backend business API. Signature query params already redacted by portal-explorer (X-Amz-Credential, X-Amz-Signature, X-Amz-Date)."
+      }
+    ],
+    "security_surfaces": [
+      "x-xsrf-token header present on all observed state-changing REST calls (POST/PUT to /api/artworks*, /api/clipart-categories) -- consistent with a CSRF-protection pattern; value redacted, not further analyzed.",
+      "x-acting-user-id header (plain value, not secret) appears alongside authorization/cookie on every captured call and is used by this run to verify account scope (266 = Linh explorer). Whether the server independently validates this header against the authenticated session/token (vs trusting it from the client) is NOT observable from this evidence and would need dedicated security review, not asserted here.",
+      "Direct-to-storage upload uses short-lived presigned S3 URLs (query-param signature) rather than proxying file bytes through the teeinblue API -- standard pattern, redacted signature components not analyzed further."
+    ],
+    "unmapped_endpoints": [],
+    "unexplored_operations": [
+      {
+        "description": "Working 'Search' category-picker modal (separate from the broken inline 'Search top-level category' textbox) -- functionally confirmed to list all categories with thumbnails and successfully link a category to a layer, but no HTTP/GraphQL request was captured/identified for it in any provided network file.",
+        "act_ids": ["ACT-01-01-005", "ACT-01-02-003"]
+      },
+      {
+        "description": "Data source (if any) behind the group-clipart-categories layer's 'Group's default value' combobox, which showed 'List is empty.' for a category (6202) that has 2 confirmed items -- no distinguishing network request was isolated for this specific UI element.",
+        "act_ids": ["ACT-01-02-003"]
+      },
+      {
+        "description": "Whether GET /api/layer-image-categories?type=clipart (APIOP-004) also fires when opening the add-layer asset picker for a group-clipart-categories layer -- no network_ref captured for that action (ACT-01-02-001).",
+        "act_ids": ["ACT-01-02-001"]
+      },
+      {
+        "description": "Category update endpoint (e.g. PUT/PATCH /api/clipart-categories/{id}) for changing settings on an ALREADY-EXISTING category -- not observed in this run; only category-creation (POST) was captured, already carrying the final Thumbnail size value.",
+        "act_ids": ["ACT-05-01-001"]
+      },
+      {
+        "description": "Any dedicated endpoint for generating/serving an image at a specific size variant -- not observed. Only static pre-existing path suffixes ('_large.webp', '_thumbnail.webp') were seen already embedded in stored layer/default_value URLs; generation mechanism/timing is not visible from API evidence captured this run.",
+        "act_ids": ["ACT-01-01-006", "ACT-01-02-004"]
+      },
+      {
+        "description": "Buyer-facing personalization-save / add-to-cart / get-cart endpoints for clipart selection -- explicitly out of api-explorer's scope this run per task boundary (assigned to storefront-explorer, who captures storefront network directly).",
+        "act_ids": []
+      }
+    ],
+    "coverage_limitations": [
+      "Only 6 network capture files were provided (ACT-01-01-006, ACT-01-02-004, ACT-05-01-001, ACT-05-01-002, ACT-05-01-003, ACT-06-01-002); every operation derived from them has observed_count of 1 or 2, so per contract counting rules no field anywhere in this artifact is marked always_present and overall confidence stays LOW.",
+        "No request body was captured for 5 of 11 mapped operations (APIOP-001, 002, 003, 008, 009) -- only response bodies or bare status codes. Request contracts for those are marked 'unknown', not guessed from the response shape.",
+      "No 4xx/5xx or error-path response was observed for ANY operation in this batch -- every mapped operation is a single happy-path sample. error_contract is empty everywhere; this should not be read as 'no errors possible'.",
+      "Campaign create/launch (APIOP-010, APIOP-011) evidence is qualitative only (portal-explorer recorded UI outcome text, not actual HTTP method/status/body) -- lowest-fidelity entries in this artifact.",
+      "This run's scope explicitly excludes buyer-side/storefront network capture (add-to-cart, cart, personalization-save) per the task instructions -- those are storefront-explorer's responsibility and are NOT included here even though bootstrap-request.json's original TASK-6 wording mentions them."
+    ],
+    "redaction_applied": true
+  },
+  "gate": {
+    "decision": "CONDITIONAL_PASS",
+    "blocking_findings": [],
+    "conditions": [
+      "3 open conflicts (CONF-CTX20260921-03-01, CONF-CTX20260921-03-02 carried forward with API-level evidence added; new CONF-API-CTX20260921-03-01 on REST-vs-GraphQL category listing divergence) must be carried forward unresolved to qa-knowledge-normalizer/reviewer -- do not let downstream silently pick a side.",
+      "Category-update endpoint (Thumbnail size change on an existing category) and the 2 non-captured 'category listing' surfaces (working Search modal, group default-value combobox) remain unexplored -- flagged in unexplored_operations, not fabricated.",
+      "All operations rest on observed_count 1-2 -- treat every field/enum/status list here as an OBSERVED_CURRENT baseline, not a confirmed contract, until more samples exist."
+    ],
+    "allowed_next_steps": ["qa-knowledge-normalizer", "feature-profile-builder"]
+  }
+}

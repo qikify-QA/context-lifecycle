@@ -1,0 +1,308 @@
+{
+  "schema_version": "1.0",
+  "artifact_type": "FeatureProfileCandidate",
+  "artifact_id": "FPCAND-CTX-20261002-01-payment-method-affiliate-payment-info-setup",
+  "workflow_id": "CTX-20261002-01",
+  "producer": "feature-profile-builder",
+  "source_refs": [
+    {
+      "type": "doc_ref",
+      "doc_id": "`qikfiliate/dashboard - payment and payout request`",
+      "path": "candidate/product-kb/affiliate-payment-info-setup.json"
+    },
+    {
+      "type": "doc_ref",
+      "doc_id": "`qikfiliate/dashboard - payment and payout request`",
+      "path": "candidate/product-kb/_object-level.payment-method.json"
+    }
+  ],
+  "upstream_artifact_ids": [
+    "PKC-CTX-20261002-01-affiliate-payment-info-setup",
+    "PKC-CTX-20261002-01-object-payment-method"
+  ],
+  "status": "READY",
+  "confidence": "MEDIUM",
+  "observations": [
+    "DOC_BOOTSTRAP: không có quan sát runtime. act_ids[] rỗng theo luật.",
+    "_object-level.payment-method.json có 0 KB candidate theo chủ đích (mọi claim thuộc object payment-method đã được gán cho feature affiliate-payment-info-setup hoặc payment-method-catalog) — không có nội dung object-level nào để đưa vào profile này.",
+    "KB-007/KB-008/KB-010 là 3 KNOWN DEFECT về hardcode payment_method_id trên frontend, được 3 tài liệu độc lập đồng thuận (CLM-14-029/030/032 + corroborate `qikfiliate/admin - invoices and payment methods`/`qikfiliate/known issues edge cases`) — theo chỉ thị: đưa cả 3 vào risks[] với mức độ nghiêm trọng rõ ràng, giữ knowledge_kind=OBSERVED_CURRENT, KHÔNG đưa vào confirmed_rules/permissions.",
+    "1 phần evidence của KB-007 (CLM-25-057/CLM-25-058) mang brand_scope='UNCERTAIN' theo doc-ingest-explorer — giữ scope.brand=null ở KB gốc, và được lặp lại ở unknown_areas của profile này để không mất tín hiệu."
+  ],
+  "assumptions": [],
+  "unknowns": [
+    "Field Katakana có phải nhu cầu thực tế đang dùng hay chỉ chuẩn bị sẵn (chưa xác nhận PO).",
+    "Điều gì xảy ra với affiliate đang dùng 1 payment method nếu admin đổi visible=false, đổi country, hoặc xoá method đó.",
+    "Phạm vi brand của 1 phần evidence hardcode (CLM-25-057/058) là UNCERTAIN theo doc-ingest-explorer — chưa rõ known defect KB-007 có áp dụng cho mọi brand/instance hay chỉ 1 brand cụ thể."
+  ],
+  "conflicts": [],
+  "blocking_issues": [],
+  "payload": {
+    "feature_profiles": [
+      {
+        "feature_id": "FEAT-01-affiliate-payment-info-setup",
+        "feature_key": "affiliate-payment-info-setup",
+        "name": "Affiliate thiết lập thông tin nhận thanh toán",
+        "user_goal": "Affiliate chọn 1 phương thức nhận thanh toán khả dụng và điền đủ thông tin thanh toán tương ứng (đơn giản hoặc 7 field ngân hàng) để đủ điều kiện rút tiền (điều kiện chung #1 của payout-request-eligibility).",
+        "stable_since_version": "v1",
+        "actors": [
+          {
+            "role": "affiliate",
+            "permission_observed": "Affiliate chỉ thiết lập payment info cho chính mình; không có evidence về admin chỉnh payment info hộ affiliate trong feature này.",
+            "kb_refs": [
+              "KB-001",
+              "KB-002",
+              "KB-003"
+            ]
+          }
+        ],
+        "entry_points": [
+          {
+            "path": "Portal — Account → Payment Info (Bước 1)",
+            "precondition": "Affiliate đã đăng nhập",
+            "kb_refs": [
+              "KB-002",
+              "KB-003"
+            ]
+          },
+          {
+            "path": "GET /api/payment-methods",
+            "precondition": "n/a",
+            "kb_refs": [
+              "KB-006"
+            ]
+          }
+        ],
+        "capabilities": [
+          {
+            "name": "Liệt kê payment method khả dụng theo visible + country",
+            "description": "Affiliate gọi GET /api/payment-methods, chỉ thấy các method: visible = true VÀ (country để trống HOẶC trùng country của chính affiliate).",
+            "kb_refs": [
+              "KB-006"
+            ],
+            "act_ids": []
+          },
+          {
+            "name": "Chọn payment method và lưu vào User.payment_method_id",
+            "description": "payment_method_id là FK tới PaymentMethod mà affiliate đã chọn để nhận thanh toán.",
+            "kb_refs": [
+              "KB-001"
+            ],
+            "act_ids": []
+          },
+          {
+            "name": "Nhập payment_info đơn giản (method không cần bank details)",
+            "description": "Khi payment method đã chọn KHÔNG cần bank details (requires_bank_details=false), hiển thị 1 ô nhập payment_info (ví dụ: email PayPal); label ô nhập lấy từ payment_info_field_name.",
+            "kb_refs": [
+              "KB-002",
+              "KB-005"
+            ],
+            "act_ids": []
+          },
+          {
+            "name": "Nhập 7 field ngân hàng (method cần bank details)",
+            "description": "Khi payment method đã chọn có requires_bank_details = true, affiliate phải điền 7 field ngân hàng có cấu trúc (User.payment_details, cast array) thay vì 1 ô payment_info đơn giản: tên ngân hàng, tên chi nhánh, số chi nhánh, loại tài khoản (Savings/Checking), số tài khoản, tên chủ tài khoản, tên chủ tài khoản dạng Katakana.",
+            "kb_refs": [
+              "KB-003",
+              "KB-004"
+            ],
+            "act_ids": []
+          },
+          {
+            "name": "Điều kiện thật ở backend không phụ thuộc ID payment method",
+            "description": "Mặc dù UI có thể hiển thị điều kiện sai (xem known defect KB-007/KB-008/KB-010), điều kiện thật ở backend (InvoiceService::canCreateByUser) hoàn toàn KHÔNG phụ thuộc ID cụ thể nào và vẫn tính đúng.",
+            "kb_refs": [
+              "KB-009"
+            ],
+            "act_ids": []
+          }
+        ],
+        "state_transitions": [],
+        "confirmed_rules": [
+          {
+            "statement": "User.payment_method_id là FK tới PaymentMethod đã chọn.",
+            "knowledge_kind": "CONFIRMED_EXPECTED",
+            "confidence": "LOW",
+            "kb_refs": [
+              "KB-001"
+            ]
+          },
+          {
+            "statement": "payment_info là chuỗi đơn giản, dùng khi method không cần bank details.",
+            "knowledge_kind": "CONFIRMED_EXPECTED",
+            "confidence": "HIGH",
+            "kb_refs": [
+              "KB-002"
+            ]
+          },
+          {
+            "statement": "requires_bank_details=true → phải điền 7 field ngân hàng thay vì 1 chuỗi đơn giản.",
+            "knowledge_kind": "CONFIRMED_EXPECTED",
+            "confidence": "HIGH",
+            "kb_refs": [
+              "KB-003"
+            ]
+          },
+          {
+            "statement": "7 field ngân hàng gồm: tên ngân hàng, tên chi nhánh, số chi nhánh, loại tài khoản (Savings/Checking), số tài khoản, tên chủ tài khoản, tên chủ tài khoản Katakana.",
+            "knowledge_kind": "CONFIRMED_EXPECTED",
+            "confidence": "MEDIUM",
+            "kb_refs": [
+              "KB-004"
+            ]
+          },
+          {
+            "statement": "payment_info_field_name là label cho ô nhập đơn giản.",
+            "knowledge_kind": "CONFIRMED_EXPECTED",
+            "confidence": "LOW",
+            "kb_refs": [
+              "KB-005"
+            ]
+          },
+          {
+            "statement": "Affiliate chỉ thấy payment method visible=true VÀ (country trống HOẶC trùng country affiliate).",
+            "knowledge_kind": "CONFIRMED_EXPECTED",
+            "confidence": "MEDIUM",
+            "kb_refs": [
+              "KB-006"
+            ]
+          },
+          {
+            "statement": "Điều kiện thật ở backend (InvoiceService::canCreateByUser) không phụ thuộc ID payment method cụ thể, vẫn tính đúng dù UI hiển thị có thể sai.",
+            "knowledge_kind": "CONFIRMED_EXPECTED",
+            "confidence": "MEDIUM",
+            "kb_refs": [
+              "KB-009"
+            ]
+          }
+        ],
+        "observed_behavior": [
+          "KB-007 (OBSERVED_CURRENT, xem risks[]): component PayoutBlock.vue hardcode cứng payment_method_id === 1 = PayPal (áp điều kiện hiển thị 'cần balance > $50') và id === 2 = Payoneer ('không giới hạn tối thiểu') — hardcode theo ID, không đọc field nào từ PaymentMethod.",
+          "KB-008 (OBSERVED_CURRENT, xem risks[]): nếu admin xoá rồi tạo lại record PayPal/Payoneer, bản ghi mới nhận ID khác (auto-increment không tái sử dụng ID cũ) — điều kiện hardcode trên UI không còn khớp ID thật.",
+          "KB-010 (OBSERVED_CURRENT, xem risks[]): hệ quả hiển thị — affiliate có thể thấy thông báo điều kiện rút tiền SAI LỆCH trên UI dù backend vẫn chặn/cho phép đúng; tài liệu tự đánh giá: gây nhầm lẫn trải nghiệm nhưng KHÔNG gây sai số tiền thực tế."
+        ],
+        "observed_validations": [],
+        "permissions": [
+          "Affiliate chỉ thiết lập payment info cho chính mình (role=affiliate); không có evidence về admin chỉnh payment info hộ affiliate trong feature này."
+        ],
+        "surface_mapping": {
+          "portal": [
+            "Form chọn payment method + nhập payment_info/7 field ngân hàng (KB-002, KB-003, KB-004)",
+            "KNOWN DEFECT: PayoutBlock.vue hardcode ID 1/2 (KB-007, KB-008, KB-010)"
+          ],
+          "storefront": [],
+          "api": [
+            "GET /api/payment-methods (KB-006)",
+            "InvoiceService::canCreateByUser không phụ thuộc ID (KB-009)"
+          ],
+          "data": [
+            "User.payment_method_id FK (KB-001)",
+            "payment_info_field_name label (KB-005)"
+          ],
+          "code": []
+        },
+        "dependencies": [
+          "Consume danh mục từ payment-method-catalog (nguồn payment method khả dụng: visible, country, requires_bank_details).",
+          "Feeds vào payout-request-eligibility (điều kiện chung #1: payment info hợp lệ)."
+        ],
+        "risks": [
+          {
+            "risk": "KNOWN_DEFECT (KB-007) — SEVERITY: MEDIUM (sai lệch hiển thị UI, không sai số tiền thật). Component PayoutBlock.vue hardcode cứng payment_method_id === 1 = PayPal (điều kiện hiển thị 'cần balance > $50 mới rút được') và id === 2 = Payoneer ('không giới hạn tối thiểu') — hardcode theo ID, KHÔNG đọc field nào từ PaymentMethod để suy ra điều kiện này. Đây là hành vi hiện tại (OBSERVED_CURRENT), KHÔNG phải expected result.",
+            "kb_refs": [
+              "KB-007"
+            ],
+            "severity": "MEDIUM"
+          },
+          {
+            "risk": "KNOWN_DEFECT (KB-008) — hệ quả trực tiếp của KB-007: nếu admin xoá rồi tạo lại record PayPal/Payoneer trong bảng payment_methods, bản ghi mới nhận ID khác (auto-increment không tái sử dụng ID cũ) — điều kiện hardcode trên UI KHÔNG CÒN KHỚP với ID thật, hiển thị sai ngưỡng cho affiliate. SEVERITY: MEDIUM.",
+            "kb_refs": [
+              "KB-008"
+            ],
+            "severity": "MEDIUM"
+          },
+          {
+            "risk": "KNOWN_DEFECT (KB-010) — hệ quả hiển thị: affiliate có thể thấy thông báo điều kiện rút tiền SAI LỆCH trên UI (hiển thị sai ngưỡng) dù backend vẫn chặn/cho phép đúng (KB-009). Tài liệu tự đánh giá mức độ: gây nhầm lẫn trải nghiệm nhưng KHÔNG gây sai số tiền thực tế. SEVERITY: LOW-MEDIUM (rủi ro UX/niềm tin, không phải tiền).",
+            "kb_refs": [
+              "KB-010",
+              "KB-009"
+            ],
+            "severity": "LOW_MEDIUM"
+          }
+        ],
+        "freshness": {
+          "observed_at": null,
+          "run_id": "CTX-20261002-01"
+        },
+        "unknown_areas": [
+          {
+            "question": "Field Katakana có phải nhu cầu thực tế đang dùng hay chỉ chuẩn bị sẵn?",
+            "why_it_matters": "Quyết định có nên bắt buộc/validate field này trong test case hay không; tài liệu tự nêu chưa xác nhận với PO."
+          },
+          {
+            "question": "Điều gì xảy ra với affiliate đang dùng 1 payment method nếu admin đổi visible=false, đổi country, hoặc xoá method đó?",
+            "why_it_matters": "Mục rủi ro hardcode cho thấy record payment method có thể bị xoá/tạo lại; nhưng hệ quả với payment info đã lưu của affiliate không được mô tả."
+          },
+          {
+            "question": "Phạm vi brand của 1 phần evidence hardcode (CLM-25-057/058) là UNCERTAIN theo doc-ingest-explorer — known defect KB-007 có áp dụng cho mọi brand/instance hay chỉ 1 brand cụ thể?",
+            "why_it_matters": "Nếu chỉ áp dụng cho 1 brand, test case phải scope đúng brand đó, không áp dụng tràn sang brand khác."
+          }
+        ]
+      }
+    ],
+    "profile_relationships": [
+      {
+        "from": "FEAT-01-affiliate-payment-info-setup",
+        "to": "FEAT-02-payment-method-catalog",
+        "relation": "CONSUMES"
+      },
+      {
+        "from": "FEAT-01-affiliate-payment-info-setup",
+        "to": "invoice-payout:FEAT-02-payout-request-eligibility",
+        "relation": "REQUIRED_BY"
+      }
+    ],
+    "coverage_matrix": [
+      {
+        "feature_id": "FEAT-01-affiliate-payment-info-setup",
+        "layer": "portal",
+        "role": "affiliate",
+        "state": "any",
+        "environment": "documented",
+        "covered": true
+      },
+      {
+        "feature_id": "FEAT-01-affiliate-payment-info-setup",
+        "layer": "api",
+        "role": "affiliate",
+        "state": "any",
+        "environment": "documented",
+        "covered": true
+      },
+      {
+        "feature_id": "FEAT-01-affiliate-payment-info-setup",
+        "layer": "data",
+        "role": "affiliate",
+        "state": "any",
+        "environment": "documented",
+        "covered": true
+      }
+    ],
+    "unassigned_kb_items": [],
+    "profile_conflicts": [],
+    "profile_change_summary": [
+      "Profile mới tạo ở run CTX-20261002-01 (DOC_BOOTSTRAP), chưa có version trước."
+    ],
+    "kb_trace_complete": true
+  },
+  "gate": {
+    "decision": "CONDITIONAL_PASS",
+    "blocking_findings": [],
+    "conditions": [
+      "KB-007/KB-008/KB-010 (known defect, OBSERVED_CURRENT) nằm trong observed_behavior[] + risks[] với severity rõ ràng, KHÔNG nằm trong confirmed_rules/permissions.",
+      "observed_validations[] rỗng, act_ids[] rỗng theo luật DOC_BOOTSTRAP."
+    ],
+    "allowed_next_steps": [
+      "qa-checklist-builder",
+      "knowledge-diff-analyzer"
+    ]
+  }
+}

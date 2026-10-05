@@ -1,0 +1,32 @@
+{
+  "purpose": "Xác nhận môi trường staging + identity đúng account trước khi verify rate-limit (bootstrap-request.json §account_scope)",
+  "environment_check": {
+    "env_var": "TIB_API_BASE",
+    "resolved_value": "https://staging-api.teeinblue.com",
+    "postman_collection_base_url_variable": "https://staging-api.teeinblue.com",
+    "match": true,
+    "decision": "PASS - đúng staging, tiếp tục. Không có request nào gửi tới production trong toàn bộ run này."
+  },
+  "auth_flow_observed": {
+    "note": "KHÔNG dùng Bearer token như postman collection auth mặc định khai báo (auth.type=bearer) - POST /api/login trực tiếp không kèm CSRF trả 419. Flow thật cần Sanctum SPA: GET /sanctum/csrf-cookie lấy XSRF-TOKEN + session cookie -> POST /api/login kèm X-XSRF-TOKEN + Cookie + Origin/Referer=TIB_PORTAL_BASE -> GET /api/user dùng cùng cookie jar. Đây là documented_observed_mismatch với postman collection (xem action-api-map.json).",
+    "steps": [
+      { "step": "GET /sanctum/csrf-cookie", "status": 204, "cookies_set_names": ["XSRF-TOKEN", "__Secure-teeinblue_staging_session"] },
+      { "step": "POST /api/login", "status": 200, "response_body_top_level_keys": ["acting_user_id"], "cors_acao": "https://staging-portal.teeinblue.com" },
+      { "step": "GET /api/user", "status": 200, "auth_mode_used": "cookie_only (XSRF-TOKEN + session cookie + Origin/Referer=portal)" }
+    ]
+  },
+  "identity_observed": {
+    "id": 266,
+    "name": "Linh explorer",
+    "product_segment": "provider",
+    "tier_subscription": { "instance_id": 609, "display_name": "Blue", "type": "shopify", "status": "ACTIVE" },
+    "guide_config_sampleCampaign_id": 2592,
+    "match_expected_identity_hint": "id=266 'Linh explorer' - KHỚP với bootstrap-request.json.account_scope.expected_identity_hint"
+  },
+  "redaction_note": "email/phone/token/password/private_config(gpt_api_key/gemini_api_key/...) đã bị loại khỏi log này hoàn toàn - server bản thân trả về các api_key trong private_config đã tự mask một phần (***) nhưng agent KHÔNG copy field đó vào bất kỳ output nào, kể cả dạng đã mask, theo §6.",
+  "credentials_used": {
+    "source": "process.env, đọc từ .env qua parser thủ công trong scratchpad (không dotenv module)",
+    "vars": ["TIB_STAGING_EMAIL", "TIB_STAGING_PASSWORD"],
+    "values_logged_anywhere": false
+  }
+}

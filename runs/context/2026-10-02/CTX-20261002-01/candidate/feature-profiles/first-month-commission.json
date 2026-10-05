@@ -1,0 +1,417 @@
+{
+  "schema_version": "1.0",
+  "artifact_type": "FeatureProfileCandidate",
+  "artifact_id": "FP-CAND-CTX-20261002-01-first-month-commission",
+  "workflow_id": "CTX-20261002-01",
+  "producer": "feature-profile-builder",
+  "source_refs": [
+    "candidate/product-kb/first-month-commission.json",
+    "candidate/product-kb/_object-level.commission-calculation.json"
+  ],
+  "upstream_artifact_ids": [
+    "KBCAND-CTX-20261002-01-first-month-commission",
+    "KBCAND-CTX-20261002-01-OBJECT-LEVEL"
+  ],
+  "status": "READY",
+  "confidence": "MEDIUM",
+  "observations": [
+    "feature_id dùng nguyên feature_key \"first-month-commission\" — chưa có FEAT-ID chính thức do orchestrator mint cho object commission-calculation (§4 contract).",
+    "_object-level.commission-calculation.json có kb_candidates=[] — không có nội dung object-level cần hợp nhất.",
+    "1/13 KB item của shard này (KB-013) là phía `qikfiliate/commision - recurring & first month` của conflict cross-doc OQ-commission-calculation-005 đã biết — giữ trong profile_conflicts, không dựng thành capability đã chốt. KB-002 giữ nội dung formula CONFIRMED_EXPECTED (amount = partner_share × rate) nhưng phần 'có/không áp maximum_amount' KHÔNG được dùng làm oracle ở đây — chỉ KB-013 (CONFLICTED) đại diện đúng điểm tranh chấp.",
+    "KB-006 và KB-011 đạt confidence HIGH nhờ 2 tài liệu độc lập đồng thuận (`qikfiliate/commision - recurring & first month`+`qikfiliate/known issues edge cases` cho KB-006; `qikfiliate/commision - recurring & first month`+`qikfiliate/admin - customers and conversions` cho KB-011) — mạnh hơn phần còn lại của shard (MEDIUM, chỉ `qikfiliate/commision - recurring & first month`).",
+    "KB-012 là known_defect (OBSERVED_CURRENT) mô tả 1 kỳ vọng SAI thường gặp — dùng làm regression watch, không phải oracle; quy tắc thật nằm ở KB-006."
+  ],
+  "assumptions": [],
+  "unknowns": [],
+  "conflicts": [],
+  "blocking_issues": [],
+  "payload": {
+    "feature_profiles": [
+      {
+        "feature_id": "first-month-commission",
+        "feature_key": "first-month-commission",
+        "name": "Hoa hồng tháng đầu (và isFirstMonth)",
+        "user_goal": "Affiliate nhận rate tháng-đầu đúng 1 lần cho mỗi shop, và QA xác định được một dòng có phải first-month hay không.",
+        "stable_since_version": "commission-calculation kb_version v1 (DOC_BOOTSTRAP, doc_set generated 2026-08-20, run CTX-20261002-01)",
+        "actors": [
+          {
+            "role": "system/engine (không gắn qua UI)",
+            "permission_observed": "Tính amount cho mọi Conversion type=\"first\"; quyết định is_first_month qua Customer::isFirstMonth().",
+            "kb_refs": [
+              "KB-004",
+              "KB-006"
+            ]
+          },
+          {
+            "role": "admin",
+            "permission_observed": "Bật/tắt field skip_first_month trên form Customer, tắt hẳn toàn bộ cơ chế first-month cho shop đó.",
+            "kb_refs": [
+              "KB-011"
+            ]
+          }
+        ],
+        "entry_points": [
+          {
+            "path": "Pipeline tính hoa hồng — áp dụng khi Customer::isFirstMonth() trả về true cho dòng đang xét",
+            "precondition": "charge_type đã được commission-decision-flow phân loại vào nhánh recurring/first-month; dòng là conversion đầu tiên tuyệt đối của shop, hoặc dòng âm đầu tiên trong 30 ngày kể từ charge đầu.",
+            "kb_refs": [
+              "KB-006"
+            ]
+          },
+          {
+            "path": "Customer form (portal admin) — field skip_first_month",
+            "precondition": "admin có quyền sửa Customer.",
+            "kb_refs": [
+              "KB-011"
+            ]
+          }
+        ],
+        "capabilities": [
+          {
+            "name": "Tính số tiền hoa hồng tháng đầu (không yearly)",
+            "description": "rate = ProgramCommission.first_month_percentage / 100 (KB-001). amount = partner_share × rate cho first-month không yearly (KB-002) — LƯU Ý: việc maximum_amount có áp cho nhánh này hay không đang MÂU THUẪN giữa nguồn, xem profile_conflicts (OQ-commission-calculation-005), KHÔNG coi đây là đã chốt. Ví dụ minh hoạ: KB-005 (EXAMPLE_ONLY).",
+            "kb_refs": [
+              "KB-001",
+              "KB-002",
+              "KB-005"
+            ],
+            "act_ids": []
+          },
+          {
+            "name": "Tính số tiền hoa hồng tháng đầu khi gói là yearly",
+            "description": "Riêng first-month + yearly có công thức tách biệt: monthly = partner_share / 12; phần_tháng_1 = monthly × rate (rate first-month); phần_11_tháng_còn_lại = clamp(monthly × (percentage/100) × 11, maximum_amount × 11); amount = phần_tháng_1 + phần_11_tháng_còn_lại. Ví dụ minh hoạ: KB-005 (EXAMPLE_ONLY).",
+            "kb_refs": [
+              "KB-003",
+              "KB-005"
+            ],
+            "act_ids": []
+          },
+          {
+            "name": "Phân loại Conversion type=\"first\"",
+            "description": "Conversion sinh ra từ nhánh first-month có type = \"first\".",
+            "kb_refs": [
+              "KB-004"
+            ],
+            "act_ids": []
+          },
+          {
+            "name": "Xác định một dòng có phải first-month hay không (isFirstMonth)",
+            "description": "first-month chỉ có thể xảy ra ở đúng 2 tình huống: (a) dòng conversion ĐẦU TIÊN tuyệt đối của shop — luôn luôn true, không cần xét mốc 30 ngày; (b) dòng refund/downgrade ĐẦU TIÊN của shop, miễn là rơi trong 30 ngày kể từ charge đầu tiên. Mọi charge dương từ dòng thứ 2 trở đi KHÔNG BAO GIỜ là first-month; mốc 30 ngày CHỈ áp dụng cho nhánh refund/downgrade (KB-006). Nếu charge_creation_time của dòng đầu tiên bị rỗng thì isFirstMonth trả về false (KB-007). Nếu customer ĐÃ TỪNG có dòng partner_share < 0 trước đây thì isFirstMonth luôn trả về false (KB-008). charge_creation_time khi đọc qua Eloquent bị cast kiểu date (cắt về 00:00:00 đầu ngày), nên mốc \"30 ngày\" thực chất so sánh theo NGÀY LỊCH, không phải giờ chính xác (KB-010, derivation code_artifact). Ví dụ minh hoạ 5 timeline: KB-009 (EXAMPLE_ONLY).",
+            "kb_refs": [
+              "KB-006",
+              "KB-007",
+              "KB-008",
+              "KB-009",
+              "KB-010"
+            ],
+            "act_ids": []
+          },
+          {
+            "name": "Cho phép admin tắt hẳn cơ chế first-month qua skip_first_month",
+            "description": "skip_first_month là field trên Customer do admin bật/tắt tay trong form; khi bật thì toàn bộ cơ chế first-month bị tắt hẳn và customer luôn tính theo rate recurring từ dòng đầu tiên. Xác nhận độc lập bởi 2 tài liệu (`qikfiliate/commision - recurring & first month` + `qikfiliate/admin - customers and conversions`).",
+            "kb_refs": [
+              "KB-011"
+            ],
+            "act_ids": []
+          }
+        ],
+        "state_transitions": [
+          {
+            "from": "dòng conversion đầu tiên tuyệt đối của shop",
+            "to": "is_first_month = true",
+            "trigger": "Customer::isFirstMonth()",
+            "condition": "luôn true, không cần xét mốc 30 ngày",
+            "kb_refs": [
+              "KB-006"
+            ]
+          },
+          {
+            "from": "dòng refund/downgrade đầu tiên của shop",
+            "to": "is_first_month = true",
+            "trigger": "Customer::isFirstMonth()",
+            "condition": "rơi trong 30 ngày kể từ charge đầu tiên (so theo ngày lịch, KB-010)",
+            "kb_refs": [
+              "KB-006",
+              "KB-010"
+            ]
+          },
+          {
+            "from": "charge dương từ dòng thứ 2 trở đi",
+            "to": "is_first_month = false",
+            "trigger": "Customer::isFirstMonth()",
+            "condition": "luôn false dù có rơi trong 30 ngày đầu hay không",
+            "kb_refs": [
+              "KB-006"
+            ]
+          },
+          {
+            "from": "customer đã từng có dòng partner_share < 0",
+            "to": "is_first_month = false",
+            "trigger": "Customer::isFirstMonth()",
+            "condition": "mọi dòng âm tiếp theo luôn false",
+            "kb_refs": [
+              "KB-008"
+            ]
+          },
+          {
+            "from": "cơ chế first-month đang hoạt động cho 1 Customer",
+            "to": "cơ chế first-month bị tắt hẳn (luôn tính recurring từ dòng đầu)",
+            "trigger": "admin bật skip_first_month trên form Customer",
+            "condition": "",
+            "kb_refs": [
+              "KB-011"
+            ]
+          }
+        ],
+        "confirmed_rules": [
+          {
+            "statement": "rate = ProgramCommission.first_month_percentage / 100",
+            "kb_refs": [
+              "KB-001"
+            ]
+          },
+          {
+            "statement": "amount = partner_share × rate cho first-month không yearly (phạm vi áp dụng maximum_amount đang tranh chấp, xem OQ-commission-calculation-005)",
+            "kb_refs": [
+              "KB-002"
+            ]
+          },
+          {
+            "statement": "First-month + yearly: monthly = partner_share/12; phần_tháng_1 = monthly×rate; phần_11_tháng_còn_lại = clamp(monthly×(percentage/100)×11, maximum_amount×11); amount = phần_tháng_1 + phần_11_tháng_còn_lại",
+            "kb_refs": [
+              "KB-003"
+            ]
+          },
+          {
+            "statement": "Conversion sinh từ nhánh first-month có type = \"first\"",
+            "kb_refs": [
+              "KB-004"
+            ]
+          },
+          {
+            "statement": "isFirstMonth đúng 2 tình huống: (a) dòng đầu tiên tuyệt đối -> luôn true; (b) dòng âm đầu tiên trong 30 ngày -> true; mọi dòng dương từ thứ 2 trở đi -> luôn false; mốc 30 ngày chỉ áp cho nhánh âm",
+            "kb_refs": [
+              "KB-006"
+            ]
+          },
+          {
+            "statement": "charge_creation_time rỗng -> isFirstMonth = false",
+            "kb_refs": [
+              "KB-007"
+            ]
+          },
+          {
+            "statement": "customer đã từng có dòng âm trước đây -> isFirstMonth luôn false",
+            "kb_refs": [
+              "KB-008"
+            ]
+          },
+          {
+            "statement": "charge_creation_time bị cast về đầu ngày (Eloquent date cast) -> mốc 30 ngày so theo ngày lịch, không phải giờ chính xác",
+            "kb_refs": [
+              "KB-010"
+            ]
+          },
+          {
+            "statement": "skip_first_month bật -> tắt hẳn cơ chế first-month, customer luôn tính theo rate recurring từ dòng đầu tiên",
+            "kb_refs": [
+              "KB-011"
+            ]
+          }
+        ],
+        "observed_behavior": [],
+        "observed_validations": [],
+        "permissions": [
+          {
+            "role": "admin",
+            "capability": "Bật/tắt skip_first_month trên form Customer (tắt hẳn cơ chế first-month cho shop đó).",
+            "kb_refs": [
+              "KB-011"
+            ]
+          }
+        ],
+        "surface_mapping": {
+          "portal": [
+            "Customer form — field skip_first_month (KB-011)"
+          ],
+          "storefront": [],
+          "api": [],
+          "data": [
+            "Conversion.type = \"first\" (KB-004)",
+            "Customer::isFirstMonth() (KB-006, KB-007, KB-008, KB-010)"
+          ],
+          "code": [
+            "charge_creation_time cast kiểu date trong Eloquent — derivation code_artifact (KB-010)"
+          ]
+        },
+        "dependencies": [
+          {
+            "dependency": "commission-decision-flow: xác định dòng nào thuộc nhánh recurring/first-month trước khi xét isFirstMonth; phạm vi maximum_amount cho first-month liên quan OQ-commission-calculation-005.",
+            "kb_refs": [
+              "KB-013"
+            ]
+          },
+          {
+            "dependency": "recurring-commission: 2 nhánh loại trừ nhau trên cùng input, rẽ theo Customer::isFirstMonth().",
+            "kb_refs": [
+              "KB-006"
+            ]
+          },
+          {
+            "dependency": "refund-and-downgrade-adjustment: quy tắc isFirstMonth cho dòng âm (refund/downgrade đầu tiên trong 30 ngày) cũng áp dụng ở feature đó.",
+            "kb_refs": [
+              "KB-006"
+            ]
+          },
+          {
+            "dependency": "customer-shop-registry (object khác): claim CLM-18-005 (`qikfiliate/admin - customers and conversions`) corroborate độc lập cho skip_first_month, ngoài phạm vi object commission-calculation.",
+            "kb_refs": [
+              "KB-011"
+            ]
+          }
+        ],
+        "risks": [
+          {
+            "risk": "[KNOWN_DEFECT] Kỳ vọng sai thường gặp: \"mọi charge trong 30 ngày đầu đều first-month\" — SAI. Một charge dương ở tháng thứ 2 vẫn nằm trong 30 ngày (do Shopify gửi dữ liệu trễ/lệch thứ tự) vẫn KHÔNG được first-month. Dùng làm regression watch, không phải oracle (quy tắc thật ở KB-006).",
+            "kb_refs": [
+              "KB-012"
+            ]
+          },
+          {
+            "risk": "Việc maximum_amount có áp cho nhánh first-month (non-yearly) hay không đang mâu thuẫn nguồn (OQ-commission-calculation-005) — sai hướng nào cũng là trả sai tiền cho affiliate.",
+            "kb_refs": [
+              "KB-013"
+            ]
+          },
+          {
+            "risk": "Phần lớn KB CONFIRMED_EXPECTED của feature này (trừ KB-006, KB-011) chỉ có 1 nguồn độc lập (`qikfiliate/commision - recurring & first month`) trong phạm vi được giao -> confidence MEDIUM, chưa đạt HIGH.",
+            "kb_refs": [
+              "KB-001",
+              "KB-003",
+              "KB-004"
+            ]
+          }
+        ],
+        "freshness": {
+          "observed_at": "2026-08-20",
+          "run_id": "CTX-20261002-01"
+        },
+        "unknown_areas": [
+          {
+            "question": "Không tìm thấy trong phạm vi tài liệu được giao câu cảnh báo phân biệt Customer::isFirstMonth() (tháng đầu của 1 SHOP) với User::isFirstMonth()/hasPremiumOffer() (tháng đầu của 1 AFFILIATE, dùng cho premium offer mới) — cảnh báo đó thuộc `qikfiliate/Domain Entities`, ngoài phạm vi được giao.",
+            "why_it_matters": "Nhầm 2 khái niệm \"first month\" này là trả sai tiền cho nhóm affiliate mới (premium offer), không liên quan gì tới commission-calculation."
+          },
+          {
+            "question": "Timezone dùng để so mốc 30 ngày sau khi charge_creation_time bị cast về đầu ngày không được nêu (app timezone, UTC, hay timezone dữ liệu Shopify).",
+            "why_it_matters": "Ảnh hưởng trực tiếp kết quả ở đúng biên 30 ngày — test case biên cần biết timezone chính xác để xác định expected result."
+          },
+          {
+            "question": "Tổ hợp first-month + yearly + refund (maximum_amount × 11 có áp cho số âm hay không) không được tài liệu nói tới — đây là tổ hợp tiền lớn nhất chưa có công thức.",
+            "why_it_matters": "Không có công thức thì không viết được expected result cho tổ hợp này, và đây là vùng rủi ro tiền lớn nhất trong feature."
+          },
+          {
+            "question": "skip_first_month: không rõ giá trị mặc định khi tạo mới, và bật/tắt có tác dụng hồi tố với Conversion đã tạo trước đó hay không.",
+            "why_it_matters": "Ảnh hưởng test case cho Customer mới tạo và test case toggle skip_first_month sau khi đã có Conversion."
+          }
+        ]
+      }
+    ],
+    "profile_relationships": [
+      {
+        "from_feature_id": "first-month-commission",
+        "to_feature_id": "commission-decision-flow",
+        "relation": "depends_on",
+        "note": "Nhận input charge_type đã phân nhánh recurring/first-month; phạm vi maximum_amount cho nhánh này đang tranh chấp (OQ-commission-calculation-005)."
+      },
+      {
+        "from_feature_id": "first-month-commission",
+        "to_feature_id": "recurring-commission",
+        "relation": "mutually_exclusive_branch",
+        "note": "Cùng input nhưng rẽ nhánh theo Customer::isFirstMonth() — chỉ đúng 1 trong 2 nhánh áp dụng cho 1 dòng."
+      },
+      {
+        "from_feature_id": "first-month-commission",
+        "to_feature_id": "refund-and-downgrade-adjustment",
+        "relation": "shares_mechanism",
+        "note": "Quy tắc isFirstMonth cho dòng âm đầu tiên trong 30 ngày (KB-006) áp dụng chung cho cả dòng downgrade/refund."
+      }
+    ],
+    "coverage_matrix": [
+      {
+        "feature_id": "first-month-commission",
+        "layer": "data",
+        "role": "system",
+        "state": "formula first-month / isFirstMonth",
+        "environment": "documented",
+        "covered": true
+      },
+      {
+        "feature_id": "first-month-commission",
+        "layer": "portal",
+        "role": "admin",
+        "state": "skip_first_month toggle",
+        "environment": "documented",
+        "covered": true
+      },
+      {
+        "feature_id": "first-month-commission",
+        "layer": "api",
+        "role": "system",
+        "state": "formula first-month",
+        "environment": "documented",
+        "covered": false
+      },
+      {
+        "feature_id": "first-month-commission",
+        "layer": "storefront",
+        "role": "n/a",
+        "state": "formula first-month",
+        "environment": "documented",
+        "covered": false
+      }
+    ],
+    "unassigned_kb_items": [],
+    "profile_conflicts": [
+      {
+        "conflict_id": "OQ-commission-calculation-005",
+        "topic": "maximum_amount có áp cho nhánh first-month hay không",
+        "conflict_scope": "cross_doc",
+        "sides": [
+          {
+            "statement": "`qikfiliate/commission - overview`: maximum_amount (cap per-row) áp dụng chung cho cả recurring VÀ first-month.",
+            "source": "`qikfiliate/commission - overview` §Bảng so sánh nhanh (CLM-03-008) — shard commission-decision-flow.json, kb_ref KB-011",
+            "confidence": "LOW"
+          },
+          {
+            "statement": "`qikfiliate/commision - recurring & first month`: KHÔNG áp maximum_amount cho first-month bình thường (chỉ nhánh first-month+yearly dùng maximum_amount × 11).",
+            "source": "`qikfiliate/commision - recurring & first month` §Công thức first-month (CLM-07-021, CLM-07-029) — shard này (first-month-commission), kb_ref KB-013",
+            "confidence": "LOW"
+          }
+        ],
+        "resolution": "UNRESOLVED",
+        "needs": "PO/dev xác nhận. Sai hướng nào cũng là trả sai tiền cho affiliate. Không chọn bên ở feature profile này. Xem đầy đủ ở shard commission-decision-flow.json."
+      }
+    ],
+    "profile_change_summary": [
+      {
+        "change": "created",
+        "detail": "Profile khởi tạo lần đầu từ DOC_BOOTSTRAP CTX-20261002-01, dựng từ 13 KB candidate của shard first-month-commission.json (9 CONFIRMED_EXPECTED gồm 2 HIGH, 2 EXAMPLE_ONLY/INFERRED, 1 KNOWN_DEFECT/OBSERVED_CURRENT, 1 CONFLICTED/INFERRED).",
+        "source_run": "CTX-20261002-01"
+      }
+    ],
+    "kb_trace_complete": true
+  },
+  "gate": {
+    "decision": "CONDITIONAL_PASS",
+    "blocking_findings": [],
+    "conditions": [
+      "KB-013 (phía `qikfiliate/commision - recurring & first month` của OQ-commission-calculation-005) KHÔNG được dùng làm oracle cho tới khi PO/dev xác nhận — giữ trong profile_conflicts, không trong capabilities/confirmed_rules.",
+      "KB-012 (known_defect) chỉ dùng làm regression watch, không phải expected result.",
+      "Tổ hợp first-month + yearly + refund (unknown_areas #3) chưa có công thức — checklist-builder không được tự suy công thức cho tổ hợp này."
+    ],
+    "allowed_next_steps": [
+      "qa-checklist-builder",
+      "knowledge-diff-analyzer"
+    ]
+  }
+}

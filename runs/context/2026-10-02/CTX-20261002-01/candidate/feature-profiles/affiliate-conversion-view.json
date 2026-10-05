@@ -1,0 +1,127 @@
+{
+  "schema_version": "1.0",
+  "artifact_type": "FeatureProfileCandidate",
+  "artifact_id": "FPCAND-CTX-20261002-01-affiliate-conversion-view",
+  "workflow_id": "CTX-20261002-01",
+  "producer": "feature-profile-builder",
+  "source_refs": [
+    { "type": "artifact_ref", "path": "candidate/product-kb/affiliate-conversion-view.json", "artifact_id": "KBCAND-CTX-20261002-01-affiliate-conversion-view" },
+    { "type": "artifact_ref", "path": "candidate/product-kb/_object-level.conversion-ledger.json", "artifact_id": "KBCAND-CTX-20261002-01-object-level-conversion-ledger" },
+    { "type": "artifact_ref", "path": "candidate/product-kb/admin-conversion-review.json", "artifact_id": "KBCAND-CTX-20261002-01-admin-conversion-review", "note": "Đọc chéo trong cùng object để lấy risk known_defect liên quan (is_capped ẩn khỏi admin)." }
+  ],
+  "upstream_artifact_ids": [
+    "KBCAND-CTX-20261002-01-affiliate-conversion-view",
+    "KBCAND-CTX-20261002-01-object-level-conversion-ledger",
+    "KBCAND-CTX-20261002-01-admin-conversion-review"
+  ],
+  "status": "READY",
+  "confidence": "MEDIUM",
+  "observations": [
+    "Mode DOC_BOOTSTRAP: observed_validations[] và act_ids[] rỗng theo đúng ràng buộc — mọi evidence là doc_ref/claim, không có quan sát runtime.",
+    "Risk known_defect 'is_capped không hiển thị ở admin' được giữ ở feature admin-conversion-review (nơi defect thực sự xảy ra) nhưng cũng được tham chiếu ở risks[] của profile này vì nó ảnh hưởng trực tiếp tới khả năng đối soát badge 'cap reached' mà affiliate nhìn thấy."
+  ],
+  "assumptions": [
+    "feature_id dùng nguyên feature_key 'affiliate-conversion-view' — chưa có FEAT-ID chính thức do orchestrator mint.",
+    "kb_refs dạng '_object-level:KB-00X' trỏ về candidate/product-kb/_object-level.conversion-ledger.json; kb_refs dạng '<feature_key>:KB-00X' trỏ về shard feature khác cùng object, đọc chéo trong run này."
+  ],
+  "unknowns": [
+    "Phân trang/giới hạn số dòng và công thức 4 tiêu chí sắp xếp trên Conversions page không được tài liệu nêu.",
+    "Công thức tính percentage hiển thị (tính ngược amount/partner_share) chỉ là INFERRED, tài liệu tự đánh dấu chưa xác nhận PO."
+  ],
+  "conflicts": [],
+  "blocking_issues": [],
+  "payload": {
+    "feature_profiles": [
+      {
+        "feature_id": "affiliate-conversion-view",
+        "feature_key": "affiliate-conversion-view",
+        "name": "Affiliate xem hoa hồng (Conversion View)",
+        "user_goal": "Affiliate muốn xem lại lịch sử hoa hồng (Conversion) của mình trên dashboard, bao gồm biết dòng nào đang bị giới hạn (cap) bởi lifetime usage cap, mà không cần và không được tự nhập/sửa số liệu.",
+        "stable_since_version": "v1",
+        "actors": [
+          { "role": "affiliate", "permission_observed": "Chỉ XEM hoa hồng của mình; không tự nhập/sửa số tiền — việc nhập tay (Custom Conversion) hoặc sửa số liệu chỉ admin panel mới làm được.", "kb_refs": ["KB-001"] }
+        ],
+        "entry_points": [
+          { "path": "Affiliate dashboard > Conversions page", "precondition": "Đã đăng nhập với role affiliate", "kb_refs": ["KB-001", "KB-002"] }
+        ],
+        "capabilities": [
+          { "name": "Xem danh sách hoa hồng (view-only)", "description": "Affiliate xem được các dòng Conversion của mình; không có quyền tạo/sửa trực tiếp trên dashboard.", "kb_refs": ["KB-001"], "act_ids": [] },
+          { "name": "Ẩn dòng usage bị cap về $0", "description": "Các dòng Conversion loại usage bị cap về đúng $0 (đạt lifetime cap) KHÔNG hiển thị trên Conversions page, tránh affiliate thấy dòng '$0' khó hiểu. Dùng scope withoutCappedToZero().", "kb_refs": ["KB-002", "_object-level:KB-002", "_object-level:KB-003"], "act_ids": [] },
+          { "name": "Hiển thị badge 'cap reached' cho dòng usage bị cap nhưng chưa về 0", "description": "Dòng hoa hồng có is_capped=true hiển thị badge 'cap reached'; badge này CHỈ tồn tại ở affiliate dashboard, không có tương đương ở admin panel.", "kb_refs": ["KB-003"], "act_ids": [] }
+        ],
+        "state_transitions": [
+          { "from": "usage conversion row — chưa cap", "to": "usage conversion row — is_capped=true (badge hiển thị)", "trigger": "amount bị cap bởi lifetime usage cap nhưng còn > $0", "condition": "is_capped=true", "kb_refs": ["KB-003"] },
+          { "from": "usage conversion row — is_capped=true", "to": "usage conversion row — cap về đúng $0, ẩn khỏi danh sách", "trigger": "amount cap về đúng $0", "condition": "object_state=usage_capped_to_zero", "kb_refs": ["KB-002"] }
+        ],
+        "confirmed_rules": [
+          { "statement": "Affiliate chỉ xem hoa hồng của mình; không tự nhập/sửa số tiền — chỉ admin mới nhập tay (Custom Conversion) hoặc sửa số liệu.", "kb_refs": ["KB-001"] },
+          { "statement": "Dòng usage bị cap về đúng $0 không hiển thị trên Conversions page của affiliate dashboard.", "kb_refs": ["KB-002", "_object-level:KB-002"] },
+          { "statement": "Dòng usage có is_capped=true hiển thị badge 'cap reached' chỉ ở affiliate dashboard, không có ở admin panel.", "kb_refs": ["KB-003"] }
+        ],
+        "observed_behavior": [
+          { "statement": "percentage hiển thị được mô tả là % hiệu lực thực tế đã dùng để tính amount (có thể khác ProgramCommission.percentage gốc nếu bị cap, tính ngược từ amount/partner_share) — tài liệu tự đánh dấu đây là suy luận, chưa xác nhận PO.", "knowledge_kind": "INFERRED", "kb_refs": ["_object-level:KB-005"] }
+        ],
+        "observed_validations": [],
+        "permissions": [
+          { "role": "affiliate", "capability": "view Conversions page", "allowed": true, "kb_refs": ["KB-001"] },
+          { "role": "affiliate", "capability": "create/edit Conversion", "allowed": false, "kb_refs": ["KB-001"] }
+        ],
+        "surface_mapping": {
+          "portal": ["Affiliate dashboard > Conversions page (KB-001, KB-002, KB-003)"],
+          "storefront": [],
+          "api": [],
+          "data": [
+            "conversions.type enum (first/recurring/usage/custom) — _object-level:KB-002",
+            "conversions.amount — _object-level:KB-003",
+            "conversions.partner_share — _object-level:KB-004",
+            "conversions.is_capped — KB-003",
+            "withoutCappedToZero() query scope — KB-002"
+          ],
+          "code": ["Conversion::TYPE_* const — _object-level:KB-002"]
+        },
+        "dependencies": [
+          { "type": "same_object_feature", "feature_key": "admin-conversion-review", "note": "Cùng entity Conversion; admin-conversion-review là nơi tạo/sửa/đối soát dữ liệu mà feature này chỉ hiển thị.", "kb_refs": ["KB-001"] },
+          { "type": "same_object_feature", "feature_key": "custom-conversion-entry", "note": "Conversion type=Custom do admin tạo qua Custom Conversion cũng hiển thị trên Conversions page này (reason hiển thị lại cho affiliate).", "kb_refs": ["custom-conversion-entry:KB-009"] },
+          { "type": "external_object", "object_key": "usage-charge-commission", "note": "Cơ chế tính cap lifetime usage nằm ngoài object conversion-ledger, ngoài phạm vi run này — feature này chỉ biết hệ quả hiển thị (is_capped, cap-to-zero).", "kb_refs": [] }
+        ],
+        "risks": [
+          { "risk": "KNOWN DEFECT ở feature admin-conversion-review: cột is_capped KHÔNG hiển thị trên admin, nên admin không có cách nhìn nhanh biết dòng usage nào bị cap; phải tự tính partner_share×usage_percentage so với amount (thủ công, dễ sai) để xác minh — ảnh hưởng khả năng đối soát với dòng mà affiliate đang thấy badge 'cap reached'.", "severity": "MEDIUM", "kb_refs": ["admin-conversion-review:KB-007", "admin-conversion-review:KB-008", "KB-003"] }
+        ],
+        "freshness": { "observed_at": null, "run_id": "CTX-20261002-01" },
+        "unknown_areas": [
+          { "question": "Conversions page có phân trang/giới hạn số dòng không, và công thức của 4 tiêu chí sắp xếp là gì?", "why_it_matters": "Không biết thì không dựng được test data/case cho phân trang hoặc sắp xếp trên trang dashboard." },
+          { "question": "percentage hiển thị có đúng là % hiệu lực thực tế đã cap (tính ngược amount/partner_share) hay là field khác — tài liệu tự đánh dấu chưa xác nhận PO?", "why_it_matters": "Nếu sai, QA sẽ xây oracle kiểm tra số liệu percentage theo công thức sai." }
+        ]
+      }
+    ],
+    "profile_relationships": [
+      { "from": "affiliate-conversion-view", "to": "admin-conversion-review", "relation": "shares_entity", "note": "Cùng Conversion entity; admin-conversion-review là nguồn ghi/đối soát, affiliate-conversion-view là nơi đọc." },
+      { "from": "affiliate-conversion-view", "to": "custom-conversion-entry", "relation": "consumes_output", "note": "Conversion type=Custom tạo qua custom-conversion-entry hiển thị tại Conversions page này." }
+    ],
+    "coverage_matrix": [
+      { "feature_id": "affiliate-conversion-view", "layer": "portal", "role": "affiliate", "state": "normal_view", "environment": "documented", "covered": true },
+      { "feature_id": "affiliate-conversion-view", "layer": "portal", "role": "affiliate", "state": "usage_capped_to_zero", "environment": "documented", "covered": true },
+      { "feature_id": "affiliate-conversion-view", "layer": "portal", "role": "affiliate", "state": "is_capped=true", "environment": "documented", "covered": true },
+      { "feature_id": "affiliate-conversion-view", "layer": "data", "role": "unspecified", "state": "normal", "environment": "documented", "covered": true },
+      { "feature_id": "affiliate-conversion-view", "layer": "api", "role": "affiliate", "state": "any", "environment": "documented", "covered": false }
+    ],
+    "unassigned_kb_items": [
+      { "kb_id": "_object-level:KB-001", "reason": "Entity relationship fact (Customer 1-N Conversion) — cấu trúc quan hệ, không gắn trực tiếp với capability view-only của feature này." },
+      { "kb_id": "_object-level:KB-006", "reason": "scope subscription() dùng cho tính level/bonus/first-month (commission-calculation) — không liên quan trực tiếp tới việc affiliate xem Conversion." }
+    ],
+    "profile_conflicts": [],
+    "profile_change_summary": [
+      { "version": "v1", "change": "Initial profile tạo từ DOC_BOOTSTRAP run CTX-20261002-01." }
+    ],
+    "kb_trace_complete": true
+  },
+  "gate": {
+    "decision": "CONDITIONAL_PASS",
+    "blocking_findings": [],
+    "conditions": [
+      "KB-003 không được dùng để suy ra rằng admin panel KHÔNG BIẾT dòng nào bị cap — đó là risk thuộc feature admin-conversion-review, chỉ tham chiếu ở đây.",
+      "observed_behavior KB-005 (percentage, INFERRED) không được nâng CONFIRMED_EXPECTED ở bước checklist."
+    ],
+    "allowed_next_steps": ["qa-checklist-builder", "knowledge-diff-analyzer"]
+  }
+}

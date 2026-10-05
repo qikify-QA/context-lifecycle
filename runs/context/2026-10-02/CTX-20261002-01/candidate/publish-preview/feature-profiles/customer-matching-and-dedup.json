@@ -1,0 +1,258 @@
+{
+  "feature_key": "customer-matching-and-dedup",
+  "name": "Khớp Customer & chống trùng lặp (dedup) khi import payout",
+  "user_goal": "Với vai trò hệ thống xử lý import (không có actor người dùng trực tiếp ở bước này), suy luận đúng Customer của 1 dòng CSV payout (vì Shopify và Qikfiliate không chia sẻ khoá chính nào cho 1 charge) và phát hiện dòng đã được import trước đó để tránh tạo Conversion trùng khi admin re-upload file.",
+  "stable_since_version": "v1",
+  "actors": [
+    {
+      "role": "unspecified",
+      "permission_observed": "Cơ chế khớp Customer và dedup chạy ở tầng xử lý dữ liệu khi import (cả màn hình Upload payout file và Populate/reconcile đều gọi tới); không có claim permission riêng cho bước này trong shard.",
+      "kb_refs": [
+        "KB-001",
+        "KB-002"
+      ]
+    }
+  ],
+  "entry_points": [],
+  "capabilities": [
+    {
+      "name": "Khớp Customer cho 1 dòng payout mới",
+      "description": "Vì Shopify và Qikfiliate là 2 hệ thống độc lập, không chia sẻ khoá chính nào cho 1 charge, hệ thống phải suy luận Customer bằng cách khớp theo tổ hợp field có sẵn trong CSV: (1) Customer.name = cột Shop; (2) Customer.program_id → Program.slug = cột app_slug. Nếu không tìm thấy Customer nào khớp cả 2 điều kiện, dòng bị bỏ qua hoàn toàn, không tạo Conversion.",
+      "kb_refs": [
+        "KB-001",
+        "KB-002",
+        "KB-003",
+        "KB-004"
+      ]
+    },
+    {
+      "name": "Chống trùng lặp (dedup) khi re-upload cùng dữ liệu",
+      "description": "Hệ thống coi 1 dòng CSV là 'đã tồn tại' (bỏ qua, không tạo Conversion mới) nếu tìm thấy 1 Conversion sẵn có của đúng Customer đó khớp các điều kiện: payout_date giống nhau; charge_type giống nhau; charge_creation_time giống nhau theo NGÀY (không theo giờ/phút/giây); partner_share giống nhau trong sai số 0.005 (không so tuyệt đối, vì float có thể lệch bit khi lưu DB). Vai trò của điều kiện charge_id trong tổ hợp này ĐANG CONFLICTED (xem profile_conflicts — OQ-payout-import-021): KHÔNG khẳng định charge_id có hay không tham gia điều kiện AND này ở đây.",
+      "kb_refs": [
+        "KB-006",
+        "KB-007",
+        "KB-008",
+        "KB-009",
+        "KB-010",
+        "KB-011"
+      ]
+    },
+    {
+      "name": "Ví dụ minh hoạ: upload lại đúng file cũ",
+      "description": "Trong 1 ví dụ minh hoạ của tài liệu, khi admin upload lại đúng file cũ, banner báo '0 conversions created' (hoặc số nhỏ hơn số dòng thật nếu chỉ 1 phần trùng) — tài liệu khẳng định đây là hành vi ĐÚNG, không phải lỗi. Đây là EXAMPLE_ONLY, KHÔNG dùng để suy ra số lượng/boundary cụ thể cho test case.",
+      "kb_refs": [
+        "KB-012"
+      ]
+    }
+  ],
+  "state_transitions": [
+    {
+      "from": "row_with_customer_candidate_fields",
+      "to": "customer_matched",
+      "trigger": "Customer.name == cột Shop VÀ Customer.program_id→Program.slug == cột app_slug",
+      "condition": "Khớp cả 2 điều kiện cùng lúc.",
+      "kb_refs": [
+        "KB-003"
+      ]
+    },
+    {
+      "from": "row_with_customer_candidate_fields",
+      "to": "row_dropped_no_customer_match",
+      "trigger": "Không có Customer nào khớp cả 2 điều kiện",
+      "condition": "Dòng bị bỏ qua hoàn toàn, không tạo Conversion, không log.",
+      "kb_refs": [
+        "KB-004",
+        "KB-005"
+      ]
+    },
+    {
+      "from": "customer_matched",
+      "to": "row_treated_as_duplicate_skipped",
+      "trigger": "Tồn tại 1 Conversion cũ của đúng Customer khớp payout_date + charge_type + charge_creation_time(ngày) + partner_share(±0.005) [+ vai trò charge_id: CONFLICTED]",
+      "condition": "Toàn bộ điều kiện AND (trừ charge_id — đang CONFLICTED) khớp với 1 Conversion sẵn có.",
+      "kb_refs": [
+        "KB-006",
+        "KB-007",
+        "KB-008",
+        "KB-009",
+        "KB-010"
+      ]
+    }
+  ],
+  "confirmed_rules": [
+    {
+      "statement": "KB-001: Shopify và Qikfiliate là 2 hệ thống độc lập, không chia sẻ khoá chính nào cho 1 charge.",
+      "kb_refs": [
+        "KB-001"
+      ]
+    },
+    {
+      "statement": "KB-002: Hệ thống phải suy luận Customer bằng cách khớp theo tổ hợp field có sẵn trong CSV.",
+      "kb_refs": [
+        "KB-002"
+      ]
+    },
+    {
+      "statement": "KB-003: Khớp Customer đòi 2 điều kiện cùng lúc: Customer.name = cột Shop; Customer.program_id→Program.slug = cột app_slug.",
+      "kb_refs": [
+        "KB-003"
+      ]
+    },
+    {
+      "statement": "KB-004: Không khớp Customer nào → dòng bị bỏ qua hoàn toàn, không tạo Conversion.",
+      "kb_refs": [
+        "KB-004"
+      ]
+    },
+    {
+      "statement": "KB-006: Dedup coi 1 dòng là đã tồn tại nếu khớp toàn bộ điều kiện với 1 Conversion sẵn có (payout_date, charge_type, charge_creation_time theo ngày, partner_share ±0.005; vai trò charge_id CONFLICTED — xem profile_conflicts).",
+      "kb_refs": [
+        "KB-006"
+      ]
+    },
+    {
+      "statement": "KB-007: payout_date giống nhau là 1 điều kiện dedup.",
+      "kb_refs": [
+        "KB-007"
+      ]
+    },
+    {
+      "statement": "KB-008: charge_type giống nhau là 1 điều kiện dedup.",
+      "kb_refs": [
+        "KB-008"
+      ]
+    },
+    {
+      "statement": "KB-009: charge_creation_time được so theo NGÀY, không theo giờ/phút/giây (cột DB bị cast về đầu ngày).",
+      "kb_refs": [
+        "KB-009"
+      ]
+    },
+    {
+      "statement": "KB-010: partner_share được so trong sai số 0.005, không so tuyệt đối (float có thể lệch bit khi lưu DB).",
+      "kb_refs": [
+        "KB-010"
+      ]
+    },
+    {
+      "statement": "KB-011: Các dòng downgrade/credit của Shopify không có Charge ID.",
+      "kb_refs": [
+        "KB-011"
+      ]
+    }
+  ],
+  "observed_behavior": [],
+  "observed_validations": [],
+  "permissions": [],
+  "surface_mapping": {
+    "portal": [],
+    "storefront": [],
+    "api": [],
+    "data": [
+      "Customer (khớp qua Customer.name + Customer.program_id→Program.slug — KB-001..KB-004)",
+      "Conversion (so trùng qua payout_date/charge_type/charge_creation_time/partner_share — KB-006..KB-011)"
+    ],
+    "code": []
+  },
+  "dependencies": [
+    "payout-csv-upload: dùng cơ chế khớp Customer của feature này trước khi tạo Conversion mới; dòng không khớp Customer bị bỏ qua (KB-004 ở đây tương ứng KB-023 của feature kia).",
+    "populate-reconcile-late-data: dùng điều kiện tương tự (customer_id, payout_date, charge_creation_time...) để tìm Conversion cần cập nhật, dù khoá khớp của populate không hoàn toàn giống dedup ở đây (granularity charge_creation_time của populate chưa được xác nhận — xem unknown_areas của feature đó)."
+  ],
+  "risks": [
+    {
+      "risk": "KNOWN_DEFECT (KB-005): Dòng bị bỏ qua vì không khớp Customer không được ghi log — cùng loại observability gap với KB-024 của feature payout-csv-upload, khác nguyên nhân skip.",
+      "kb_refs": [
+        "KB-005"
+      ]
+    }
+  ],
+  "unknown_areas": [
+    {
+      "question": "Dòng refund có charge_id riêng của chính nó (khác charge gốc) hay luôn rỗng như dòng downgrade/credit?",
+      "why_it_matters": "Đây là câu hỏi then chốt chưa được tài liệu nào trả lời rõ, là gốc của OQ-payout-import-021 (xem profile_conflicts) — quyết định liệu charge_id có tham gia điều kiện dedup như 1 khoá so sánh thật hay không đối với dòng refund/downgrade."
+    },
+    {
+      "question": "Dòng bị dedup bỏ qua (không khớp Customer) có được ghi lại ở đâu để đối soát không (báo cáo, log, export)?",
+      "why_it_matters": "KB-005 nói rõ 'không log'; đây là điều kiện để QA/Ops kiểm chứng kết quả một lần import tiền mà tài liệu không nêu."
+    }
+  ],
+  "last_updated": {
+    "date": "2026-10-05",
+    "ccr_ref": "bootstrap"
+  },
+  "profile_relationships": [
+    {
+      "from": "customer-matching-and-dedup",
+      "to": "payout-csv-upload",
+      "relation": "SUPPORTS",
+      "note": "Cung cấp cơ chế khớp Customer + dedup dùng khi tạo Conversion mới."
+    },
+    {
+      "from": "customer-matching-and-dedup",
+      "to": "populate-reconcile-late-data",
+      "relation": "SUPPORTS",
+      "note": "Cung cấp nguyên lý khớp dữ liệu nền tảng; populate dùng khoá khớp riêng (customer_id, payout_date, charge_creation_time, date_from, date_to)."
+    }
+  ],
+  "unassigned_kb_items": [],
+  "profile_conflicts": [
+    {
+      "conflict_id": "OQ-payout-import-021",
+      "topic": "Vai trò của charge_id trong cơ chế dedup đối với các dòng refund/downgrade.",
+      "sides": [
+        {
+          "side": "A",
+          "statement": "KB-014 (nguồn `qikfiliate/payout - charge type reference`): cơ chế chống trùng lặp (dedup) KHÔNG dùng charge_id làm khoá chính cho các dòng loại refund/downgrade.",
+          "kb_refs": [
+            "KB-014"
+          ]
+        },
+        {
+          "side": "B",
+          "statement": "KB-013 (nguồn `qikfiliate/payout - dedup and reconciliation`): charge_id giống nhau LÀ 1 trong các điều kiện AND bắt buộc của dedup; riêng trường hợp charge_id rỗng (dòng downgrade/credit không có Charge ID) được coi là NULL khi so sánh, không so = với chuỗi rỗng.",
+          "kb_refs": [
+            "KB-013"
+          ]
+        }
+      ],
+      "resolution": "UNRESOLVED",
+      "requires_human_decision": true,
+      "reason_not_resolved": "Hai tài liệu nguồn cùng version v1 / cùng generated_at 2026-08-20, không có generated_from_commit — không có cơ sở nào để chọn bên. Topic 'payout' nằm trong config/products/qikfiliate.json → supersede_policy.never_supersede_topics, nên KHÔNG được tự supersede dù có nguồn mạnh hơn xuất hiện sau (§12.5 STEP 6 blocker f). Câu hỏi then chốt (dòng refund có charge_id riêng hay không) không được tài liệu nào trả lời.",
+      "impact_if_misread": "Hiểu sai dẫn tới hoặc bỏ sót 1 dòng refund thật (coi nhầm là trùng lặp), hoặc tạo Conversion refund trùng lặp — cả hai đều là lỗi tài chính trực tiếp lên balance affiliate."
+    }
+  ],
+  "profile_change_summary": [
+    "Profile mới tạo ở (DOC_BOOTSTRAP), chưa có version trước để so sánh."
+  ],
+  "kb_trace_complete": true,
+  "coverage_matrix": [
+    {
+      "layer": "data",
+      "role": "unspecified",
+      "state": "re_upload_or_new_row_matching",
+      "environment": "documented",
+      "covered": true
+    },
+    {
+      "layer": "data",
+      "role": "unspecified",
+      "state": "re_upload_duplicate_check",
+      "environment": "documented",
+      "covered": true
+    },
+    {
+      "layer": "portal",
+      "role": "admin",
+      "state": "any",
+      "environment": "documented",
+      "covered": false
+    },
+    {
+      "layer": "code",
+      "role": "unspecified",
+      "state": "any",
+      "environment": "documented",
+      "covered": false
+    }
+  ]
+}

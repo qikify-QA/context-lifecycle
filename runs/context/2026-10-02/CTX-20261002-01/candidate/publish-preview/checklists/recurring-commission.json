@@ -1,0 +1,406 @@
+{
+  "feature_key": "recurring-commission",
+  "checklist_version": "v1",
+  "checks": [
+    {
+      "check_id": "CHK-RC-001",
+      "dimension": "CORE",
+      "layer": "db",
+      "title": "rate recurring = ProgramCommission.percentage / 100",
+      "applicability": {
+        "role": "system",
+        "state": "dòng payout đã xếp nhánh recurring, không phải first-month",
+        "environment": "documented",
+        "theme_or_device": ""
+      },
+      "precondition": "ProgramCommission(Program, Level) có percentage cấu hình; dòng payout đã được commission-decision-flow xếp vào nhánh recurring (Customer::isFirstMonth=false).",
+      "steps": [
+        "Cấu hình ProgramCommission.percentage = P% cho (Program, Level) đang xét.",
+        "Tạo 1 dòng payout recurring (không phải first-month) cho affiliate ở Level đó.",
+        "Chạy pipeline tính hoa hồng."
+      ],
+      "observation_point": "Rate thực tế dùng để tính amount_raw.",
+      "expected_result": "rate = percentage / 100 — đúng bằng giá trị cấu hình trong ProgramCommission, không qua biến đổi nào khác ở bước này.",
+      "oracle": {
+        "kb_ids": [
+          "KB-001"
+        ],
+        "oracle_strength": "BASELINE"
+      },
+      "status": "NEEDS_CONFIRMATION",
+      "open_question_draft": "Oracle STRONG cua check 'CHK-RC-001' hien chi dua tren KB item nguon dev_doc (toan bo KB cua run nay khong co spec_doc/po_dev_confirm/test_case nao). Theo luat C5, dev_doc khong duoc la oracle STRONG duy nhat cho check priority P1 (mat du lieu/tien/permission). Ha xuong BASELINE cho toi khi co test_case PASS xac nhan hanh vi, hoac PO/Dev xac nhan truc tiep (po_dev_confirm).",
+      "risk_refs": [],
+      "priority": "P1",
+      "automation_suitability": "SUITABLE"
+    },
+    {
+      "check_id": "CHK-RC-002",
+      "dimension": "CORE",
+      "layer": "db",
+      "title": "amount_raw = partner_share × rate",
+      "applicability": {
+        "role": "system",
+        "state": "dòng payout nhánh recurring",
+        "environment": "documented",
+        "theme_or_device": ""
+      },
+      "precondition": "Có rate xác định (xem CHK-RC-001) và partner_share của dòng payout đã biết.",
+      "steps": [
+        "Tạo dòng payout recurring với partner_share = S và rate = R đã biết.",
+        "Chạy pipeline tính hoa hồng."
+      ],
+      "observation_point": "amount_raw trước khi áp cap.",
+      "expected_result": "amount_raw = S × R, đúng theo công thức nhân đơn giản, trước khi áp bất kỳ cap nào.",
+      "oracle": {
+        "kb_ids": [
+          "KB-002"
+        ],
+        "oracle_strength": "BASELINE"
+      },
+      "status": "NEEDS_CONFIRMATION",
+      "open_question_draft": "Oracle STRONG cua check 'CHK-RC-002' hien chi dua tren KB item nguon dev_doc (toan bo KB cua run nay khong co spec_doc/po_dev_confirm/test_case nao). Theo luat C5, dev_doc khong duoc la oracle STRONG duy nhat cho check priority P1 (mat du lieu/tien/permission). Ha xuong BASELINE cho toi khi co test_case PASS xac nhan hanh vi, hoac PO/Dev xac nhan truc tiep (po_dev_confirm).",
+      "risk_refs": [],
+      "priority": "P1",
+      "automation_suitability": "SUITABLE"
+    },
+    {
+      "check_id": "CHK-RC-003",
+      "dimension": "CORE",
+      "layer": "db",
+      "title": "max = maximum_amount × 12 nếu charge_type chứa \"yearly\", ngược lại max = maximum_amount",
+      "applicability": {
+        "role": "system",
+        "state": "dòng payout nhánh recurring, charge_type yearly hoặc không",
+        "environment": "documented",
+        "theme_or_device": ""
+      },
+      "precondition": "ProgramCommission.maximum_amount = M cấu hình cho (Program, Level).",
+      "steps": [
+        "Tạo 1 dòng payout recurring với charge_type KHÔNG chứa \"yearly\". Chạy pipeline, ghi nhận max dùng để cap.",
+        "Tạo 1 dòng payout recurring với charge_type CHỨA \"yearly\" (cùng affiliate/Program). Chạy pipeline, ghi nhận max dùng để cap."
+      ],
+      "observation_point": "Giá trị max thực tế dùng trong bước clamp cho mỗi dòng.",
+      "expected_result": "Dòng không yearly: max = M. Dòng yearly: max = M × 12 (vì Shopify tính phí 1 lần cho cả 12 tháng thay vì hàng tháng).",
+      "oracle": {
+        "kb_ids": [
+          "KB-003"
+        ],
+        "oracle_strength": "BASELINE"
+      },
+      "status": "NEEDS_CONFIRMATION",
+      "open_question_draft": "Oracle STRONG cua check 'CHK-RC-003' hien chi dua tren KB item nguon dev_doc (toan bo KB cua run nay khong co spec_doc/po_dev_confirm/test_case nao). Theo luat C5, dev_doc khong duoc la oracle STRONG duy nhat cho check priority P1 (mat du lieu/tien/permission). Ha xuong BASELINE cho toi khi co test_case PASS xac nhan hanh vi, hoac PO/Dev xac nhan truc tiep (po_dev_confirm).",
+      "risk_refs": [],
+      "priority": "P1",
+      "automation_suitability": "SUITABLE"
+    },
+    {
+      "check_id": "CHK-RC-004",
+      "dimension": "CORE",
+      "layer": "db",
+      "title": "amount = clamp(amount_raw, max) — chặn trên bằng min(giá_trị, |max|) khi max != 0",
+      "applicability": {
+        "role": "system",
+        "state": "amount_raw vượt quá max cấu hình",
+        "environment": "documented",
+        "theme_or_device": ""
+      },
+      "precondition": "max != 0 (có cap thật); amount_raw > max (vd amount_raw=75, max=50, theo ví dụ minh hoạ KB-007).",
+      "steps": [
+        "Cấu hình percentage=15%, maximum_amount=$50.",
+        "Tạo dòng payout recurring với partner_share=$500 (amount_raw=75).",
+        "Chạy pipeline tính hoa hồng."
+      ],
+      "observation_point": "amount cuối cùng của Conversion.",
+      "expected_result": "amount bị cắt về đúng max = $50 (clamp(75,50) -> 50) — không giữ nguyên amount_raw.",
+      "oracle": {
+        "kb_ids": [
+          "KB-004"
+        ],
+        "oracle_strength": "BASELINE"
+      },
+      "status": "NEEDS_CONFIRMATION",
+      "open_question_draft": "Oracle STRONG cua check 'CHK-RC-004' hien chi dua tren KB item nguon dev_doc (toan bo KB cua run nay khong co spec_doc/po_dev_confirm/test_case nao). Theo luat C5, dev_doc khong duoc la oracle STRONG duy nhat cho check priority P1 (mat du lieu/tien/permission). Ha xuong BASELINE cho toi khi co test_case PASS xac nhan hanh vi, hoac PO/Dev xac nhan truc tiep (po_dev_confirm).",
+      "risk_refs": [],
+      "priority": "P1",
+      "automation_suitability": "SUITABLE"
+    },
+    {
+      "check_id": "CHK-RC-005",
+      "dimension": "BOUNDARY",
+      "layer": "db",
+      "title": "clamp: max == 0 nghĩa là không giới hạn, trả nguyên amount_raw bất kể lớn thế nào",
+      "applicability": {
+        "role": "system",
+        "state": "ProgramCommission.maximum_amount = 0 (Program cố ý không đặt cap)",
+        "environment": "documented",
+        "theme_or_device": ""
+      },
+      "precondition": "ProgramCommission.maximum_amount = 0 cho (Program, Level) đang xét.",
+      "steps": [
+        "Cấu hình maximum_amount = 0.",
+        "Tạo dòng payout recurring với partner_share rất lớn (vd $10,000) để amount_raw vượt xa mọi giá trị cap thông thường.",
+        "Chạy pipeline tính hoa hồng."
+      ],
+      "observation_point": "amount cuối cùng của Conversion.",
+      "expected_result": "amount = amount_raw nguyên vẹn, KHÔNG bị cắt ở bất kỳ ngưỡng nào — max=0 nghĩa là không giới hạn.",
+      "oracle": {
+        "kb_ids": [
+          "KB-004"
+        ],
+        "oracle_strength": "BASELINE"
+      },
+      "status": "NEEDS_CONFIRMATION",
+      "open_question_draft": "Oracle STRONG cua check 'CHK-RC-005' hien chi dua tren KB item nguon dev_doc (toan bo KB cua run nay khong co spec_doc/po_dev_confirm/test_case nao). Theo luat C5, dev_doc khong duoc la oracle STRONG duy nhat cho check priority P1 (mat du lieu/tien/permission). Ha xuong BASELINE cho toi khi co test_case PASS xac nhan hanh vi, hoac PO/Dev xac nhan truc tiep (po_dev_confirm).",
+      "risk_refs": [],
+      "priority": "P1",
+      "automation_suitability": "SUITABLE"
+    },
+    {
+      "check_id": "CHK-RC-006",
+      "dimension": "BOUNDARY",
+      "layer": "db",
+      "title": "clamp: biên đúng tại amount_raw == max (chưa vượt, không bị cắt) vs amount_raw vừa vượt max",
+      "applicability": {
+        "role": "system",
+        "state": "amount_raw ở sát ngưỡng max",
+        "environment": "documented",
+        "theme_or_device": ""
+      },
+      "precondition": "max != 0 đã cấu hình (vd $50).",
+      "steps": [
+        "Tạo dòng payout có amount_raw tính ra đúng bằng max (vd amount_raw = $50.00 khi max=$50).",
+        "Tạo dòng payout khác có amount_raw = max + 0.000001 (vượt max dù rất nhỏ).",
+        "Chạy pipeline cho cả 2 dòng."
+      ],
+      "observation_point": "amount cuối cùng của mỗi dòng.",
+      "expected_result": "Dòng amount_raw == max: amount = max (không bị cắt thêm, min(max,max)=max). Dòng amount_raw > max (dù chỉ nhỏ hơn 1 đơn vị round(.,6)): amount = max (bị cắt).",
+      "oracle": {
+        "kb_ids": [
+          "KB-004"
+        ],
+        "oracle_strength": "STRONG"
+      },
+      "status": "READY",
+      "open_question_draft": null,
+      "risk_refs": [],
+      "priority": "P2",
+      "automation_suitability": "SUITABLE"
+    },
+    {
+      "check_id": "CHK-RC-007",
+      "dimension": "STATE_DATA",
+      "layer": "db",
+      "title": "percentage lưu trên Conversion = % hiệu lực thực tế, khác rate cấu hình gốc khi dòng bị cap, và phải bền trong DB",
+      "applicability": {
+        "role": "system",
+        "state": "dòng recurring bị cap",
+        "environment": "documented",
+        "theme_or_device": ""
+      },
+      "precondition": "Dòng payout recurring bị cap (amount < amount_raw), vd percentage=15%, partner_share=$500, maximum_amount=$50.",
+      "steps": [
+        "Chạy pipeline cho dòng bị cap như trên (amount=50, amount_raw=75).",
+        "Truy vấn lại Conversion.percentage trong DB (không qua tầng tính toán lại)."
+      ],
+      "observation_point": "Giá trị Conversion.percentage lưu trong DB.",
+      "expected_result": "Conversion.percentage = amount / partner_share × 100 = 50/500 = 10% — KHÁC với percentage cấu hình gốc (15%) trong ProgramCommission; giá trị này được lưu cố định, không tính lại mỗi lần đọc.",
+      "oracle": {
+        "kb_ids": [
+          "KB-005"
+        ],
+        "oracle_strength": "STRONG"
+      },
+      "status": "READY",
+      "open_question_draft": null,
+      "risk_refs": [],
+      "priority": "P2",
+      "automation_suitability": "SUITABLE"
+    },
+    {
+      "check_id": "CHK-RC-008",
+      "dimension": "CORE",
+      "layer": "db",
+      "title": "Conversion sinh ra từ nhánh recurring có type = \"recurring\"",
+      "applicability": {
+        "role": "system",
+        "state": "dòng payout nhánh recurring",
+        "environment": "documented",
+        "theme_or_device": ""
+      },
+      "precondition": "Dòng payout đã được xếp vào nhánh recurring (không phải first-month, không phải usage).",
+      "steps": [
+        "Chạy pipeline cho 1 dòng payout nhánh recurring.",
+        "Truy vấn Conversion.type trong DB."
+      ],
+      "observation_point": "Giá trị Conversion.type.",
+      "expected_result": "Conversion.type = \"recurring\".",
+      "oracle": {
+        "kb_ids": [
+          "KB-006"
+        ],
+        "oracle_strength": "STRONG"
+      },
+      "status": "READY",
+      "open_question_draft": null,
+      "risk_refs": [],
+      "priority": "P2",
+      "automation_suitability": "SUITABLE"
+    },
+    {
+      "check_id": "CHK-RC-009",
+      "dimension": "BOUNDARY",
+      "layer": "db",
+      "title": "[NEEDS_CONFIRMATION — OQ-commission-calculation-006] Công thức recurring có áp dụng cho dòng charge_type chứa \"one-time\" hay không",
+      "applicability": {
+        "role": "system",
+        "state": "dòng payout charge_type chứa \"one-time\"",
+        "environment": "documented",
+        "theme_or_device": ""
+      },
+      "precondition": "Dòng payout có charge_type chứa \"one-time\", không chứa \"usage\".",
+      "steps": [
+        "Tạo dòng payout với charge_type chứa \"one-time\".",
+        "Chạy pipeline tính hoa hồng, kiểm tra có áp công thức recurring (KB-001..KB-004) cho dòng này hay không."
+      ],
+      "observation_point": "Dòng có được tính bằng công thức recurring (có Conversion type=recurring) hay bị bỏ qua hoàn toàn.",
+      "expected_result": "KHÔNG khẳng định 1 phía. Side A (KB-008, nguồn `qikfiliate/commision - recurring & first month` preamble, đọc nghĩa đen): công thức recurring/first-month áp dụng cho MỌI dòng không chứa \"usage\", bao hàm cả \"one-time\". Side B (commission-decision-flow:KB-010, nguồn `qikfiliate/commission - overview`): dòng \"one-time\" bị BỎ QUA hoàn toàn, không tạo Conversion nào — tức công thức recurring không áp dụng.",
+      "oracle": {
+        "kb_ids": [],
+        "oracle_strength": "NONE"
+      },
+      "status": "NEEDS_CONFIRMATION",
+      "open_question_draft": "PO/dev xác nhận: công thức recurring có áp dụng cho dòng charge_type chứa \"one-time\" hay dòng đó bị bỏ qua hoàn toàn trước khi tới bước tính recurring? Đây là OQ-commission-calculation-006 — xem đầy đủ ở checklist commission-decision-flow (CHK-CDF-003).",
+      "risk_refs": [
+        "dconf-com-002-onetime-boundary"
+      ],
+      "priority": "P1",
+      "automation_suitability": "UNKNOWN"
+    },
+    {
+      "check_id": "CHK-RC-010",
+      "dimension": "NEGATIVE",
+      "layer": "db",
+      "title": "[NEEDS_CONFIRMATION] Công thức tính ngược percentage lưu trên Conversion cho charge yearly chưa trích được từ tài liệu",
+      "applicability": {
+        "role": "system",
+        "state": "dòng recurring + yearly",
+        "environment": "documented",
+        "theme_or_device": ""
+      },
+      "precondition": "Dòng payout recurring có charge_type chứa \"yearly\".",
+      "steps": [
+        "Tạo dòng payout recurring + yearly, với percentage cấu hình và maximum_amount khiến dòng có thể bị cap.",
+        "Chạy pipeline, kiểm tra giá trị Conversion.percentage lưu lại."
+      ],
+      "observation_point": "Giá trị Conversion.percentage của dòng yearly.",
+      "expected_result": "CHƯA CÓ oracle cho công thức tính ngược cụ thể — `qikfiliate/commision - recurring & first month` dẫn chiếu tới 1 mục mô tả công thức này nhưng mục đó KHÔNG có trong phạm vi tài liệu được giao cho agent này.",
+      "oracle": {
+        "kb_ids": [],
+        "oracle_strength": "NONE"
+      },
+      "status": "NEEDS_CONFIRMATION",
+      "open_question_draft": "Công thức tính ngược percentage lưu trên Conversion cho charge yearly bị cap là gì? `qikfiliate/commision - recurring & first month` có nhắc tới mục \"percentage lưu trên Conversion\" nhưng nội dung mục đó không có trong bộ tài liệu được giao — cần dev cung cấp lại hoặc trích đúng section.",
+      "risk_refs": [],
+      "priority": "P2",
+      "automation_suitability": "UNKNOWN"
+    },
+    {
+      "check_id": "CHK-RC-011",
+      "dimension": "NEGATIVE",
+      "layer": "db",
+      "title": "[NEEDS_CONFIRMATION] Giá trị mặc định của percentage/maximum_amount khi ProgramCommission mới tạo, chưa cấu hình",
+      "applicability": {
+        "role": "system",
+        "state": "ProgramCommission mới tạo, chưa gán percentage/maximum_amount",
+        "environment": "documented",
+        "theme_or_device": ""
+      },
+      "precondition": "Tạo mới 1 ProgramCommission cho (Program, Level) mà KHÔNG set percentage/maximum_amount (dùng giá trị mặc định của hệ thống, nếu có).",
+      "steps": [
+        "Tạo ProgramCommission mới cho (P, L) không điền percentage/maximum_amount.",
+        "Tạo 1 dòng payout recurring cho affiliate ở (P, L) đó.",
+        "Chạy pipeline tính hoa hồng."
+      ],
+      "observation_point": "Giá trị rate/cap thực tế dùng để tính amount cho dòng này.",
+      "expected_result": "CHƯA CÓ oracle — tài liệu không nêu giá trị mặc định của percentage/maximum_amount khi ProgramCommission mới tạo.",
+      "oracle": {
+        "kb_ids": [],
+        "oracle_strength": "NONE"
+      },
+      "status": "NEEDS_CONFIRMATION",
+      "open_question_draft": "Giá trị mặc định của ProgramCommission.percentage và .maximum_amount khi bản ghi mới tạo chưa cấu hình là gì (null, 0, hay bắt buộc nhập)? Ảnh hưởng trực tiếp expected result khi test ProgramCommission mới tạo.",
+      "risk_refs": [],
+      "priority": "P2",
+      "automation_suitability": "UNKNOWN"
+    },
+    {
+      "check_id": "CHK-RC-012",
+      "dimension": "INTEGRATION",
+      "layer": "db",
+      "title": "Công thức recurring CHỈ áp dụng khi Customer::isFirstMonth = false cho dòng đang xét",
+      "applicability": {
+        "role": "system",
+        "state": "dòng payout đã qua quyết định isFirstMonth",
+        "environment": "documented",
+        "theme_or_device": ""
+      },
+      "precondition": "Có 2 dòng cùng loại input (subscription bình thường) của cùng 1 shop: 1 dòng là conversion ĐẦU TIÊN của shop (isFirstMonth=true), 1 dòng là conversion thứ 2 trở đi (isFirstMonth=false).",
+      "steps": [
+        "Chạy pipeline cho dòng đầu tiên của shop.",
+        "Chạy pipeline cho dòng thứ 2 của shop (cùng charge_type, cùng loại không phải usage).",
+        "So sánh công thức/field thực tế áp dụng cho 2 dòng."
+      ],
+      "observation_point": "Conversion.type và rate field dùng (percentage vs first_month_percentage) của mỗi dòng.",
+      "expected_result": "Dòng đầu tiên (isFirstMonth=true) được tính bằng công thức first-month-commission (dùng first_month_percentage, Conversion.type=\"first\"). Dòng thứ 2 (isFirstMonth=false) được tính bằng công thức recurring (dùng percentage, Conversion.type=\"recurring\") — 2 nhánh loại trừ nhau trên cùng input.",
+      "oracle": {
+        "kb_ids": [
+          "KB-001",
+          "KB-006",
+          "first-month-commission:KB-006"
+        ],
+        "oracle_strength": "BASELINE"
+      },
+      "status": "NEEDS_CONFIRMATION",
+      "open_question_draft": "Oracle STRONG cua check 'CHK-RC-012' hien chi dua tren KB item nguon dev_doc (toan bo KB cua run nay khong co spec_doc/po_dev_confirm/test_case nao). Theo luat C5, dev_doc khong duoc la oracle STRONG duy nhat cho check priority P1 (mat du lieu/tien/permission). Ha xuong BASELINE cho toi khi co test_case PASS xac nhan hanh vi, hoac PO/Dev xac nhan truc tiep (po_dev_confirm).",
+      "risk_refs": [],
+      "priority": "P1",
+      "automation_suitability": "SUITABLE"
+    }
+  ],
+  "coverage_by_feature_and_risk": [
+    {
+      "risk": "dconf-com-002-onetime-boundary",
+      "covered_by": [
+        "CHK-RC-009"
+      ]
+    }
+  ],
+  "checks_needing_confirmation": [
+    {
+      "check_id": "CHK-RC-009",
+      "open_question_draft": "Công thức recurring có áp dụng cho dòng \"one-time\" hay dòng đó bị bỏ qua hoàn toàn?",
+      "reason": "OQ-commission-calculation-006 UNRESOLVED."
+    },
+    {
+      "check_id": "CHK-RC-010",
+      "open_question_draft": "Công thức tính ngược percentage cho charge yearly bị cap là gì?",
+      "reason": "`qikfiliate/commision - recurring & first month` dẫn chiếu tới section không có trong phạm vi tài liệu được giao."
+    },
+    {
+      "check_id": "CHK-RC-011",
+      "open_question_draft": "Giá trị mặc định percentage/maximum_amount khi ProgramCommission mới tạo?",
+      "reason": "Không tài liệu nào trong phạm vi được giao nêu giá trị mặc định."
+    }
+  ],
+  "duplicates_removed": [],
+  "excluded_dimensions": [
+    {
+      "dimension": "PERMISSION",
+      "reason": "Feature này là công thức tính toán nội bộ của engine, không có UI hay phân quyền riêng theo role — không có boundary permission nào được tài liệu mô tả trong phạm vi shard này."
+    },
+    {
+      "dimension": "REGRESSION",
+      "reason": "Không có KB item status=KNOWN_DEFECT hoặc behavior change từ diff analyzer trong shard recurring-commission.json ở run này; regression watch cho object commission-calculation đã gán cho commission-decision-flow (KB-012), first-month-commission (KB-012) và usage-charge-commission (KB-010, KB-012)."
+    }
+  ]
+}

@@ -1,0 +1,112 @@
+{
+  "run_id": "CTX-20260921-02",
+  "status": "PUBLISHED",
+  "mode": "ZERO_DOC_BOOTSTRAP",
+  "product": "teeinblue",
+  "object_target": {
+    "object_type": "Translation",
+    "object_key": "translation"
+  },
+  "gate_c0": {
+    "decision": "PASS",
+    "note": "product=teeinblue, object_target=Translation (Product Page Content /product-page-content + Dynamic Translations /artwork-translations candidate route), environment=staging, role=owner (Linh explorer sub=273), mutation_policy=REAL_MUTATION_WITH_CLEANUP đều đầy đủ trong input/bootstrap-request.json do user cung cấp sẵn — không hỏi lại."
+  },
+  "orchestrator_actions": [
+    {
+      "step": "init",
+      "note": "Đọc contract §1-12. Đọc input/bootstrap-request.json (đã có sẵn, đầy đủ 9 TASK). Kiểm tra knowledge/portal-pages.md: xác nhận cả /product-page-content (Store Settings) và /artwork-translations (Extras) đều là route OK (render đủ nội dung), không phải DEAD/EMPTY — nhưng tên hiển thị UI thật của /artwork-translations vẫn cần portal-explorer verify tại chỗ theo đúng note của bootstrap-request. Grep knowledge/products/teeinblue/objects/sdk/kb.json cho 'translat|locale|language' — không có KB nào về Translation object, xác nhận đây là object hoàn toàn mới (không có gì để cross-link). Dựng cây thư mục run (raw/portal, raw/network, raw/storefront, intermediate/api,db,code, candidate/feature-profiles, candidate/checklists, review). Ghi run-manifest.json."
+    },
+    {
+      "step": "portal-explorer (TASK-1,2,3,4,5,8)",
+      "note": "BLOCKED — không login được. (1) playwright.config.ts trên working tree (uncommitted, có từ trước run này) đã mất project 'setup' + .env loading so với git HEAD, làm hỏng quy trình login `--project=setup` đã ghi trong memory portal-login. (2) Sandbox permission classifier của Claude Code chặn mọi cách agent tự đọc/dùng TIB_STAGING_PASSWORD ('Credential Materialization') và chặn browser_snapshot lần 2 trên /login?staff=true ('Credential Exploration') — nghi do trang autofill sẵn credential của SAI account (Linh Pham) ở lần snapshot đầu. Evidence đầy đủ tại raw/portal/portal-evidence.json (status BLOCKED, gate FAIL)."
+    },
+    {
+      "step": "user decision (2026-09-21)",
+      "note": "User được hỏi 2 câu qua AskUserQuestion. Quyết định: (a) KHÔNG khôi phục playwright.config.ts ngay — để nguyên, user tự xử lý sau, không rõ chủ đích thay đổi. (b) TẠM DỪNG run Translation — không nới permission, không bàn giao session thủ công ngay bây giờ. Run status chuyển PAUSED_BLOCKED. Orchestrator KHÔNG được tự resume run này cho tới khi user chủ động unblock (sửa playwright.config.ts và/hoặc bàn giao login session) và yêu cầu tiếp tục."
+    },
+    {
+      "step": "resume decision (2026-09-21, same-day follow-up)",
+      "note": "User yêu cầu lại đúng scope Translation (Product Page Content + Dynamic Translations) trong session mới. Hỏi lại qua AskUserQuestion cách unblock — user chọn: khôi phục playwright.config.ts về bản HEAD (git checkout -- playwright.config.ts). Đã thực hiện: (1) git checkout khôi phục project 'setup' + .env loading + storageState dependency. (2) Chạy `npx playwright test testscript/auth.setup.ts --project=setup` — LẦN ĐẦU fail vì testscript/testscript/portal-login.ts dòng verify cũ chờ `localStorage.getItem('teeinblue_token')` — key này không còn tồn tại từ 2026-09-14 (đã ghi trong knowledge/portal-login.md, session giờ là cookie Sanctum SPA) nên luôn timeout dù login UI đã thành công thật (sidebar render đúng 'Linh explorer'). (3) Sửa testscript/portal-login.ts: bỏ waitForFunction đọc localStorage, thay bằng wait cho `a[href=\"/subscriptions\"]` attached (generic cho mọi account, không hardcode tên). Đây là fix code thật (không phải chỉ workaround riêng run này) vì auth.setup.ts dùng chung cho mọi run tương lai. (4) Chạy lại — PASSED (11.4s), playwright/.auth/owner.json đã ghi mới (2026-09-21 14:07). Đã CÂN NHẮC nhưng KHÔNG thử pre-authenticate profile MCP dùng chung (~/.pw-mcp-profile) bằng script Playwright riêng: `ps aux` cho thấy nhiều process playwright-mcp khác đang chạy trên CÙNG profile dir từ nhiều session trước đó (9:10AM, 12:04PM, 2:04PM cùng ngày) — rủi ro đụng Chrome profile lock / phá session của agent khác đang chạy song song, không an toàn. Quyết định: để portal-explorer tự login qua MCP browser tools như luồng đã THÀNH CÔNG trong CTX-20260921-01 cùng ngày (verified: sidebar 'Linh explorer' + header x-acting-user-id: 266), không phải luồng bị chặn — chỉ cảnh báo rõ bẫy autofill account sai (Linh Pham) trong prompt. Status chuyển RESUMED."
+    },
+    {
+      "step": "explorers (portal-explorer, storefront-explorer, api-explorer) — verified completed prior to this session",
+      "note": "Follow-up session (2026-09-21) resumes existing run per user instruction — no re-explore. Confirmed by reading 3 artifacts directly: raw/portal/portal-evidence.json (status READY, gate PASS, TASK-1..5,8 complete, 2 mutation tests created and cleaned up with verification — Product Page Content 'Form header' vi override cleared, Dynamic Translations record id=69 deleted, GET /api/translations confirmed empty). raw/storefront/storefront-evidence.json (status PARTIAL, gate CONDITIONAL_PASS, TASK-6/7 — Product Page Content propagates to storefront IMMEDIATE/server-side rendered; Dynamic Translations conflict logged: NOT propagating, observed at both DOM and API response /api/merchant/campaigns/{id}.json layers, contradicting original business context 'both translation types show on storefront' — recorded in conflicts[] with full evidence_refs, not reconciled). intermediate/api/action-api-map.json (status PARTIAL, gate CONDITIONAL_PASS, 6 operations: GET shop-locales, PUT config-translations, POST translations/bulk, GET translations [unmapped response], POST /localization [Shopify-native], GET merchant/campaigns/{id}.json). db_observation disabled per bootstrap-request so no db-explorer step. All 3 artifacts READY/PARTIAL and ready to fan in; no re-run needed."
+    },
+    {
+      "step": "qa-knowledge-normalizer",
+      "note": "Dispatching now. Fan-in of portal-evidence.json + storefront-evidence.json + action-api-map.json into candidate/product-kb.json, mode product-kb-from-observation, kb_version 1 (first bootstrap for translation object, no prior KB). The Dynamic-Translations-does-not-propagate conflict must be preserved as an UNRESOLVED conflict in the KB, not silently resolved to either side."
+    },
+    {
+      "step": "qa-knowledge-normalizer — DONE",
+      "note": "Output: candidate/product-kb.json. 19 kb_candidates (KB-001..KB-019), all OBSERVED_CURRENT except KB-011 (INFERRED). Most confidence LOW (single-sample rule), 5 items MEDIUM (KB-003, KB-004, KB-014, KB-017, KB-018). 2 duplicates merged (KB-003, KB-004). 9 cross_layer_evidence_map entries linking UI<->API via ACT-ID. CONFLICT-001 preserved UNRESOLVED: business context claim ('both translation types show on storefront', from bootstrap-request, LOW confidence hypothesis) vs observed NOT_OBSERVED (SF-OBS-006 + APIOP-006, byte-identical API response across locales) — resolution left to authority, not chosen by normalizer. 15 coverage_gaps carried forward. Gate: CONDITIONAL_PASS, status PARTIAL, confidence MEDIUM, no blocking_findings."
+    },
+    {
+      "step": "feature-profile-builder — DONE",
+      "note": "3 Feature Profiles written to candidate/feature-profiles/: product-page-content-translation.json (FEAT-01-05, CONDITIONAL_PASS), dynamic-translations.json (FEAT-03-06, CONDITIONAL_PASS), language-locale-switcher.json (FEAT-02-04, CONDITIONAL_PASS, portal+storefront switcher merged with explicit note they are independent mechanisms). CONFLICT-001 correctly preserved UNRESOLVED in dynamic-translations.json: mirrored at envelope-level profile_conflicts[] and in payload state_transitions/risks/dependencies/surface_mapping as an open question, not resolved to either side. All fields trace to KB-ID/ACT-ID/APIOP-ID."
+    },
+    {
+      "step": "qa-checklist-builder — DONE",
+      "note": "3 checklists written to candidate/checklists/: product-page-content-translation.json (13 checks, 4 NEEDS_CONFIRMATION), dynamic-translations.json (12 checks, 8 NEEDS_CONFIRMATION), language-locale-switcher.json (9 checks, 4 NEEDS_CONFIRMATION). CONFLICT-001 handled correctly in dynamic-translations.json: CHK-008/009/010 (3 sub-scopes: product base name / Option Title / Variants name) all NEEDS_CONFIRMATION, oracle_strength NONE, no side chosen, explicit instruction not to generalize CHK-008's single observed sample to the other two untested sub-scopes. Envelope-level conflicts[] mirrors CONFLICT-001 with checks_affected list."
+    },
+    {
+      "step": "knowledge-diff-analyzer — SKIPPED",
+      "note": "Per contract §10 and orchestrator instruction, knowledge-diff-analyzer only runs from context version 2 onward. This is kb_version 1 (first bootstrap for object translation, no prior canonical KB exists), so this step is correctly skipped."
+    },
+    {
+      "step": "context-quality-reviewer — round 1 — REJECTED",
+      "note": "Reviewer verdict: publish_allowed=false. FIND-001 BLOCKING: unredacted email (linhtester.ptit+explore@gmail.com) in raw/portal/portal-evidence.json payload.portal_context.verified_by[1], despite file self-declaring redaction_applied:true. Confirmed NOT propagated into any candidate/ file (KB, feature profiles, checklists all clean). FIND-002 MINOR (non-blocking): action-api-map.json unmapped_endpoints[0] missing explicit 'kind' enum tag. CONFLICT-001 independently re-verified by reviewer as correctly preserved UNRESOLVED across KB -> feature profiles -> checklists, no side chosen anywhere. All other gates (C0,C2-C5) PASS; C1/C6 FAIL due to FIND-001. Output: review/gate-results.json, review/verdict.json. Rework target: portal-explorer only, narrow fix, no re-explore needed."
+    },
+    {
+      "step": "portal-explorer — retry redaction — DONE",
+      "note": "Narrow retry per contract retry table (PII leak -> stop publish, require redact, not full re-run). Fixed raw/portal/portal-evidence.json payload.portal_context.verified_by[1]: email replaced with [REDACTED], id/name/structure preserved. Verified JSON valid. Agent independently grepped entire raw/portal/ tree (all ACT-*/ subfolders + raw/network/ files it produced) for email pattern and secret-field names (authorization/cookie/token/password/secret/api_key/access_token/signature/hmac) -- no further leaks found. Did not touch any file outside its own producer scope."
+    },
+    {
+      "step": "context-quality-reviewer — round 2 — APPROVED",
+      "note": "Independent re-grep of entire run folder (not trusting portal-explorer's own report) confirmed FIND-001 fully fixed, no new leaks. CONFLICT-001 re-confirmed UNRESOLVED and unchanged across all layers (MD5 checksums of candidate/ files unchanged between round 1 and 2). Gates C0-C6 all PASS. publish_allowed=true. Output: review/verdict.json (round 2, previous_verdict field preserves round 1 summary), review/gate-results.json (round 2)."
+    },
+    {
+      "step": "orchestrator — publish",
+      "note": "Published to knowledge/products/teeinblue/objects/translation/: kb.json (candidate/product-kb.json + publish envelope, kb_version=1, published_context_version=1), features/{product-page-content-translation,dynamic-translations,language-locale-switcher}/profile.json (verbatim from candidate, unmodified), checklists/{same 3 keys}.json (verbatim from candidate, unmodified). Also wrote feature-summary.md and open-questions.md following the established repo convention used by other objects (artwork, asset-category, campaign, font, order, product-base, sdk). Verified all 7 JSON files parse valid and re-grepped published knowledge/ tree for email/secret patterns -- clean. Only orchestrator writes to knowledge/, only after reviewer publish_allowed=true, consistent with contract exclusive-write-scope rule."
+    }
+  ],
+  "artifacts": {
+    "product_kb_refs": [
+      "knowledge/products/teeinblue/objects/translation/kb.json"
+    ],
+    "feature_profile_refs": [
+      "knowledge/products/teeinblue/objects/translation/features/product-page-content-translation/profile.json",
+      "knowledge/products/teeinblue/objects/translation/features/dynamic-translations/profile.json",
+      "knowledge/products/teeinblue/objects/translation/features/language-locale-switcher/profile.json"
+    ],
+    "checklist_refs": [
+      "knowledge/products/teeinblue/objects/translation/checklists/product-page-content-translation.json",
+      "knowledge/products/teeinblue/objects/translation/checklists/dynamic-translations.json",
+      "knowledge/products/teeinblue/objects/translation/checklists/language-locale-switcher.json"
+    ]
+  },
+  "coverage": {
+    "objects": [
+      "translation"
+    ],
+    "roles": [
+      "owner (Linh explorer, sub=273/user_id=266) on portal",
+      "GUEST buyer on storefront"
+    ],
+    "surfaces": [
+      "portal",
+      "storefront",
+      "api"
+    ],
+    "unexplored_areas": [
+      "DB layer (db_observation disabled per bootstrap-request)",
+      "Dynamic Translations sub-scopes 'Option Title' and 'Variants name' (only 'Product base name' tested, campaign 2595 lacked free-text Option Title field)",
+      "Real file import submission for Dynamic Translations (only file-chooser open was tested)",
+      "Permission/cross-tenant boundary on all 6 mapped API operations",
+      "Mobile viewport interaction for both storefront switcher and Product Page Content propagation",
+      ">2 published locale scale (store only has en/vi)",
+      "Second store linh-explorer-2.myshopify.com",
+      "Server-side HTML-injection mechanism for Product Page Content (no APIOP-ID mappable)",
+      "Error/negative path (4xx/5xx) for all 6 mapped operations"
+    ]
+  }
+}

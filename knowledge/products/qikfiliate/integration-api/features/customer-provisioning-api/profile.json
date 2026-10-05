@@ -1,0 +1,238 @@
+{
+  "feature_key": "customer-provisioning-api",
+  "name": "Báo cáo & quản lý vòng đời tồn tại của Customer (shop)",
+  "user_goal": "Với vai trò client app (ví dụ mysbox), báo cho Qikfiliate biết một shop đã thực sự cài app (gắn với affiliate giới thiệu qua tracking_id + program_slug), đã gỡ cài (soft-delete), hoặc cài lại (khôi phục) — vì Qikfiliate không tự biết các trạng thái này.",
+  "stable_since_version": "v1",
+  "actors": [
+    {
+      "role": "client_app",
+      "permission_observed": "Được phép tạo/soft-delete/khôi phục Customer qua 3 route của feature này, với điều kiện đã xác thực theo feature api-key-authentication (FEAT-01).",
+      "kb_refs": [
+        "KB-002",
+        "KB-003"
+      ]
+    }
+  ],
+  "entry_points": [
+    {
+      "path": "POST /api/customers",
+      "precondition": "Đã có TrackingInformation hợp lệ (chưa dùng) ứng với tracking_id gửi lên; Program tồn tại theo program_slug gửi lên (KB-009 — hiện KHÔNG được validate).",
+      "kb_refs": [
+        "KB-001",
+        "KB-004"
+      ]
+    },
+    {
+      "path": "DELETE /api/customers",
+      "precondition": "Customer (theo related_id + program_slug) đang ở trạng thái active, chưa soft-delete.",
+      "kb_refs": [
+        "KB-013",
+        "KB-015"
+      ]
+    },
+    {
+      "path": "PUT /api/trashed-customers",
+      "precondition": "Customer đã bị soft-delete trước đó (tồn tại trong trashed scope).",
+      "kb_refs": [
+        "KB-016",
+        "KB-017"
+      ]
+    }
+  ],
+  "capabilities": [
+    {
+      "name": "Tạo Customer khi shop thực sự cài app (install)",
+      "description": "POST /api/customers tìm TrackingInformation theo tracking_id, tìm Program theo program_slug, gộp user_id/source_url từ TrackingInformation với name/email/related_id từ request để tạo 1 Customer mới gắn với affiliate giới thiệu. Sau khi tạo thành công, TrackingInformation bị xoá (token dùng 1 lần) — gọi lại cùng tracking_id lần 2 sẽ thất bại. Response dạng CustomerResource. Payload mẫu: tracking_id, related_id, name, email, program_slug (KB-004, EXAMPLE_ONLY — không phải đặc tả required).",
+      "kb_refs": [
+        "KB-001",
+        "KB-004",
+        "KB-005",
+        "KB-006",
+        "KB-007",
+        "KB-008"
+      ]
+    },
+    {
+      "name": "Soft-delete Customer khi shop gỡ cài app (uninstall)",
+      "description": "DELETE /api/customers soft-delete 1 Customer. Trả về 204 No Content, không có body. Payload mẫu: related_id, program_slug (KB-015, EXAMPLE_ONLY). Theo KB-012 (hedged, chưa xác nhận bắt buộc), thường đi kèm 1 lệnh gọi riêng POST /api/customer-events(name=uninstalled) ở feature FEAT-03.",
+      "kb_refs": [
+        "KB-013",
+        "KB-014",
+        "KB-015",
+        "KB-012"
+      ]
+    },
+    {
+      "name": "Khôi phục Customer khi shop cài lại (reinstall)",
+      "description": "PUT /api/trashed-customers khôi phục 1 Customer đã soft-delete: gửi deleted_at rỗng/null/false khiến hệ thống gọi restore, huỷ soft-delete. Payload mẫu: related_id, program_slug, deleted_at (KB-017, EXAMPLE_ONLY).",
+      "kb_refs": [
+        "KB-016",
+        "KB-017"
+      ]
+    }
+  ],
+  "state_transitions": [
+    {
+      "from": "không tồn tại",
+      "to": "active",
+      "trigger": "POST /api/customers thành công",
+      "condition": "tracking_id khớp TrackingInformation còn hiệu lực (chưa dùng); program_slug khớp Program tồn tại (không được validate — KB-009)",
+      "kb_refs": [
+        "KB-001",
+        "KB-005",
+        "KB-006"
+      ]
+    },
+    {
+      "from": "active",
+      "to": "soft_deleted",
+      "trigger": "DELETE /api/customers thành công",
+      "condition": "Customer (related_id + program_slug) đang active",
+      "kb_refs": [
+        "KB-013",
+        "KB-014"
+      ]
+    },
+    {
+      "from": "soft_deleted",
+      "to": "active",
+      "trigger": "PUT /api/trashed-customers với deleted_at rỗng/null/false",
+      "condition": "Customer đang ở trạng thái soft_deleted",
+      "kb_refs": [
+        "KB-016"
+      ]
+    }
+  ],
+  "confirmed_rules": [
+    "KB-001: POST /api/customers tạo Customer gắn với affiliate qua tracking_id + program_slug, gộp dữ liệu từ TrackingInformation và request.",
+    "KB-002: Qikfiliate không tự biết trạng thái shop; mọi thông tin phải do client app báo qua API này.",
+    "KB-003: Nhóm API tích hợp là cửa vào duy nhất cho luồng dữ liệu trạng thái shop.",
+    "KB-005: Sau khi tạo Customer thành công, TrackingInformation bị xoá vì token dùng đúng 1 lần.",
+    "KB-006: Gọi lại POST /api/customers với cùng tracking_id lần 2 sẽ thất bại (token đã bị xoá).",
+    "KB-007: Response của POST /api/customers có dạng CustomerResource.",
+    "KB-013: DELETE /api/customers soft-delete 1 Customer khi shop gỡ cài app.",
+    "KB-014: DELETE /api/customers trả về 204 No Content, không có body.",
+    "KB-016: PUT /api/trashed-customers khôi phục Customer đã soft-delete khi gửi deleted_at rỗng/null/false, gọi restore."
+  ],
+  "observed_behavior": [],
+  "observed_validations": [],
+  "permissions": [
+    "client_app đã xác thực theo FEAT-01 (api-key-authentication) được phép gọi cả 3 route của feature này."
+  ],
+  "surface_mapping": {
+    "portal": [],
+    "storefront": [],
+    "api": [
+      "POST /api/customers",
+      "DELETE /api/customers",
+      "PUT /api/trashed-customers"
+    ],
+    "data": [
+      "Customer (bảng shop) — soft-delete pattern (deleted_at)",
+      "TrackingInformation — token dùng 1 lần, bị xoá sau khi tạo Customer thành công",
+      "Program — tham chiếu qua program_slug, hiện KHÔNG được validate tồn tại ở tầng request (KB-009)"
+    ],
+    "code": []
+  },
+  "dependencies": [
+    "FEAT-01-api-key-authentication: mọi request của feature này phải qua xác thực X-API-Key trước.",
+    "FEAT-03-customer-event-reporting-api: KB-012 nêu 2 lệnh gọi (DELETE /api/customers và POST /api/customer-events name=uninstalled) thường đi cùng nhau khi uninstall, nhưng chưa xác nhận bắt buộc cả 2."
+  ],
+  "risks": [
+    {
+      "risk": "KNOWN_DEFECT (KB-009): POST /api/customers không validate program_slug tồn tại (thiếu exists:programs,slug) ở tầng request.",
+      "kb_refs": [
+        "KB-009"
+      ]
+    },
+    {
+      "risk": "KNOWN_DEFECT nghi vấn (KB-010): program_slug không tồn tại có thể gây lỗi runtime 500 khi cố lấy $program->id, thay vì trả 422 rõ ràng.",
+      "kb_refs": [
+        "KB-010"
+      ]
+    },
+    {
+      "risk": "KNOWN_DEFECT nghi vấn, chưa xác minh (KB-011): một số endpoint khác dùng program_slug có thể cùng gặp lỗi tương tự KB-010, chưa xác minh endpoint nào.",
+      "kb_refs": [
+        "KB-011"
+      ]
+    }
+  ],
+  "unknown_areas": [
+    {
+      "question": "Gọi POST /api/customers với related_id đã tồn tại (cùng Program) thì xảy ra gì — lỗi trùng, ghi đè, hay tạo bản ghi thứ hai?",
+      "why_it_matters": "Shop cài lại mà client app gọi sai endpoint (POST thay vì PUT /api/trashed-customers) là tình huống thực tế dễ xảy ra; không có expected result."
+    },
+    {
+      "question": "PUT /api/trashed-customers trả về status/body gì khi restore thành công và khi không tìm thấy bản ghi đã soft-delete?",
+      "why_it_matters": "Là endpoint duy nhất khôi phục dữ liệu; không có contract response thì không verify được bước khôi phục."
+    },
+    {
+      "question": "Client app có BẮT BUỘC gọi cả DELETE /api/customers và POST /api/customer-events(uninstalled) khi uninstall, hay 1 trong 2 đã đủ?",
+      "why_it_matters": "Ảnh hưởng thiết kế test case cho luồng uninstall và việc hệ thống nhận biết đúng shop đã gỡ cài hay chưa."
+    },
+    {
+      "question": "Field nào required/optional cho cả 3 route (POST /api/customers, DELETE /api/customers, PUT /api/trashed-customers)?",
+      "why_it_matters": "Chỉ có payload mẫu, không có đặc tả chính thức — không dựng được test case validate field thiếu/sai kiểu."
+    }
+  ],
+  "last_updated": {
+    "date": "2026-10-05",
+    "ccr_ref": "bootstrap"
+  },
+  "profile_relationships": [
+    {
+      "from": "FEAT-02-customer-provisioning-api",
+      "to": "FEAT-01-api-key-authentication",
+      "relation": "DEPENDS_ON"
+    },
+    {
+      "from": "FEAT-02-customer-provisioning-api",
+      "to": "FEAT-03-customer-event-reporting-api",
+      "relation": "RELATED_LIFECYCLE_STEP"
+    }
+  ],
+  "unassigned_kb_items": [],
+  "profile_conflicts": [],
+  "profile_change_summary": [
+    "Profile mới tạo ở (DOC_BOOTSTRAP), chưa có version trước."
+  ],
+  "kb_trace_complete": true,
+  "coverage_matrix": [
+    {
+      "layer": "api",
+      "role": "client_app",
+      "state": "active",
+      "environment": "documented",
+      "covered": true
+    },
+    {
+      "layer": "api",
+      "role": "client_app",
+      "state": "soft_deleted",
+      "environment": "documented",
+      "covered": true
+    },
+    {
+      "layer": "data",
+      "role": "client_app",
+      "state": "active_to_soft_deleted",
+      "environment": "documented",
+      "covered": true
+    },
+    {
+      "layer": "data",
+      "role": "client_app",
+      "state": "soft_deleted_to_active",
+      "environment": "documented",
+      "covered": true
+    },
+    {
+      "layer": "portal",
+      "role": "client_app",
+      "state": "n/a",
+      "environment": "documented",
+      "covered": false
+    }
+  ]
+}
