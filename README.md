@@ -25,7 +25,7 @@ Nó không chạy test. Việc test hằng ngày thuộc về daily test agent r
 ### 1. Lấy context
 
 ```bash
-git clone --depth 1 git@github.com:qikify-QA/qa-knowledge.git
+git clone --depth 1 https://github.com/qikify-QA/qa-knowledge.git
 ```
 
 ~6MB. Không cần clone repo này (nó nặng 200MB+ vì chứa toàn bộ evidence).
@@ -113,13 +113,22 @@ Bạn sẽ nhận phản hồi ngay trên task đó (status + note) với 1 tron
 
 Chạy local — explorer cần credential staging trong `.env`, session browser, quyền gọi staging API.
 
+`knowledge/` là **git submodule** trỏ tới `qikify-QA/qa-knowledge`. Clone repo này kèm knowledge:
+
+```bash
+git clone --recurse-submodules https://github.com/qikify-QA/context-lifecycle.git
+# đã clone rồi: git submodule update --init knowledge
+```
+
+Update knowledge **không cần commit repo này**: `publish-knowledge.mjs --push` commit + tag + push ngay trong `knowledge/`. Muốn ghim một phiên bản knowledge vào repo build thì `git add knowledge && git commit` (tuỳ chọn — `.gitmodules` đặt `ignore = dirty` nên thay đổi local trong `knowledge/` không làm bẩn `git status`).
+
 ```bash
 npm run ops-board          # bảng theo dõi state agent: http://127.0.0.1:4177
 
 node scripts/generate-manifest.mjs           # sinh knowledge/manifest.json
 node scripts/generate-manifest.mjs --check   # chỉ kiểm, exit 1 nếu có object chưa publish
 node scripts/publish-knowledge.mjs           # dry-run: kiểm + chuẩn bị, KHÔNG đẩy
-node scripts/publish-knowledge.mjs --push    # đẩy thật sang qa-knowledge
+node scripts/publish-knowledge.mjs --push    # commit + tag + push trong submodule knowledge/ (qa-knowledge)
 node scripts/prune-runs.mjs                  # báo cáo run nào không còn được KB tham chiếu
 ```
 

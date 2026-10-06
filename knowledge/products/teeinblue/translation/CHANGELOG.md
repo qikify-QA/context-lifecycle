@@ -1,4 +1,0 @@
-# CHANGELOG — Translation
-
-- 2026-09-21 — bootstrap:CTX-20260921-02 — Initial context created from zero-doc bootstrap (`ZERO_DOC_BOOTSTRAP`). Covers 3 features: `product-page-content-translation`, `dynamic-translations`, `language-locale-switcher`. 21 KB items published (KB-001..KB-021), all `OBSERVED_CURRENT`/`INFERRED` except KB-020/KB-021 (`PROPOSED`); 0 items `CONFIRMED_EXPECTED`. Run had 1 blocked start (login tooling issue, resolved same day) and 1 review round `REJECTED` for an unredacted email in raw evidence (fixed and independently re-verified at round 2).
-- 2026-09-21 — user-annotation:2026-09-21 — Added KB-020/KB-021 (`PROPOSED`, unverified) directly from a user chat annotation after the bootstrap publish: possible alternate "Import to Translations" entry point on Artwork/Product Base/Campaign list pages, and a broader field-scope claim for Dynamic Translations than the UI banner states. Recorded as open question OQ-translation-022.

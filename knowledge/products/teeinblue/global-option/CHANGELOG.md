@@ -1,4 +1,0 @@
-# Changelog — Global Option
-
-- 2026-09-15 — bootstrap:CTX-20260915-01 — Initial context created from zero-doc bootstrap (round 1): portal+API exploration of Global Option CRUD (create/edit/clone/delete across 7 layer types) and of the artwork-personalization link ("Use an existing global option"); 25 KB candidates, 2 conflicts opened (Category default value, cross-object "No personalization" option mismatch with object `artwork`).
-- 2026-09-16 — bootstrap:CTX-20260915-01 — Round 2 fan-in added storefront evidence (buyer-facing personalization, share-value across artworks/printareas, AI image generation, add-to-cart, cart line-item shape) for 2/7 Global Option types (text, text-to-image); 1 business rule confirmed by product owner (share value by Global Option id, with a stated pixel-level/live-sync verification limitation); 2 new conflicts opened (campaign.status ambiguity, localStorage key naming by type).

@@ -1,6 +1,9 @@
 #!/usr/bin/env node
 // Phát hành knowledge cho team: sinh manifest -> kiểm nhất quán -> kiểm không rò rỉ field
-// nội bộ -> đẩy sang repo qikify-QA/qa-knowledge.
+// nội bộ -> commit + tag + push NGAY TRONG submodule knowledge/ (repo qikify-QA/qa-knowledge).
+//
+// knowledge/ là git submodule trỏ tới qa-knowledge, nên publish KHÔNG cần commit/push repo
+// build này. Muốn ghim phiên bản knowledge vào repo build thì tự `git add knowledge` (tuỳ chọn).
 //
 // Từ khi knowledge/ chuyển sang schema §5a, knowledge/ HOÀN TOÀN TỰ CHỨA: không còn giữ
 // evidence_refs hay bất kỳ con trỏ nào vào runs/ (runs/ không đi kèm khi publish, và giờ
@@ -17,7 +20,7 @@
 // repo consumer dùng chung cho cả team.
 //
 //   node scripts/publish-knowledge.mjs             # dry-run: chuẩn bị + kiểm, KHÔNG đẩy
-//   node scripts/publish-knowledge.mjs --push      # đẩy thật (side effect: repo dùng chung)
+//   node scripts/publish-knowledge.mjs --push      # commit + push thật trong knowledge/ (side effect: repo dùng chung)
 //   node scripts/publish-knowledge.mjs --allow-unpublished   # cho qua object thiếu block publish
 
 import { readFile, mkdir, rm, readdir, stat, cp } from "node:fs/promises";
@@ -32,7 +35,7 @@ const knowledgeDir = path.join(rootDir, "knowledge");
 const stageDir = path.join(rootDir, ".publish-stage");
 
 const SOURCE_REPO = "qikify-QA/context-lifecycle";
-const TARGET_REPO = "git@github.com:qikify-QA/qa-knowledge.git";
+const TARGET_REPO = "https://github.com/qikify-QA/qa-knowledge.git";
 
 const doPush = process.argv.includes("--push");
 const allowUnpublished = process.argv.includes("--allow-unpublished");
@@ -211,29 +214,15 @@ async function findBadConfirmationRefs(dir) {
 }
 
 async function main() {
-  // 1. Trạng thái git phải sạch — tag publish (ctx-YYYY-MM-DD) và commit message ở repo
-  // consumer trỏ về đúng 1 sha của repo build này; sha đó chỉ có ý nghĩa cho người khác
-  // nếu mọi thứ đã được commit và đẩy lên (không ai mở được sha chỉ tồn tại cục bộ).
-  const dirty = await git("status", "--porcelain", "knowledge", "runs");
-  if (dirty) {
-    console.error("FAIL: knowledge/ hoặc runs/ còn thay đổi chưa commit.");
-    console.error("Publish gắn tag theo commit sha, nên phải commit + push repo build TRƯỚC khi publish.");
-    console.error(dirty.split("\n").slice(0, 10).join("\n"));
-    process.exit(1);
-  }
-
-  const sha = await git("rev-parse", "HEAD");
-  let pushedSha = null;
+  // 1. knowledge/ phải là submodule đã checkout. Sha repo build chỉ ghi vào commit message
+  // để tra ngược (không bắt buộc đã push — knowledge publish độc lập với repo build).
   try {
-    pushedSha = await git("rev-parse", "origin/main");
+    await git("-C", knowledgeDir, "rev-parse", "--git-dir");
   } catch {
-    /* chưa có upstream */
-  }
-  if (pushedSha && pushedSha !== sha) {
-    console.error(`FAIL: HEAD (${sha.slice(0, 8)}) chưa được đẩy lên origin/main (${pushedSha.slice(0, 8)}).`);
-    console.error("Commit sha ghi vào message publish sẽ không ai truy cập được. Chạy: git push");
+    console.error("FAIL: knowledge/ không phải git repo. Chạy: git submodule update --init knowledge");
     process.exit(1);
   }
+  const sha = await git("rev-parse", "HEAD");
 
   // 2. Sinh manifest + kiểm nhất quán
   console.log("== Kiểm tra knowledge ==");
@@ -269,7 +258,7 @@ async function main() {
 // cho mọi product. Repo chỉ ship PHỤ LỤC product-specific. Trước đây ship cả 2
 // template (trong đó 1 bản .json đã tự khai deprecated và lỗi nhịp cấu trúc), nên
 // consumer đọc được một khuôn không còn ai dùng.
-for (const name of ["ccr-product-appendix.md"]) {
+  for (const name of ["ccr-product-appendix.md"]) {
     await cp(path.join(rootDir, "contracts", name), path.join(stageDir, "how-to-request", name));
   }
 
@@ -330,21 +319,22 @@ for (const name of ["ccr-product-appendix.md"]) {
     return;
   }
 
-  // 5. Đẩy thật
+  // 5. Commit + tag + push trong submodule knowledge/. how-to-request/ được đồng bộ từ
+  // contracts/ vào knowledge/ trước khi commit để consumer luôn có bản mới nhất.
   const tag = `ctx-${new Date().toISOString().slice(0, 10)}`;
-  const workDir = path.join(stageDir, ".repo");
-  console.log(`\n== Đẩy sang ${TARGET_REPO} (tag ${tag}) ==`);
-  await execFileAsync("git", ["clone", "--depth", "1", TARGET_REPO, workDir]);
-  for (const name of ["products", "manifest.json", "how-to-request"]) {
-    await rm(path.join(workDir, name), { recursive: true, force: true });
-    await cp(path.join(stageDir, name), path.join(workDir, name), { recursive: true });
-  }
-  const run = (...a) => execFileAsync("git", a, { cwd: workDir });
+  console.log(`\n== Đẩy knowledge/ -> ${TARGET_REPO} (tag ${tag}) ==`);
+  await rm(path.join(knowledgeDir, "how-to-request"), { recursive: true, force: true });
+  await cp(path.join(stageDir, "how-to-request"), path.join(knowledgeDir, "how-to-request"), { recursive: true });
+  const run = (...a) => git("-C", knowledgeDir, ...a);
   await run("add", "-A");
+  if (!(await run("status", "--porcelain"))) {
+    console.log("knowledge/ không có thay đổi — không có gì để publish.");
+    return;
+  }
   await run("commit", "-m", `Publish knowledge from ${SOURCE_REPO}@${sha.slice(0, 8)}`);
-  await run("tag", tag);
+  await run("tag", "-f", tag);
   await run("push", "origin", "HEAD");
-  await run("push", "origin", tag);
+  await run("push", "-f", "origin", tag);
   console.log(`Xong. Team lấy bằng: git clone --depth 1 ${TARGET_REPO}`);
 }
 

@@ -200,6 +200,14 @@ Ba tầng giờ khai tường minh: **product** (vocabulary/actor/ranh giới) �
 
 **Quyết định:** cảnh báo trong `issues[]`, **không** đổi `status`. Vì `[]` **hợp lệ** về nguyên tắc (object có thể thật sự không có fact dùng chung), nhưng nó không phân biệt được "đã rà, không có" với "chưa ai rà" — và sự mơ hồ đó không được im lặng. Làm bước rút trích thật là **sửa nội dung KB teeinblue**, thuộc quyết định 1.6 → chờ chủ repo.
 
+### 2.17 `knowledge/` thành submodule `qikify-QA/qa-knowledge` (2026-10-06)
+
+Trước đây `knowledge/` được track trong repo build, và `publish-knowledge.mjs` bắt repo build phải sạch + đã push rồi mới clone `qa-knowledge` và copy sang. Hệ quả: mỗi lần update knowledge đều kéo theo một commit ở repo build.
+
+**Quyết định (chủ repo chọn):** tách bằng `git subtree split` (giữ lịch sử) sang `qa-knowledge`, gắn lại dưới dạng submodule cùng path `knowledge/` — agent và script không đổi path. `--push` giờ commit/tag/push trong submodule; sha repo build chỉ ghi vào commit message để tra ngược, không còn bắt buộc đã push.
+
+**Hệ quả cần biết:** `qa-knowledge` giờ chứa cả `_open-issues/` (trước không publish). 3 file trong đó (`product-base-api.md`, `security.md`, `ui-inconsistencies.md`) còn đường dẫn `runs/context` — leak scan §5a **không** quét `_open-issues/` (giữ phạm vi cũ: `products/**`, `manifest.json`, `how-to-request/**`). Còn mở: strip các đường dẫn đó, hoặc chuyển `_open-issues/` ra khỏi repo consumer.
+
 ---
 
 ## 3. Phát hiện làm đổi thiết kế
