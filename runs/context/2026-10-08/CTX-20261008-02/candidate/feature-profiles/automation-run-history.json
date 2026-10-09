@@ -1,0 +1,1021 @@
+{
+  "schema_version": "1.0",
+  "artifact_type": "FeatureProfileCandidate",
+  "artifact_id": "ART-FEATURE-PROFILE-automation-run-history-CTX-20261008-02",
+  "workflow_id": "CTX-20261008-02",
+  "producer": "feature-profile-builder",
+  "source_refs": [
+    "candidate/product-kb/automation-run-history.json",
+    "candidate/product-kb/_product-level.json",
+    "input/scope-plan.json",
+    "input/orchestrator-directives.json"
+  ],
+  "upstream_artifact_ids": [
+    "PKBC-CTX-20261008-02-automations-automation-run-history",
+    "PKBC-CTX-20261008-02-_product-level"
+  ],
+  "status": "PARTIAL",
+  "confidence": "MEDIUM",
+  "observations": [
+    "Profile dựng hoàn toàn từ tài liệu QA, không có quan sát runtime trong lần chạy này; act_ids rỗng ở mọi nơi và observed_validations rỗng.",
+    "Object automations không có mục KB nào nằm ngoài feature nên không có KB cấp object để đọc; tham chiếu tầng product chỉ dùng cho từ vựng, khung app và mô hình role.",
+    "Có 5 rule đã xác nhận, 22 mục hiện trạng (trong đó 2 lỗi đã biết) và 12 mục rủi ro / suy luận / mâu thuẫn; ba nhóm được tách riêng, không trộn."
+  ],
+  "assumptions": [],
+  "unknowns": [
+    "Contact bị suppress đi vào flow có được tính vào `Sent` của khối Delivery không, và được đếm vào Bounced hay Spam complaints theo tiêu chí nào?",
+    "Bộ lọc outcome có nên tách run Failed ra khỏi Exited không?",
+    "Retry this run được phép trong điều kiện nào, có ẩn / disable với lỗi permanent (template đã xoá, contact đã xoá, người nhận đã unsubscribe) không, và sau Retry thì run cũ đổi trạng thái gì hay tạo run mới?",
+    "Run Waiting của contact đã bị xoá thì khi tới mốc Resumes at phải ra sao?",
+    "Khi node Wait bị xoá (hoặc thời lượng Wait bị sửa, hoặc flow bị Pause) trong lúc có run đang Waiting ở node đó, run giữ mốc Resumes at cũ không và Run detail hiện tên step hay UUID node?",
+    "HTTP method, schema response và mã lỗi của `/runs` và `/runs/{run_id}` là gì?",
+    "Một contact khớp trigger lại khi đang có run (kể cả Waiting) thì Run history có thêm dòng mới không?",
+    "Role nào được xem Run history, Run detail và bấm Retry this run?"
+  ],
+  "conflicts": [],
+  "blocking_issues": [],
+  "payload": {
+    "feature_profiles": [
+      {
+        "feature_id": "automation-run-history",
+        "feature_key": "automation-run-history",
+        "name": "Run history và Run detail: theo dõi từng lượt contact chạy qua flow và thử lại run lỗi",
+        "user_goal": "Người dùng xem từng lượt contact đi qua flow cùng trạng thái / outcome, hiểu vì sao một run dừng, và thử lại run lỗi khi được phép.",
+        "stable_since_version": "v1",
+        "actors": [
+          {
+            "role": "unspecified (người theo dõi flow)",
+            "permission_observed": "Role được xem Run history và bấm Retry this run không được ghi.",
+            "kb_refs": [
+              "KB-026"
+            ]
+          },
+          {
+            "role": "system (runtime engine)",
+            "permission_observed": "Kết thúc run theo trạng thái contact: unsubscribed → Failed, suppressed → Completed; template bị xoá → Failed.",
+            "kb_refs": [
+              "KB-153",
+              "KB-154",
+              "KB-178"
+            ]
+          }
+        ],
+        "entry_points": [
+          {
+            "path": "`/automations/:id/runs` qua `View runs` (builder hoặc menu danh sách)",
+            "precondition": "Automation đã lưu.",
+            "kb_refs": [
+              "KB-159",
+              "KB-012",
+              "KB-045"
+            ]
+          },
+          {
+            "path": "Link từ Reports sang run log với `step`, `event`, `from`, `to`",
+            "precondition": "Đang xem Reports của flow.",
+            "kb_refs": [
+              "KB-167",
+              "KB-002"
+            ]
+          },
+          {
+            "path": "Click một dòng run → dialog Run detail",
+            "precondition": "Có ít nhất một run.",
+            "kb_refs": [
+              "KB-169",
+              "KB-171"
+            ]
+          }
+        ],
+        "capabilities": [
+          {
+            "name": "Xem danh sách run",
+            "description": "Run log liệt kê từng lượt chạy (một contact vào 2 lần có 2 dòng — PO/Dev 24/09), mới nhất trước, 25 dòng mỗi trang; cột Contact, Status, Last step, Started, Finished.",
+            "kb_refs": [
+              "KB-157",
+              "KB-159",
+              "KB-160",
+              "KB-168",
+              "KB-169",
+              "KB-185",
+              "KB-182"
+            ],
+            "act_ids": []
+          },
+          {
+            "name": "Tìm và lọc run",
+            "description": "Search theo tên / email (`q`); `Filter by outcome` {All outcomes, In progress, Completed, Exited}, Exited gộp cả run Failed; chip lọc email khi vào từ Reports; thông báo khi không khớp.",
+            "kb_refs": [
+              "KB-162",
+              "KB-163",
+              "KB-164",
+              "KB-165",
+              "KB-166",
+              "KB-167"
+            ],
+            "act_ids": []
+          },
+          {
+            "name": "Xem số liệu Delivery của flow",
+            "description": "Khối Delivery: Sent, Delivered, Opens, Clicks, Bounced, Spam complaints, Unsubscribed, tính cả đời flow (khác Reports theo range). Contact bị suppress được đếm vào Bounced / Spam complaints (PO/BA 02/10).",
+            "kb_refs": [
+              "KB-161",
+              "KB-155",
+              "KB-156",
+              "KB-212"
+            ],
+            "act_ids": []
+          },
+          {
+            "name": "Xem Run detail",
+            "description": "Dialog Contact / Status / Started / Finished và bảng Step, Status, Detail, Occurred at, Message ID; run Failed có `Why this run stopped`; run Waiting có `Resumes at`; run Skipped có \"Why this run did not start\".",
+            "kb_refs": [
+              "KB-171",
+              "KB-172",
+              "KB-177",
+              "KB-181",
+              "KB-170"
+            ],
+            "act_ids": []
+          },
+          {
+            "name": "Thử lại run lỗi",
+            "description": "Run Failed có `Retry this run` (\"Picks up at the step that failed…\"); Retry thật chưa được đối chiếu; Retry vẫn hiện với lỗi permanent; theo bundle run có người nhận đã unsubscribe không retry được.",
+            "kb_refs": [
+              "KB-173",
+              "KB-174",
+              "KB-175",
+              "KB-176"
+            ],
+            "act_ids": []
+          },
+          {
+            "name": "Kết quả run theo tình trạng contact / dữ liệu",
+            "description": "Unsubscribed → Failed (BR-28); suppressed → Completed (BR-29); template bị xoá → Failed; contact bị xoá khi Waiting → Failed khi tới hạn (quan sát 27/09, chưa chốt); template tag một ngoặc kiểu cũ → mọi run Failed (quan sát 29/09).",
+            "kb_refs": [
+              "KB-153",
+              "KB-154",
+              "KB-178",
+              "KB-179",
+              "KB-180",
+              "KB-186",
+              "KB-187",
+              "KB-158"
+            ],
+            "act_ids": []
+          }
+        ],
+        "state_transitions": [
+          {
+            "from": "Running",
+            "to": "Waiting",
+            "trigger": "Contact tới step Wait",
+            "condition": "Run detail hiện Resumes at, Finished = Still running",
+            "kb_refs": [
+              "KB-177",
+              "KB-170"
+            ]
+          },
+          {
+            "from": "Waiting",
+            "to": "tiếp tục / Completed",
+            "trigger": "Tới mốc Resumes at",
+            "condition": "—",
+            "kb_refs": [
+              "KB-177"
+            ]
+          },
+          {
+            "from": "Running",
+            "to": "Failed",
+            "trigger": "Contact đã unsubscribe đi vào flow",
+            "condition": "PO/BA 02/10 BR-28",
+            "kb_refs": [
+              "KB-153"
+            ]
+          },
+          {
+            "from": "Running",
+            "to": "Completed",
+            "trigger": "Contact bị suppress đi vào flow",
+            "condition": "PO/BA 02/10 BR-29; đếm vào Bounced / Spam complaints",
+            "kb_refs": [
+              "KB-154",
+              "KB-155"
+            ]
+          },
+          {
+            "from": "Running",
+            "to": "Failed",
+            "trigger": "Template của step Send email đã bị xoá",
+            "condition": "Thông điệp \"The mail template this step sends no longer belongs to this workspace.\" (quan sát)",
+            "kb_refs": [
+              "KB-178"
+            ]
+          },
+          {
+            "from": "Waiting (contact đã bị xoá)",
+            "to": "Failed?",
+            "trigger": "Tới mốc Resumes at",
+            "condition": "Quan sát 27/09 là Failed; ngữ nghĩa chưa chốt (GAP-26)",
+            "kb_refs": [
+              "KB-179",
+              "KB-180"
+            ]
+          },
+          {
+            "from": "(sự kiện do chính flow phát ra)",
+            "to": "Skipped",
+            "trigger": "Trigger bị chặn vì vòng lặp",
+            "condition": "\"Why this run did not start\" … would have looped",
+            "kb_refs": [
+              "KB-181"
+            ]
+          },
+          {
+            "from": "Failed",
+            "to": "được xếp hàng chạy tiếp?",
+            "trigger": "Bấm Retry this run",
+            "condition": "Chưa đối chiếu trên UI; thông báo kết quả chỉ có trong bundle",
+            "kb_refs": [
+              "KB-173",
+              "KB-176"
+            ]
+          }
+        ],
+        "confirmed_rules": [
+          {
+            "statement": "Theo quyết định PO/BA 02/10/2026 (task Testlane MTRO-018 BR-28), contact đã unsubscribe đi vào flow automation thì run kết thúc ở trạng thái `Failed`.",
+            "knowledge_kind": "CONFIRMED_EXPECTED",
+            "confidence": "MEDIUM",
+            "tags": [
+              "unsubscribe-consent"
+            ],
+            "kb_refs": [
+              "KB-153"
+            ]
+          },
+          {
+            "statement": "Theo quyết định PO/BA 02/10/2026 (task Testlane MTRO-018 BR-29), contact bị suppress đi vào flow automation thì run kết thúc ở trạng thái `Completed`.",
+            "knowledge_kind": "CONFIRMED_EXPECTED",
+            "confidence": "MEDIUM",
+            "tags": [
+              "suppression"
+            ],
+            "kb_refs": [
+              "KB-154"
+            ]
+          },
+          {
+            "statement": "Theo quyết định PO/BA 02/10/2026 (task Testlane MTRO-018 BR-29), run automation gặp contact bị suppress được đếm vào `Bounced` / `Spam complaints` của khối Delivery (report automation); tiêu chí đếm vào vế nào không được nêu.",
+            "knowledge_kind": "CONFIRMED_EXPECTED",
+            "confidence": "MEDIUM",
+            "tags": [
+              "suppression"
+            ],
+            "kb_refs": [
+              "KB-155"
+            ]
+          },
+          {
+            "statement": "Theo quyết định PO/Dev 21–24/09/2026 (Jira MTRO-16 / MTRO-94), run log liệt kê từng lượt chạy — một contact vào flow 2 lần thì có 2 dòng.",
+            "knowledge_kind": "CONFIRMED_EXPECTED",
+            "confidence": "MEDIUM",
+            "tags": [],
+            "kb_refs": [
+              "KB-157"
+            ]
+          },
+          {
+            "statement": "Theo Jira MTRO-94 (Story [BE] Analytic, QA đọc 07/10/2026), endpoint `/runs` của automation hỗ trợ lọc theo `q`, `outcome`, `step` kèm `event` và trả `last_step`; endpoint chi tiết `/runs/{run_id}` có trả danh sách `emails`.",
+            "knowledge_kind": "CONFIRMED_EXPECTED",
+            "confidence": "MEDIUM",
+            "tags": [],
+            "kb_refs": [
+              "KB-188"
+            ]
+          }
+        ],
+        "observed_behavior": [
+          {
+            "statement": "Theo bản dựng staging 03/09/2026 (ghi kèm copy dialog Pause), mỗi contact chỉ có 1 run tại một thời điểm trong một flow; quan sát staging 27/09 (contact đang Waiting khớp trigger lại vẫn tạo run thứ hai) nói khác, xem mâu thuẫn re-entry.",
+            "knowledge_kind": "OBSERVED_CURRENT",
+            "confidence": "LOW",
+            "status": "CURRENT_STATE",
+            "tags": [],
+            "kb_refs": [
+              "KB-158"
+            ]
+          },
+          {
+            "statement": "Trên staging (khảo sát 01/10/2026), trang Run history ở `/automations/:id/runs` có breadcrumb `Automations › Run history`, nút `Back to builder` và h1 là tên automation (trong lúc tải hiện \"Run history\" rồi đổi thành tên).",
+            "knowledge_kind": "OBSERVED_CURRENT",
+            "confidence": "MEDIUM",
+            "status": "CURRENT_STATE",
+            "tags": [],
+            "kb_refs": [
+              "KB-159"
+            ]
+          },
+          {
+            "statement": "Trên staging (khảo sát 01/10/2026), Run history mô tả \"Every contact that has walked this flow, newest first.\" — liệt kê mọi contact đã đi qua flow, mới nhất trước.",
+            "knowledge_kind": "OBSERVED_CURRENT",
+            "confidence": "MEDIUM",
+            "status": "CURRENT_STATE",
+            "tags": [],
+            "kb_refs": [
+              "KB-160"
+            ]
+          },
+          {
+            "statement": "Trên staging (khảo sát 01/10/2026), khối `Delivery` của Run history có `Sent` · `Delivered` · `Opens` · `Clicks` · `Bounced` · `Spam complaints` · `Unsubscribed`; mô tả ghi Opens và Clicks tính cả lượt lặp lại, Unsubscribed không tính người đã đăng ký lại, và số liệu tính cho cả đời flow, không theo range thời gian (khác Reports).",
+            "knowledge_kind": "OBSERVED_CURRENT",
+            "confidence": "MEDIUM",
+            "status": "CURRENT_STATE",
+            "tags": [
+              "unsubscribe-consent"
+            ],
+            "kb_refs": [
+              "KB-161"
+            ]
+          },
+          {
+            "statement": "Trên staging (khảo sát 01/10/2026), Run history có ô `Search name or email…` tìm theo tên hoặc email, gửi qua tham số `q`.",
+            "knowledge_kind": "OBSERVED_CURRENT",
+            "confidence": "MEDIUM",
+            "status": "CURRENT_STATE",
+            "tags": [],
+            "kb_refs": [
+              "KB-162"
+            ]
+          },
+          {
+            "statement": "Trên staging (khảo sát 01/10/2026), Run history có bộ lọc `Filter by outcome` {`All outcomes`, `In progress`, `Completed`, `Exited`}; bộ lọc này thay cho bộ lọc 7 trạng thái cũ (đóng 29/09) và không còn lựa chọn `Skipped`.",
+            "knowledge_kind": "OBSERVED_CURRENT",
+            "confidence": "MEDIUM",
+            "status": "CURRENT_STATE",
+            "tags": [],
+            "kb_refs": [
+              "KB-163"
+            ]
+          },
+          {
+            "statement": "Trên staging (khảo sát 01/10/2026; khớp bundle), outcome `Exited` gộp cả các run `Failed`, nên không lọc riêng được các run lỗi.",
+            "knowledge_kind": "OBSERVED_CURRENT",
+            "confidence": "MEDIUM",
+            "status": "CURRENT_STATE",
+            "tags": [],
+            "kb_refs": [
+              "KB-164"
+            ]
+          },
+          {
+            "statement": "Trên staging (khảo sát 01/10/2026), khi search / filter của Run history không khớp run nào thì hiện `No runs match these filters.` / \"Try a different search or outcome.\"",
+            "knowledge_kind": "OBSERVED_CURRENT",
+            "confidence": "MEDIUM",
+            "status": "CURRENT_STATE",
+            "tags": [],
+            "kb_refs": [
+              "KB-166"
+            ]
+          },
+          {
+            "statement": "Trên staging (khảo sát 01/10/2026), khi vào Run history từ Reports có chip lọc email (vd `Unique opens` · `Send email` · khoảng ngày) kèm nút `Clear email filter`.",
+            "knowledge_kind": "OBSERVED_CURRENT",
+            "confidence": "MEDIUM",
+            "status": "CURRENT_STATE",
+            "tags": [],
+            "kb_refs": [
+              "KB-167"
+            ]
+          },
+          {
+            "statement": "Trên staging (khảo sát 01/10/2026), bảng Run history có các cột `Contact` (email, hoặc `Deleted contact` khi contact đã bị xoá) · `Status` (đã thấy `Failed` / `Completed` / `Waiting`) · `Last step` (vd \"Send email · Failed\") · `Started` · `Finished` (`—` khi run chưa xong); cột `Last step` thay cho `Current step` cũ.",
+            "knowledge_kind": "OBSERVED_CURRENT",
+            "confidence": "MEDIUM",
+            "status": "CURRENT_STATE",
+            "tags": [],
+            "kb_refs": [
+              "KB-168"
+            ]
+          },
+          {
+            "statement": "Trên staging (khảo sát 01/10/2026), Run history hiển thị 25 dòng mỗi trang và click một dòng mở Run detail.",
+            "knowledge_kind": "OBSERVED_CURRENT",
+            "confidence": "MEDIUM",
+            "status": "CURRENT_STATE",
+            "tags": [],
+            "kb_refs": [
+              "KB-169"
+            ]
+          },
+          {
+            "statement": "Trên staging (khảo sát 01/10/2026), Run detail là dialog hiện Contact / Status / Started / Finished và bảng `Step` · `Status` · `Detail` · `Occurred at` · `Message ID`, kèm nút `Close`.",
+            "knowledge_kind": "OBSERVED_CURRENT",
+            "confidence": "MEDIUM",
+            "status": "CURRENT_STATE",
+            "tags": [],
+            "kb_refs": [
+              "KB-171"
+            ]
+          },
+          {
+            "statement": "Trên staging (khảo sát 01/10/2026), Run detail của run Failed có alert `Why this run stopped` kèm thông điệp lỗi và câu \"Something needs changing before this can get further.\"",
+            "knowledge_kind": "OBSERVED_CURRENT",
+            "confidence": "MEDIUM",
+            "status": "CURRENT_STATE",
+            "tags": [],
+            "kb_refs": [
+              "KB-172"
+            ]
+          },
+          {
+            "statement": "Trên staging (khảo sát 01/10/2026), run Failed có nút `Retry this run` với copy \"Picks up at the step that failed. A step that already sent its email will not send it again.\"; bấm Retry thật chưa được đối chiếu ở lần khảo sát này.",
+            "knowledge_kind": "OBSERVED_CURRENT",
+            "confidence": "MEDIUM",
+            "status": "CURRENT_STATE",
+            "tags": [],
+            "kb_refs": [
+              "KB-173"
+            ]
+          },
+          {
+            "statement": "Trên staging (khảo sát 01/10/2026), Run detail của run Waiting có thêm `Resumes at` (vd \"Oct 4, 2026, 3:58 PM\"), `Finished` hiện `Still running`, và step Wait / delay ở trạng thái `Passed` với chi tiết dạng \"Waiting 3 days.\" (giá trị mẫu).",
+            "knowledge_kind": "OBSERVED_CURRENT",
+            "confidence": "MEDIUM",
+            "status": "CURRENT_STATE",
+            "tags": [],
+            "kb_refs": [
+              "KB-177"
+            ]
+          },
+          {
+            "statement": "Trên staging (run 30/09, xem lại 01/10/2026), khi template của step Send email đã bị xoá thì engine chặn lúc chạy: mọi run tới step đó `Failed` với thông điệp \"The mail template this step sends no longer belongs to this workspace.\" (GAP-09).",
+            "knowledge_kind": "OBSERVED_CURRENT",
+            "confidence": "MEDIUM",
+            "status": "CURRENT_STATE",
+            "tags": [
+              "data-deletion"
+            ],
+            "kb_refs": [
+              "KB-178"
+            ]
+          },
+          {
+            "statement": "Trên staging (27/09/2026), contact bị xoá khi run đang Waiting thì cột Contact hiện `Deleted contact` và run vẫn còn `Resumes at`; khi tới hạn run chuyển `Failed` với thông điệp \"The contact this run was for no longer exists.\" và vẫn hiện nút Retry.",
+            "knowledge_kind": "OBSERVED_CURRENT",
+            "confidence": "LOW",
+            "status": "CURRENT_STATE",
+            "tags": [
+              "data-deletion"
+            ],
+            "kb_refs": [
+              "KB-179"
+            ]
+          },
+          {
+            "statement": "Trên staging (khảo sát 01/10/2026), run `Skipped` có mục \"Why this run did not start\"; với event do chính flow phát ra thì lý do là flow sẽ bị lặp (\"would have looped\").",
+            "knowledge_kind": "OBSERVED_CURRENT",
+            "confidence": "LOW",
+            "status": "CURRENT_STATE",
+            "tags": [],
+            "kb_refs": [
+              "KB-181"
+            ]
+          },
+          {
+            "statement": "Lỗi đã biết BUG-58 (mở từ 27/09, còn tái hiện 01/10/2026): Test this flow / Run detail ghi nhánh của Conditional split là \"Took the `no` branch.\" — có backtick thô và dùng `yes` / `no` thay cho nhãn True / False trên canvas.",
+            "knowledge_kind": "OBSERVED_CURRENT",
+            "confidence": "MEDIUM",
+            "status": "KNOWN_DEFECT",
+            "tags": [],
+            "kb_refs": [
+              "KB-183"
+            ]
+          },
+          {
+            "statement": "Lỗi đã biết BUG-56 (còn mở 01/10/2026): mở `/automations/<id không tồn tại>/runs` chỉ hiện alert `Not Found.` + `Retry` nhưng vẫn hiện ô search và bộ lọc.",
+            "knowledge_kind": "OBSERVED_CURRENT",
+            "confidence": "MEDIUM",
+            "status": "KNOWN_DEFECT",
+            "tags": [],
+            "kb_refs": [
+              "KB-184"
+            ]
+          },
+          {
+            "statement": "Trên staging, cột Contact của Run history từng hiện id dạng `N01…` thay vì email (16/09/2026) và đến lần khảo sát 01/10/2026 đã hiện email — dùng làm regression watch.",
+            "knowledge_kind": "OBSERVED_CURRENT",
+            "confidence": "LOW",
+            "status": "CURRENT_STATE",
+            "tags": [],
+            "kb_refs": [
+              "KB-185"
+            ]
+          },
+          {
+            "statement": "Trên staging (run khoảng 29/09/2026), automation dùng template chứa tag kiểu cũ `{first_name}` có mọi run `Failed` với thông điệp \"This step's mail uses merge tags nothing fills: {first_name}…\", và dry-run cũng Failed.",
+            "knowledge_kind": "OBSERVED_CURRENT",
+            "confidence": "LOW",
+            "status": "CURRENT_STATE",
+            "tags": [
+              "merge-tag-syntax"
+            ],
+            "kb_refs": [
+              "KB-187"
+            ]
+          }
+        ],
+        "observed_validations": [],
+        "permissions": [
+          {
+            "statement": "Role được xem Run history, Run detail và bấm Retry không được ghi; ma trận quyền automation chưa chốt.",
+            "kb_refs": [
+              "KB-026",
+              "KB-P-051"
+            ]
+          }
+        ],
+        "surface_mapping": {
+          "portal": [
+            {
+              "item": "Trang `/automations/:id/runs`: breadcrumb, Back to builder, tên automation, mô tả \"newest first\"",
+              "kb_refs": [
+                "KB-159",
+                "KB-160"
+              ]
+            },
+            {
+              "item": "Khối Delivery",
+              "kb_refs": [
+                "KB-161"
+              ]
+            },
+            {
+              "item": "Search, Filter by outcome, chip lọc email, bảng run, phân trang",
+              "kb_refs": [
+                "KB-162",
+                "KB-163",
+                "KB-167",
+                "KB-168",
+                "KB-169"
+              ]
+            },
+            {
+              "item": "Dialog Run detail (bảng step, Why this run stopped, Resumes at, Retry this run)",
+              "kb_refs": [
+                "KB-171",
+                "KB-172",
+                "KB-173",
+                "KB-177"
+              ]
+            }
+          ],
+          "storefront": [],
+          "api": [
+            {
+              "item": "Endpoint `/runs` lọc theo `q`, `outcome`, `step` kèm `event`, trả `last_step`; `/runs/{run_id}` trả `emails` (Jira MTRO-94)",
+              "kb_refs": [
+                "KB-188"
+              ]
+            },
+            {
+              "item": "`GET automations/{id}/runs` (page, per_page, outcome, q, step, event, from, to), `GET …/runs/{runId}`, `POST …/runs/{runId}/retry` (từ bundle)",
+              "kb_refs": [
+                "KB-189"
+              ]
+            }
+          ],
+          "data": [
+            {
+              "item": "Trạng thái run: Pending, Running, Waiting, Completed, Failed, Cancelled, Skipped; trạng thái step trong run: Passed, Failed, Skipped (từ bundle / glossary)",
+              "kb_refs": [
+                "KB-170",
+                "KB-P-020"
+              ]
+            }
+          ],
+          "code": []
+        },
+        "dependencies": [
+          {
+            "target": "automations / automation-triggers-and-entry",
+            "relation": "consumes",
+            "note": "Mỗi lượt vào flow là một run; số run khi contact khớp lại phụ thuộc luật re-entry đang mâu thuẫn.",
+            "kb_refs": [
+              "KB-157",
+              "KB-158"
+            ]
+          },
+          {
+            "target": "automations / automation-reports",
+            "relation": "navigated_from",
+            "note": "Link drill-down từ Reports mang tham số lọc sang Run history; Delivery (cả đời) lệch Reports (theo range).",
+            "kb_refs": [
+              "KB-167",
+              "KB-212"
+            ]
+          },
+          {
+            "target": "deliverability / send-time-suppression-check",
+            "relation": "shared_rule",
+            "note": "Theo tham chiếu chéo của KB, automation dùng chung bước kiểm suppression với campaign; quyết định BR-28/29 cũng ghi ở phía deliverability.",
+            "kb_refs": [
+              "KB-153",
+              "KB-154"
+            ]
+          },
+          {
+            "target": "abuse-guard / sending-suspension-and-staff-review",
+            "relation": "constraint",
+            "note": "Theo tham chiếu chéo của KB (Jira MTRO-92), khi workspace bị dừng gửi contact vẫn vào automation nhưng không mail nào được gửi; sau Reinstate chạy tiếp đúng chỗ dừng.",
+            "kb_refs": [
+              "KB-161"
+            ]
+          },
+          {
+            "target": "contacts (xoá contact)",
+            "relation": "state_effect",
+            "note": "Xoá contact khi run đang Waiting: hiện Deleted contact, kết quả khi tới hạn chưa chốt.",
+            "kb_refs": [
+              "KB-179",
+              "KB-180"
+            ]
+          },
+          {
+            "target": "email-content / merge-tags",
+            "relation": "state_effect",
+            "note": "Template tag một ngoặc kiểu cũ làm run Failed.",
+            "kb_refs": [
+              "KB-187"
+            ]
+          }
+        ],
+        "risks": [
+          {
+            "statement": "Lỗi đang mở: Run detail / Test ghi nhánh split là \"Took the `no` branch.\" (BUG-58); Run history của id không tồn tại vẫn hiện search / filter cạnh alert Not Found (BUG-56). Regression watch.",
+            "knowledge_kind": "OBSERVED_CURRENT",
+            "confidence": "MEDIUM",
+            "status": "KNOWN_DEFECT",
+            "kb_refs": [
+              "KB-183",
+              "KB-184"
+            ]
+          },
+          {
+            "statement": "\"Mỗi contact chỉ 1 run tại một thời điểm\" (bản dựng 03/09) trái với quan sát 27/09 (contact Waiting khớp lại tạo run thứ hai) — liên quan mâu thuẫn re-entry, không dùng làm oracle.",
+            "knowledge_kind": "OBSERVED_CURRENT",
+            "confidence": "LOW",
+            "related_conflict_group": "CONF-MTRO-automations-02",
+            "kb_refs": [
+              "KB-158",
+              "KB-081"
+            ]
+          },
+          {
+            "statement": "Theo QA KB Mailtro \"Automations — Reports · Test this flow · Run history\" v1, việc contact bị suppress có được tính vào `Sent` hay không vẫn còn mở (GAP-32), chưa chốt.",
+            "knowledge_kind": "INFERRED",
+            "confidence": "LOW",
+            "conflict_group": null,
+            "tags": [
+              "suppression"
+            ],
+            "kb_refs": [
+              "KB-156"
+            ]
+          },
+          {
+            "statement": "Theo QA KB Mailtro \"Automations — Reports · Test this flow · Run history\" v1 và Known issues (trạng thái chờ chốt PO / Dev), có nên tách run `Failed` ra khỏi outcome `Exited` hay không đang chờ PO xác nhận (GAP-25).",
+            "knowledge_kind": "INFERRED",
+            "confidence": "LOW",
+            "conflict_group": null,
+            "tags": [],
+            "kb_refs": [
+              "KB-165"
+            ]
+          },
+          {
+            "statement": "Theo bundle front-end (khảo sát 01/10/2026; glossary QA cũng liệt kê), run automation có 7 trạng thái `Pending` · `Running` · `Waiting` · `Completed` · `Failed` · `Cancelled` · `Skipped`, còn step trong run có trạng thái `Passed` · `Failed` · `Skipped`; trên UI mới thấy Failed / Completed / Waiting.",
+            "knowledge_kind": "INFERRED",
+            "confidence": "LOW",
+            "conflict_group": null,
+            "tags": [],
+            "kb_refs": [
+              "KB-170"
+            ]
+          },
+          {
+            "statement": "Trên staging (01/10/2026), Run detail của lỗi loại permanent (\"Something needs changing…\", vd template đã bị xoá) vẫn hiện nút `Retry this run` dù thử lại vô ích; có nên ẩn / disable Retry với lỗi permanent hay không đang chờ Dev xác nhận (GAP-22, Known issues ghi chờ chốt).",
+            "knowledge_kind": "INFERRED",
+            "confidence": "LOW",
+            "conflict_group": null,
+            "tags": [],
+            "kb_refs": [
+              "KB-174"
+            ]
+          },
+          {
+            "statement": "Theo bundle / i18n (khảo sát 01/10/2026, chưa thấy trên UI), run có người nhận đã unsubscribe không retry được (\"This one cannot be retried: the recipient has unsubscribed.\").",
+            "knowledge_kind": "INFERRED",
+            "confidence": "LOW",
+            "conflict_group": null,
+            "tags": [
+              "unsubscribe-consent"
+            ],
+            "kb_refs": [
+              "KB-175"
+            ]
+          },
+          {
+            "statement": "Theo bundle / i18n (khảo sát 01/10/2026, chưa thấy trên UI), retry thành công báo \"The run is queued to continue.\", retry thất bại báo \"That run could not be retried.\", và với lỗi có thể chỉ tạm thời Run detail gợi ý \"This looks like something that may have passed — retrying is worth a try.\"",
+            "knowledge_kind": "INFERRED",
+            "confidence": "LOW",
+            "conflict_group": null,
+            "tags": [],
+            "kb_refs": [
+              "KB-176"
+            ]
+          },
+          {
+            "statement": "Ngữ nghĩa run của contact đã bị xoá chưa được chốt (GAP-26): staging 01/10/2026 thấy run vẫn `Waiting` với `Deleted contact` và `Resumes at` nhưng chưa biết điều gì xảy ra khi tới hạn, còn quan sát 27/09 thấy run chuyển Failed khi tới hạn; tài liệu ghi cần PO xác nhận.",
+            "knowledge_kind": "INFERRED",
+            "confidence": "LOW",
+            "conflict_group": null,
+            "tags": [
+              "data-deletion"
+            ],
+            "kb_refs": [
+              "KB-180"
+            ]
+          },
+          {
+            "statement": "Theo bundle / i18n (khảo sát 01/10/2026, chưa thấy trên UI), Run history rỗng hiện \"No runs yet\" / \"Once a contact enters this flow, their run appears here.\"",
+            "knowledge_kind": "INFERRED",
+            "confidence": "LOW",
+            "conflict_group": null,
+            "tags": [],
+            "kb_refs": [
+              "KB-182"
+            ]
+          },
+          {
+            "statement": "Theo QA KB Mailtro \"Automations — Reports · Test this flow · Run history\" v1 (TC-MTRO-1103 minh hoạ, không ghi PASS), khi step Wait đã bị xoá thì run vẫn `Waiting` theo mốc thời gian cũ và Run detail hiện UUID của node thay cho tên step; ngữ nghĩa này đang chờ xác nhận (GAP-06).",
+            "knowledge_kind": "INFERRED",
+            "confidence": "LOW",
+            "conflict_group": null,
+            "tags": [],
+            "kb_refs": [
+              "KB-186"
+            ]
+          },
+          {
+            "statement": "Theo bundle front-end (khảo sát 01/10/2026), Run history gọi `GET automations/{id}/runs` (`page`, `per_page`, `outcome`, `q`, `step`, `event`, `from`, `to`), Run detail gọi `GET automations/{id}/runs/{runId}` và Retry gọi `POST …/runs/{runId}/retry`.",
+            "knowledge_kind": "INFERRED",
+            "confidence": "LOW",
+            "conflict_group": null,
+            "tags": [],
+            "kb_refs": [
+              "KB-189"
+            ]
+          }
+        ],
+        "freshness": {
+          "observed_at": "2026-10-07",
+          "run_id": "CTX-20261008-02",
+          "basis": "Quyết định PO/Dev 21–24/09/2026, quyết định PO/BA 02/10/2026, Jira MTRO-94 (QA đọc 07/10/2026), test-run 27/09 và khảo sát staging 01/10/2026"
+        },
+        "unknown_areas": [
+          {
+            "question": "Contact bị suppress đi vào flow có được tính vào `Sent` của khối Delivery không, và được đếm vào Bounced hay Spam complaints theo tiêu chí nào?",
+            "why_it_matters": "BR-29 chỉ nói run Completed và đếm vào \"Bounced / Spam complaints\" (GAP-32).",
+            "kb_refs": [
+              "KB-155",
+              "KB-156"
+            ]
+          },
+          {
+            "question": "Bộ lọc outcome có nên tách run Failed ra khỏi Exited không?",
+            "why_it_matters": "Hiện Exited gộp Failed nên không lọc riêng được run lỗi (GAP-25).",
+            "kb_refs": [
+              "KB-164",
+              "KB-165"
+            ]
+          },
+          {
+            "question": "Retry this run được phép trong điều kiện nào, có ẩn / disable với lỗi permanent (template đã xoá, contact đã xoá, người nhận đã unsubscribe) không, và sau Retry thì run cũ đổi trạng thái gì hay tạo run mới?",
+            "why_it_matters": "Retry thật chưa được bấm; Retry vẫn hiện với lỗi permanent (GAP-22).",
+            "kb_refs": [
+              "KB-173",
+              "KB-174",
+              "KB-175",
+              "KB-176",
+              "KB-179"
+            ]
+          },
+          {
+            "question": "Run Waiting của contact đã bị xoá thì khi tới mốc Resumes at phải ra sao?",
+            "why_it_matters": "Quan sát 27/09 (Failed) và 01/10 (vẫn Waiting) chưa thống nhất; GAP-26 chờ PO.",
+            "kb_refs": [
+              "KB-179",
+              "KB-180"
+            ]
+          },
+          {
+            "question": "Khi node Wait bị xoá (hoặc thời lượng Wait bị sửa, hoặc flow bị Pause) trong lúc có run đang Waiting ở node đó, run giữ mốc Resumes at cũ không và Run detail hiện tên step hay UUID node?",
+            "why_it_matters": "Chỉ có một quan sát minh hoạ (run giữ mốc cũ, hiện UUID); GAP-06 Major.",
+            "kb_refs": [
+              "KB-186",
+              "KB-017"
+            ]
+          },
+          {
+            "question": "HTTP method, schema response và mã lỗi của `/runs` và `/runs/{run_id}` là gì?",
+            "why_it_matters": "Jira MTRO-94 chỉ liệt kê tham số lọc và trường trả về.",
+            "kb_refs": [
+              "KB-188",
+              "KB-189"
+            ]
+          },
+          {
+            "question": "Một contact khớp trigger lại khi đang có run (kể cả Waiting) thì Run history có thêm dòng mới không?",
+            "why_it_matters": "Phụ thuộc mâu thuẫn re-entry chưa phân xử.",
+            "kb_refs": [
+              "KB-157",
+              "KB-158",
+              "KB-081"
+            ]
+          },
+          {
+            "question": "Role nào được xem Run history, Run detail và bấm Retry this run?",
+            "why_it_matters": "Không có expected cho phân quyền.",
+            "kb_refs": [
+              "KB-026"
+            ]
+          }
+        ]
+      }
+    ],
+    "profile_relationships": [
+      {
+        "from": "automation-run-history",
+        "to": "automation-triggers-and-entry",
+        "relation": "RECORDS_RUNS_OF",
+        "kb_refs": [
+          "KB-157",
+          "KB-181"
+        ]
+      },
+      {
+        "from": "automation-run-history",
+        "to": "automation-reports",
+        "relation": "DRILL_DOWN_TARGET_OF",
+        "kb_refs": [
+          "KB-167",
+          "KB-200"
+        ]
+      },
+      {
+        "from": "automation-run-history",
+        "to": "automation-steps",
+        "relation": "SHOWS_OUTCOME_OF",
+        "kb_refs": [
+          "KB-178",
+          "KB-177"
+        ]
+      }
+    ],
+    "coverage_matrix": [
+      {
+        "feature_id": "automation-run-history",
+        "layer": "portal",
+        "role": "unspecified",
+        "state": "danh sách run (cột, phân trang, newest first)",
+        "environment": "documented",
+        "covered": true,
+        "note": "Quan sát 01/10; PO/Dev 24/09 mỗi lượt một dòng"
+      },
+      {
+        "feature_id": "automation-run-history",
+        "layer": "portal",
+        "role": "unspecified",
+        "state": "search / outcome filter / không khớp",
+        "environment": "documented",
+        "covered": true,
+        "note": "Quan sát 01/10"
+      },
+      {
+        "feature_id": "automation-run-history",
+        "layer": "portal",
+        "role": "unspecified",
+        "state": "khối Delivery",
+        "environment": "documented",
+        "covered": true,
+        "note": "Quan sát + BR-29 (suppressed đếm Bounced / Spam)"
+      },
+      {
+        "feature_id": "automation-run-history",
+        "layer": "portal",
+        "role": "unspecified",
+        "state": "Run detail Failed / Waiting / Skipped",
+        "environment": "documented",
+        "covered": true,
+        "note": "Quan sát 01/10"
+      },
+      {
+        "feature_id": "automation-run-history",
+        "layer": "portal",
+        "role": "unspecified",
+        "state": "Retry this run",
+        "environment": "documented",
+        "covered": false,
+        "note": "Chưa bấm thật; điều kiện chưa chốt"
+      },
+      {
+        "feature_id": "automation-run-history",
+        "layer": "backend",
+        "role": "system (runtime engine)",
+        "state": "contact unsubscribed / suppressed",
+        "environment": "documented",
+        "covered": true,
+        "note": "PO/BA 02/10 BR-28, BR-29"
+      },
+      {
+        "feature_id": "automation-run-history",
+        "layer": "backend",
+        "role": "system (runtime engine)",
+        "state": "template của step bị xoá",
+        "environment": "documented",
+        "covered": true,
+        "note": "Quan sát run Failed; expected chưa chốt"
+      },
+      {
+        "feature_id": "automation-run-history",
+        "layer": "backend",
+        "role": "system (runtime engine)",
+        "state": "contact bị xoá khi Waiting",
+        "environment": "documented",
+        "covered": false,
+        "note": "GAP-26 chưa chốt"
+      },
+      {
+        "feature_id": "automation-run-history",
+        "layer": "backend",
+        "role": "system (runtime engine)",
+        "state": "node Wait bị xoá / sửa khi Waiting",
+        "environment": "documented",
+        "covered": false,
+        "note": "GAP-06 chưa chốt"
+      },
+      {
+        "feature_id": "automation-run-history",
+        "layer": "api",
+        "role": "unspecified",
+        "state": "/runs, /runs/{run_id}, retry",
+        "environment": "documented",
+        "covered": true,
+        "note": "Jira MTRO-94 tham số; contract chi tiết chưa có"
+      },
+      {
+        "feature_id": "automation-run-history",
+        "layer": "portal",
+        "role": "Member / Admin / custom role",
+        "state": "xem / Retry",
+        "environment": "documented",
+        "covered": false,
+        "note": "Không ghi role"
+      },
+      {
+        "feature_id": "automation-run-history",
+        "layer": "code",
+        "role": "unspecified",
+        "state": "any",
+        "environment": "documented",
+        "covered": false,
+        "note": "Không có nguồn mã"
+      }
+    ],
+    "unassigned_kb_items": [],
+    "profile_conflicts": [],
+    "profile_change_summary": [
+      "Profile tạo mới lần đầu từ bộ tài liệu (bootstrap); chưa có phiên bản publish trước để so.",
+      {
+        "summary": "Rework r1: dựng lại từ KB đã sửa (không có id bị bỏ); cập nhật theo kind, tag và conflict hiện tại của KB.",
+        "kb_refs": []
+      }
+    ],
+    "kb_trace_complete": true
+  },
+  "gate": {
+    "decision": "CONDITIONAL_PASS",
+    "blocking_findings": [],
+    "conditions": [
+      "Rule đã xác nhận: mỗi lượt chạy một dòng, unsubscribed → Failed, suppressed → Completed và đếm Bounced / Spam, tham số lọc của /runs.",
+      "Retry, contact bị xoá khi Waiting, Wait bị xoá khi Waiting, tách Failed khỏi Exited và suppressed có tính Sent chưa có expected.",
+      "Lỗi đã biết chỉ là regression watch; số run khi contact khớp lại phụ thuộc CONF-MTRO-automations-02."
+    ],
+    "allowed_next_steps": [
+      "qa-checklist-builder",
+      "knowledge-diff-analyzer"
+    ]
+  }
+}

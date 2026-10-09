@@ -1,0 +1,600 @@
+{
+  "schema_version": "1.0",
+  "artifact_type": "FeatureProfileCandidate",
+  "artifact_id": "ART-FEATURE-PROFILE-transactional-mail-safeguards-CTX-20261008-02",
+  "workflow_id": "CTX-20261008-02",
+  "producer": "feature-profile-builder",
+  "source_refs": [
+    "candidate/product-kb/transactional-mail-safeguards.json",
+    "candidate/product-kb/_object-level.abuse-guard.json",
+    "candidate/product-kb/_product-level.json",
+    "input/scope-plan.json",
+    "input/orchestrator-directives.json"
+  ],
+  "upstream_artifact_ids": [
+    "PKBC-CTX-20261008-02-abuse-guard-transactional-mail-safeguards",
+    "PKBC-CTX-20261008-02-abuse-guard-object-level",
+    "PKBC-CTX-20261008-02-_product-level"
+  ],
+  "status": "PARTIAL",
+  "confidence": "MEDIUM",
+  "observations": [
+    "Profile dựng hoàn toàn từ tài liệu (DOC_BOOTSTRAP); act_ids và observed_validations rỗng.",
+    "Shard của feature không có item OBSERVED_CURRENT; observed_behavior rỗng."
+  ],
+  "assumptions": [
+    "feature_id dùng feature_key vì chưa có mã FEAT số được cấp.",
+    "Thêm nhóm surface_mapping 'recipient' ngoài schema chuẩn cho bề mặt người nhận; không tạo tri thức mới."
+  ],
+  "unknowns": [
+    "Ai được gỡ trạng thái huỷ đăng ký của một người nhận: chỉ chính người nhận qua trang huỷ (Jira MTRO-92 §11) hay cả marketer qua Portal API DELETE teams/{team}/unsubscribes/{id} (Jira MTRO-81) (GAP-06)?",
+    "Transactional API có route, method và shape request / response nào, và body lỗi 422 có nêu lý do (thiếu biến, tên biến cấm, link huỷ + cc / bcc, quá 13 header) không?",
+    "Khi cú pháp merge tag được phân xử, tag link huỷ trong mail giao dịch viết thế nào (một ngoặc hay hai ngoặc) và tag sai cú pháp có làm mất link huỷ không?",
+    "Link huỷ trong mail giao dịch đã gửi còn hoạt động khi workspace Sending suspended hoặc Disabled không (GAP-10)?",
+    "Huỷ qua link trong mail giao dịch được ghi vào sổ consent hay vào suppression, và hiển thị thế nào ở danh sách contact / suppression?"
+  ],
+  "conflicts": [
+    "CONF-MTRO-deliverability-02 (owner deliverability; KB-098, KB-099 là thành viên)",
+    "CONF-MTRO-email-content-01 (phụ thuộc chéo object)"
+  ],
+  "blocking_issues": [],
+  "payload": {
+    "feature_profiles": [
+      {
+        "feature_id": "transactional-mail-safeguards",
+        "feature_key": "transactional-mail-safeguards",
+        "name": "Biến, header và link huỷ trong mail giao dịch (Transactional API)",
+        "user_goal": "Mail giao dịch gửi qua Transactional API chỉ được chấp nhận khi biến và header hợp lệ (sai thì trả 422), link huỷ đăng ký chỉ xuất hiện khi nội dung tự đặt tag unsubscribe_url, và người nhận huỷ qua link đó được huỷ trên toàn workspace.",
+        "stable_since_version": "v1",
+        "actors": [
+          {
+            "role": "api-caller (Transactional API)",
+            "permission_observed": "Gửi request mail giao dịch; nhận 422 khi thiếu biến, dùng tên biến bị cấm, có link huỷ kèm cc / bcc, hoặc hơn 13 header tự đặt.",
+            "kb_refs": [
+              "KB-092",
+              "KB-093",
+              "KB-096",
+              "KB-097"
+            ]
+          },
+          {
+            "role": "recipient",
+            "permission_observed": "Bấm link huỷ trong mail giao dịch thì huỷ toàn workspace; đăng ký lại chỉ qua trang huỷ của chính mình theo Jira MTRO-92 §11 (đang tranh chấp).",
+            "kb_refs": [
+              "KB-095",
+              "KB-098"
+            ]
+          },
+          {
+            "role": "marketer",
+            "permission_observed": "Theo Jira MTRO-81 có Portal API DELETE teams/{team}/unsubscribes/{id} để gỡ trạng thái huỷ thay người nhận (đang tranh chấp với Jira MTRO-92 §11).",
+            "kb_refs": [
+              "KB-099",
+              "KB-P-006"
+            ]
+          }
+        ],
+        "entry_points": [
+          {
+            "path": "API: request gửi mail giao dịch qua Transactional API (route, method và shape không được nêu)",
+            "precondition": "Có quyền gọi API; workspace không ở Sending suspended.",
+            "kb_refs": [
+              "KB-092",
+              "KB-093",
+              "KB-096",
+              "KB-097",
+              "KB-050"
+            ]
+          },
+          {
+            "path": "Link huỷ đăng ký trong mail giao dịch",
+            "precondition": "Nội dung mail tự đặt tag unsubscribe_url.",
+            "kb_refs": [
+              "KB-094",
+              "KB-095"
+            ]
+          },
+          {
+            "path": "Trang huỷ đăng ký của người nhận (đăng ký lại)",
+            "precondition": "Contact đã huỷ đăng ký.",
+            "kb_refs": [
+              "KB-098"
+            ]
+          },
+          {
+            "path": "Portal API DELETE teams/{team}/unsubscribes/{id}",
+            "precondition": "Contact đã huỷ đăng ký; quyền gọi của marketer đang tranh chấp.",
+            "kb_refs": [
+              "KB-099"
+            ]
+          }
+        ],
+        "capabilities": [
+          {
+            "name": "Kiểm biến của request",
+            "description": "Thiếu biến thì 422; có biến tên unsubscribe_url hoặc tên biến chứa dấu chấm thì 422.",
+            "kb_refs": [
+              "KB-092",
+              "KB-093"
+            ],
+            "act_ids": []
+          },
+          {
+            "name": "Kiểm header và người nhận phụ",
+            "description": "Có link huỷ kèm cc hoặc bcc thì 422; hơn 13 header tự đặt thì 422.",
+            "kb_refs": [
+              "KB-096",
+              "KB-097"
+            ],
+            "act_ids": []
+          },
+          {
+            "name": "Link huỷ có điều kiện",
+            "description": "Mail giao dịch chỉ có link huỷ khi nội dung tự đặt tag unsubscribe_url (ticket viết dạng một ngoặc, cú pháp đang tranh chấp).",
+            "kb_refs": [
+              "KB-094"
+            ],
+            "act_ids": []
+          },
+          {
+            "name": "Phạm vi huỷ đăng ký từ mail giao dịch",
+            "description": "Huỷ qua link trong mail giao dịch là huỷ toàn workspace, áp cho campaign, automation và cả transactional.",
+            "kb_refs": [
+              "KB-095"
+            ],
+            "act_ids": []
+          },
+          {
+            "name": "Đăng ký lại sau khi huỷ (đang tranh chấp)",
+            "description": "Jira MTRO-92 §11: chỉ người nhận qua trang huỷ của mình; Jira MTRO-81: marketer gỡ qua Portal API. Chưa có kết quả mong đợi.",
+            "kb_refs": [
+              "KB-098",
+              "KB-099"
+            ],
+            "act_ids": []
+          }
+        ],
+        "state_transitions": [
+          {
+            "from": "contact đang nhận mail của workspace",
+            "to": "đã huỷ đăng ký toàn workspace (campaign, automation, transactional)",
+            "trigger": "Người nhận bấm link huỷ trong mail giao dịch",
+            "condition": "Mail có link huỷ vì nội dung tự đặt tag unsubscribe_url",
+            "kb_refs": [
+              "KB-094",
+              "KB-095"
+            ]
+          },
+          {
+            "from": "đã huỷ đăng ký",
+            "to": "đăng ký lại",
+            "trigger": "Người nhận đăng ký lại ở trang huỷ của mình (Jira MTRO-92 §11) hoặc marketer gọi Portal API DELETE unsubscribes (Jira MTRO-81)",
+            "condition": "Đang tranh chấp; chưa dùng làm kết quả mong đợi",
+            "kb_refs": [
+              "KB-098",
+              "KB-099"
+            ]
+          }
+        ],
+        "confirmed_rules": [
+          {
+            "statement": "Theo Jira MTRO-92 AC §10–§11 (tóm tắt trong QA KB Mailtro \"Security & Abuse guard\" v1, chưa kiểm trên staging), gọi Transactional API thiếu biến thì nhận 422.",
+            "knowledge_kind": "CONFIRMED_EXPECTED",
+            "confidence": "MEDIUM",
+            "kb_refs": [
+              "KB-092"
+            ],
+            "tags": [
+              "merge-tag-syntax",
+              "unsubscribe-consent"
+            ]
+          },
+          {
+            "statement": "Theo Jira MTRO-92 AC §10–§11 (tóm tắt trong QA KB Mailtro \"Security & Abuse guard\" v1, chưa kiểm trên staging), Transactional API trả 422 nếu có biến tên unsubscribe_url hoặc tên biến chứa dấu chấm.",
+            "knowledge_kind": "CONFIRMED_EXPECTED",
+            "confidence": "MEDIUM",
+            "kb_refs": [
+              "KB-093"
+            ],
+            "tags": [
+              "merge-tag-syntax",
+              "unsubscribe-consent"
+            ]
+          },
+          {
+            "statement": "Theo Jira MTRO-92 AC §10–§11 (tóm tắt trong QA KB Mailtro \"Security & Abuse guard\" v1, chưa kiểm trên staging), mail giao dịch chỉ có link huỷ đăng ký khi nội dung tự đặt merge tag unsubscribe_url. Ticket viết tag này dạng một ngoặc — cú pháp đó đang tranh chấp (xem tranh chấp cú pháp merge tag ở Email content).",
+            "knowledge_kind": "CONFIRMED_EXPECTED",
+            "confidence": "MEDIUM",
+            "kb_refs": [
+              "KB-094"
+            ],
+            "tags": [
+              "merge-tag-syntax",
+              "unsubscribe-consent"
+            ]
+          },
+          {
+            "statement": "Theo Jira MTRO-92 AC §10–§11 (tóm tắt trong QA KB Mailtro \"Security & Abuse guard\" v1, chưa kiểm trên staging), người nhận huỷ đăng ký qua link trong mail giao dịch là huỷ toàn workspace, áp cho campaign, automation và cả mail transactional.",
+            "knowledge_kind": "CONFIRMED_EXPECTED",
+            "confidence": "MEDIUM",
+            "kb_refs": [
+              "KB-095"
+            ],
+            "tags": [
+              "merge-tag-syntax",
+              "unsubscribe-consent"
+            ]
+          },
+          {
+            "statement": "Theo Jira MTRO-92 AC §10–§11 (tóm tắt trong QA KB Mailtro \"Security & Abuse guard\" v1, chưa kiểm trên staging), mail giao dịch vừa có link huỷ vừa có cc hoặc bcc thì Transactional API trả 422.",
+            "knowledge_kind": "CONFIRMED_EXPECTED",
+            "confidence": "MEDIUM",
+            "kb_refs": [
+              "KB-096"
+            ],
+            "tags": [
+              "merge-tag-syntax",
+              "unsubscribe-consent"
+            ]
+          },
+          {
+            "statement": "Theo Jira MTRO-92 AC §10–§11 (tóm tắt trong QA KB Mailtro \"Security & Abuse guard\" v1, chưa kiểm trên staging), mail giao dịch có hơn 13 header tự đặt thì Transactional API trả 422.",
+            "knowledge_kind": "CONFIRMED_EXPECTED",
+            "confidence": "MEDIUM",
+            "kb_refs": [
+              "KB-097"
+            ],
+            "tags": [
+              "merge-tag-syntax",
+              "unsubscribe-consent"
+            ]
+          }
+        ],
+        "observed_behavior": [],
+        "observed_validations": [],
+        "permissions": [
+          {
+            "statement": "Ai được gỡ trạng thái huỷ đăng ký (chỉ người nhận, hay cả marketer qua Portal API) đang tranh chấp; profile không chọn bên.",
+            "kb_refs": [
+              "KB-098",
+              "KB-099"
+            ]
+          },
+          {
+            "statement": "Transactional API bị chặn khi workspace Sending suspended.",
+            "kb_refs": [
+              "KB-050"
+            ]
+          }
+        ],
+        "surface_mapping": {
+          "portal": [],
+          "storefront": [],
+          "api": [
+            {
+              "item": "Transactional API: 422 khi thiếu biến, biến unsubscribe_url / tên có dấu chấm, link huỷ + cc / bcc, hơn 13 header tự đặt",
+              "kb_refs": [
+                "KB-092",
+                "KB-093",
+                "KB-096",
+                "KB-097"
+              ]
+            },
+            {
+              "item": "Portal API DELETE teams/{team}/unsubscribes/{id} (đang tranh chấp)",
+              "kb_refs": [
+                "KB-099",
+                "KB-P-006"
+              ]
+            }
+          ],
+          "data": [
+            {
+              "item": "Trạng thái huỷ đăng ký của contact, phạm vi toàn workspace",
+              "kb_refs": [
+                "KB-095",
+                "KB-P-013"
+              ]
+            },
+            {
+              "item": "Tag unsubscribe_url trong nội dung mail giao dịch",
+              "kb_refs": [
+                "KB-094"
+              ]
+            }
+          ],
+          "code": [],
+          "recipient": [
+            {
+              "item": "Link huỷ trong mail giao dịch; trang huỷ đăng ký của người nhận",
+              "kb_refs": [
+                "KB-094",
+                "KB-095",
+                "KB-098"
+              ]
+            }
+          ]
+        },
+        "dependencies": [
+          {
+            "target": "email-content / merge-tags",
+            "relation": "syntax_source",
+            "note": "Cú pháp tag unsubscribe_url (một ngoặc trong ticket) phụ thuộc tranh chấp cú pháp merge tag.",
+            "kb_refs": [
+              "KB-094",
+              "KB-P-018"
+            ]
+          },
+          {
+            "target": "deliverability / unsubscribe-handling, suppression-list-management",
+            "relation": "overlap",
+            "note": "Phạm vi huỷ toàn workspace và Portal API unsubscribes cần đối chiếu với luồng huỷ đăng ký và danh sách suppression.",
+            "kb_refs": [
+              "KB-095",
+              "KB-099"
+            ]
+          },
+          {
+            "target": "abuse-guard / sending-suspension-and-staff-review",
+            "relation": "state_source",
+            "note": "Transactional API bị chặn khi suspended; link huỷ khi Suspended / Disabled chưa xác nhận.",
+            "kb_refs": [
+              "KB-050",
+              "KB-091"
+            ]
+          },
+          {
+            "target": "Khái niệm consent và suppression (product-level)",
+            "relation": "see_also",
+            "note": "Consent là sổ opt-out của người nhận, khác suppression.",
+            "kb_refs": [
+              "KB-P-013",
+              "KB-P-014"
+            ]
+          }
+        ],
+        "risks": [
+          {
+            "statement": "Tranh chấp chưa phân xử về đăng ký lại: Jira MTRO-92 §11 nói người nhận chỉ resubscribe được qua trang huỷ của chính mình, còn Jira MTRO-81 có Portal API DELETE teams/{team}/unsubscribes/{id} cho marketer gỡ trạng thái huỷ; chờ PO xác nhận (GAP-06). Không dùng bên nào làm kết quả mong đợi.",
+            "knowledge_kind": "INFERRED",
+            "confidence": "LOW",
+            "kb_refs": [
+              "KB-098",
+              "KB-099"
+            ],
+            "status": "UNRESOLVED",
+            "conflict_group": "CONF-MTRO-deliverability-02",
+            "tags": [
+              "merge-tag-syntax",
+              "unsubscribe-consent"
+            ]
+          },
+          {
+            "statement": "Tag unsubscribe_url được ticket viết dạng một ngoặc trong khi cú pháp merge tag đang tranh chấp; quy tắc link huỷ có điều kiện vẫn là CE nhưng chuỗi tag mẫu chưa có oracle.",
+            "knowledge_kind": "CONFIRMED_EXPECTED",
+            "confidence": "MEDIUM",
+            "kb_refs": [
+              "KB-094"
+            ],
+            "tags": [
+              "merge-tag-syntax",
+              "unsubscribe-consent"
+            ]
+          },
+          {
+            "statement": "Toàn bộ rule của feature chỉ dựa trên Jira MTRO-92 AC §10–§11, chưa kiểm trên staging, và route / shape của Transactional API không có trong bộ nguồn.",
+            "knowledge_kind": "CONFIRMED_EXPECTED",
+            "confidence": "MEDIUM",
+            "kb_refs": [
+              "KB-092",
+              "KB-093",
+              "KB-094",
+              "KB-095",
+              "KB-096",
+              "KB-097"
+            ]
+          }
+        ],
+        "freshness": {
+          "observed_at": "2026-10-07",
+          "run_id": "CTX-20261008-02",
+          "basis": "Ngày QA đọc và tóm tắt Jira MTRO-92 AC §10–§11 (07/10/2026); chưa kiểm trên staging; không có quan sát runtime trong lần dựng này."
+        },
+        "unknown_areas": [
+          {
+            "question": "Ai được gỡ trạng thái huỷ đăng ký của một người nhận: chỉ chính người nhận qua trang huỷ (Jira MTRO-92 §11) hay cả marketer qua Portal API DELETE teams/{team}/unsubscribes/{id} (Jira MTRO-81) (GAP-06)?",
+            "why_it_matters": "Hai spec Jira nói ngược nhau về cùng hành vi; chạm topic unsubscribe-consent. Câu hỏi CONFLICT do deliverability sở hữu; profile này chỉ tham chiếu.",
+            "kb_refs": [
+              "KB-098",
+              "KB-099"
+            ]
+          },
+          {
+            "question": "Transactional API có route, method và shape request / response nào, và body lỗi 422 có nêu lý do (thiếu biến, tên biến cấm, link huỷ + cc / bcc, quá 13 header) không?",
+            "why_it_matters": "Rule 422 chưa gắn được với operation cụ thể; không so được body lỗi.",
+            "kb_refs": [
+              "KB-092",
+              "KB-093",
+              "KB-096",
+              "KB-097"
+            ]
+          },
+          {
+            "question": "Khi cú pháp merge tag được phân xử, tag link huỷ trong mail giao dịch viết thế nào (một ngoặc hay hai ngoặc) và tag sai cú pháp có làm mất link huỷ không?",
+            "why_it_matters": "Có hay không có link huỷ phụ thuộc việc nhận diện tag unsubscribe_url.",
+            "kb_refs": [
+              "KB-094"
+            ]
+          },
+          {
+            "question": "Link huỷ trong mail giao dịch đã gửi còn hoạt động khi workspace Sending suspended hoặc Disabled không (GAP-10)?",
+            "why_it_matters": "Disabled chặn mọi thao tác trừ xem; chạm topic unsubscribe-consent.",
+            "kb_refs": [
+              "KB-091",
+              "KB-095"
+            ]
+          },
+          {
+            "question": "Huỷ qua link trong mail giao dịch được ghi vào sổ consent hay vào suppression, và hiển thị thế nào ở danh sách contact / suppression?",
+            "why_it_matters": "Hai khái niệm khác nhau ở tầng product; nguồn của feature chỉ nêu phạm vi huỷ.",
+            "kb_refs": [
+              "KB-095",
+              "KB-P-013",
+              "KB-P-014"
+            ]
+          }
+        ]
+      }
+    ],
+    "profile_relationships": [
+      {
+        "from": "transactional-mail-safeguards",
+        "to": "content-screening",
+        "relation": "SHARES_MERGE_TAG_SYNTAX_DEPENDENCY",
+        "kb_refs": [
+          "KB-094",
+          "KB-036"
+        ]
+      },
+      {
+        "from": "transactional-mail-safeguards",
+        "to": "sending-suspension-and-staff-review",
+        "relation": "DEPENDS_ON_STATE",
+        "kb_refs": [
+          "KB-050",
+          "KB-091"
+        ]
+      },
+      {
+        "from": "transactional-mail-safeguards",
+        "to": "deliverability/unsubscribe-handling",
+        "relation": "SHARES_RULES",
+        "kb_refs": [
+          "KB-095"
+        ]
+      },
+      {
+        "from": "transactional-mail-safeguards",
+        "to": "deliverability/suppression-list-management",
+        "relation": "CONFLICT_COUNTERPART",
+        "kb_refs": [
+          "KB-099"
+        ]
+      }
+    ],
+    "coverage_matrix": [
+      {
+        "feature_id": "transactional-mail-safeguards",
+        "layer": "api",
+        "role": "api-caller",
+        "state": "thiếu biến / tên biến cấm",
+        "environment": "documented",
+        "covered": true,
+        "note": "Chỉ Jira AC; route chưa biết"
+      },
+      {
+        "feature_id": "transactional-mail-safeguards",
+        "layer": "api",
+        "role": "api-caller",
+        "state": "link huỷ + cc / bcc; hơn 13 header",
+        "environment": "documented",
+        "covered": true,
+        "note": "Chỉ Jira AC"
+      },
+      {
+        "feature_id": "transactional-mail-safeguards",
+        "layer": "api",
+        "role": "api-caller",
+        "state": "request hợp lệ (shape, response thành công)",
+        "environment": "documented",
+        "covered": false,
+        "note": "Không có nguồn"
+      },
+      {
+        "feature_id": "transactional-mail-safeguards",
+        "layer": "backend",
+        "role": "recipient",
+        "state": "mail có / không có tag unsubscribe_url",
+        "environment": "documented",
+        "covered": true,
+        "note": "Chỉ Jira AC; cú pháp tag tranh chấp"
+      },
+      {
+        "feature_id": "transactional-mail-safeguards",
+        "layer": "backend",
+        "role": "recipient",
+        "state": "huỷ qua link mail giao dịch",
+        "environment": "documented",
+        "covered": true,
+        "note": "Chỉ Jira AC"
+      },
+      {
+        "feature_id": "transactional-mail-safeguards",
+        "layer": "api",
+        "role": "marketer / recipient",
+        "state": "đăng ký lại sau huỷ",
+        "environment": "documented",
+        "covered": false,
+        "note": "Tranh chấp chưa phân xử"
+      },
+      {
+        "feature_id": "transactional-mail-safeguards",
+        "layer": "backend",
+        "role": "recipient",
+        "state": "link huỷ khi workspace Suspended / Disabled",
+        "environment": "documented",
+        "covered": false,
+        "note": "GAP-10"
+      },
+      {
+        "feature_id": "transactional-mail-safeguards",
+        "layer": "code",
+        "role": "unspecified",
+        "state": "any",
+        "environment": "documented",
+        "covered": false,
+        "note": "Không có nguồn mã"
+      }
+    ],
+    "unassigned_kb_items": [],
+    "profile_conflicts": [
+      {
+        "type": "KB_CONFLICT_GROUP",
+        "conflict_group": "CONF-MTRO-deliverability-02",
+        "summary": "Đăng ký lại: chỉ qua trang người nhận (Jira MTRO-92 §11) vs Portal API cho marketer (Jira MTRO-81). Group do deliverability sở hữu (OQ CONFLICT ở đó); KB-098 và KB-099 của abuse-guard là thành viên.",
+        "kb_refs": [
+          "KB-098",
+          "KB-099"
+        ],
+        "status": "UNRESOLVED",
+        "owner_object": "deliverability"
+      },
+      {
+        "type": "CROSS_OBJECT_CONFLICT_DEPENDENCY",
+        "conflict_group": "CONF-MTRO-email-content-01",
+        "summary": "Cú pháp tag unsubscribe_url phụ thuộc tranh chấp cú pháp merge tag ở email-content.",
+        "kb_refs": [
+          "KB-094"
+        ],
+        "status": "UNRESOLVED"
+      }
+    ],
+    "profile_change_summary": [
+      "Rework r1: tranh chấp đăng ký lại (KB-098, KB-099) chuyển sang conflict group CONF-MTRO-deliverability-02 do deliverability sở hữu; CONF-MTRO-abuse-guard-03 không còn tồn tại."
+    ],
+    "kb_trace_complete": true
+  },
+  "gate": {
+    "decision": "CONDITIONAL_PASS",
+    "blocking_findings": [],
+    "conditions": [
+      "Route / shape Transactional API không có trong nguồn; check 422 chỉ ở mức điều kiện.",
+      "Tranh chấp đăng ký lại và phụ thuộc cú pháp merge tag không có oracle."
+    ],
+    "reason": "Profile có identity ổn định, user goal, mọi field trace về kb_id, coverage và freshness; đủ cho regression discovery nhưng oracle còn unknown ở operation cụ thể và vùng tranh chấp.",
+    "allowed_next_steps": [
+      "qa-checklist-builder",
+      "knowledge-diff-analyzer"
+    ]
+  }
+}

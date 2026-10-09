@@ -1,0 +1,659 @@
+{
+  "schema_version": "1.0",
+  "artifact_type": "FeatureProfileCandidate",
+  "artifact_id": "ART-FEATURE-PROFILE-contact-detail-CTX-20261008-02",
+  "workflow_id": "CTX-20261008-02",
+  "producer": "feature-profile-builder",
+  "source_refs": [
+    "candidate/product-kb/contact-detail.json",
+    "candidate/product-kb/custom-fields.json",
+    "candidate/product-kb/contact-list-and-search.json",
+    "candidate/product-kb/contact-create-and-edit.json",
+    "candidate/product-kb/_object-level.contacts.json",
+    "candidate/product-kb/_product-level.json",
+    "input/scope-plan.json",
+    "input/orchestrator-directives.json",
+    "input/profile-checklist-brief.md",
+    "intermediate/doc/DOC-27.json"
+  ],
+  "upstream_artifact_ids": [
+    "PKBC-CTX-20261008-02-contacts-contact-detail",
+    "PKBC-CTX-20261008-02-contacts-custom-fields",
+    "PKBC-CTX-20261008-02-contacts-contact-list-and-search",
+    "PKBC-CTX-20261008-02-contacts-contact-create-and-edit",
+    "PKBC-CTX-20261008-02-contacts-object-level",
+    "PKBC-CTX-20261008-02-_product-level"
+  ],
+  "status": "PARTIAL",
+  "confidence": "MEDIUM",
+  "observations": [
+    "Rework r1: dựng lại từ shard hiện tại; item staging tách khỏi rule CE (F-03) được đưa vào observed_behavior riêng, rule CE chỉ còn nội dung authority.",
+    "KB-071 phụ thuộc tranh chấp resubscribe CONF-MTRO-deliverability-02 (deliverability sở hữu): ghi ở risks, unknown_areas, dependencies và profile_conflicts.",
+    "Profile dựng hoàn toàn từ tài liệu (DOC_BOOTSTRAP); act_ids rỗng, observed_validations rỗng.",
+    "Rule tag ngoài phạm vi lấy từ shard object-level của contacts; rule nguồn Consent lấy từ shard contact-list-and-search vì áp cho cả danh sách và trang chi tiết."
+  ],
+  "assumptions": [],
+  "unknowns": [
+    "Resubscribe contact / gỡ suppression có thao tác trên UI không, hay chỉ qua API `DELETE teams/{team}/unsubscribes/{id}` (GAP-14) — và marketer có được resubscribe qua API không, hay chỉ người nhận tự làm qua trang của họ (tranh chấp CONF-MTRO-deliverability-02)?",
+    "Danh sách đầy đủ và ý nghĩa các giá trị Consent, Deliverability, Unsubscribed via; mốc Updated có phải đổi khi consent đổi không (GAP-13)?",
+    "Value custom field null / rỗng nên hiện `—` hay ô trắng, và Datetime nên hiện theo định dạng / múi giờ nào (GAP-11)?",
+    "Contact id không tồn tại có nên hiện `Contact not found.` kèm đường quay lại thay vì alert `Not Found.` không có nút Back?",
+    "Trang chi tiết có cần tự cập nhật khi automation ghi attribute không?",
+    "Activity / timeline của contact (Jira MTRO-26, To Do) có nằm trong phạm vi release không?"
+  ],
+  "conflicts": [
+    "CONF-MTRO-deliverability-02"
+  ],
+  "blocking_issues": [],
+  "payload": {
+    "feature_profiles": [
+      {
+        "feature_id": "contact-detail",
+        "feature_key": "contact-detail",
+        "name": "Xem chi tiết một contact",
+        "user_goal": "Người dùng workspace xem đầy đủ hồ sơ của một contact — thông tin cá nhân, custom field, trạng thái consent và deliverability — để hiểu vì sao contact có / không nhận email, rồi sửa hoặc xoá contact từ đó.",
+        "stable_since_version": "v1",
+        "actors": [
+          {
+            "role": "Owner",
+            "permission_observed": "Quan sát staging 29/09 và 01/10/2026 bằng Owner: mở trang chi tiết, menu Contact actions (Edit, Delete).",
+            "kb_refs": [
+              "KB-063",
+              "KB-064"
+            ]
+          },
+          {
+            "role": "Admin / role thứ ba (tên đang tranh chấp)",
+            "permission_observed": "Chưa quan sát; ma trận quyền Contacts chưa chốt.",
+            "kb_refs": [
+              "KB-P-051"
+            ]
+          }
+        ],
+        "entry_points": [
+          {
+            "path": "Click một dòng trong bảng `/contacts` → route `/contacts/:id`",
+            "precondition": "Contact tồn tại trong workspace.",
+            "kb_refs": [
+              "KB-014",
+              "KB-063"
+            ]
+          },
+          {
+            "path": "Mở thẳng URL `/contacts/:id`",
+            "precondition": "Đã đăng nhập workspace; id không tồn tại thì hiện `Not Found.`",
+            "kb_refs": [
+              "KB-063",
+              "KB-069",
+              "KB-P-050"
+            ]
+          }
+        ],
+        "capabilities": [
+          {
+            "name": "Xem thông tin cá nhân và custom field",
+            "description": "Header (email làm h1, Created / Updated), khối Properties chỉ đọc (First name, Last name, Country, Address, SMS) và khối Custom fields key → value.",
+            "kb_refs": [
+              "KB-063",
+              "KB-066",
+              "KB-067",
+              "KB-068"
+            ],
+            "act_ids": []
+          },
+          {
+            "name": "Biết contact có nhận được email không",
+            "description": "Khối `Email status` chỉ đọc: Consent, Unsubscribed via, Unsubscribed on, Deliverability, Last delivery event; theo PO/BA + Dev 02/10/2026 đây là giá trị đúng khi lệch với cột Consent ở danh sách. Bounce / complaint chỉ hiện ở Deliverability; unsubscribe theo topic không hiện ở đây.",
+            "kb_refs": [
+              "KB-019",
+              "KB-064",
+              "KB-065",
+              "KB-072"
+            ],
+            "act_ids": []
+          },
+          {
+            "name": "Sửa hoặc xoá contact từ trang chi tiết",
+            "description": "Menu `Contact actions` có `Edit` và `Delete`; không có thao tác resubscribe cho contact Unsubscribed.",
+            "kb_refs": [
+              "KB-063",
+              "KB-051",
+              "KB-070"
+            ],
+            "act_ids": []
+          },
+          {
+            "name": "Xử lý contact không tồn tại",
+            "description": "id không tồn tại (kể cả `/contacts/tags`) hiện alert `Not Found.` của API, không có nút Back.",
+            "kb_refs": [
+              "KB-069",
+              "KB-P-050"
+            ],
+            "act_ids": []
+          }
+        ],
+        "state_transitions": [
+          {
+            "from": "đang xem chi tiết contact",
+            "to": "dialog Edit contact mở với giá trị điền sẵn",
+            "trigger": "`Contact actions` › `Edit`",
+            "condition": "—",
+            "kb_refs": [
+              "KB-063",
+              "KB-051"
+            ]
+          },
+          {
+            "from": "contact Subscribed",
+            "to": "contact Unsubscribed (Email status cập nhật, mốc Updated không đổi trên mẫu quan sát)",
+            "trigger": "Contact unsubscribe (ví dụ qua footer link)",
+            "condition": "Một mẫu quan sát; Updated có phải đổi theo consent chưa được BE xác nhận",
+            "kb_refs": [
+              "KB-064",
+              "KB-072"
+            ]
+          },
+          {
+            "from": "trang chi tiết đang mở",
+            "to": "hiện giá trị attribute mới",
+            "trigger": "Reload trang sau khi automation ghi attribute",
+            "condition": "Trang không tự refresh",
+            "kb_refs": [
+              "KB-073"
+            ]
+          }
+        ],
+        "confirmed_rules": [
+          {
+            "statement": "Theo quyết định PO/BA + Dev 02/10/2026 (task Testlane MTRO-010 BR-14), cột `Consent` ở danh sách Contacts và khối `Email status` ở trang chi tiết cùng đọc từ bảng `unsubscribes` (global); khi hai chỗ lệch nhau thì `Email status` là giá trị đúng.",
+            "knowledge_kind": "CONFIRMED_EXPECTED",
+            "confidence": "MEDIUM",
+            "kb_refs": [
+              "KB-019"
+            ]
+          },
+          {
+            "statement": "Theo quyết định PO/BA 02/10/2026 (task Testlane MTRO-010 BR-15), gắn tag cho contact nằm ngoài phạm vi (đã bỏ tag khỏi Contacts, không có UI gán tag).",
+            "knowledge_kind": "CONFIRMED_EXPECTED",
+            "confidence": "MEDIUM",
+            "kb_refs": [
+              "KB-162"
+            ]
+          }
+        ],
+        "observed_behavior": [
+          {
+            "statement": "Trên staging (khảo sát 29/09 và 01/10/2026), trang chi tiết contact ở route `/contacts/:id`; header gồm `Back`, avatar chữ cái đầu, h1 là email, menu `Contact actions` (`Edit` · `Delete`) và hai mốc `Created` / `Updated`.",
+            "knowledge_kind": "OBSERVED_CURRENT",
+            "confidence": "MEDIUM",
+            "status": "CURRENT_STATE",
+            "kb_refs": [
+              "KB-063"
+            ]
+          },
+          {
+            "statement": "Trên staging (khảo sát 01/10/2026), trang chi tiết contact có khối `Email status` chỉ đọc gồm `Consent`, `Unsubscribed via`, `Unsubscribed on`, `Deliverability` và `Last delivery event`; giá trị đã thấy gồm `Footer link` / `—` (Unsubscribed via), `Good` / các trạng thái bounced (Deliverability) và dạng \"sự kiện · thời điểm\" (Last delivery event). Ý nghĩa đầy đủ của các giá trị chưa được BE xác nhận (GAP-13).",
+            "knowledge_kind": "OBSERVED_CURRENT",
+            "confidence": "MEDIUM",
+            "status": "CURRENT_STATE",
+            "kb_refs": [
+              "KB-064"
+            ]
+          },
+          {
+            "statement": "Theo QA KB Mailtro \"Contacts\" v1 (staging 01/10/2026), trạng thái bounce / complaint của contact chỉ hiện ở mục `Deliverability` (không ở `Consent`), còn unsubscribe theo topic không hiện ở cả cột `Consent` (danh sách) lẫn khối `Email status` (trang chi tiết).",
+            "knowledge_kind": "OBSERVED_CURRENT",
+            "confidence": "LOW",
+            "status": "CURRENT_STATE",
+            "kb_refs": [
+              "KB-065"
+            ]
+          },
+          {
+            "statement": "Trên staging (khảo sát 01/10/2026), khối `Properties` chỉ đọc ở trang chi tiết contact gồm `First name`, `Last name`, `Country`, `Address` và `SMS`.",
+            "knowledge_kind": "OBSERVED_CURRENT",
+            "confidence": "MEDIUM",
+            "status": "CURRENT_STATE",
+            "kb_refs": [
+              "KB-066"
+            ]
+          },
+          {
+            "statement": "Trên staging (khảo sát 01/10/2026), khối `Custom fields` ở trang chi tiết contact hiển thị từng cặp key → value (Boolean hiện `true`), hoặc `—` khi contact không có custom field.",
+            "knowledge_kind": "OBSERVED_CURRENT",
+            "confidence": "MEDIUM",
+            "status": "CURRENT_STATE",
+            "kb_refs": [
+              "KB-067"
+            ]
+          },
+          {
+            "statement": "Trên staging (quan sát 06/10/2026, TC-MTRO-258), custom field có value rỗng / null hiện ô trắng ở trang chi tiết thay vì `—` như field chuẩn; đúng hay sai đang chờ PO chốt (GAP-11), chưa xác định là lỗi.",
+            "knowledge_kind": "OBSERVED_CURRENT",
+            "confidence": "LOW",
+            "status": "CURRENT_STATE",
+            "kb_refs": [
+              "KB-068"
+            ]
+          },
+          {
+            "statement": "Trên staging (khảo sát 01/10/2026), mở `/contacts/:id` với id không tồn tại (kể cả `/contacts/tags`, bị hiểu là một contact id) hiện alert `Not Found.` của API (404) và không có nút Back; chuỗi `Contact not found.` có trong bundle FE nhưng không được dùng.",
+            "knowledge_kind": "OBSERVED_CURRENT",
+            "confidence": "MEDIUM",
+            "status": "CURRENT_STATE",
+            "kb_refs": [
+              "KB-069"
+            ]
+          },
+          {
+            "statement": "Trên staging (khảo sát 01/10/2026), với contact Unsubscribed, menu `Contact actions` không có thao tác resubscribe nào; việc resubscribe / gỡ suppression có UI hay không chưa được PO chốt (GAP-14).",
+            "knowledge_kind": "OBSERVED_CURRENT",
+            "confidence": "MEDIUM",
+            "status": "CURRENT_STATE",
+            "kb_refs": [
+              "KB-070"
+            ]
+          },
+          {
+            "statement": "Trên staging (khảo sát 01/10/2026, một mẫu: Updated 11:18, Unsubscribed on 11:23), mốc `Updated` của contact không đổi khi contact unsubscribe; `Updated at` có phải đổi khi consent đổi hay không chưa được BE xác nhận (GAP-13).",
+            "knowledge_kind": "OBSERVED_CURRENT",
+            "confidence": "LOW",
+            "status": "CURRENT_STATE",
+            "kb_refs": [
+              "KB-072"
+            ]
+          },
+          {
+            "statement": "Theo test-run staging 06/10/2026, trang chi tiết contact không tự refresh sau khi automation ghi attribute vào contact; phải reload trang mới thấy giá trị mới.",
+            "knowledge_kind": "OBSERVED_CURRENT",
+            "confidence": "LOW",
+            "status": "CURRENT_STATE",
+            "kb_refs": [
+              "KB-073"
+            ]
+          },
+          {
+            "statement": "Trên staging (khảo sát 01/10/2026), trang chi tiết contact không có khối Tags và không có timeline / activity; Jira MTRO-26 (To Do) mô tả Tags, Activity và timeline nhưng chưa có trên bản dựng.",
+            "knowledge_kind": "OBSERVED_CURRENT",
+            "confidence": "MEDIUM",
+            "status": "CURRENT_STATE",
+            "kb_refs": [
+              "KB-074"
+            ]
+          },
+          {
+            "statement": "Trên staging (khảo sát 01/10/2026), Contacts chưa có tính năng tag.",
+            "knowledge_kind": "OBSERVED_CURRENT",
+            "confidence": "LOW",
+            "status": "CURRENT_STATE",
+            "kb_refs": [
+              "KB-169",
+              "KB-162"
+            ]
+          },
+          {
+            "statement": "Trên staging (quan sát 06/10/2026), trang chi tiết contact hiển thị value Datetime dạng ISO UTC thô (ví dụ `2026-10-01T16:30:00Z`); tài liệu ghi chưa có rule cho cách hiển thị này.",
+            "knowledge_kind": "OBSERVED_CURRENT",
+            "confidence": "LOW",
+            "status": "CURRENT_STATE",
+            "kb_refs": [
+              "KB-140"
+            ]
+          }
+        ],
+        "observed_validations": [],
+        "permissions": [
+          {
+            "statement": "Quyền xem trang chi tiết và các thao tác Edit / Delete theo role chưa được chốt; mọi quan sát bằng Owner.",
+            "kb_refs": [
+              "KB-P-051",
+              "KB-063"
+            ]
+          }
+        ],
+        "surface_mapping": {
+          "portal": [
+            {
+              "item": "Route `/contacts/:id`: Back, avatar, h1 email, menu `Contact actions` (Edit, Delete), mốc Created / Updated",
+              "kb_refs": [
+                "KB-063"
+              ]
+            },
+            {
+              "item": "Khối `Email status`, `Properties`, `Custom fields` (chỉ đọc)",
+              "kb_refs": [
+                "KB-064",
+                "KB-066",
+                "KB-067"
+              ]
+            },
+            {
+              "item": "Alert `Not Found.` cho id không tồn tại",
+              "kb_refs": [
+                "KB-069"
+              ]
+            }
+          ],
+          "storefront": [],
+          "api": [
+            {
+              "item": "API chi tiết contact trả 404 khi id không tồn tại (đường dẫn không được ghi)",
+              "kb_refs": [
+                "KB-069"
+              ]
+            },
+            {
+              "item": "Theo Jira MTRO-81 (chưa chốt), resubscribe qua `DELETE teams/{team}/unsubscribes/{id}`",
+              "kb_refs": [
+                "KB-071"
+              ]
+            }
+          ],
+          "data": [
+            {
+              "item": "Consent và Email status đọc bảng `unsubscribes` (global)",
+              "kb_refs": [
+                "KB-019"
+              ]
+            },
+            {
+              "item": "Value Datetime custom field hiển thị dạng ISO UTC thô; value null hiện ô trắng",
+              "kb_refs": [
+                "KB-140",
+                "KB-068"
+              ]
+            }
+          ],
+          "code": []
+        },
+        "dependencies": [
+          {
+            "target": "contacts / contact-list-and-search",
+            "relation": "opened_from",
+            "note": "Mở bằng click dòng; Consent ở danh sách phải khớp Email status.",
+            "kb_refs": [
+              "KB-014",
+              "KB-019"
+            ]
+          },
+          {
+            "target": "contacts / contact-create-and-edit",
+            "relation": "entry_point_for",
+            "note": "Contact actions › Edit mở dialog Edit contact.",
+            "kb_refs": [
+              "KB-051"
+            ]
+          },
+          {
+            "target": "deliverability / suppression-list-management",
+            "relation": "resubscribe_and_suppression",
+            "note": "Gỡ unsubscribe / suppression thuộc deliverability; quyền resubscribe qua API của marketer đang tranh chấp (CONF-MTRO-deliverability-02) và route API còn mâu thuẫn ở object đó.",
+            "kb_refs": [
+              "KB-070",
+              "KB-071"
+            ]
+          },
+          {
+            "target": "automations / automation-steps",
+            "relation": "attribute_writer",
+            "note": "Step Update contact field ghi attribute; trang chi tiết không tự refresh.",
+            "kb_refs": [
+              "KB-073"
+            ]
+          },
+          {
+            "target": "contacts / custom-fields",
+            "relation": "displays",
+            "note": "Hiển thị value custom field theo Kind.",
+            "kb_refs": [
+              "KB-067",
+              "KB-139",
+              "KB-140"
+            ]
+          }
+        ],
+        "risks": [
+          {
+            "statement": "Resubscribe chỉ qua API (Jira MTRO-81) còn câu hỏi mở với PO (GAP-14) và phụ thuộc tranh chấp CONF-MTRO-deliverability-02 do deliverability sở hữu (marketer được resubscribe qua API hay chỉ qua trang người nhận); không dùng làm oracle cho việc trang chi tiết thiếu thao tác resubscribe.",
+            "knowledge_kind": "INFERRED",
+            "confidence": "LOW",
+            "kb_refs": [
+              "KB-071",
+              "KB-070"
+            ]
+          },
+          {
+            "statement": "Jira MTRO-26 (To Do) mô tả Tags, Activity, timeline nhưng bản dựng không có; tag đã được PO/BA 02/10/2026 đưa ra ngoài phạm vi (staging cũng chưa có tag), còn Activity / timeline chưa có quyết định.",
+            "knowledge_kind": "OBSERVED_CURRENT",
+            "confidence": "MEDIUM",
+            "kb_refs": [
+              "KB-074",
+              "KB-162",
+              "KB-169"
+            ]
+          },
+          {
+            "statement": "Chuỗi `Segment similar users` có trong bundle FE nhưng chưa thấy trên UI — có thể là tính năng sắp ra hoặc đã bỏ.",
+            "knowledge_kind": "INFERRED",
+            "confidence": "LOW",
+            "kb_refs": [
+              "KB-075"
+            ]
+          },
+          {
+            "statement": "Hiển thị value null (ô trắng) và Datetime (ISO UTC thô) chưa có rule; chưa xác định là lỗi.",
+            "knowledge_kind": "OBSERVED_CURRENT",
+            "confidence": "LOW",
+            "kb_refs": [
+              "KB-068",
+              "KB-140"
+            ]
+          },
+          {
+            "statement": "Ý nghĩa đầy đủ các giá trị Consent / Deliverability / Unsubscribed via chưa được BE xác nhận (GAP-13); unsubscribe theo topic không hiện ở đâu trên Contacts.",
+            "knowledge_kind": "OBSERVED_CURRENT",
+            "confidence": "MEDIUM",
+            "kb_refs": [
+              "KB-064",
+              "KB-065"
+            ]
+          }
+        ],
+        "freshness": {
+          "observed_at": "2026-10-06",
+          "run_id": "CTX-20261008-02",
+          "basis": "Khảo sát staging 29/09 và 01/10/2026, test-run 06/10/2026; quyết định PO/BA + Dev 02/10/2026. Build staging không được ghi."
+        },
+        "unknown_areas": [
+          {
+            "question": "Resubscribe contact / gỡ suppression có thao tác trên UI không, hay chỉ qua API `DELETE teams/{team}/unsubscribes/{id}` (GAP-14) — và marketer có được resubscribe qua API không, hay chỉ người nhận tự làm qua trang của họ (tranh chấp CONF-MTRO-deliverability-02)?",
+            "why_it_matters": "Topic unsubscribe-consent; staging không có thao tác UI, rule API chưa chốt và phụ thuộc tranh chấp do deliverability phân xử.",
+            "kb_refs": [
+              "KB-070",
+              "KB-071"
+            ]
+          },
+          {
+            "question": "Danh sách đầy đủ và ý nghĩa các giá trị Consent, Deliverability, Unsubscribed via; mốc Updated có phải đổi khi consent đổi không (GAP-13)?",
+            "why_it_matters": "Không có expected cho khối Email status ngoài quy tắc nguồn dữ liệu.",
+            "kb_refs": [
+              "KB-064",
+              "KB-072"
+            ]
+          },
+          {
+            "question": "Value custom field null / rỗng nên hiện `—` hay ô trắng, và Datetime nên hiện theo định dạng / múi giờ nào (GAP-11)?",
+            "why_it_matters": "Chỉ có quan sát 06/10/2026, chưa có rule.",
+            "kb_refs": [
+              "KB-068",
+              "KB-140"
+            ]
+          },
+          {
+            "question": "Contact id không tồn tại có nên hiện `Contact not found.` kèm đường quay lại thay vì alert `Not Found.` không có nút Back?",
+            "why_it_matters": "Chuỗi riêng có trong bundle nhưng không dùng; không biết hiện trạng là chủ ý hay lỗi.",
+            "kb_refs": [
+              "KB-069",
+              "KB-P-050"
+            ]
+          },
+          {
+            "question": "Trang chi tiết có cần tự cập nhật khi automation ghi attribute không?",
+            "why_it_matters": "Hiện phải reload; không có rule.",
+            "kb_refs": [
+              "KB-073"
+            ]
+          },
+          {
+            "question": "Activity / timeline của contact (Jira MTRO-26, To Do) có nằm trong phạm vi release không?",
+            "why_it_matters": "Tag đã bị loại khỏi phạm vi nhưng Activity / timeline chưa có quyết định.",
+            "kb_refs": [
+              "KB-074",
+              "KB-162"
+            ]
+          },
+          {
+            "question": "Owner, Admin và role thứ ba được xem trang chi tiết và dùng Contact actions tới đâu?",
+            "why_it_matters": "Ma trận quyền chưa chốt.",
+            "kb_refs": [
+              "KB-P-051"
+            ]
+          }
+        ]
+      }
+    ],
+    "profile_relationships": [
+      {
+        "from": "contact-detail",
+        "to": "contact-list-and-search",
+        "relation": "OPENED_FROM",
+        "kb_refs": [
+          "KB-014"
+        ]
+      },
+      {
+        "from": "contact-detail",
+        "to": "contact-create-and-edit",
+        "relation": "ENTRY_POINT_FOR",
+        "kb_refs": [
+          "KB-051"
+        ]
+      },
+      {
+        "from": "contact-detail",
+        "to": "deliverability/suppression-list-management",
+        "relation": "READS_CONSENT_FROM",
+        "kb_refs": [
+          "KB-019",
+          "KB-070"
+        ]
+      }
+    ],
+    "coverage_matrix": [
+      {
+        "feature_id": "contact-detail",
+        "layer": "portal",
+        "role": "Owner",
+        "state": "contact Subscribed có đủ thông tin",
+        "environment": "documented",
+        "covered": true,
+        "note": "Hiện trạng staging"
+      },
+      {
+        "feature_id": "contact-detail",
+        "layer": "portal",
+        "role": "unspecified",
+        "state": "contact Unsubscribed",
+        "environment": "documented",
+        "covered": true,
+        "note": "Rule nguồn Consent (CE) + hiện trạng; ý nghĩa giá trị chưa chốt"
+      },
+      {
+        "feature_id": "contact-detail",
+        "layer": "portal",
+        "role": "unspecified",
+        "state": "contact bị bounce / complaint",
+        "environment": "documented",
+        "covered": true,
+        "note": "Chỉ hiện trạng (QA KB Contacts)"
+      },
+      {
+        "feature_id": "contact-detail",
+        "layer": "portal",
+        "role": "unspecified",
+        "state": "contact có custom field null / Datetime",
+        "environment": "documented",
+        "covered": true,
+        "note": "Hiện trạng 06/10/2026, chưa có rule"
+      },
+      {
+        "feature_id": "contact-detail",
+        "layer": "portal",
+        "role": "Owner",
+        "state": "id không tồn tại",
+        "environment": "documented",
+        "covered": true,
+        "note": "Hiện trạng staging"
+      },
+      {
+        "feature_id": "contact-detail",
+        "layer": "portal",
+        "role": "unspecified",
+        "state": "resubscribe contact",
+        "environment": "documented",
+        "covered": false,
+        "note": "Chưa chốt UI hay API"
+      },
+      {
+        "feature_id": "contact-detail",
+        "layer": "portal",
+        "role": "Admin",
+        "state": "xem chi tiết / Contact actions",
+        "environment": "documented",
+        "covered": false,
+        "note": "Chưa khảo sát"
+      },
+      {
+        "feature_id": "contact-detail",
+        "layer": "portal",
+        "role": "Member",
+        "state": "xem chi tiết / Contact actions",
+        "environment": "documented",
+        "covered": false,
+        "note": "Chưa khảo sát"
+      }
+    ],
+    "unassigned_kb_items": [],
+    "profile_conflicts": [
+      {
+        "conflict_group": "CONF-MTRO-deliverability-02",
+        "topic": "Marketer resubscribe contact qua API hay chỉ qua trang người nhận",
+        "kb_ids": [],
+        "related_kb_ids": [
+          "KB-071",
+          "KB-070"
+        ],
+        "status": "UNRESOLVED",
+        "owner_feature": "deliverability/suppression-list-management",
+        "note": "Nhóm do deliverability sở hữu; ở contacts chỉ KB-071 phụ thuộc, không phát câu hỏi CONFLICT riêng."
+      }
+    ],
+    "profile_change_summary": [
+      "Rework r1: KB-162 chỉ còn quyết định PO/BA; quan sát staging 'chưa có tag' tách thành KB-169 (observed_behavior).",
+      "KB-071 thêm phụ thuộc tranh chấp CONF-MTRO-deliverability-02: cập nhật risks, unknown_areas, dependencies, profile_conflicts."
+    ],
+    "kb_trace_complete": true
+  },
+  "gate": {
+    "decision": "CONDITIONAL_PASS",
+    "blocking_findings": [],
+    "conditions": [
+      "Chỉ có 2 rule CE (Email status là nguồn đúng của Consent; tag ngoài phạm vi); phần lớn trang chi tiết là hiện trạng staging, dùng làm baseline chứ không phải spec.",
+      "Resubscribe, ý nghĩa Email status và cách hiển thị null / Datetime chưa chốt — không viết expected khẳng định cho các mục này."
+    ],
+    "allowed_next_steps": [
+      "qa-checklist-builder",
+      "knowledge-diff-analyzer"
+    ]
+  }
+}

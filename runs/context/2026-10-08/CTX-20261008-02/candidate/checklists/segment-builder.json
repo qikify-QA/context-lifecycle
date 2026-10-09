@@ -1,0 +1,1679 @@
+{
+  "schema_version": "1.0",
+  "artifact_type": "RegressionChecklistCandidate",
+  "artifact_id": "RCCAND-segment-builder-CTX-20261008-02",
+  "workflow_id": "CTX-20261008-02",
+  "producer": "qa-checklist-builder",
+  "source_refs": [
+    "candidate/feature-profiles/segment-builder.json",
+    "candidate/product-kb/segment-list-management.json",
+    "candidate/product-kb/segment-builder.json",
+    "candidate/product-kb/segment-audience-evaluation.json",
+    "candidate/product-kb/_product-level.json",
+    "input/orchestrator-directives.json",
+    "input/profile-checklist-brief.md",
+    "input/rework-r1-builders.md",
+    "intermediate/doc/DOC-27.json"
+  ],
+  "upstream_artifact_ids": [
+    "ART-FEATURE-PROFILE-segment-builder-CTX-20261008-02",
+    "PKBC-CTX-20261008-02-segments-segment-builder"
+  ],
+  "status": "PARTIAL",
+  "confidence": "MEDIUM",
+  "rework_round": "r1",
+  "observations": [
+    "32 check; theo oracle_strength {'STRONG': 18, 'BASELINE': 8, 'NONE': 6}; theo status {'READY': 26, 'NEEDS_CONFIRMATION': 6}; theo dimension {'CORE': 16, 'STATE_DATA': 5, 'NEGATIVE': 4, 'BOUNDARY': 4, 'PERMISSION': 3}; theo priority {'P2': 16, 'P3': 14, 'P1': 2}.",
+    "Dựng lại hoàn toàn ở rework r1 từ shard và profile hiện tại. oracle_strength tính bằng script: STRONG khi mọi kb_id của oracle là CONFIRMED_EXPECTED ngoài conflict_group; có OBSERVED_CURRENT (không KNOWN_DEFECT) thì BASELINE; có INFERRED / PROPOSED hoặc không có kb_id thì NONE + NEEDS_CONFIRMATION + open_question_draft. Không item KNOWN_DEFECT nào nằm trong oracle.kb_ids; chúng ở regression_watch_kb_ids.",
+    "Object segments không có shard object-level và không có kb_id bị bỏ ở r1; oracle chỉ trích kb_id của ba feature shard segments.",
+    "Checklist hồi quy do QA viết chỉ dùng làm gợi ý rủi ro / phạm vi phủ, không làm oracle."
+  ],
+  "assumptions": [
+    "risk_ref RISK-<feature-key>-NN do checklist này đặt, đánh số theo thứ tự rủi ro trong feature profile (profile không có id rủi ro); rủi ro bổ sung (phân quyền, cô lập workspace) đánh số tiếp theo.",
+    "Môi trường của mọi check là 'documented' (bootstrap từ tài liệu); khi chạy trên staging cần đối chiếu các lỗi đã biết ở regression_watch_kb_ids trước khi kết luận.",
+    "Check round-trip Value chứa `\"` / ` OR ` dùng rule 'Edit nạp lại cây điều kiện đã lưu' (Jira MTRO-53 AC) làm oracle; nguồn gọi việc mất ký tự / không đọc lại được là lỗi (BUG-CS-05, BUG-113), nên Value người dùng đã lưu phải được nạp lại nguyên vẹn.",
+    "Check chặn Member (Jira MTRO-100) là STRONG theo quyết định PO 30/09/2026; trên staging 01/10/2026 chặn này chưa deploy nên check sẽ lệch tới khi ticket lên build — lệch đó là lỗi đã biết, không phải lỗi mới.",
+    "Copy toast chặn Member để NEEDS_CONFIRMATION (không STRONG) vì còn đề xuất copy khác của Dev (PROPOSED) chưa được PO xử lý."
+  ],
+  "unknowns": [
+    "Khi đổi operator của một điều kiện đã có Value (ví dụ `Equal to` sang `Includes` cùng kiểu Text), Value phải được giữ hay xoá? Hiện staging xoá trắng Value (BUG-CS-13, còn open 06/10/2026) nhưng tài liệu không có rule mong đợi.",
+    "Tên segment chỉ gồm khoảng trắng có được coi là rỗng (Save disabled) không, và tên có khoảng trắng đầu / cuối có được trim khi lưu không? Ngoài giới hạn 255 ký tự ở BE, tài liệu chưa nêu quy tắc validate tên segment; cũng chưa nêu giới hạn số điều kiện / số card trong một segment.",
+    "PO quyết bỏ hẳn hay bật lại chế độ Advanced (pseudo-SQL) của segment builder (GAP-01)? Dev 02/10/2026 cho biết toggle đang ẩn có chủ ý; nếu bật lại thì mô tả trong Jira MTRO-53 AC (`FROM contacts` / `WHERE (...)` / `OR (...)`, monospace, số dòng, × khi hover, hai chế độ là hai cách thể hiện cùng dữ liệu) còn hiệu lực không?",
+    "Các toast của segment (`Segment created`, `Segment saved`, `Couldn't save segment` kèm message server, `Couldn't duplicate segment`, `Couldn't delete segment`, `Counting…`, `Count unavailable`) mới thấy trong chuỗi i18n của bundle FE: PO/Dev có xác nhận đây là copy và thời điểm hiển thị mong đợi không?",
+    "Copy toast cuối cùng khi Member bị chặn tạo segment là copy PO chốt 30/09/2026 (Jira MTRO-100) \"Only workspace Owners and Admins can create segments. Ask an Admin to create it for you.\" hay copy Dev đề xuất có cụm \"…create or edit segments…\"?",
+    "Ngoài quyết định Member không được tạo / sửa segment (PO 30/09/2026, Jira MTRO-100), Owner, Admin và custom role có được tạo / sửa segment không? Member mở segment có sẵn bị chặn ở đâu và API `PUT /segments/{id}` trả gì cho role không có quyền? Ma trận quyền segment chưa chốt (GAP-07), tên role thứ ba đang tranh chấp.",
+    "API key có scope `segments:write` (ghi nhận QA): endpoint tạo / sửa segment qua Public API và phản hồi khi key thiếu scope chưa được tài liệu hoá."
+  ],
+  "conflicts": [],
+  "blocking_issues": [],
+  "payload": {
+    "checklists": [
+      {
+        "feature_id": "segment-builder",
+        "feature_key": "segment-builder",
+        "checklist_version": "v1",
+        "checks": [
+          {
+            "check_id": "CHK-001",
+            "dimension": "CORE",
+            "layer": "portal",
+            "title": "Builder tạo mới mở với 1 điều kiện trống, tên mặc định và Save bị vô hiệu",
+            "applicability": {
+              "role": "unspecified",
+              "state": "builder tạo mới (/segments/new)",
+              "environment": "documented",
+              "theme_or_device": null
+            },
+            "precondition": "Đã đăng nhập portal Mailtro vào workspace test bằng tài khoản được phép tạo / sửa segment (Owner theo các khảo sát hiện có).",
+            "steps": [
+              "Từ `/segments` bấm `Create segment`.",
+              "Đọc ô `Segment name`, đếm số dòng điều kiện, đọc trạng thái nút `Save`.",
+              "Click vào tên, sửa inline thành tên khác."
+            ],
+            "observation_point": "Builder ngay sau khi mở và sau khi sửa tên.",
+            "expected_result": "Mở `/segments/new` với builder có sẵn đúng 1 dòng điều kiện trống, tên mặc định \"Untitled segment\" sửa được inline; `Save` disabled vì điều kiện còn trống Value.",
+            "oracle": {
+              "kb_ids": [
+                "KB-020",
+                "KB-048"
+              ],
+              "oracle_strength": "STRONG"
+            },
+            "status": "READY",
+            "open_question_draft": null,
+            "regression_watch_kb_ids": [
+              "KB-049"
+            ],
+            "risk_refs": [
+              "RISK-segment-builder-04"
+            ],
+            "priority": "P2",
+            "act_ids": [],
+            "evidence_refs": [],
+            "automation_suitability": "SUITABLE"
+          },
+          {
+            "check_id": "CHK-002",
+            "dimension": "CORE",
+            "layer": "portal",
+            "title": "Tạo và lưu segment mới hợp lệ",
+            "applicability": {
+              "role": "unspecified",
+              "state": "builder tạo mới",
+              "environment": "documented",
+              "theme_or_device": null
+            },
+            "precondition": "Đã đăng nhập portal Mailtro vào workspace test bằng tài khoản được phép tạo / sửa segment (Owner theo các khảo sát hiện có).",
+            "steps": [
+              "Mở `/segments/new`, đặt tên duy nhất N.",
+              "Card 1: thêm 2 điều kiện bằng \"+ And\" (vd First name `Equal to` một giá trị có sẵn, Email `Includes` một domain test).",
+              "Bấm \"+ Or\" thêm card 2 với 1 điều kiện có Value.",
+              "Bấm `Save`.",
+              "Mở `/segments`, đọc dòng N; mở lại N trong builder."
+            ],
+            "observation_point": "Danh sách sau khi lưu và builder khi mở lại.",
+            "expected_result": "`Save` enable khi đủ tên, điều kiện và Value; sau khi lưu, danh sách có dòng N với cột Conditions là 3 điều kiện (ví dụ \"3 conditions\"); mở lại N nạp đúng tên, 2 card và 3 điều kiện như đã nhập.",
+            "oracle": {
+              "kb_ids": [
+                "KB-047",
+                "KB-004",
+                "KB-021"
+              ],
+              "oracle_strength": "STRONG"
+            },
+            "status": "READY",
+            "open_question_draft": null,
+            "regression_watch_kb_ids": [
+              "KB-049"
+            ],
+            "risk_refs": [
+              "RISK-segment-builder-04"
+            ],
+            "priority": "P2",
+            "act_ids": [],
+            "evidence_refs": [],
+            "automation_suitability": "SUITABLE"
+          },
+          {
+            "check_id": "CHK-003",
+            "dimension": "STATE_DATA",
+            "layer": "portal",
+            "title": "Sửa segment có sẵn, lưu bằng PUT và nạp lại đúng sau khi tải lại",
+            "applicability": {
+              "role": "unspecified",
+              "state": "segment đã lưu",
+              "environment": "documented",
+              "theme_or_device": null
+            },
+            "precondition": "Đã đăng nhập portal Mailtro vào workspace test bằng tài khoản được phép tạo / sửa segment (Owner theo các khảo sát hiện có). Có segment S đã lưu; mở DevTools tab Network.",
+            "steps": [
+              "Mở S từ danh sách (click dòng).",
+              "Đổi tên, đổi Value một điều kiện và thêm 1 điều kiện mới; bấm `Save`.",
+              "Ghi lại method / URL request lưu trong Network.",
+              "Tải lại trang builder và mở lại S từ danh sách."
+            ],
+            "observation_point": "Request lưu và nội dung builder sau khi tải lại.",
+            "expected_result": "Request lưu là `PUT /segments/<id S>` (không phải PATCH); sau khi tải lại, builder `/segments/<id S>/edit` nạp đúng tên mới, cây điều kiện mới và sort đã lưu.",
+            "oracle": {
+              "kb_ids": [
+                "KB-021",
+                "KB-022"
+              ],
+              "oracle_strength": "STRONG"
+            },
+            "status": "READY",
+            "open_question_draft": null,
+            "regression_watch_kb_ids": [],
+            "risk_refs": [],
+            "priority": "P2",
+            "act_ids": [],
+            "evidence_refs": [],
+            "automation_suitability": "SUITABLE"
+          },
+          {
+            "check_id": "CHK-004",
+            "dimension": "STATE_DATA",
+            "layer": "portal",
+            "title": "Segment 2 điều kiện AND / 2 card OR mở lại bằng card editor",
+            "applicability": {
+              "role": "Owner",
+              "state": "segment đã lưu có 2 điều kiện AND hoặc 2 card OR",
+              "environment": "documented",
+              "theme_or_device": null
+            },
+            "precondition": "Đã đăng nhập portal Mailtro bằng tài khoản role Owner của workspace test. Có segment SA (1 card, 2 điều kiện AND) và SO (2 card OR) đã lưu.",
+            "steps": [
+              "Mở SA từ danh sách.",
+              "Mở SO từ danh sách."
+            ],
+            "observation_point": "Chế độ hiển thị điều kiện khi mở lại.",
+            "expected_result": "Theo hiện trạng staging 01/10/2026, lệch = cần điều tra: cả hai mở lại bằng card editor, không bị chuyển sang ô textarea dạng text như bản 29/09/2026.",
+            "oracle": {
+              "kb_ids": [
+                "KB-056"
+              ],
+              "oracle_strength": "BASELINE"
+            },
+            "status": "READY",
+            "open_question_draft": null,
+            "regression_watch_kb_ids": [
+              "KB-055"
+            ],
+            "risk_refs": [
+              "RISK-segment-builder-05"
+            ],
+            "priority": "P3",
+            "act_ids": [],
+            "evidence_refs": [],
+            "automation_suitability": "SUITABLE"
+          },
+          {
+            "check_id": "CHK-005",
+            "dimension": "CORE",
+            "layer": "portal",
+            "title": "Dựng cây điều kiện: AND trong card, OR giữa các card, xoá điều kiện cuối thì card biến mất",
+            "applicability": {
+              "role": "unspecified",
+              "state": "builder đang dựng điều kiện",
+              "environment": "documented",
+              "theme_or_device": null
+            },
+            "precondition": "Đã đăng nhập portal Mailtro vào workspace test bằng tài khoản được phép tạo / sửa segment (Owner theo các khảo sát hiện có).",
+            "steps": [
+              "Mở `/segments/new`.",
+              "Bấm \"+ And\" trong card đầu; quan sát rail nối.",
+              "Bấm \"+ Or\"; quan sát card mới và pill giữa 2 card.",
+              "Ở card 2 bấm × xoá điều kiện duy nhất."
+            ],
+            "observation_point": "Cấu trúc card / rail / pill sau mỗi thao tác.",
+            "expected_result": "Mỗi card có viền; \"+ And\" thêm điều kiện vào cùng card (có rail nối khi từ 2 điều kiện); \"+ Or\" thêm card mới với pill \"Or\" giữa 2 card; mỗi điều kiện gồm Field → Operator → Value + nút ×; xoá điều kiện cuối của card 2 thì card 2 biến mất.",
+            "oracle": {
+              "kb_ids": [
+                "KB-023"
+              ],
+              "oracle_strength": "STRONG"
+            },
+            "status": "READY",
+            "open_question_draft": null,
+            "regression_watch_kb_ids": [],
+            "risk_refs": [],
+            "priority": "P2",
+            "act_ids": [],
+            "evidence_refs": [],
+            "automation_suitability": "SUITABLE"
+          },
+          {
+            "check_id": "CHK-006",
+            "dimension": "CORE",
+            "layer": "portal",
+            "title": "Xoá hết điều kiện trong builder",
+            "applicability": {
+              "role": "Owner",
+              "state": "segment có sẵn đã mở trong builder",
+              "environment": "documented",
+              "theme_or_device": null
+            },
+            "precondition": "Đã đăng nhập portal Mailtro bằng tài khoản role Owner của workspace test. Có segment S đã lưu.",
+            "steps": [
+              "Mở S trong builder.",
+              "Bấm `Remove condition` cho đến khi không còn điều kiện.",
+              "Đọc trạng thái nút `Save`."
+            ],
+            "observation_point": "Vùng điều kiện và nút Save.",
+            "expected_result": "Theo hiện trạng staging 01/10/2026, lệch = cần điều tra: builder chỉ còn nút `Add filter`; `Save` disabled (không có điều kiện nào).",
+            "oracle": {
+              "kb_ids": [
+                "KB-024",
+                "KB-047"
+              ],
+              "oracle_strength": "BASELINE"
+            },
+            "status": "READY",
+            "open_question_draft": null,
+            "regression_watch_kb_ids": [],
+            "risk_refs": [],
+            "priority": "P3",
+            "act_ids": [],
+            "evidence_refs": [],
+            "automation_suitability": "SUITABLE"
+          },
+          {
+            "check_id": "CHK-007",
+            "dimension": "CORE",
+            "layer": "backend",
+            "title": "AND được ưu tiên hơn OR khi đánh giá segment",
+            "applicability": {
+              "role": "unspecified",
+              "state": "segment có card AND và card OR",
+              "environment": "documented",
+              "theme_or_device": null
+            },
+            "precondition": "Đã đăng nhập portal Mailtro vào workspace test bằng tài khoản được phép tạo / sửa segment (Owner theo các khảo sát hiện có). Có 4 contact Subscribed: c1 thoả A và B, c2 chỉ thoả A, c3 chỉ thoả C, c4 không thoả gì (A, B, C là điều kiện trên field Text với giá trị riêng của bộ dữ liệu test).",
+            "steps": [
+              "Tạo segment: card 1 = A AND B, card 2 = C.",
+              "Bấm `Run`, đợi bảng kết quả nạp xong (có thể trễ vài giây sau toast)."
+            ],
+            "observation_point": "Bộ đếm và danh sách email trong bảng kết quả.",
+            "expected_result": "Theo hiện trạng ghi nhận 08/09/2026 (chưa có xác nhận PO/Dev), lệch = cần điều tra: kết quả là (A AND B) OR C — gồm c1 và c3, không có c2, c4.",
+            "oracle": {
+              "kb_ids": [
+                "KB-025"
+              ],
+              "oracle_strength": "BASELINE"
+            },
+            "status": "READY",
+            "open_question_draft": null,
+            "regression_watch_kb_ids": [],
+            "risk_refs": [
+              "RISK-segment-builder-10"
+            ],
+            "priority": "P2",
+            "act_ids": [],
+            "evidence_refs": [],
+            "automation_suitability": "SUITABLE"
+          },
+          {
+            "check_id": "CHK-008",
+            "dimension": "CORE",
+            "layer": "portal",
+            "title": "Nhóm Custom fields trong `Condition field` hiển thị key thô",
+            "applicability": {
+              "role": "unspecified",
+              "state": "workspace có custom field",
+              "environment": "documented",
+              "theme_or_device": null
+            },
+            "precondition": "Đã đăng nhập portal Mailtro vào workspace test bằng tài khoản được phép tạo / sửa segment (Owner theo các khảo sát hiện có). Workspace có custom field key `plan_tier` (hoặc key bất kỳ có label khác key).",
+            "steps": [
+              "Mở `/segments/new`, mở dropdown `Condition field`.",
+              "Đọc các mục trong nhóm `Custom fields`."
+            ],
+            "observation_point": "Nhóm `Custom fields` của dropdown.",
+            "expected_result": "Custom field hiện bằng key thô (vd `plan_tier`).",
+            "oracle": {
+              "kb_ids": [
+                "KB-026"
+              ],
+              "oracle_strength": "STRONG"
+            },
+            "status": "READY",
+            "open_question_draft": null,
+            "regression_watch_kb_ids": [],
+            "risk_refs": [],
+            "priority": "P3",
+            "act_ids": [],
+            "evidence_refs": [],
+            "automation_suitability": "SUITABLE"
+          },
+          {
+            "check_id": "CHK-009",
+            "dimension": "CORE",
+            "layer": "portal",
+            "title": "Nhóm Contact details trong `Condition field` và nhãn trường số điện thoại",
+            "applicability": {
+              "role": "Owner",
+              "state": "dropdown Condition field",
+              "environment": "documented",
+              "theme_or_device": null
+            },
+            "precondition": "Đã đăng nhập portal Mailtro bằng tài khoản role Owner của workspace test.",
+            "steps": [
+              "Mở `/segments/new`, mở dropdown `Condition field`.",
+              "Đọc các mục trong nhóm `Contact details` theo thứ tự."
+            ],
+            "observation_point": "Nhóm `Contact details` của dropdown.",
+            "expected_result": "Theo hiện trạng staging 01/10/2026 và nhãn QA lead chốt 05/10/2026 theo bản dựng staging (chưa có xác nhận PO/Dev), lệch = cần điều tra: nhóm gồm Email, First name, Last name, Country code, Address, trường số điện thoại, Created at; trường số điện thoại mang nhãn `SMS` (staging hiện `Phone` là lỗi đã biết, TC-MTRO-289 fail 05/10/2026).",
+            "oracle": {
+              "kb_ids": [
+                "KB-027",
+                "KB-028"
+              ],
+              "oracle_strength": "BASELINE"
+            },
+            "status": "READY",
+            "open_question_draft": null,
+            "regression_watch_kb_ids": [
+              "KB-029"
+            ],
+            "risk_refs": [
+              "RISK-segment-builder-07"
+            ],
+            "priority": "P3",
+            "act_ids": [],
+            "evidence_refs": [],
+            "automation_suitability": "SUITABLE"
+          },
+          {
+            "check_id": "CHK-010",
+            "dimension": "CORE",
+            "layer": "portal",
+            "title": "Danh sách operator cho field Text",
+            "applicability": {
+              "role": "Owner",
+              "state": "điều kiện trên field Text",
+              "environment": "documented",
+              "theme_or_device": null
+            },
+            "precondition": "Đã đăng nhập portal Mailtro bằng tài khoản role Owner của workspace test.",
+            "steps": [
+              "Mở `/segments/new`, chọn field `First name`.",
+              "Đọc operator mặc định và mở danh sách operator."
+            ],
+            "observation_point": "Dropdown operator.",
+            "expected_result": "Theo hiện trạng staging 01/10/2026, lệch = cần điều tra: mặc định `Equal to`; danh sách gồm `Equal to`, `Not equal to`, `Includes`, `Does not include`, `Starts with`, `Ends with`, `Is empty`, `Is not empty`; không có `In`.",
+            "oracle": {
+              "kb_ids": [
+                "KB-030"
+              ],
+              "oracle_strength": "BASELINE"
+            },
+            "status": "READY",
+            "open_question_draft": null,
+            "regression_watch_kb_ids": [],
+            "risk_refs": [],
+            "priority": "P2",
+            "act_ids": [],
+            "evidence_refs": [],
+            "automation_suitability": "SUITABLE"
+          },
+          {
+            "check_id": "CHK-011",
+            "dimension": "CORE",
+            "layer": "portal",
+            "title": "Danh sách operator cho field Number",
+            "applicability": {
+              "role": "unspecified",
+              "state": "workspace có custom field kiểu Number",
+              "environment": "documented",
+              "theme_or_device": null
+            },
+            "precondition": "Đã đăng nhập portal Mailtro vào workspace test bằng tài khoản được phép tạo / sửa segment (Owner theo các khảo sát hiện có). Workspace có custom field kiểu Number.",
+            "steps": [
+              "Mở `/segments/new`, chọn custom field Number.",
+              "Mở danh sách operator.",
+              "Chọn `Between`, đếm số ô nhập."
+            ],
+            "observation_point": "Dropdown operator và vùng Value.",
+            "expected_result": "Operator gồm `Equal to`, `Greater than`, `Less than`, `Between`, `Is empty`, `Is not empty`; `Between` hiện 2 ô số.",
+            "oracle": {
+              "kb_ids": [
+                "KB-031"
+              ],
+              "oracle_strength": "STRONG"
+            },
+            "status": "READY",
+            "open_question_draft": null,
+            "regression_watch_kb_ids": [],
+            "risk_refs": [],
+            "priority": "P2",
+            "act_ids": [],
+            "evidence_refs": [],
+            "automation_suitability": "SUITABLE"
+          },
+          {
+            "check_id": "CHK-012",
+            "dimension": "CORE",
+            "layer": "portal",
+            "title": "Operator và cách nhập giá trị cho field Date / Datetime",
+            "applicability": {
+              "role": "unspecified",
+              "state": "điều kiện trên `Created at`",
+              "environment": "documented",
+              "theme_or_device": null
+            },
+            "precondition": "Đã đăng nhập portal Mailtro vào workspace test bằng tài khoản được phép tạo / sửa segment (Owner theo các khảo sát hiện có).",
+            "steps": [
+              "Mở `/segments/new`, chọn field `Created at`.",
+              "Đọc operator mặc định, mở danh sách operator.",
+              "Bấm `Pick a date` với `After`.",
+              "Đổi sang `Between`."
+            ],
+            "observation_point": "Dropdown operator và vùng Value.",
+            "expected_result": "Operator gồm `After` (mặc định), `Before`, `Between`, `Is empty`, `Is not empty`; giá trị chọn bằng nút `Pick a date` (chỉ chọn ngày); `Between` hiện 2 date picker nối bằng chữ `And`.",
+            "oracle": {
+              "kb_ids": [
+                "KB-032",
+                "KB-033"
+              ],
+              "oracle_strength": "STRONG"
+            },
+            "status": "READY",
+            "open_question_draft": null,
+            "regression_watch_kb_ids": [],
+            "risk_refs": [],
+            "priority": "P2",
+            "act_ids": [],
+            "evidence_refs": [],
+            "automation_suitability": "SUITABLE"
+          },
+          {
+            "check_id": "CHK-013",
+            "dimension": "CORE",
+            "layer": "portal",
+            "title": "Điều kiện custom field Boolean: operator `Is` / `Is not` và `Is not` khớp cả contact chưa có giá trị",
+            "applicability": {
+              "role": "unspecified",
+              "state": "workspace có custom field Boolean",
+              "environment": "documented",
+              "theme_or_device": null
+            },
+            "precondition": "Đã đăng nhập portal Mailtro vào workspace test bằng tài khoản được phép tạo / sửa segment (Owner theo các khảo sát hiện có). Có custom field Boolean F; contact Subscribed b1 có F = true, b2 có F = false, b3 chưa từng có giá trị F.",
+            "steps": [
+              "Mở `/segments/new`, chọn F; đọc danh sách operator và kiểu ô Value.",
+              "Đặt `Is not` + giá trị true từ combobox `Condition value`, bấm `Run`, đợi bảng kết quả.",
+              "Đổi thành `Is` + true, bấm `Run`."
+            ],
+            "observation_point": "Danh sách operator, ô Value, bộ đếm, bảng kết quả, toast.",
+            "expected_result": "Operator chỉ có `Is` / `Is not`, giá trị chọn từ combobox `Condition value`; `Is not` true trả b2 và b3 (contact chưa có giá trị cũng khớp); `Is` true trả b1.",
+            "oracle": {
+              "kb_ids": [
+                "KB-034"
+              ],
+              "oracle_strength": "STRONG"
+            },
+            "status": "READY",
+            "open_question_draft": null,
+            "regression_watch_kb_ids": [
+              "KB-035"
+            ],
+            "risk_refs": [
+              "RISK-segment-builder-01"
+            ],
+            "priority": "P2",
+            "act_ids": [],
+            "evidence_refs": [],
+            "automation_suitability": "SUITABLE"
+          },
+          {
+            "check_id": "CHK-014",
+            "dimension": "NEGATIVE",
+            "layer": "portal",
+            "title": "Đổi field của điều kiện từ Text sang Boolean thì operator đổi theo kiểu",
+            "applicability": {
+              "role": "unspecified",
+              "state": "điều kiện đang dùng field Text",
+              "environment": "documented",
+              "theme_or_device": null
+            },
+            "precondition": "Đã đăng nhập portal Mailtro vào workspace test bằng tài khoản được phép tạo / sửa segment (Owner theo các khảo sát hiện có). Có custom field Boolean F.",
+            "steps": [
+              "Mở `/segments/new`, chọn `First name` (operator `Equal to`).",
+              "Đổi field của cùng điều kiện sang F.",
+              "Đọc operator đang hiện và danh sách operator."
+            ],
+            "observation_point": "Operator của điều kiện sau khi đổi field.",
+            "expected_result": "Sau khi đổi sang F, operator đang hiện thuộc `Is` / `Is not` và danh sách chỉ có hai operator này; không còn `Equal to`.",
+            "oracle": {
+              "kb_ids": [
+                "KB-034"
+              ],
+              "oracle_strength": "STRONG"
+            },
+            "status": "READY",
+            "open_question_draft": null,
+            "regression_watch_kb_ids": [
+              "KB-036"
+            ],
+            "risk_refs": [
+              "RISK-segment-builder-03"
+            ],
+            "priority": "P3",
+            "act_ids": [],
+            "evidence_refs": [],
+            "automation_suitability": "SUITABLE"
+          },
+          {
+            "check_id": "CHK-015",
+            "dimension": "NEGATIVE",
+            "layer": "portal",
+            "title": "Đổi operator của điều kiện đã có Value",
+            "applicability": {
+              "role": "unspecified",
+              "state": "điều kiện Text đã nhập Value",
+              "environment": "documented",
+              "theme_or_device": null
+            },
+            "precondition": "Đã đăng nhập portal Mailtro vào workspace test bằng tài khoản được phép tạo / sửa segment (Owner theo các khảo sát hiện có).",
+            "steps": [
+              "Mở `/segments/new`, chọn `First name`, `Equal to`, nhập Value `abc`.",
+              "Đổi operator sang `Includes`, đọc ô Value.",
+              "Đổi operator sang `Is empty`, rồi về `Starts with`, đọc ô Value."
+            ],
+            "observation_point": "Ô Value sau mỗi lần đổi operator.",
+            "expected_result": "Chưa có kết quả mong đợi được xác nhận. Ghi lại nguyên văn hành vi thực tế (phản hồi, thông báo, dữ liệu sau thao tác) và chuyển cho PO/Dev xác nhận; không kết luận pass/fail ở lần chạy này.",
+            "oracle": {
+              "kb_ids": [],
+              "oracle_strength": "NONE"
+            },
+            "status": "NEEDS_CONFIRMATION",
+            "open_question_draft": "Khi đổi operator của một điều kiện đã có Value (ví dụ `Equal to` sang `Includes` cùng kiểu Text), Value phải được giữ hay xoá? Hiện staging xoá trắng Value (BUG-CS-13, còn open 06/10/2026) nhưng tài liệu không có rule mong đợi.",
+            "regression_watch_kb_ids": [
+              "KB-037"
+            ],
+            "risk_refs": [
+              "RISK-segment-builder-03"
+            ],
+            "priority": "P3",
+            "act_ids": [],
+            "evidence_refs": [],
+            "automation_suitability": "SUITABLE"
+          },
+          {
+            "check_id": "CHK-016",
+            "dimension": "CORE",
+            "layer": "backend",
+            "title": "So khớp hoa thường của điều kiện Text",
+            "applicability": {
+              "role": "unspecified",
+              "state": "dữ liệu contact có giá trị khác hoa thường",
+              "environment": "documented",
+              "theme_or_device": null
+            },
+            "precondition": "Đã đăng nhập portal Mailtro vào workspace test bằng tài khoản được phép tạo / sửa segment (Owner theo các khảo sát hiện có). Contact Subscribed t1 có First name `Anna`, email `Anna.QA@<domain test>`, country code `VN`.",
+            "steps": [
+              "Run segment `First name` `Includes` `ann` → ghi kết quả.",
+              "Run `First name` `Starts with` `AN`, rồi `Ends with` `NNA`.",
+              "Run `First name` `Equal to` `anna`.",
+              "Run `Email` `Equal to` `anna.qa@<domain test>` (chữ thường).",
+              "Run `Country code` `Equal to` `vn`."
+            ],
+            "observation_point": "Có / không có t1 trong kết quả mỗi lần Run.",
+            "expected_result": "`Includes` / `Starts with` / `Ends with` khớp không phân biệt hoa thường (có t1); `Equal to` trên First name phân biệt hoa thường (không có t1); `Equal to` trên email và country_code không phân biệt hoa thường (có t1).",
+            "oracle": {
+              "kb_ids": [
+                "KB-038"
+              ],
+              "oracle_strength": "STRONG"
+            },
+            "status": "READY",
+            "open_question_draft": null,
+            "regression_watch_kb_ids": [],
+            "risk_refs": [
+              "RISK-segment-builder-10"
+            ],
+            "priority": "P2",
+            "act_ids": [],
+            "evidence_refs": [],
+            "automation_suitability": "SUITABLE"
+          },
+          {
+            "check_id": "CHK-017",
+            "dimension": "BOUNDARY",
+            "layer": "backend",
+            "title": "Escape `%` / `_` và phạm vi khớp của `Is empty`",
+            "applicability": {
+              "role": "unspecified",
+              "state": "dữ liệu contact có ký tự đặc biệt và giá trị trống",
+              "environment": "documented",
+              "theme_or_device": null
+            },
+            "precondition": "Đã đăng nhập portal Mailtro vào workspace test bằng tài khoản được phép tạo / sửa segment (Owner theo các khảo sát hiện có). Custom field Text F; contact Subscribed: e1 có F = `50%_off`, e2 có F = `50abcoff`, e3 có F = chuỗi rỗng, e4 chưa từng có F, e5 đã gỡ giá trị F (Remove field), e6 có F = `x`.",
+            "steps": [
+              "Run segment `F` `Includes` `%_`.",
+              "Run segment `F` `Is empty`."
+            ],
+            "observation_point": "Danh sách contact khớp mỗi lần Run.",
+            "expected_result": "`Includes` `%_` chỉ khớp e1 (ký tự `%`, `_` được escape, không thành wildcard nên không khớp e2); `Is empty` khớp e3, e4 và e5 (null, chuỗi rỗng, thiếu key), không khớp e6.",
+            "oracle": {
+              "kb_ids": [
+                "KB-039"
+              ],
+              "oracle_strength": "STRONG"
+            },
+            "status": "READY",
+            "open_question_draft": null,
+            "regression_watch_kb_ids": [],
+            "risk_refs": [
+              "RISK-segment-builder-10"
+            ],
+            "priority": "P2",
+            "act_ids": [],
+            "evidence_refs": [],
+            "automation_suitability": "SUITABLE"
+          },
+          {
+            "check_id": "CHK-018",
+            "dimension": "BOUNDARY",
+            "layer": "backend",
+            "title": "Biên điều kiện ngày: UTC, After / Before không gồm ngày biên, Between gồm hai biên, Between đảo thứ tự",
+            "applicability": {
+              "role": "unspecified",
+              "state": "contact tạo ở các mốc ngày biết trước (UTC)",
+              "environment": "documented",
+              "theme_or_device": null
+            },
+            "precondition": "Đã đăng nhập portal Mailtro vào workspace test bằng tài khoản được phép tạo / sửa segment (Owner theo các khảo sát hiện có). Biết `Created at` (UTC) của các contact Subscribed: d1 tạo ngày D-1, d2 ngày D, d3 ngày D+1; có ít nhất một contact tạo trong khoảng 00:00–07:00 giờ VN (ngày UTC khác ngày VN).",
+            "steps": [
+              "Run `Created at` `After` D.",
+              "Run `Created at` `Before` D.",
+              "Run `Created at` `Between` D-1 `And` D+1.",
+              "Run `Created at` `Between` D+1 `And` D-1 (đảo thứ tự).",
+              "Với contact tạo lúc 00:00–07:00 giờ VN, Run `After` / `Before` quanh ngày đó và so với ngày UTC."
+            ],
+            "observation_point": "Danh sách contact khớp, thông báo lỗi nếu có.",
+            "expected_result": "Ngày tính theo UTC (dù danh sách hiển thị giờ VN); `After` D chỉ có d3, `Before` D chỉ có d1 (không gồm ngày biên); `Between` D-1..D+1 gồm d1, d2, d3; `Between` đảo thứ tự cho 0 kết quả và không báo lỗi.",
+            "oracle": {
+              "kb_ids": [
+                "KB-040"
+              ],
+              "oracle_strength": "STRONG"
+            },
+            "status": "READY",
+            "open_question_draft": null,
+            "regression_watch_kb_ids": [],
+            "risk_refs": [
+              "RISK-segment-builder-10"
+            ],
+            "priority": "P2",
+            "act_ids": [],
+            "evidence_refs": [],
+            "automation_suitability": "SUITABLE"
+          },
+          {
+            "check_id": "CHK-019",
+            "dimension": "STATE_DATA",
+            "layer": "portal",
+            "title": "Bộ đếm `~N contacts` trong builder chỉ cập nhật khi bấm Run",
+            "applicability": {
+              "role": "unspecified",
+              "state": "segment đã lưu mở trong builder",
+              "environment": "documented",
+              "theme_or_device": null
+            },
+            "precondition": "Đã đăng nhập portal Mailtro vào workspace test bằng tài khoản được phép tạo / sửa segment (Owner theo các khảo sát hiện có). Có segment S đã lưu, số đếm khác 0.",
+            "steps": [
+              "Mở S, ghi lại bộ đếm `~N contacts`.",
+              "Đổi field hoặc Value của một điều kiện sao cho tập khớp phải khác; không bấm Run; đợi 30 giây, đọc lại bộ đếm.",
+              "Bấm `Run`, đọc lại bộ đếm."
+            ],
+            "observation_point": "Bộ đếm `~N contacts` trên toolbar.",
+            "expected_result": "Sau khi đổi điều kiện, bộ đếm giữ nguyên số cũ (không tự tính lại); chỉ sau khi bấm `Run` bộ đếm mới cập nhật theo điều kiện mới.",
+            "oracle": {
+              "kb_ids": [
+                "KB-041"
+              ],
+              "oracle_strength": "STRONG"
+            },
+            "status": "READY",
+            "open_question_draft": null,
+            "regression_watch_kb_ids": [],
+            "risk_refs": [],
+            "priority": "P2",
+            "act_ids": [],
+            "evidence_refs": [],
+            "automation_suitability": "SUITABLE"
+          },
+          {
+            "check_id": "CHK-020",
+            "dimension": "CORE",
+            "layer": "portal",
+            "title": "Toolbar bộ đếm, Run và bảng kết quả",
+            "applicability": {
+              "role": "Owner",
+              "state": "segment đã lưu có contact khớp và segment không khớp ai",
+              "environment": "documented",
+              "theme_or_device": null
+            },
+            "precondition": "Đã đăng nhập portal Mailtro bằng tài khoản role Owner của workspace test. Có segment S1 khớp ≥ 1 contact và segment S0 không khớp contact nào.",
+            "steps": [
+              "Mở S1, đọc toolbar.",
+              "Bấm `Run`, ghi lại toast; đợi bảng kết quả nạp xong (có thể trễ vài giây sau toast).",
+              "Đọc tiêu đề cột, thử sort `Created at`, `Updated at`, kiểm tra phân trang.",
+              "Mở S0, bấm `Run`, đọc bảng."
+            ],
+            "observation_point": "Toolbar, toast, bảng kết quả.",
+            "expected_result": "Theo hiện trạng staging 01/10/2026, lệch = cần điều tra: toolbar hiện chấm xanh + `~N contacts` + `X.XX% of your contact base`, nạp sẵn khi mở segment đã lưu; `Run` hiện toast `Segment evaluated` kèm \"{count} contacts match right now.\" và nạp bảng 6 cột `Email`, `First name`, `Last name`, `Consent`, `Created at` (sort được), `Updated at` (sort được), có phân trang; S0 hiện `No contacts match` / `Loosen the conditions above.`.",
+            "oracle": {
+              "kb_ids": [
+                "KB-042",
+                "KB-043",
+                "KB-044"
+              ],
+              "oracle_strength": "BASELINE"
+            },
+            "status": "READY",
+            "open_question_draft": null,
+            "regression_watch_kb_ids": [
+              "KB-035"
+            ],
+            "risk_refs": [
+              "RISK-segment-builder-01"
+            ],
+            "priority": "P2",
+            "act_ids": [],
+            "evidence_refs": [],
+            "automation_suitability": "SUITABLE"
+          },
+          {
+            "check_id": "CHK-021",
+            "dimension": "NEGATIVE",
+            "layer": "portal",
+            "title": "Nút Save bị vô hiệu khi segment chưa hợp lệ hoặc chưa thay đổi",
+            "applicability": {
+              "role": "unspecified",
+              "state": "builder tạo mới và builder sửa",
+              "environment": "documented",
+              "theme_or_device": null
+            },
+            "precondition": "Đã đăng nhập portal Mailtro vào workspace test bằng tài khoản được phép tạo / sửa segment (Owner theo các khảo sát hiện có). Có segment S đã lưu.",
+            "steps": [
+              "Mở `/segments/new`: có điều kiện chưa điền Value → đọc `Save`; điền Value → đọc `Save`.",
+              "Xoá trắng tên segment (điều kiện đủ Value) → đọc `Save`.",
+              "Thêm điều kiện thứ 2 nhưng để trống Value → đọc `Save`.",
+              "Mở S, chưa sửa gì → đọc `Save`; sửa 1 Value → đọc `Save`."
+            ],
+            "observation_point": "Trạng thái enable / disabled của `Save` sau từng bước.",
+            "expected_result": "`Save` chỉ enable khi tên không rỗng, có ít nhất 1 điều kiện, không còn điều kiện nào trống Value và có thay đổi so với lúc load; S chưa sửa giữ `Save` disabled, sửa 1 Value thì enable.",
+            "oracle": {
+              "kb_ids": [
+                "KB-047",
+                "KB-048"
+              ],
+              "oracle_strength": "STRONG"
+            },
+            "status": "READY",
+            "open_question_draft": null,
+            "regression_watch_kb_ids": [
+              "KB-049"
+            ],
+            "risk_refs": [
+              "RISK-segment-builder-04"
+            ],
+            "priority": "P2",
+            "act_ids": [],
+            "evidence_refs": [],
+            "automation_suitability": "SUITABLE"
+          },
+          {
+            "check_id": "CHK-022",
+            "dimension": "BOUNDARY",
+            "layer": "portal",
+            "title": "Tên segment vượt 255 ký tự",
+            "applicability": {
+              "role": "unspecified",
+              "state": "builder tạo mới",
+              "environment": "documented",
+              "theme_or_device": null
+            },
+            "precondition": "Đã đăng nhập portal Mailtro vào workspace test bằng tài khoản được phép tạo / sửa segment (Owner theo các khảo sát hiện có).",
+            "steps": [
+              "Mở `/segments/new`, thêm 1 điều kiện hợp lệ.",
+              "Nhập tên 255 ký tự, Save, ghi kết quả.",
+              "Tạo segment khác với tên 256 ký tự (dán vào ô tên), Save, ghi kết quả và thông báo."
+            ],
+            "observation_point": "Kết quả lưu và thông báo ở hai lần lưu.",
+            "expected_result": "Theo hiện trạng ghi nhận QA cạnh BUG-70 (không ghi ngày, chưa có xác nhận PO/Dev), lệch = cần điều tra: tên dài hơn 255 ký tự bị BE từ chối. Ghi lại nguyên văn thông báo hiển thị khi bị từ chối (chưa có rule cho thông báo này).",
+            "oracle": {
+              "kb_ids": [
+                "KB-058"
+              ],
+              "oracle_strength": "BASELINE"
+            },
+            "status": "READY",
+            "open_question_draft": null,
+            "regression_watch_kb_ids": [
+              "KB-018"
+            ],
+            "risk_refs": [],
+            "priority": "P3",
+            "act_ids": [],
+            "evidence_refs": [],
+            "automation_suitability": "SUITABLE"
+          },
+          {
+            "check_id": "CHK-023",
+            "dimension": "BOUNDARY",
+            "layer": "portal",
+            "title": "Tên segment chỉ có khoảng trắng hoặc có khoảng trắng đầu / cuối",
+            "applicability": {
+              "role": "unspecified",
+              "state": "builder tạo mới",
+              "environment": "documented",
+              "theme_or_device": null
+            },
+            "precondition": "Đã đăng nhập portal Mailtro vào workspace test bằng tài khoản được phép tạo / sửa segment (Owner theo các khảo sát hiện có).",
+            "steps": [
+              "Mở `/segments/new`, thêm 1 điều kiện hợp lệ.",
+              "Đặt tên chỉ gồm khoảng trắng, đọc `Save`, thử lưu.",
+              "Đặt tên `  abc  `, lưu, đọc tên trên danh sách."
+            ],
+            "observation_point": "Trạng thái Save, thông báo, tên đã lưu.",
+            "expected_result": "Chưa có kết quả mong đợi được xác nhận. Ghi lại nguyên văn hành vi thực tế (phản hồi, thông báo, dữ liệu sau thao tác) và chuyển cho PO/Dev xác nhận; không kết luận pass/fail ở lần chạy này.",
+            "oracle": {
+              "kb_ids": [],
+              "oracle_strength": "NONE"
+            },
+            "status": "NEEDS_CONFIRMATION",
+            "open_question_draft": "Tên segment chỉ gồm khoảng trắng có được coi là rỗng (Save disabled) không, và tên có khoảng trắng đầu / cuối có được trim khi lưu không? Ngoài giới hạn 255 ký tự ở BE, tài liệu chưa nêu quy tắc validate tên segment; cũng chưa nêu giới hạn số điều kiện / số card trong một segment.",
+            "regression_watch_kb_ids": [],
+            "risk_refs": [],
+            "priority": "P3",
+            "act_ids": [],
+            "evidence_refs": [],
+            "automation_suitability": "SUITABLE"
+          },
+          {
+            "check_id": "CHK-024",
+            "dimension": "STATE_DATA",
+            "layer": "portal",
+            "title": "Rời builder khi còn thay đổi chưa lưu",
+            "applicability": {
+              "role": "Owner",
+              "state": "builder có thay đổi chưa lưu",
+              "environment": "documented",
+              "theme_or_device": null
+            },
+            "precondition": "Đã đăng nhập portal Mailtro bằng tài khoản role Owner của workspace test.",
+            "steps": [
+              "Mở segment S, sửa 1 Value, bấm `Back`; đọc dialog; bấm `Stay`.",
+              "Bấm `Back` lần nữa, bấm `Leave`; mở lại S.",
+              "Mở S, không sửa gì, tải lại trang; rồi sửa 1 Value và tải lại trang."
+            ],
+            "observation_point": "Dialog trong app, cảnh báo của trình duyệt, dữ liệu S sau khi rời.",
+            "expected_result": "Theo hiện trạng staging 08/09/2026 và 01/10/2026, lệch = cần điều tra: `Back` khi có thay đổi chưa lưu mở dialog `Leave without saving?` / \"You have unsaved changes. They'll be lost if you leave.\" với `Stay` / `Leave`; `Stay` giữ nguyên trên builder, `Leave` rời và S không đổi; cảnh báo `beforeunload` của trình duyệt chỉ bật khi có thay đổi chưa lưu.",
+            "oracle": {
+              "kb_ids": [
+                "KB-050"
+              ],
+              "oracle_strength": "BASELINE"
+            },
+            "status": "READY",
+            "open_question_draft": null,
+            "regression_watch_kb_ids": [],
+            "risk_refs": [],
+            "priority": "P3",
+            "act_ids": [],
+            "evidence_refs": [],
+            "automation_suitability": "HYBRID"
+          },
+          {
+            "check_id": "CHK-025",
+            "dimension": "STATE_DATA",
+            "layer": "portal",
+            "title": "Giá trị điều kiện có ký tự đặc biệt được giữ nguyên sau khi lưu và mở lại",
+            "applicability": {
+              "role": "unspecified",
+              "state": "segment có Value chứa dấu ngoặc kép hoặc chuỗi ` OR `",
+              "environment": "documented",
+              "theme_or_device": null
+            },
+            "precondition": "Đã đăng nhập portal Mailtro vào workspace test bằng tài khoản được phép tạo / sửa segment (Owner theo các khảo sát hiện có).",
+            "steps": [
+              "Tạo segment: `First name` `Equal to` `Say \"hi\"`; card 2: `First name` `Includes` `A OR B`; Save.",
+              "Tải lại, mở lại segment từ danh sách."
+            ],
+            "observation_point": "Chế độ hiển thị và Value của hai điều kiện khi mở lại.",
+            "expected_result": "Builder nạp lại đúng cây điều kiện đã lưu: Value giữ nguyên `Say \"hi\"` và `A OR B`.",
+            "oracle": {
+              "kb_ids": [
+                "KB-021"
+              ],
+              "oracle_strength": "STRONG"
+            },
+            "status": "READY",
+            "open_question_draft": null,
+            "regression_watch_kb_ids": [
+              "KB-055",
+              "KB-057"
+            ],
+            "risk_refs": [
+              "RISK-segment-builder-05"
+            ],
+            "priority": "P2",
+            "act_ids": [],
+            "evidence_refs": [],
+            "automation_suitability": "SUITABLE"
+          },
+          {
+            "check_id": "CHK-026",
+            "dimension": "CORE",
+            "layer": "portal",
+            "title": "Toggle Advanced bị ẩn; segment không đọc được bằng card editor tự vào chế độ Advanced",
+            "applicability": {
+              "role": "unspecified",
+              "state": "builder; segment có query card editor không đọc được",
+              "environment": "documented",
+              "theme_or_device": null
+            },
+            "precondition": "Đã đăng nhập portal Mailtro vào workspace test bằng tài khoản được phép tạo / sửa segment (Owner theo các khảo sát hiện có). Có segment Q dùng điều kiện mà card editor không đọc được (hiện trạng: điều kiện `Is set` hoặc Value chứa ` OR `, theo lỗi đã biết BUG-113).",
+            "steps": [
+              "Mở `/segments/new`, tìm toggle Advanced trên toolbar.",
+              "Mở Q từ danh sách; quan sát chế độ hiển thị và tìm nút quay lại card editor."
+            ],
+            "observation_point": "Toolbar builder và chế độ hiển thị của Q.",
+            "expected_result": "Không có toggle Advanced trên UI; Q mở thẳng ở chế độ Advanced và không có nút quay lại card editor.",
+            "oracle": {
+              "kb_ids": [
+                "KB-051"
+              ],
+              "oracle_strength": "STRONG"
+            },
+            "status": "READY",
+            "open_question_draft": null,
+            "regression_watch_kb_ids": [
+              "KB-052",
+              "KB-055"
+            ],
+            "risk_refs": [
+              "RISK-segment-builder-06",
+              "RISK-segment-builder-05"
+            ],
+            "priority": "P3",
+            "act_ids": [],
+            "evidence_refs": [],
+            "automation_suitability": "HYBRID"
+          },
+          {
+            "check_id": "CHK-027",
+            "dimension": "CORE",
+            "layer": "portal",
+            "title": "Chế độ Advanced (pseudo-SQL) theo Jira MTRO-53 AC",
+            "applicability": {
+              "role": "unspecified",
+              "state": "chỉ áp dụng nếu PO quyết bật lại toggle Advanced",
+              "environment": "documented",
+              "theme_or_device": null
+            },
+            "precondition": "Đã đăng nhập portal Mailtro vào workspace test bằng tài khoản được phép tạo / sửa segment (Owner theo các khảo sát hiện có). Toggle Advanced đã được bật lại trên build đang test.",
+            "steps": [
+              "Dựng segment 2 card trong card editor.",
+              "Chuyển sang Advanced, đọc nội dung; hover từng dòng.",
+              "Xoá một dòng bằng ×, chuyển lại card editor."
+            ],
+            "observation_point": "Nội dung Advanced và đồng bộ với card editor.",
+            "expected_result": "Chưa có kết quả mong đợi được xác nhận. Ghi lại nguyên văn hành vi thực tế (phản hồi, thông báo, dữ liệu sau thao tác) và chuyển cho PO/Dev xác nhận; không kết luận pass/fail ở lần chạy này.",
+            "oracle": {
+              "kb_ids": [
+                "KB-053",
+                "KB-054"
+              ],
+              "oracle_strength": "NONE"
+            },
+            "status": "NEEDS_CONFIRMATION",
+            "open_question_draft": "PO quyết bỏ hẳn hay bật lại chế độ Advanced (pseudo-SQL) của segment builder (GAP-01)? Dev 02/10/2026 cho biết toggle đang ẩn có chủ ý; nếu bật lại thì mô tả trong Jira MTRO-53 AC (`FROM contacts` / `WHERE (...)` / `OR (...)`, monospace, số dòng, × khi hover, hai chế độ là hai cách thể hiện cùng dữ liệu) còn hiệu lực không?",
+            "regression_watch_kb_ids": [
+              "KB-052"
+            ],
+            "risk_refs": [
+              "RISK-segment-builder-06"
+            ],
+            "priority": "P3",
+            "act_ids": [],
+            "evidence_refs": [],
+            "automation_suitability": "NOT_SUITABLE"
+          },
+          {
+            "check_id": "CHK-028",
+            "dimension": "CORE",
+            "layer": "portal",
+            "title": "Breadcrumb của builder là Contacts › Segments",
+            "applicability": {
+              "role": "unspecified",
+              "state": "builder New segment / Edit segment",
+              "environment": "documented",
+              "theme_or_device": null
+            },
+            "precondition": "Đã đăng nhập portal Mailtro vào workspace test bằng tài khoản được phép tạo / sửa segment (Owner theo các khảo sát hiện có). Có segment S đã lưu.",
+            "steps": [
+              "Mở `/segments/new`, đọc breadcrumb.",
+              "Mở S, đọc breadcrumb."
+            ],
+            "observation_point": "Breadcrumb trên header builder.",
+            "expected_result": "Breadcrumb hiện đường dẫn cha đầy đủ Contacts › Segments ở cả builder tạo mới và builder sửa.",
+            "oracle": {
+              "kb_ids": [
+                "KB-059"
+              ],
+              "oracle_strength": "STRONG"
+            },
+            "status": "READY",
+            "open_question_draft": null,
+            "regression_watch_kb_ids": [
+              "KB-060"
+            ],
+            "risk_refs": [
+              "RISK-segment-builder-07"
+            ],
+            "priority": "P3",
+            "act_ids": [],
+            "evidence_refs": [],
+            "automation_suitability": "SUITABLE"
+          },
+          {
+            "check_id": "CHK-029",
+            "dimension": "NEGATIVE",
+            "layer": "portal",
+            "title": "Thông báo khi tạo / lưu / nhân bản / xoá segment thành công hoặc thất bại",
+            "applicability": {
+              "role": "unspecified",
+              "state": "các thao tác ghi trên segment",
+              "environment": "documented",
+              "theme_or_device": null
+            },
+            "precondition": "Đã đăng nhập portal Mailtro vào workspace test bằng tài khoản được phép tạo / sửa segment (Owner theo các khảo sát hiện có). Có cách gây lỗi lưu (ví dụ tài khoản Member trên build chưa có chặn Jira MTRO-100, hoặc tên dài hơn 255 ký tự).",
+            "steps": [
+              "Tạo segment mới hợp lệ, Save, ghi toast.",
+              "Sửa segment có sẵn, Save, ghi toast.",
+              "Gây lỗi lưu, ghi toast và message đi kèm.",
+              "Quan sát chữ hiển thị trên bộ đếm trong lúc đang đếm."
+            ],
+            "observation_point": "Toast và chữ trạng thái bộ đếm.",
+            "expected_result": "Chưa có kết quả mong đợi được xác nhận. Ghi lại nguyên văn hành vi thực tế (phản hồi, thông báo, dữ liệu sau thao tác) và chuyển cho PO/Dev xác nhận; không kết luận pass/fail ở lần chạy này.",
+            "oracle": {
+              "kb_ids": [
+                "KB-061"
+              ],
+              "oracle_strength": "NONE"
+            },
+            "status": "NEEDS_CONFIRMATION",
+            "open_question_draft": "Các toast của segment (`Segment created`, `Segment saved`, `Couldn't save segment` kèm message server, `Couldn't duplicate segment`, `Couldn't delete segment`, `Counting…`, `Count unavailable`) mới thấy trong chuỗi i18n của bundle FE: PO/Dev có xác nhận đây là copy và thời điểm hiển thị mong đợi không?",
+            "regression_watch_kb_ids": [
+              "KB-062"
+            ],
+            "risk_refs": [
+              "RISK-segment-builder-08"
+            ],
+            "priority": "P3",
+            "act_ids": [],
+            "evidence_refs": [],
+            "automation_suitability": "HYBRID"
+          },
+          {
+            "check_id": "CHK-030",
+            "dimension": "PERMISSION",
+            "layer": "portal",
+            "title": "Member bị chặn tạo segment ở nút Create segment và không vào được builder",
+            "applicability": {
+              "role": "Member",
+              "state": "build đã deploy Jira MTRO-100; trước đó lệch là lỗi đã biết",
+              "environment": "documented",
+              "theme_or_device": null
+            },
+            "precondition": "Đã đăng nhập portal Mailtro bằng tài khoản role Member của workspace test; có segment S.",
+            "steps": [
+              "Mở `/segments`, hover rồi bấm `Create segment`.",
+              "Gõ thẳng `/segments/new` trên thanh địa chỉ.",
+              "Click dòng S; gõ thẳng `/segments/<id S>/edit`."
+            ],
+            "observation_point": "Nút Create segment, tooltip, màn hình sau mỗi thao tác.",
+            "expected_result": "Member bị chặn ngay ở nút `Create segment` (có tooltip) và không vào được segment builder bằng bất kỳ đường nào ở trên.",
+            "oracle": {
+              "kb_ids": [
+                "KB-063"
+              ],
+              "oracle_strength": "STRONG"
+            },
+            "status": "READY",
+            "open_question_draft": null,
+            "regression_watch_kb_ids": [
+              "KB-066"
+            ],
+            "risk_refs": [
+              "RISK-segment-builder-02",
+              "RISK-segment-builder-11"
+            ],
+            "priority": "P1",
+            "act_ids": [],
+            "evidence_refs": [],
+            "automation_suitability": "SUITABLE"
+          },
+          {
+            "check_id": "CHK-031",
+            "dimension": "PERMISSION",
+            "layer": "portal",
+            "title": "Copy toast khi Member bị chặn tạo segment",
+            "applicability": {
+              "role": "Member",
+              "state": "build đã deploy Jira MTRO-100",
+              "environment": "documented",
+              "theme_or_device": null
+            },
+            "precondition": "Như check Member bị chặn tạo segment.",
+            "steps": [
+              "Bấm `Create segment` bằng tài khoản Member, ghi nguyên văn toast."
+            ],
+            "observation_point": "Toast hiển thị.",
+            "expected_result": "Chưa có kết quả mong đợi được xác nhận. Ghi lại nguyên văn hành vi thực tế (phản hồi, thông báo, dữ liệu sau thao tác) và chuyển cho PO/Dev xác nhận; không kết luận pass/fail ở lần chạy này.",
+            "oracle": {
+              "kb_ids": [
+                "KB-064",
+                "KB-065"
+              ],
+              "oracle_strength": "NONE"
+            },
+            "status": "NEEDS_CONFIRMATION",
+            "open_question_draft": "Copy toast cuối cùng khi Member bị chặn tạo segment là copy PO chốt 30/09/2026 (Jira MTRO-100) \"Only workspace Owners and Admins can create segments. Ask an Admin to create it for you.\" hay copy Dev đề xuất có cụm \"…create or edit segments…\"?",
+            "regression_watch_kb_ids": [
+              "KB-066"
+            ],
+            "risk_refs": [
+              "RISK-segment-builder-09"
+            ],
+            "priority": "P3",
+            "act_ids": [],
+            "evidence_refs": [],
+            "automation_suitability": "SUITABLE"
+          },
+          {
+            "check_id": "CHK-032",
+            "dimension": "PERMISSION",
+            "layer": "portal",
+            "title": "Quyền tạo / sửa segment của Owner, Admin, custom role và Member với segment có sẵn",
+            "applicability": {
+              "role": "Owner | Admin | Member | custom role",
+              "state": "mỗi role một tài khoản trong cùng workspace",
+              "environment": "documented",
+              "theme_or_device": null
+            },
+            "precondition": "Có tài khoản Owner, Admin, Member (và custom role nếu có) trong cùng workspace test; có segment S.",
+            "steps": [
+              "Lần lượt đăng nhập từng role.",
+              "Tạo segment mới hợp lệ và Save.",
+              "Mở S, sửa 1 Value, Save.",
+              "Gọi trực tiếp `PUT /segments/<id S>` bằng phiên của role đó."
+            ],
+            "observation_point": "Kết quả UI và phản hồi API theo từng role.",
+            "expected_result": "Chưa có kết quả mong đợi được xác nhận. Ghi lại nguyên văn hành vi thực tế (phản hồi, thông báo, dữ liệu sau thao tác) và chuyển cho PO/Dev xác nhận; không kết luận pass/fail ở lần chạy này.",
+            "oracle": {
+              "kb_ids": [
+                "KB-068"
+              ],
+              "oracle_strength": "NONE"
+            },
+            "status": "NEEDS_CONFIRMATION",
+            "open_question_draft": "Ngoài quyết định Member không được tạo / sửa segment (PO 30/09/2026, Jira MTRO-100), Owner, Admin và custom role có được tạo / sửa segment không? Member mở segment có sẵn bị chặn ở đâu và API `PUT /segments/{id}` trả gì cho role không có quyền? Ma trận quyền segment chưa chốt (GAP-07), tên role thứ ba đang tranh chấp.",
+            "regression_watch_kb_ids": [
+              "KB-066"
+            ],
+            "risk_refs": [
+              "RISK-segment-builder-11"
+            ],
+            "priority": "P1",
+            "act_ids": [],
+            "evidence_refs": [],
+            "automation_suitability": "HYBRID"
+          }
+        ]
+      }
+    ],
+    "coverage_by_feature_and_risk": [
+      {
+        "feature_id": "segment-builder",
+        "risk_ref": "RISK-segment-builder-01",
+        "risk_description": "Điều kiện custom field Boolean luôn 422 nhưng toast báo thành công với 0 contact.",
+        "covered_by_checks": [
+          "CHK-013",
+          "CHK-020"
+        ],
+        "kb_ids": [
+          "KB-034",
+          "KB-042",
+          "KB-043",
+          "KB-044"
+        ],
+        "coverage_status": "COVERED"
+      },
+      {
+        "feature_id": "segment-builder",
+        "risk_ref": "RISK-segment-builder-02",
+        "risk_description": "Quyết định chặn Member tạo / sửa segment (Jira MTRO-100) chưa deploy trên staging.",
+        "covered_by_checks": [
+          "CHK-030"
+        ],
+        "kb_ids": [
+          "KB-063"
+        ],
+        "coverage_status": "COVERED"
+      },
+      {
+        "feature_id": "segment-builder",
+        "risk_ref": "RISK-segment-builder-03",
+        "risk_description": "Đổi field / operator làm hỏng trạng thái điều kiện (operator không đổi theo kiểu, value bị xoá trắng).",
+        "covered_by_checks": [
+          "CHK-014",
+          "CHK-015"
+        ],
+        "kb_ids": [
+          "KB-034"
+        ],
+        "coverage_status": "PARTIALLY_COVERED_NEEDS_CONFIRMATION"
+      },
+      {
+        "feature_id": "segment-builder",
+        "risk_ref": "RISK-segment-builder-04",
+        "risk_description": "Lưu khi Value trống từng tạo segment rác (BUG-97, chưa đóng chính thức).",
+        "covered_by_checks": [
+          "CHK-001",
+          "CHK-002",
+          "CHK-021"
+        ],
+        "kb_ids": [
+          "KB-004",
+          "KB-020",
+          "KB-021",
+          "KB-047",
+          "KB-048"
+        ],
+        "coverage_status": "COVERED"
+      },
+      {
+        "feature_id": "segment-builder",
+        "risk_ref": "RISK-segment-builder-05",
+        "risk_description": "Query không round-trip: `Is set` / value chứa ` OR ` không mở lại bằng card editor, ký tự `\"` bị mất.",
+        "covered_by_checks": [
+          "CHK-004",
+          "CHK-025",
+          "CHK-026"
+        ],
+        "kb_ids": [
+          "KB-021",
+          "KB-051",
+          "KB-056"
+        ],
+        "coverage_status": "COVERED"
+      },
+      {
+        "feature_id": "segment-builder",
+        "risk_ref": "RISK-segment-builder-06",
+        "risk_description": "Toggle Advanced đang ẩn, tương lai chưa chốt.",
+        "covered_by_checks": [
+          "CHK-026",
+          "CHK-027"
+        ],
+        "kb_ids": [
+          "KB-051",
+          "KB-053",
+          "KB-054"
+        ],
+        "coverage_status": "PARTIALLY_COVERED_NEEDS_CONFIRMATION"
+      },
+      {
+        "feature_id": "segment-builder",
+        "risk_ref": "RISK-segment-builder-07",
+        "risk_description": "Lỗi hiển thị: nhãn `Phone` thay vì `SMS`, breadcrumb thiếu đường dẫn cha.",
+        "covered_by_checks": [
+          "CHK-009",
+          "CHK-028"
+        ],
+        "kb_ids": [
+          "KB-027",
+          "KB-028",
+          "KB-059"
+        ],
+        "coverage_status": "COVERED"
+      },
+      {
+        "feature_id": "segment-builder",
+        "risk_ref": "RISK-segment-builder-08",
+        "risk_description": "Toast lỗi lưu từng thiếu message server (BUG-CS-12); toast phụ mới thấy trong bundle.",
+        "covered_by_checks": [
+          "CHK-029"
+        ],
+        "kb_ids": [
+          "KB-061"
+        ],
+        "coverage_status": "FLAGGED_NEEDS_CONFIRMATION"
+      },
+      {
+        "feature_id": "segment-builder",
+        "risk_ref": "RISK-segment-builder-09",
+        "risk_description": "Copy toast chặn Member chưa chốt cuối (PO chốt vs Dev đề xuất).",
+        "covered_by_checks": [
+          "CHK-031"
+        ],
+        "kb_ids": [
+          "KB-064",
+          "KB-065"
+        ],
+        "coverage_status": "FLAGGED_NEEDS_CONFIRMATION"
+      },
+      {
+        "feature_id": "segment-builder",
+        "risk_ref": "RISK-segment-builder-10",
+        "risk_description": "Quy tắc đánh giá điều kiện (hoa thường, escape, Is empty, UTC, biên ngày, AND ưu tiên OR) sai sẽ cho audience sai.",
+        "covered_by_checks": [
+          "CHK-007",
+          "CHK-016",
+          "CHK-017",
+          "CHK-018"
+        ],
+        "kb_ids": [
+          "KB-025",
+          "KB-038",
+          "KB-039",
+          "KB-040"
+        ],
+        "coverage_status": "COVERED"
+      },
+      {
+        "feature_id": "segment-builder",
+        "risk_ref": "RISK-segment-builder-11",
+        "risk_description": "Ma trận quyền tạo / sửa segment cho Owner / Admin / custom role chưa chốt.",
+        "covered_by_checks": [
+          "CHK-030",
+          "CHK-032"
+        ],
+        "kb_ids": [
+          "KB-063",
+          "KB-068"
+        ],
+        "coverage_status": "PARTIALLY_COVERED_NEEDS_CONFIRMATION"
+      },
+      {
+        "feature_id": "segment-builder",
+        "risk_ref": null,
+        "capability": "Bắt đầu segment mới",
+        "covered_by_checks": [
+          "CHK-001"
+        ],
+        "kb_ids": [
+          "KB-020"
+        ],
+        "coverage_status": "COVERED"
+      },
+      {
+        "feature_id": "segment-builder",
+        "risk_ref": null,
+        "capability": "Mở và sửa segment đã lưu",
+        "covered_by_checks": [
+          "CHK-002",
+          "CHK-003",
+          "CHK-004",
+          "CHK-025"
+        ],
+        "kb_ids": [
+          "KB-021",
+          "KB-022",
+          "KB-056"
+        ],
+        "coverage_status": "COVERED"
+      },
+      {
+        "feature_id": "segment-builder",
+        "risk_ref": null,
+        "capability": "Dựng cây điều kiện AND / OR",
+        "covered_by_checks": [
+          "CHK-005",
+          "CHK-006"
+        ],
+        "kb_ids": [
+          "KB-023",
+          "KB-024"
+        ],
+        "coverage_status": "COVERED"
+      },
+      {
+        "feature_id": "segment-builder",
+        "risk_ref": null,
+        "capability": "Chọn field và operator theo kiểu dữ liệu",
+        "covered_by_checks": [
+          "CHK-008",
+          "CHK-009",
+          "CHK-010",
+          "CHK-011",
+          "CHK-012",
+          "CHK-013",
+          "CHK-014",
+          "CHK-016",
+          "CHK-017",
+          "CHK-018"
+        ],
+        "kb_ids": [
+          "KB-026",
+          "KB-027",
+          "KB-030",
+          "KB-031",
+          "KB-032",
+          "KB-033",
+          "KB-034",
+          "KB-038",
+          "KB-039",
+          "KB-040"
+        ],
+        "coverage_status": "COVERED"
+      },
+      {
+        "feature_id": "segment-builder",
+        "risk_ref": null,
+        "capability": "Run để đánh giá và xem kết quả",
+        "covered_by_checks": [
+          "CHK-019",
+          "CHK-020"
+        ],
+        "kb_ids": [
+          "KB-041",
+          "KB-042",
+          "KB-043",
+          "KB-044",
+          "KB-045"
+        ],
+        "coverage_status": "COVERED"
+      },
+      {
+        "feature_id": "segment-builder",
+        "risk_ref": null,
+        "capability": "Lưu segment hợp lệ",
+        "covered_by_checks": [
+          "CHK-001",
+          "CHK-002",
+          "CHK-006",
+          "CHK-021"
+        ],
+        "kb_ids": [
+          "KB-047",
+          "KB-048"
+        ],
+        "coverage_status": "COVERED"
+      },
+      {
+        "feature_id": "segment-builder",
+        "risk_ref": null,
+        "capability": "Rời builder khi còn thay đổi chưa lưu",
+        "covered_by_checks": [
+          "CHK-024"
+        ],
+        "kb_ids": [
+          "KB-050"
+        ],
+        "coverage_status": "COVERED"
+      },
+      {
+        "feature_id": "segment-builder",
+        "risk_ref": null,
+        "capability": "Chế độ Advanced (pseudo-SQL)",
+        "covered_by_checks": [
+          "CHK-026",
+          "CHK-027"
+        ],
+        "kb_ids": [
+          "KB-051",
+          "KB-053",
+          "KB-054"
+        ],
+        "coverage_status": "COVERED"
+      },
+      {
+        "feature_id": "segment-builder",
+        "risk_ref": null,
+        "capability": "Chặn Member tạo / sửa segment",
+        "covered_by_checks": [
+          "CHK-030",
+          "CHK-031"
+        ],
+        "kb_ids": [
+          "KB-063",
+          "KB-064"
+        ],
+        "coverage_status": "COVERED"
+      }
+    ],
+    "kb_items_without_dedicated_check": [
+      {
+        "kb_id": "KB-045",
+        "note": "Cột `Consent` luôn `Subscribed` được kiểm cùng rule loại contact Unsubscribed / bị suppress ở checklist segment-audience-evaluation (cùng một hành vi, tránh check trùng)."
+      },
+      {
+        "kb_id": "KB-046",
+        "note": "Khối \"Refine your segment\" nằm ngoài phạm vi Jira MTRO-53; không có hành vi để kiểm."
+      },
+      {
+        "kb_id": "KB-067",
+        "note": "Scope `segments:write` của API key: chưa có tài liệu endpoint tạo / sửa segment qua Public API và hệ quả khi thiếu scope, nên chưa viết được check; nêu ở unknowns."
+      },
+      {
+        "kb_id": "KB-069",
+        "note": "Lọc theo engagement (Jira MTRO-120, To Do) chưa quyết vị trí và chưa được làm; không có hành vi để kiểm."
+      },
+      {
+        "kb_id": "KB-029",
+        "note": "Lỗi đã biết nhãn `Phone`, theo dõi qua check nhóm Contact details."
+      },
+      {
+        "kb_id": "KB-035",
+        "note": "Lỗi đã biết Boolean 422, theo dõi qua check Boolean và check Run."
+      },
+      {
+        "kb_id": "KB-036",
+        "note": "Lỗi đã biết, theo dõi qua check đổi field Text sang Boolean."
+      },
+      {
+        "kb_id": "KB-037",
+        "note": "Lỗi đã biết BUG-CS-13, theo dõi qua check đổi operator."
+      },
+      {
+        "kb_id": "KB-049",
+        "note": "Lỗi đã biết BUG-97, theo dõi qua các check Save."
+      },
+      {
+        "kb_id": "KB-052",
+        "note": "Giới hạn tạm BUG-CS-04, theo dõi qua check toggle Advanced."
+      },
+      {
+        "kb_id": "KB-055",
+        "note": "Lỗi đã biết BUG-113, theo dõi qua check round-trip Value đặc biệt và check mở lại 2 AND / 2 OR."
+      },
+      {
+        "kb_id": "KB-057",
+        "note": "Lỗi đã biết BUG-CS-05, theo dõi qua check round-trip Value đặc biệt."
+      },
+      {
+        "kb_id": "KB-060",
+        "note": "Lỗi đã biết breadcrumb, theo dõi qua check breadcrumb."
+      },
+      {
+        "kb_id": "KB-062",
+        "note": "Lỗi đã sửa BUG-CS-12, theo dõi qua check toast."
+      },
+      {
+        "kb_id": "KB-066",
+        "note": "Hiện trạng staging chưa chặn Member (Jira MTRO-100 In Progress), theo dõi qua các check PERMISSION."
+      }
+    ],
+    "checks_needing_confirmation": [
+      {
+        "check_id": "CHK-015",
+        "open_question_draft": "Khi đổi operator của một điều kiện đã có Value (ví dụ `Equal to` sang `Includes` cùng kiểu Text), Value phải được giữ hay xoá? Hiện staging xoá trắng Value (BUG-CS-13, còn open 06/10/2026) nhưng tài liệu không có rule mong đợi.",
+        "reason": "Chỉ có lỗi đã biết, không có rule về việc giữ Value khi đổi operator."
+      },
+      {
+        "check_id": "CHK-023",
+        "open_question_draft": "Tên segment chỉ gồm khoảng trắng có được coi là rỗng (Save disabled) không, và tên có khoảng trắng đầu / cuối có được trim khi lưu không? Ngoài giới hạn 255 ký tự ở BE, tài liệu chưa nêu quy tắc validate tên segment; cũng chưa nêu giới hạn số điều kiện / số card trong một segment.",
+        "reason": "Rule Save chỉ nói tên không rỗng; không có rule về khoảng trắng / trim."
+      },
+      {
+        "check_id": "CHK-027",
+        "open_question_draft": "PO quyết bỏ hẳn hay bật lại chế độ Advanced (pseudo-SQL) của segment builder (GAP-01)? Dev 02/10/2026 cho biết toggle đang ẩn có chủ ý; nếu bật lại thì mô tả trong Jira MTRO-53 AC (`FROM contacts` / `WHERE (...)` / `OR (...)`, monospace, số dòng, × khi hover, hai chế độ là hai cách thể hiện cùng dữ liệu) còn hiệu lực không?",
+        "reason": "AC Advanced chưa test được và chưa chốt có giữ chế độ này hay không (INFERRED)."
+      },
+      {
+        "check_id": "CHK-029",
+        "open_question_draft": "Các toast của segment (`Segment created`, `Segment saved`, `Couldn't save segment` kèm message server, `Couldn't duplicate segment`, `Couldn't delete segment`, `Counting…`, `Count unavailable`) mới thấy trong chuỗi i18n của bundle FE: PO/Dev có xác nhận đây là copy và thời điểm hiển thị mong đợi không?",
+        "reason": "Danh sách toast chỉ có từ bundle (INFERRED), chưa đối chiếu đủ trên UI."
+      },
+      {
+        "check_id": "CHK-031",
+        "open_question_draft": "Copy toast cuối cùng khi Member bị chặn tạo segment là copy PO chốt 30/09/2026 (Jira MTRO-100) \"Only workspace Owners and Admins can create segments. Ask an Admin to create it for you.\" hay copy Dev đề xuất có cụm \"…create or edit segments…\"?",
+        "reason": "Có đề xuất copy thay thế (PROPOSED) chưa được PO xử lý; không dùng copy làm oracle mạnh cho tới khi PO xác nhận."
+      },
+      {
+        "check_id": "CHK-032",
+        "open_question_draft": "Ngoài quyết định Member không được tạo / sửa segment (PO 30/09/2026, Jira MTRO-100), Owner, Admin và custom role có được tạo / sửa segment không? Member mở segment có sẵn bị chặn ở đâu và API `PUT /segments/{id}` trả gì cho role không có quyền? Ma trận quyền segment chưa chốt (GAP-07), tên role thứ ba đang tranh chấp.",
+        "reason": "Ma trận quyền chưa chốt; KB là câu hỏi mở (INFERRED)."
+      }
+    ],
+    "duplicates_removed": [
+      {
+        "merged_into_title": "Sửa segment có sẵn, lưu bằng PUT và nạp lại đúng sau khi tải lại",
+        "removed": "Check riêng \"Lưu segment có sẵn gọi `PUT /segments/{id}`\"",
+        "reason": "Cùng thao tác lưu segment có sẵn; method request được quan sát ngay trong check STATE_DATA."
+      },
+      {
+        "merged_into_title": "Các check operator theo kiểu dữ liệu và quy tắc đánh giá",
+        "removed": "Một check / một KB cho từng operator",
+        "reason": "Gom theo kiểu dữ liệu và theo nhóm quy tắc đánh giá thay vì nhân bản theo từng KB."
+      }
+    ],
+    "excluded_dimensions": [
+      {
+        "dimension": "REGRESSION",
+        "reason": "Phiên bản đầu tiên của bộ check (bootstrap từ tài liệu); chưa có thay đổi hành vi nào từ diff analyzer. Lỗi đã biết được gắn ở `regression_watch_kb_ids`."
+      },
+      {
+        "dimension": "INTEGRATION",
+        "reason": "Đối chiếu số đếm builder với cột Contacts ở danh sách, `estimated recipients` của campaign và gửi campaign theo segment thuộc feature segment-audience-evaluation; export / xoá segment đang được campaign dùng thuộc segment-list-management. Không lặp lại ở đây."
+      }
+    ]
+  },
+  "gate": {
+    "decision": "PASS",
+    "blocking_findings": [],
+    "conditions": [
+      "6 check NEEDS_CONFIRMATION (oracle NONE) chờ PO/Dev trả lời trước khi dùng làm kết quả mong đợi; check BASELINE chỉ là hiện trạng, lệch = cần điều tra."
+    ],
+    "rationale": "Core capability và rủi ro P0/P1 của feature đều có check; mọi check có applicability, layer, trace về feature và kb_id (hoặc được gắn cờ gap); check STRONG chỉ khẳng định đúng nội dung authority, chi tiết staging nằm ở check BASELINE riêng; không expected khẳng định nào dựa trên oracle NONE; không item lỗi đã biết nào làm oracle; check được gom theo hành vi, không nhân bản theo KB.",
+    "allowed_next_steps": [
+      "knowledge-diff-analyzer",
+      "context-quality-reviewer"
+    ]
+  }
+}

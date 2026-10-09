@@ -1,0 +1,706 @@
+{
+  "feature_id": "preference-page-in-sends",
+  "feature_key": "preference-page-in-sends",
+  "name": "Gắn preference page vào campaign/automation và tác dụng lên người nhận",
+  "user_goal": "Người gửi gắn một preference page vào campaign (bước Recipients) hoặc step Send email của automation để link `{{preferences_url}}` trong email đưa người nhận tới trang chọn loại email muốn nhận; lựa chọn của người nhận được kỳ vọng ảnh hưởng tới ai nhận các email sau, nhưng cách loại người đã bỏ tick đang tranh chấp và trang công khai chưa có trên staging.",
+  "stable_since_version": "v1",
+  "actors": [
+    {
+      "role": "unspecified (người soạn campaign / automation)",
+      "permission_observed": "Chọn page qua combobox ở bước Recipients của campaign hoặc ở step Send email của automation; tài liệu không ghi role nào được làm.",
+      "kb_refs": [
+        "KB-048",
+        "KB-055",
+        "KB-P-051"
+      ]
+    },
+    {
+      "role": "recipient",
+      "permission_observed": "Mở link preference trong email để đổi lựa chọn hoặc unsubscribe toàn bộ; trang công khai chưa thấy trên staging, cấu trúc URL / token chưa được Dev xác nhận.",
+      "kb_refs": [
+        "KB-047",
+        "KB-059",
+        "KB-060",
+        "KB-P-062"
+      ]
+    }
+  ],
+  "entry_points": [
+    {
+      "path": "Campaign wizard › bước Recipients › khối `Email preferences` › combobox `Preferences page`",
+      "precondition": "Đang soạn campaign; danh sách page có thể rỗng (chỉ có `None — people can only unsubscribe from everything`).",
+      "kb_refs": [
+        "KB-048"
+      ]
+    },
+    {
+      "path": "Automation builder › step `Send email` › combobox `Email preferences page`",
+      "precondition": "Đang sửa flow có step Send email.",
+      "kb_refs": [
+        "KB-055"
+      ]
+    },
+    {
+      "path": "Picker merge tag › nhóm `System` › `{{preferences_url}}` khi soạn nội dung email",
+      "precondition": "Đang soạn email.",
+      "kb_refs": [
+        "KB-056"
+      ]
+    },
+    {
+      "path": "Người nhận bấm link preference trong email (tài liệu ngày 03/09/2026 nhắc dạng `/u/{token}`)",
+      "precondition": "Email đã gửi có link; trang chưa có trên staging.",
+      "kb_refs": [
+        "KB-059",
+        "KB-060"
+      ]
+    }
+  ],
+  "capabilities": [
+    {
+      "name": "Gắn preference page vào campaign",
+      "description": "Khối `Email preferences` ở bước Recipients cho chọn một page (hoặc `None`), có link `Manage pages`; campaign chỉ lưu `preference_page_id`, không có ô chọn choice nào. Cảnh báo khi segment không lọc field của choice và khi email có `{{preferences_url}}` nhưng chưa chọn page chỉ biết qua i18n.",
+      "kb_refs": [
+        "KB-048",
+        "KB-049",
+        "KB-052",
+        "KB-058"
+      ]
+    },
+    {
+      "name": "Gắn preference page vào email của automation",
+      "description": "Step `Send email` có combobox `Email preferences page` lưu `preference_page_id`; helper nói đây là page mà link `{{preferences_url}}` của email mở.",
+      "kb_refs": [
+        "KB-055",
+        "KB-049"
+      ]
+    },
+    {
+      "name": "Đưa link preference vào nội dung email",
+      "description": "Merge tag `{{preferences_url}}` thuộc nhóm `System`; khi không gắn page link mở trang unsubscribe thường. Việc BE thay link lúc gửi chỉ là suy luận; cú pháp merge tag thuộc phạm vi merge tag của Email library.",
+      "kb_refs": [
+        "KB-056",
+        "KB-057",
+        "KB-058"
+      ]
+    },
+    {
+      "name": "Người nhận chọn loại email muốn nhận",
+      "description": "Mục đích theo Jira MTRO-17 là partial unsubscribe (U5, đang ghi Later). Trang công khai chưa có trên staging; nội dung chỉ biết qua preview trong builder.",
+      "kb_refs": [
+        "KB-047",
+        "KB-059",
+        "KB-060",
+        "KB-043"
+      ]
+    },
+    {
+      "name": "Loại người đã bỏ tick khỏi lần gửi liên quan",
+      "description": "Đang tranh chấp: copy hướng dẫn trên `/preferences` nói người bỏ tick bị loại khỏi campaign liên quan; mô tả theo bản dựng nói chỉ bị loại khi segment của campaign lọc giá trị false trên field của choice. Chưa có lần gửi thật kiểm chứng.",
+      "kb_refs": [
+        "KB-053",
+        "KB-054",
+        "KB-050",
+        "KB-051",
+        "KB-052",
+        "KB-031"
+      ]
+    },
+    {
+      "name": "Biết page đang được dùng ở đâu trước khi xoá",
+      "description": "Cột `Used in` và cảnh báo khi xoá chỉ đếm campaign, không đếm automation (chờ Dev chốt, GAP-07); page chỉ dùng ở automation có thể xoá mà không cảnh báo (suy luận).",
+      "kb_refs": [
+        "KB-061",
+        "KB-062",
+        "KB-007"
+      ]
+    }
+  ],
+  "state_transitions": [
+    {
+      "from": "campaign không gắn page (`None`)",
+      "to": "campaign gắn page (`preference_page_id`)",
+      "trigger": "Chọn page trong combobox `Preferences page` ở bước Recipients",
+      "condition": "Workspace có ít nhất 1 page (ngày 01/10/2026 workspace có 0 page)",
+      "kb_refs": [
+        "KB-048",
+        "KB-049"
+      ]
+    },
+    {
+      "from": "step Send email không gắn page",
+      "to": "step gắn page (`preference_page_id`)",
+      "trigger": "Chọn page trong combobox `Email preferences page`",
+      "condition": "Hiện trạng staging 01/10/2026",
+      "kb_refs": [
+        "KB-055"
+      ]
+    },
+    {
+      "from": "email có `{{preferences_url}}`, campaign chưa chọn page",
+      "to": "cảnh báo `Your email offers choices but has no page`",
+      "trigger": "Ở bước Recipients của campaign",
+      "condition": "Theo i18n bundle và cờ `has_preferences_link` từ BE, chưa thấy trên UI",
+      "kb_refs": [
+        "KB-058"
+      ]
+    },
+    {
+      "from": "campaign gắn page, segment không lọc field của choice",
+      "to": "cảnh báo `Your segment ignores some of the page's choices`",
+      "trigger": "Ở bước Recipients của campaign",
+      "condition": "Theo i18n bundle, chưa thấy trên UI",
+      "kb_refs": [
+        "KB-052"
+      ]
+    },
+    {
+      "from": "page đang được campaign dùng",
+      "to": "page đã xoá; link unsubscribe của campaign quay về trang `Unsubscribe from all`",
+      "trigger": "Xoá page",
+      "condition": "Theo chuỗi bundle, chưa thấy trên UI",
+      "kb_refs": [
+        "KB-007"
+      ]
+    },
+    {
+      "from": "page chỉ được automation dùng (`Not used yet`)",
+      "to": "page đã xoá, không có cảnh báo",
+      "trigger": "Xoá page",
+      "condition": "Suy luận từ bundle; link trong email của automation sau đó mở trang nào chưa xác định",
+      "kb_refs": [
+        "KB-061",
+        "KB-062"
+      ]
+    },
+    {
+      "from": "người nhận đang nhận email về một choice",
+      "to": "chưa xác định (tự bị loại, hay chỉ bị loại khi segment lọc field)",
+      "trigger": "Người nhận bỏ tick choice đó và lưu trên trang preference",
+      "condition": "Đang tranh chấp, chưa có lần gửi thật kiểm chứng",
+      "kb_refs": [
+        "KB-053",
+        "KB-054"
+      ]
+    }
+  ],
+  "confirmed_rules": [],
+  "observed_behavior": [
+    {
+      "statement": "Trên staging (khảo sát 01/10/2026, workspace chưa có page nào; BR-14 của task Testlane MTRO-024 là quan sát), bước Recipients của campaign có khối `Email preferences` (\"Let people tell you which emails they want. Each choice is saved onto the contact, so a segment can read it.\"), combobox `Preferences page` với lựa chọn `None — people can only unsubscribe from everything` (theo bundle, kèm tên các page khi có), hint \"The page people reach from this campaign's unsubscribe link.\" và link `Manage pages` dẫn vào Email preferences.",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "confidence": "MEDIUM",
+      "status": "CURRENT_STATE",
+      "kb_refs": [
+        "KB-048"
+      ]
+    },
+    {
+      "statement": "Trên staging (khảo sát 01/10/2026, khớp bundle; BR-14 của task Testlane MTRO-024 là quan sát), campaign chỉ lưu `preference_page_id`: bước Recipients không có ô nào để chọn hay tick các choice mà campaign liên quan. Step `Send email` của automation cũng chỉ gắn page qua `preference_page_id`.",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "confidence": "MEDIUM",
+      "status": "CURRENT_STATE",
+      "kb_refs": [
+        "KB-049"
+      ]
+    },
+    {
+      "statement": "Trên staging (khảo sát 01/10/2026), bước hướng dẫn 2 `Use the page on a campaign` trên trang `/preferences` ghi \"On the Recipients step, pick the page and tick the choices this campaign is about.\", trong khi bước Recipients của campaign không có ô tick choice nào; tài liệu chưa xác định đây là copy cũ hay wizard còn thiếu ô chọn.",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "confidence": "MEDIUM",
+      "status": "CURRENT_STATE",
+      "kb_refs": [
+        "KB-050"
+      ]
+    },
+    {
+      "statement": "Trên staging (khảo sát 01/10/2026), bước hướng dẫn 3 `People choose` trên trang `/preferences` ghi \"Anyone who unticks a choice is left out of campaigns about it. Everything else still reaches them.\".",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "confidence": "MEDIUM",
+      "status": "CURRENT_STATE",
+      "kb_refs": [
+        "KB-051"
+      ]
+    },
+    {
+      "statement": "Trên staging (khảo sát 01/10/2026; BR-15 của task Testlane MTRO-024 là quan sát), step `Send email` của automation có combobox `Email preferences page` (lưu `preference_page_id`) với helper \"The page this email’s {{preferences_url}} link opens.\".",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "confidence": "MEDIUM",
+      "status": "CURRENT_STATE",
+      "kb_refs": [
+        "KB-055"
+      ]
+    },
+    {
+      "statement": "Trên staging (khảo sát 01/10/2026), link tới trang preference trong email dùng merge tag `{{preferences_url}}`, nằm trong nhóm `System` của picker merge tag với mô tả rằng link mở trang unsubscribe thường khi không gắn preference page (\"…the plain unsubscribe page when none is attached.\"). Cú pháp merge tag (một hay hai ngoặc) thuộc phạm vi merge tag của Email library, không quyết định ở đây.",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "confidence": "MEDIUM",
+      "status": "CURRENT_STATE",
+      "kb_refs": [
+        "KB-056"
+      ]
+    },
+    {
+      "statement": "Trên staging (khảo sát 01/10/2026), chưa thấy trang preference công khai cho người nhận: SPA workspace không có route public nào cho trang này (router chỉ có 3 route quản trị `/preferences`, `/preferences/new`, `/preferences/:id`); nội dung trang thật (choice, `Save my choices`, `Unsubscribe from all emails`, resubscribe) hiện chỉ biết qua preview trong builder.",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "confidence": "MEDIUM",
+      "status": "CURRENT_STATE",
+      "kb_refs": [
+        "KB-059"
+      ]
+    },
+    {
+      "statement": "Trên staging (danh sách có dữ liệu ngày 29/09/2026, khớp field `used_in_campaigns` trong bundle 01/10/2026), cột `Used in` của danh sách preference page và câu cảnh báo khi xoá chỉ đếm campaign, không đếm automation — dù step Send email của automation cũng gắn page và toast lưu ghi \"Campaigns and automations can use it now.\"; QA KB Mailtro \"Known issues\" v1 để trạng thái chờ Dev chốt (GAP-07).",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "confidence": "LOW",
+      "status": "CURRENT_STATE",
+      "kb_refs": [
+        "KB-061"
+      ]
+    }
+  ],
+  "observed_validations": [],
+  "permissions": [
+    {
+      "statement": "Tài liệu không gán role cho thao tác gắn preference page vào campaign hay automation; ma trận quyền của sản phẩm chưa chốt.",
+      "knowledge_kind": "CONFIRMED_EXPECTED",
+      "confidence": "MEDIUM",
+      "kb_refs": [
+        "KB-P-051",
+        "KB-048",
+        "KB-055"
+      ]
+    },
+    {
+      "statement": "Trang preference công khai cho người nhận chưa có trên staging; cơ chế truy cập (URL, token, hạn dùng) chưa được Dev xác nhận.",
+      "knowledge_kind": "INFERRED",
+      "confidence": "LOW",
+      "kb_refs": [
+        "KB-059",
+        "KB-060"
+      ]
+    }
+  ],
+  "surface_mapping": {
+    "portal": [
+      {
+        "item": "Khối `Email preferences` ở bước Recipients của campaign: combobox `Preferences page`, lựa chọn `None — people can only unsubscribe from everything`, hint, link `Manage pages`",
+        "kb_refs": [
+          "KB-048"
+        ]
+      },
+      {
+        "item": "Cảnh báo ở bước Recipients: segment bỏ qua choice, email có link preference nhưng chưa có page (theo i18n)",
+        "kb_refs": [
+          "KB-052",
+          "KB-058"
+        ]
+      },
+      {
+        "item": "Combobox `Email preferences page` ở step Send email của automation",
+        "kb_refs": [
+          "KB-055"
+        ]
+      },
+      {
+        "item": "Merge tag `{{preferences_url}}` trong nhóm `System` của picker",
+        "kb_refs": [
+          "KB-056"
+        ]
+      },
+      {
+        "item": "Bước hướng dẫn 2 và 3 trên trang `/preferences` mô tả cách dùng page khi gửi",
+        "kb_refs": [
+          "KB-050",
+          "KB-051"
+        ]
+      },
+      {
+        "item": "Cột `Used in` của danh sách preference page",
+        "kb_refs": [
+          "KB-061"
+        ]
+      }
+    ],
+    "storefront": [],
+    "api": [
+      {
+        "item": "Danh sách page cho combobox lấy từ `GET /api/teams/{slug}/preference-pages` (dùng chung với màn quản lý)",
+        "kb_refs": [
+          "KB-011"
+        ]
+      },
+      {
+        "item": "Cờ `has_preferences_link` BE trả để FE quyết định hiện cảnh báo (theo bundle)",
+        "kb_refs": [
+          "KB-058"
+        ]
+      }
+    ],
+    "data": [
+      {
+        "item": "`preference_page_id` trên campaign và trên step Send email",
+        "kb_refs": [
+          "KB-049",
+          "KB-055"
+        ]
+      },
+      {
+        "item": "`used_in_campaigns` chỉ đếm campaign",
+        "kb_refs": [
+          "KB-061"
+        ]
+      }
+    ],
+    "code": []
+  },
+  "dependencies": [
+    {
+      "target": "campaigns / campaign-wizard",
+      "relation": "host_surface",
+      "note": "Khối Email preferences và các cảnh báo nằm ở bước Recipients của campaign.",
+      "kb_refs": [
+        "KB-048",
+        "KB-052",
+        "KB-058"
+      ]
+    },
+    {
+      "target": "automations / automation-steps",
+      "relation": "host_surface",
+      "note": "Combobox Email preferences page nằm ở step Send email.",
+      "kb_refs": [
+        "KB-055"
+      ]
+    },
+    {
+      "target": "email-content / merge-tags",
+      "relation": "merge_tag_syntax",
+      "note": "Cú pháp merge tag (một hay hai ngoặc) do phạm vi merge tag quyết định, không quyết định ở đây.",
+      "kb_refs": [
+        "KB-056"
+      ]
+    },
+    {
+      "target": "segments / segment-builder",
+      "relation": "filter_by_boolean_field",
+      "note": "Việc loại người đã bỏ tick phụ thuộc điều kiện segment trên field Boolean của choice (đang tranh chấp).",
+      "kb_refs": [
+        "KB-052",
+        "KB-054"
+      ]
+    },
+    {
+      "target": "deliverability / unsubscribe-handling",
+      "relation": "unsubscribe_consent",
+      "note": "Link unsubscribe khi không gắn page và nút Unsubscribe from all trên trang người nhận liên quan sổ consent / unsubscribe.",
+      "kb_refs": [
+        "KB-056",
+        "KB-059",
+        "KB-P-013"
+      ]
+    },
+    {
+      "target": "email-preferences / preference-page-management",
+      "relation": "provider",
+      "note": "Page được tạo và quản lý ở feature quản lý preference page.",
+      "kb_refs": [
+        "KB-011",
+        "KB-031"
+      ]
+    }
+  ],
+  "risks": [
+    {
+      "statement": "Người nhận bỏ tick một choice có tự bị loại khỏi campaign liên quan hay không đang tranh chấp giữa copy hướng dẫn trên trang và mô tả theo bản dựng (GAP-02 Blocker, rủi ro tuân thủ); chưa có lần gửi thật kiểm chứng.",
+      "knowledge_kind": "INFERRED",
+      "confidence": "LOW",
+      "kb_refs": [
+        "KB-053",
+        "KB-054"
+      ]
+    },
+    {
+      "statement": "Copy bước hướng dẫn 2 bảo tick các choice ở bước Recipients trong khi bước này không có ô tick nào; chưa rõ là copy cũ hay wizard còn thiếu.",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "confidence": "MEDIUM",
+      "kb_refs": [
+        "KB-050",
+        "KB-049"
+      ]
+    },
+    {
+      "statement": "Hai cảnh báo ở bước Recipients (segment bỏ qua choice; email có link preference nhưng chưa có page) chỉ biết qua i18n, chưa thấy trên UI.",
+      "knowledge_kind": "INFERRED",
+      "confidence": "LOW",
+      "kb_refs": [
+        "KB-052",
+        "KB-058"
+      ]
+    },
+    {
+      "statement": "Việc BE thay `{{preferences_url}}` bằng URL trang preference lúc gửi chỉ là suy luận; chưa có email thật chứa link để kiểm.",
+      "knowledge_kind": "INFERRED",
+      "confidence": "LOW",
+      "kb_refs": [
+        "KB-057"
+      ]
+    },
+    {
+      "statement": "Trang công khai cho người nhận (dạng `/u/{token}` theo tài liệu 03/09/2026) chưa có trên staging; toàn bộ hành vi phía người nhận chưa có nguồn.",
+      "knowledge_kind": "INFERRED",
+      "confidence": "LOW",
+      "kb_refs": [
+        "KB-060",
+        "KB-059"
+      ]
+    },
+    {
+      "statement": "Mục đích partial unsubscribe theo Jira MTRO-17 có U5/U6 ghi Later, không phải acceptance criteria hiện hành.",
+      "knowledge_kind": "INFERRED",
+      "confidence": "LOW",
+      "kb_refs": [
+        "KB-047"
+      ]
+    },
+    {
+      "statement": "`Used in` không đếm automation nên page chỉ dùng ở automation có thể bị xoá mà không cảnh báo, làm link trong email của automation có thể hỏng (suy luận).",
+      "knowledge_kind": "INFERRED",
+      "confidence": "LOW",
+      "kb_refs": [
+        "KB-062",
+        "KB-061"
+      ]
+    }
+  ],
+  "freshness": {
+    "observed_at": "2026-10-01",
+    "basis": "Khảo sát staging 01/10/2026 (workspace 0 page) và danh sách có dữ liệu 29/09/2026; đọc bundle FE 01/10/2026; Jira MTRO-17 đọc 07/10/2026; tài liệu tổng quan bản dựng 03/09/2026"
+  },
+  "unknown_areas": [
+    {
+      "question": "Khi người nhận bỏ tick một choice trên trang preference, họ có tự bị loại khỏi các campaign về choice đó không, hay vẫn nhận trừ khi segment của campaign có điều kiện loại giá trị false trên field của choice?",
+      "why_it_matters": "Copy hướng dẫn và cảnh báo ở bước Recipients nói ngược nhau; PO cần chốt (GAP-02 Blocker, rủi ro tuân thủ) và cần một lần gửi thật để kiểm chứng.",
+      "kb_refs": [
+        "KB-053",
+        "KB-054",
+        "KB-051",
+        "KB-052"
+      ],
+      "oq_id": "OQ-email-preferences-010"
+    },
+    {
+      "question": "Bước hướng dẫn 2 trên `/preferences` (\"pick the page and tick the choices this campaign is about\") là copy cũ cần sửa, hay bước Recipients của campaign còn thiếu ô chọn choice?",
+      "why_it_matters": "Campaign hiện chỉ lưu `preference_page_id`; không biết hành vi nào là đúng để kiểm.",
+      "kb_refs": [
+        "KB-050",
+        "KB-049",
+        "KB-048"
+      ],
+      "oq_id": "OQ-email-preferences-011"
+    },
+    {
+      "question": "Cột `Used in` và cảnh báo xoá có nên tính cả automation không (GAP-07); khi xoá page đang được automation hoặc campaign Scheduled dùng thì link `{{preferences_url}}` mở trang nào và builder có báo gì không (GAP-08)?",
+      "why_it_matters": "Xoá page có thể làm hỏng link trong email đang chạy mà người dùng không được cảnh báo.",
+      "kb_refs": [
+        "KB-061",
+        "KB-062",
+        "KB-007"
+      ],
+      "oq_id": "OQ-email-preferences-012"
+    },
+    {
+      "question": "Trên trang preference công khai, `Unsubscribe from all emails` có ghi sổ unsubscribe giống link footer không, và `I clicked by mistake — resubscribe` có gỡ trạng thái unsubscribe / suppression và ghi người thực hiện không (GAP-05)?",
+      "why_it_matters": "Chủ đề consent; hiện chỉ biết hai trạng thái này qua preview client-only.",
+      "kb_refs": [
+        "KB-059",
+        "KB-043"
+      ],
+      "oq_id": "OQ-email-preferences-013"
+    },
+    {
+      "question": "Contact chưa có giá trị (null) ở field của một choice thì trang preference hiện ô đó đã tick hay chưa, và segment điều kiện \"Is not false\" có giữ contact null không (GAP-06)?",
+      "why_it_matters": "Quyết định này xác định ai vẫn nhận campaign khi chưa từng mở trang preference.",
+      "kb_refs": [
+        "KB-045",
+        "KB-052",
+        "KB-054"
+      ],
+      "oq_id": "OQ-email-preferences-014"
+    },
+    {
+      "question": "Khi người nhận lưu lựa chọn trên trang preference, hệ thống có phát event `Contact field changed` để kích hoạt automation theo dõi field đó như copy trên form gợi ý không (GAP-16)?",
+      "why_it_matters": "Copy hướng dẫn người dùng dựa vào event này nhưng chưa có quan sát.",
+      "kb_refs": [
+        "KB-031"
+      ],
+      "oq_id": "OQ-email-preferences-015"
+    },
+    {
+      "question": "Trang preference công khai cho người nhận có URL dạng gì, có token và hạn dùng không, trang lỗi ra sao khi token sai / hết hạn / page bị xoá, và lựa chọn được lưu lên contact thế nào (GAP-03)?",
+      "why_it_matters": "Không thể viết expected result cho role người nhận; cần Dev xác nhận và một lần gửi thật có `{{preferences_url}}` và `{{unsubscribe_url}}`.",
+      "kb_refs": [
+        "KB-059",
+        "KB-060",
+        "KB-057",
+        "KB-043"
+      ],
+      "oq_id": "OQ-email-preferences-016"
+    }
+  ],
+  "last_updated": {
+    "date": "2026-10-08",
+    "ccr_ref": "bootstrap"
+  },
+  "coverage_matrix": [
+    {
+      "feature_id": "preference-page-in-sends",
+      "layer": "portal",
+      "role": "unspecified",
+      "state": "campaign bước Recipients, workspace 0 page",
+      "environment": "documented",
+      "covered": true,
+      "note": "Khảo sát staging 01/10/2026"
+    },
+    {
+      "feature_id": "preference-page-in-sends",
+      "layer": "portal",
+      "role": "unspecified",
+      "state": "campaign bước Recipients, đã chọn page",
+      "environment": "documented",
+      "covered": false,
+      "note": "Workspace không có page ngày 01/10; cảnh báo chỉ theo i18n"
+    },
+    {
+      "feature_id": "preference-page-in-sends",
+      "layer": "portal",
+      "role": "unspecified",
+      "state": "automation step Send email gắn page",
+      "environment": "documented",
+      "covered": true,
+      "note": "Khảo sát staging 01/10/2026"
+    },
+    {
+      "feature_id": "preference-page-in-sends",
+      "layer": "portal",
+      "role": "unspecified",
+      "state": "merge tag `{{preferences_url}}` trong picker",
+      "environment": "documented",
+      "covered": true,
+      "note": "Khảo sát staging 01/10/2026"
+    },
+    {
+      "feature_id": "preference-page-in-sends",
+      "layer": "portal",
+      "role": "unspecified",
+      "state": "`Used in` khi page dùng ở campaign / automation",
+      "environment": "documented",
+      "covered": true,
+      "note": "Quan sát 29/09/2026 + bundle; chờ Dev chốt"
+    },
+    {
+      "feature_id": "preference-page-in-sends",
+      "layer": "portal",
+      "role": "Owner/Admin/role thứ 3",
+      "state": "phân quyền gắn page",
+      "environment": "documented",
+      "covered": false,
+      "note": "Ma trận quyền chưa chốt"
+    },
+    {
+      "feature_id": "preference-page-in-sends",
+      "layer": "portal",
+      "role": "recipient",
+      "state": "trang preference công khai",
+      "environment": "documented",
+      "covered": false,
+      "note": "Chưa có trên staging (GAP-03)"
+    },
+    {
+      "feature_id": "preference-page-in-sends",
+      "layer": "backend",
+      "role": "recipient",
+      "state": "bỏ tick choice → loại khỏi lần gửi",
+      "environment": "documented",
+      "covered": false,
+      "note": "Đang tranh chấp, chưa gửi thật"
+    },
+    {
+      "feature_id": "preference-page-in-sends",
+      "layer": "backend",
+      "role": "unspecified",
+      "state": "thay `{{preferences_url}}` lúc gửi",
+      "environment": "documented",
+      "covered": false,
+      "note": "Chỉ suy luận"
+    },
+    {
+      "feature_id": "preference-page-in-sends",
+      "layer": "data",
+      "role": "unspecified",
+      "state": "`preference_page_id` trên campaign / step",
+      "environment": "documented",
+      "covered": true,
+      "note": "Khảo sát staging + bundle"
+    },
+    {
+      "feature_id": "preference-page-in-sends",
+      "layer": "code",
+      "role": "unspecified",
+      "state": "any",
+      "environment": "documented",
+      "covered": false,
+      "note": "Không có nguồn mã"
+    }
+  ],
+  "profile_conflicts": [
+    {
+      "conflict_id": "CONF-MTRO-email-preferences-02",
+      "topic": "Người nhận bỏ tick một choice có tự bị loại khỏi campaign liên quan, hay chỉ bị loại khi segment lọc field của choice",
+      "resolution": "UNRESOLVED",
+      "kb_refs": [
+        "KB-053",
+        "KB-054"
+      ],
+      "never_supersede_topic": "unsubscribe-consent",
+      "profile_handling": "Giữ cả hai phía ở capabilities (mô tả là tranh chấp), risks và unknown_areas; state transition để kết quả là chưa xác định."
+    }
+  ],
+  "profile_relationships": [
+    {
+      "from": "preference-page-in-sends",
+      "to": "preference-page-management",
+      "relation": "CONSUMES",
+      "kb_refs": [
+        "KB-011",
+        "KB-048",
+        "KB-055"
+      ]
+    },
+    {
+      "from": "preference-page-in-sends",
+      "to": "campaigns/campaign-wizard",
+      "relation": "EMBEDDED_IN",
+      "kb_refs": [
+        "KB-048"
+      ]
+    },
+    {
+      "from": "preference-page-in-sends",
+      "to": "automations/automation-steps",
+      "relation": "EMBEDDED_IN",
+      "kb_refs": [
+        "KB-055"
+      ]
+    },
+    {
+      "from": "preference-page-in-sends",
+      "to": "segments/segment-builder",
+      "relation": "DEPENDS_ON",
+      "kb_refs": [
+        "KB-052",
+        "KB-054"
+      ]
+    }
+  ]
+}

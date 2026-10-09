@@ -1,0 +1,1151 @@
+{
+  "feature_id": "email-library",
+  "feature_key": "email-library",
+  "object_id": "email-content",
+  "name": "Email library (đang đổi tên thành Templates): quản lý thư viện email dùng cho campaign và automation",
+  "user_goal": "Người soạn nội dung quản lý một thư viện email thiết kế sẵn — tạo mới, import HTML, nhân bản, xem trước, xoá — để campaign và automation chọn dùng.",
+  "stable_since_version": "v1",
+  "actors": [
+    {
+      "role": "Owner",
+      "permission_observed": "Mọi hành vi trên màn này được khảo sát staging bằng tài khoản Owner; hành vi của role khác chưa được ghi nhận.",
+      "kb_refs": [
+        "KB-007",
+        "KB-009"
+      ]
+    },
+    {
+      "role": "unspecified (Admin / role thứ 3)",
+      "permission_observed": "Sản phẩm có 3 role chuẩn (Owner, Admin, role thứ 3 tên đang tranh chấp) và custom role; ma trận quyền cho thư viện email chưa chốt. Router front-end không có phân quyền theo role nên chặn quyền phải nằm ở API.",
+      "kb_refs": [
+        "KB-P-051",
+        "KB-P-052"
+      ]
+    },
+    {
+      "role": "Claude MCP (tạo email thay người dùng)",
+      "permission_observed": "Email có thể được tạo qua Claude MCP; theo báo cáo từ production có lỗi đổi màu nền content với email tạo bằng đường này.",
+      "kb_refs": [
+        "KB-027",
+        "KB-002",
+        "KB-P-029"
+      ]
+    }
+  ],
+  "entry_points": [
+    {
+      "path": "Sidebar `Email library` (route `/templates`), giữa Contacts và Campaigns; có submenu `Saved blocks`",
+      "precondition": "Đã đăng nhập app workspace.",
+      "kb_refs": [
+        "KB-001",
+        "KB-P-037"
+      ]
+    },
+    {
+      "path": "Nút `New email` / `Import HTML` ở header trang `/templates` (hoặc trong khối empty khi thư viện rỗng)",
+      "precondition": "Đang ở trang Email library.",
+      "kb_refs": [
+        "KB-007",
+        "KB-015"
+      ]
+    },
+    {
+      "path": "Picker chọn email ở bước Contents của Campaign (`Choose email library` / `Create email library`)",
+      "precondition": "Đang tạo hoặc sửa campaign.",
+      "kb_refs": [
+        "KB-047",
+        "KB-002"
+      ]
+    }
+  ],
+  "capabilities": [
+    {
+      "name": "Duyệt danh sách email",
+      "description": "Danh sách email của workspace với cột Name / Created by / Updated / Actions, sắp xếp theo thời gian cập nhật, phân trang; trạng thái loading / rỗng / lỗi chỉ có từ bundle.",
+      "kb_refs": [
+        "KB-007",
+        "KB-008",
+        "KB-009",
+        "KB-014",
+        "KB-015"
+      ]
+    },
+    {
+      "name": "Tạo email mới",
+      "description": "`New email` tạo bản ghi `Untitled email` ngay, mở editor và dialog Email details bắt buộc nhập Subject line trước khi thêm nội dung; ô Preview text trong dialog đang tranh chấp.",
+      "kb_refs": [
+        "KB-016",
+        "KB-017",
+        "KB-018",
+        "KB-019",
+        "KB-020",
+        "KB-021"
+      ]
+    },
+    {
+      "name": "Import email từ file HTML",
+      "description": "`Import HTML` nhận file .html / .htm, đặt tên theo tên file và mở editor của email mới; import từ Brevo đang được phát triển.",
+      "kb_refs": [
+        "KB-022",
+        "KB-023",
+        "KB-024",
+        "KB-025",
+        "KB-026"
+      ]
+    },
+    {
+      "name": "Nhân bản email",
+      "description": "`Duplicate` tạo bản sao `Copy of {name}` (khác quy ước `{name} (copy)` của `Duplicate design`).",
+      "kb_refs": [
+        "KB-028",
+        "KB-029",
+        "KB-030"
+      ]
+    },
+    {
+      "name": "Xoá email (một dòng hoặc hàng loạt)",
+      "description": "Xoá qua menu dòng hoặc thanh bulk, có hộp xác nhận \"This can't be undone.\"; xoá email đang được campaign Draft / automation dùng hiện không bị chặn.",
+      "kb_refs": [
+        "KB-010",
+        "KB-011",
+        "KB-012",
+        "KB-013",
+        "KB-031",
+        "KB-032",
+        "KB-033",
+        "KB-034",
+        "KB-035"
+      ]
+    },
+    {
+      "name": "Xem trước email",
+      "description": "Dialog Preview render từ `design_json` trong iframe sandbox, hai chế độ Desktop / Mobile; merge tag hiện nguyên văn.",
+      "kb_refs": [
+        "KB-038",
+        "KB-039",
+        "KB-040",
+        "KB-041",
+        "KB-042",
+        "KB-043"
+      ]
+    },
+    {
+      "name": "Cung cấp email cho campaign và automation",
+      "description": "Campaign cần ít nhất 1 email trong thư viện; picker ở Campaign nạp 50 email sửa gần nhất; các campaign Draft dùng chung một email (không copy-on-write), campaign Sent đóng băng nội dung.",
+      "kb_refs": [
+        "KB-046",
+        "KB-047",
+        "KB-048",
+        "KB-049",
+        "KB-036",
+        "KB-037"
+      ]
+    }
+  ],
+  "state_transitions": [
+    {
+      "from": "chưa có email",
+      "to": "bản ghi `Untitled email` đã tồn tại, editor mở kèm dialog Email details",
+      "trigger": "Bấm `New email`",
+      "condition": "Bản ghi được tạo ngay khi bấm; việc `Cancel` có để lại bản ghi không chưa được kiểm",
+      "kb_refs": [
+        "KB-016",
+        "KB-018"
+      ]
+    },
+    {
+      "from": "dialog Email details (tạo mới)",
+      "to": "editor sẵn sàng thêm nội dung",
+      "trigger": "Bấm `Add content`",
+      "condition": "`Add content` bị disabled khi Subject line trống",
+      "kb_refs": [
+        "KB-018"
+      ]
+    },
+    {
+      "from": "chưa có email",
+      "to": "email mới mở trong editor",
+      "trigger": "`Import HTML` với file .html / .htm",
+      "condition": "Chỉ có từ bundle, chưa đối chiếu UI",
+      "kb_refs": [
+        "KB-022",
+        "KB-025"
+      ]
+    },
+    {
+      "from": "email tồn tại",
+      "to": "email đã xoá",
+      "trigger": "Xác nhận Delete (một dòng hoặc bulk)",
+      "condition": "Không bị chặn khi email đang được campaign Draft hoặc automation dùng; automation tới bước gửi email đó bị Failed",
+      "kb_refs": [
+        "KB-012",
+        "KB-031",
+        "KB-035",
+        "KB-036",
+        "KB-037"
+      ]
+    }
+  ],
+  "confirmed_rules": [
+    {
+      "statement": "Theo quyết định PO ngày 30/09/2026 (Jira MTRO-99, đang In Progress), tên hiển thị `Email library` đổi thành `Templates` ở sidebar, page title và breadcrumbs; nút chính đổi thành `New template`; thứ tự sidebar là Contacts → Templates → Campaigns; ở màn campaign, `Choose email library` / `Create email library` đổi thành `Choose a template` / `Create new template`; text của Claude MCP cũng sửa theo tên mới; saved blocks và folders không đổi tên. Quyết định này thay quyết định ngày 11/08/2026 (đổi `Templates` thành `Email library`) và chưa được deploy lên staging tại lần khảo sát 01/10/2026.",
+      "knowledge_kind": "CONFIRMED_EXPECTED",
+      "confidence": "MEDIUM",
+      "kb_refs": [
+        "KB-002"
+      ]
+    },
+    {
+      "statement": "Theo quyết định PO ngày 30/09/2026 (Jira MTRO-99), việc đổi tên `Email library` thành `Templates` chỉ đổi tên hiển thị: route và tên API giữ nguyên.",
+      "knowledge_kind": "CONFIRMED_EXPECTED",
+      "confidence": "MEDIUM",
+      "kb_refs": [
+        "KB-003"
+      ]
+    },
+    {
+      "statement": "Theo rule ngày 07/08/2026 (Jira MTRO-11, MTRO-8, MTRO-15), campaign cần ít nhất 1 email trong thư viện.",
+      "knowledge_kind": "CONFIRMED_EXPECTED",
+      "confidence": "MEDIUM",
+      "kb_refs": [
+        "KB-046"
+      ]
+    }
+  ],
+  "observed_behavior": [
+    {
+      "statement": "Trên staging (khảo sát 01/10/2026), module thư viện email vẫn mang tên `Email library` ở sidebar (mục cha, có submenu `Saved blocks`), h1 và breadcrumb; nút tạo là `New email` và copy dùng chữ \"email\"; route `/templates` (danh sách) và `/templates/:id` (editor), resource API `mail-templates`. Việc đổi tên sang `Templates` theo quyết định PO ngày 30/09/2026 chưa thấy trên bản dựng này; ngày deploy chưa được xác nhận.",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "confidence": "MEDIUM",
+      "status": "CURRENT_STATE",
+      "kb_refs": [
+        "KB-001"
+      ]
+    },
+    {
+      "statement": "QA lead chốt 30/09/2026 (task Testlane MTRO-021 BR-21) rằng Email library (Jira MTRO-34) được nghiệm thu theo hành vi bản dựng staging, không theo description prototype của ticket (folder, `New template`, Paste HTML); chưa có xác nhận PO/Dev cho quyết định này.",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "confidence": "MEDIUM",
+      "status": "CURRENT_STATE",
+      "kb_refs": [
+        "KB-004"
+      ]
+    },
+    {
+      "statement": "QA lead chốt 30/09/2026 nghiệm thu Email library theo bản dựng staging (task Testlane MTRO-021 BR-21), chưa có xác nhận PO/Dev. Trên staging (khảo sát 01/10/2026), trang `/templates` có breadcrumb và h1 `Email library`, mô tả \"All emails from your campaigns and automation flows.\", nút `Import HTML` (outline) và `New email`.",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "confidence": "MEDIUM",
+      "status": "CURRENT_STATE",
+      "kb_refs": [
+        "KB-007"
+      ]
+    },
+    {
+      "statement": "QA lead chốt 30/09/2026 nghiệm thu Email library theo bản dựng staging (task Testlane MTRO-021 BR-21), chưa có xác nhận PO/Dev. Trên staging (khảo sát 01/10/2026), combobox sắp xếp có `Updated: Newest first` (mặc định) và `Updated: Oldest first`; đổi sắp xếp làm đổi thứ tự thật nhưng không ghi lên URL; request danh sách dùng tham số `sort=updated_at&direction=desc` / `asc`.",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "confidence": "MEDIUM",
+      "status": "CURRENT_STATE",
+      "kb_refs": [
+        "KB-008"
+      ]
+    },
+    {
+      "statement": "QA lead chốt 30/09/2026 nghiệm thu Email library theo bản dựng staging (task Testlane MTRO-021 BR-21), chưa có xác nhận PO/Dev. Trên staging (khảo sát 01/10/2026), bảng danh sách gồm checkbox `Select all emails`, cột `Name` (link sang editor), `Created by` (tên người tạo, không có thì `—`), `Updated` (thời gian tương đối, vd \"4 hours ago\") và `Actions`; mỗi dòng có nút mắt `Preview {name}` nằm ngoài menu. Badge `Missing subject` cạnh tên email chưa có subject chỉ thấy trên staging 29/09/2026.",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "confidence": "MEDIUM",
+      "status": "CURRENT_STATE",
+      "kb_refs": [
+        "KB-009"
+      ]
+    },
+    {
+      "statement": "QA lead chốt 30/09/2026 nghiệm thu Email library theo bản dựng staging (task Testlane MTRO-021 BR-21), chưa có xác nhận PO/Dev. Trên staging (khảo sát 01/10/2026), menu `Actions for {name}` của mỗi dòng gồm `Edit`, `Duplicate`, (separator) và `Delete`.",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "confidence": "MEDIUM",
+      "status": "CURRENT_STATE",
+      "kb_refs": [
+        "KB-010"
+      ]
+    },
+    {
+      "statement": "QA lead chốt 30/09/2026 nghiệm thu Email library theo bản dựng staging (task Testlane MTRO-021 BR-21), chưa có xác nhận PO/Dev. Trên staging (khảo sát 01/10/2026), chọn checkbox thì thanh bulk thay chỗ combobox sắp xếp, gồm `{count} selected`, nút `Delete` (destructive) và `Cancel`.",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "confidence": "MEDIUM",
+      "status": "CURRENT_STATE",
+      "kb_refs": [
+        "KB-011"
+      ]
+    },
+    {
+      "statement": "QA lead chốt 30/09/2026 nghiệm thu Email library theo bản dựng staging (task Testlane MTRO-021 BR-21), chưa có xác nhận PO/Dev. Trên staging (khảo sát 29/09/2026, thử với 1 dòng; bản 01/10 không mở), xoá hàng loạt hỏi xác nhận bằng hộp `Delete {count} email(s)?` / \"This can't be undone.\".",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "confidence": "LOW",
+      "status": "CURRENT_STATE",
+      "tags": [
+        "data-deletion"
+      ],
+      "kb_refs": [
+        "KB-012"
+      ]
+    },
+    {
+      "statement": "QA lead chốt 30/09/2026 nghiệm thu Email library theo bản dựng staging (task Testlane MTRO-021 BR-21), chưa có xác nhận PO/Dev. Trên staging (khảo sát 01/10/2026), rows per page có các giá trị 10, 20, 25, 50, 100, mặc định 20; `Previous page` / `Next page` bị disabled ở trang đầu / trang cuối; đổi rows per page thì danh sách quay về trang 1.",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "confidence": "MEDIUM",
+      "status": "CURRENT_STATE",
+      "kb_refs": [
+        "KB-014"
+      ]
+    },
+    {
+      "statement": "QA lead chốt 30/09/2026 nghiệm thu Email library theo bản dựng staging (task Testlane MTRO-021 BR-21), chưa có xác nhận PO/Dev. Trên staging (khảo sát 29/09/2026, giữ trong bản 01/10; BR-24), bấm `New email` gọi `POST mail-templates` với tên `Untitled email`, tạo bản ghi ngay, chuyển sang `/templates/<id>` rồi mở dialog Email details; dialog dạng tạo mới cũng hiện khi mở email chưa có subject. Bấm `Cancel` sau đó có để lại bản ghi `Untitled email` hay không chưa được kiểm (GAP-06).",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "confidence": "MEDIUM",
+      "status": "CURRENT_STATE",
+      "kb_refs": [
+        "KB-016"
+      ]
+    },
+    {
+      "statement": "QA lead chốt 30/09/2026 nghiệm thu Email library theo bản dựng staging (task Testlane MTRO-021 BR-21), chưa có xác nhận PO/Dev. Trên staging (khảo sát 29/09/2026, giữ trong bản 01/10), dialog Email details lúc tạo có câu \"Give this email a subject line before building its content.\", ô `Email name` điền sẵn `Untitled email` (gợi ý `For internal use`), ô bắt buộc `Subject line *` và nút `Cancel` / `Add content`; `Add content` bị disabled khi Subject trống; `Cancel` đưa về `/templates` (thấy trên staging 16/09/2026).",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "confidence": "MEDIUM",
+      "status": "CURRENT_STATE",
+      "kb_refs": [
+        "KB-018"
+      ]
+    },
+    {
+      "statement": "Trên staging (khảo sát 01/10/2026, mở hộp chọn file nhưng không chọn), nút `Import HTML` chỉ nhận file `.html`, `.htm` hoặc `text/html`.",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "confidence": "LOW",
+      "status": "CURRENT_STATE",
+      "kb_refs": [
+        "KB-022"
+      ]
+    },
+    {
+      "statement": "QA lead chốt 30/09/2026 nghiệm thu Email library theo bản dựng staging (task Testlane MTRO-021 BR-21), chưa có xác nhận PO/Dev. Đính chính so với description Jira MTRO-34: Import HTML không có sheet `Paste HTML` (nhập bằng file) và tên email không lấy từ thẻ `<title>`.",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "confidence": "MEDIUM",
+      "status": "CURRENT_STATE",
+      "kb_refs": [
+        "KB-023"
+      ]
+    },
+    {
+      "statement": "Theo báo cáo từ production (bộ phận Marketing báo ngày 01–02/10/2026, không phải quan sát staging), bug Jira MTRO-114 (In Progress, đang mở): sau khi tạo email qua Claude MCP hoặc Import HTML, template nguồn có nền trắng bị đổi màu nền content, chỉ block cuối còn trắng.",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "confidence": "LOW",
+      "status": "KNOWN_DEFECT",
+      "kb_refs": [
+        "KB-027"
+      ]
+    },
+    {
+      "statement": "Trên staging (khảo sát 01/10/2026), bản sao tạo bằng `Duplicate` trong Email library được đặt tên `Copy of {name}`; theo bundle tên bản sao bị cắt còn tối đa 255 ký tự. Quy ước này khác kiểu `{name} (copy)` của campaign.",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "confidence": "LOW",
+      "status": "CURRENT_STATE",
+      "kb_refs": [
+        "KB-028"
+      ]
+    },
+    {
+      "statement": "Trên staging (khảo sát 01/10/2026), thao tác `Duplicate design` tạo bản sao tên `{name} (copy)`, khác kiểu `Copy of {name}` của `Duplicate` trong Email library.",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "confidence": "LOW",
+      "status": "CURRENT_STATE",
+      "kb_refs": [
+        "KB-029"
+      ]
+    },
+    {
+      "statement": "Trên staging (khảo sát 01/10/2026), xoá một email đang được campaign Draft hoặc automation dùng không bị chặn; chưa có quyết định PO nên chặn hay chỉ cảnh báo (GAP-04 task Testlane MTRO-021, GAP-09 task Testlane MTRO-018).",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "confidence": "MEDIUM",
+      "status": "CURRENT_STATE",
+      "tags": [
+        "data-deletion"
+      ],
+      "kb_refs": [
+        "KB-035"
+      ]
+    },
+    {
+      "statement": "Trên staging (khảo sát 01/10/2026), sau khi email đang được bước gửi mail của automation dùng bị xoá, run của automation tới bước đó bị Failed với thông báo \"The mail template this step sends no longer belongs to this workspace.\"",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "confidence": "LOW",
+      "status": "CURRENT_STATE",
+      "tags": [
+        "data-deletion"
+      ],
+      "kb_refs": [
+        "KB-036"
+      ]
+    },
+    {
+      "statement": "Trên staging (khảo sát 01/10/2026), campaign Draft dùng chung `mail_template.id` cũng bị ảnh hưởng khi email đó bị xoá; tài liệu không mô tả campaign hiển thị gì sau đó.",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "confidence": "LOW",
+      "status": "CURRENT_STATE",
+      "tags": [
+        "data-deletion"
+      ],
+      "kb_refs": [
+        "KB-037"
+      ]
+    },
+    {
+      "statement": "QA lead chốt 30/09/2026 nghiệm thu Email library theo bản dựng staging (task Testlane MTRO-021 BR-21), chưa có xác nhận PO/Dev. Trên staging (khảo sát 01/10/2026), dialog Preview có h2 là tên email, câu \"Rendered in a sandboxed frame — scripts in the email cannot run.\" và hai chế độ `Desktop` (720px) / `Mobile` (375px) cho email có nội dung.",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "confidence": "MEDIUM",
+      "status": "CURRENT_STATE",
+      "kb_refs": [
+        "KB-038"
+      ]
+    },
+    {
+      "statement": "QA lead chốt 30/09/2026 nghiệm thu Email library theo bản dựng staging (task Testlane MTRO-021 BR-21), chưa có xác nhận PO/Dev. Trên staging (khảo sát 01/10/2026), Preview render từ `design_json` của email (không có trường `rawHtml`).",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "confidence": "MEDIUM",
+      "status": "CURRENT_STATE",
+      "kb_refs": [
+        "KB-040"
+      ]
+    },
+    {
+      "statement": "QA lead chốt 30/09/2026 nghiệm thu Email library theo bản dựng staging (task Testlane MTRO-021 BR-21), chưa có xác nhận PO/Dev. Trên staging (khảo sát 01/10/2026), Preview không thay giá trị merge tag mà hiện nguyên văn (vd `Hi {{contact.first_name}},`) và link Unsubscribe giữ `href=\"{{unsubscribe_url}}\"`; chưa chốt đây có phải ý đồ thiết kế (GAP-08).",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "confidence": "MEDIUM",
+      "status": "CURRENT_STATE",
+      "tags": [
+        "merge-tag-syntax",
+        "unsubscribe-consent"
+      ],
+      "kb_refs": [
+        "KB-041"
+      ]
+    },
+    {
+      "statement": "QA lead chốt 30/09/2026 nghiệm thu Email library theo bản dựng staging (task Testlane MTRO-021 BR-21), chưa có xác nhận PO/Dev. Trên staging (khảo sát 01/10/2026), Preview của email chưa có nội dung (canvas rỗng) chỉ hiện `No HTML source available` (kèm thumbnail nếu email có `thumbnail_url`) và không có nút Desktop / Mobile.",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "confidence": "MEDIUM",
+      "status": "CURRENT_STATE",
+      "kb_refs": [
+        "KB-042"
+      ]
+    },
+    {
+      "statement": "QA lead chốt 30/09/2026 nghiệm thu Email library theo bản dựng staging (task Testlane MTRO-021 BR-21), chưa có xác nhận PO/Dev. Trên staging (khảo sát 01/10/2026, BR-41), picker chọn email ở Campaign nạp một lần `GET mail-templates?per_page=50&sort=updated_at&direction=desc`, không phân trang, nên chỉ chọn được 50 email sửa gần nhất; chưa chốt đây có phải giới hạn chủ ý (GAP-18).",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "confidence": "MEDIUM",
+      "status": "CURRENT_STATE",
+      "kb_refs": [
+        "KB-047"
+      ]
+    },
+    {
+      "statement": "Chốt ngày 25/08/2026 theo hành vi bản dựng khi chạy wizard (TC-MTRO-208 ghi 'Đã chốt', tài liệu không ghi vai trò người chốt), chưa có xác nhận PO/Dev: không có copy-on-write — sửa design trong một campaign Draft làm thay đổi mọi campaign Draft dùng cùng `mail_template.id`.",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "confidence": "MEDIUM",
+      "status": "CURRENT_STATE",
+      "kb_refs": [
+        "KB-048"
+      ]
+    },
+    {
+      "statement": "Chốt ngày 25/08/2026 theo hành vi bản dựng khi chạy wizard (TC-MTRO-208 ghi 'Đã chốt', tài liệu không ghi vai trò người chốt), chưa có xác nhận PO/Dev: nội dung campaign đã Sent được đóng băng, không đổi khi email nguồn bị sửa.",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "confidence": "MEDIUM",
+      "status": "CURRENT_STATE",
+      "kb_refs": [
+        "KB-049"
+      ]
+    }
+  ],
+  "observed_validations": [],
+  "limitations": [
+    {
+      "note": "Folder không thuộc phạm vi Email library hiện tại (QA lead chốt 30/09/2026, chưa có xác nhận PO/Dev); staging 01/10/2026 không có folder.",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "confidence": "MEDIUM",
+      "kb_refs": [
+        "KB-005"
+      ]
+    },
+    {
+      "note": "Email library không có `Send test`; gửi thử chỉ có ở bước `Preview & test` của Campaign (theo bản dựng staging 01/10/2026).",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "confidence": "MEDIUM",
+      "kb_refs": [
+        "KB-044"
+      ]
+    }
+  ],
+  "permissions": [
+    {
+      "statement": "Ma trận quyền cho Email library theo role chưa chốt; tài liệu chỉ khảo sát bằng Owner. Profile không tự suy quyền theo role.",
+      "kb_refs": [
+        "KB-P-051",
+        "KB-009"
+      ]
+    },
+    {
+      "statement": "Router front-end không khai báo phân quyền theo role; mọi chặn quyền (nếu có) phải nằm ở API.",
+      "kb_refs": [
+        "KB-P-052"
+      ]
+    }
+  ],
+  "surface_mapping": {
+    "portal": [
+      {
+        "item": "Trang `/templates`: header (`Import HTML`, `New email`), sort, bảng, bulk bar, phân trang",
+        "kb_refs": [
+          "KB-007",
+          "KB-008",
+          "KB-009",
+          "KB-011",
+          "KB-014"
+        ]
+      },
+      {
+        "item": "Dialog Email details lúc tạo, dialog Preview, hộp xác nhận Delete",
+        "kb_refs": [
+          "KB-018",
+          "KB-038",
+          "KB-012",
+          "KB-031"
+        ]
+      },
+      {
+        "item": "Picker chọn email ở Campaign",
+        "kb_refs": [
+          "KB-047"
+        ]
+      }
+    ],
+    "storefront": [],
+    "api": [
+      {
+        "item": "Resource `mail-templates`: `POST mail-templates` (New email), `POST mail-templates/import-html`, `DELETE mail-templates/{id}`, list với `sort=updated_at&direction=desc|asc`, picker `per_page=50`",
+        "kb_refs": [
+          "KB-001",
+          "KB-016",
+          "KB-025",
+          "KB-032",
+          "KB-008",
+          "KB-047"
+        ]
+      },
+      {
+        "item": "Đổi tên sang Templates giữ nguyên route và tên API",
+        "kb_refs": [
+          "KB-003"
+        ]
+      }
+    ],
+    "data": [
+      {
+        "item": "`design_json` của email là nguồn render Preview; `mail_template.id` dùng chung giữa các campaign Draft",
+        "kb_refs": [
+          "KB-040",
+          "KB-048",
+          "KB-037"
+        ]
+      },
+      {
+        "item": "Tên email từ import / duplicate bị cắt còn tối đa 255 ký tự",
+        "kb_refs": [
+          "KB-024",
+          "KB-028"
+        ]
+      }
+    ],
+    "code": []
+  },
+  "dependencies": [
+    {
+      "target": "email-content / email-editor",
+      "relation": "opens",
+      "note": "Tên email trong danh sách và `New email` / `Import HTML` dẫn sang editor `/templates/:id`.",
+      "kb_refs": [
+        "KB-009",
+        "KB-016",
+        "KB-050"
+      ]
+    },
+    {
+      "target": "campaigns / campaign-wizard",
+      "relation": "consumer",
+      "note": "Campaign chọn email từ thư viện; Draft dùng chung email, Sent đóng băng nội dung.",
+      "kb_refs": [
+        "KB-046",
+        "KB-047",
+        "KB-048",
+        "KB-049"
+      ]
+    },
+    {
+      "target": "automations / automation-run-history",
+      "relation": "consumer",
+      "note": "Xoá email đang được bước gửi mail dùng làm run Failed.",
+      "kb_refs": [
+        "KB-036"
+      ]
+    },
+    {
+      "target": "workspace-settings / claude-connector",
+      "relation": "producer",
+      "note": "Email có thể được tạo qua Claude MCP; text MCP sẽ đổi theo tên Templates.",
+      "kb_refs": [
+        "KB-002",
+        "KB-027"
+      ]
+    },
+    {
+      "target": "abuse-guard / content-screening",
+      "relation": "see_also",
+      "note": "Quy tắc lọc nội dung template thuộc object abuse-guard; profile này không lặp lại.",
+      "kb_refs": [
+        "KB-040"
+      ]
+    }
+  ],
+  "risks": [
+    {
+      "statement": "Theo Jira MTRO-115 (To Do tại 02/10/2026, chưa triển khai), folder template dự kiến được làm lại dạng list phẳng: `Create folder`, ô tìm `Search emails...`, bộ lọc `All` / `Ungrouped` / từng folder và dropdown `Folder` trong Email details.",
+      "knowledge_kind": "INFERRED",
+      "confidence": "LOW",
+      "kb_refs": [
+        "KB-006"
+      ]
+    },
+    {
+      "statement": "Theo bundle front-end staging 01/10/2026 (chưa đối chiếu UI), xoá hàng loạt thành công hiện toast `{count} emails deleted`; lỗi hiện `Could not delete the email(s).`",
+      "knowledge_kind": "INFERRED",
+      "confidence": "LOW",
+      "tags": [
+        "data-deletion"
+      ],
+      "kb_refs": [
+        "KB-013"
+      ]
+    },
+    {
+      "statement": "Theo bundle front-end staging 01/10/2026 (chưa đối chiếu UI), khi chưa có dữ liệu danh sách hiện 6 dòng skeleton; thư viện rỗng hiện `No emails yet` / \"Create your first email to reuse across campaigns.\" kèm `Import HTML` / `New email` trong khối empty và ẩn hai nút ở header; lỗi tải danh sách hiện \"Failed to load emails\" (chuỗi cứng, không qua i18n).",
+      "knowledge_kind": "INFERRED",
+      "confidence": "LOW",
+      "kb_refs": [
+        "KB-015"
+      ]
+    },
+    {
+      "statement": "Theo bundle front-end staging 01/10/2026 (chưa đối chiếu UI), tạo email bằng `New email` lỗi thì hiện `Could not create the email.`; cả hai nút `Import HTML` và `New email` bị vô hiệu hoá trong lúc đang xử lý.",
+      "knowledge_kind": "INFERRED",
+      "confidence": "LOW",
+      "kb_refs": [
+        "KB-017"
+      ]
+    },
+    {
+      "statement": "Theo Jira MTRO-90 (To Do, spec prototype, chưa triển khai), khi Subject trống dialog Email details là blocking — không đóng được bằng Esc, click ra ngoài hay nút close.",
+      "knowledge_kind": "INFERRED",
+      "confidence": "LOW",
+      "kb_refs": [
+        "KB-019"
+      ]
+    },
+    {
+      "statement": "Theo Jira MTRO-90 (To Do, spec prototype), dialog Email details có thêm ô `Preview text` (optional); điểm này lệch quan sát staging và chưa được xác nhận.",
+      "knowledge_kind": "INFERRED",
+      "confidence": "LOW",
+      "conflict_group": "CONF-MTRO-email-content-03",
+      "conflict_status": "UNRESOLVED",
+      "kb_refs": [
+        "KB-020"
+      ]
+    },
+    {
+      "statement": "Trên staging (khảo sát 29/09/2026), dialog Email details không có ô Preview text; preheader nằm ở tab `Settings` của editor. Quan sát này lệch spec Jira MTRO-90 và chưa được phân xử.",
+      "knowledge_kind": "INFERRED",
+      "confidence": "LOW",
+      "conflict_group": "CONF-MTRO-email-content-03",
+      "conflict_status": "UNRESOLVED",
+      "kb_refs": [
+        "KB-021"
+      ]
+    },
+    {
+      "statement": "Theo bundle front-end staging 01/10/2026 (chưa đối chiếu UI), email tạo bằng `Import HTML` lấy tên từ tên file bỏ đuôi `.html` / `.htm` (không đọc thẻ `<title>`); tên được trim, rỗng thì thành `Untitled email`, và bị cắt còn tối đa 255 ký tự.",
+      "knowledge_kind": "INFERRED",
+      "confidence": "LOW",
+      "kb_refs": [
+        "KB-024"
+      ]
+    },
+    {
+      "statement": "Theo bundle front-end staging 01/10/2026 (chưa đối chiếu UI), `Import HTML` gửi `POST mail-templates/import-html` (FormData `name` + `file`); xong thì mở thẳng editor của email mới với toast `Imported “{name}”`, hoặc cảnh báo 15 giây `Imported “{name}” — a few things need a look` kèm danh sách ảnh cần thay / `Not carried over: {items}.`; lỗi hiện `Could not import the HTML file.`",
+      "knowledge_kind": "INFERRED",
+      "confidence": "LOW",
+      "kb_refs": [
+        "KB-025"
+      ]
+    },
+    {
+      "statement": "Theo Jira MTRO-104 (BE xong 06/10/2026, chưa lên staging), Import sắp có ô nguồn `HTML` (mặc định) / `Brevo`; chọn Brevo thì merge tag Brevo được map sang merge tag Mailtro, mỗi cụm `{% if %}` thành một block có điều kiện, tag không chuyển được được liệt kê kèm lý do; file giống Brevo mà chọn nguồn HTML thì bị trả 422 kèm gợi ý import theo Brevo.",
+      "knowledge_kind": "INFERRED",
+      "confidence": "LOW",
+      "kb_refs": [
+        "KB-026"
+      ]
+    },
+    {
+      "statement": "Lỗi đang mở, theo dõi như regression watch, không dùng làm expected: Theo báo cáo từ production (bộ phận Marketing báo ngày 01–02/10/2026, không phải quan sát staging), bug Jira MTRO-114 (In Progress, đang mở): sau khi tạo email qua Claude MCP hoặc Import HTML, template nguồn có nền trắng bị đổi màu nền content, chỉ block cuối còn trắng.",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "confidence": "LOW",
+      "status": "KNOWN_DEFECT",
+      "kb_refs": [
+        "KB-027"
+      ]
+    },
+    {
+      "statement": "Theo bundle front-end staging 01/10/2026 (chưa đối chiếu UI), `Duplicate` lấy email gốc (GET) rồi tạo bản mới (POST) chép name, subject và design; người dùng ở lại trang danh sách và danh sách được nạp lại; lỗi hiện `Could not duplicate the email.`",
+      "knowledge_kind": "INFERRED",
+      "confidence": "LOW",
+      "kb_refs": [
+        "KB-030"
+      ]
+    },
+    {
+      "statement": "Theo bundle front-end staging 01/10/2026 (chưa đối chiếu UI), `Delete` một email mở hộp `Delete \"{name}\"?` / \"This can't be undone.\" với `Cancel` / `Delete`; xoá xong hiện toast `Deleted \"{name}\"`. Hộp này không mở được trên staging 01/10/2026.",
+      "knowledge_kind": "INFERRED",
+      "confidence": "LOW",
+      "tags": [
+        "data-deletion"
+      ],
+      "kb_refs": [
+        "KB-031"
+      ]
+    },
+    {
+      "statement": "Theo bundle front-end staging 01/10/2026 (chưa đối chiếu UI), xoá hàng loạt gửi `DELETE mail-templates/{id}` lần lượt từng id (không phải một request gộp); dòng nào xoá được thì bỏ khỏi selection, cuối cùng danh sách được nạp lại. Lỗi giữa chừng thì các dòng đã xoá vẫn mất (không rollback) trong khi dialog chỉ báo `Could not delete the email(s).`; QA đang hỏi Dev đây có phải chủ ý (GAP-14).",
+      "knowledge_kind": "INFERRED",
+      "confidence": "LOW",
+      "tags": [
+        "data-deletion"
+      ],
+      "kb_refs": [
+        "KB-032"
+      ]
+    },
+    {
+      "statement": "Theo bundle front-end staging 01/10/2026 (chưa đối chiếu UI), checkbox `Select all emails` chỉ chọn các dòng của trang đang xem; staging chỉ có 1 trang nên chưa thấy trên UI.",
+      "knowledge_kind": "INFERRED",
+      "confidence": "LOW",
+      "kb_refs": [
+        "KB-033"
+      ]
+    },
+    {
+      "statement": "Theo bundle front-end staging 01/10/2026 (chưa đối chiếu UI), selection không bị xoá khi đổi trang, đổi sắp xếp hoặc đổi số dòng mỗi trang; vì vậy có thể chọn ở trang 1, sang trang 2 rồi bấm `Delete` và xoá cả dòng không còn thấy trên màn. Chưa tái hiện trên UI; QA đang hỏi Dev có phải chủ ý (GAP-16).",
+      "knowledge_kind": "INFERRED",
+      "confidence": "LOW",
+      "tags": [
+        "data-deletion"
+      ],
+      "kb_refs": [
+        "KB-034"
+      ]
+    },
+    {
+      "statement": "Theo bundle front-end staging 01/10/2026 (chưa đối chiếu UI), iframe của Preview có `sandbox=\"allow-same-origin\"` (không có `allow-scripts`) và `referrerpolicy=\"no-referrer\"`.",
+      "knowledge_kind": "INFERRED",
+      "confidence": "LOW",
+      "kb_refs": [
+        "KB-039"
+      ]
+    },
+    {
+      "statement": "Theo bundle front-end staging 01/10/2026 (chưa đối chiếu UI), Preview lỗi render thì hiện `Could not render this email.`",
+      "knowledge_kind": "INFERRED",
+      "confidence": "LOW",
+      "kb_refs": [
+        "KB-043"
+      ]
+    },
+    {
+      "statement": "Theo Jira MTRO-119 (To Do), việc chia sẻ template cho người ngoài (Send test, link preview hoặc Download HTML) đang được cân nhắc; chưa chốt phương án.",
+      "knowledge_kind": "INFERRED",
+      "confidence": "LOW",
+      "kb_refs": [
+        "KB-045"
+      ]
+    }
+  ],
+  "freshness": {
+    "observed_at": "2026-10-01",
+    "basis": "Khảo sát staging 16/09, 29/09 và 01/10/2026; quyết định PO 30/09/2026; Jira đọc 07/10/2026"
+  },
+  "unknown_areas": [
+    {
+      "question": "Việc đổi tên `Email library` thành `Templates` (quyết định PO 30/09/2026, Jira MTRO-99) đã deploy lên staging / production chưa, từ ngày nào thì checklist phải assert theo tên mới?",
+      "why_it_matters": "Staging 01/10/2026 vẫn hiện `Email library`; không biết tên nào là đúng tại thời điểm test.",
+      "kb_refs": [
+        "KB-001",
+        "KB-002",
+        "KB-003"
+      ],
+      "oq_id": "OQ-email-content-006"
+    },
+    {
+      "question": "PO/Dev có chấp nhận hành vi bản dựng staging của Email library (list, sort, phân trang, bulk bar, New email, dialog Email details, Preview, picker 50 email) mà QA lead chốt 30/09/2026 là hành vi mong đợi không?",
+      "why_it_matters": "Phần lớn hành vi màn này chỉ ở tầng QA lead chốt theo staging; chưa có oracle PO/Dev.",
+      "kb_refs": [
+        "KB-004",
+        "KB-007",
+        "KB-008",
+        "KB-009",
+        "KB-014",
+        "KB-018",
+        "KB-038",
+        "KB-047"
+      ],
+      "oq_id": "OQ-email-content-007"
+    },
+    {
+      "question": "Dialog Email details có ô `Preview text` (theo Jira MTRO-90) hay giữ như bản dựng (preheader ở tab Settings của editor)?",
+      "why_it_matters": "Hai nguồn mâu thuẫn trực tiếp về cùng một dialog, chưa được phân xử.",
+      "kb_refs": [
+        "KB-020",
+        "KB-021"
+      ],
+      "oq_id": "OQ-email-content-015"
+    },
+    {
+      "question": "Xoá email đang được campaign Draft / Scheduled, automation hoặc saved block dùng: phải chặn, cảnh báo, hay giữ như hiện tại (không chặn)?",
+      "why_it_matters": "Staging không chặn và automation run bị Failed sau đó; liên quan xoá dữ liệu.",
+      "kb_refs": [
+        "KB-035",
+        "KB-036",
+        "KB-037"
+      ],
+      "oq_id": "OQ-email-content-009"
+    },
+    {
+      "question": "Sau khi email bị xoá, campaign Draft đang dùng email đó hiển thị gì?",
+      "why_it_matters": "Tài liệu chỉ ghi campaign Draft bị ảnh hưởng, không mô tả kết quả.",
+      "kb_refs": [
+        "KB-037"
+      ],
+      "oq_id": "OQ-email-content-009"
+    },
+    {
+      "question": "Bấm `Cancel` ở dialog Email details sau `New email` thì bản ghi `Untitled email` đã tạo còn lại trong thư viện hay bị xoá?",
+      "why_it_matters": "Có thể sinh rác dữ liệu; chưa có expected cho case Cancel.",
+      "kb_refs": [
+        "KB-016",
+        "KB-018"
+      ],
+      "oq_id": "OQ-email-content-011"
+    },
+    {
+      "question": "Selection giữ qua đổi trang / sắp xếp / số dòng và bulk Delete xoá tuần tự không rollback có phải chủ ý không; khi lỗi giữa chừng UI phải báo gì?",
+      "why_it_matters": "Bulk Delete có thể xoá dòng không còn thấy trên màn và báo lỗi chung dù đã xoá một phần.",
+      "kb_refs": [
+        "KB-032",
+        "KB-033",
+        "KB-034"
+      ],
+      "oq_id": "OQ-email-content-010"
+    },
+    {
+      "question": "Giới hạn picker chọn email ở Campaign chỉ nạp 50 email sửa gần nhất có chủ ý không; có thêm tìm kiếm / phân trang không?",
+      "why_it_matters": "Workspace có hơn 50 email sẽ không chọn được email cũ.",
+      "kb_refs": [
+        "KB-047"
+      ],
+      "oq_id": "OQ-email-content-012"
+    },
+    {
+      "question": "Preview hiện nguyên merge tag và link Unsubscribe giữ nguyên tag (không thay giá trị mẫu) có phải ý đồ thiết kế không?",
+      "why_it_matters": "Quyết định oracle cho Preview của email có merge tag.",
+      "kb_refs": [
+        "KB-041"
+      ],
+      "oq_id": "OQ-email-content-013"
+    },
+    {
+      "question": "Hành vi không copy-on-write giữa các campaign Draft và đóng băng nội dung campaign Sent (chốt 25/08/2026, không ghi người chốt) có được PO/Dev xác nhận không?",
+      "why_it_matters": "Ảnh hưởng trực tiếp tới nội dung campaign khi sửa email dùng chung.",
+      "kb_refs": [
+        "KB-048",
+        "KB-049"
+      ],
+      "oq_id": "OQ-email-content-008"
+    },
+    {
+      "question": "Boundary của Email library là gì: độ dài tối đa và việc cho trùng `Email name`, độ dài Subject line, số email tối đa của workspace, kích thước file HTML tối đa khi import?",
+      "why_it_matters": "Không có boundary để viết case validation; chỉ biết tên từ import / duplicate bị cắt 255 ký tự.",
+      "kb_refs": [
+        "KB-024",
+        "KB-028"
+      ],
+      "oq_id": "OQ-email-content-016"
+    },
+    {
+      "question": "Folder dạng list phẳng (Jira MTRO-115), Import từ Brevo (Jira MTRO-104), chia sẻ template cho người ngoài (Jira MTRO-119) và dialog Email details blocking (Jira MTRO-90) khi nào lên staging, spec hiện tại còn đúng không?",
+      "why_it_matters": "Các spec này chưa triển khai; không dùng làm expected cho tới khi deploy.",
+      "kb_refs": [
+        "KB-006",
+        "KB-019",
+        "KB-026",
+        "KB-045"
+      ],
+      "oq_id": "OQ-email-content-014"
+    },
+    {
+      "question": "Lỗi đổi màu nền content của email tạo qua Claude MCP / Import HTML (Jira MTRO-114, theo báo cáo từ production) có tái hiện trên staging không, và đã sửa chưa?",
+      "why_it_matters": "Lỗi đang mở; cần biết phạm vi môi trường để theo dõi regression.",
+      "kb_refs": [
+        "KB-027"
+      ],
+      "oq_id": "OQ-email-content-017"
+    },
+    {
+      "question": "Các luồng chỉ có từ bundle front-end (toast tạo / xoá / import / duplicate, empty state, Delete đơn lẻ, phân trang nhiều trang) hiển thị thế nào trên UI, và build staging nào đang được mô tả?",
+      "why_it_matters": "Không ghi build; nhiều chuỗi chưa đối chiếu UI nên không dùng làm expected.",
+      "kb_refs": [
+        "KB-013",
+        "KB-015",
+        "KB-017",
+        "KB-025",
+        "KB-030",
+        "KB-031"
+      ],
+      "oq_id": "OQ-email-content-003"
+    },
+    {
+      "question": "Route API cụ thể của Delete và bước GET / POST của Duplicate là gì (description Jira MTRO-36, MTRO-51, MTRO-58 đều trống)?",
+      "why_it_matters": "Không dựng được kiểm thử API cho các thao tác này.",
+      "kb_refs": [
+        "KB-030",
+        "KB-031"
+      ],
+      "oq_id": "OQ-email-content-005"
+    },
+    {
+      "question": "Ma trận quyền cho Email library theo role (Owner / Admin / role thứ 3, tên đang tranh chấp) là gì: role nào được tạo, sửa, xoá email, kể cả email do người khác tạo?",
+      "why_it_matters": "Tài liệu chỉ khảo sát bằng tài khoản Owner và gần như không gắn role cho hành vi nào; không viết được expected result phân quyền.",
+      "kb_refs": [
+        "KB-P-051",
+        "KB-P-052",
+        "KB-009"
+      ],
+      "oq_id": "OQ-email-content-001"
+    }
+  ],
+  "last_updated": {
+    "date": "2026-10-08",
+    "ccr_ref": "bootstrap"
+  },
+  "coverage_matrix": [
+    {
+      "feature_id": "email-library",
+      "layer": "portal",
+      "role": "Owner",
+      "state": "danh sách có dữ liệu (sort, cột, phân trang)",
+      "environment": "documented",
+      "covered": true,
+      "note": "Khảo sát staging 01/10/2026, QA lead chốt theo bản dựng"
+    },
+    {
+      "feature_id": "email-library",
+      "layer": "portal",
+      "role": "Owner",
+      "state": "thư viện rỗng / loading / lỗi tải",
+      "environment": "documented",
+      "covered": true,
+      "note": "Chỉ từ bundle, chưa đối chiếu UI"
+    },
+    {
+      "feature_id": "email-library",
+      "layer": "portal",
+      "role": "Owner",
+      "state": "tạo email mới + dialog Email details",
+      "environment": "documented",
+      "covered": true,
+      "note": "Staging 29/09; Cancel chưa kiểm; Preview text đang tranh chấp"
+    },
+    {
+      "feature_id": "email-library",
+      "layer": "portal",
+      "role": "Owner",
+      "state": "import HTML",
+      "environment": "documented",
+      "covered": true,
+      "note": "Chỉ chọn file trên staging; luồng hoàn tất từ bundle"
+    },
+    {
+      "feature_id": "email-library",
+      "layer": "portal",
+      "role": "Owner",
+      "state": "duplicate",
+      "environment": "documented",
+      "covered": true,
+      "note": "Tên bản sao quan sát staging; cơ chế từ bundle"
+    },
+    {
+      "feature_id": "email-library",
+      "layer": "portal",
+      "role": "Owner",
+      "state": "xoá một dòng / hàng loạt",
+      "environment": "documented",
+      "covered": true,
+      "note": "Hộp bulk thấy 29/09; Delete đơn lẻ chỉ từ bundle"
+    },
+    {
+      "feature_id": "email-library",
+      "layer": "portal",
+      "role": "Owner",
+      "state": "xoá email đang được dùng",
+      "environment": "documented",
+      "covered": true,
+      "note": "Quan sát staging; chưa có expected PO"
+    },
+    {
+      "feature_id": "email-library",
+      "layer": "portal",
+      "role": "Owner",
+      "state": "preview",
+      "environment": "documented",
+      "covered": true,
+      "note": "Khảo sát staging 01/10/2026"
+    },
+    {
+      "feature_id": "email-library",
+      "layer": "portal",
+      "role": "unspecified",
+      "state": "tên module sau đổi tên Templates",
+      "environment": "documented",
+      "covered": true,
+      "note": "Quyết định PO 30/09/2026, chưa deploy staging 01/10/2026"
+    },
+    {
+      "feature_id": "email-library",
+      "layer": "portal",
+      "role": "Admin",
+      "state": "any",
+      "environment": "documented",
+      "covered": false,
+      "note": "Chưa khảo sát"
+    },
+    {
+      "feature_id": "email-library",
+      "layer": "portal",
+      "role": "Member",
+      "state": "any",
+      "environment": "documented",
+      "covered": false,
+      "note": "Chưa khảo sát"
+    },
+    {
+      "feature_id": "email-library",
+      "layer": "api",
+      "role": "Claude MCP",
+      "state": "tạo email qua MCP",
+      "environment": "documented",
+      "covered": true,
+      "note": "Chỉ có báo cáo lỗi từ production (Jira MTRO-114)"
+    },
+    {
+      "feature_id": "email-library",
+      "layer": "api",
+      "role": "unspecified",
+      "state": "route Delete / Duplicate",
+      "environment": "documented",
+      "covered": false,
+      "note": "Route không được ghi"
+    },
+    {
+      "feature_id": "email-library",
+      "layer": "data",
+      "role": "unspecified",
+      "state": "email dùng chung giữa campaign Draft / Sent",
+      "environment": "documented",
+      "covered": true,
+      "note": "Chốt 25/08/2026, chưa có xác nhận PO/Dev"
+    },
+    {
+      "feature_id": "email-library",
+      "layer": "code",
+      "role": "unspecified",
+      "state": "any",
+      "environment": "documented",
+      "covered": false,
+      "note": "Không có nguồn mã"
+    }
+  ],
+  "profile_conflicts": [
+    {
+      "conflict_group": "CONF-MTRO-email-content-03",
+      "topic": "email-details-preview-text",
+      "resolution": "UNRESOLVED",
+      "sides": [
+        {
+          "kb_id": "KB-020",
+          "statement": "Theo Jira MTRO-90 (To Do, spec prototype), dialog Email details có thêm ô `Preview text` (optional); điểm này lệch quan sát staging và chưa được xác nhận."
+        },
+        {
+          "kb_id": "KB-021",
+          "statement": "Trên staging (khảo sát 29/09/2026), dialog Email details không có ô Preview text; preheader nằm ở tab `Settings` của editor. Quan sát này lệch spec Jira MTRO-90 và chưa được phân xử."
+        }
+      ],
+      "needs": "PO xác nhận dialog Email details có ô Preview text (theo Jira MTRO-90) hay giữ như bản dựng (preheader ở tab Settings).",
+      "kb_refs": [
+        "KB-020",
+        "KB-021"
+      ]
+    }
+  ],
+  "profile_relationships": [
+    {
+      "from": "email-library",
+      "to": "email-editor",
+      "relation": "OPENS",
+      "kb_refs": [
+        "KB-009",
+        "KB-016",
+        "KB-050"
+      ]
+    },
+    {
+      "from": "email-library",
+      "to": "saved-blocks",
+      "relation": "PARENT_MENU_OF",
+      "kb_refs": [
+        "KB-001",
+        "KB-100"
+      ]
+    },
+    {
+      "from": "email-library",
+      "to": "campaigns/campaign-wizard",
+      "relation": "CONSUMED_BY",
+      "kb_refs": [
+        "KB-046",
+        "KB-047",
+        "KB-048"
+      ]
+    },
+    {
+      "from": "email-library",
+      "to": "automations/automation-run-history",
+      "relation": "CONSUMED_BY",
+      "kb_refs": [
+        "KB-036"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,715 @@
+{
+  "feature_id": "password-reset",
+  "feature_key": "password-reset",
+  "name": "Quên mật khẩu và đặt lại mật khẩu",
+  "user_goal": "Người dùng quên mật khẩu (hoặc muốn đổi mật khẩu) yêu cầu link đặt lại qua email và đặt mật khẩu mới để đăng nhập lại.",
+  "stable_since_version": "v1",
+  "actors": [
+    {
+      "role": "visitor (chưa đăng nhập, quên mật khẩu)",
+      "permission_observed": "Mở /forgot-password; người đã đăng nhập mở trang này bị redirect về /.",
+      "kb_refs": [
+        "KB-081",
+        "KB-084"
+      ]
+    },
+    {
+      "role": "unspecified (người đã đăng nhập gửi link từ Account settings)",
+      "permission_observed": "Gửi link đặt lại từ Account settings; ghi chú QA cho rằng link dùng chung luồng Forgot / reset password, chưa có xác nhận.",
+      "kb_refs": [
+        "KB-105",
+        "KB-109"
+      ]
+    }
+  ],
+  "entry_points": [
+    {
+      "path": "Mailtro ID /forgot-password, từ link Forgot password? ở /login",
+      "precondition": "Chưa đăng nhập.",
+      "kb_refs": [
+        "KB-005",
+        "KB-081",
+        "KB-084"
+      ]
+    },
+    {
+      "path": "Link trong email: /reset-password?token=&email=",
+      "precondition": "Đã yêu cầu link đặt lại.",
+      "kb_refs": [
+        "KB-091"
+      ]
+    },
+    {
+      "path": "Trang link hết hạn, nút Request a new link sang /forgot-password",
+      "precondition": "Mở trang reset không có token hoặc token hết hạn.",
+      "kb_refs": [
+        "KB-096"
+      ]
+    },
+    {
+      "path": "App workspace /settings/account, khối Password, nút Send reset link",
+      "precondition": "Đã vào app workspace.",
+      "kb_refs": [
+        "KB-105",
+        "KB-109"
+      ]
+    }
+  ],
+  "capabilities": [
+    {
+      "name": "Yêu cầu link đặt lại mật khẩu",
+      "description": "Nhập Email ở /forgot-password, Send reset link gọi POST /api/auth/forgot-password kèm captcha_token; màn kế tiếp dùng câu trung tính không xác nhận email có tồn tại. Toàn bộ là hiện trạng staging, không có đặc tả PO/Jira (Jira MTRO-52 description trống).",
+      "kb_refs": [
+        "KB-081",
+        "KB-082",
+        "KB-083",
+        "KB-085",
+        "KB-086",
+        "KB-090",
+        "KB-P-066"
+      ]
+    },
+    {
+      "name": "Gửi lại link và giới hạn",
+      "description": "Nút Send it again có cooldown 60 giây; quá nhiều yêu cầu bị 429; server có cooldown khoảng 60 giây mỗi tài khoản (vẫn trả 200 nhưng không gửi mail).",
+      "kb_refs": [
+        "KB-087",
+        "KB-088",
+        "KB-089",
+        "KB-P-071"
+      ]
+    },
+    {
+      "name": "Đặt mật khẩu mới qua link",
+      "description": "Trang Choose a new password với New password và Confirm new password; không khớp thì báo \"Both passwords must match.\"; thành công thì toast \"Password updated. Sign in with your new password.\" và về /login.",
+      "kb_refs": [
+        "KB-091",
+        "KB-092",
+        "KB-093",
+        "KB-094",
+        "KB-095",
+        "KB-101"
+      ]
+    },
+    {
+      "name": "Xử lý link không hợp lệ hoặc hết hạn",
+      "description": "Không token hoặc token hết hạn thì hiện \"This link is no longer valid\" với nút Request a new link; token giả vẫn hiện form, trang không chặn ngay khi tải. Theo ghi chú QA, nội dung script trong tham số email được escape (không ghi ngày chạy / build).",
+      "kb_refs": [
+        "KB-096",
+        "KB-097",
+        "KB-100"
+      ]
+    }
+  ],
+  "state_transitions": [
+    {
+      "from": "/login",
+      "to": "/forgot-password",
+      "trigger": "Bấm Forgot password?",
+      "condition": "Chưa đăng nhập",
+      "kb_refs": [
+        "KB-005",
+        "KB-081"
+      ]
+    },
+    {
+      "from": "đã đăng nhập",
+      "to": "/",
+      "trigger": "Mở /forgot-password",
+      "condition": "Quan sát staging",
+      "kb_refs": [
+        "KB-084"
+      ]
+    },
+    {
+      "from": "/forgot-password, ô Email rỗng (nút disabled)",
+      "to": "Check your email",
+      "trigger": "Nhập email, bấm Send reset link",
+      "condition": "Gửi kèm captcha_token",
+      "kb_refs": [
+        "KB-082",
+        "KB-083",
+        "KB-085"
+      ]
+    },
+    {
+      "from": "Check your email",
+      "to": "Check your email, nút đếm ngược",
+      "trigger": "Bấm Send it again",
+      "condition": "Cooldown 60 giây; thành công có toast Reset link sent.",
+      "kb_refs": [
+        "KB-087"
+      ]
+    },
+    {
+      "from": "/forgot-password hoặc Check your email",
+      "to": "báo bị rate limit (429)",
+      "trigger": "Gửi quá nhiều yêu cầu",
+      "condition": "Ngưỡng không được nêu",
+      "kb_refs": [
+        "KB-088"
+      ]
+    },
+    {
+      "from": "mở link reset",
+      "to": "Choose a new password",
+      "trigger": "Mở /reset-password?token=&email=",
+      "condition": "Kể cả token giả vẫn hiện form",
+      "kb_refs": [
+        "KB-091",
+        "KB-097"
+      ]
+    },
+    {
+      "from": "mở link reset",
+      "to": "This link is no longer valid",
+      "trigger": "Mở trang không có token hoặc token hết hạn",
+      "condition": "Nút Request a new link sang /forgot-password",
+      "kb_refs": [
+        "KB-096"
+      ]
+    },
+    {
+      "from": "Choose a new password",
+      "to": "/login với toast Password updated",
+      "trigger": "Bấm Reset password với mật khẩu hợp lệ",
+      "condition": "POST /api/auth/reset-password thành công",
+      "kb_refs": [
+        "KB-094"
+      ]
+    },
+    {
+      "from": "Choose a new password",
+      "to": "Choose a new password, báo lỗi không khớp",
+      "trigger": "Confirm khác New password",
+      "condition": "Quan sát staging",
+      "kb_refs": [
+        "KB-092"
+      ]
+    }
+  ],
+  "confirmed_rules": [],
+  "observed_behavior": [
+    {
+      "statement": "Theo ghi chú QA trong danh sách lỗi đã biết (case TC-RESET-042 của repo automation QA ghi pass; không ghi ngày chạy và build), nội dung XSS trong tham số email của URL reset password được escape trên staging.",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "confidence": "LOW",
+      "status": "CURRENT_STATE",
+      "kb_refs": [
+        "KB-100"
+      ]
+    },
+    {
+      "statement": "Trên staging (khảo sát 29/09/2026), /forgot-password có tiêu đề \"Forgot your password?\" và phụ đề \"Enter your email and we'll send you a reset link.\", có link \"Back to sign in\" quay về /login.",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "confidence": "MEDIUM",
+      "status": "CURRENT_STATE",
+      "kb_refs": [
+        "KB-081"
+      ]
+    },
+    {
+      "statement": "Trên staging (khảo sát 29/09/2026), nút \"Send reset link\" ở /forgot-password bị disabled khi ô Email rỗng.",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "confidence": "MEDIUM",
+      "status": "CURRENT_STATE",
+      "kb_refs": [
+        "KB-082"
+      ]
+    },
+    {
+      "statement": "Trên staging (khảo sát 29/09/2026), \"Send reset link\" gọi POST /api/auth/forgot-password kèm captcha_token.",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "confidence": "MEDIUM",
+      "status": "CURRENT_STATE",
+      "kb_refs": [
+        "KB-083"
+      ]
+    },
+    {
+      "statement": "Trên staging (khảo sát 29/09/2026), người đã đăng nhập mở /forgot-password thì bị redirect về /.",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "confidence": "LOW",
+      "status": "CURRENT_STATE",
+      "kb_refs": [
+        "KB-084"
+      ]
+    },
+    {
+      "statement": "Trên staging (khảo sát 23/09 và 29/09/2026), sau khi gửi yêu cầu reset, màn kế tiếp có tiêu đề \"Check your email\", dòng \"The link expires in 60 minutes.\" (chuỗi UI; thời hạn thật của link chưa được kiểm) và dòng \"Didn't get it? Check your spam folder.\".",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "confidence": "MEDIUM",
+      "status": "CURRENT_STATE",
+      "kb_refs": [
+        "KB-085"
+      ]
+    },
+    {
+      "statement": "Trên staging (khảo sát 23/09 và 29/09/2026), màn sau khi gửi yêu cầu reset dùng câu trung tính \"If an account exists for {email}, we've sent a link to reset its password.\", không xác nhận email có tồn tại hay không.",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "confidence": "MEDIUM",
+      "status": "CURRENT_STATE",
+      "kb_refs": [
+        "KB-086"
+      ]
+    },
+    {
+      "statement": "Trên staging (khảo sát 23/09 và 29/09/2026), nút \"Send it again\" có cooldown 60 giây (hằng 60 trong bundle), trong thời gian đó nút hiện \"Send it again in {seconds}s\"; gửi lại thành công hiện toast \"Reset link sent.\".",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "confidence": "MEDIUM",
+      "status": "CURRENT_STATE",
+      "kb_refs": [
+        "KB-087"
+      ]
+    },
+    {
+      "statement": "Trên staging (khảo sát 23/09 và 29/09/2026), yêu cầu quên mật khẩu bị rate limit (429) thì hiện \"Too many attempts. Please wait a minute and try again.\"; tài liệu không nêu ngưỡng.",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "confidence": "MEDIUM",
+      "status": "CURRENT_STATE",
+      "kb_refs": [
+        "KB-088"
+      ]
+    },
+    {
+      "statement": "Theo test-run 26/08/2026 trên staging, server có cooldown khoảng 60 giây cho mỗi tài khoản: request quên mật khẩu trong cooldown vẫn trả 200 nhưng không gửi mail (con số 60 giây là xấp xỉ).",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "confidence": "LOW",
+      "status": "CURRENT_STATE",
+      "kb_refs": [
+        "KB-089"
+      ]
+    },
+    {
+      "statement": "Theo test-run 26/08/2026 trên staging, client chuyển email về chữ thường trước khi gửi yêu cầu quên mật khẩu.",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "confidence": "LOW",
+      "status": "CURRENT_STATE",
+      "kb_refs": [
+        "KB-090"
+      ]
+    },
+    {
+      "statement": "Trên staging (khảo sát 29/09/2026), /reset-password?token=&email= có tiêu đề \"Choose a new password\" và dòng \"Enter a new password for {email}.\", field \"New password\" có placeholder \"At least 8 characters\" (placeholder chỉ là chữ gợi ý, không đủ căn cứ cho rule độ dài).",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "confidence": "MEDIUM",
+      "status": "CURRENT_STATE",
+      "kb_refs": [
+        "KB-091"
+      ]
+    },
+    {
+      "statement": "Trên staging (khảo sát 23/09 và 29/09/2026), nếu \"Confirm new password\" khác \"New password\" thì hiện lỗi \"Both passwords must match.\".",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "confidence": "MEDIUM",
+      "status": "CURRENT_STATE",
+      "kb_refs": [
+        "KB-092"
+      ]
+    },
+    {
+      "statement": "Trên staging (khảo sát 29/09/2026, không submit), nút \"Reset password\" bị disabled khi các ô còn rỗng.",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "confidence": "LOW",
+      "status": "CURRENT_STATE",
+      "kb_refs": [
+        "KB-093"
+      ]
+    },
+    {
+      "statement": "Trên staging (khảo sát 23/09/2026, test-run 26/08/2026), nút \"Reset password\" gửi POST /api/auth/reset-password; đặt lại thành công thì hiện toast \"Password updated. Sign in with your new password.\" rồi chuyển về /login.",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "confidence": "MEDIUM",
+      "status": "CURRENT_STATE",
+      "kb_refs": [
+        "KB-094"
+      ]
+    },
+    {
+      "statement": "Theo khảo sát staging (29/09/2026) và test-run 26/08/2026, khi đặt lại mật khẩu việc validate mật khẩu chạy trước việc kiểm token (câu không ghi ngày riêng).",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "confidence": "LOW",
+      "status": "CURRENT_STATE",
+      "kb_refs": [
+        "KB-095"
+      ]
+    },
+    {
+      "statement": "Trên staging (khảo sát 29/09/2026), mở trang reset không có token hoặc token đã hết hạn thì hiện tiêu đề \"This link is no longer valid\" kèm \"This reset link has expired or has already been used. Request a new one to continue.\"; nút \"Request a new link\" dẫn tới /forgot-password.",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "confidence": "MEDIUM",
+      "status": "CURRENT_STATE",
+      "kb_refs": [
+        "KB-096"
+      ]
+    },
+    {
+      "statement": "Trên staging (thử 29/09/2026 bằng token giả, không submit), mở /reset-password?token=…&email=… với token giả vẫn hiện form \"Choose a new password\": trang không chặn ngay khi tải dù token không hợp lệ.",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "confidence": "LOW",
+      "status": "CURRENT_STATE",
+      "kb_refs": [
+        "KB-097"
+      ]
+    },
+    {
+      "statement": "Theo quan sát QA trên staging ngày 26/08/2026 ở luồng reset (QA ghi là áp dụng chung, chưa có rule PO/Dev), mật khẩu phải có ít nhất 8 ký tự, có chữ cái và không nằm trong danh sách mật khẩu bị rò rỉ (Pwned).",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "confidence": "LOW",
+      "status": "CURRENT_STATE",
+      "kb_refs": [
+        "KB-101"
+      ]
+    },
+    {
+      "statement": "Trên staging (quan sát 23/09, 29/09 và 01/10/2026), captcha Cloudflare Turnstile chỉ có ở `/signup` và `/forgot-password` của Mailtro ID.",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "confidence": "MEDIUM",
+      "status": "CURRENT_STATE",
+      "kb_refs": [
+        "KB-P-066"
+      ]
+    }
+  ],
+  "observed_validations": [],
+  "permissions": [
+    {
+      "statement": "Quên mật khẩu trên staging chỉ dành cho người chưa đăng nhập (người đã đăng nhập bị redirect); người đã đăng nhập có Send reset link ở Account settings, được ghi chú là cùng luồng nhưng chưa xác nhận.",
+      "kb_refs": [
+        "KB-084",
+        "KB-109"
+      ]
+    }
+  ],
+  "surface_mapping": {
+    "portal": [
+      {
+        "item": "Mailtro ID /forgot-password: Forgot your password?, ô Email, Send reset link, Back to sign in; có captcha",
+        "kb_refs": [
+          "KB-081",
+          "KB-082",
+          "KB-P-066"
+        ]
+      },
+      {
+        "item": "Màn Check your email: câu trung tính, \"The link expires in 60 minutes.\", Send it again có cooldown",
+        "kb_refs": [
+          "KB-085",
+          "KB-086",
+          "KB-087"
+        ]
+      },
+      {
+        "item": "Mailtro ID /reset-password: Choose a new password, New password, Confirm new password, Reset password",
+        "kb_refs": [
+          "KB-091",
+          "KB-092",
+          "KB-093"
+        ]
+      },
+      {
+        "item": "Trang This link is no longer valid với Request a new link",
+        "kb_refs": [
+          "KB-096"
+        ]
+      },
+      {
+        "item": "App workspace /settings/account: Send reset link",
+        "kb_refs": [
+          "KB-105",
+          "KB-109"
+        ]
+      }
+    ],
+    "storefront": [],
+    "api": [
+      {
+        "item": "POST /api/auth/forgot-password kèm captcha_token",
+        "kb_refs": [
+          "KB-083"
+        ]
+      },
+      {
+        "item": "POST /api/auth/reset-password; validate mật khẩu chạy trước kiểm token",
+        "kb_refs": [
+          "KB-094",
+          "KB-095"
+        ]
+      },
+      {
+        "item": "422 \"The password field confirmation does not match.\" khi Confirm trống",
+        "kb_refs": [
+          "KB-098"
+        ]
+      }
+    ],
+    "data": [
+      {
+        "item": "Email được chuyển chữ thường ở client trước khi gửi yêu cầu",
+        "kb_refs": [
+          "KB-090"
+        ]
+      },
+      {
+        "item": "Cooldown phía server khoảng 60 giây mỗi tài khoản",
+        "kb_refs": [
+          "KB-089"
+        ]
+      }
+    ],
+    "code": []
+  },
+  "dependencies": [
+    {
+      "target": "auth / sign-in-and-workspace-selection",
+      "relation": "entry_from / returns_to",
+      "note": "Vào từ link Forgot password? ở /login và quay về /login sau khi đặt lại.",
+      "kb_refs": [
+        "KB-005",
+        "KB-094"
+      ]
+    },
+    {
+      "target": "auth / account-security-settings",
+      "relation": "reused_by (chưa xác nhận)",
+      "note": "Send reset link ở Account settings được ghi chú QA là dùng chung luồng này; chưa có AC hay xác nhận PO/Dev.",
+      "kb_refs": [
+        "KB-109",
+        "KB-105"
+      ]
+    },
+    {
+      "target": "auth / signup-and-workspace-creation",
+      "relation": "see_also",
+      "note": "Captcha theo Jira MTRO-92 áp cho cả form đăng ký và form quên mật khẩu.",
+      "kb_refs": [
+        "KB-059"
+      ]
+    }
+  ],
+  "risks": [
+    {
+      "statement": "Trên staging (TC-MTRO-117, task Testlane MTRO-005, open 26/08/2026), khi ô \"Confirm new password\" trống người dùng vẫn bấm được \"Reset password\" (client không chặn) và server trả 422 \"The password field confirmation does not match.\". Đây là lỗi đã biết, không phải hành vi đúng; khảo sát 29/09/2026 ghi nút disabled khi các ô còn rỗng nhưng không ghi đã kiểm lại trường hợp chỉ ô Confirm trống.",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "confidence": "LOW",
+      "status": "KNOWN_DEFECT",
+      "kb_refs": [
+        "KB-098"
+      ]
+    },
+    {
+      "statement": "Trên staging (TC-MTRO-137, task Testlane MTRO-005, open 26/08/2026), giá trị tham số email trên URL reset password được in nguyên văn lên trang \"Choose a new password\", nên kẻ xấu chèn được chữ tuỳ ý trên domain Mailtro (content injection / phishing). Đây là lỗi đã biết, không phải hành vi đúng.",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "confidence": "LOW",
+      "status": "KNOWN_DEFECT",
+      "kb_refs": [
+        "KB-099"
+      ]
+    },
+    {
+      "statement": "Theo ghi chú cấu hình test API của repo automation QA (QA KB Mailtro \"Environments\" v1), forgot password và reset password dùng chung một bucket rate limit của endpoint auth. Chưa có nguồn PO/Dev cho điểm này.",
+      "knowledge_kind": "INFERRED",
+      "confidence": "LOW",
+      "kb_refs": [
+        "KB-P-071"
+      ]
+    },
+    {
+      "statement": "Toàn bộ hành vi quên / đặt lại mật khẩu là hiện trạng staging và test-run; feature không có item nào đã xác nhận bởi PO/Dev/Jira AC hay test case có ngày chạy, nên mọi check chỉ có baseline hiện trạng.",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "confidence": "LOW",
+      "status": "CURRENT_STATE",
+      "kb_refs": [
+        "KB-085",
+        "KB-094",
+        "KB-096",
+        "KB-100"
+      ]
+    }
+  ],
+  "freshness": {
+    "observed_at": "2026-09-29",
+    "basis": "Test-run 26/08/2026; khảo sát staging 23/09 và 29/09/2026"
+  },
+  "unknown_areas": [
+    {
+      "question": "Thời hạn thật của link đặt lại là bao lâu (UI ghi 60 phút) và link có chỉ dùng được một lần không?",
+      "why_it_matters": "Chuỗi UI chưa được kiểm; trang link hết hạn ghi \"expired or has already been used\" nhưng chưa có rule.",
+      "kb_refs": [
+        "KB-085",
+        "KB-096"
+      ],
+      "oq_id": "OQ-auth-019"
+    },
+    {
+      "question": "Khi tham số email trên URL reset bị sửa nhưng token đúng, server đổi mật khẩu của tài khoản nào hoặc có từ chối không?",
+      "why_it_matters": "Case bảo mật quan trọng chưa được test (không được đổi mật khẩu tài khoản QA dùng chung); email trên URL còn bị in nguyên văn lên trang.",
+      "kb_refs": [
+        "KB-091",
+        "KB-099"
+      ],
+      "oq_id": "OQ-auth-019"
+    },
+    {
+      "question": "Ô Confirm new password trống thì client có phải chặn nút Reset password không, và lỗi này đã được sửa chưa?",
+      "why_it_matters": "Lỗi mở từ 26/08/2026; khảo sát 29/09/2026 không kiểm lại đúng trường hợp chỉ Confirm trống.",
+      "kb_refs": [
+        "KB-093",
+        "KB-098"
+      ],
+      "oq_id": "OQ-auth-018"
+    },
+    {
+      "question": "Chính sách mật khẩu chính thức khi đặt lại là gì (tối thiểu 8 ký tự, có chữ cái, chặn mật khẩu bị rò rỉ) và thông báo lỗi cho từng điều kiện?",
+      "why_it_matters": "Chỉ có quan sát QA, chưa có rule PO/Dev; placeholder không đủ làm căn cứ.",
+      "kb_refs": [
+        "KB-091",
+        "KB-101"
+      ],
+      "oq_id": "OQ-auth-041"
+    },
+    {
+      "question": "Ngưỡng rate limit của quên / đặt lại mật khẩu là bao nhiêu và có dùng chung bucket với các endpoint auth khác không?",
+      "why_it_matters": "Chỉ biết có 429 và một ghi chú cấu hình test chưa có nguồn PO/Dev.",
+      "kb_refs": [
+        "KB-088",
+        "KB-P-070",
+        "KB-P-071"
+      ],
+      "oq_id": "OQ-auth-033"
+    },
+    {
+      "question": "Sau khi đặt lại mật khẩu thành công, các phiên đang mở ở nơi khác có bị huỷ không, và 2FA vẫn được yêu cầu ở lần đăng nhập kế tiếp không?",
+      "why_it_matters": "Tài liệu chỉ mô tả toast và chuyển về /login; hậu quả với phiên và 2FA không được ghi.",
+      "kb_refs": [
+        "KB-094"
+      ],
+      "oq_id": "OQ-auth-032"
+    },
+    {
+      "question": "Việc escape nội dung script trong tham số email của URL reset đã được kiểm trên bản dựng nào, ngày nào, và đó có phải yêu cầu bảo mật đã chốt không?",
+      "why_it_matters": "Chỉ có ghi chú QA rằng một case automation pass, không ghi ngày chạy và build; chưa đủ làm expected.",
+      "kb_refs": [
+        "KB-100",
+        "KB-099"
+      ],
+      "oq_id": "OQ-auth-018"
+    },
+    {
+      "question": "Email đặt lại gồm nội dung gì, và server xử lý thế nào khi captcha_token thiếu hoặc sai ở /forgot-password?",
+      "why_it_matters": "Nội dung email và nhánh captcha phía server chưa được khảo sát.",
+      "kb_refs": [
+        "KB-083",
+        "KB-059"
+      ],
+      "oq_id": "OQ-auth-042"
+    }
+  ],
+  "last_updated": {
+    "date": "2026-10-08",
+    "ccr_ref": "bootstrap"
+  },
+  "coverage_matrix": [
+    {
+      "feature_id": "password-reset",
+      "layer": "auth",
+      "role": "visitor",
+      "state": "yêu cầu link đặt lại",
+      "environment": "documented",
+      "covered": true,
+      "note": "Chỉ hiện trạng staging"
+    },
+    {
+      "feature_id": "password-reset",
+      "layer": "auth",
+      "role": "visitor",
+      "state": "gửi lại / rate limit",
+      "environment": "documented",
+      "covered": true,
+      "note": "Hiện trạng staging; ngưỡng chưa có"
+    },
+    {
+      "feature_id": "password-reset",
+      "layer": "auth",
+      "role": "visitor",
+      "state": "đặt mật khẩu mới hợp lệ",
+      "environment": "documented",
+      "covered": true,
+      "note": "Hiện trạng staging"
+    },
+    {
+      "feature_id": "password-reset",
+      "layer": "auth",
+      "role": "visitor",
+      "state": "link hết hạn / không token",
+      "environment": "documented",
+      "covered": true,
+      "note": "Hiện trạng staging; thời hạn thật chưa kiểm"
+    },
+    {
+      "feature_id": "password-reset",
+      "layer": "auth",
+      "role": "visitor",
+      "state": "tham số email bị sửa / có script",
+      "environment": "documented",
+      "covered": true,
+      "note": "Escape script chỉ có ghi chú QA không ngày; sửa email + token đúng chưa test"
+    },
+    {
+      "feature_id": "password-reset",
+      "layer": "auth",
+      "role": "unspecified",
+      "state": "đã đăng nhập mở /forgot-password",
+      "environment": "documented",
+      "covered": true,
+      "note": "Hiện trạng staging"
+    },
+    {
+      "feature_id": "password-reset",
+      "layer": "portal",
+      "role": "unspecified",
+      "state": "gửi link từ Account settings",
+      "environment": "documented",
+      "covered": true,
+      "note": "Ghi chú QA (INFERRED) dùng chung luồng; chưa bấm thật"
+    },
+    {
+      "feature_id": "password-reset",
+      "layer": "api",
+      "role": "visitor",
+      "state": "POST forgot / reset",
+      "environment": "documented",
+      "covered": true,
+      "note": "Hiện trạng staging"
+    },
+    {
+      "feature_id": "password-reset",
+      "layer": "code",
+      "role": "unspecified",
+      "state": "any",
+      "environment": "documented",
+      "covered": false,
+      "note": "Không có nguồn mã"
+    }
+  ],
+  "profile_conflicts": [],
+  "profile_relationships": [
+    {
+      "from": "password-reset",
+      "to": "sign-in-and-workspace-selection",
+      "relation": "RETURNS_TO",
+      "kb_refs": [
+        "KB-005",
+        "KB-094"
+      ]
+    },
+    {
+      "from": "password-reset",
+      "to": "account-security-settings",
+      "relation": "REUSED_BY",
+      "kb_refs": [
+        "KB-109"
+      ]
+    }
+  ]
+}

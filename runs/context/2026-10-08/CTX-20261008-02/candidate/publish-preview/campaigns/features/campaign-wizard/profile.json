@@ -1,0 +1,1290 @@
+{
+  "feature_id": "campaign-wizard",
+  "feature_key": "campaign-wizard",
+  "name": "Soạn campaign qua wizard 4 bước (Campaign details → Sender → Recipients → Contents)",
+  "user_goal": "Người dùng tạo hoặc sửa bản nháp campaign: đặt tên và subject, khai báo người gửi, chọn đúng một segment người nhận, gắn email nội dung, rồi lưu thủ công mà không mất dữ liệu để campaign đủ điều kiện gửi.",
+  "stable_since_version": "v1",
+  "actors": [
+    {
+      "role": "unspecified (người dùng workspace thao tác trên Campaigns)",
+      "permission_observed": "Tài liệu Campaigns không gán role cho bất kỳ thao tác nào. Mô hình role chung có Owner, Admin, một role thứ 3 (UI staging gọi là Member, tên chính thức đang tranh chấp) và custom role; ma trận quyền chi tiết chưa chốt. Router của app không khai báo phân quyền theo role nên mọi chặn quyền phải nằm ở API (suy luận từ bundle). Hiện trạng staging chỉ được khảo sát bằng Owner.",
+      "kb_refs": [
+        "KB-P-051",
+        "KB-P-052",
+        "KB-P-036"
+      ]
+    }
+  ],
+  "entry_points": [
+    {
+      "path": "Nút `New campaign` ở danh sách → `/campaigns/new/details` (builder rỗng, chưa tạo campaign tới khi Save)",
+      "precondition": "Đã đăng nhập app workspace.",
+      "kb_refs": [
+        "KB-002",
+        "KB-040"
+      ]
+    },
+    {
+      "path": "Click dòng campaign Draft ở danh sách → `/campaigns/:id/details`",
+      "precondition": "Campaign ở status Draft.",
+      "kb_refs": [
+        "KB-016",
+        "KB-042"
+      ]
+    },
+    {
+      "path": "Duplicate ở danh sách → bước `/content` của bản sao",
+      "precondition": "Có campaign để nhân bản.",
+      "kb_refs": [
+        "KB-020"
+      ]
+    },
+    {
+      "path": "Link từng bước trên stepper `Campaign steps` (`/details`, `/sender`, `/recipients`, `/content`)",
+      "precondition": "Đang ở trong wizard.",
+      "kb_refs": [
+        "KB-038",
+        "KB-042"
+      ]
+    }
+  ],
+  "capabilities": [
+    {
+      "name": "Tạo bản nháp và lưu thủ công",
+      "description": "Builder mới chưa gọi API tạo campaign cho tới khi Save; sau Save URL đổi sang `/campaigns/:id/<bước>`. Không có auto-save; nút Save chỉ hiện khi có thay đổi (staging). Save nuốt lỗi 422 và rời wizard mất thay đổi không cảnh báo là lỗi đã biết.",
+      "kb_refs": [
+        "KB-040",
+        "KB-197",
+        "KB-041",
+        "KB-042",
+        "KB-043",
+        "KB-044",
+        "KB-045",
+        "KB-046",
+        "KB-091",
+        "KB-092",
+        "KB-093"
+      ]
+    },
+    {
+      "name": "Điều hướng stepper và điều kiện hoàn thành bước",
+      "description": "Stepper 4 bước với trạng thái done/active/upcoming; bước chỉ done khi đủ dữ liệu bắt buộc; theo AC nút Send bị disabled cho tới khi campaign đủ điều kiện gửi (trên staging `Preview & test` cũng disabled khi draft chưa đủ 4 bước). Nút Next không validate field bắt buộc là lỗi đã biết.",
+      "kb_refs": [
+        "KB-037",
+        "KB-038",
+        "KB-196",
+        "KB-039",
+        "KB-047",
+        "KB-198",
+        "KB-048",
+        "KB-054",
+        "KB-055",
+        "KB-056"
+      ]
+    },
+    {
+      "name": "Bước 1 Campaign details",
+      "description": "`Campaign name *` và `Subject line *` bắt buộc, subject tối đa 255 ký tự; `Preview text` tuỳ chọn; không có field Folder.",
+      "kb_refs": [
+        "KB-049",
+        "KB-050",
+        "KB-051",
+        "KB-052",
+        "KB-053"
+      ]
+    },
+    {
+      "name": "Bước 2 Sender",
+      "description": "From name, From email, Reply-to (tuỳ chọn, mặc định bằng From email). Cảnh báo `Sending needs a verified domain` vẫn hiện trong khi gửi thật đi qua host dùng chung; sender bị đổi âm thầm mà UI vẫn hiện địa chỉ đã gõ là lỗi đã biết.",
+      "kb_refs": [
+        "KB-057",
+        "KB-199",
+        "KB-058",
+        "KB-200",
+        "KB-059",
+        "KB-060",
+        "KB-061"
+      ]
+    },
+    {
+      "name": "Bước 3 Recipients: chọn đúng một segment",
+      "description": "Heading `Send to`, picker single-select chỉ hiện tên segment, empty state khi chưa có segment, dòng `N estimated recipients`; người nhận chỉ gồm contact Subscribed. Picker không phân biệt segment trùng tên là lỗi đã biết.",
+      "kb_refs": [
+        "KB-062",
+        "KB-063",
+        "KB-064",
+        "KB-065",
+        "KB-066",
+        "KB-067",
+        "KB-068",
+        "KB-069",
+        "KB-070"
+      ]
+    },
+    {
+      "name": "Gắn preferences page cho campaign",
+      "description": "Khối `Email preferences` ở bước Recipients chọn preferences page cho link unsubscribe của campaign; không có ô tick lựa chọn; cách loại người đã bỏ tick một lựa chọn chưa chốt.",
+      "kb_refs": [
+        "KB-071",
+        "KB-072",
+        "KB-073",
+        "KB-074",
+        "KB-075"
+      ]
+    },
+    {
+      "name": "Bước 4 Contents: chọn hoặc tạo email",
+      "description": "Chọn email có sẵn (picker nạp tối đa 50 email sửa gần nhất) hoặc tạo mới (from scratch / Duplicate design); khi đã có email, bước Contents hiện preview kèm Subject / Preheader / From; đổi email chỉ qua `Reset design`; PO đã quyết đổi nhãn nút sang Templates nhưng staging 01/10 chưa deploy. Quan hệ copy-on-write giữa các Draft dùng chung email thuộc email-content.",
+      "kb_refs": [
+        "KB-076",
+        "KB-077",
+        "KB-078",
+        "KB-079",
+        "KB-080",
+        "KB-081",
+        "KB-082",
+        "KB-083",
+        "KB-084",
+        "KB-085",
+        "KB-201",
+        "KB-086"
+      ]
+    },
+    {
+      "name": "Merge tag trong nội dung campaign",
+      "description": "Cú pháp merge tag đang mâu thuẫn (hai ngoặc vs một ngoặc); iframe ở bước Contents hiện chuỗi merge tag thô. Quy tắc không migrate nội dung một ngoặc thuộc email-content / merge-tags.",
+      "kb_refs": [
+        "KB-087",
+        "KB-088"
+      ]
+    }
+  ],
+  "state_transitions": [
+    {
+      "from": "builder mới chưa lưu (`/campaigns/new/*`)",
+      "to": "campaign Draft đã lưu (`/campaigns/:id/<bước>`)",
+      "trigger": "Bấm `Save`",
+      "condition": "Chưa gọi API tạo campaign trước khi Save",
+      "knowledge_kind": "CONFIRMED_EXPECTED",
+      "kb_refs": [
+        "KB-040",
+        "KB-041"
+      ]
+    },
+    {
+      "from": "bước upcoming / active",
+      "to": "bước done",
+      "trigger": "Nhập đủ dữ liệu bắt buộc của bước",
+      "condition": "B1: name + subject; B2: danh tính người gửi; B3: đã chọn segment; B4: đã chọn email",
+      "knowledge_kind": "CONFIRMED_EXPECTED",
+      "kb_refs": [
+        "KB-039"
+      ]
+    },
+    {
+      "from": "Draft chưa đủ điều kiện (Send / Preview & test disabled)",
+      "to": "Draft đủ điều kiện (Send / Preview & test bật ở mọi bước)",
+      "trigger": "Hoàn thành đủ 4 bước",
+      "condition": "`canSendCampaign` = true; trên staging Preview & test cũng disabled tới khi đủ 4 bước",
+      "knowledge_kind": "CONFIRMED_EXPECTED",
+      "kb_refs": [
+        "KB-047",
+        "KB-198"
+      ]
+    },
+    {
+      "from": "Contents chưa có design",
+      "to": "Contents đã có design",
+      "trigger": "Chọn email có sẵn hoặc tạo mới (Create from scratch / Duplicate design)",
+      "condition": "Bản sao từ Duplicate design có tên `{name} (copy)`",
+      "knowledge_kind": "CONFIRMED_EXPECTED",
+      "kb_refs": [
+        "KB-084",
+        "KB-085"
+      ]
+    },
+    {
+      "from": "Contents đã có design",
+      "to": "Contents chưa có design",
+      "trigger": "`Design actions` → `Reset design`",
+      "condition": "Đổi email chỉ có thể qua Reset design",
+      "knowledge_kind": "CONFIRMED_EXPECTED",
+      "kb_refs": [
+        "KB-086"
+      ]
+    },
+    {
+      "from": "wizard có thay đổi chưa lưu",
+      "to": "thay đổi bị mất, không cảnh báo",
+      "trigger": "Bấm `Manage sending domains` hoặc đổi menu",
+      "condition": "Lỗi đã biết BUG-WIZ-02, không phải hành vi đúng",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "status": "KNOWN_DEFECT",
+      "kb_refs": [
+        "KB-093"
+      ]
+    }
+  ],
+  "confirmed_rules": [
+    {
+      "statement": "Theo Jira MTRO-11, MTRO-8, MTRO-15 (tóm tắt trong QA business rule Mailtro, cập nhật 07/08/2026), tạo và gửi campaign cần có sẵn một segment có contact (từ Contacts) và ít nhất 1 template / email (từ thư viện email).",
+      "knowledge_kind": "CONFIRMED_EXPECTED",
+      "confidence": "MEDIUM",
+      "kb_refs": [
+        "KB-037"
+      ]
+    },
+    {
+      "statement": "Theo Jira MTRO-29 AC §Stepper (tóm tắt trong QA business rule Mailtro, cập nhật 15/09/2026), wizard campaign có stepper `Campaign steps` bên trái 4 bước `Campaign details`, `Sender`, `Recipients`, `Contents`, mỗi bước có trạng thái done / active / upcoming; staging 01/10/2026 khớp.",
+      "knowledge_kind": "CONFIRMED_EXPECTED",
+      "confidence": "MEDIUM",
+      "kb_refs": [
+        "KB-038"
+      ]
+    },
+    {
+      "statement": "Theo Jira MTRO-29 AC §Stepper (tóm tắt trong QA business rule Mailtro, cập nhật 15/09/2026), một bước chỉ được tính done khi đủ dữ liệu bắt buộc: bước 1 Campaign details có Campaign name và Subject line; bước 2 Sender đã cấu hình danh tính người gửi; bước 3 Recipients đã chọn segment; bước 4 Contents đã chọn template / email.",
+      "knowledge_kind": "CONFIRMED_EXPECTED",
+      "confidence": "MEDIUM",
+      "kb_refs": [
+        "KB-039"
+      ]
+    },
+    {
+      "statement": "Theo Jira MTRO-29 AC §Entry points (tóm tắt trong QA business rule Mailtro, cập nhật 07/10/2026), \"New campaign\" ở danh sách mở `/campaigns/new/details` với builder rỗng ở bước 1 và chưa gọi API tạo campaign cho tới khi bấm `Save`; staging 01/10/2026 khớp.",
+      "knowledge_kind": "CONFIRMED_EXPECTED",
+      "confidence": "MEDIUM",
+      "kb_refs": [
+        "KB-040"
+      ]
+    },
+    {
+      "statement": "Theo Jira MTRO-29 AC §Entry points (tóm tắt trong QA business rule Mailtro, cập nhật 07/10/2026), sau khi Save, URL của campaign đổi thành `/campaigns/:id/<bước>`; staging 01/10/2026 khớp.",
+      "knowledge_kind": "CONFIRMED_EXPECTED",
+      "confidence": "MEDIUM",
+      "kb_refs": [
+        "KB-041"
+      ]
+    },
+    {
+      "statement": "Theo Jira MTRO-29 AC §Header (tóm tắt trong QA business rule Mailtro, cập nhật 15/09/2026), header dùng chung mọi bước gồm tên campaign (chưa có tên thì \"New campaign\"), badge Draft, status text, và các action bên phải Save, Preview & test, Send; staging 01/10/2026 khớp.",
+      "knowledge_kind": "CONFIRMED_EXPECTED",
+      "confidence": "MEDIUM",
+      "kb_refs": [
+        "KB-043"
+      ]
+    },
+    {
+      "statement": "Theo quyết định PO 11/08/2026 (comment Jira MTRO-29 khi review prototype), wizard campaign không có auto-save; người dùng phải bấm nút `Save` để lưu thủ công. Staging 01/10/2026 đối chiếu khớp.",
+      "knowledge_kind": "CONFIRMED_EXPECTED",
+      "confidence": "MEDIUM",
+      "kb_refs": [
+        "KB-044"
+      ]
+    },
+    {
+      "statement": "Theo Jira MTRO-29 AC §Header (tóm tắt trong QA business rule Mailtro, cập nhật 15/09/2026), nút Send bị disabled cho tới khi `canSendCampaign` = true, và Preview/Send dùng được ở mọi bước khi campaign đã đủ điều kiện gửi.",
+      "knowledge_kind": "CONFIRMED_EXPECTED",
+      "confidence": "MEDIUM",
+      "kb_refs": [
+        "KB-047"
+      ]
+    },
+    {
+      "statement": "Theo Jira MTRO-29 AC §Step 1 (tóm tắt trong QA business rule Mailtro, cập nhật 07/10/2026) và quyết định PO 11/08/2026 (dấu `*` cho 2 field bắt buộc), bước 1 có `Campaign name *` với helper \"Internal only — recipients never see this.\" và `Subject line *`; hai field này bắt buộc và có dấu `*`. Staging 01/10/2026 khớp.",
+      "knowledge_kind": "CONFIRMED_EXPECTED",
+      "confidence": "MEDIUM",
+      "kb_refs": [
+        "KB-049"
+      ]
+    },
+    {
+      "statement": "Theo Jira MTRO-29 AC §Step 1 (tóm tắt trong QA business rule Mailtro, cập nhật 07/10/2026), Subject line của campaign tối đa 255 ký tự.",
+      "knowledge_kind": "CONFIRMED_EXPECTED",
+      "confidence": "MEDIUM",
+      "kb_refs": [
+        "KB-050"
+      ]
+    },
+    {
+      "statement": "Theo quyết định PO 11/08/2026 (comment Jira MTRO-29), bước 1 Campaign details không có field Folder; folder chỉ được gán qua `Add to folder` ở danh sách campaign. Staging 01/10/2026 khớp (bước 1 chỉ có Campaign name / Subject line / Preview text).",
+      "knowledge_kind": "CONFIRMED_EXPECTED",
+      "confidence": "MEDIUM",
+      "kb_refs": [
+        "KB-053"
+      ]
+    },
+    {
+      "statement": "Theo Jira MTRO-29 AC §Step 1 và §Step 2 (tóm tắt trong QA business rule Mailtro, cập nhật 07/10/2026 và 15/09/2026), bước 1 có nút `Back` / `Next: Sender →`, bước 2 có nút `Next: Recipients →`; staging 01/10/2026 khớp ở bước 1.",
+      "knowledge_kind": "CONFIRMED_EXPECTED",
+      "confidence": "MEDIUM",
+      "kb_refs": [
+        "KB-054"
+      ]
+    },
+    {
+      "statement": "Theo Jira MTRO-29 AC §Step 2 (tóm tắt trong QA business rule Mailtro, cập nhật 15/09/2026), bước Sender có các field From name, From email, Reply-to.",
+      "knowledge_kind": "CONFIRMED_EXPECTED",
+      "confidence": "MEDIUM",
+      "kb_refs": [
+        "KB-057"
+      ]
+    },
+    {
+      "statement": "Theo Jira MTRO-29 AC §Step 2 (tóm tắt trong QA business rule Mailtro, cập nhật 15/09/2026), Reply-to là tuỳ chọn ghi đè và mặc định bằng From email khi để trống.",
+      "knowledge_kind": "CONFIRMED_EXPECTED",
+      "confidence": "MEDIUM",
+      "kb_refs": [
+        "KB-058"
+      ]
+    },
+    {
+      "statement": "Theo quyết định PO 11/08/2026 (comment Jira MTRO-29), heading của bước Recipients đổi từ \"Segment\" thành \"Send to\"; Jira MTRO-29 AC §Step 3 và staging 01/10/2026 khớp.",
+      "knowledge_kind": "CONFIRMED_EXPECTED",
+      "confidence": "MEDIUM",
+      "kb_refs": [
+        "KB-062"
+      ]
+    },
+    {
+      "statement": "Theo quyết định PO 11/08/2026 (comment Jira MTRO-29, đổi multi-select sang single-select), picker Recipients chỉ chọn được đúng 1 segment, tức một campaign là một email gửi tới đúng một segment; Dev BE 18/09/2026 (PO đồng ý) cũng nêu campaign chỉ có một segment. Description Jira MTRO-29 vẫn ghi multi-select (bản cũ).",
+      "knowledge_kind": "CONFIRMED_EXPECTED",
+      "confidence": "MEDIUM",
+      "kb_refs": [
+        "KB-063"
+      ]
+    },
+    {
+      "statement": "Theo quyết định PO 11/08/2026 (comment Jira MTRO-29), danh sách segment ở bước Recipients chỉ hiện tên, bỏ helptext \"X contacts\" (không đếm được ngay); staging 01/10/2026 khớp.",
+      "knowledge_kind": "CONFIRMED_EXPECTED",
+      "confidence": "MEDIUM",
+      "kb_refs": [
+        "KB-064"
+      ]
+    },
+    {
+      "statement": "Theo Jira MTRO-29 AC §Step 3 (tóm tắt trong QA business rule Mailtro, cập nhật 15/09/2026), khi chưa có segment nào, bước Recipients hiện empty state \"There are no segments yet. Add a new segment to this folder to better manage your contacts.\" kèm nút \"Create segment\" điều hướng sang tạo segment; staging 01/10/2026 khớp.",
+      "knowledge_kind": "CONFIRMED_EXPECTED",
+      "confidence": "MEDIUM",
+      "kb_refs": [
+        "KB-066"
+      ]
+    },
+    {
+      "statement": "Theo quyết định PO 02/10/2026 (ghi trong QA KB Mailtro \"Campaigns\" v1), segment dùng làm người nhận campaign chỉ gồm contact ở trạng thái Subscribed.",
+      "knowledge_kind": "CONFIRMED_EXPECTED",
+      "confidence": "MEDIUM",
+      "kb_refs": [
+        "KB-068"
+      ],
+      "tags": [
+        "unsubscribe-consent",
+        "suppression"
+      ]
+    },
+    {
+      "statement": "Theo quyết định PO 30/09/2026 (description và comment Jira MTRO-99), hai nút ở màn campaign đổi thành `Choose a template` / `Create new template`; Jira MTRO-99 còn In Progress và staging khảo sát 01/10/2026 chưa áp dụng.",
+      "knowledge_kind": "CONFIRMED_EXPECTED",
+      "confidence": "MEDIUM",
+      "kb_refs": [
+        "KB-078"
+      ]
+    },
+    {
+      "statement": "Theo quyết định PO 11/08/2026 (comment Jira MTRO-29), ở bước Contents lựa chọn tạo mới mở ra hai cách: `Create from scratch` tạo email mới rồi mở builder, `Duplicate design` cho chọn một design có sẵn để duplicate rồi mở builder, bản sao có tên `{name} (copy)`; staging 01/10/2026 và i18n khớp phần tên bản sao.",
+      "knowledge_kind": "CONFIRMED_EXPECTED",
+      "confidence": "MEDIUM",
+      "kb_refs": [
+        "KB-084"
+      ]
+    },
+    {
+      "statement": "Theo Jira MTRO-29 AC §Step 4 (tóm tắt trong QA business rule Mailtro, cập nhật 07/10/2026), khi đã chọn email, bước Contents hiện preview template kèm Subject / Preheader / From.",
+      "knowledge_kind": "CONFIRMED_EXPECTED",
+      "confidence": "MEDIUM",
+      "kb_refs": [
+        "KB-085"
+      ]
+    },
+    {
+      "statement": "Theo quyết định PO 11/08/2026 (comment Jira MTRO-29), menu `Design actions` (`...`) cạnh nút `Edit design` có `Reset design` để quay về empty state và chọn design khác; đổi email chỉ có thể qua `Reset design`. Staging 25/08 và 01/10/2026 khớp.",
+      "knowledge_kind": "CONFIRMED_EXPECTED",
+      "confidence": "MEDIUM",
+      "kb_refs": [
+        "KB-086"
+      ]
+    }
+  ],
+  "observed_behavior": [
+    {
+      "statement": "Trên staging (khảo sát 01/10/2026), mỗi bước wizard có route riêng: campaign chưa lưu dùng `/campaigns/new/details` · `/sender` · `/recipients` · `/content`, campaign đã lưu dùng `/campaigns/:id/details` · `/sender` · `/recipients` · `/content`; ngoài ra có route `/campaigns/:id/design/:templateId` nhưng chưa được khảo sát.",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "confidence": "MEDIUM",
+      "kb_refs": [
+        "KB-042"
+      ],
+      "status": "CURRENT_STATE"
+    },
+    {
+      "statement": "Trên staging (khảo sát 01/10/2026), nút `Save` của wizard chỉ hiện khi có thay đổi chưa lưu: mở draft đã lưu không có `Save`, gõ thêm 1 ký tự vào `Preview text` thì `Save` hiện, xoá lại thì `Save` biến mất; ở các route `/campaigns/new/*` nút `Save` hiện ngay (bundle: điều kiện `isEditable && isDirty`).",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "confidence": "MEDIUM",
+      "kb_refs": [
+        "KB-045"
+      ],
+      "status": "CURRENT_STATE"
+    },
+    {
+      "statement": "Trên staging (khảo sát 01/10/2026, kèm chuỗi i18n), tooltip của nút gửi bị disabled có nội dung `Finish every step before sending.` hoặc `This campaign is missing a subject, sender, audience or design, so it cannot be sent.`; tài liệu không nêu tooltip nào hiện ở trường hợp nào.",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "confidence": "MEDIUM",
+      "kb_refs": [
+        "KB-048"
+      ],
+      "status": "CURRENT_STATE"
+    },
+    {
+      "statement": "Trên staging (khảo sát 01/10/2026), API trả 422 khi Subject line của campaign vượt 255 ký tự.",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "confidence": "LOW",
+      "kb_refs": [
+        "KB-051"
+      ],
+      "status": "CURRENT_STATE"
+    },
+    {
+      "statement": "Trên staging (khảo sát 01/10/2026), bước 1 có field `Preview text` không đánh dấu bắt buộc, kèm hint \"The snippet shown after the subject line in most inboxes.\"",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "confidence": "MEDIUM",
+      "kb_refs": [
+        "KB-052"
+      ],
+      "status": "CURRENT_STATE"
+    },
+    {
+      "statement": "Trên staging (khảo sát 01/10/2026), bước 3 Recipients có nút `Back` và `Next: Contents`.",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "confidence": "LOW",
+      "kb_refs": [
+        "KB-055"
+      ],
+      "status": "CURRENT_STATE"
+    },
+    {
+      "statement": "Lỗi đã biết (mở, ghi trong test-run wizard 25/08/2026): trên staging, nút `Next` của wizard campaign không validate các field bắt buộc. Đây là hành vi sai đang tồn tại, không phải hành vi đúng.",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "confidence": "LOW",
+      "kb_refs": [
+        "KB-056"
+      ],
+      "status": "KNOWN_DEFECT"
+    },
+    {
+      "statement": "Trên staging (khảo sát 29/09–01/10/2026), bước Sender của wizard campaign vẫn hiện cảnh báo \"Sending needs a verified domain — this address won't be accepted until its domain is verified.\" kèm link `Manage sending domains`, trong khi quan sát gửi thật 09/09/2026 cho thấy workspace chưa có domain verified vẫn gửi được qua host dùng chung; độ lệch này thuộc mâu thuẫn chưa chốt về gửi campaign khi chưa có domain verified.",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "confidence": "MEDIUM",
+      "kb_refs": [
+        "KB-059"
+      ],
+      "tags": [
+        "sending-domain-verification"
+      ],
+      "status": "CURRENT_STATE"
+    },
+    {
+      "statement": "Lỗi đã biết (mở, ghi trong test-run wizard 25/08/2026): trên staging, sender của campaign bị đổi âm thầm sang host gửi dùng chung nhưng bước 4 Contents và Preview vẫn hiện địa chỉ người dùng đã gõ. Đây là hành vi lệch đang tồn tại, không phải hành vi đúng.",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "confidence": "LOW",
+      "kb_refs": [
+        "KB-060"
+      ],
+      "tags": [
+        "sending-domain-verification"
+      ],
+      "status": "KNOWN_DEFECT"
+    },
+    {
+      "statement": "Trên staging (khảo sát 29/09 và 01/10/2026), picker segment là popover `Select a segment…` có ô `Search segments…`; segment đã chọn hiện dạng chip tên kèm nút `Remove {name}`; tìm không khớp hiện `No segments match your search.`",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "confidence": "MEDIUM",
+      "kb_refs": [
+        "KB-065"
+      ],
+      "status": "CURRENT_STATE"
+    },
+    {
+      "statement": "Trên staging (khảo sát 01/10/2026), sau khi chọn segment, bước Recipients hiện dòng `N estimated recipients` với N bằng cột Contacts của segment đó (lượt 29/09 dòng này còn trống). QA KB Mailtro \"Feature map\" v1 nêu cùng quy tắc nhưng không gắn nguồn PO/Dev riêng cho vế này.",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "confidence": "MEDIUM",
+      "kb_refs": [
+        "KB-067"
+      ],
+      "status": "CURRENT_STATE"
+    },
+    {
+      "statement": "Lỗi đã biết BUG-69 / BUG-CS-16 (mở 14/09/2026): tên segment không unique nên picker Recipients của campaign không phân biệt được 2 segment trùng tên; QA ghi rủi ro gửi campaign hoặc export cho sai tập khách hàng. Đây là hành vi sai đang tồn tại, không phải hành vi đúng.",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "confidence": "LOW",
+      "kb_refs": [
+        "KB-069"
+      ],
+      "status": "KNOWN_DEFECT"
+    },
+    {
+      "statement": "Trên staging (khảo sát 01/10/2026), bước Recipients có khối `Email preferences` (\"Let people tell you which emails they want. Each choice is saved onto the contact, so a segment can read it.\") với combobox `Preferences page` có hint \"The page people reach from this campaign's unsubscribe link.\" và link `Manage pages` tới `/preferences`; khi workspace chưa có preferences page, combobox chỉ có lựa chọn `None — people can only unsubscribe from everything`.",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "confidence": "MEDIUM",
+      "kb_refs": [
+        "KB-071"
+      ],
+      "tags": [
+        "unsubscribe-consent"
+      ],
+      "status": "CURRENT_STATE"
+    },
+    {
+      "statement": "Trên staging (khảo sát 01/10/2026, workspace chưa có preferences page), khối Email preferences ở bước Recipients không có ô tick choice nào, và chuỗi i18n của phần này cũng không có chuỗi nào cho việc tick choice; cơ chế thật là lọc bằng segment.",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "confidence": "MEDIUM",
+      "kb_refs": [
+        "KB-072"
+      ],
+      "tags": [
+        "unsubscribe-consent"
+      ],
+      "status": "CURRENT_STATE"
+    },
+    {
+      "statement": "Trên staging (khảo sát 01/10/2026), khi campaign chưa có design, bước Contents hiện \"Add email content to this campaign\" / \"Use an email you already have, or start a new one.\"",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "confidence": "MEDIUM",
+      "kb_refs": [
+        "KB-076"
+      ],
+      "status": "CURRENT_STATE"
+    },
+    {
+      "statement": "Trên staging (khảo sát 01/10/2026), hai nút ở bước Contents khi chưa có design có nhãn `Choose email library` và `Create email library` (không phải `Choose from existing` / `Create new`); quyết định đổi nhãn của PO 30/09/2026 chưa được deploy lên staging tại thời điểm khảo sát.",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "confidence": "MEDIUM",
+      "kb_refs": [
+        "KB-077"
+      ],
+      "status": "CURRENT_STATE"
+    },
+    {
+      "statement": "Trên staging (khảo sát 01/10/2026), dialog `Choose email library` có mô tả \"Pick an existing email design to use for this campaign.\", hiện lưới thẻ gồm tên email và người tạo, nút `Cancel` / `Close`, không có ô search, không phân trang, không hiện ngày tạo; chọn một thẻ là dùng ngay.",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "confidence": "MEDIUM",
+      "kb_refs": [
+        "KB-079"
+      ],
+      "status": "CURRENT_STATE"
+    },
+    {
+      "statement": "Trên staging (khảo sát 01/10/2026, xác nhận qua network), mở builder campaign gọi một lần `GET mail-templates?per_page=50&sort=updated_at&direction=desc`, nên picker email ở bước Contents chỉ có tối đa 50 email được sửa gần nhất.",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "confidence": "MEDIUM",
+      "kb_refs": [
+        "KB-080"
+      ],
+      "status": "CURRENT_STATE"
+    },
+    {
+      "statement": "Trên staging (khảo sát 01/10/2026, mở dialog nhưng chưa chọn), dialog `Create email library` hỏi \"How do you want to start?\" với hai lựa chọn `Create from scratch` (\"Start with a blank canvas\") và `Duplicate design` (\"Start from an existing design and customize it\").",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "confidence": "MEDIUM",
+      "kb_refs": [
+        "KB-083"
+      ],
+      "status": "CURRENT_STATE"
+    },
+    {
+      "statement": "Trên staging (khảo sát 01/10/2026), iframe xem trước ở bước Contents hiện nguyên chuỗi merge tag, không thay bằng giá trị.",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "confidence": "LOW",
+      "kb_refs": [
+        "KB-087"
+      ],
+      "tags": [
+        "merge-tag-syntax"
+      ],
+      "status": "CURRENT_STATE"
+    },
+    {
+      "statement": "Trên staging (quan sát 25/08/2026), cập nhật một campaign đã có dùng phương thức `PUT`.",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "confidence": "LOW",
+      "kb_refs": [
+        "KB-091"
+      ],
+      "status": "CURRENT_STATE"
+    },
+    {
+      "statement": "Lỗi đã biết BUG-WIZ-01 (P0, còn mở theo sprint status 02/10/2026): khi Save ở wizard campaign với from_email sai hoặc subject dài hơn 255 ký tự, BE trả 422 nhưng wizard nuốt lỗi, Save thất bại im lặng và người dùng tưởng đã lưu; QA ghi nguyên nhân chung là FE chưa có tầng xử lý lỗi chung. Đây là hành vi sai đang tồn tại, không phải hành vi đúng.",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "confidence": "LOW",
+      "kb_refs": [
+        "KB-092"
+      ],
+      "status": "KNOWN_DEFECT"
+    },
+    {
+      "statement": "Lỗi đã biết BUG-WIZ-02 (P1, mở 25/08/2026): bấm link `Manage sending domains` hoặc đổi menu khi wizard campaign chưa Save thì mất thay đổi, không có cảnh báo; bundle front-end 01/10/2026 vẫn không có route-leave guard hay `beforeunload` (01/10 chưa thử lại trên UI). Đây là hành vi sai đang tồn tại, không phải hành vi đúng.",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "confidence": "LOW",
+      "kb_refs": [
+        "KB-093"
+      ],
+      "status": "KNOWN_DEFECT"
+    },
+    {
+      "statement": "Trên staging (khảo sát 01/10/2026), các bước trên stepper của wizard campaign là link, và bước đã hoàn tất hiện dấu tick.",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "confidence": "LOW",
+      "kb_refs": [
+        "KB-196"
+      ],
+      "status": "CURRENT_STATE"
+    },
+    {
+      "statement": "Trên staging (khảo sát 01/10/2026), draft chưa đủ 4 bước thì cả `Preview & test` và `Send` đều bị disabled.",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "confidence": "MEDIUM",
+      "kb_refs": [
+        "KB-198"
+      ],
+      "status": "CURRENT_STATE"
+    },
+    {
+      "statement": "Trên staging (khảo sát 29/09/2026), bước Sender hiện `From name` (placeholder `Mailtro Team`), `From email` (placeholder `hello@yourdomain.com`) và `Reply-to (optional)`.",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "confidence": "MEDIUM",
+      "kb_refs": [
+        "KB-199"
+      ],
+      "status": "CURRENT_STATE"
+    },
+    {
+      "statement": "Trên staging (khảo sát 29/09/2026), field Reply-to có placeholder `Defaults to the sender email` và hint \"Replies go to the sender address unless you set one here.\"",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "confidence": "MEDIUM",
+      "kb_refs": [
+        "KB-200"
+      ],
+      "status": "CURRENT_STATE"
+    },
+    {
+      "statement": "Trên staging (khảo sát 01/10/2026), bước Contents khi đã có design hiện tên design, nút `Edit design`, menu `Design actions` (có `Reset design`), `Subject`, `Preheader` (trống thì `(No preview text yet)`), iframe nội dung, `From` (trống thì `(No sender yet)`) và nút `Back`.",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "confidence": "MEDIUM",
+      "kb_refs": [
+        "KB-201"
+      ],
+      "status": "CURRENT_STATE"
+    }
+  ],
+  "observed_validations": [],
+  "permissions": [
+    {
+      "statement": "Mailtro có 3 role chuẩn (Owner, Admin, role thứ 3 đang tranh chấp tên) cộng custom role; ma trận quyền chi tiết cho Campaigns chưa được chốt nên profile này không gán quyền theo role cho thao tác nào.",
+      "knowledge_kind": "CONFIRMED_EXPECTED",
+      "kb_refs": [
+        "KB-P-051"
+      ]
+    },
+    {
+      "statement": "Router front-end không có meta phân quyền theo role; việc chặn quyền (nếu có) phải nằm ở API. Đây là suy luận từ bundle, chưa kiểm trên staging.",
+      "knowledge_kind": "INFERRED",
+      "kb_refs": [
+        "KB-P-052"
+      ]
+    }
+  ],
+  "surface_mapping": {
+    "portal": [
+      {
+        "item": "Header wizard (tên, badge Draft, Save, Preview & test, Send) và stepper `Campaign steps` (bước là link, bước xong có tick trên staging)",
+        "kb_refs": [
+          "KB-038",
+          "KB-196",
+          "KB-043",
+          "KB-045",
+          "KB-047",
+          "KB-198",
+          "KB-048"
+        ]
+      },
+      {
+        "item": "Bước 1 `/details`: Campaign name *, Subject line *, Preview text, Back / Next: Sender",
+        "kb_refs": [
+          "KB-049",
+          "KB-052",
+          "KB-054"
+        ]
+      },
+      {
+        "item": "Bước 2 `/sender`: From name, From email, Reply-to (optional), cảnh báo verified domain + link Manage sending domains",
+        "kb_refs": [
+          "KB-057",
+          "KB-199",
+          "KB-058",
+          "KB-200",
+          "KB-059"
+        ]
+      },
+      {
+        "item": "Bước 3 `/recipients`: Send to, picker segment, estimated recipients, khối Email preferences",
+        "kb_refs": [
+          "KB-062",
+          "KB-065",
+          "KB-067",
+          "KB-071"
+        ]
+      },
+      {
+        "item": "Bước 4 `/content`: empty state, dialog chọn email, dialog tạo email, preview design, Reset design",
+        "kb_refs": [
+          "KB-076",
+          "KB-077",
+          "KB-079",
+          "KB-083",
+          "KB-085",
+          "KB-201",
+          "KB-086"
+        ]
+      },
+      {
+        "item": "Route `/campaigns/:id/design/:templateId` (chưa khảo sát)",
+        "kb_refs": [
+          "KB-042"
+        ]
+      }
+    ],
+    "storefront": [],
+    "api": [
+      {
+        "item": "Cập nhật campaign đã có dùng `PUT`",
+        "kb_refs": [
+          "KB-091"
+        ]
+      },
+      {
+        "item": "Subject > 255 ký tự trả 422",
+        "kb_refs": [
+          "KB-051"
+        ]
+      },
+      {
+        "item": "Mở builder gọi `GET mail-templates?per_page=50&sort=updated_at&direction=desc`",
+        "kb_refs": [
+          "KB-080"
+        ]
+      }
+    ],
+    "data": [
+      {
+        "item": "Campaign có đúng một segment; chỉ lưu `preference_page_id` cho phần Email preferences",
+        "kb_refs": [
+          "KB-063",
+          "KB-073"
+        ]
+      },
+      {
+        "item": "Merge tag trong nội dung (cú pháp đang tranh chấp)",
+        "kb_refs": [
+          "KB-088",
+          "KB-P-018"
+        ]
+      }
+    ],
+    "code": []
+  },
+  "dependencies": [
+    {
+      "target": "segments / segment-audience-evaluation",
+      "relation": "audience_source",
+      "note": "Campaign gửi tới đúng một segment, chỉ contact Subscribed; estimated recipients theo cột Contacts của segment.",
+      "kb_refs": [
+        "KB-063",
+        "KB-067",
+        "KB-068",
+        "KB-P-015",
+        "KB-P-016"
+      ]
+    },
+    {
+      "target": "email-content / email-library",
+      "relation": "content_source",
+      "note": "Bước Contents chọn/tạo email từ thư viện; đổi tên sang Templates theo quyết định PO 30/09/2026 chưa deploy staging 01/10. Quy tắc copy-on-write giữa các Draft dùng chung email và giới hạn picker 50 email do email-content / email-library sở hữu.",
+      "kb_refs": [
+        "KB-077",
+        "KB-078",
+        "KB-080",
+        "KB-081",
+        "KB-P-009"
+      ]
+    },
+    {
+      "target": "email-content / merge-tags",
+      "relation": "conflict_owner",
+      "note": "Cú pháp merge tag là conflict cross-object do email-content sở hữu; quy tắc không migrate nội dung một ngoặc cũng thuộc email-content.",
+      "kb_refs": [
+        "KB-088",
+        "KB-087"
+      ]
+    },
+    {
+      "target": "workspace-settings / sending-domains",
+      "relation": "sender_identity",
+      "note": "Cảnh báo verified domain và link Manage sending domains ở bước Sender; gửi thật đi qua host dùng chung.",
+      "kb_refs": [
+        "KB-059",
+        "KB-060",
+        "KB-P-021"
+      ]
+    },
+    {
+      "target": "email-preferences / preference-page-in-sends",
+      "relation": "unsubscribe_page",
+      "note": "Preferences page gắn với link unsubscribe của campaign.",
+      "kb_refs": [
+        "KB-071",
+        "KB-075"
+      ]
+    },
+    {
+      "target": "campaigns / campaign-preview-and-test, campaign-send-and-schedule",
+      "relation": "next_step",
+      "note": "Preview & test và Send mở từ header wizard khi campaign đủ điều kiện.",
+      "kb_refs": [
+        "KB-043",
+        "KB-047"
+      ]
+    }
+  ],
+  "risks": [
+    {
+      "statement": "Theo chuỗi i18n trong bundle front-end 01/10/2026 (chưa thấy trên UI), lưu campaign khi chưa có tên sẽ báo \"Give this campaign a name before saving it.\"",
+      "knowledge_kind": "INFERRED",
+      "confidence": "LOW",
+      "kb_refs": [
+        "KB-046"
+      ],
+      "risk_type": "undecided_or_bundle_only"
+    },
+    {
+      "statement": "Theo QA KB Mailtro \"Sending domains\" v1, chưa chốt UX có cần báo cho người dùng khi sender của campaign bị đổi sang host gửi dùng chung hay không; cần xác nhận.",
+      "knowledge_kind": "INFERRED",
+      "confidence": "LOW",
+      "kb_refs": [
+        "KB-061"
+      ],
+      "tags": [
+        "sending-domain-verification"
+      ],
+      "risk_type": "undecided_or_bundle_only"
+    },
+    {
+      "statement": "Theo QA business rule Mailtro và QA KB Mailtro \"Known issues\" v1, cách phân biệt segment trùng tên trong picker Recipients chưa chốt; đang chờ PO quyết picker phải hiện thêm thông tin gì (GAP-19).",
+      "knowledge_kind": "INFERRED",
+      "confidence": "LOW",
+      "kb_refs": [
+        "KB-070"
+      ],
+      "risk_type": "undecided_or_bundle_only"
+    },
+    {
+      "statement": "Theo bundle front-end 01/10/2026, campaign chỉ lưu `preference_page_id` cho phần Email preferences, không có state lựa chọn riêng của campaign.",
+      "knowledge_kind": "INFERRED",
+      "confidence": "LOW",
+      "kb_refs": [
+        "KB-073"
+      ],
+      "tags": [
+        "unsubscribe-consent"
+      ],
+      "risk_type": "undecided_or_bundle_only"
+    },
+    {
+      "statement": "Theo chuỗi i18n trong bundle front-end 01/10/2026 (chưa đối chiếu UI), bước Recipients có cảnh báo `Your email offers choices but has no page` khi design dùng tag lựa chọn mà campaign chưa gắn preferences page (người bấm rơi vào trang unsubscribe thường), và cảnh báo `Your segment ignores some of the page's choices` nói người đã tắt lựa chọn vẫn nhận campaign nếu segment không lọc theo field đó (khuyên thêm điều kiện loại giá trị false).",
+      "knowledge_kind": "INFERRED",
+      "confidence": "LOW",
+      "kb_refs": [
+        "KB-074"
+      ],
+      "tags": [
+        "unsubscribe-consent"
+      ],
+      "risk_type": "undecided_or_bundle_only"
+    },
+    {
+      "statement": "Theo Inventory staging Mailtro \"Campaigns\" (01/10/2026), chưa rõ hướng dẫn \"tick the choices this campaign is about\" là copy cũ hay wizard còn thiếu ô chọn, và người bỏ tick một lựa chọn bị loại tự động khỏi campaign hay chỉ bị loại khi segment lọc theo field đó; cần hỏi PO.",
+      "knowledge_kind": "INFERRED",
+      "confidence": "LOW",
+      "kb_refs": [
+        "KB-075"
+      ],
+      "tags": [
+        "unsubscribe-consent"
+      ],
+      "risk_type": "undecided_or_bundle_only"
+    },
+    {
+      "statement": "Theo bundle front-end 01/10/2026 và QA KB Mailtro \"Known issues\" v1 (ranh giới 50/51 chưa thử), workspace có hơn 50 email thì email cũ hơn không chọn được ở bước Contents hay ở `Duplicate design` (dùng cùng danh sách); QA đang hỏi Dev giới hạn 50 có chủ ý không và có định thêm tìm kiếm / phân trang không.",
+      "knowledge_kind": "INFERRED",
+      "confidence": "LOW",
+      "kb_refs": [
+        "KB-081"
+      ],
+      "risk_type": "undecided_or_bundle_only"
+    },
+    {
+      "statement": "Theo chuỗi i18n trong bundle front-end 01/10/2026 (chưa thấy trên UI), picker email khi thư viện trống hiện `No emails in this workspace yet.`",
+      "knowledge_kind": "INFERRED",
+      "confidence": "LOW",
+      "kb_refs": [
+        "KB-082"
+      ],
+      "risk_type": "undecided_or_bundle_only"
+    },
+    {
+      "statement": "Theo quyết định PO 02/10/2026 (ghi trong QA KB Mailtro \"Campaigns\" v1, kèm task Testlane MTRO-009 BR-10) và Inventory staging Mailtro \"Campaigns\" (01/10/2026: draft tạo 01/10 dùng `{{contact.first_name}}`, `{{unsubscribe_url}}`), merge tag trong nội dung email dùng cú pháp hai ngoặc `{{…}}`; phát biểu này đang mâu thuẫn với Jira MTRO-92 §10 (cú pháp một ngoặc, `{{…}}` bị từ chối khi lưu) và chưa được PO/Dev phân xử.",
+      "knowledge_kind": "INFERRED",
+      "confidence": "LOW",
+      "kb_refs": [
+        "KB-088"
+      ],
+      "tags": [
+        "merge-tag-syntax"
+      ],
+      "conflict_group": "CONF-MTRO-email-content-01",
+      "status": "UNRESOLVED",
+      "risk_type": "conflict_side"
+    },
+    {
+      "statement": "Theo bundle front-end 01/10/2026 (chưa đối chiếu network), `New campaign` mở wizard với param `new` và không gọi API cho tới khi bấm `Save`.",
+      "knowledge_kind": "INFERRED",
+      "confidence": "LOW",
+      "kb_refs": [
+        "KB-197"
+      ],
+      "risk_type": "undecided_or_bundle_only"
+    },
+    {
+      "statement": "Theo dõi hồi quy các lỗi đã biết của wizard (không dùng làm expected result): BUG-WIZ-01 (P0) Save nuốt lỗi 422 khiến người dùng tưởng đã lưu; BUG-WIZ-02 (P1) rời wizard chưa lưu mất thay đổi; Next không validate field bắt buộc; sender bị đổi sang host chung nhưng UI vẫn hiện địa chỉ đã gõ; BUG-69 picker không phân biệt segment trùng tên (rủi ro gửi sai tập khách hàng).",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "status": "KNOWN_DEFECT",
+      "risk_type": "known_defect_regression_watch",
+      "kb_refs": [
+        "KB-092",
+        "KB-093",
+        "KB-056",
+        "KB-060",
+        "KB-069"
+      ]
+    }
+  ],
+  "freshness": {
+    "observed_at": "2026-10-07",
+    "basis": "AC Jira MTRO-29 tóm tắt trong QA business rule Mailtro (cập nhật 15/09 và 07/10/2026); quyết định PO 11/08, 30/09, 02/10/2026; khảo sát staging 25/08, 29/09, 01/10/2026."
+  },
+  "unknown_areas": [
+    {
+      "question": "Cú pháp merge tag đúng cho nội dung campaign là hai ngoặc `{{…}}` (quyết định PO 02/10/2026, staging 01/10/2026) hay một ngoặc như Jira MTRO-92 §10?",
+      "why_it_matters": "Conflict cross-object chưa phân xử (merge-tag-syntax); không có oracle cho lưu/gửi nội dung có merge tag.",
+      "kb_refs": [
+        "KB-088"
+      ],
+      "oq_id": "OQ-email-content-026"
+    },
+    {
+      "question": "Nhãn nút `Choose a template` / `Create new template` (quyết định PO 30/09/2026, Jira MTRO-99) đã được deploy lên staging chưa, từ build nào?",
+      "why_it_matters": "Staging 01/10/2026 vẫn hiện `Choose email library` / `Create email library`.",
+      "kb_refs": [
+        "KB-077",
+        "KB-078"
+      ],
+      "oq_id": "OQ-campaigns-009"
+    },
+    {
+      "question": "Giới hạn picker email ở bước Contents (nạp một lần 50 email sửa gần nhất, không search, không phân trang) có chủ ý không, và có định thêm tìm kiếm / phân trang không?",
+      "why_it_matters": "Workspace có hơn 50 email không chọn được email cũ; ranh giới 50/51 chưa thử.",
+      "kb_refs": [
+        "KB-080",
+        "KB-081"
+      ],
+      "oq_id": "OQ-campaigns-010"
+    },
+    {
+      "question": "Picker Recipients phải hiện thêm thông tin gì (số contact, ngày tạo, người tạo) để phân biệt hai segment trùng tên?",
+      "why_it_matters": "Rủi ro gửi campaign cho sai tập khách hàng (BUG-69).",
+      "kb_refs": [
+        "KB-069",
+        "KB-070"
+      ],
+      "oq_id": "OQ-campaigns-011"
+    },
+    {
+      "question": "Người bỏ tick một lựa chọn trên preferences page có bị loại tự động khỏi campaign liên quan không, hay chỉ bị loại khi segment lọc theo field đó? Hướng dẫn \"tick the choices this campaign is about\" là copy cũ hay wizard còn thiếu ô chọn?",
+      "why_it_matters": "Liên quan unsubscribe-consent; bước Recipients trên staging không có ô tick nào.",
+      "kb_refs": [
+        "KB-071",
+        "KB-072",
+        "KB-074",
+        "KB-075"
+      ],
+      "oq_id": "OQ-campaigns-012"
+    },
+    {
+      "question": "Khi From email không thuộc domain verified và sender bị đổi sang host gửi dùng chung, UX có cần báo cho người dùng biết địa chỉ gửi thật không?",
+      "why_it_matters": "Bước Contents và Preview đang hiện địa chỉ người dùng gõ, khác địa chỉ gửi thật.",
+      "kb_refs": [
+        "KB-060",
+        "KB-061"
+      ],
+      "oq_id": "OQ-campaigns-013"
+    },
+    {
+      "question": "PO xác nhận `N estimated recipients` ở bước Recipients phải bằng cột Contacts của segment?",
+      "why_it_matters": "Quy tắc chỉ có từ quan sát staging, không gắn quyết định PO/Dev riêng.",
+      "kb_refs": [
+        "KB-064",
+        "KB-067"
+      ],
+      "oq_id": "OQ-campaigns-014"
+    },
+    {
+      "question": "Tooltip nào của nút gửi bị disabled hiện ở trường hợp nào (`Finish every step before sending.` hay `This campaign is missing a subject, sender, audience or design…`)?",
+      "why_it_matters": "Tài liệu chỉ liệt kê hai chuỗi, không nêu điều kiện.",
+      "kb_refs": [
+        "KB-048"
+      ],
+      "oq_id": "OQ-campaigns-043"
+    },
+    {
+      "question": "Quy tắc validate của From email và Reply-to ở bước Sender là gì (định dạng, domain)?",
+      "why_it_matters": "Chỉ biết BE trả 422 với from_email sai; không có quy tắc định dạng.",
+      "kb_refs": [
+        "KB-057",
+        "KB-092"
+      ],
+      "oq_id": "OQ-campaigns-044"
+    },
+    {
+      "question": "Role nào (Owner, Admin, role thứ 3 đang tranh chấp tên Member hay Marketer/Editor, custom role) được tạo, Save, Send, Schedule, xoá campaign và xem report; quyền có được chặn ở API không?",
+      "why_it_matters": "Toàn bộ tài liệu Campaigns không ghi role, staging chỉ khảo sát bằng Owner, Admin chưa từng được quan sát; không viết được expected result cho kiểm thử phân quyền.",
+      "kb_refs": [
+        "KB-102",
+        "KB-104",
+        "KB-107",
+        "KB-023",
+        "KB-186",
+        "KB-P-051"
+      ],
+      "oq_id": "OQ-campaigns-018"
+    }
+  ],
+  "last_updated": {
+    "date": "2026-10-08",
+    "ccr_ref": "bootstrap"
+  },
+  "coverage_matrix": [
+    {
+      "layer": "portal",
+      "role": "unspecified",
+      "state": "campaign mới chưa lưu → Save lần đầu",
+      "covered": true,
+      "note": "AC Jira MTRO-29 + staging",
+      "kb_refs": [
+        "KB-040",
+        "KB-041"
+      ],
+      "feature_id": "campaign-wizard",
+      "environment": "documented"
+    },
+    {
+      "layer": "portal",
+      "role": "unspecified",
+      "state": "Draft đã lưu: sửa và Save thủ công",
+      "covered": true,
+      "note": "Quyết định PO 11/08 + staging",
+      "kb_refs": [
+        "KB-044",
+        "KB-045"
+      ],
+      "feature_id": "campaign-wizard",
+      "environment": "documented"
+    },
+    {
+      "layer": "portal",
+      "role": "unspecified",
+      "state": "bước 1 / 2 / 3 / 4",
+      "covered": true,
+      "kb_refs": [
+        "KB-049",
+        "KB-057",
+        "KB-199",
+        "KB-063",
+        "KB-085",
+        "KB-201"
+      ],
+      "feature_id": "campaign-wizard",
+      "environment": "documented"
+    },
+    {
+      "layer": "portal",
+      "role": "unspecified",
+      "state": "Save lỗi (422), rời wizard chưa lưu",
+      "covered": true,
+      "note": "Chỉ lỗi đã biết, chưa có expected result chính thức cho thông báo lỗi",
+      "kb_refs": [
+        "KB-092",
+        "KB-093"
+      ],
+      "feature_id": "campaign-wizard",
+      "environment": "documented"
+    },
+    {
+      "layer": "portal",
+      "role": "unspecified",
+      "state": "workspace chưa có segment / chưa có email / > 50 email",
+      "covered": true,
+      "note": "Segment rỗng: AC; email rỗng và > 50: bundle, chưa thử",
+      "kb_refs": [
+        "KB-066",
+        "KB-081",
+        "KB-082"
+      ],
+      "feature_id": "campaign-wizard",
+      "environment": "documented"
+    },
+    {
+      "layer": "portal",
+      "role": "unspecified",
+      "state": "workspace có preferences page",
+      "covered": false,
+      "note": "Staging chỉ có workspace 0 preferences page",
+      "kb_refs": [
+        "KB-072"
+      ],
+      "feature_id": "campaign-wizard",
+      "environment": "documented"
+    },
+    {
+      "layer": "portal",
+      "role": "unspecified",
+      "state": "workspace chưa có sending domain verified",
+      "covered": true,
+      "note": "Chỉ hiện trạng copy cảnh báo; hành vi gửi đang conflict",
+      "kb_refs": [
+        "KB-059"
+      ],
+      "feature_id": "campaign-wizard",
+      "environment": "documented"
+    },
+    {
+      "layer": "portal",
+      "role": "Owner",
+      "state": "any",
+      "covered": true,
+      "note": "Hiện trạng staging khảo sát bằng Owner",
+      "kb_refs": [
+        "KB-P-036"
+      ],
+      "feature_id": "campaign-wizard",
+      "environment": "documented"
+    },
+    {
+      "layer": "portal",
+      "role": "Member",
+      "state": "any",
+      "covered": false,
+      "note": "Chưa khảo sát cho Campaigns",
+      "kb_refs": [
+        "KB-P-051"
+      ],
+      "feature_id": "campaign-wizard",
+      "environment": "documented"
+    },
+    {
+      "layer": "portal",
+      "role": "Admin",
+      "state": "any",
+      "covered": false,
+      "note": "Chưa từng quan sát",
+      "kb_refs": [
+        "KB-P-051"
+      ],
+      "feature_id": "campaign-wizard",
+      "environment": "documented"
+    },
+    {
+      "layer": "api",
+      "role": "unspecified",
+      "state": "tạo / cập nhật campaign",
+      "covered": true,
+      "note": "Mảnh rời (PUT, 422); chưa có hợp đồng API campaign core",
+      "kb_refs": [
+        "KB-091",
+        "KB-051"
+      ],
+      "feature_id": "campaign-wizard",
+      "environment": "documented"
+    },
+    {
+      "layer": "data",
+      "role": "unspecified",
+      "state": "segment, preference page, template dùng chung, merge tag",
+      "covered": true,
+      "kb_refs": [
+        "KB-063",
+        "KB-073",
+        "KB-088"
+      ],
+      "feature_id": "campaign-wizard",
+      "environment": "documented"
+    },
+    {
+      "layer": "code",
+      "role": "unspecified",
+      "state": "any",
+      "covered": false,
+      "note": "Không có nguồn mã",
+      "kb_refs": [],
+      "feature_id": "campaign-wizard",
+      "environment": "documented"
+    }
+  ],
+  "profile_conflicts": [
+    {
+      "conflict_group": "CONF-MTRO-email-content-01",
+      "topic": "Cú pháp merge tag hai ngoặc vs một ngoặc",
+      "resolution": "UNRESOLVED",
+      "owner": "email-content / merge-tags",
+      "note": "Phía campaign là item INFERRED/LOW; phía một ngoặc (Jira MTRO-92 §10) thuộc object email-content nên không có kb_id trong object campaigns. Không chọn bên.",
+      "kb_refs": [
+        "KB-088"
+      ]
+    }
+  ],
+  "profile_relationships": [
+    {
+      "from": "campaign-wizard",
+      "to": "campaign-preview-and-test",
+      "relation": "PRECEDES",
+      "kb_refs": [
+        "KB-043",
+        "KB-047"
+      ]
+    },
+    {
+      "from": "campaign-wizard",
+      "to": "campaign-send-and-schedule",
+      "relation": "PRECEDES",
+      "kb_refs": [
+        "KB-047"
+      ]
+    }
+  ]
+}

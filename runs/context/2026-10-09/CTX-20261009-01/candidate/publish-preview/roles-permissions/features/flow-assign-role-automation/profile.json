@@ -1,0 +1,742 @@
+{
+  "feature_id": "flow-assign-role-automation",
+  "feature_key": "flow-assign-role-automation",
+  "name": "Tự động gán role qua Shopify Flow action \"assign role\"",
+  "user_goal": "Merchant dùng Shopify Flow để tự động gán role template của Duos cho member (kèm contact role Shopify), với kết quả rõ ràng: cấu hình sai thì run fail và không ghi gì, chạy thành công thì member có role/contact role đúng, permission được đồng bộ từ role template, email đổi role được gửi và trigger \"member role updated\" được bắn.",
+  "user_goal_kb_refs": [
+    "KB-032",
+    "KB-036",
+    "KB-038",
+    "KB-040",
+    "KB-041"
+  ],
+  "stable_since_version": "v1",
+  "never_supersede_topics": [
+    "permission"
+  ],
+  "actors": [
+    {
+      "role": "merchant (Shopify Flow)",
+      "permission_observed": "Cấu hình workflow chứa action \"assign role\" (role template + `shopify_contact_role`) và có thể tự động theo customer tag. Staff role nào được dùng chưa có nguồn; Flow chưa mở trên staging.",
+      "kb_refs": [
+        "KB-032",
+        "KB-043",
+        "KB-P-006"
+      ]
+    },
+    {
+      "role": "member (buyer được gán role)",
+      "permission_observed": "Nhận role template và contact role Shopify (Location admin / Ordering only), nhận email đổi role khi action chạy thành công.",
+      "kb_refs": [
+        "KB-036",
+        "KB-041"
+      ]
+    },
+    {
+      "role": "system",
+      "permission_observed": "Kiểm tra field, role template, customer; fail thì không ghi gì; thành công thì re-sync permission từ role template cho mọi member giữ role, gửi email, bắn trigger `duos-member-role-updated`.",
+      "kb_refs": [
+        "KB-038",
+        "KB-040",
+        "KB-041"
+      ]
+    }
+  ],
+  "entry_points": [
+    {
+      "path": "Shopify Flow › workflow › action \"assign role\" của Duos (field role template, ngay sau là `shopify_contact_role`)",
+      "precondition": "Store đã cài Duos; frontend đã khai báo field với key đúng `shopify_contact_role`.",
+      "kb_refs": [
+        "KB-032",
+        "KB-039",
+        "KB-P-006"
+      ]
+    },
+    {
+      "path": "Shopify Flow › trigger `companyContact Assigned` + điều kiện customer tag → action assign role (theo ticket)",
+      "precondition": "Customer được thêm vào company location; tag map tới role template.",
+      "kb_refs": [
+        "KB-043"
+      ]
+    },
+    {
+      "path": "Shopify Flow › trigger \"member role updated\" (`duos-member-role-updated`)",
+      "precondition": "Role của member vừa đổi (kể cả do action assign role).",
+      "kb_refs": [
+        "KB-041",
+        "KB-042",
+        "KB-045"
+      ]
+    }
+  ],
+  "capabilities": [
+    {
+      "name": "Cấu hình action với contact role Shopify",
+      "description": "Field `shopify_contact_role` dạng single_line_text đặt sau field role template; chỉ nhận đúng `location_admin` / `ordering_only` (strict, phân biệt hoa/thường, không trim); key field phải đúng và được khai báo ở frontend.",
+      "kb_refs": [
+        "KB-032",
+        "KB-034",
+        "KB-039"
+      ]
+    },
+    {
+      "name": "Từ chối run sai cấu hình mà không ghi gì",
+      "description": "Field rỗng → `Shopify contact role is required`; giá trị sai → `Shopify contact role \"X\" is not supported. Use one of: location_admin, ordering_only`; role template không tồn tại/chưa publish cho company hoặc customer không tồn tại → fail (message chưa nêu). Mọi nhánh fail không tạo/gán role và không đổi contact role Shopify.",
+      "kb_refs": [
+        "KB-033",
+        "KB-035",
+        "KB-037",
+        "KB-038",
+        "KB-039"
+      ]
+    },
+    {
+      "name": "Gán role và contact role khi run thành công",
+      "description": "`location_admin` → Location admin, `ordering_only` → Ordering only trên Shopify company location; permission được re-sync từ role template xuống mọi member đang giữ role đó, kể cả ở location khác.",
+      "kb_refs": [
+        "KB-036",
+        "KB-040"
+      ]
+    },
+    {
+      "name": "Thông báo đổi role",
+      "description": "Gửi email đổi role cho member và bắn trigger \"member role updated\" (`duos-member-role-updated`); workflow nghe trigger này mà chứa action assign role sẽ loop vô hạn (limitation chấp nhận).",
+      "kb_refs": [
+        "KB-041",
+        "KB-042",
+        "KB-045"
+      ]
+    },
+    {
+      "name": "Tự động gán role theo customer tag (theo ticket)",
+      "description": "Trigger `companyContact Assigned` gán role template theo tag; location chưa có role thì Flow tự tạo (tên dạng \"prefix baserole + name\", chưa xác nhận); gỡ tag thì role về `Member`.",
+      "kb_refs": [
+        "KB-043",
+        "KB-044",
+        "KB-P-017"
+      ]
+    }
+  ],
+  "state_transitions": [
+    {
+      "from": "run action assign role",
+      "to": "failed — không ghi gì",
+      "trigger": "`shopify_contact_role` rỗng (hoặc frontend chưa deploy / sai key)",
+      "condition": "Message `Shopify contact role is required`.",
+      "kb_refs": [
+        "KB-033",
+        "KB-038",
+        "KB-039"
+      ]
+    },
+    {
+      "from": "run action assign role",
+      "to": "failed — không ghi gì",
+      "trigger": "`shopify_contact_role` không phải đúng `location_admin` / `ordering_only` (kể cả có khoảng trắng bao quanh, khác hoa/thường)",
+      "condition": "Message `Shopify contact role \"X\" is not supported. Use one of: location_admin, ordering_only`.",
+      "kb_refs": [
+        "KB-034",
+        "KB-035",
+        "KB-038"
+      ]
+    },
+    {
+      "from": "run action assign role",
+      "to": "failed — không ghi gì",
+      "trigger": "Role template không tồn tại / chưa publish cho company đang xử lý, hoặc customer không tồn tại trên Shopify",
+      "condition": "Message chưa có nguồn.",
+      "kb_refs": [
+        "KB-037",
+        "KB-038"
+      ]
+    },
+    {
+      "from": "member có role cũ",
+      "to": "member giữ role template, contact role Shopify theo giá trị field; permission mọi member giữ role được re-sync; email gửi; trigger bắn",
+      "trigger": "Run thành công",
+      "condition": "Field hợp lệ, role template đã publish cho company, customer tồn tại.",
+      "kb_refs": [
+        "KB-036",
+        "KB-040",
+        "KB-041"
+      ]
+    },
+    {
+      "from": "customer có tag map tới role template",
+      "to": "role của customer về `Member`",
+      "trigger": "Gỡ tag",
+      "condition": "Chỉ theo ticket Jira DUOS-402, chưa xác nhận.",
+      "kb_refs": [
+        "KB-043"
+      ]
+    }
+  ],
+  "confirmed_rules": [
+    {
+      "statement": "Theo Jira DUOS-405 (description/AC, tóm tắt trong QA business rule Duos cập nhật 11/08/2026), Shopify Flow action \"assign role\" của Duos có field `shopify_contact_role` đặt ngay sau field role template, dạng `single_line_text` vì custom field của Shopify Flow không hỗ trợ dropdown/select.",
+      "knowledge_kind": "CONFIRMED_EXPECTED",
+      "confidence": "MEDIUM",
+      "tags": [
+        "permission"
+      ],
+      "kb_refs": [
+        "KB-032"
+      ]
+    },
+    {
+      "statement": "Theo Jira DUOS-405 (description/AC, cập nhật 11/08/2026), nếu bỏ trống field `shopify_contact_role`, run của Flow action \"assign role\" fail với message chính xác `Shopify contact role is required`.",
+      "knowledge_kind": "CONFIRMED_EXPECTED",
+      "confidence": "MEDIUM",
+      "tags": [
+        "permission"
+      ],
+      "kb_refs": [
+        "KB-033"
+      ]
+    },
+    {
+      "statement": "Theo quyết định Dev BE 10/08/2026 (Jira DUOS-405 comment, ghi trong Decision log Duos), field `shopify_contact_role` chỉ chấp nhận đúng 2 chuỗi `location_admin` và `ordering_only`, so khớp strict: phân biệt hoa/thường và không trim khoảng trắng bao quanh — giá trị \" location_admin \" bị reject là hành vi cố ý, không phải bug.",
+      "knowledge_kind": "CONFIRMED_EXPECTED",
+      "confidence": "MEDIUM",
+      "tags": [
+        "permission"
+      ],
+      "kb_refs": [
+        "KB-034"
+      ]
+    },
+    {
+      "statement": "Theo Jira DUOS-405 (description/AC, cập nhật 11/08/2026), khi giá trị `shopify_contact_role` không hợp lệ, run fail với message `Shopify contact role \"X\" is not supported. Use one of: location_admin, ordering_only` (X là giá trị đã nhập).",
+      "knowledge_kind": "CONFIRMED_EXPECTED",
+      "confidence": "MEDIUM",
+      "tags": [
+        "permission"
+      ],
+      "kb_refs": [
+        "KB-035"
+      ]
+    },
+    {
+      "statement": "Theo Jira DUOS-405 (description/AC, cập nhật 11/08/2026), giá trị `location_admin` làm member thành Location admin trên Shopify company location; `ordering_only` làm member thành Ordering only.",
+      "knowledge_kind": "CONFIRMED_EXPECTED",
+      "confidence": "MEDIUM",
+      "tags": [
+        "permission"
+      ],
+      "kb_refs": [
+        "KB-036"
+      ]
+    },
+    {
+      "statement": "Theo Jira DUOS-405 (description/AC, cập nhật 11/08/2026), run của Flow action \"assign role\" fail nếu role template chỉ định không tồn tại hoặc chưa được publish cho đúng company đang xử lý, hoặc customer không tồn tại trên Shopify. Tài liệu không nêu message lỗi của các nhánh này.",
+      "knowledge_kind": "CONFIRMED_EXPECTED",
+      "confidence": "MEDIUM",
+      "tags": [
+        "permission"
+      ],
+      "kb_refs": [
+        "KB-037"
+      ]
+    },
+    {
+      "statement": "Theo quyết định Dev BE 10/08/2026 (Jira DUOS-405 comment, ghi trong Decision log Duos và QA business rule Duos), ở mọi nhánh failure của Flow action \"assign role\" (field rỗng hoặc sai, role template không hợp lệ, customer không tồn tại), hệ thống không ghi gì: không tạo/gán role trong app Duos và không đổi contact role bên Shopify.",
+      "knowledge_kind": "CONFIRMED_EXPECTED",
+      "confidence": "MEDIUM",
+      "tags": [
+        "permission"
+      ],
+      "kb_refs": [
+        "KB-038"
+      ]
+    },
+    {
+      "statement": "Theo quyết định Dev BE 10/08/2026 (Jira DUOS-405 comment, ghi trong Decision log Duos), role template là source of truth của permission: mỗi lần Flow action \"assign role\" chạy, permission được re-sync từ role template xuống tất cả member đang giữ role đó — không chỉ member trong lần chạy, kể cả member ở company location khác. Đây là thay đổi có chủ đích, tác động diện rộng lên dữ liệu hiện có.",
+      "knowledge_kind": "CONFIRMED_EXPECTED",
+      "confidence": "MEDIUM",
+      "tags": [
+        "permission"
+      ],
+      "kb_refs": [
+        "KB-040"
+      ]
+    },
+    {
+      "statement": "Theo Jira DUOS-405 (description/AC, cập nhật 11/08/2026), Flow action \"assign role\" gửi email đổi role cho member và bắn Shopify Flow trigger \"member role updated\" — hành vi giống luồng admin đổi role. Theo Dev BE và Dev FE 18/08/2026 (Jira DUOS-409 comment), trigger này là trigger có sẵn `duos-member-role-updated`.",
+      "knowledge_kind": "CONFIRMED_EXPECTED",
+      "confidence": "MEDIUM",
+      "tags": [
+        "permission"
+      ],
+      "kb_refs": [
+        "KB-041"
+      ]
+    },
+    {
+      "statement": "Theo Jira DUOS-405 (description/AC, cập nhật 11/08/2026), field của Flow action được khai báo ở frontend, không phải backend, và key phải chính xác là `shopify_contact_role`; nếu frontend chưa deploy hoặc khai báo sai key thì action luôn fail với `Shopify contact role is required`, không phân biệt được với trường hợp merchant bỏ trống field (Known issues Duos xếp là intentional limitation).",
+      "knowledge_kind": "CONFIRMED_EXPECTED",
+      "confidence": "MEDIUM",
+      "tags": [
+        "permission"
+      ],
+      "kb_refs": [
+        "KB-039"
+      ],
+      "note": "Limitation đã biết (intentional), không phải lỗi."
+    },
+    {
+      "statement": "Theo quyết định Dev BE 10/08/2026 (Jira DUOS-405 comment, ghi trong Decision log Duos), workflow lắng nghe trigger \"member role updated\" mà bên trong chứa action \"assign role\" sẽ loop vô hạn; đây là limitation đã biết và được chấp nhận, không log bug.",
+      "knowledge_kind": "CONFIRMED_EXPECTED",
+      "confidence": "MEDIUM",
+      "tags": [
+        "permission"
+      ],
+      "kb_refs": [
+        "KB-042"
+      ],
+      "note": "Limitation đã biết và được chấp nhận, không log bug."
+    }
+  ],
+  "observed_behavior": [],
+  "observed_validations": [],
+  "permissions": [
+    {
+      "statement": "Action chỉ gán được role template đã publish cho đúng company đang xử lý.",
+      "kb_refs": [
+        "KB-037",
+        "KB-020"
+      ]
+    },
+    {
+      "statement": "Role template là source of truth của permission; mỗi lần chạy, permission của mọi member đang giữ role được đồng bộ lại.",
+      "kb_refs": [
+        "KB-040"
+      ]
+    },
+    {
+      "statement": "Staff role nào của merchant được cấu hình Flow action chưa có nguồn.",
+      "kb_refs": [
+        "KB-032"
+      ]
+    }
+  ],
+  "surface_mapping": {
+    "portal": [],
+    "storefront": [],
+    "api": [],
+    "data": [
+      {
+        "item": "Role template (role mặc định hoặc custom) và tập company được publish",
+        "kb_refs": [
+          "KB-037",
+          "KB-P-016"
+        ]
+      },
+      {
+        "item": "Contact role Shopify của member: Location admin / Ordering only",
+        "kb_refs": [
+          "KB-036"
+        ]
+      },
+      {
+        "item": "Role fallback `Member` khi gỡ tag (theo ticket)",
+        "kb_refs": [
+          "KB-043",
+          "KB-P-017"
+        ]
+      }
+    ],
+    "code": [
+      {
+        "item": "Field Flow action khai báo ở frontend với key `shopify_contact_role`",
+        "kb_refs": [
+          "KB-039"
+        ]
+      }
+    ],
+    "shopify_flow": [
+      {
+        "item": "Action \"assign role\": field role template + `shopify_contact_role` (single_line_text)",
+        "kb_refs": [
+          "KB-032"
+        ]
+      },
+      {
+        "item": "Message lỗi `Shopify contact role is required` và `Shopify contact role \"X\" is not supported. Use one of: location_admin, ordering_only`",
+        "kb_refs": [
+          "KB-033",
+          "KB-035"
+        ]
+      },
+      {
+        "item": "Trigger \"member role updated\" (`duos-member-role-updated`)",
+        "kb_refs": [
+          "KB-041",
+          "KB-045"
+        ]
+      },
+      {
+        "item": "Trigger `companyContact Assigned` dùng cho auto-assign theo tag (theo ticket)",
+        "kb_refs": [
+          "KB-043"
+        ]
+      }
+    ]
+  },
+  "dependencies": [
+    {
+      "target": "roles-permissions / default-and-custom-roles",
+      "relation": "role_template_source",
+      "note": "Role template phải tồn tại và được publish cho company.",
+      "kb_refs": [
+        "KB-020",
+        "KB-037"
+      ]
+    },
+    {
+      "target": "roles-permissions / member-role-assignment-sync",
+      "relation": "shared_write_path",
+      "note": "Action chạy qua cùng member-sync path với 4 luồng đổi role khác; ràng buộc ≥ 1 Admin mỗi location (Flow có enforce không — chưa chốt) do feature đó sở hữu.",
+      "kb_refs": [
+        "KB-026",
+        "KB-027",
+        "KB-029"
+      ]
+    },
+    {
+      "target": "notifications / notification-settings-and-templates",
+      "relation": "sends_via",
+      "note": "Template email \"Member role updated\" và danh sách trigger email thuộc notifications; hệ quả gửi email của action thuộc feature này.",
+      "kb_refs": [
+        "KB-041"
+      ]
+    },
+    {
+      "target": "notifications / flow-email-triggers",
+      "relation": "see_also",
+      "note": "Trigger Flow liên quan email thuộc notifications.",
+      "kb_refs": [
+        "KB-041"
+      ]
+    }
+  ],
+  "risks": [
+    {
+      "statement": "Mỗi lần action chạy, permission được re-sync từ role template xuống tất cả member đang giữ role — kể cả ở company location khác; một lần chạy có thể thay đổi dữ liệu quyền diện rộng.",
+      "knowledge_kind": "CONFIRMED_EXPECTED",
+      "confidence": "MEDIUM",
+      "tags": [
+        "permission"
+      ],
+      "kb_refs": [
+        "KB-040"
+      ]
+    },
+    {
+      "statement": "Workflow nghe trigger \"member role updated\" mà chứa action assign role sẽ loop vô hạn (limitation chấp nhận); merchant cấu hình như vậy sẽ gây chạy lặp.",
+      "knowledge_kind": "CONFIRMED_EXPECTED",
+      "confidence": "MEDIUM",
+      "tags": [
+        "permission"
+      ],
+      "kb_refs": [
+        "KB-042"
+      ]
+    },
+    {
+      "statement": "Frontend chưa deploy hoặc khai báo sai key field khiến action luôn fail với `Shopify contact role is required`, không phân biệt được với merchant bỏ trống field — dễ chẩn đoán nhầm khi regression sau deploy.",
+      "knowledge_kind": "CONFIRMED_EXPECTED",
+      "confidence": "MEDIUM",
+      "tags": [
+        "permission"
+      ],
+      "kb_refs": [
+        "KB-039"
+      ]
+    },
+    {
+      "statement": "QA business rule Duos ghi \"Chưa chốt\": Shopify Flow action \"assign role\" có enforce rule mỗi company location tối thiểu 1 Admin hay không — cụ thể khi hạ Admin cuối cùng của location xuống `ordering_only` qua Flow. Chưa có PO/Dev trả lời; không dùng làm kết quả mong đợi.",
+      "knowledge_kind": "INFERRED",
+      "confidence": "LOW",
+      "tags": [
+        "permission"
+      ],
+      "kb_refs": [
+        "KB-029"
+      ],
+      "note": "Câu hỏi mở do member-role-assignment-sync sở hữu; ảnh hưởng trực tiếp Flow."
+    },
+    {
+      "statement": "Theo Jira DUOS-402 (description, story Done; chưa có rule active tương ứng trong QA business rule Duos), auto-assign role Duos qua Shopify Flow theo customer tag: trigger `companyContact Assigned` (chạy 1 lần khi customer được thêm vào company location) gán role template cho customer; location chưa có role đó thì Flow tự tạo role rồi gán; gỡ tag thì role của customer trở về `Member` (glossary ghi `member` là một giá trị role_name hợp lệ).",
+      "knowledge_kind": "INFERRED",
+      "confidence": "MEDIUM",
+      "tags": [
+        "permission"
+      ],
+      "kb_refs": [
+        "KB-043"
+      ],
+      "note": "Chỉ theo ticket Jira DUOS-402; không làm oracle."
+    },
+    {
+      "statement": "Theo Dev FE 15/07/2026 (ghi trong QA KB Duos \"Roles & permissions\" v1), role tạo ra từ role template có tên dạng \"prefix baserole + name\"; tài liệu ghi chưa có ví dụ nên format này cần xác nhận.",
+      "knowledge_kind": "INFERRED",
+      "confidence": "LOW",
+      "tags": [
+        "permission"
+      ],
+      "kb_refs": [
+        "KB-044"
+      ],
+      "note": "Format tên role chưa có ví dụ."
+    },
+    {
+      "statement": "Theo QA KB Duos \"Roles & permissions\" v1, Jira DUOS-409 (Shopify Flow trigger khi role Duos thay đổi) vẫn ở trạng thái To Do: trigger đã có sẵn nhưng phạm vi ticket chưa chốt.",
+      "knowledge_kind": "INFERRED",
+      "confidence": "LOW",
+      "tags": [
+        "permission"
+      ],
+      "kb_refs": [
+        "KB-045"
+      ],
+      "note": "Phạm vi Jira DUOS-409 chưa chốt."
+    },
+    {
+      "statement": "Shopify Flow chưa mở trên staging; toàn bộ hành vi của action chỉ dựa trên Jira/quyết định Dev, chưa có quan sát hay test case PASS có ngày.",
+      "knowledge_kind": "INFERRED",
+      "confidence": "LOW",
+      "tags": [
+        "permission"
+      ],
+      "kb_refs": [
+        "KB-032",
+        "KB-038",
+        "KB-041",
+        "KB-P-006"
+      ]
+    }
+  ],
+  "unknown_areas": [
+    {
+      "question": "Field `shopify_contact_role` chỉ chứa khoảng trắng báo `required` hay `not supported`?",
+      "why_it_matters": "Rule strict không trim nhưng không nói nhánh toàn khoảng trắng; boundary validation còn trống.",
+      "kb_refs": [
+        "KB-033",
+        "KB-034"
+      ],
+      "oq_id": "OQ-roles-permissions-011"
+    },
+    {
+      "question": "Message lỗi khi role template không tồn tại / chưa publish cho company, hoặc customer không tồn tại trên Shopify là gì?",
+      "why_it_matters": "Rule chỉ nói run fail; không kiểm được message.",
+      "kb_refs": [
+        "KB-037",
+        "KB-038"
+      ],
+      "oq_id": "OQ-roles-permissions-011"
+    },
+    {
+      "question": "Tạo/gán role fail giữa chừng (sau khi qua validation) thì hệ thống retry, ghi log hay báo merchant?",
+      "why_it_matters": "\"Không ghi gì\" chỉ áp cho các nhánh validation đã liệt kê.",
+      "kb_refs": [
+        "KB-038"
+      ],
+      "oq_id": "OQ-roles-permissions-011"
+    },
+    {
+      "question": "Chạy lại action lần 2 với cùng role có gửi email đổi role lần nữa không; nội dung và người nhận email đổi role là gì; Jira DUOS-409 (đang To Do) còn phạm vi gì chưa làm?",
+      "why_it_matters": "Hệ quả thông báo chưa có kết quả mong đợi chi tiết.",
+      "kb_refs": [
+        "KB-041",
+        "KB-045"
+      ],
+      "oq_id": "OQ-roles-permissions-011"
+    },
+    {
+      "question": "Auto-assign theo customer tag (Jira DUOS-402): customer có nhiều tag map nhiều role thì gán role nào; thêm tag sau khi đã ở location có kích hoạt không; thêm member thủ công có kích hoạt trigger không; customer nhiều location bị gỡ tag thì gỡ role ở đâu; custom role / role mặc định riêng của merchant có làm role template được không; tên role tạo từ template cụ thể ra sao?",
+      "why_it_matters": "Luồng auto-assign chỉ theo ticket, nhiều nhánh chưa chốt.",
+      "kb_refs": [
+        "KB-043",
+        "KB-044"
+      ],
+      "oq_id": "OQ-roles-permissions-019"
+    },
+    {
+      "question": "Flow action assign role có chặn việc hạ Admin cuối cùng của location xuống `ordering_only` không?",
+      "why_it_matters": "Ràng buộc ≥ 1 Admin đã xác nhận nhưng Flow enforce \"Chưa chốt\" (câu hỏi do member-role-assignment-sync sở hữu).",
+      "kb_refs": [
+        "KB-029",
+        "KB-027"
+      ],
+      "oq_id": "OQ-roles-permissions-009"
+    },
+    {
+      "question": "Khi nào có được store staging mở Shopify Flow để quan sát/kiểm thử action assign role và trigger member role updated?",
+      "why_it_matters": "Feature chưa có bất kỳ quan sát nào; mọi check đều chỉ dựa trên tài liệu.",
+      "kb_refs": [
+        "KB-032",
+        "KB-036",
+        "KB-040",
+        "KB-P-006"
+      ],
+      "oq_id": "OQ-roles-permissions-012"
+    }
+  ],
+  "freshness": {
+    "observed_at": "2026-10-08",
+    "earliest_source_date": "2026-04-14",
+    "basis": "Ngày nguồn mới nhất trong các KB item được tham chiếu; Jira DUOS-405 (cập nhật 11/08/2026), Dev BE 10/08/2026, Dev BE/FE 18/08/2026 (Jira DUOS-409), Dev FE 15/07/2026, ticket Jira DUOS-402. Không có quan sát runtime trong lần chạy này."
+  },
+  "last_updated": {
+    "date": "2026-10-09",
+    "ccr_ref": "bootstrap"
+  },
+  "coverage_matrix": [
+    {
+      "feature_id": "flow-assign-role-automation",
+      "layer": "shopify_flow",
+      "role": "merchant",
+      "state": "field shopify_contact_role rỗng",
+      "environment": "documented",
+      "covered": true,
+      "note": "Jira DUOS-405 — message chính xác."
+    },
+    {
+      "feature_id": "flow-assign-role-automation",
+      "layer": "shopify_flow",
+      "role": "merchant",
+      "state": "field sai giá trị / khác hoa-thường / có khoảng trắng",
+      "environment": "documented",
+      "covered": true,
+      "note": "Jira DUOS-405 + Dev BE 10/08/2026."
+    },
+    {
+      "feature_id": "flow-assign-role-automation",
+      "layer": "shopify_flow",
+      "role": "merchant",
+      "state": "field chỉ chứa khoảng trắng",
+      "environment": "documented",
+      "covered": false,
+      "note": "Chưa có nguồn."
+    },
+    {
+      "feature_id": "flow-assign-role-automation",
+      "layer": "shopify_flow",
+      "role": "system",
+      "state": "role template không tồn tại / chưa publish; customer không tồn tại",
+      "environment": "documented",
+      "covered": true,
+      "note": "Fail + không ghi gì; message chưa có."
+    },
+    {
+      "feature_id": "flow-assign-role-automation",
+      "layer": "shopify_flow",
+      "role": "system",
+      "state": "run thành công location_admin / ordering_only",
+      "environment": "documented",
+      "covered": true,
+      "note": "Jira DUOS-405."
+    },
+    {
+      "feature_id": "flow-assign-role-automation",
+      "layer": "shopify_flow",
+      "role": "system",
+      "state": "re-sync permission cho mọi member giữ role (nhiều location)",
+      "environment": "documented",
+      "covered": true,
+      "note": "Dev BE 10/08/2026."
+    },
+    {
+      "feature_id": "flow-assign-role-automation",
+      "layer": "shopify_flow",
+      "role": "system",
+      "state": "email đổi role + trigger member role updated",
+      "environment": "documented",
+      "covered": true,
+      "note": "Jira DUOS-405 + Dev 18/08/2026; nội dung email chưa có."
+    },
+    {
+      "feature_id": "flow-assign-role-automation",
+      "layer": "shopify_flow",
+      "role": "merchant",
+      "state": "workflow nghe trigger chứa assign role (loop)",
+      "environment": "documented",
+      "covered": true,
+      "note": "Limitation chấp nhận."
+    },
+    {
+      "feature_id": "flow-assign-role-automation",
+      "layer": "shopify_flow",
+      "role": "merchant",
+      "state": "auto-assign theo customer tag / gỡ tag",
+      "environment": "documented",
+      "covered": true,
+      "note": "Chỉ theo ticket."
+    },
+    {
+      "feature_id": "flow-assign-role-automation",
+      "layer": "shopify_flow",
+      "role": "merchant",
+      "state": "hạ Admin cuối cùng của location",
+      "environment": "documented",
+      "covered": false,
+      "note": "Chưa chốt."
+    },
+    {
+      "feature_id": "flow-assign-role-automation",
+      "layer": "shopify_flow",
+      "role": "system",
+      "state": "lỗi giữa chừng sau validation (retry/log)",
+      "environment": "documented",
+      "covered": false,
+      "note": "Chưa có nguồn."
+    },
+    {
+      "feature_id": "flow-assign-role-automation",
+      "layer": "api",
+      "role": "any",
+      "state": "any",
+      "environment": "documented",
+      "covered": false,
+      "note": "Bộ tài liệu QA không có đặc tả API/data model cho feature này"
+    },
+    {
+      "feature_id": "flow-assign-role-automation",
+      "layer": "db",
+      "role": "any",
+      "state": "any",
+      "environment": "documented",
+      "covered": false,
+      "note": "Bộ tài liệu QA không có đặc tả API/data model cho feature này"
+    }
+  ],
+  "profile_conflicts": [],
+  "profile_relationships": [
+    {
+      "from": "flow-assign-role-automation",
+      "to": "default-and-custom-roles",
+      "relation": "USES_ROLE_TEMPLATE",
+      "kb_refs": [
+        "KB-037",
+        "KB-020"
+      ]
+    },
+    {
+      "from": "flow-assign-role-automation",
+      "to": "member-role-assignment-sync",
+      "relation": "SHARES_WRITE_PATH",
+      "kb_refs": [
+        "KB-026",
+        "KB-029"
+      ]
+    },
+    {
+      "from": "flow-assign-role-automation",
+      "to": "notifications/notification-settings-and-templates",
+      "relation": "SENDS_VIA",
+      "kb_refs": [
+        "KB-041"
+      ]
+    }
+  ]
+}

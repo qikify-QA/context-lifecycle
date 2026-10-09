@@ -1,0 +1,728 @@
+{
+  "schema_version": "1.0",
+  "artifact_type": "FeatureProfileCandidate",
+  "artifact_id": "ART-FEATURE-PROFILE-subscription-page-CTX-20261009-01",
+  "workflow_id": "CTX-20261009-01",
+  "producer": "feature-profile-builder",
+  "source_refs": [
+    "candidate/product-kb/subscription-page.json",
+    "candidate/product-kb/module-pricing-and-plan-tiers.json",
+    "candidate/product-kb/suggested-plans-and-trial.json",
+    "candidate/product-kb/legacy-price-retention-banner.json",
+    "candidate/product-kb/module-entitlement-gating.json",
+    "candidate/product-kb/_product-level.json",
+    "input/scope-plan.json",
+    "input/orchestrator-directives.json",
+    "input/profile-checklist-brief.md",
+    "intermediate/doc/DOC-21.json"
+  ],
+  "upstream_artifact_ids": [
+    "PKBC-CTX-20261009-01-pricing-subscription-subscription-page",
+    "PKBC-CTX-20261009-01-pricing-subscription-module-pricing-and-plan-tiers",
+    "PKBC-CTX-20261009-01-pricing-subscription-suggested-plans-and-trial",
+    "PKBC-CTX-20261009-01-pricing-subscription-legacy-price-retention-banner",
+    "PKBC-CTX-20261009-01-pricing-subscription-module-entitlement-gating",
+    "PKBC-CTX-20261009-01-_product-level",
+    "SCOPE-PLAN-CTX-20261009-01"
+  ],
+  "status": "PARTIAL",
+  "confidence": "MEDIUM",
+  "observations": [
+    "Profile dựng từ tài liệu (bootstrap); không có quan sát runtime nên act_ids và observed_validations rỗng.",
+    "Shard feature có 13 KB item, tất cả được tham chiếu; confirmed_rules 2, observed_behavior 4, risks 7, unknown_areas 7.",
+    "Object pricing-subscription không có shard object-level riêng; tham chiếu chéo trong object dùng KB của shard feature khác cùng object, product-level dùng KB-P.",
+    "Regression checklist QA chỉ dùng làm gợi ý vùng rủi ro (giá theo tier, banner Plus, module chưa mua, banner giữ giá cũ), không làm oracle."
+  ],
+  "assumptions": [
+    "feature_id dùng chính feature_key (ID ổn định qua các version).",
+    "coverage_matrix.covered = true khi ô có quy tắc CONFIRMED_EXPECTED hoặc quan sát staging; false khi chỉ có ticket, đề xuất, tranh chấp hoặc không có nguồn.",
+    "Bộ tài liệu QA không có đặc tả API/data model cho feature này: thêm dòng coverage layer api và db covered=false; endpoint / field nhắc trong giải thích Dev chỉ ghi ở surface_mapping, không coi là đặc tả.",
+    "confirmed_rules mang confirmation_type / derivation của KB; item derivation code_artifact có oracle_note (chỉ là baseline).",
+    "Item CONFIRMED_EXPECTED không thuộc conflict_group vào confirmed_rules; OBSERVED_CURRENT không phải known defect vào observed_behavior; INFERRED / tranh chấp / known defect vào risks và unknown_areas."
+  ],
+  "unknowns": [
+    "CTA \"Build my plan\" (staging) thay \"Build my subscription\" (Jira DUOS-365) là chủ đích hay regression, và các label \"Current subscription\", \"No items selected\", \"Subtotal\" \"-\", \"Total: $0 /mo\" có phải bản đúng không?",
+    "\"Select all\", panel \"Estimate\", toggle Monthly/Yearly (và giá gạch, banner early-bird / trial) còn tồn tại không, và chỉ ẩn ở trạng thái store nào?",
+    "Ai trong phía merchant (chủ store, staff Shopify được cấp quyền vào app) được xem trang Subscription, chọn module, subscribe, thêm module và huỷ gói — ma trận quyền cho trang pricing / subscription là gì?",
+    "Store đã subscribe, store early-bird và store đang trả giá cũ thấy trang Subscription thế nào trên staging (modal huỷ gói, \"Add more items\" / \"Subscribe new pack\", banner early-bird, banner giữ giá cũ)?",
+    "Discount code trên trang pricing (Jira DUOS-369) hoạt động thế nào, báo lỗi gì, và cộng dồn với chiết khấu bundle / annual ra sao?",
+    "Khảo sát staging 08/10/2026 của trang Subscription và extension hub chạy trên build / version nào?",
+    "Giá gạch trùng giá thật ở User & Permission (dạng \"~150~ 150\") khi chiết khấu admin 0% có tái xuất hiện sau mỗi lần đổi setting chiết khấu / bảng giá không, và TC-DUOS-303, TC-DUOS-304 xác nhận fix chạy ngày nào?"
+  ],
+  "conflicts": [
+    "Ảnh hưởng bởi CONF-DUOS-pricing-subscription-01 và -02 (sở hữu ở module-pricing-and-plan-tiers) — UNRESOLVED."
+  ],
+  "blocking_issues": [],
+  "payload": {
+    "feature_profiles": [
+      {
+        "feature_id": "subscription-page",
+        "feature_key": "subscription-page",
+        "name": "Chọn module, subscribe, thêm module và huỷ gói trên trang Subscription",
+        "user_goal": "Merchant chọn module trên trang Subscription, xem tổng giá của lựa chọn, subscribe, thêm module hoặc huỷ gói; store đang ở Free plan của app thấy trạng thái Free và không chọn được module.",
+        "user_goal_kb_refs": [
+          "KB-018",
+          "KB-019",
+          "KB-022",
+          "KB-028",
+          "KB-044"
+        ],
+        "stable_since_version": "v1",
+        "actors": [
+          {
+            "role": "merchant (store ở Free plan của app)",
+            "permission_observed": "Khảo sát staging 08/10/2026 trên store Plus ở Free plan: thấy badge \"Free\", 6 checkbox đều disabled, CTA \"Build my plan\". Phân quyền giữa chủ store và staff chưa có nguồn.",
+            "kb_refs": [
+              "KB-021",
+              "KB-022",
+              "KB-023"
+            ]
+          },
+          {
+            "role": "merchant (store đã subscribe)",
+            "permission_observed": "Thêm module, subscribe gói mới, huỷ gói chỉ có mô tả theo ticket Jira DUOS-329; chưa quan sát trên staging.",
+            "kb_refs": [
+              "KB-028"
+            ]
+          },
+          {
+            "role": "merchant (store early-bird)",
+            "permission_observed": "Banner \"Your store is in Early-bird plan\" và tự chọn mọi module chỉ theo ticket Jira DUOS-333; chưa quan sát.",
+            "kb_refs": [
+              "KB-029"
+            ]
+          }
+        ],
+        "entry_points": [
+          {
+            "path": "Trang \"Subscription\" của Portal: subtitle \"See costs and savings with our usage calculator.\", link \"Help Center\", card \"Add items to your estimate\"",
+            "precondition": "Store đã cài app.",
+            "kb_refs": [
+              "KB-018",
+              "KB-023"
+            ]
+          },
+          {
+            "path": "Panel \"Current subscription\" với CTA \"Build my plan\"",
+            "precondition": "Store ở Free plan của app (label theo staging, chưa có PO/Dev xác nhận).",
+            "kb_refs": [
+              "KB-021"
+            ]
+          },
+          {
+            "path": "Nút \"Add more items\" và modal huỷ gói \"Are you sure to cancel your plan?\"",
+            "precondition": "Store đã subscribe (theo ticket, chưa quan sát).",
+            "kb_refs": [
+              "KB-028"
+            ]
+          }
+        ],
+        "capabilities": [
+          {
+            "name": "Xem các item có thể mua theo nhóm",
+            "description": "Card \"Add items to your estimate\" chia 6 item thành 3 nhóm \"Company setup\" / \"B2B ordering\" / \"Finance & credit\" kèm giá từng item, và card \"Get in touch with us\" / \"Contact sales\" (hiện trạng staging). Giá thuộc feature module-pricing-and-plan-tiers.",
+            "kb_refs": [
+              "KB-018",
+              "KB-023",
+              "KB-005"
+            ],
+            "act_ids": []
+          },
+          {
+            "name": "Chọn module và xem ước tính",
+            "description": "Theo ticket Jira DUOS-329 có \"Select all\", panel \"Estimate\" với toggle Monthly/Yearly; staging 08/10/2026 (store Plus, Free plan) không thấy các thành phần này và panel bên phải tên \"Current subscription\". User & Permission chỉ hiện một giá, không giá gạch khi chiết khấu admin 0% (Dev FE 02/10/2026). Việc User & permission check sẵn, giá $0.00 là phía tranh chấp; staging không còn check sẵn.",
+            "kb_refs": [
+              "KB-019",
+              "KB-020",
+              "KB-024",
+              "KB-025",
+              "KB-026",
+              "KB-027"
+            ],
+            "act_ids": []
+          },
+          {
+            "name": "Trạng thái store ở Free plan của app",
+            "description": "Khi store ở Free plan thì việc chọn module bị disable, trang bỏ chọn mọi item và hiện badge \"Free\" (PO 25/03/2026); staging hiện thêm \"No items selected\", \"Subtotal\" \"-\", \"Total: $0 /mo\" và CTA \"Build my plan\".",
+            "kb_refs": [
+              "KB-022",
+              "KB-021",
+              "KB-023"
+            ],
+            "act_ids": []
+          },
+          {
+            "name": "Subscribe, thêm module và huỷ gói",
+            "description": "Theo ticket Jira DUOS-329 (chưa quan sát): store đã subscribe thấy \"Add more items\"; \"Subscribe new pack\" disable nếu không thay đổi; modal huỷ gói cảnh báo huỷ sẽ deactivate mọi tính năng B2B. Khi store approve subscription, bảng charges lưu snapshot (giải thích của Dev trong rule draft).",
+            "kb_refs": [
+              "KB-028",
+              "KB-044"
+            ],
+            "act_ids": []
+          },
+          {
+            "name": "Trang pricing cho store early-bird",
+            "description": "Theo ticket Jira DUOS-333 (chưa quan sát): banner \"Your store is in Early-bird plan\" và trang tự chọn mọi module.",
+            "kb_refs": [
+              "KB-029",
+              "KB-017"
+            ],
+            "act_ids": []
+          },
+          {
+            "name": "Nhập discount code",
+            "description": "Jira DUOS-369 (QA Review) chỉ có ảnh; hành vi và cách cộng dồn với chiết khấu bundle / annual chưa được mô tả.",
+            "kb_refs": [
+              "KB-030"
+            ],
+            "act_ids": []
+          }
+        ],
+        "state_transitions": [
+          {
+            "from": "store ở Free plan của app (badge \"Free\", không chọn được module)",
+            "to": "bắt đầu dựng gói",
+            "trigger": "Bấm CTA \"Build my plan\" (label theo staging; Jira DUOS-365 ghi \"Build my subscription\")",
+            "condition": "Kết quả sau khi bấm không có trong KB",
+            "kb_refs": [
+              "KB-021",
+              "KB-022"
+            ]
+          },
+          {
+            "from": "chưa subscribe",
+            "to": "đã subscribe",
+            "trigger": "Chọn module → \"Subscribe\" → store approve subscription",
+            "condition": "Theo phía Mar 2026 (tranh chấp), \"Subscribe\" disable khi chỉ có module miễn phí được chọn; bảng charges lưu snapshot lúc approve (giải thích Dev trong rule draft)",
+            "kb_refs": [
+              "KB-024",
+              "KB-044"
+            ]
+          },
+          {
+            "from": "đã subscribe",
+            "to": "đã subscribe với gói mới",
+            "trigger": "\"Add more items\" → \"Subscribe new pack\"",
+            "condition": "\"Subscribe new pack\" disable nếu không thay đổi (ticket, chưa quan sát)",
+            "kb_refs": [
+              "KB-028"
+            ]
+          },
+          {
+            "from": "đã subscribe",
+            "to": "đã huỷ gói (mọi tính năng B2B bị deactivate theo nội dung modal)",
+            "trigger": "Modal \"Are you sure to cancel your plan?\" → [Confirm cancellation]",
+            "condition": "Theo ticket, chưa quan sát",
+            "kb_refs": [
+              "KB-028"
+            ]
+          }
+        ],
+        "confirmed_rules": [
+          {
+            "statement": "Theo PO 25/03/2026 (comment Jira DUOS-365, ghi trong QA business rule Duos), khi store đang ở Free plan của app thì việc chọn module trên trang pricing bị disable: trang bỏ chọn mọi item và hiện badge \"Free\".",
+            "knowledge_kind": "CONFIRMED_EXPECTED",
+            "confidence": "MEDIUM",
+            "confirmation_type": "spec_doc",
+            "derivation": "prose",
+            "kb_refs": [
+              "KB-022"
+            ]
+          },
+          {
+            "statement": "Theo Dev FE 02/10/2026 (comment Jira DUOS-431, kèm description DUOS-431; ghi trong QA business rule Duos), trên trang pricing module User & Permission chỉ hiển thị một giá, không có giá gạch; khi setting chiết khấu ở admin bằng 0% thì frontend không render giá gạch kiểu \"~150~ 150\".",
+            "knowledge_kind": "CONFIRMED_EXPECTED",
+            "confidence": "MEDIUM",
+            "confirmation_type": "spec_doc",
+            "derivation": "prose",
+            "kb_refs": [
+              "KB-026"
+            ]
+          }
+        ],
+        "observed_behavior": [
+          {
+            "statement": "Trên staging (khảo sát 08/10/2026, store staging Plus, app ở Free plan), card \"Add items to your estimate\" chia 6 item thành 3 nhóm \"Company setup\" / \"B2B ordering\" / \"Finance & credit\", cả 6 checkbox đều disabled; trang có card \"Get in touch with us\" kèm \"Contact sales\".",
+            "knowledge_kind": "OBSERVED_CURRENT",
+            "confidence": "MEDIUM",
+            "status": "CURRENT_STATE",
+            "kb_refs": [
+              "KB-023"
+            ]
+          },
+          {
+            "statement": "Trên staging (khảo sát 08/10/2026, store staging Plus, app ở Free plan; QA lead xác nhận lưu label, chưa có PO/Dev xác nhận), panel \"Current subscription\" của trang \"Subscription\" hiện badge \"Free\", \"No items selected\", \"Subtotal\" \"-\", \"Total: $0 /mo\" và CTA \"Build my plan\" (Jira DUOS-365 ghi CTA \"Build my subscription\").",
+            "knowledge_kind": "OBSERVED_CURRENT",
+            "confidence": "MEDIUM",
+            "status": "CURRENT_STATE",
+            "kb_refs": [
+              "KB-021"
+            ]
+          },
+          {
+            "statement": "Trên staging (khảo sát 08/10/2026, store staging Plus, app ở Free plan), trang \"Subscription\" không có nút \"Select all\", panel \"Estimate\", toggle Monthly/Yearly, giá gạch, banner early-bird / trial / early partners; panel bên phải mang tên \"Current subscription\".",
+            "knowledge_kind": "OBSERVED_CURRENT",
+            "confidence": "LOW",
+            "status": "CURRENT_STATE",
+            "kb_refs": [
+              "KB-020"
+            ]
+          },
+          {
+            "statement": "Trên staging (khảo sát 08/10/2026, store staging Plus, app ở Free plan), checkbox \"Users & permissions\" trên trang \"Subscription\" không còn ở trạng thái check sẵn với giá $0.00. Quan sát một store; không giải quyết tranh chấp User & Permission miễn phí hay trả phí.",
+            "knowledge_kind": "OBSERVED_CURRENT",
+            "confidence": "LOW",
+            "status": "CURRENT_STATE",
+            "kb_refs": [
+              "KB-025"
+            ]
+          }
+        ],
+        "observed_validations": [],
+        "permissions": [
+          {
+            "statement": "Vai trò được xem / chọn / subscribe / huỷ gói chưa có nguồn; khảo sát staging không ghi vai trò dùng cho trang này.",
+            "kb_refs": [
+              "KB-018",
+              "KB-022",
+              "KB-028"
+            ]
+          }
+        ],
+        "surface_mapping": {
+          "portal": [
+            {
+              "item": "Trang \"Subscription\": header, \"Help Center\", card \"Add items to your estimate\" (3 nhóm, 6 item), card \"Get in touch with us\" / \"Contact sales\"",
+              "kb_refs": [
+                "KB-018",
+                "KB-023"
+              ]
+            },
+            {
+              "item": "Panel \"Current subscription\" (store Free): badge \"Free\", \"No items selected\", \"Subtotal\" \"-\", \"Total: $0 /mo\", CTA \"Build my plan\"",
+              "kb_refs": [
+                "KB-021",
+                "KB-022"
+              ]
+            },
+            {
+              "item": "\"Select all\", panel \"Estimate\", toggle Monthly/Yearly (theo ticket; không thấy trên staging)",
+              "kb_refs": [
+                "KB-019",
+                "KB-020"
+              ]
+            },
+            {
+              "item": "Item User & Permission: một giá, không giá gạch khi chiết khấu admin 0%",
+              "kb_refs": [
+                "KB-026",
+                "KB-027"
+              ]
+            },
+            {
+              "item": "\"Add more items\", \"Subscribe new pack\", modal huỷ gói [Contact sales] [Confirm cancellation] (theo ticket)",
+              "kb_refs": [
+                "KB-028"
+              ]
+            },
+            {
+              "item": "Banner \"Your store is in Early-bird plan\" (theo ticket)",
+              "kb_refs": [
+                "KB-029"
+              ]
+            },
+            {
+              "item": "Ô discount code (chỉ có ảnh ticket)",
+              "kb_refs": [
+                "KB-030"
+              ]
+            }
+          ],
+          "storefront": [],
+          "api": [],
+          "data": [
+            {
+              "item": "Bảng charges lưu snapshot (price, interval, trial_days…) khi store approve subscription (giải thích Dev trong rule draft)",
+              "kb_refs": [
+                "KB-044"
+              ]
+            },
+            {
+              "item": "Setting chiết khấu ở admin quyết định có render giá gạch",
+              "kb_refs": [
+                "KB-026",
+                "KB-012"
+              ]
+            }
+          ],
+          "code": []
+        },
+        "dependencies": [
+          {
+            "target": "pricing-subscription / module-pricing-and-plan-tiers",
+            "relation": "price_source",
+            "note": "Giá và chiết khấu hiển thị trên trang thuộc feature giá; ba tranh chấp giá ảnh hưởng tổng tiền.",
+            "kb_refs": [
+              "KB-005",
+              "KB-024",
+              "KB-026"
+            ]
+          },
+          {
+            "target": "pricing-subscription / suggested-plans-and-trial",
+            "relation": "embedded_section",
+            "note": "SuggestedPlans và banner trial nằm trên trang pricing.",
+            "kb_refs": [
+              "KB-031",
+              "KB-020"
+            ]
+          },
+          {
+            "target": "pricing-subscription / legacy-price-retention-banner",
+            "relation": "embedded_section",
+            "note": "Banner giữ giá cũ nằm dưới dòng \"Bill monthly at…\" của trang pricing.",
+            "kb_refs": [
+              "KB-038"
+            ]
+          },
+          {
+            "target": "pricing-subscription / module-entitlement-gating",
+            "relation": "enables",
+            "note": "Module đã subscribe quyết định tính năng nào dùng được; huỷ gói deactivate tính năng B2B theo nội dung modal.",
+            "kb_refs": [
+              "KB-028",
+              "KB-049"
+            ]
+          }
+        ],
+        "risks": [
+          {
+            "statement": "Known issue (fixed trên staging bằng fallback frontend, Jira DUOS-431 — giữ regression): trang pricing từng hiển thị giá gạch trùng giá thật ở User & Permission (dạng \"~150~ 150\") khi chiết khấu admin bằng 0%. Cần theo dõi mỗi khi đổi setting chiết khấu hoặc bảng giá.",
+            "knowledge_kind": "OBSERVED_CURRENT",
+            "confidence": "LOW",
+            "kb_refs": [
+              "KB-027",
+              "KB-026"
+            ],
+            "status": "KNOWN_DEFECT"
+          },
+          {
+            "statement": "CTA store Free trên staging là \"Build my plan\" trong khi Jira DUOS-365 ghi \"Build my subscription\"; label panel \"Current subscription\" chỉ có QA lead xác nhận lưu, chưa có PO/Dev xác nhận.",
+            "knowledge_kind": "OBSERVED_CURRENT",
+            "confidence": "MEDIUM",
+            "kb_refs": [
+              "KB-021"
+            ]
+          },
+          {
+            "statement": "\"Select all\", panel \"Estimate\" và toggle Monthly/Yearly theo ticket Jira DUOS-329 không thấy trên staging (store Plus, Free plan); chưa rõ đã bỏ hay chỉ ẩn theo trạng thái store.",
+            "knowledge_kind": "INFERRED",
+            "confidence": "MEDIUM",
+            "kb_refs": [
+              "KB-019",
+              "KB-020"
+            ]
+          },
+          {
+            "statement": "Hành vi User & Permission check sẵn, giá $0.00 và \"Subscribe\" disable khi chỉ có module miễn phí là phía Mar 2026 của tranh chấp; staging không còn check sẵn.",
+            "knowledge_kind": "INFERRED",
+            "confidence": "LOW",
+            "kb_refs": [
+              "KB-024",
+              "KB-025"
+            ],
+            "status": "UNRESOLVED",
+            "conflict_group": "CONF-DUOS-pricing-subscription-01"
+          },
+          {
+            "statement": "Luồng subscribe / thêm module / huỷ gói và trang cho store early-bird chỉ có mô tả theo ticket, chưa quan sát; huỷ gói deactivate toàn bộ tính năng B2B là thao tác rủi ro cao.",
+            "knowledge_kind": "INFERRED",
+            "confidence": "MEDIUM",
+            "kb_refs": [
+              "KB-028",
+              "KB-029"
+            ]
+          },
+          {
+            "statement": "Discount code (Jira DUOS-369) chưa có mô tả hành vi.",
+            "knowledge_kind": "INFERRED",
+            "confidence": "LOW",
+            "kb_refs": [
+              "KB-030"
+            ]
+          },
+          {
+            "statement": "Trang \"Subscription\" chỉ khảo sát trên một store Plus ở Free plan; mọi quan sát có thể khác ở store non-Plus hoặc store đã subscribe.",
+            "knowledge_kind": "OBSERVED_CURRENT",
+            "confidence": "LOW",
+            "kb_refs": [
+              "KB-020",
+              "KB-023"
+            ]
+          }
+        ],
+        "unknown_areas": [
+          {
+            "question": "CTA \"Build my plan\" (staging) thay \"Build my subscription\" (Jira DUOS-365) là chủ đích hay regression, và các label \"Current subscription\", \"No items selected\", \"Subtotal\" \"-\", \"Total: $0 /mo\" có phải bản đúng không?",
+            "why_it_matters": "Label chỉ có QA lead xác nhận lưu; chưa có PO/Dev xác nhận nên chỉ dùng làm hiện trạng.",
+            "kb_refs": [
+              "KB-021",
+              "KB-022"
+            ]
+          },
+          {
+            "question": "\"Select all\", panel \"Estimate\", toggle Monthly/Yearly (và giá gạch, banner early-bird / trial) còn tồn tại không, và chỉ ẩn ở trạng thái store nào?",
+            "why_it_matters": "Ticket Jira DUOS-329 mô tả nhưng staging (store Plus, Free plan) không thấy.",
+            "kb_refs": [
+              "KB-019",
+              "KB-020"
+            ]
+          },
+          {
+            "question": "Ai trong phía merchant (chủ store, staff Shopify được cấp quyền vào app) được xem trang Subscription, chọn module, subscribe, thêm module và huỷ gói — ma trận quyền cho trang pricing / subscription là gì?",
+            "why_it_matters": "Tài liệu pricing không ghi vai trò; không viết được điều kiện quyền cho các thao tác billing. Câu hỏi này gom cho cả object Pricing & Subscription.",
+            "kb_refs": [
+              "KB-018",
+              "KB-022",
+              "KB-028",
+              "KB-002",
+              "KB-052"
+            ]
+          },
+          {
+            "question": "Store đã subscribe, store early-bird và store đang trả giá cũ thấy trang Subscription thế nào trên staging (modal huỷ gói, \"Add more items\" / \"Subscribe new pack\", banner early-bird, banner giữ giá cũ)?",
+            "why_it_matters": "Chưa có store staging ở các trạng thái này; các mô tả chỉ theo ticket.",
+            "kb_refs": [
+              "KB-028",
+              "KB-029",
+              "KB-038",
+              "KB-039",
+              "KB-040",
+              "KB-045"
+            ]
+          },
+          {
+            "question": "Discount code trên trang pricing (Jira DUOS-369) hoạt động thế nào, báo lỗi gì, và cộng dồn với chiết khấu bundle / annual ra sao?",
+            "why_it_matters": "Ticket chỉ có ảnh; không có oracle.",
+            "kb_refs": [
+              "KB-030"
+            ]
+          },
+          {
+            "question": "Khảo sát staging 08/10/2026 của trang Subscription và extension hub chạy trên build / version nào?",
+            "why_it_matters": "Không gắn được quan sát với bản build cụ thể để so sánh lần sau.",
+            "kb_refs": [
+              "KB-005",
+              "KB-020",
+              "KB-021",
+              "KB-023",
+              "KB-025",
+              "KB-050",
+              "KB-051"
+            ]
+          },
+          {
+            "question": "Giá gạch trùng giá thật ở User & Permission (dạng \"~150~ 150\") khi chiết khấu admin 0% có tái xuất hiện sau mỗi lần đổi setting chiết khấu / bảng giá không, và TC-DUOS-303, TC-DUOS-304 xác nhận fix chạy ngày nào?",
+            "why_it_matters": "Known issue đã fix bằng fallback frontend, giữ làm regression.",
+            "kb_refs": [
+              "KB-027",
+              "KB-026"
+            ]
+          }
+        ],
+        "freshness": {
+          "observed_at": "2026-10-08",
+          "run_id": "CTX-20261009-01",
+          "earliest_source_date": "2026-03-25",
+          "basis": "Ngày nguồn mới nhất trong các KB item tham chiếu (khảo sát staging 08/10/2026; PO 25/03/2026 về Free plan là nguồn có ngày sớm nhất); không có quan sát runtime trong lần chạy này."
+        }
+      }
+    ],
+    "profile_relationships": [
+      {
+        "from": "pricing-subscription/subscription-page",
+        "to": "pricing-subscription/module-pricing-and-plan-tiers",
+        "relation": "DEPENDS_ON",
+        "kb_refs": [
+          "KB-005",
+          "KB-024",
+          "KB-026"
+        ]
+      },
+      {
+        "from": "pricing-subscription/subscription-page",
+        "to": "pricing-subscription/suggested-plans-and-trial",
+        "relation": "CONTAINS",
+        "kb_refs": [
+          "KB-031"
+        ]
+      },
+      {
+        "from": "pricing-subscription/subscription-page",
+        "to": "pricing-subscription/legacy-price-retention-banner",
+        "relation": "CONTAINS",
+        "kb_refs": [
+          "KB-038"
+        ]
+      },
+      {
+        "from": "pricing-subscription/subscription-page",
+        "to": "pricing-subscription/module-entitlement-gating",
+        "relation": "AFFECTS",
+        "kb_refs": [
+          "KB-028",
+          "KB-049"
+        ]
+      }
+    ],
+    "coverage_matrix": [
+      {
+        "feature_id": "subscription-page",
+        "layer": "portal",
+        "role": "merchant",
+        "state": "store Plus ở Free plan của app",
+        "environment": "documented",
+        "covered": true,
+        "note": "PO 25/03/2026 (chọn module disable, badge Free) + hiện trạng staging 08/10/2026"
+      },
+      {
+        "feature_id": "subscription-page",
+        "layer": "portal",
+        "role": "merchant",
+        "state": "store non-Plus chưa subscribe",
+        "environment": "documented",
+        "covered": false,
+        "note": "Chưa quan sát; chỉ có ticket"
+      },
+      {
+        "feature_id": "subscription-page",
+        "layer": "portal",
+        "role": "merchant",
+        "state": "chọn module / ước tính (Select all, Estimate, Monthly/Yearly)",
+        "environment": "documented",
+        "covered": false,
+        "note": "Ticket vs staging lệch, chưa xác nhận"
+      },
+      {
+        "feature_id": "subscription-page",
+        "layer": "portal",
+        "role": "merchant",
+        "state": "chiết khấu admin 0% (giá User & Permission không gạch)",
+        "environment": "documented",
+        "covered": true,
+        "note": "Dev FE 02/10/2026; regression known issue"
+      },
+      {
+        "feature_id": "subscription-page",
+        "layer": "portal",
+        "role": "merchant",
+        "state": "store đã subscribe: thêm module / subscribe gói mới",
+        "environment": "documented",
+        "covered": false,
+        "note": "Chỉ ticket"
+      },
+      {
+        "feature_id": "subscription-page",
+        "layer": "portal",
+        "role": "merchant",
+        "state": "store đã subscribe: huỷ gói",
+        "environment": "documented",
+        "covered": false,
+        "note": "Chỉ ticket"
+      },
+      {
+        "feature_id": "subscription-page",
+        "layer": "portal",
+        "role": "merchant",
+        "state": "store early-bird",
+        "environment": "documented",
+        "covered": false,
+        "note": "Chỉ ticket"
+      },
+      {
+        "feature_id": "subscription-page",
+        "layer": "portal",
+        "role": "merchant",
+        "state": "discount code",
+        "environment": "documented",
+        "covered": false,
+        "note": "Không có mô tả hành vi"
+      },
+      {
+        "feature_id": "subscription-page",
+        "layer": "portal",
+        "role": "unspecified",
+        "state": "phân quyền theo vai trò",
+        "environment": "documented",
+        "covered": false,
+        "note": "Không có nguồn"
+      },
+      {
+        "feature_id": "subscription-page",
+        "layer": "api",
+        "role": "unspecified",
+        "state": "mọi trạng thái",
+        "environment": "documented",
+        "covered": false,
+        "note": "Bộ tài liệu QA không có đặc tả API/data model cho feature này"
+      },
+      {
+        "feature_id": "subscription-page",
+        "layer": "db",
+        "role": "unspecified",
+        "state": "mọi trạng thái",
+        "environment": "documented",
+        "covered": false,
+        "note": "Bộ tài liệu QA không có đặc tả API/data model cho feature này"
+      }
+    ],
+    "unassigned_kb_items": [],
+    "profile_conflicts": [
+      {
+        "conflict_group": "CONF-DUOS-pricing-subscription-01",
+        "owner_feature": "pricing-subscription/module-pricing-and-plan-tiers",
+        "topic": "User & Permission / B2B Registration miễn phí (đợt Mar/Apr 2026) hay trả phí (Epic Jira DUOS-430, đợt Oct 2026)",
+        "side_a": "Theo PO 23/03/2026 (comment Jira DUOS-320), Jira DUOS-329 và Jira DUOS-377 (Epic Done, đợt Apr 2026): User & Permission (và B2B Registration ở đợt Apr 2026) miễn phí ở mọi tier; đợt Mar 2026 item User & permission check sẵn, disabled, giá \"$0.00\".",
+        "side_b": "Theo description Epic Jira DUOS-430 \"Pricing Oct 2026\" (To Do, đề xuất): User & Permission $90 / $150 mỗi tháng (non-Plus / Plus), B2B Registration $30 / $50; staging 08/10/2026 (store Plus, Free plan) đã hiển thị $150.00 / $50.00 nhưng quan sát này không phải quyết định.",
+        "resolution": "UNRESOLVED",
+        "kb_refs": [
+          "KB-003",
+          "KB-004",
+          "KB-024",
+          "KB-005",
+          "KB-025"
+        ]
+      },
+      {
+        "conflict_group": "CONF-DUOS-pricing-subscription-02",
+        "owner_feature": "pricing-subscription/module-pricing-and-plan-tiers",
+        "topic": "Chiết khấu bundle khoảng 5% / 10% và trial khoảng 30 ngày ở đợt Oct 2026: giữ hay bỏ",
+        "side_a": "Theo description Epic Jira DUOS-430 \"Pricing Oct 2026\" (To Do, đề xuất): giữ chiết khấu bundle khoảng 5% cho 4 extension, khoảng 10% cho 6 extension và khoảng 30 ngày trial.",
+        "side_b": "Theo PO 02/10/2026 (comment Jira DUOS-431): có lẽ không giảm giá bundle nữa; theo Dev 02/10/2026, setting chiết khấu ở admin trên staging đang là 0%. Phía này không nói về trial.",
+        "resolution": "UNRESOLVED",
+        "kb_refs": [
+          "KB-011",
+          "KB-012",
+          "KB-037"
+        ]
+      }
+    ],
+    "profile_change_summary": [
+      "Tạo mới profile subscription-page từ tài liệu (bootstrap); chưa có bản publish trước để so sánh."
+    ],
+    "kb_trace_complete": true
+  },
+  "gate": {
+    "decision": "CONDITIONAL_PASS",
+    "blocking_findings": [],
+    "conditions": [
+      "Identity, user goal và capability theo mục tiêu (xem item, chọn / ước tính, trạng thái Free, subscribe / thêm / huỷ, early-bird, discount code) trace đủ về KB.",
+      "Oracle mạnh chỉ có cho trạng thái Free plan (PO 25/03/2026) và giá User & Permission không gạch khi chiết khấu 0% (Dev FE 02/10/2026); label UI là hiện trạng staging; luồng subscribe / huỷ chỉ có ticket.",
+      "Giá trên trang phụ thuộc ba tranh chấp do feature module-pricing-and-plan-tiers sở hữu."
+    ],
+    "allowed_next_steps": [
+      "qa-checklist-builder",
+      "knowledge-diff-analyzer"
+    ]
+  }
+}

@@ -1,0 +1,1280 @@
+{
+  "schema_version": "1.0",
+  "artifact_type": "FeatureProfileCandidate",
+  "artifact_id": "ART-FEATURE-PROFILE-segment-builder-CTX-20261008-02",
+  "workflow_id": "CTX-20261008-02",
+  "producer": "feature-profile-builder",
+  "source_refs": [
+    "candidate/product-kb/segment-builder.json",
+    "candidate/product-kb/_product-level.json",
+    "input/scope-plan.json",
+    "input/orchestrator-directives.json"
+  ],
+  "upstream_artifact_ids": [
+    "PKBC-CTX-20261008-02-segments-segment-builder",
+    "PKBC-CTX-20261008-02-_product-level"
+  ],
+  "status": "PARTIAL",
+  "confidence": "MEDIUM",
+  "observations": [
+    "Profile dựng hoàn toàn từ tài liệu QA, không có quan sát runtime trong lần chạy này; act_ids rỗng và observed_validations rỗng.",
+    "Rule đã xác nhận nằm ở confirmed_rules; hiện trạng staging và lỗi đã biết nằm ở observed_behavior (status KNOWN_DEFECT cho lỗi); mục suy luận / đề xuất / chưa chốt nằm ở risks và unknown_areas.",
+    "Object segments không có shard object-level (mọi item gắn vào 1 trong 3 feature); chỉ tham chiếu thêm product-level.",
+    "feature_id dùng feature_key; chưa có mã FEAT số được cấp."
+  ],
+  "assumptions": [],
+  "unknowns": [
+    "Owner, Admin, Member và custom role mỗi role được tạo, sửa, xoá, duplicate, export segment hay không? Member mở / sửa segment có sẵn bị chặn ở đâu và báo gì?",
+    "Jira MTRO-100 (chặn Member tạo / sửa segment) đã deploy lên staging từ build nào?",
+    "Copy toast cuối cùng khi Member bị chặn là copy PO chốt 30/09/2026 hay copy Dev đề xuất có cụm \"…create or edit segments…\"?",
+    "PO quyết bỏ hẳn hay bật lại chế độ Advanced (pseudo-SQL) của builder (GAP-01)?",
+    "Nhãn chuẩn của trường số điện thoại trong `Condition field` có phải `SMS` (PO/Dev xác nhận) để coi `Phone` là lỗi không?",
+    "PO/Dev có xác nhận các hành vi hiện chỉ có từ quan sát QA là hành vi mong đợi không: AND ưu tiên hơn OR, danh sách operator Text, nhóm Contact details, BE chặn tên > 255 ký tự, guard `Leave without saving?`, các toast phụ?",
+    "Hành vi đúng của segment có điều kiện trên custom field Boolean (ngoài lỗi 422 hiện tại) là gì, và kế hoạch sửa ra sao?",
+    "Biên của builder: tên chỉ có khoảng trắng / có trim / ký tự đặc biệt xử lý thế nào, FE báo gì khi BE chặn tên dài; giới hạn số điều kiện và số card; sort lưu cùng segment gồm tuỳ chọn nào, mặc định gì; điều kiện trên custom field Date / Datetime hiển thị ra sao?",
+    "Lọc recipient theo engagement (opened / clicked trong N ngày, Jira MTRO-120) sẽ nằm trong segment builder hay ở bước Recipients của campaign?",
+    "Sửa segment sau khi campaign đã gửi thì report của campaign đó hiển thị gì?"
+  ],
+  "conflicts": [
+    "Copy toast khi Member bị chặn tạo segment",
+    "Phạm vi của bộ đếm segment (live theo dữ liệu contact vs chỉ cập nhật khi Run)"
+  ],
+  "blocking_issues": [],
+  "payload": {
+    "feature_profiles": [
+      {
+        "feature_id": "segment-builder",
+        "feature_key": "segment-builder",
+        "name": "Segment builder: dựng điều kiện, Run xem kết quả và lưu segment",
+        "user_goal": "Người dùng được phép tạo segment dựng điều kiện AND/OR trên field contact và custom field, bấm Run để xem contact nào khớp, rồi lưu segment hợp lệ để dùng làm tập người nhận.",
+        "stable_since_version": "v1",
+        "actors": [
+          {
+            "role": "unspecified (người tạo / sửa segment)",
+            "permission_observed": "Ma trận quyền segment chưa chốt (GAP-07); Admin chưa từng được quan sát. Profile không suy quyền cho Owner/Admin.",
+            "kb_refs": [
+              "KB-068",
+              "KB-P-051"
+            ]
+          },
+          {
+            "role": "Owner",
+            "permission_observed": "Khảo sát staging 01/10/2026 dùng Owner: vào được builder, Run, xem bảng kết quả, Save. Hiện trạng khảo sát, không phải quyết định quyền.",
+            "kb_refs": [
+              "KB-024",
+              "KB-042",
+              "KB-044",
+              "KB-050"
+            ]
+          },
+          {
+            "role": "Member",
+            "permission_observed": "Theo PO 30/09/2026 (Jira MTRO-100) Member không được tạo / sửa segment, bị chặn ở nút `Create segment`; staging 01/10/2026 chưa deploy chặn này — Member vẫn vào builder và khi lưu nhận `Couldn't save segment — This action is unauthorized.`.",
+            "kb_refs": [
+              "KB-063",
+              "KB-064",
+              "KB-066"
+            ]
+          },
+          {
+            "role": "api-caller",
+            "permission_observed": "API key có scope riêng `segments:write` (ghi nhận QA, chưa xác nhận PO/Dev).",
+            "kb_refs": [
+              "KB-067"
+            ]
+          }
+        ],
+        "entry_points": [
+          {
+            "path": "Nút `Create segment` ở danh sách Segments → `/segments/new`",
+            "precondition": "Đã đăng nhập; với Member, theo PO 30/09/2026 nút này phải chặn.",
+            "kb_refs": [
+              "KB-001",
+              "KB-020",
+              "KB-063"
+            ]
+          },
+          {
+            "path": "Click dòng hoặc action Edit ở danh sách → `/segments/:id/edit`",
+            "precondition": "Segment đã lưu.",
+            "kb_refs": [
+              "KB-007",
+              "KB-021"
+            ]
+          }
+        ],
+        "capabilities": [
+          {
+            "name": "Bắt đầu segment mới",
+            "description": "Builder rỗng có sẵn 1 dòng điều kiện trống, tên mặc định \"Untitled segment\" sửa inline.",
+            "kb_refs": [
+              "KB-020"
+            ],
+            "act_ids": []
+          },
+          {
+            "name": "Mở và sửa segment đã lưu",
+            "description": "Nạp lại cây điều kiện, tên và sort đã lưu; lưu thay đổi gọi `PUT /segments/{id}`; segment 2 điều kiện AND hoặc 2 card OR mở lại được bằng card editor (staging 01/10/2026).",
+            "kb_refs": [
+              "KB-021",
+              "KB-022",
+              "KB-056"
+            ],
+            "act_ids": []
+          },
+          {
+            "name": "Dựng cây điều kiện AND / OR",
+            "description": "Mỗi card là một nhóm AND, các card nối OR; mỗi điều kiện Field → Operator → Value + nút ×; \"+ And\" thêm điều kiện vào card, \"+ Or\" thêm card mới; xoá điều kiện cuối thì card biến mất.",
+            "kb_refs": [
+              "KB-023",
+              "KB-024"
+            ],
+            "act_ids": []
+          },
+          {
+            "name": "Chọn field và operator theo kiểu dữ liệu",
+            "description": "Nhóm Contact details và Custom fields (key thô); operator riêng cho Text, Number, Date / Datetime, Boolean; quy tắc so khớp hoa thường, escape, Is empty, UTC và biên ngày do Dev chốt.",
+            "kb_refs": [
+              "KB-026",
+              "KB-027",
+              "KB-030",
+              "KB-031",
+              "KB-032",
+              "KB-033",
+              "KB-034",
+              "KB-038",
+              "KB-039",
+              "KB-040"
+            ],
+            "act_ids": []
+          },
+          {
+            "name": "Run để đánh giá và xem kết quả",
+            "description": "Bộ đếm `~N contacts` chỉ cập nhật khi bấm Run; bảng kết quả 6 cột có Consent (luôn Subscribed), phân trang, trạng thái không có ai khớp.",
+            "kb_refs": [
+              "KB-041",
+              "KB-042",
+              "KB-043",
+              "KB-044",
+              "KB-045"
+            ],
+            "act_ids": []
+          },
+          {
+            "name": "Lưu segment hợp lệ",
+            "description": "Save chỉ enable khi có tên, có ít nhất 1 điều kiện, có thay đổi so với lúc load và không còn Value trống.",
+            "kb_refs": [
+              "KB-047",
+              "KB-048"
+            ],
+            "act_ids": []
+          },
+          {
+            "name": "Rời builder khi còn thay đổi chưa lưu",
+            "description": "Back mở dialog `Leave without saving?` (Stay / Leave) — hiện trạng staging.",
+            "kb_refs": [
+              "KB-050"
+            ],
+            "act_ids": []
+          },
+          {
+            "name": "Chế độ Advanced (pseudo-SQL)",
+            "description": "Toggle đang ẩn có chủ ý; builder tự vào Advanced, không có nút quay lại, khi card editor không đọc được query. Tương lai của chế độ này chưa chốt.",
+            "kb_refs": [
+              "KB-051",
+              "KB-053",
+              "KB-054"
+            ],
+            "act_ids": []
+          },
+          {
+            "name": "Chặn Member tạo / sửa segment",
+            "description": "Theo PO 30/09/2026: chặn ở nút Create segment kèm tooltip và toast riêng; chưa deploy trên staging 01/10/2026.",
+            "kb_refs": [
+              "KB-063",
+              "KB-064"
+            ],
+            "act_ids": []
+          }
+        ],
+        "state_transitions": [
+          {
+            "from": "builder mới (1 điều kiện trống, Save disabled)",
+            "to": "Save enabled",
+            "trigger": "Điền Value cho điều kiện",
+            "condition": "Tên không rỗng và có ít nhất 1 điều kiện",
+            "kb_refs": [
+              "KB-020",
+              "KB-047",
+              "KB-048"
+            ]
+          },
+          {
+            "from": "segment đã lưu mở ở edit (Save disabled)",
+            "to": "Save enabled",
+            "trigger": "Thay đổi tên / điều kiện",
+            "condition": "Có thay đổi thật so với lúc load và không còn Value trống",
+            "kb_refs": [
+              "KB-047",
+              "KB-048"
+            ]
+          },
+          {
+            "from": "builder có điều kiện",
+            "to": "chỉ còn nút `Add filter`, Save disabled",
+            "trigger": "Xoá hết điều kiện",
+            "condition": "",
+            "kb_refs": [
+              "KB-024",
+              "KB-047"
+            ]
+          },
+          {
+            "from": "bộ đếm hiển thị số cũ",
+            "to": "bộ đếm và bảng kết quả theo điều kiện hiện tại",
+            "trigger": "Bấm `Run`",
+            "condition": "Đổi điều kiện không tự tính lại",
+            "kb_refs": [
+              "KB-041",
+              "KB-043",
+              "KB-044"
+            ]
+          },
+          {
+            "from": "chưa lưu / có thay đổi",
+            "to": "segment đã lưu",
+            "trigger": "Bấm `Save`",
+            "condition": "Điều kiện Save enabled được thoả; segment có sẵn lưu bằng `PUT /segments/{id}`",
+            "kb_refs": [
+              "KB-022",
+              "KB-047"
+            ]
+          },
+          {
+            "from": "builder có thay đổi chưa lưu",
+            "to": "dialog `Leave without saving?`",
+            "trigger": "Bấm `Back`",
+            "condition": "Hiện trạng staging",
+            "kb_refs": [
+              "KB-050"
+            ]
+          },
+          {
+            "from": "mở segment",
+            "to": "chế độ Advanced, không có nút quay lại",
+            "trigger": "Card editor không đọc được query của segment",
+            "condition": "",
+            "kb_refs": [
+              "KB-051"
+            ]
+          }
+        ],
+        "confirmed_rules": [
+          {
+            "statement": "Create segment mở `/segments/new` với builder có sẵn 1 dòng điều kiện trống và tên mặc định \"Untitled segment\" sửa inline (Jira MTRO-53 AC).",
+            "knowledge_kind": "CONFIRMED_EXPECTED",
+            "confidence": "MEDIUM",
+            "kb_refs": [
+              "KB-020"
+            ]
+          },
+          {
+            "statement": "Edit mở `/segments/:id/edit` và nạp lại cây điều kiện, tên và sort đã lưu (Jira MTRO-53 AC).",
+            "knowledge_kind": "CONFIRMED_EXPECTED",
+            "confidence": "MEDIUM",
+            "kb_refs": [
+              "KB-021"
+            ]
+          },
+          {
+            "statement": "Lưu segment có sẵn gọi `PUT /segments/{id}`, không phải PATCH (Dev BE 08/09/2026).",
+            "knowledge_kind": "CONFIRMED_EXPECTED",
+            "confidence": "MEDIUM",
+            "kb_refs": [
+              "KB-022"
+            ]
+          },
+          {
+            "statement": "Điều kiện trong cùng card nối AND, giữa các card nối OR; \"+ And\" thêm điều kiện vào card, \"+ Or\" thêm card mới; xoá điều kiện cuối của card thì card biến mất (Jira MTRO-53 AC).",
+            "knowledge_kind": "CONFIRMED_EXPECTED",
+            "confidence": "MEDIUM",
+            "kb_refs": [
+              "KB-023"
+            ]
+          },
+          {
+            "statement": "Nhóm `Custom fields` trong `Condition field` hiển thị key thô của custom field, là thiết kế cuối (PO/BA 02/10/2026, BR-19).",
+            "knowledge_kind": "CONFIRMED_EXPECTED",
+            "confidence": "MEDIUM",
+            "kb_refs": [
+              "KB-026"
+            ]
+          },
+          {
+            "statement": "Operator cho field Number: `Equal to`, `Greater than`, `Less than`, `Between` (2 ô số), `Is empty`, `Is not empty` (Dev 02/10/2026, BR-21).",
+            "knowledge_kind": "CONFIRMED_EXPECTED",
+            "confidence": "MEDIUM",
+            "kb_refs": [
+              "KB-031"
+            ]
+          },
+          {
+            "statement": "Operator cho Date / Datetime: `After` (mặc định), `Before`, `Between`, `Is empty`, `Is not empty`; giá trị chọn bằng `Pick a date`, `Between` có 2 date picker nối bằng `And`; giá trị ngày tương đối hiện trong ô text (Dev 02/10/2026, BR-21).",
+            "knowledge_kind": "CONFIRMED_EXPECTED",
+            "confidence": "MEDIUM",
+            "kb_refs": [
+              "KB-032",
+              "KB-033"
+            ]
+          },
+          {
+            "statement": "Field Boolean dùng `Is` / `Is not` với giá trị từ combobox `Condition value`; `Is not` khớp cả contact chưa có giá trị (Dev 02/10/2026, BR-23).",
+            "knowledge_kind": "CONFIRMED_EXPECTED",
+            "confidence": "MEDIUM",
+            "kb_refs": [
+              "KB-034"
+            ]
+          },
+          {
+            "statement": "`Includes` / `Starts with` / `Ends with` không phân biệt hoa thường; `Equal to` / `Is any of` phân biệt hoa thường trừ trên `email` và `country_code`; `%` và `_` được escape; `Is empty` khớp null, chuỗi rỗng và thiếu key (Dev 02/10/2026, BR-22).",
+            "knowledge_kind": "CONFIRMED_EXPECTED",
+            "confidence": "MEDIUM",
+            "kb_refs": [
+              "KB-038",
+              "KB-039"
+            ]
+          },
+          {
+            "statement": "Điều kiện ngày tính theo UTC; `After` / `Before` không gồm ngày biên; `Between` gồm cả hai biên; `Between` hai ngày đảo thứ tự cho 0 kết quả, không báo lỗi (Dev 02/10/2026, BR-24).",
+            "knowledge_kind": "CONFIRMED_EXPECTED",
+            "confidence": "MEDIUM",
+            "kb_refs": [
+              "KB-040"
+            ]
+          },
+          {
+            "statement": "Bộ đếm `~N contacts` trên toolbar builder chỉ cập nhật khi bấm `Run`, đổi điều kiện không tự tính lại (PO/BA 02/10/2026, BR-27). Phạm vi chỉ là bộ đếm trong builder.",
+            "knowledge_kind": "CONFIRMED_EXPECTED",
+            "confidence": "MEDIUM",
+            "kb_refs": [
+              "KB-041"
+            ]
+          },
+          {
+            "statement": "Cột `Consent` của bảng kết quả luôn là `Subscribed` vì segment chỉ gồm contact Subscribed (PO/BA 02/10/2026, BR-12).",
+            "knowledge_kind": "CONFIRMED_EXPECTED",
+            "confidence": "MEDIUM",
+            "kb_refs": [
+              "KB-045"
+            ]
+          },
+          {
+            "statement": "Khối \"Refine your segment\" nằm ngoài phạm vi builder hiện tại (PO/BA 02/10/2026, BR-18).",
+            "knowledge_kind": "CONFIRMED_EXPECTED",
+            "confidence": "MEDIUM",
+            "kb_refs": [
+              "KB-046"
+            ]
+          },
+          {
+            "statement": "`Save` chỉ enable khi tên không rỗng, có ít nhất 1 điều kiện và có thay đổi so với lúc load (Jira MTRO-53 AC).",
+            "knowledge_kind": "CONFIRMED_EXPECTED",
+            "confidence": "MEDIUM",
+            "kb_refs": [
+              "KB-047"
+            ]
+          },
+          {
+            "statement": "`Save` disabled khi còn điều kiện để trống Value, nên segment mới giữ Save disabled tới khi điền Value (PO/BA 02/10/2026, BR-16).",
+            "knowledge_kind": "CONFIRMED_EXPECTED",
+            "confidence": "MEDIUM",
+            "kb_refs": [
+              "KB-048"
+            ]
+          },
+          {
+            "statement": "Toggle Advanced được ẩn có chủ ý; khi card editor không đọc được query, builder tự vào Advanced và không có nút quay lại (Dev 02/10/2026, BR-20).",
+            "knowledge_kind": "CONFIRMED_EXPECTED",
+            "confidence": "MEDIUM",
+            "kb_refs": [
+              "KB-051"
+            ]
+          },
+          {
+            "statement": "Breadcrumb đúng của builder là Contacts › Segments (Dev 02/10/2026, BR-26).",
+            "knowledge_kind": "CONFIRMED_EXPECTED",
+            "confidence": "MEDIUM",
+            "kb_refs": [
+              "KB-059"
+            ]
+          },
+          {
+            "statement": "Member không được tạo hoặc sửa segment: bị chặn ở nút `Create segment` (kèm tooltip) và không vào được builder (PO 30/09/2026, Jira MTRO-100).",
+            "knowledge_kind": "CONFIRMED_EXPECTED",
+            "confidence": "MEDIUM",
+            "kb_refs": [
+              "KB-063"
+            ]
+          },
+          {
+            "statement": "Toast khi Member bị chặn: \"Only workspace Owners and Admins can create segments. Ask an Admin to create it for you.\" (PO 30/09/2026, Jira MTRO-100); copy cuối còn chờ xác nhận vì Dev đề xuất copy khác.",
+            "knowledge_kind": "CONFIRMED_EXPECTED",
+            "confidence": "MEDIUM",
+            "kb_refs": [
+              "KB-064"
+            ]
+          }
+        ],
+        "observed_behavior": [
+          {
+            "statement": "Staging 01/10/2026 (Owner): xoá hết điều kiện thì chỉ còn nút `Add filter`.",
+            "knowledge_kind": "OBSERVED_CURRENT",
+            "confidence": "MEDIUM",
+            "status": "CURRENT_STATE",
+            "kb_refs": [
+              "KB-024"
+            ]
+          },
+          {
+            "statement": "Ghi nhận QA 08/09/2026 (chưa xác nhận PO/Dev): AND ưu tiên hơn OR — `A AND B OR C` tương đương `(A AND B) OR C`.",
+            "knowledge_kind": "OBSERVED_CURRENT",
+            "confidence": "LOW",
+            "status": "CURRENT_STATE",
+            "kb_refs": [
+              "KB-025"
+            ]
+          },
+          {
+            "statement": "Staging 01/10/2026 (Owner): nhóm `Contact details` gồm Email, First name, Last name, Country code, Address, Phone, Created at.",
+            "knowledge_kind": "OBSERVED_CURRENT",
+            "confidence": "MEDIUM",
+            "status": "CURRENT_STATE",
+            "kb_refs": [
+              "KB-027"
+            ]
+          },
+          {
+            "statement": "QA lead chốt 05/10/2026 theo staging, chưa có xác nhận PO/Dev: trường số điện thoại mang nhãn `SMS` ở mọi nơi, kể cả `Condition field`.",
+            "knowledge_kind": "OBSERVED_CURRENT",
+            "confidence": "MEDIUM",
+            "status": "CURRENT_STATE",
+            "kb_refs": [
+              "KB-028"
+            ]
+          },
+          {
+            "statement": "Staging 01/10/2026 (Owner): operator Text gồm `Equal to` (mặc định), `Not equal to`, `Includes`, `Does not include`, `Starts with`, `Ends with`, `Is empty`, `Is not empty`; không còn `In`.",
+            "knowledge_kind": "OBSERVED_CURRENT",
+            "confidence": "MEDIUM",
+            "status": "CURRENT_STATE",
+            "kb_refs": [
+              "KB-030"
+            ]
+          },
+          {
+            "statement": "Staging 01/10/2026 (Owner): toolbar hiện chấm xanh + `~N contacts` + `X.XX% of your contact base`, nạp sẵn khi mở segment đã lưu.",
+            "knowledge_kind": "OBSERVED_CURRENT",
+            "confidence": "MEDIUM",
+            "status": "CURRENT_STATE",
+            "kb_refs": [
+              "KB-042"
+            ]
+          },
+          {
+            "statement": "Theo mô tả khảo sát 01/10/2026 (không bấm Run lần đó): `Run` nạp bảng kết quả và hiện toast `Segment evaluated` + \"{count} contacts match right now.\".",
+            "knowledge_kind": "OBSERVED_CURRENT",
+            "confidence": "LOW",
+            "status": "CURRENT_STATE",
+            "kb_refs": [
+              "KB-043"
+            ]
+          },
+          {
+            "statement": "Staging 01/10/2026 (Owner): bảng kết quả 6 cột `Email`, `First name`, `Last name`, `Consent`, `Created at`, `Updated at` (hai cột cuối sắp xếp được), phân trang; không ai khớp thì hiện `No contacts match` / `Loosen the conditions above.`.",
+            "knowledge_kind": "OBSERVED_CURRENT",
+            "confidence": "MEDIUM",
+            "status": "CURRENT_STATE",
+            "kb_refs": [
+              "KB-044"
+            ]
+          },
+          {
+            "statement": "Staging (08/09 và 01/10/2026, Owner): Back khi có thay đổi chưa lưu mở `Leave without saving?` với `Stay` / `Leave`; `beforeunload` chỉ bật khi có thay đổi chưa lưu.",
+            "knowledge_kind": "OBSERVED_CURRENT",
+            "confidence": "MEDIUM",
+            "status": "CURRENT_STATE",
+            "kb_refs": [
+              "KB-050"
+            ]
+          },
+          {
+            "statement": "Staging 01/10/2026 (Owner): segment 2 điều kiện AND hoặc 2 card OR mở lại được bằng card editor (bản 29/09/2026 bị chuyển sang textarea).",
+            "knowledge_kind": "OBSERVED_CURRENT",
+            "confidence": "MEDIUM",
+            "status": "CURRENT_STATE",
+            "kb_refs": [
+              "KB-056"
+            ]
+          },
+          {
+            "statement": "Ghi chú QA (không ngày, chưa xác nhận PO/Dev): BE chặn tên segment dài hơn 255 ký tự.",
+            "knowledge_kind": "OBSERVED_CURRENT",
+            "confidence": "LOW",
+            "status": "CURRENT_STATE",
+            "kb_refs": [
+              "KB-058"
+            ]
+          },
+          {
+            "statement": "Ghi nhận QA trên dialog tạo API key: có scope `segments:write`.",
+            "knowledge_kind": "OBSERVED_CURRENT",
+            "confidence": "LOW",
+            "status": "CURRENT_STATE",
+            "kb_refs": [
+              "KB-067"
+            ]
+          },
+          {
+            "statement": "Lỗi đã biết (REOPENED 06/10/2026, TC-MTRO-1535): điều kiện trên custom field Boolean luôn lỗi 422 `Expected a value, got 'true'.`, ô đếm `Count unavailable`, nhưng toast vẫn \"Segment evaluated · 0 contacts match right now.\".",
+            "knowledge_kind": "OBSERVED_CURRENT",
+            "confidence": "LOW",
+            "status": "KNOWN_DEFECT",
+            "kb_refs": [
+              "KB-035"
+            ]
+          },
+          {
+            "statement": "Lỗi đã biết (REOPENED một phần 06/10/2026): đổi field Text sang Boolean thì operator vẫn hiện `Equal to`.",
+            "knowledge_kind": "OBSERVED_CURRENT",
+            "confidence": "LOW",
+            "status": "KNOWN_DEFECT",
+            "kb_refs": [
+              "KB-036"
+            ]
+          },
+          {
+            "statement": "Lỗi đã biết BUG-CS-13 (còn open 06/10/2026): đổi operator làm xoá trắng value đã chọn.",
+            "knowledge_kind": "OBSERVED_CURRENT",
+            "confidence": "LOW",
+            "status": "KNOWN_DEFECT",
+            "kb_refs": [
+              "KB-037"
+            ]
+          },
+          {
+            "statement": "Lỗi đã biết BUG-97 (\"fixed?\"): lưu khi Value trống từng tạo segment rác `Untitled segment`; staging 01/10/2026 đã thấy Save disabled khi Value trống nhưng case chưa chạy lại để đóng.",
+            "knowledge_kind": "OBSERVED_CURRENT",
+            "confidence": "LOW",
+            "status": "KNOWN_DEFECT",
+            "kb_refs": [
+              "KB-049"
+            ]
+          },
+          {
+            "statement": "Giới hạn đã biết BUG-CS-04 (tạm): staging 01/10/2026 không có toggle Advanced, không test được pseudo-SQL.",
+            "knowledge_kind": "OBSERVED_CURRENT",
+            "confidence": "LOW",
+            "status": "KNOWN_DEFECT",
+            "kb_refs": [
+              "KB-052"
+            ]
+          },
+          {
+            "statement": "Lỗi đã biết BUG-113 (còn open 06/10/2026): segment dùng `Is set` hoặc value chứa ` OR ` không mở lại được bằng card editor.",
+            "knowledge_kind": "OBSERVED_CURRENT",
+            "confidence": "LOW",
+            "status": "KNOWN_DEFECT",
+            "kb_refs": [
+              "KB-055"
+            ]
+          },
+          {
+            "statement": "Lỗi đã biết BUG-CS-05 (còn open 06/10/2026): ký tự `\"` trong value bị xoá khi serialize (`Say \"hi\"` thành `Say hi`).",
+            "knowledge_kind": "OBSERVED_CURRENT",
+            "confidence": "LOW",
+            "status": "KNOWN_DEFECT",
+            "kb_refs": [
+              "KB-057"
+            ]
+          },
+          {
+            "statement": "Lỗi đã biết (Dev 02/10/2026 xác nhận, BR-26): breadcrumb builder chỉ hiện `New segment` / `Edit segment`.",
+            "knowledge_kind": "OBSERVED_CURRENT",
+            "confidence": "LOW",
+            "status": "KNOWN_DEFECT",
+            "kb_refs": [
+              "KB-060"
+            ]
+          },
+          {
+            "statement": "Lỗi đã biết (open 06/10/2026, TC-MTRO-289 fail 05/10/2026): `Condition field` hiện `Phone` thay vì `SMS`.",
+            "knowledge_kind": "OBSERVED_CURRENT",
+            "confidence": "LOW",
+            "status": "KNOWN_DEFECT",
+            "kb_refs": [
+              "KB-029"
+            ]
+          },
+          {
+            "statement": "Staging 01/10/2026: chặn Member theo Jira MTRO-100 chưa có (In Progress); Member vào được builder, lưu thì nhận `Couldn't save segment — This action is unauthorized.`.",
+            "knowledge_kind": "OBSERVED_CURRENT",
+            "confidence": "LOW",
+            "status": "KNOWN_DEFECT",
+            "kb_refs": [
+              "KB-066"
+            ]
+          },
+          {
+            "statement": "BUG-CS-12 (toast `Couldn't save segment` thiếu message server) ghi đã sửa 08/09/2026; chỉ giữ làm mục theo dõi regression.",
+            "knowledge_kind": "OBSERVED_CURRENT",
+            "confidence": "LOW",
+            "status": "KNOWN_DEFECT",
+            "kb_refs": [
+              "KB-062"
+            ]
+          }
+        ],
+        "observed_validations": [],
+        "permissions": [
+          {
+            "statement": "Member không được tạo / sửa segment, chặn ở nút `Create segment` kèm tooltip và toast riêng (PO 30/09/2026, Jira MTRO-100).",
+            "kb_refs": [
+              "KB-063",
+              "KB-064"
+            ]
+          },
+          {
+            "statement": "Trên staging 01/10/2026 chặn này chưa deploy: Member vào được builder, chỉ bị từ chối khi lưu.",
+            "kb_refs": [
+              "KB-066"
+            ]
+          },
+          {
+            "statement": "API key có scope `segments:write` (ghi nhận QA, chưa xác nhận PO/Dev).",
+            "kb_refs": [
+              "KB-067"
+            ]
+          },
+          {
+            "statement": "Quyền tạo / sửa / xoá / duplicate / export segment cho Owner, Admin và custom role chưa chốt (GAP-07); tên role thứ ba đang tranh chấp.",
+            "kb_refs": [
+              "KB-068",
+              "KB-P-051"
+            ]
+          },
+          {
+            "statement": "Router frontend không có meta phân quyền; QA suy ra chặn quyền phải nằm ở API (suy luận).",
+            "kb_refs": [
+              "KB-P-052"
+            ]
+          }
+        ],
+        "surface_mapping": {
+          "portal": [
+            {
+              "item": "Route `/segments/new` (New segment) và `/segments/:id/edit` (Edit segment); ô `Segment name` sửa inline",
+              "kb_refs": [
+                "KB-002",
+                "KB-020",
+                "KB-021"
+              ]
+            },
+            {
+              "item": "Card điều kiện AND / OR, nút \"+ And\", \"+ Or\", `Remove condition`, `Add filter`",
+              "kb_refs": [
+                "KB-023",
+                "KB-024"
+              ]
+            },
+            {
+              "item": "Dropdown `Condition field` (Contact details, Custom fields key thô), operator và `Condition value` theo kiểu",
+              "kb_refs": [
+                "KB-026",
+                "KB-027",
+                "KB-030",
+                "KB-031",
+                "KB-032",
+                "KB-033",
+                "KB-034"
+              ]
+            },
+            {
+              "item": "Toolbar: `~N contacts`, `X.XX% of your contact base`, nút `Run`, `Save`, `Back`",
+              "kb_refs": [
+                "KB-041",
+                "KB-042",
+                "KB-043",
+                "KB-047"
+              ]
+            },
+            {
+              "item": "Bảng kết quả 6 cột có Consent; empty `No contacts match`",
+              "kb_refs": [
+                "KB-044",
+                "KB-045"
+              ]
+            },
+            {
+              "item": "Dialog `Leave without saving?`",
+              "kb_refs": [
+                "KB-050"
+              ]
+            },
+            {
+              "item": "Breadcrumb (đúng: Contacts › Segments)",
+              "kb_refs": [
+                "KB-059",
+                "KB-060"
+              ]
+            }
+          ],
+          "storefront": [],
+          "api": [
+            {
+              "item": "`PUT /segments/{id}` lưu segment có sẵn",
+              "kb_refs": [
+                "KB-022"
+              ]
+            },
+            {
+              "item": "Preview và contacts/search của segment trả 422 với điều kiện Boolean (lỗi đã biết)",
+              "kb_refs": [
+                "KB-035"
+              ]
+            },
+            {
+              "item": "Scope API key `segments:write`",
+              "kb_refs": [
+                "KB-067"
+              ]
+            }
+          ],
+          "data": [
+            {
+              "item": "Cây điều kiện: card (AND) nối nhau bằng OR; tên, sort lưu cùng segment",
+              "kb_refs": [
+                "KB-021",
+                "KB-023"
+              ]
+            },
+            {
+              "item": "Ngữ nghĩa so khớp: hoa thường, escape `%` `_`, Is empty, ngày theo UTC và biên",
+              "kb_refs": [
+                "KB-038",
+                "KB-039",
+                "KB-040"
+              ]
+            },
+            {
+              "item": "Tên segment tối đa 255 ký tự ở BE (ghi chú QA); ký tự `\"` bị mất khi serialize (lỗi)",
+              "kb_refs": [
+                "KB-058",
+                "KB-057"
+              ]
+            }
+          ],
+          "code": []
+        },
+        "dependencies": [
+          {
+            "target": "workspace-settings / roles-and-permissions",
+            "relation": "permission_source",
+            "note": "Mô hình role, ma trận quyền và tranh chấp tên role thứ ba thuộc phần quản lý role của workspace.",
+            "kb_refs": [
+              "KB-063",
+              "KB-068"
+            ]
+          },
+          {
+            "target": "workspace-settings / api-keys-and-public-api",
+            "relation": "see_also",
+            "note": "Scope API key cho segment được mô tả ở phần API keys.",
+            "kb_refs": [
+              "KB-067"
+            ]
+          },
+          {
+            "target": "contacts / custom-fields",
+            "relation": "data_source",
+            "note": "Kiểu custom field (Text / Number / Boolean / Date / Datetime) dùng trong điều kiện; xoá custom field đang được segment dùng thuộc phần custom field.",
+            "kb_refs": [
+              "KB-026",
+              "KB-034"
+            ]
+          },
+          {
+            "target": "contacts / contact-create-and-edit",
+            "relation": "see_also",
+            "note": "Quyết định nhãn `SMS` cho trường số điện thoại thuộc phần contact.",
+            "kb_refs": [
+              "KB-028"
+            ]
+          },
+          {
+            "target": "automations / automation-steps",
+            "relation": "shared_semantics",
+            "note": "Conditional split của automation dùng cùng ngữ nghĩa so khớp operator với segment builder.",
+            "kb_refs": [
+              "KB-038"
+            ]
+          },
+          {
+            "target": "segments / segment-audience-evaluation",
+            "relation": "evaluates_with",
+            "note": "Run và bảng kết quả áp quy tắc chỉ gồm contact Subscribed, loại contact bị suppress.",
+            "kb_refs": [
+              "KB-041",
+              "KB-045",
+              "KB-070"
+            ]
+          },
+          {
+            "target": "segments / segment-list-management",
+            "relation": "entered_from",
+            "note": "Builder mở từ nút Create segment và từ dòng / action Edit ở danh sách.",
+            "kb_refs": [
+              "KB-001",
+              "KB-007"
+            ]
+          }
+        ],
+        "risks": [
+          {
+            "statement": "Điều kiện Boolean luôn 422 nhưng toast báo thành công với 0 contact: người dùng tưởng không ai khớp và có thể lưu / dùng segment sai.",
+            "knowledge_kind": "OBSERVED_CURRENT",
+            "confidence": "LOW",
+            "kb_refs": [
+              "KB-035",
+              "KB-043"
+            ],
+            "status": "KNOWN_DEFECT"
+          },
+          {
+            "statement": "Quyết định chặn Member chưa deploy: hành vi trên staging lệch quyết định PO cho tới khi Jira MTRO-100 lên build.",
+            "knowledge_kind": "CONFIRMED_EXPECTED+OBSERVED_CURRENT",
+            "confidence": "LOW",
+            "kb_refs": [
+              "KB-066",
+              "KB-063"
+            ],
+            "status": "KNOWN_DEFECT"
+          },
+          {
+            "statement": "Đổi field / operator làm hỏng trạng thái điều kiện (operator không đổi theo kiểu, value bị xoá trắng).",
+            "knowledge_kind": "OBSERVED_CURRENT",
+            "confidence": "LOW",
+            "kb_refs": [
+              "KB-036",
+              "KB-037"
+            ],
+            "status": "KNOWN_DEFECT"
+          },
+          {
+            "statement": "Lỗi tạo segment rác khi Value trống (BUG-97) chưa được đóng chính thức; cần theo dõi regression.",
+            "knowledge_kind": "OBSERVED_CURRENT",
+            "confidence": "LOW",
+            "kb_refs": [
+              "KB-049"
+            ],
+            "status": "KNOWN_DEFECT"
+          },
+          {
+            "statement": "Một số query không round-trip được: `Is set` / value chứa ` OR ` không mở lại bằng card editor, ký tự `\"` bị mất.",
+            "knowledge_kind": "OBSERVED_CURRENT",
+            "confidence": "LOW",
+            "kb_refs": [
+              "KB-055",
+              "KB-057"
+            ],
+            "status": "KNOWN_DEFECT"
+          },
+          {
+            "statement": "Toggle Advanced đang ẩn và chưa chốt giữ hay bỏ; AC Advanced chưa test được.",
+            "knowledge_kind": "INFERRED+OBSERVED_CURRENT",
+            "confidence": "LOW",
+            "kb_refs": [
+              "KB-052",
+              "KB-053",
+              "KB-054"
+            ],
+            "status": "KNOWN_DEFECT"
+          },
+          {
+            "statement": "Lỗi hiển thị: nhãn `Phone` thay vì `SMS`, breadcrumb thiếu đường dẫn cha.",
+            "knowledge_kind": "OBSERVED_CURRENT",
+            "confidence": "LOW",
+            "kb_refs": [
+              "KB-029",
+              "KB-060"
+            ],
+            "status": "KNOWN_DEFECT"
+          },
+          {
+            "statement": "Toast lỗi lưu từng thiếu message server (BUG-CS-12, ghi đã sửa 08/09/2026); theo dõi regression.",
+            "knowledge_kind": "OBSERVED_CURRENT",
+            "confidence": "LOW",
+            "kb_refs": [
+              "KB-062"
+            ],
+            "status": "KNOWN_DEFECT"
+          },
+          {
+            "statement": "Danh sách toast phụ (`Segment created`, `Segment saved`, `Couldn't save segment`, `Couldn't duplicate segment`, `Couldn't delete segment`, `Counting…`, `Count unavailable`) mới thấy trong chuỗi i18n của bundle, chưa đối chiếu đủ trên UI.",
+            "knowledge_kind": "INFERRED",
+            "confidence": "LOW",
+            "kb_refs": [
+              "KB-061"
+            ]
+          },
+          {
+            "statement": "Dev đề xuất copy toast chặn Member khác với copy PO đã chốt; copy cuối có thể đổi.",
+            "knowledge_kind": "PROPOSED",
+            "confidence": "LOW",
+            "kb_refs": [
+              "KB-065"
+            ]
+          }
+        ],
+        "freshness": {
+          "observed_at": "2026-10-08",
+          "run_id": "CTX-20261008-02",
+          "basis": "Ngày mới nhất của nguồn thẩm quyền trong KB feature (ngày quyết định / cập nhật rule / ghi bug); khảo sát staging gần nhất 01/10/2026."
+        },
+        "unknown_areas": [
+          {
+            "question": "Owner, Admin, Member và custom role mỗi role được tạo, sửa, xoá, duplicate, export segment hay không? Member mở / sửa segment có sẵn bị chặn ở đâu và báo gì?",
+            "why_it_matters": "Quyết định PO chỉ mô tả chặn Member ở nút Create segment; Admin chưa từng được quan sát; không có oracle cho kiểm thử phân quyền.",
+            "kb_refs": [
+              "KB-063",
+              "KB-068",
+              "KB-067",
+              "KB-P-051"
+            ]
+          },
+          {
+            "question": "Jira MTRO-100 (chặn Member tạo / sửa segment) đã deploy lên staging từ build nào?",
+            "why_it_matters": "Cần biết từ lúc nào quyết định này dùng được làm expected result trên staging.",
+            "kb_refs": [
+              "KB-063",
+              "KB-064",
+              "KB-066"
+            ]
+          },
+          {
+            "question": "Copy toast cuối cùng khi Member bị chặn là copy PO chốt 30/09/2026 hay copy Dev đề xuất có cụm \"…create or edit segments…\"?",
+            "why_it_matters": "Expected copy cho test permission Member.",
+            "kb_refs": [
+              "KB-064",
+              "KB-065"
+            ]
+          },
+          {
+            "question": "PO quyết bỏ hẳn hay bật lại chế độ Advanced (pseudo-SQL) của builder (GAP-01)?",
+            "why_it_matters": "Quyết định này xác định AC Advanced của Jira MTRO-53 còn hiệu lực hay không.",
+            "kb_refs": [
+              "KB-051",
+              "KB-052",
+              "KB-053",
+              "KB-054"
+            ]
+          },
+          {
+            "question": "Nhãn chuẩn của trường số điện thoại trong `Condition field` có phải `SMS` (PO/Dev xác nhận) để coi `Phone` là lỗi không?",
+            "why_it_matters": "Hiện chỉ có QA lead chốt theo bản dựng staging.",
+            "kb_refs": [
+              "KB-027",
+              "KB-028",
+              "KB-029"
+            ]
+          },
+          {
+            "question": "PO/Dev có xác nhận các hành vi hiện chỉ có từ quan sát QA là hành vi mong đợi không: AND ưu tiên hơn OR, danh sách operator Text, nhóm Contact details, BE chặn tên > 255 ký tự, guard `Leave without saving?`, các toast phụ?",
+            "why_it_matters": "Chưa xác nhận thì chỉ dùng làm baseline hiện trạng, không làm oracle mạnh.",
+            "kb_refs": [
+              "KB-025",
+              "KB-027",
+              "KB-030",
+              "KB-050",
+              "KB-058",
+              "KB-061"
+            ]
+          },
+          {
+            "question": "Hành vi đúng của segment có điều kiện trên custom field Boolean (ngoài lỗi 422 hiện tại) là gì, và kế hoạch sửa ra sao?",
+            "why_it_matters": "Rule operator Boolean có, nhưng chưa có expected cho số đếm / kết quả khi lỗi được sửa.",
+            "kb_refs": [
+              "KB-034",
+              "KB-035"
+            ]
+          },
+          {
+            "question": "Biên của builder: tên chỉ có khoảng trắng / có trim / ký tự đặc biệt xử lý thế nào, FE báo gì khi BE chặn tên dài; giới hạn số điều kiện và số card; sort lưu cùng segment gồm tuỳ chọn nào, mặc định gì; điều kiện trên custom field Date / Datetime hiển thị ra sao?",
+            "why_it_matters": "Tài liệu không nêu; thiếu expected result cho boundary.",
+            "kb_refs": [
+              "KB-020",
+              "KB-021",
+              "KB-047",
+              "KB-058",
+              "KB-032"
+            ]
+          },
+          {
+            "question": "Lọc recipient theo engagement (opened / clicked trong N ngày, Jira MTRO-120) sẽ nằm trong segment builder hay ở bước Recipients của campaign?",
+            "why_it_matters": "Cần chốt vị trí tính năng trước khi viết test.",
+            "kb_refs": [
+              "KB-069"
+            ]
+          },
+          {
+            "question": "Sửa segment sau khi campaign đã gửi thì report của campaign đó hiển thị gì?",
+            "why_it_matters": "Đã có quyết định cho trường hợp segment bị xoá nhưng chưa có cho trường hợp segment bị sửa.",
+            "kb_refs": [
+              "KB-014",
+              "KB-021"
+            ]
+          }
+        ]
+      }
+    ],
+    "profile_relationships": [
+      {
+        "from": "segment-builder",
+        "to": "segment-audience-evaluation",
+        "relation": "EVALUATES_WITH",
+        "kb_refs": [
+          "KB-041",
+          "KB-045",
+          "KB-070"
+        ]
+      },
+      {
+        "from": "segment-list-management",
+        "to": "segment-builder",
+        "relation": "OPENS",
+        "kb_refs": [
+          "KB-007",
+          "KB-021"
+        ]
+      },
+      {
+        "from": "segment-builder",
+        "to": "workspace-settings/roles-and-permissions",
+        "relation": "PERMISSION_FROM",
+        "kb_refs": [
+          "KB-063",
+          "KB-068"
+        ]
+      },
+      {
+        "from": "segment-builder",
+        "to": "automations/automation-steps",
+        "relation": "SHARES_SEMANTICS",
+        "kb_refs": [
+          "KB-038"
+        ]
+      }
+    ],
+    "coverage_matrix": [
+      {
+        "feature_id": "segment-builder",
+        "layer": "portal",
+        "role": "Owner",
+        "state": "tạo segment mới",
+        "environment": "documented",
+        "covered": true,
+        "note": "AC Jira MTRO-53 + PO/BA 02/10/2026 + khảo sát staging"
+      },
+      {
+        "feature_id": "segment-builder",
+        "layer": "portal",
+        "role": "Owner",
+        "state": "sửa segment đã lưu",
+        "environment": "documented",
+        "covered": true,
+        "note": "AC + khảo sát staging"
+      },
+      {
+        "feature_id": "segment-builder",
+        "layer": "portal",
+        "role": "unspecified",
+        "state": "điều kiện Text / Number / Date",
+        "environment": "documented",
+        "covered": true,
+        "note": "Dev 02/10/2026 (Number, Date); Text chỉ có hiện trạng staging"
+      },
+      {
+        "feature_id": "segment-builder",
+        "layer": "portal",
+        "role": "unspecified",
+        "state": "điều kiện custom field Boolean",
+        "environment": "documented",
+        "covered": true,
+        "note": "Rule operator có; staging đang lỗi 422"
+      },
+      {
+        "feature_id": "segment-builder",
+        "layer": "portal",
+        "role": "unspecified",
+        "state": "điều kiện custom field Date / Datetime",
+        "environment": "documented",
+        "covered": false,
+        "note": "Staging chưa có fixture; tài liệu không mô tả hiển thị"
+      },
+      {
+        "feature_id": "segment-builder",
+        "layer": "portal",
+        "role": "Owner",
+        "state": "Run và bảng kết quả",
+        "environment": "documented",
+        "covered": true,
+        "note": "PO/BA 02/10/2026 + khảo sát staging"
+      },
+      {
+        "feature_id": "segment-builder",
+        "layer": "portal",
+        "role": "unspecified",
+        "state": "Save enable / disable",
+        "environment": "documented",
+        "covered": true,
+        "note": "AC + PO/BA 02/10/2026"
+      },
+      {
+        "feature_id": "segment-builder",
+        "layer": "portal",
+        "role": "Owner",
+        "state": "rời builder khi có thay đổi chưa lưu",
+        "environment": "documented",
+        "covered": true,
+        "note": "Chỉ hiện trạng staging"
+      },
+      {
+        "feature_id": "segment-builder",
+        "layer": "portal",
+        "role": "unspecified",
+        "state": "chế độ Advanced",
+        "environment": "documented",
+        "covered": false,
+        "note": "Toggle bị ẩn; tương lai chưa chốt"
+      },
+      {
+        "feature_id": "segment-builder",
+        "layer": "portal",
+        "role": "Member",
+        "state": "tạo / sửa segment",
+        "environment": "documented",
+        "covered": true,
+        "note": "PO 30/09/2026; chưa deploy trên staging 01/10/2026"
+      },
+      {
+        "feature_id": "segment-builder",
+        "layer": "portal",
+        "role": "Admin",
+        "state": "tạo / sửa segment",
+        "environment": "documented",
+        "covered": false,
+        "note": "Admin chưa từng được quan sát; ma trận quyền chưa chốt"
+      },
+      {
+        "feature_id": "segment-builder",
+        "layer": "portal",
+        "role": "unspecified",
+        "state": "biên tên / số điều kiện / sort",
+        "environment": "documented",
+        "covered": false,
+        "note": "Tài liệu không nêu"
+      },
+      {
+        "feature_id": "segment-builder",
+        "layer": "api",
+        "role": "unspecified",
+        "state": "lưu segment có sẵn",
+        "environment": "documented",
+        "covered": true,
+        "note": "Dev BE 08/09/2026: PUT /segments/{id}"
+      },
+      {
+        "feature_id": "segment-builder",
+        "layer": "api",
+        "role": "api-caller",
+        "state": "ghi segment qua Public API",
+        "environment": "documented",
+        "covered": false,
+        "note": "Chỉ biết có scope segments:write"
+      },
+      {
+        "feature_id": "segment-builder",
+        "layer": "backend",
+        "role": "unspecified",
+        "state": "ngữ nghĩa so khớp điều kiện",
+        "environment": "documented",
+        "covered": true,
+        "note": "Dev 02/10/2026 (BR-22, BR-24); AND ưu tiên OR chỉ là ghi nhận QA"
+      },
+      {
+        "feature_id": "segment-builder",
+        "layer": "code",
+        "role": "unspecified",
+        "state": "any",
+        "environment": "documented",
+        "covered": false,
+        "note": "Không có nguồn mã"
+      }
+    ],
+    "unassigned_kb_items": [],
+    "profile_conflicts": [
+      {
+        "topic": "Copy toast khi Member bị chặn tạo segment",
+        "side_a": {
+          "statement": "Copy PO chốt 30/09/2026 (Jira MTRO-100): \"Only workspace Owners and Admins can create segments. Ask an Admin to create it for you.\"",
+          "kb_refs": [
+            "KB-064"
+          ]
+        },
+        "side_b": {
+          "statement": "Dev đề xuất một copy khác có cụm \"…create or edit segments…\", không ghi được PO chấp nhận.",
+          "kb_refs": [
+            "KB-065"
+          ]
+        },
+        "resolution": "UNRESOLVED",
+        "handling": "Giữ copy PO làm rule; phía Dev chỉ là đề xuất; câu hỏi copy cuối ở unknown_areas."
+      },
+      {
+        "topic": "Phạm vi của bộ đếm segment (live theo dữ liệu contact vs chỉ cập nhật khi Run)",
+        "side_a": {
+          "statement": "Bộ đếm trong builder chỉ cập nhật khi bấm Run (PO/BA 02/10/2026, BR-27).",
+          "kb_refs": [
+            "KB-041"
+          ]
+        },
+        "side_b": {
+          "statement": "Cột Contacts / membership phản ánh dữ liệu contact hiện tại (rule nháp Jira MTRO-27).",
+          "kb_refs": [
+            "KB-075"
+          ]
+        },
+        "resolution": "UNRESOLVED",
+        "handling": "Ghi chính ở segment-audience-evaluation; ở builder chỉ dùng rule BR-27 trong phạm vi bộ đếm builder khi đổi điều kiện."
+      }
+    ],
+    "profile_change_summary": [
+      "Profile tạo mới lần đầu từ bộ tài liệu QA Mailtro; chưa có phiên bản publish trước để so.",
+      "Rework r1: không đổi nội dung; dựng lại từ shard hiện tại."
+    ],
+    "kb_trace_complete": true
+  },
+  "gate": {
+    "decision": "CONDITIONAL_PASS",
+    "blocking_findings": [],
+    "conditions": [
+      "Ma trận quyền segment chưa chốt; chỉ quyết định chặn Member (chưa deploy staging) là rule.",
+      "Nhiều lỗi đã biết (Boolean 422, đổi field / operator, round-trip query) chỉ dùng làm regression watch, không làm oracle.",
+      "Hành vi chỉ có từ quan sát QA (AND ưu tiên OR, operator Text, guard rời trang, toast phụ) chỉ là baseline hiện trạng.",
+      "Lý do CONDITIONAL_PASS: profile có stable identity, user goal theo capability, mọi mục trace về KB, coverage/freshness đầy đủ và không có assumption; đủ cho regression discovery nhưng một phần oracle còn unknown (bình thường với bootstrap lần đầu)."
+    ],
+    "allowed_next_steps": [
+      "qa-checklist-builder",
+      "knowledge-diff-analyzer"
+    ]
+  }
+}

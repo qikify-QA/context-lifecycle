@@ -1,0 +1,766 @@
+{
+  "schema_version": "1.0",
+  "artifact_type": "FeatureProfileCandidate",
+  "artifact_id": "ART-FEATURE-PROFILE-two-factor-challenge-CTX-20261008-02",
+  "revision": "r1",
+  "workflow_id": "CTX-20261008-02",
+  "producer": "feature-profile-builder",
+  "source_refs": [
+    "candidate/product-kb/two-factor-challenge.json",
+    "candidate/product-kb/_object-level.auth.json",
+    "candidate/product-kb/_product-level.json",
+    "input/scope-plan.json",
+    "input/orchestrator-directives.json",
+    "intermediate/doc/DOC-27.json",
+    "input/rework-r1-builders.md",
+    "input/rework-r1.md"
+  ],
+  "upstream_artifact_ids": [
+    "PKBC-CTX-20261008-02-auth-two-factor-challenge",
+    "PKBC-CTX-20261008-02-auth-object-level",
+    "PKBC-CTX-20261008-02-_product-level"
+  ],
+  "status": "PARTIAL",
+  "confidence": "MEDIUM",
+  "observations": [
+    "Profile dựng hoàn toàn từ tài liệu (DOC_BOOTSTRAP), không có quan sát runtime trong lần chạy này; act_ids và observed_validations rỗng.",
+    "Statement ở confirmed_rules, observed_behavior và risks lấy nguyên văn từ KB; phần mô tả capability / transition chỉ tóm tắt các KB được trỏ.",
+    "Regression checklist QA chỉ dùng làm gợi ý phủ, không làm nguồn cho nội dung profile.",
+    "feature_id dùng feature_key như KB của feature; chưa có mã FEAT dạng số."
+  ],
+  "assumptions": [],
+  "unknowns": [
+    "Giới hạn nhập sai mã 2FA khi đăng nhập là bao nhiêu (Jira MTRO-88 ghi 6 lần/phút/session và 20 lần/phút/IP) và staging hiện có áp dụng không, khi test-run 23/09/2026 nhập 15–20 mã sai đều chỉ nhận 422?",
+    "Tài khoản chưa bật TOTP có phải nhập mã OTP gửi qua email khi đăng nhập không (Jira MTRO-92 §1 nói có, Jira MTRO-88 và staging nói không)?",
+    "Cửa sổ thời gian chấp nhận mã TOTP là bao nhiêu (mã của chu kỳ trước / sau có được nhận không)?",
+    "Thời hạn thật phía server của một lượt challenge là bao lâu, có khớp đồng hồ 5:00 trên UI không?",
+    "Recovery code có định dạng và độ dài nào, ô nhập mã / recovery code có maxlength bao nhiêu, và dùng lại một recovery code đã dùng thì nhận lỗi gì?",
+    "Reload hoặc mở tab mới khi đang ở màn challenge thì người dùng được đưa về màn nào và có thông báo gì?"
+  ],
+  "conflicts": [
+    "CONF-MTRO-abuse-guard-01",
+    "CONF-MTRO-auth-02"
+  ],
+  "blocking_issues": [],
+  "payload": {
+    "feature_profiles": [
+      {
+        "feature_id": "two-factor-challenge",
+        "feature_key": "two-factor-challenge",
+        "name": "Xác thực hai lớp khi đăng nhập (mã TOTP / recovery code)",
+        "user_goal": "Người dùng đã bật 2FA hoàn tất bước challenge sau khi nhập đúng mật khẩu, bằng mã từ ứng dụng authenticator hoặc một recovery code, trong thời hạn của lượt đăng nhập, rồi vào luồng landing bình thường.",
+        "stable_since_version": "v1",
+        "actors": [
+          {
+            "role": "unspecified (tài khoản đã bật TOTP)",
+            "permission_observed": "Chỉ tài khoản đã tự bật TOTP ở Account settings mới gặp màn challenge; 2FA là tuỳ chọn của từng tài khoản, không bắt buộc theo workspace. Khảo sát staging dùng tài khoản Owner đang bật 2FA.",
+            "kb_refs": [
+              "KB-028",
+              "KB-129",
+              "KB-110"
+            ]
+          }
+        ],
+        "entry_points": [
+          {
+            "path": "Mailtro ID /login/two-factor-challenge, sau khi POST /login trả về khoá two_factor",
+            "precondition": "Đã nhập đúng email và mật khẩu của tài khoản bật 2FA; lượt đăng nhập 2FA đang chờ trong cùng tab.",
+            "kb_refs": [
+              "KB-007",
+              "KB-033",
+              "KB-034",
+              "KB-037"
+            ]
+          }
+        ],
+        "capabilities": [
+          {
+            "name": "Xác minh bằng mã từ ứng dụng authenticator",
+            "description": "Chế độ mặc định: ô Authentication code 6 chữ số, nút Verify bật khi đủ 6 ký tự, gửi POST /login/two-factor-challenge với {code}. 2FA của Mailtro là TOTP opt-in (Jira MTRO-88).",
+            "kb_refs": [
+              "KB-028",
+              "KB-034",
+              "KB-038",
+              "KB-039",
+              "KB-040"
+            ],
+            "act_ids": []
+          },
+          {
+            "name": "Xác minh bằng recovery code",
+            "description": "Đổi sang chế độ recovery bằng \"Use a recovery code instead\"; ô Recovery code, gửi {recovery_code}. Đổi chế độ xoá nội dung đã gõ và lỗi đang hiện.",
+            "kb_refs": [
+              "KB-034",
+              "KB-035",
+              "KB-039",
+              "KB-040",
+              "KB-113"
+            ],
+            "act_ids": []
+          },
+          {
+            "name": "Thời hạn lượt challenge và quay lại đăng nhập",
+            "description": "Màn hiển thị đồng hồ đếm ngược 5:00; hết giờ thì toast \"Your sign-in expired. Please sign in again.\" và về /login. Reload hoặc mở tab mới làm mất lượt challenge. Link \"Back to sign in\" về /login. Thời hạn thật phía server không được ghi.",
+            "kb_refs": [
+              "KB-033",
+              "KB-034",
+              "KB-036",
+              "KB-037"
+            ],
+            "act_ids": []
+          },
+          {
+            "name": "Giới hạn nhập sai mã",
+            "description": "Nhập sai trả 422 \"Verification failed\"; một quan sát có 429 \"Too many attempts. Try again in a minute.\". Ngưỡng theo Jira MTRO-88 và quan sát staging mâu thuẫn nhau, chưa chốt.",
+            "kb_refs": [
+              "KB-040",
+              "KB-041",
+              "KB-042",
+              "KB-043"
+            ],
+            "act_ids": []
+          },
+          {
+            "name": "Hoàn tất đăng nhập và chấp nhận lời mời",
+            "description": "Qua challenge thì vào luồng landing như đăng nhập không có 2FA; nếu URL có ?invite= thì lời mời vào workspace được chấp nhận (Jira MTRO-88).",
+            "kb_refs": [
+              "KB-046",
+              "KB-047"
+            ],
+            "act_ids": []
+          }
+        ],
+        "state_transitions": [
+          {
+            "from": "/login",
+            "to": "/login/two-factor-challenge (chế độ app)",
+            "trigger": "Bấm Sign in, đăng nhập đúng",
+            "condition": "Response có khoá two_factor",
+            "kb_refs": [
+              "KB-007",
+              "KB-034"
+            ]
+          },
+          {
+            "from": "challenge chế độ app",
+            "to": "challenge chế độ recovery",
+            "trigger": "Bấm \"Use a recovery code instead\"",
+            "condition": "Nội dung đã gõ và lỗi bị xoá",
+            "kb_refs": [
+              "KB-035"
+            ]
+          },
+          {
+            "from": "challenge chế độ recovery",
+            "to": "challenge chế độ app",
+            "trigger": "Bấm \"Use a code from your app instead\"",
+            "condition": "Nội dung đã gõ và lỗi bị xoá",
+            "kb_refs": [
+              "KB-035"
+            ]
+          },
+          {
+            "from": "challenge, ô mã chưa đủ 6 ký tự",
+            "to": "challenge, nút Verify bật",
+            "trigger": "Nhập đủ 6 ký tự",
+            "condition": "Quan sát staging",
+            "kb_refs": [
+              "KB-038"
+            ]
+          },
+          {
+            "from": "challenge",
+            "to": "challenge, hiện lỗi Verification failed",
+            "trigger": "Verify với mã sai",
+            "condition": "BE trả 422",
+            "kb_refs": [
+              "KB-040"
+            ]
+          },
+          {
+            "from": "challenge",
+            "to": "bị chặn tạm (429)",
+            "trigger": "Nhập sai nhiều lần",
+            "condition": "Ngưỡng chưa chốt, staging có quan sát không chặn",
+            "kb_refs": [
+              "KB-041",
+              "KB-042",
+              "KB-043"
+            ]
+          },
+          {
+            "from": "challenge",
+            "to": "luồng landing sau đăng nhập",
+            "trigger": "Verify với mã đúng",
+            "condition": "Như đăng nhập không có 2FA",
+            "kb_refs": [
+              "KB-046"
+            ]
+          },
+          {
+            "from": "challenge với URL có ?invite=",
+            "to": "lời mời vào workspace được chấp nhận",
+            "trigger": "Verify với mã đúng",
+            "condition": "URL có tham số invite",
+            "kb_refs": [
+              "KB-047"
+            ]
+          },
+          {
+            "from": "challenge",
+            "to": "/login",
+            "trigger": "Hết đồng hồ 5:00 hoặc bấm \"Back to sign in\"",
+            "condition": "Hết giờ thì có toast thông báo",
+            "kb_refs": [
+              "KB-034",
+              "KB-036"
+            ]
+          },
+          {
+            "from": "challenge",
+            "to": "mất lượt challenge",
+            "trigger": "Reload hoặc mở tab mới",
+            "condition": "State chỉ lưu trong tab; màn đích không được ghi",
+            "kb_refs": [
+              "KB-037"
+            ]
+          },
+          {
+            "from": "không có lượt 2FA đang chờ",
+            "to": "/login",
+            "trigger": "Mở thẳng /login/two-factor-challenge",
+            "condition": "Theo router bundle + route-probe (suy luận)",
+            "kb_refs": [
+              "KB-033"
+            ]
+          }
+        ],
+        "confirmed_rules": [
+          {
+            "statement": "Theo Jira MTRO-88 (tóm tắt trong QA KB Mailtro \"Mailtro ID (Auth)\" v1, đọc 07/10/2026), xác thực hai lớp của Mailtro là TOTP opt-in bằng ứng dụng authenticator, người dùng tự bật ở Account settings.",
+            "knowledge_kind": "CONFIRMED_EXPECTED",
+            "confidence": "MEDIUM",
+            "kb_refs": [
+              "KB-028"
+            ]
+          },
+          {
+            "statement": "Theo Jira MTRO-88 (mục out of scope, đọc 07/10/2026), mã 2FA gửi qua SMS nằm ngoài phạm vi; bundle frontend (đến 29/09/2026) cũng không có lựa chọn mã qua SMS.",
+            "knowledge_kind": "CONFIRMED_EXPECTED",
+            "confidence": "MEDIUM",
+            "kb_refs": [
+              "KB-029"
+            ]
+          },
+          {
+            "statement": "Theo Jira MTRO-88 (mục out of scope, đọc 07/10/2026), tuỳ chọn \"remember this browser\" (bỏ qua 2FA trên trình duyệt đã nhớ) nằm ngoài phạm vi.",
+            "knowledge_kind": "CONFIRMED_EXPECTED",
+            "confidence": "MEDIUM",
+            "kb_refs": [
+              "KB-030"
+            ]
+          },
+          {
+            "statement": "Theo Jira MTRO-88 (đọc 07/10/2026, tóm tắt trong QA KB Mailtro \"Mailtro ID (Auth)\" v1), sau khi qua 2FA challenge thành công người dùng vào luồng landing bình thường như đăng nhập không có 2FA.",
+            "knowledge_kind": "CONFIRMED_EXPECTED",
+            "confidence": "MEDIUM",
+            "kb_refs": [
+              "KB-046"
+            ]
+          },
+          {
+            "statement": "Theo Jira MTRO-88 (đọc 07/10/2026, tóm tắt trong QA KB Mailtro \"Mailtro ID (Auth)\" v1), sau khi qua 2FA challenge thành công, nếu URL có tham số ?invite= thì lời mời vào workspace được chấp nhận.",
+            "knowledge_kind": "CONFIRMED_EXPECTED",
+            "confidence": "MEDIUM",
+            "kb_refs": [
+              "KB-047"
+            ]
+          }
+        ],
+        "observed_behavior": [
+          {
+            "statement": "Trên staging (khảo sát 23/09/2026), màn /login/two-factor-challenge có tiêu đề \"Two-factor authentication\" ở cả hai chế độ: chế độ app hiện \"Enter the 6-digit code from your authenticator app.\" với ô \"Authentication code\" (placeholder 123456, inputmode=numeric, autocomplete=one-time-code); chế độ recovery hiện \"Enter one of the recovery codes you saved.\" với ô \"Recovery code\" (placeholder \"Paste a recovery code\"); link \"Back to sign in\" quay về /login.",
+            "knowledge_kind": "OBSERVED_CURRENT",
+            "confidence": "MEDIUM",
+            "status": "CURRENT_STATE",
+            "kb_refs": [
+              "KB-034"
+            ]
+          },
+          {
+            "statement": "Trên staging (khảo sát 23/09/2026), màn 2FA challenge có nút đổi qua lại \"Use a recovery code instead\" / \"Use a code from your app instead\"; khi đổi chế độ thì nội dung đã gõ và lỗi đang hiện bị xoá.",
+            "knowledge_kind": "OBSERVED_CURRENT",
+            "confidence": "MEDIUM",
+            "status": "CURRENT_STATE",
+            "kb_refs": [
+              "KB-035"
+            ]
+          },
+          {
+            "statement": "Trên staging (khảo sát 23/09/2026), màn 2FA challenge hiện \"This sign-in expires in {time}.\" đếm ngược từ 5:00 (hằng 300 giây trong bundle); hết giờ thì hiện toast \"Your sign-in expired. Please sign in again.\" và tự quay về /login. Thời hạn thật phía server của lượt challenge không được ghi.",
+            "knowledge_kind": "OBSERVED_CURRENT",
+            "confidence": "MEDIUM",
+            "status": "CURRENT_STATE",
+            "kb_refs": [
+              "KB-036"
+            ]
+          },
+          {
+            "statement": "Trên staging (quan sát 23/09/2026), reload hoặc mở tab mới làm mất lượt 2FA challenge vì state chỉ được lưu trong tab.",
+            "knowledge_kind": "OBSERVED_CURRENT",
+            "confidence": "LOW",
+            "status": "CURRENT_STATE",
+            "kb_refs": [
+              "KB-037"
+            ]
+          },
+          {
+            "statement": "Trên staging (khảo sát 23/09/2026), nút \"Verify\" ở màn 2FA challenge bị disabled khi ô còn rỗng hoặc chưa đủ 6 ký tự (hằng 6 trong bundle).",
+            "knowledge_kind": "OBSERVED_CURRENT",
+            "confidence": "MEDIUM",
+            "status": "CURRENT_STATE",
+            "kb_refs": [
+              "KB-038"
+            ]
+          },
+          {
+            "statement": "Trên staging (khảo sát 23/09/2026), ô \"Authentication code\" là input số và frontend tự lọc bỏ ký tự không phải số; ô \"Recovery code\" tắt autocomplete và frontend bỏ mọi khoảng trắng; body gửi lên vẫn đúng vì frontend lọc ở biến dẫn xuất (giá trị hiển thị trên ô thì không được làm sạch, xem lỗi đã biết liên quan).",
+            "knowledge_kind": "OBSERVED_CURRENT",
+            "confidence": "MEDIUM",
+            "status": "CURRENT_STATE",
+            "kb_refs": [
+              "KB-039"
+            ]
+          },
+          {
+            "statement": "Trên staging (khảo sát 23/09/2026), bấm \"Verify\" gửi POST /login/two-factor-challenge với body {code} hoặc {recovery_code} tuỳ chế độ; nhập sai mã thì BE trả 422 và hiện alert \"Verification failed\" cùng lỗi dưới field lấy từ code[0] / recovery_code[0] (\"The provided two-factor code was invalid.\").",
+            "knowledge_kind": "OBSERVED_CURRENT",
+            "confidence": "MEDIUM",
+            "status": "CURRENT_STATE",
+            "kb_refs": [
+              "KB-040"
+            ]
+          },
+          {
+            "statement": "Trên staging (khảo sát 23/09/2026), nhập sai mã 2FA quá số lần cho phép thì nhận 429 với thông báo \"Too many attempts. Try again in a minute.\"; tài liệu không nêu ngưỡng số lần. Cùng ngày, một test-run khác ghi nhận không thấy 429 sau 15–20 lần sai (xem mâu thuẫn về giới hạn nhập sai mã 2FA).",
+            "knowledge_kind": "OBSERVED_CURRENT",
+            "confidence": "MEDIUM",
+            "status": "CURRENT_STATE",
+            "kb_refs": [
+              "KB-041"
+            ]
+          },
+          {
+            "statement": "Trên staging (khảo sát 23/09/2026) và trong cả 2 bundle frontend, màn 2FA challenge không có nút gửi lại mã và không có cooldown mã.",
+            "knowledge_kind": "OBSERVED_CURRENT",
+            "confidence": "MEDIUM",
+            "status": "CURRENT_STATE",
+            "kb_refs": [
+              "KB-045"
+            ]
+          },
+          {
+            "statement": "Trên staging (khảo sát 23/09/2026) và trong cả 2 bundle frontend, màn 2FA challenge không có tuỳ chọn \"remember / trust this device\".",
+            "knowledge_kind": "OBSERVED_CURRENT",
+            "confidence": "MEDIUM",
+            "status": "CURRENT_STATE",
+            "kb_refs": [
+              "KB-140"
+            ]
+          }
+        ],
+        "observed_validations": [],
+        "permissions": [
+          {
+            "statement": "2FA là tuỳ chọn của từng tài khoản Mailtro ID, không có cấu hình bắt buộc theo workspace; tài liệu không gán role cho bước challenge.",
+            "kb_refs": [
+              "KB-028",
+              "KB-129",
+              "KB-103"
+            ]
+          }
+        ],
+        "surface_mapping": {
+          "portal": [
+            {
+              "item": "Mailtro ID /login/two-factor-challenge: tiêu đề Two-factor authentication, ô Authentication code (placeholder 123456, inputmode numeric, autocomplete one-time-code) hoặc ô Recovery code, nút Verify, nút đổi chế độ, link Back to sign in",
+              "kb_refs": [
+                "KB-034",
+                "KB-035",
+                "KB-038"
+              ]
+            },
+            {
+              "item": "Đồng hồ \"This sign-in expires in {time}.\" đếm từ 5:00 và toast hết hạn",
+              "kb_refs": [
+                "KB-036"
+              ]
+            },
+            {
+              "item": "Không có nút gửi lại mã, không có tuỳ chọn remember / trust this device, không có SMS",
+              "kb_refs": [
+                "KB-029",
+                "KB-030",
+                "KB-045",
+                "KB-140"
+              ]
+            }
+          ],
+          "storefront": [],
+          "api": [
+            {
+              "item": "POST /login/two-factor-challenge với {code} hoặc {recovery_code}; mã sai trả 422 với lỗi ở code[0] / recovery_code[0]",
+              "kb_refs": [
+                "KB-040"
+              ]
+            },
+            {
+              "item": "429 \"Too many attempts. Try again in a minute.\" khi nhập sai nhiều (ngưỡng chưa chốt)",
+              "kb_refs": [
+                "KB-041",
+                "KB-042",
+                "KB-043"
+              ]
+            }
+          ],
+          "data": [
+            {
+              "item": "Lượt challenge chỉ lưu trong state của tab",
+              "kb_refs": [
+                "KB-037"
+              ]
+            }
+          ],
+          "code": [
+            {
+              "item": "Router bundle: /login/two-factor-challenge có guard guestOnly và requiresTwoFactorPending (suy luận)",
+              "kb_refs": [
+                "KB-033"
+              ]
+            },
+            {
+              "item": "Frontend lọc ký tự không phải số ở ô mã và bỏ khoảng trắng ở ô recovery code trên giá trị gửi đi",
+              "kb_refs": [
+                "KB-039"
+              ]
+            }
+          ]
+        },
+        "dependencies": [
+          {
+            "target": "auth / sign-in-and-workspace-selection",
+            "relation": "entry_from",
+            "note": "Màn challenge chỉ đến sau POST /login có khoá two_factor.",
+            "kb_refs": [
+              "KB-007"
+            ]
+          },
+          {
+            "target": "auth / account-security-settings",
+            "relation": "configured_by",
+            "note": "Bật / tắt 2FA và tạo recovery code ở Account settings.",
+            "kb_refs": [
+              "KB-028",
+              "KB-113"
+            ]
+          },
+          {
+            "target": "auth / signup-and-workspace-creation",
+            "relation": "see_also",
+            "note": "Qua challenge với ?invite= thì lời mời được chấp nhận.",
+            "kb_refs": [
+              "KB-047",
+              "KB-062"
+            ]
+          },
+          {
+            "target": "abuse-guard / account-and-access-abuse-limits",
+            "relation": "conflict_owner",
+            "note": "Mâu thuẫn mã OTP qua email khi đăng nhập được sở hữu ở object abuse-guard.",
+            "kb_refs": [
+              "KB-031",
+              "KB-032"
+            ]
+          }
+        ],
+        "risks": [
+          {
+            "statement": "Theo router Mailtro ID trong bundle frontend 28/09/2026 và route-probe trên staging 29/09/2026, route /login/two-factor-challenge có guard guestOnly và requiresTwoFactorPending: mở thẳng URL này khi không có lượt đăng nhập 2FA đang chờ thì bị đưa về /login.",
+            "knowledge_kind": "INFERRED",
+            "confidence": "LOW",
+            "kb_refs": [
+              "KB-033"
+            ]
+          },
+          {
+            "statement": "Theo Jira MTRO-92 §1 (tóm tắt trong QA KB Mailtro \"Mailtro ID (Auth)\" v1 và \"Account settings & Two-factor authentication\" v1, đọc 07/10/2026), tài khoản chưa bật TOTP vẫn phải nhập mã OTP gửi qua email khi đăng nhập (màn \"Check your email\", mã 6 số hết hạn sau 10 phút, khoá gửi lại 60 giây, sai 5 lần thì quay về form đăng nhập), và tắt TOTP thì tài khoản quay về đăng nhập bằng mã email. Đây là một phía của mâu thuẫn chưa chốt với Jira MTRO-88 và với staging; chờ Dev xác nhận.",
+            "knowledge_kind": "INFERRED",
+            "confidence": "LOW",
+            "status": "UNRESOLVED",
+            "conflict_group": "CONF-MTRO-abuse-guard-01",
+            "kb_refs": [
+              "KB-031"
+            ]
+          },
+          {
+            "statement": "Theo Jira MTRO-88 (mã đăng nhập qua email nằm ngoài phạm vi), quan sát staging 23/09/2026 và bundle frontend 29/09/2026, đăng nhập Mailtro không có bước mã OTP gửi qua email (chỉ có TOTP opt-in). Đây là phía còn lại của mâu thuẫn với Jira MTRO-92 §1; chờ Dev xác nhận email OTP đã bỏ, chưa deploy hay chỉ bật trên production.",
+            "knowledge_kind": "INFERRED",
+            "confidence": "LOW",
+            "status": "UNRESOLVED",
+            "conflict_group": "CONF-MTRO-abuse-guard-01",
+            "kb_refs": [
+              "KB-032"
+            ]
+          },
+          {
+            "statement": "Theo Jira MTRO-88 (đọc 07/10/2026, tóm tắt trong QA KB Mailtro \"Mailtro ID (Auth)\" v1 và \"Known issues\" v1), số lần thử mã 2FA bị giới hạn 6 lần/phút/session và 20 lần/phút/IP. Chưa dùng làm expected result: quan sát staging 23/09/2026 nói ngược (không bị chặn sau 15–20 lần sai) và chưa có quyết định PO/Dev phân xử.",
+            "knowledge_kind": "INFERRED",
+            "confidence": "LOW",
+            "status": "UNRESOLVED",
+            "conflict_group": "CONF-MTRO-auth-02",
+            "kb_refs": [
+              "KB-042"
+            ]
+          },
+          {
+            "statement": "Trên staging (TC-MTRO-931, test-run 2FA thủ công 23/09/2026), nhập 15–20 mã 2FA sai liên tiếp trong khoảng 2 phút 42 giây đều nhận 422, không có 429 hay thông báo \"Too many attempts. Try again in a minute.\"; QA ghi đây là lỗi nghi vấn mức High, chưa report. Đây là phía còn lại của mâu thuẫn với giới hạn trong Jira MTRO-88.",
+            "knowledge_kind": "INFERRED",
+            "confidence": "LOW",
+            "status": "UNRESOLVED",
+            "conflict_group": "CONF-MTRO-auth-02",
+            "kb_refs": [
+              "KB-043"
+            ]
+          },
+          {
+            "statement": "Trên staging (TC-MTRO-902, 905, 906, test-run 23/09/2026), các giá trị như \"12ab#3-4x56\", \"123 456\", \"123-456\" được giữ nguyên trên ô nhập mã 2FA / recovery code (giá trị hiển thị không được làm sạch). Đây là lỗi đã biết mức Low (open 23/09/2026), không phải hành vi đúng.",
+            "knowledge_kind": "OBSERVED_CURRENT",
+            "confidence": "LOW",
+            "status": "KNOWN_DEFECT",
+            "kb_refs": [
+              "KB-044"
+            ]
+          }
+        ],
+        "freshness": {
+          "observed_at": "2026-09-23",
+          "run_id": "CTX-20261008-02",
+          "basis": "Jira MTRO-88 / MTRO-92 đọc 07/10/2026; khảo sát staging và test-run 2FA 23/09/2026; bundle frontend 28–29/09/2026"
+        },
+        "unknown_areas": [
+          {
+            "question": "Giới hạn nhập sai mã 2FA khi đăng nhập là bao nhiêu (Jira MTRO-88 ghi 6 lần/phút/session và 20 lần/phút/IP) và staging hiện có áp dụng không, khi test-run 23/09/2026 nhập 15–20 mã sai đều chỉ nhận 422?",
+            "why_it_matters": "Hai nguồn mâu thuẫn; không viết được expected cho case brute-force mã 2FA, mức nghi vấn High.",
+            "kb_refs": [
+              "KB-041",
+              "KB-042",
+              "KB-043"
+            ],
+            "conflict_group": "CONF-MTRO-auth-02"
+          },
+          {
+            "question": "Tài khoản chưa bật TOTP có phải nhập mã OTP gửi qua email khi đăng nhập không (Jira MTRO-92 §1 nói có, Jira MTRO-88 và staging nói không)?",
+            "why_it_matters": "Quyết định có tồn tại cả một bước đăng nhập (màn Check your email, hết hạn 10 phút, khoá gửi lại 60 giây) hay không.",
+            "kb_refs": [
+              "KB-031",
+              "KB-032"
+            ],
+            "conflict_group": "CONF-MTRO-abuse-guard-01"
+          },
+          {
+            "question": "Cửa sổ thời gian chấp nhận mã TOTP là bao nhiêu (mã của chu kỳ trước / sau có được nhận không)?",
+            "why_it_matters": "Cần cho case biên mã vừa hết hạn; tài liệu ghi chưa có nguồn.",
+            "kb_refs": [
+              "KB-028",
+              "KB-040"
+            ]
+          },
+          {
+            "question": "Thời hạn thật phía server của một lượt challenge là bao lâu, có khớp đồng hồ 5:00 trên UI không?",
+            "why_it_matters": "Đồng hồ UI là hằng số frontend; submit sau khi hết hạn phía server chưa có expected.",
+            "kb_refs": [
+              "KB-036"
+            ]
+          },
+          {
+            "question": "Recovery code có định dạng và độ dài nào, ô nhập mã / recovery code có maxlength bao nhiêu, và dùng lại một recovery code đã dùng thì nhận lỗi gì?",
+            "why_it_matters": "Rule chỉ nói mỗi code dùng một lần; không có expected cho code đã dùng hoặc sai định dạng.",
+            "kb_refs": [
+              "KB-034",
+              "KB-039",
+              "KB-113"
+            ]
+          },
+          {
+            "question": "Reload hoặc mở tab mới khi đang ở màn challenge thì người dùng được đưa về màn nào và có thông báo gì?",
+            "why_it_matters": "Chỉ biết lượt challenge bị mất; màn đích không được ghi.",
+            "kb_refs": [
+              "KB-037"
+            ]
+          }
+        ]
+      }
+    ],
+    "profile_relationships": [
+      {
+        "from": "two-factor-challenge",
+        "to": "sign-in-and-workspace-selection",
+        "relation": "CONTINUES",
+        "kb_refs": [
+          "KB-007",
+          "KB-046"
+        ]
+      },
+      {
+        "from": "two-factor-challenge",
+        "to": "account-security-settings",
+        "relation": "CONFIGURED_BY",
+        "kb_refs": [
+          "KB-028",
+          "KB-113"
+        ]
+      },
+      {
+        "from": "two-factor-challenge",
+        "to": "signup-and-workspace-creation",
+        "relation": "SEE_ALSO",
+        "kb_refs": [
+          "KB-047"
+        ]
+      },
+      {
+        "from": "two-factor-challenge",
+        "to": "abuse-guard/account-and-access-abuse-limits",
+        "relation": "SHARES_CONFLICT_WITH",
+        "kb_refs": [
+          "KB-031",
+          "KB-032"
+        ]
+      }
+    ],
+    "coverage_matrix": [
+      {
+        "feature_id": "two-factor-challenge",
+        "layer": "auth",
+        "role": "unspecified (2FA On)",
+        "state": "nhập đúng mã app",
+        "environment": "documented",
+        "covered": true,
+        "note": "Rule landing Jira MTRO-88 + quan sát staging"
+      },
+      {
+        "feature_id": "two-factor-challenge",
+        "layer": "auth",
+        "role": "unspecified (2FA On)",
+        "state": "nhập đúng recovery code",
+        "environment": "documented",
+        "covered": true,
+        "note": "Quan sát staging; code dùng một lần theo Jira MTRO-92"
+      },
+      {
+        "feature_id": "two-factor-challenge",
+        "layer": "auth",
+        "role": "unspecified (2FA On)",
+        "state": "nhập sai mã",
+        "environment": "documented",
+        "covered": true,
+        "note": "Quan sát staging 422"
+      },
+      {
+        "feature_id": "two-factor-challenge",
+        "layer": "auth",
+        "role": "unspecified (2FA On)",
+        "state": "nhập sai nhiều lần (rate limit)",
+        "environment": "documented",
+        "covered": false,
+        "note": "Mâu thuẫn chưa chốt"
+      },
+      {
+        "feature_id": "two-factor-challenge",
+        "layer": "auth",
+        "role": "unspecified (2FA On)",
+        "state": "hết hạn lượt challenge",
+        "environment": "documented",
+        "covered": true,
+        "note": "Quan sát UI; TTL server chưa có"
+      },
+      {
+        "feature_id": "two-factor-challenge",
+        "layer": "auth",
+        "role": "unspecified (2FA On)",
+        "state": "challenge kèm ?invite=",
+        "environment": "documented",
+        "covered": true,
+        "note": "Rule Jira MTRO-88; chưa có quan sát"
+      },
+      {
+        "feature_id": "two-factor-challenge",
+        "layer": "auth",
+        "role": "unspecified (2FA Off)",
+        "state": "đăng nhập không có TOTP (mã email?)",
+        "environment": "documented",
+        "covered": false,
+        "note": "Mâu thuẫn chưa chốt; không có tài khoản 2FA Off để khảo sát"
+      },
+      {
+        "feature_id": "two-factor-challenge",
+        "layer": "api",
+        "role": "unspecified",
+        "state": "POST /login/two-factor-challenge",
+        "environment": "documented",
+        "covered": true,
+        "note": "Quan sát staging"
+      },
+      {
+        "feature_id": "two-factor-challenge",
+        "layer": "code",
+        "role": "unspecified",
+        "state": "route guard",
+        "environment": "documented",
+        "covered": false,
+        "note": "Chỉ suy luận từ bundle"
+      }
+    ],
+    "unassigned_kb_items": [],
+    "profile_conflicts": [
+      {
+        "conflict_group": "CONF-MTRO-abuse-guard-01",
+        "kb_refs": [
+          "KB-031",
+          "KB-032"
+        ],
+        "resolution": "UNRESOLVED",
+        "handling": "Giữ cả hai phía ở risks, câu hỏi ở unknown_areas; không chọn phía nào làm expected."
+      },
+      {
+        "conflict_group": "CONF-MTRO-auth-02",
+        "kb_refs": [
+          "KB-042",
+          "KB-043"
+        ],
+        "resolution": "UNRESOLVED",
+        "handling": "Giữ cả hai phía ở risks, câu hỏi ở unknown_areas; không chọn phía nào làm expected."
+      }
+    ],
+    "profile_change_summary": [
+      "Profile tạo mới lần đầu từ bộ tài liệu (DOC_BOOTSTRAP); chưa có bản publish trước để so.",
+      "Rework r1: dựng lại theo shard đã sửa (bỏ tham chiếu tới item đã bỏ, cập nhật item đổi loại, thêm item tách mới).",
+      "KB-030 rút về phạm vi Jira MTRO-88; thêm KB-140 (hiện trạng màn challenge không có remember / trust this device) vào observed_behavior."
+    ],
+    "kb_trace_complete": true
+  },
+  "gate": {
+    "decision": "CONDITIONAL_PASS",
+    "reason": "Profile có stable identity, user goal, mọi field trỏ về kb_id, coverage và freshness; không leak assumption. Đủ cho regression discovery nhưng oracle của nhiều mảng còn unknown.",
+    "blocking_findings": [],
+    "conditions": [
+      "Giới hạn nhập sai mã và bước mã email cho tài khoản không bật TOTP là hai mâu thuẫn mở; không viết expected cho hai mảng này.",
+      "Tham số biên của 2FA (cửa sổ TOTP, TTL server, định dạng recovery code) chưa có nguồn.",
+      "observed_behavior là hiện trạng tại thời điểm khảo sát, risks gồm suy luận / mâu thuẫn / lỗi đã biết; không mục nào trong hai nhóm này là expected result."
+    ],
+    "allowed_next_steps": [
+      "qa-checklist-builder",
+      "knowledge-diff-analyzer"
+    ]
+  }
+}

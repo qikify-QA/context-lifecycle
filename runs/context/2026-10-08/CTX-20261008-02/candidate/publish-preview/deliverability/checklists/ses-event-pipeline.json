@@ -1,0 +1,504 @@
+{
+  "feature_id": "ses-event-pipeline",
+  "feature_key": "ses-event-pipeline",
+  "checklist_version": "v1",
+  "checks": [
+    {
+      "check_id": "CHK-001",
+      "dimension": "CORE",
+      "layer": "db",
+      "title": "Event của một lần gửi được lưu vào ses_events với đủ loại và attribution",
+      "applicability": {
+        "role": "unspecified",
+        "state": "workspace gửi một campaign có mở và click",
+        "environment": "documented",
+        "theme_or_device": null
+      },
+      "precondition": "Có quyền đọc DB staging (`ses_events`, `sending_account_regions`) và log worker (do Dev hỗ trợ; trên staging hiện thiếu credential AWS / quyền DB). Có hộp thư test mở được mail và bấm link.",
+      "steps": [
+        "Gửi một campaign tới hộp thư test.",
+        "Mở mail và bấm một link trong mail.",
+        "Đọc các row `ses_events` của message đó."
+      ],
+      "observation_point": "Các loại event được lưu và giá trị `team_id`, `campaign_id`, `campaign_broadcast_recipient_id`.",
+      "expected_result": "`ses_events` có các event của lần gửi (gồm cả open / click native của AWS), mỗi row mang đúng `team_id`, `campaign_id`, `campaign_broadcast_recipient_id` của lần gửi; event đi qua đường SNS → SQS → worker.",
+      "oracle": {
+        "kb_ids": [
+          "KB-064",
+          "KB-058"
+        ],
+        "oracle_strength": "STRONG"
+      },
+      "status": "READY",
+      "open_question_draft": null,
+      "regression_watch_kb_ids": [],
+      "context_kb_ids": [],
+      "risk_refs": [
+        "RISK-ses-event-pipeline-02"
+      ],
+      "priority": "P2",
+      "automation_suitability": "HYBRID"
+    },
+    {
+      "check_id": "CHK-002",
+      "dimension": "STATE_DATA",
+      "layer": "db",
+      "title": "Nội dung và cấu trúc bảng ses_events",
+      "applicability": {
+        "role": "unspecified",
+        "state": "có ít nhất một event bounce, complaint, click trong `ses_events`",
+        "environment": "documented",
+        "theme_or_device": null
+      },
+      "precondition": "Có quyền đọc DB staging (`ses_events`, `sending_account_regions`) và log worker (do Dev hỗ trợ; trên staging hiện thiếu credential AWS / quyền DB).",
+      "steps": [
+        "Đọc schema bảng `ses_events` (cột, index).",
+        "Với một event, so `source_domain` với `mail.source` của message.",
+        "Với event bounce / complaint / click, đọc các trường chẩn đoán."
+      ],
+      "observation_point": "Schema, giá trị `source_domain` và các trường chẩn đoán.",
+      "expected_result": "`source_domain` lấy từ `mail.source` ở dạng chữ thường; bảng có các trường `bounce_type`, `bounce_sub_type`, `diagnostic_code`, `complaint_feedback_type`, `ip_address`, `user_agent`, `link_url`; `message_id` và `occurred_at` có index; không có cột lưu raw payload JSONB.",
+      "oracle": {
+        "kb_ids": [
+          "KB-065",
+          "KB-066",
+          "KB-067"
+        ],
+        "oracle_strength": "STRONG"
+      },
+      "status": "READY",
+      "open_question_draft": null,
+      "regression_watch_kb_ids": [],
+      "context_kb_ids": [],
+      "risk_refs": [
+        "RISK-ses-event-pipeline-02"
+      ],
+      "priority": "P3",
+      "automation_suitability": "SUITABLE"
+    },
+    {
+      "check_id": "CHK-003",
+      "dimension": "NEGATIVE",
+      "layer": "db",
+      "title": "Event có TopicArn ngoài whitelist hoặc thiếu tag attribution bị log rồi drop",
+      "applicability": {
+        "role": "unspecified",
+        "state": "có cách đẩy message vào queue của worker (do Dev hỗ trợ)",
+        "environment": "documented",
+        "theme_or_device": null
+      },
+      "precondition": "Có quyền đọc DB staging (`ses_events`, `sending_account_regions`) và log worker (do Dev hỗ trợ; trên staging hiện thiếu credential AWS / quyền DB).",
+      "steps": [
+        "Đẩy một message bounce hợp lệ về chữ ký nhưng `TopicArn` không có trong `sending_account_regions.sns_topic_arn`.",
+        "Đẩy một message bounce từ topic hợp lệ nhưng không có tag attribution.",
+        "Đọc log worker, `ses_events` và `suppressions` cho hai địa chỉ dùng trong message."
+      ],
+      "observation_point": "Log worker và dữ liệu trong `ses_events` / `suppressions` sau mỗi message.",
+      "expected_result": "Cả hai message được ghi log rồi drop: không có row `ses_events` và không có row suppression nào được tạo.",
+      "oracle": {
+        "kb_ids": [
+          "KB-061",
+          "KB-063"
+        ],
+        "oracle_strength": "STRONG"
+      },
+      "status": "READY",
+      "open_question_draft": null,
+      "regression_watch_kb_ids": [],
+      "context_kb_ids": [],
+      "risk_refs": [
+        "RISK-ses-event-pipeline-03"
+      ],
+      "priority": "P1",
+      "automation_suitability": "NOT_SUITABLE"
+    },
+    {
+      "check_id": "CHK-004",
+      "dimension": "NEGATIVE",
+      "layer": "db",
+      "title": "Message SNS có chữ ký sai",
+      "applicability": {
+        "role": "unspecified",
+        "state": "có cách đẩy message vào queue của worker",
+        "environment": "documented",
+        "theme_or_device": null
+      },
+      "precondition": "Có quyền đọc DB staging (`ses_events`, `sending_account_regions`) và log worker (do Dev hỗ trợ; trên staging hiện thiếu credential AWS / quyền DB).",
+      "steps": [
+        "Đẩy một message bounce từ topic hợp lệ, có attribution, nhưng chữ ký SNS bị sửa.",
+        "Đọc log worker, `ses_events`, `suppressions`, và kiểm tra có cảnh báo không."
+      ],
+      "observation_point": "Cách worker xử lý message chữ ký sai.",
+      "expected_result": "Chưa có kết quả mong đợi được xác nhận. Ghi lại nguyên văn hành vi thực tế (phản hồi, thông báo, dữ liệu sau thao tác) và chuyển cho PO/Dev xác nhận; không kết luận pass/fail ở lần chạy này.",
+      "oracle": {
+        "kb_ids": [],
+        "oracle_strength": "NONE"
+      },
+      "status": "NEEDS_CONFIRMATION",
+      "open_question_draft": "Worker validate chữ ký SNS của mỗi message; message có chữ ký sai bị xử lý thế nào — drop, log, cảnh báo, hay đưa vào dead-letter queue?",
+      "regression_watch_kb_ids": [],
+      "context_kb_ids": [
+        "KB-060"
+      ],
+      "risk_refs": [
+        "RISK-ses-event-pipeline-03"
+      ],
+      "priority": "P1",
+      "automation_suitability": "NOT_SUITABLE",
+      "oq_id": "OQ-deliverability-016"
+    },
+    {
+      "check_id": "CHK-005",
+      "dimension": "NEGATIVE",
+      "layer": "db",
+      "title": "Message SQS bị giao trùng",
+      "applicability": {
+        "role": "unspecified",
+        "state": "có cách đẩy lại cùng một message vào queue",
+        "environment": "documented",
+        "theme_or_device": null
+      },
+      "precondition": "Có quyền đọc DB staging (`ses_events`, `sending_account_regions`) và log worker (do Dev hỗ trợ; trên staging hiện thiếu credential AWS / quyền DB).",
+      "steps": [
+        "Đẩy một event Transient cho một địa chỉ rồi đẩy lại đúng message đó lần nữa.",
+        "Đọc `ses_events` và `soft_bounce_counters` của địa chỉ.",
+        "Lặp lại với một event Delivery của một campaign; đọc số liệu delivery của campaign."
+      ],
+      "observation_point": "Số row `ses_events`, giá trị counter và số liệu campaign sau message trùng.",
+      "expected_result": "Chưa có kết quả mong đợi được xác nhận. Ghi lại nguyên văn hành vi thực tế (phản hồi, thông báo, dữ liệu sau thao tác) và chuyển cho PO/Dev xác nhận; không kết luận pass/fail ở lần chạy này.",
+      "oracle": {
+        "kb_ids": [],
+        "oracle_strength": "NONE"
+      },
+      "status": "NEEDS_CONFIRMATION",
+      "open_question_draft": "Worker có dedupe message SQS (giao at-least-once) không? Event trùng có làm tăng counter soft bounce hai lần hoặc làm số liệu delivery của campaign đếm hai lần không?",
+      "regression_watch_kb_ids": [],
+      "context_kb_ids": [
+        "KB-058",
+        "KB-031"
+      ],
+      "risk_refs": [
+        "RISK-ses-event-pipeline-04"
+      ],
+      "priority": "P1",
+      "automation_suitability": "NOT_SUITABLE",
+      "oq_id": "OQ-deliverability-016"
+    },
+    {
+      "check_id": "CHK-006",
+      "dimension": "INTEGRATION",
+      "layer": "db",
+      "title": "Mỗi trong 10 nguồn (5 region × 2 account) đẩy được event về worker và stamp heartbeat",
+      "applicability": {
+        "role": "unspecified",
+        "state": "mọi row `sending_account_regions` đang active",
+        "environment": "documented",
+        "theme_or_device": null
+      },
+      "precondition": "Có quyền đọc DB staging (`ses_events`, `sending_account_regions`) và log worker (do Dev hỗ trợ; trên staging hiện thiếu credential AWS / quyền DB). Có cách gửi qua từng region / account (do Dev hỗ trợ).",
+      "steps": [
+        "Liệt kê các row `sending_account_regions` active và `last_event_at` hiện tại.",
+        "Gửi một mail qua từng region / account.",
+        "Đọc lại `last_event_at` của từng row và event tương ứng trong `ses_events`."
+      ],
+      "observation_point": "`last_event_at` của từng row và event nhận được theo nguồn.",
+      "expected_result": "Event từ mỗi nguồn về worker qua SNS → SQS → worker; `last_event_at` của đúng row `sending_account_regions` khớp `TopicArn` được cập nhật ngay trong bước kiểm whitelist.",
+      "oracle": {
+        "kb_ids": [
+          "KB-058",
+          "KB-070"
+        ],
+        "oracle_strength": "STRONG"
+      },
+      "status": "READY",
+      "open_question_draft": null,
+      "regression_watch_kb_ids": [],
+      "context_kb_ids": [
+        "KB-P-073"
+      ],
+      "risk_refs": [
+        "RISK-ses-event-pipeline-01"
+      ],
+      "priority": "P2",
+      "automation_suitability": "NOT_SUITABLE"
+    },
+    {
+      "check_id": "CHK-007",
+      "dimension": "INTEGRATION",
+      "layer": "db",
+      "title": "Cảnh báo region chưa từng nhận event",
+      "applicability": {
+        "role": "unspecified",
+        "state": "có một row `sending_account_regions` active chưa từng nhận event",
+        "environment": "documented",
+        "theme_or_device": null
+      },
+      "precondition": "Có quyền đọc DB staging (`ses_events`, `sending_account_regions`) và log worker (do Dev hỗ trợ; trên staging hiện thiếu credential AWS / quyền DB). Có quyền xem `AdminNotification` và kênh Slack cảnh báo.",
+      "steps": [
+        "Đảm bảo một region active chưa từng nhận event (ví dụ region mới thêm).",
+        "Chờ scheduled command quét region chạy (lịch chạy chưa được mô tả; hỏi Dev hoặc kích hoạt thủ công).",
+        "Kiểm tra `AdminNotification` và Slack."
+      ],
+      "observation_point": "Cảnh báo phát ra cho region đó.",
+      "expected_result": "Scheduled command phát cảnh báo (`AdminNotification` + Slack) cho region active chưa từng nhận event.",
+      "oracle": {
+        "kb_ids": [
+          "KB-071"
+        ],
+        "oracle_strength": "STRONG"
+      },
+      "status": "READY",
+      "open_question_draft": null,
+      "regression_watch_kb_ids": [],
+      "context_kb_ids": [],
+      "risk_refs": [
+        "RISK-ses-event-pipeline-05"
+      ],
+      "priority": "P2",
+      "automation_suitability": "NOT_SUITABLE"
+    },
+    {
+      "check_id": "CHK-008",
+      "dimension": "BOUNDARY",
+      "layer": "db",
+      "title": "Ngưỡng 'câm bất thường' và lịch chạy của cảnh báo region",
+      "applicability": {
+        "role": "unspecified",
+        "state": "region active đang có broadcast gửi qua nhưng không nhận event trong một khoảng thời gian",
+        "environment": "documented",
+        "theme_or_device": null
+      },
+      "precondition": "Có quyền đọc DB staging (`ses_events`, `sending_account_regions`) và log worker (do Dev hỗ trợ; trên staging hiện thiếu credential AWS / quyền DB). Có quyền xem `AdminNotification` và Slack.",
+      "steps": [
+        "Cho một region đang có broadcast gửi qua ngừng nhận event (do Dev hỗ trợ).",
+        "Theo dõi thời điểm cảnh báo được phát ra so với event cuối cùng."
+      ],
+      "observation_point": "Thời điểm phát cảnh báo và khoảng câm tương ứng.",
+      "expected_result": "Chưa có kết quả mong đợi được xác nhận. Ghi lại nguyên văn hành vi thực tế (phản hồi, thông báo, dữ liệu sau thao tác) và chuyển cho PO/Dev xác nhận; không kết luận pass/fail ở lần chạy này.",
+      "oracle": {
+        "kb_ids": [],
+        "oracle_strength": "NONE"
+      },
+      "status": "NEEDS_CONFIRMATION",
+      "open_question_draft": "Ngưỡng 'câm bất thường' của một region (bao lâu không có event trong khi vẫn có broadcast gửi qua) và lịch chạy của scheduled command cảnh báo region là bao nhiêu?",
+      "regression_watch_kb_ids": [],
+      "context_kb_ids": [
+        "KB-071"
+      ],
+      "risk_refs": [
+        "RISK-ses-event-pipeline-05"
+      ],
+      "priority": "P2",
+      "automation_suitability": "NOT_SUITABLE",
+      "oq_id": "OQ-deliverability-022"
+    },
+    {
+      "check_id": "CHK-009",
+      "dimension": "STATE_DATA",
+      "layer": "portal",
+      "title": "Số liệu delivery của campaign tính tại thời điểm đọc, không cache",
+      "applicability": {
+        "role": "Owner",
+        "state": "campaign đã gửi, có event mới về sau lần xem báo cáo đầu",
+        "environment": "documented",
+        "theme_or_device": null
+      },
+      "precondition": "Đã đăng nhập portal bằng Owner. Có quyền đọc DB staging (`ses_events`, `sending_account_regions`) và log worker (do Dev hỗ trợ; trên staging hiện thiếu credential AWS / quyền DB).",
+      "steps": [
+        "Mở báo cáo campaign, ghi lại 6 số liệu delivery.",
+        "Đợi (hoặc tạo) một event mới cho campaign (ví dụ một lần mở mail).",
+        "Tải lại báo cáo ngay, so số liệu với COUNT trên `ses_events` của campaign."
+      ],
+      "observation_point": "6 số liệu delivery trước / sau event mới và giá trị COUNT tương ứng.",
+      "expected_result": "Số liệu đổi ngay ở lần đọc tiếp theo sau khi event được lưu (không cache) và khớp COUNT trên `ses_events` của campaign; không có bảng analytics riêng.",
+      "oracle": {
+        "kb_ids": [
+          "KB-069",
+          "KB-068"
+        ],
+        "oracle_strength": "STRONG"
+      },
+      "status": "READY",
+      "open_question_draft": null,
+      "regression_watch_kb_ids": [],
+      "context_kb_ids": [],
+      "risk_refs": [
+        "RISK-ses-event-pipeline-06"
+      ],
+      "priority": "P2",
+      "automation_suitability": "HYBRID"
+    },
+    {
+      "check_id": "CHK-010",
+      "dimension": "INTEGRATION",
+      "layer": "db",
+      "title": "Cấu hình subscription SNS → SQS và xử lý SubscriptionConfirmation",
+      "applicability": {
+        "role": "unspecified",
+        "state": "tạo mới hoặc kiểm tra subscription của một nguồn",
+        "environment": "documented",
+        "theme_or_device": null
+      },
+      "precondition": "Có quyền đọc DB staging (`ses_events`, `sending_account_regions`) và log worker (do Dev hỗ trợ; trên staging hiện thiếu credential AWS / quyền DB). Có quyền đọc cấu hình SNS / SQS (do DevOps hỗ trợ).",
+      "steps": [
+        "Đọc cấu hình subscription SNS → SQS của một nguồn, kiểm tra raw message delivery.",
+        "Tạo một subscription mới (hoặc theo dõi lúc thêm region) và đọc log worker khi message `SubscriptionConfirmation` tới."
+      ],
+      "observation_point": "Cấu hình raw message delivery và trạng thái subscription sau khi worker nhận `SubscriptionConfirmation`.",
+      "expected_result": "Raw message delivery ở trạng thái OFF; worker tự xử lý message `SubscriptionConfirmation` và subscription được xác nhận mà không cần thao tác tay.",
+      "oracle": {
+        "kb_ids": [
+          "KB-059",
+          "KB-062"
+        ],
+        "oracle_strength": "STRONG"
+      },
+      "status": "READY",
+      "open_question_draft": null,
+      "regression_watch_kb_ids": [],
+      "context_kb_ids": [],
+      "risk_refs": [
+        "RISK-ses-event-pipeline-07"
+      ],
+      "priority": "P3",
+      "automation_suitability": "NOT_SUITABLE"
+    }
+  ],
+  "coverage_by_feature_and_risk": [
+    {
+      "feature_id": "ses-event-pipeline",
+      "risk_ref": "RISK-ses-event-pipeline-01",
+      "risk_description": "Event SES không về worker từ một trong 10 nguồn (5 region × 2 AWS account)",
+      "covered_by_checks": [
+        "CHK-006"
+      ],
+      "kb_ids": [
+        "KB-058",
+        "KB-070",
+        "KB-P-073"
+      ],
+      "oracle_strengths": [
+        "STRONG"
+      ],
+      "coverage_status": "COVERED"
+    },
+    {
+      "feature_id": "ses-event-pipeline",
+      "risk_ref": "RISK-ses-event-pipeline-02",
+      "risk_description": "Event lưu thiếu loại / thiếu attribution workspace, campaign, recipient",
+      "covered_by_checks": [
+        "CHK-001",
+        "CHK-002"
+      ],
+      "kb_ids": [
+        "KB-058",
+        "KB-064",
+        "KB-065",
+        "KB-066",
+        "KB-067"
+      ],
+      "oracle_strengths": [
+        "STRONG"
+      ],
+      "coverage_status": "COVERED"
+    },
+    {
+      "feature_id": "ses-event-pipeline",
+      "risk_ref": "RISK-ses-event-pipeline-03",
+      "risk_description": "Event giả mạo / ngoài whitelist / thiếu attribution được xử lý (lưu hoặc tạo suppression)",
+      "covered_by_checks": [
+        "CHK-003",
+        "CHK-004"
+      ],
+      "kb_ids": [
+        "KB-060",
+        "KB-061",
+        "KB-063"
+      ],
+      "oracle_strengths": [
+        "NONE",
+        "STRONG"
+      ],
+      "coverage_status": "PARTIAL"
+    },
+    {
+      "feature_id": "ses-event-pipeline",
+      "risk_ref": "RISK-ses-event-pipeline-04",
+      "risk_description": "Event trùng do SQS at-least-once làm đếm hai lần (counter soft bounce, số liệu delivery)",
+      "covered_by_checks": [
+        "CHK-005"
+      ],
+      "kb_ids": [
+        "KB-031",
+        "KB-058"
+      ],
+      "oracle_strengths": [
+        "NONE"
+      ],
+      "coverage_status": "COVERED_PENDING_CONFIRMATION"
+    },
+    {
+      "feature_id": "ses-event-pipeline",
+      "risk_ref": "RISK-ses-event-pipeline-05",
+      "risk_description": "Region câm không được phát hiện và cảnh báo",
+      "covered_by_checks": [
+        "CHK-007",
+        "CHK-008"
+      ],
+      "kb_ids": [
+        "KB-071"
+      ],
+      "oracle_strengths": [
+        "NONE",
+        "STRONG"
+      ],
+      "coverage_status": "PARTIAL"
+    },
+    {
+      "feature_id": "ses-event-pipeline",
+      "risk_ref": "RISK-ses-event-pipeline-06",
+      "risk_description": "Số liệu delivery của campaign sai do cache hoặc không tính từ event",
+      "covered_by_checks": [
+        "CHK-009"
+      ],
+      "kb_ids": [
+        "KB-068",
+        "KB-069"
+      ],
+      "oracle_strengths": [
+        "STRONG"
+      ],
+      "coverage_status": "COVERED"
+    },
+    {
+      "feature_id": "ses-event-pipeline",
+      "risk_ref": "RISK-ses-event-pipeline-07",
+      "risk_description": "Cấu hình subscription SNS → SQS sai (raw message delivery, SubscriptionConfirmation)",
+      "covered_by_checks": [
+        "CHK-010"
+      ],
+      "kb_ids": [
+        "KB-059",
+        "KB-062"
+      ],
+      "oracle_strengths": [
+        "STRONG"
+      ],
+      "coverage_status": "COVERED"
+    }
+  ],
+  "excluded_dimensions": [
+    {
+      "dimension": "PERMISSION",
+      "reason": "Pipeline sự kiện SES là xử lý nền, không có thao tác người dùng theo role; cách ly dữ liệu theo workspace được kiểm qua attribution `team_id` ở CHK-001."
+    },
+    {
+      "dimension": "REGRESSION",
+      "reason": "Phiên bản đầu tiên của checklist (DOC_BOOTSTRAP); chưa có thay đổi hành vi từ so sánh version trước/sau; shard không có item KNOWN_DEFECT."
+    }
+  ],
+  "last_updated": {
+    "date": "2026-10-08",
+    "ccr_ref": "bootstrap"
+  }
+}

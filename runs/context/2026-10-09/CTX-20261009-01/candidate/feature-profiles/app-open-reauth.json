@@ -1,0 +1,521 @@
+{
+  "schema_version": "1.0",
+  "artifact_type": "FeatureProfileCandidate",
+  "artifact_id": "ART-FEATURE-PROFILE-app-open-reauth-CTX-20261009-01",
+  "workflow_id": "CTX-20261009-01",
+  "producer": "feature-profile-builder",
+  "source_refs": [
+    "candidate/product-kb/app-open-reauth.json",
+    "candidate/product-kb/_object-level.auth-token.json",
+    "candidate/product-kb/_product-level.json",
+    "input/scope-plan.json",
+    "input/orchestrator-directives.json",
+    "input/profile-checklist-brief.md",
+    "intermediate/doc/DOC-21.json"
+  ],
+  "upstream_artifact_ids": [
+    "PKBC-CTX-20261009-01-auth-token-app-open-reauth",
+    "PKBC-CTX-20261009-01-auth-token-object-level",
+    "PKBC-CTX-20261009-01-_product-level",
+    "SCOPE-PLAN-CTX-20261009-01",
+    "DEA-DOC-21-CTX-20261009-01"
+  ],
+  "status": "PARTIAL",
+  "confidence": "MEDIUM",
+  "observations": [
+    "Profile dựng từ tài liệu; không có quan sát runtime nên act_ids, observed_behavior và observed_validations rỗng.",
+    "5 quy tắc đã xác nhận đều đến từ Jira DUOS-399 (description/AC, cập nhật 07/07/2026), tóm tắt trong QA business rule Duos; mọi phát biểu chỉ có trong tóm tắt QA nằm ở risks / unknown_areas.",
+    "Object auth-token không có tranh chấp (conflict_group) nào; BUG-36 (nội dung chưa đọc được) được theo dõi như regression watch.",
+    "Danh sách regression QA chỉ dùng làm gợi ý rủi ro (thay đổi auth / token / thư viện HTTP), không làm oracle."
+  ],
+  "assumptions": [
+    "feature_id dùng chính feature_key (ổn định qua các version); FEATURE-ID dạng FEAT-nn do orchestrator mint lúc publish.",
+    "surface_mapping giữ đúng 5 khoá chuẩn.",
+    "coverage_matrix: covered=true khi có rule CONFIRMED_EXPECTED cho ô đó (environment luôn documented); covered=false khi chỉ có tóm tắt QA chưa xác nhận hoặc tài liệu không nêu."
+  ],
+  "unknowns": [
+    "Merchant thấy gì trong app khi shop đang bị gắn `Re-auth Required At` (banner, thông báo hay chuyển thẳng sang re-login)?",
+    "Màn hình và các bước re-login khi mở app cụ thể là gì (OAuth Shopify, trang trung gian, thông báo)?",
+    "\"Scope/permission của app đã đổi\" được xác định thế nào (app khai thêm scope mới, merchant thu hồi quyền…)?",
+    "Thời hạn session khi mở app chính xác là bao lâu (tài liệu ghi khoảng 60 phút)?",
+    "Thay đổi re-login-khi-mở-app đã được ship chưa, và nó ship sau khi `tokens:migrate-legacy` đã chạy xong?",
+    "BUG-36 (gắn TC-DUOS-001, trạng thái \"open?\") là lỗi gì, thuộc hành vi token nào (phát hiện token chết, refresh/migrate, re-auth khi mở app, uninstall/reinstall hay admin panel), còn mở hay đã fix?"
+  ],
+  "conflicts": [],
+  "blocking_issues": [],
+  "payload": {
+    "feature_profiles": [
+      {
+        "feature_id": "app-open-reauth",
+        "feature_key": "app-open-reauth",
+        "name": "Re-auth khi merchant mở app",
+        "user_goal": "Merchant mở Duos trong Shopify admin được vào thẳng khi shop dùng token expiring và session còn hạn, và được đưa qua re-login đúng các trường hợp: shop còn dùng token legacy, scope/permission của app đã đổi, session đã hết, hoặc không có session / không tìm thấy shop.",
+        "user_goal_kb_refs": [
+          "KB-032",
+          "KB-033",
+          "KB-034",
+          "KB-035",
+          "KB-036"
+        ],
+        "stable_since_version": "v1",
+        "actors": [
+          {
+            "role": "merchant",
+            "permission_observed": "Theo rule Jira DUOS-399: mở app; vào thẳng hoặc bị đưa qua re-login tuỳ trạng thái token/session. Luồng login/OAuth chưa được quan sát trên staging.",
+            "kb_refs": [
+              "KB-032",
+              "KB-033",
+              "KB-034",
+              "KB-035",
+              "KB-036"
+            ]
+          }
+        ],
+        "entry_points": [
+          {
+            "path": "Mở embedded app Duos (Portal) trong Shopify admin",
+            "precondition": "Shop đã cài app.",
+            "kb_refs": [
+              "KB-034",
+              "KB-P-003"
+            ]
+          }
+        ],
+        "capabilities": [
+          {
+            "name": "Vào thẳng app khi session hợp lệ",
+            "description": "Token expiring và session còn hợp lệ → merchant vào thẳng, không re-login.",
+            "kb_refs": [
+              "KB-034"
+            ],
+            "act_ids": []
+          },
+          {
+            "name": "Re-login cho shop còn dùng token legacy",
+            "description": "Shop legacy mở app → re-login; đây cũng là đường migrate legacy sang expiring (token legacy cũ không bị huỷ lúc đó).",
+            "kb_refs": [
+              "KB-032",
+              "KB-017",
+              "KB-020"
+            ],
+            "act_ids": []
+          },
+          {
+            "name": "Re-login khi scope/permission của app đổi",
+            "description": "Scope/permission của app đã đổi → re-login.",
+            "kb_refs": [
+              "KB-033"
+            ],
+            "act_ids": []
+          },
+          {
+            "name": "Re-login khi session hết hạn",
+            "description": "Token expiring nhưng session (khoảng 60 phút) đã hết → re-login, không silent refresh.",
+            "kb_refs": [
+              "KB-035",
+              "KB-055"
+            ],
+            "act_ids": []
+          },
+          {
+            "name": "Re-login khi không có session hoặc không tìm thấy shop",
+            "description": "Không có session hoặc không tìm thấy shop → re-login.",
+            "kb_refs": [
+              "KB-036"
+            ],
+            "act_ids": []
+          }
+        ],
+        "state_transitions": [
+          {
+            "from": "mở app: token expiring, session còn hạn",
+            "to": "trong app",
+            "trigger": "Merchant mở app",
+            "condition": "Không re-login",
+            "kb_refs": [
+              "KB-034"
+            ]
+          },
+          {
+            "from": "mở app: shop dùng token legacy",
+            "to": "re-login → shop dùng token expiring",
+            "trigger": "Merchant mở app",
+            "condition": "—",
+            "kb_refs": [
+              "KB-032",
+              "KB-017"
+            ]
+          },
+          {
+            "from": "mở app: scope/permission app đã đổi",
+            "to": "re-login",
+            "trigger": "Merchant mở app",
+            "condition": "—",
+            "kb_refs": [
+              "KB-033"
+            ]
+          },
+          {
+            "from": "mở app: token expiring, session đã hết",
+            "to": "re-login",
+            "trigger": "Merchant mở app",
+            "condition": "Không silent refresh",
+            "kb_refs": [
+              "KB-035"
+            ]
+          },
+          {
+            "from": "mở app: không có session / không tìm thấy shop",
+            "to": "re-login",
+            "trigger": "Merchant mở app",
+            "condition": "—",
+            "kb_refs": [
+              "KB-036"
+            ]
+          }
+        ],
+        "confirmed_rules": [
+          {
+            "statement": "Theo Jira DUOS-399 (description/AC, cập nhật 07/07/2026; tóm tắt trong QA business rule Duos và QA KB Duos \"Auth & Token lifecycle\" v1), khi merchant mở app mà shop đang dùng token legacy thì app đưa merchant qua re-login.",
+            "knowledge_kind": "CONFIRMED_EXPECTED",
+            "confidence": "MEDIUM",
+            "kb_refs": [
+              "KB-032"
+            ]
+          },
+          {
+            "statement": "Theo Jira DUOS-399 (description/AC, cập nhật 07/07/2026; tóm tắt trong QA business rule Duos và QA KB Duos \"Auth & Token lifecycle\" v1), khi merchant mở app mà scope/permission của app đã đổi thì app đưa merchant qua re-login.",
+            "knowledge_kind": "CONFIRMED_EXPECTED",
+            "confidence": "MEDIUM",
+            "kb_refs": [
+              "KB-033"
+            ]
+          },
+          {
+            "statement": "Theo Jira DUOS-399 (description/AC, cập nhật 07/07/2026; tóm tắt trong QA business rule Duos và QA KB Duos \"Auth & Token lifecycle\" v1), khi merchant mở app với token expiring và session còn hợp lệ thì merchant vào thẳng app, tiếp tục bình thường (không re-login).",
+            "knowledge_kind": "CONFIRMED_EXPECTED",
+            "confidence": "MEDIUM",
+            "kb_refs": [
+              "KB-034"
+            ]
+          },
+          {
+            "statement": "Theo Jira DUOS-399 (description/AC, cập nhật 07/07/2026; tóm tắt trong QA business rule Duos và QA KB Duos \"Auth & Token lifecycle\" v1), khi merchant mở app với token expiring nhưng session (khoảng 60 phút) đã hết thì app đưa merchant qua re-login, không silent refresh.",
+            "knowledge_kind": "CONFIRMED_EXPECTED",
+            "confidence": "MEDIUM",
+            "kb_refs": [
+              "KB-035"
+            ]
+          },
+          {
+            "statement": "Theo Jira DUOS-399 (description/AC, cập nhật 07/07/2026; tóm tắt trong QA business rule Duos và QA KB Duos \"Auth & Token lifecycle\" v1), khi merchant mở app mà không có session hoặc không tìm thấy shop thì app đưa merchant qua re-login.",
+            "knowledge_kind": "CONFIRMED_EXPECTED",
+            "confidence": "MEDIUM",
+            "kb_refs": [
+              "KB-036"
+            ]
+          }
+        ],
+        "observed_behavior": [],
+        "observed_validations": [],
+        "permissions": [
+          {
+            "statement": "Rule chỉ nêu merchant mở app; không nêu khác biệt theo role/staff Shopify. Ma trận actor của token lifecycle đang chờ PO/Dev xác nhận.",
+            "kb_refs": [
+              "KB-032",
+              "KB-034"
+            ]
+          }
+        ],
+        "surface_mapping": {
+          "portal": [
+            {
+              "item": "Mở embedded app Duos trong Shopify admin",
+              "kb_refs": [
+                "KB-034",
+                "KB-P-003"
+              ]
+            },
+            {
+              "item": "Re-login (màn hình/luồng cụ thể chưa nêu, chưa quan sát)",
+              "kb_refs": [
+                "KB-032",
+                "KB-033",
+                "KB-035",
+                "KB-036"
+              ]
+            }
+          ],
+          "storefront": [],
+          "api": [],
+          "data": [
+            {
+              "item": "Session của merchant và loại token của shop (legacy / expiring) quyết định re-login",
+              "kb_refs": [
+                "KB-032",
+                "KB-034",
+                "KB-035"
+              ]
+            }
+          ],
+          "code": []
+        },
+        "dependencies": [
+          {
+            "target": "auth-token / token-refresh-and-legacy-migration",
+            "relation": "shares_flow",
+            "note": "Re-login với shop legacy là đường migrate thứ hai; chỉ ship sau khi `tokens:migrate-legacy` chạy xong.",
+            "kb_refs": [
+              "KB-017",
+              "KB-020",
+              "KB-021"
+            ]
+          },
+          {
+            "target": "auth-token / dead-token-detection-and-reconnect",
+            "relation": "related",
+            "note": "Shop có thể đang bị gắn `Re-auth Required At`; tài liệu không nêu merchant thấy gì khi mở app trong trạng thái đó.",
+            "kb_refs": [
+              "KB-004"
+            ]
+          },
+          {
+            "target": "Portal (embedded app) — surface cấp sản phẩm",
+            "relation": "hosted_in",
+            "note": "Portal là embedded app chạy trong Shopify admin.",
+            "kb_refs": [
+              "KB-P-003"
+            ]
+          }
+        ],
+        "risks": [
+          {
+            "statement": "Re-auth khi mở app chỉ có theo rule; chưa có quan sát login/OAuth nào với shop legacy, shop đổi scope hay session hết hạn, nên mọi check của tính năng này chưa có baseline staging.",
+            "knowledge_kind": "CONFIRMED_EXPECTED",
+            "confidence": "MEDIUM",
+            "kb_refs": [
+              "KB-032",
+              "KB-033",
+              "KB-034",
+              "KB-035",
+              "KB-036"
+            ]
+          },
+          {
+            "statement": "Thay đổi auth/session có thể làm merchant có session hợp lệ bị đẩy qua re-login hoặc ngược lại shop legacy không được re-login (nên kiểm cả store expiring và legacy).",
+            "knowledge_kind": "CONFIRMED_EXPECTED",
+            "confidence": "MEDIUM",
+            "kb_refs": [
+              "KB-034",
+              "KB-032"
+            ]
+          },
+          {
+            "statement": "Rule thứ tự triển khai yêu cầu re-login-khi-mở-app chỉ ship sau khi migrate legacy chạy xong; tài liệu không nêu thay đổi này đã ship hay chưa.",
+            "knowledge_kind": "CONFIRMED_EXPECTED",
+            "confidence": "MEDIUM",
+            "kb_refs": [
+              "KB-021"
+            ]
+          },
+          {
+            "statement": "Known issues Duos ghi BUG-36 (trạng thái \"open?\") gắn với TC-DUOS-001 của nhóm Auth & Token lifecycle nhưng nội dung lỗi chưa đọc được; chưa biết lỗi chạm hành vi nào của token lifecycle, nên theo dõi như regression watch và không dùng TC-DUOS-001 làm bằng chứng PASS.",
+            "knowledge_kind": "OBSERVED_CURRENT",
+            "confidence": "LOW",
+            "kb_refs": [
+              "KB-057"
+            ],
+            "status": "KNOWN_DEFECT"
+          }
+        ],
+        "unknown_areas": [
+          {
+            "question": "Merchant thấy gì trong app khi shop đang bị gắn `Re-auth Required At` (banner, thông báo hay chuyển thẳng sang re-login)?",
+            "why_it_matters": "Không có expected UI cho trạng thái chờ reconnect.",
+            "kb_refs": [
+              "KB-004",
+              "KB-032"
+            ]
+          },
+          {
+            "question": "Màn hình và các bước re-login khi mở app cụ thể là gì (OAuth Shopify, trang trung gian, thông báo)?",
+            "why_it_matters": "Luồng chưa được quan sát trên môi trường nào; chưa có baseline.",
+            "kb_refs": [
+              "KB-032",
+              "KB-033",
+              "KB-035",
+              "KB-036"
+            ]
+          },
+          {
+            "question": "\"Scope/permission của app đã đổi\" được xác định thế nào (app khai thêm scope mới, merchant thu hồi quyền…)?",
+            "why_it_matters": "Cần để dựng điều kiện tiền đề cho check re-login do đổi scope.",
+            "kb_refs": [
+              "KB-033"
+            ]
+          },
+          {
+            "question": "Thời hạn session khi mở app chính xác là bao lâu (tài liệu ghi khoảng 60 phút)?",
+            "why_it_matters": "Quyết định biên giữa vào thẳng và re-login.",
+            "kb_refs": [
+              "KB-035",
+              "KB-055"
+            ]
+          },
+          {
+            "question": "Thay đổi re-login-khi-mở-app đã được ship chưa, và nó ship sau khi `tokens:migrate-legacy` đã chạy xong?",
+            "why_it_matters": "Nếu chưa ship, check re-login cho shop legacy chưa áp dụng được trên build hiện tại.",
+            "kb_refs": [
+              "KB-021",
+              "KB-032"
+            ]
+          },
+          {
+            "question": "BUG-36 (gắn TC-DUOS-001, trạng thái \"open?\") là lỗi gì, thuộc hành vi token nào (phát hiện token chết, refresh/migrate, re-auth khi mở app, uninstall/reinstall hay admin panel), còn mở hay đã fix?",
+            "why_it_matters": "Nếu lỗi chạm hành vi của tính năng này thì check theo rule tương ứng cần theo dõi regression; test case liên quan đang passed nên không phải bằng chứng PASS.",
+            "kb_refs": [
+              "KB-057"
+            ]
+          }
+        ],
+        "freshness": {
+          "observed_at": "2026-10-08",
+          "run_id": "CTX-20261009-01",
+          "earliest_source_date": "2026-07-07",
+          "basis": "Ngày nguồn mới nhất trong các KB item được tham chiếu (ngày cập nhật Jira trong rule, ngày phân tích QA, ngày cập nhật danh sách lỗi); không có quan sát runtime trong lần chạy này."
+        }
+      }
+    ],
+    "profile_relationships": [
+      {
+        "from": "app-open-reauth",
+        "to": "token-refresh-and-legacy-migration",
+        "relation": "SHARES_FLOW",
+        "kb_refs": [
+          "KB-017",
+          "KB-020"
+        ]
+      },
+      {
+        "from": "app-open-reauth",
+        "to": "dead-token-detection-and-reconnect",
+        "relation": "RELATED_TO",
+        "kb_refs": [
+          "KB-004"
+        ]
+      }
+    ],
+    "coverage_matrix": [
+      {
+        "feature_id": "app-open-reauth",
+        "layer": "portal",
+        "role": "merchant",
+        "state": "token expiring, session còn hạn",
+        "environment": "documented",
+        "covered": true,
+        "note": "Rule Jira DUOS-399; Không có quan sát runtime; chỉ theo tài liệu."
+      },
+      {
+        "feature_id": "app-open-reauth",
+        "layer": "portal",
+        "role": "merchant",
+        "state": "shop dùng token legacy",
+        "environment": "documented",
+        "covered": true,
+        "note": "Rule Jira DUOS-399; Không có quan sát runtime; chỉ theo tài liệu."
+      },
+      {
+        "feature_id": "app-open-reauth",
+        "layer": "portal",
+        "role": "merchant",
+        "state": "scope/permission app đã đổi",
+        "environment": "documented",
+        "covered": true,
+        "note": "Rule Jira DUOS-399; Không có quan sát runtime; chỉ theo tài liệu."
+      },
+      {
+        "feature_id": "app-open-reauth",
+        "layer": "portal",
+        "role": "merchant",
+        "state": "session đã hết",
+        "environment": "documented",
+        "covered": true,
+        "note": "Rule Jira DUOS-399; Không có quan sát runtime; chỉ theo tài liệu."
+      },
+      {
+        "feature_id": "app-open-reauth",
+        "layer": "portal",
+        "role": "merchant",
+        "state": "không có session / không tìm thấy shop",
+        "environment": "documented",
+        "covered": true,
+        "note": "Rule Jira DUOS-399; Không có quan sát runtime; chỉ theo tài liệu."
+      },
+      {
+        "feature_id": "app-open-reauth",
+        "layer": "portal",
+        "role": "merchant",
+        "state": "shop đang gắn cờ re-auth",
+        "environment": "documented",
+        "covered": false,
+        "note": "Tài liệu không nêu"
+      },
+      {
+        "feature_id": "app-open-reauth",
+        "layer": "portal",
+        "role": "merchant",
+        "state": "màn hình re-login",
+        "environment": "documented",
+        "covered": false,
+        "note": "Chưa quan sát"
+      },
+      {
+        "feature_id": "app-open-reauth",
+        "layer": "code",
+        "role": "unspecified",
+        "state": "any",
+        "environment": "documented",
+        "covered": false,
+        "note": "Không có nguồn mã"
+      },
+      {
+        "feature_id": "app-open-reauth",
+        "layer": "api",
+        "role": "unspecified",
+        "state": "đặc tả API (endpoint, request/response, mã lỗi)",
+        "environment": "documented",
+        "covered": false,
+        "note": "Bộ tài liệu QA không có đặc tả API/data model cho feature này"
+      },
+      {
+        "feature_id": "app-open-reauth",
+        "layer": "db",
+        "role": "unspecified",
+        "state": "đặc tả data model (bảng/cột, kiểu dữ liệu)",
+        "environment": "documented",
+        "covered": false,
+        "note": "Bộ tài liệu QA không có đặc tả API/data model cho feature này"
+      }
+    ],
+    "unassigned_kb_items": [],
+    "profile_conflicts": [],
+    "profile_change_summary": [
+      "Profile mới dựng từ KB tài liệu của object auth-token; chưa có bản publish trước để so.",
+      "coverage_matrix ghi rõ phần đặc tả API và data model chưa có trong bộ tài liệu QA."
+    ],
+    "kb_trace_complete": true
+  },
+  "gate": {
+    "decision": "CONDITIONAL_PASS",
+    "blocking_findings": [],
+    "conditions": [
+      "Identity ổn định, user goal, capability theo mục tiêu và mapping KB đầy đủ (mọi item của shard được tham chiếu, mọi kb_refs tồn tại).",
+      "Oracle mạnh có cho 5 rule Jira DUOS-399; chưa có baseline staging nào cho tính năng này.",
+      "Các phát biểu chỉ có trong tóm tắt QA và các khoảng trống (xem unknown_areas) không có oracle — check tương ứng phải NEEDS_CONFIRMATION."
+    ],
+    "allowed_next_steps": [
+      "qa-checklist-builder",
+      "knowledge-diff-analyzer"
+    ]
+  }
+}

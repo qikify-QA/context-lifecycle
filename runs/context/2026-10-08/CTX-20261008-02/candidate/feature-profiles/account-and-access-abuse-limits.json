@@ -1,0 +1,1073 @@
+{
+  "schema_version": "1.0",
+  "artifact_type": "FeatureProfileCandidate",
+  "artifact_id": "ART-FEATURE-PROFILE-account-and-access-abuse-limits-CTX-20261008-02",
+  "workflow_id": "CTX-20261008-02",
+  "producer": "feature-profile-builder",
+  "source_refs": [
+    "candidate/product-kb/account-and-access-abuse-limits.json",
+    "candidate/product-kb/_object-level.abuse-guard.json",
+    "candidate/product-kb/_product-level.json",
+    "input/scope-plan.json",
+    "input/orchestrator-directives.json"
+  ],
+  "upstream_artifact_ids": [
+    "PKBC-CTX-20261008-02-abuse-guard-account-and-access-abuse-limits",
+    "PKBC-CTX-20261008-02-abuse-guard-object-level",
+    "PKBC-CTX-20261008-02-_product-level"
+  ],
+  "status": "PARTIAL",
+  "confidence": "MEDIUM",
+  "observations": [
+    "Profile dựng hoàn toàn từ tài liệu (DOC_BOOTSTRAP); act_ids và observed_validations rỗng.",
+    "Shard của feature không có item OBSERVED_CURRENT nên observed_behavior rỗng; phía staging của tranh chấp được giữ ở risks."
+  ],
+  "assumptions": [
+    "feature_id dùng feature_key vì chưa có mã FEAT số được cấp.",
+    "Thêm hai nhóm surface_mapping ngoài schema chuẩn (auth, staff) vì feature trải trên Mailtro ID và trang staff; không tạo tri thức mới."
+  ],
+  "unknowns": [
+    "Khi đăng nhập, tài khoản không bật TOTP có phải nhập mã 6 số gửi qua email như Jira MTRO-92 §1 mô tả không, hay luồng này ngoài phạm vi như Jira MTRO-88 và staging cho thấy? Nếu có, đã deploy lên staging chưa (GAP-03)?",
+    "API key có hỗ trợ IP allowlist (IP ngoài danh sách nhận 403, Rotate giữ allowlist) không, và nếu có thì ô nhập nằm ở dialog nào trên staging?",
+    "IP allowlist chấp nhận định dạng nào (IPv4, IPv6, CIDR) và IP nguồn lấy từ kết nối hay từ header X-Forwarded-For (GAP-09)?",
+    "Role nào (Owner, Admin, role thứ ba đang tranh chấp tên Member / Marketer / Editor) được quản lý API key và mời thành viên (GAP-07)?",
+    "Khi bị chặn tạm vì quá 10 lượt đăng ký/phút/mạng hoặc quá 20 lời mời/phút thì bị chặn bao lâu, hiện thông báo gì và trả HTTP status nào; khi đăng nhập bị chặn tạm 1 phút thì hiện thông báo gì?",
+    "Khi nào API key chuyển sang trạng thái expired, và ai (staff hay khách) thực hiện Put back cho key đang paused?"
+  ],
+  "conflicts": [
+    "CONF-MTRO-abuse-guard-01",
+    "CONF-MTRO-abuse-guard-02"
+  ],
+  "blocking_issues": [],
+  "payload": {
+    "feature_profiles": [
+      {
+        "feature_id": "account-and-access-abuse-limits",
+        "feature_key": "account-and-access-abuse-limits",
+        "name": "Giới hạn lạm dụng ở đăng nhập/đăng ký, mời thành viên và API key",
+        "user_goal": "Hệ thống chặn dò tài khoản và đăng nhập dồn dập, chặn spam đăng ký và lời mời thành viên, và kiểm soát vòng đời API key (hiển thị một lần, Rotate, Revoke, tạm dừng khi bị báo lộ) để kẻ lạm dụng khó chiếm hoặc lợi dụng tài khoản.",
+        "stable_since_version": "v1",
+        "actors": [
+          {
+            "role": "unspecified (người đăng nhập / đăng ký trên Mailtro ID)",
+            "permission_observed": "Không cần quyền; áp dụng cho mọi lượt đăng nhập theo email và mọi lượt đăng ký theo mạng.",
+            "kb_refs": [
+              "KB-001",
+              "KB-002",
+              "KB-003",
+              "KB-P-027"
+            ]
+          },
+          {
+            "role": "unspecified (người gửi lời mời thành viên)",
+            "permission_observed": "Tài liệu không ghi role nào được mời thành viên; ma trận quyền chưa chốt.",
+            "kb_refs": [
+              "KB-013",
+              "KB-014",
+              "KB-015",
+              "KB-016",
+              "KB-017",
+              "KB-033"
+            ]
+          },
+          {
+            "role": "unspecified (người quản lý API key của workspace)",
+            "permission_observed": "Tạo, Rotate, Revoke API key; không tự mở lại được key đã bị staff chuyển sang paused. Role cụ thể chưa được xác định.",
+            "kb_refs": [
+              "KB-018",
+              "KB-023",
+              "KB-025",
+              "KB-028",
+              "KB-033"
+            ]
+          },
+          {
+            "role": "staff",
+            "permission_observed": "Bấm Report as leaked để chuyển API key sang paused.",
+            "kb_refs": [
+              "KB-027",
+              "KB-100"
+            ]
+          },
+          {
+            "role": "api-caller",
+            "permission_observed": "Gọi API bằng API key; bị từ chối khi key paused (403 \"key paused\") hoặc đã revoke.",
+            "kb_refs": [
+              "KB-025",
+              "KB-027",
+              "KB-024"
+            ]
+          }
+        ],
+        "entry_points": [
+          {
+            "path": "Mailtro ID, form Sign in (`/login`)",
+            "precondition": "Chưa đăng nhập.",
+            "kb_refs": [
+              "KB-001",
+              "KB-002",
+              "KB-P-027"
+            ]
+          },
+          {
+            "path": "Mailtro ID, đăng ký tài khoản (`/signup`)",
+            "precondition": "Chưa có tài khoản; lượt đăng ký tính theo mạng.",
+            "kb_refs": [
+              "KB-003",
+              "KB-P-027",
+              "KB-P-066"
+            ]
+          },
+          {
+            "path": "Portal, thao tác mời thành viên (trang `Team members`, `/members`, mở từ workspace switcher) và email mời gửi đi",
+            "precondition": "Đã đăng nhập workspace; role được phép mời chưa được xác định.",
+            "kb_refs": [
+              "KB-013",
+              "KB-014",
+              "KB-016",
+              "KB-017",
+              "KB-P-039",
+              "KB-033"
+            ]
+          },
+          {
+            "path": "Portal, dialog Create API key và danh sách API key của workspace (Rotate, Revoke)",
+            "precondition": "Đã đăng nhập workspace; hành vi phụ thuộc trạng thái gửi của workspace.",
+            "kb_refs": [
+              "KB-018",
+              "KB-020",
+              "KB-023",
+              "KB-025",
+              "KB-030",
+              "KB-031",
+              "KB-032"
+            ]
+          },
+          {
+            "path": "API: lời gọi bằng API key",
+            "precondition": "Có API key; trạng thái key quyết định kết quả.",
+            "kb_refs": [
+              "KB-024",
+              "KB-025",
+              "KB-027",
+              "KB-P-065"
+            ]
+          },
+          {
+            "path": "Trang quản trị staff riêng (không nằm trên sidebar app workspace): thao tác Report as leaked",
+            "precondition": "Tài khoản staff; URL và tài khoản staff chưa được xác nhận.",
+            "kb_refs": [
+              "KB-027",
+              "KB-100"
+            ]
+          }
+        ],
+        "capabilities": [
+          {
+            "name": "Chống dò tài khoản và đăng nhập dồn dập",
+            "description": "Sai mật khẩu và email không tồn tại cho cùng một thông báo lỗi; quá 10 lần đăng nhập/phút cho cùng email thì bị chặn tạm 1 phút (Jira MTRO-92 AC §1, tài liệu ghi khớp staging 20/08/2026).",
+            "kb_refs": [
+              "KB-001",
+              "KB-002"
+            ],
+            "act_ids": []
+          },
+          {
+            "name": "Chặn spam đăng ký theo mạng",
+            "description": "Quá 10 lượt đăng ký/phút từ cùng một mạng thì bị chặn tạm; thời lượng và thông báo không được nêu. Captcha ở `/signup` là cơ chế product-level riêng.",
+            "kb_refs": [
+              "KB-003",
+              "KB-P-066"
+            ],
+            "act_ids": []
+          },
+          {
+            "name": "Mã email khi đăng nhập cho tài khoản không bật TOTP (đang tranh chấp)",
+            "description": "Jira MTRO-92 §1 mô tả mã 6 số qua email (hết hạn 10 phút, gửi lại chờ khoảng 60 giây, sai 5 lần quay về form, thông báo khoá nhập); staging và Jira MTRO-88 nói không có. Chưa có kết quả mong đợi.",
+            "kb_refs": [
+              "KB-004",
+              "KB-005",
+              "KB-006",
+              "KB-007",
+              "KB-008",
+              "KB-009",
+              "KB-010",
+              "KB-011",
+              "KB-012"
+            ],
+            "act_ids": []
+          },
+          {
+            "name": "Chống spam lời mời thành viên",
+            "description": "Tên workspace trong email mời là chữ (không link); không mời lại email đang có lời mời còn hạn, mời lại được sau khi huỷ; tối đa 3 lời mời/ngày/hộp thư (gộp biến thể +tag và dấu chấm Gmail); quá 20 lời mời/phút bị chặn tạm.",
+            "kb_refs": [
+              "KB-013",
+              "KB-014",
+              "KB-015",
+              "KB-016",
+              "KB-017"
+            ],
+            "act_ids": []
+          },
+          {
+            "name": "Vòng đời API key: hiển thị một lần, Rotate, Revoke",
+            "description": "Giá trị key chỉ hiển thị một lần khi tạo và khi Rotate; key cũ còn chạy 24 giờ sau Rotate; Revoke có hiệu lực ngay; bốn trạng thái active, paused, expired, revoked. Quy tắc phía người dùng thao tác Rotate / Revoke (gồm việc không Rotate được key đã revoke) do object workspace-settings sở hữu.",
+            "kb_refs": [
+              "KB-018",
+              "KB-023",
+              "KB-024",
+              "KB-025",
+              "KB-030"
+            ],
+            "act_ids": []
+          },
+          {
+            "name": "Tạm dừng API key bị báo lộ",
+            "description": "Staff bấm Report as leaked thì key sang paused và lời gọi nhận 403 \"key paused\"; khách không tự mở lại; Put back mở lại key (không nêu ai làm).",
+            "kb_refs": [
+              "KB-027",
+              "KB-028",
+              "KB-029"
+            ],
+            "act_ids": []
+          },
+          {
+            "name": "Giới hạn API key theo IP (đang tranh chấp)",
+            "description": "Jira MTRO-92 §3 mô tả IP allowlist (IP ngoài danh sách nhận 403, Rotate giữ allowlist); staging 29/09/2026 chưa thấy ô allowlist. Chưa có kết quả mong đợi.",
+            "kb_refs": [
+              "KB-019",
+              "KB-020",
+              "KB-021",
+              "KB-022"
+            ],
+            "act_ids": []
+          },
+          {
+            "name": "Hạn chế thao tác API key theo trạng thái gửi của workspace",
+            "description": "Sending suspended: không tạo key mới nhưng vẫn Rotate và Revoke; Disabled: chỉ xem key.",
+            "kb_refs": [
+              "KB-031",
+              "KB-032"
+            ],
+            "act_ids": []
+          }
+        ],
+        "state_transitions": [
+          {
+            "from": "email đăng nhập bình thường",
+            "to": "email bị chặn đăng nhập tạm 1 phút",
+            "trigger": "Quá 10 lần đăng nhập trong 1 phút cho cùng email",
+            "condition": "Thông báo khi bị chặn không được nêu",
+            "kb_refs": [
+              "KB-002"
+            ]
+          },
+          {
+            "from": "mạng đăng ký bình thường",
+            "to": "mạng bị chặn đăng ký tạm",
+            "trigger": "Quá 10 lượt đăng ký trong 1 phút từ cùng mạng",
+            "condition": "Thời lượng chặn không được nêu",
+            "kb_refs": [
+              "KB-003"
+            ]
+          },
+          {
+            "from": "lời mời còn hạn cho email X",
+            "to": "lời mời đã huỷ",
+            "trigger": "Huỷ lời mời",
+            "condition": "Khi còn hạn: mời lại X bị từ chối; sau khi huỷ: mời lại X được",
+            "kb_refs": [
+              "KB-014",
+              "KB-015"
+            ]
+          },
+          {
+            "from": "active",
+            "to": "active (key mới) + key cũ còn hoạt động 24 giờ",
+            "trigger": "Rotate",
+            "condition": "Key mới chỉ hiển thị một lần",
+            "kb_refs": [
+              "KB-023",
+              "KB-024"
+            ]
+          },
+          {
+            "from": "active",
+            "to": "revoked",
+            "trigger": "Revoke",
+            "condition": "Key ngừng hoạt động ngay",
+            "kb_refs": [
+              "KB-025"
+            ]
+          },
+          {
+            "from": "active",
+            "to": "paused",
+            "trigger": "Staff bấm Report as leaked",
+            "condition": "Lời gọi bằng key nhận 403 \"key paused\"; khách không tự mở lại",
+            "kb_refs": [
+              "KB-027",
+              "KB-028"
+            ]
+          },
+          {
+            "from": "paused",
+            "to": "đang hoạt động trở lại",
+            "trigger": "Put back",
+            "condition": "Tài liệu không nêu ai thực hiện",
+            "kb_refs": [
+              "KB-029"
+            ]
+          }
+        ],
+        "confirmed_rules": [
+          {
+            "statement": "Theo Jira MTRO-92 AC §1 (tóm tắt trong QA KB Mailtro \"Security & Abuse guard\" v1), đăng nhập sai mật khẩu và đăng nhập bằng email không tồn tại hiện cùng một thông báo lỗi; tài liệu ghi điểm này khớp staging 20/08/2026.",
+            "knowledge_kind": "CONFIRMED_EXPECTED",
+            "confidence": "MEDIUM",
+            "kb_refs": [
+              "KB-001"
+            ],
+            "tags": [
+              "permission"
+            ]
+          },
+          {
+            "statement": "Theo Jira MTRO-92 AC §1 (tóm tắt trong QA KB Mailtro \"Security & Abuse guard\" v1), đăng nhập quá 10 lần trong một phút cho cùng một email thì bị chặn tạm 1 phút; tài liệu ghi điểm này khớp staging 20/08/2026.",
+            "knowledge_kind": "CONFIRMED_EXPECTED",
+            "confidence": "MEDIUM",
+            "kb_refs": [
+              "KB-002"
+            ],
+            "tags": [
+              "permission"
+            ]
+          },
+          {
+            "statement": "Theo Jira MTRO-92 AC §1 (tóm tắt trong QA KB Mailtro \"Security & Abuse guard\" v1, chưa kiểm trên staging), quá 10 lượt đăng ký mỗi phút từ cùng một mạng thì bị chặn tạm; tài liệu không nêu thời lượng chặn.",
+            "knowledge_kind": "CONFIRMED_EXPECTED",
+            "confidence": "MEDIUM",
+            "kb_refs": [
+              "KB-003"
+            ],
+            "tags": [
+              "permission"
+            ]
+          },
+          {
+            "statement": "Theo Jira MTRO-92 AC §2 (tóm tắt trong QA KB Mailtro \"Security & Abuse guard\" v1, chưa kiểm trên staging), tên workspace trong email mời thành viên hiển thị dạng chữ, không thành link.",
+            "knowledge_kind": "CONFIRMED_EXPECTED",
+            "confidence": "MEDIUM",
+            "kb_refs": [
+              "KB-013"
+            ],
+            "tags": [
+              "permission"
+            ]
+          },
+          {
+            "statement": "Theo Jira MTRO-92 AC §2 (tóm tắt trong QA KB Mailtro \"Security & Abuse guard\" v1, chưa kiểm trên staging), mời lại một email khi lời mời trước cho email đó còn hạn thì bị từ chối với thông báo \"An invitation for this email is already pending.\"",
+            "knowledge_kind": "CONFIRMED_EXPECTED",
+            "confidence": "MEDIUM",
+            "kb_refs": [
+              "KB-014"
+            ],
+            "tags": [
+              "permission"
+            ]
+          },
+          {
+            "statement": "Theo Jira MTRO-92 AC §2 (tóm tắt trong QA KB Mailtro \"Security & Abuse guard\" v1, chưa kiểm trên staging), sau khi huỷ lời mời thì mời lại cùng email đó được.",
+            "knowledge_kind": "CONFIRMED_EXPECTED",
+            "confidence": "MEDIUM",
+            "kb_refs": [
+              "KB-015"
+            ],
+            "tags": [
+              "permission"
+            ]
+          },
+          {
+            "statement": "Theo Jira MTRO-92 AC §2 (tóm tắt trong QA KB Mailtro \"Security & Abuse guard\" v1, chưa kiểm trên staging), mỗi hộp thư nhận tối đa 3 lời mời mỗi ngày; các biến thể +tag và dấu chấm của Gmail được tính là cùng một hộp thư.",
+            "knowledge_kind": "CONFIRMED_EXPECTED",
+            "confidence": "MEDIUM",
+            "kb_refs": [
+              "KB-016"
+            ],
+            "tags": [
+              "permission"
+            ]
+          },
+          {
+            "statement": "Theo Jira MTRO-92 AC §2 (tóm tắt trong QA KB Mailtro \"Security & Abuse guard\" v1, chưa kiểm trên staging), gửi quá 20 lời mời trong một phút thì bị chặn tạm; tài liệu không nêu thời lượng chặn.",
+            "knowledge_kind": "CONFIRMED_EXPECTED",
+            "confidence": "MEDIUM",
+            "kb_refs": [
+              "KB-017"
+            ],
+            "tags": [
+              "permission"
+            ]
+          },
+          {
+            "statement": "Theo Jira MTRO-92 AC §3 (tóm tắt trong QA KB Mailtro \"Security & Abuse guard\" v1), giá trị đầy đủ của API key chỉ hiển thị một lần duy nhất; tài liệu ghi điểm này khớp staging 29/09/2026.",
+            "knowledge_kind": "CONFIRMED_EXPECTED",
+            "confidence": "MEDIUM",
+            "kb_refs": [
+              "KB-018"
+            ],
+            "tags": [
+              "permission"
+            ]
+          },
+          {
+            "statement": "Theo Jira MTRO-92 AC §3 (tóm tắt trong QA KB Mailtro \"Security & Abuse guard\" v1, chưa kiểm trên staging), khi Rotate API key thì key mới chỉ hiển thị một lần.",
+            "knowledge_kind": "CONFIRMED_EXPECTED",
+            "confidence": "MEDIUM",
+            "kb_refs": [
+              "KB-023"
+            ],
+            "tags": [
+              "permission"
+            ]
+          },
+          {
+            "statement": "Theo Jira MTRO-92 AC §3 (tóm tắt trong QA KB Mailtro \"Security & Abuse guard\" v1), sau khi Rotate thì key cũ vẫn hoạt động thêm 24 giờ.",
+            "knowledge_kind": "CONFIRMED_EXPECTED",
+            "confidence": "MEDIUM",
+            "kb_refs": [
+              "KB-024"
+            ],
+            "tags": [
+              "permission"
+            ]
+          },
+          {
+            "statement": "Theo Jira MTRO-92 AC §3 (tóm tắt trong QA KB Mailtro \"Security & Abuse guard\" v1, chưa kiểm trên staging), Revoke API key làm key ngừng hoạt động ngay lập tức.",
+            "knowledge_kind": "CONFIRMED_EXPECTED",
+            "confidence": "MEDIUM",
+            "kb_refs": [
+              "KB-025"
+            ],
+            "tags": [
+              "permission"
+            ]
+          },
+          {
+            "statement": "Theo Jira MTRO-92 AC §3 (tóm tắt trong QA KB Mailtro \"Security & Abuse guard\" v1, chưa kiểm trên staging), khi staff bấm Report as leaked thì API key chuyển sang trạng thái paused và lời gọi bằng key đó nhận 403 \"key paused\".",
+            "knowledge_kind": "CONFIRMED_EXPECTED",
+            "confidence": "MEDIUM",
+            "kb_refs": [
+              "KB-027"
+            ],
+            "tags": [
+              "permission"
+            ]
+          },
+          {
+            "statement": "Theo Jira MTRO-92 AC §3 (tóm tắt trong QA KB Mailtro \"Security & Abuse guard\" v1, chưa kiểm trên staging), khách hàng không tự mở lại được API key đã bị staff chuyển sang paused.",
+            "knowledge_kind": "CONFIRMED_EXPECTED",
+            "confidence": "MEDIUM",
+            "kb_refs": [
+              "KB-028"
+            ],
+            "tags": [
+              "permission"
+            ]
+          },
+          {
+            "statement": "Theo Jira MTRO-92 AC §3 (tóm tắt trong QA KB Mailtro \"Security & Abuse guard\" v1, chưa kiểm trên staging), thao tác Put back mở lại API key đang paused; tài liệu không nêu ai thực hiện thao tác này.",
+            "knowledge_kind": "CONFIRMED_EXPECTED",
+            "confidence": "MEDIUM",
+            "kb_refs": [
+              "KB-029"
+            ],
+            "tags": [
+              "permission"
+            ]
+          },
+          {
+            "statement": "Theo Jira MTRO-92 AC §3 (tóm tắt trong QA KB Mailtro \"Security & Abuse guard\" v1, chưa kiểm trên staging), API key có bốn trạng thái: active, paused, expired, revoked; tài liệu không nêu khi nào key chuyển sang expired.",
+            "knowledge_kind": "CONFIRMED_EXPECTED",
+            "confidence": "MEDIUM",
+            "kb_refs": [
+              "KB-030"
+            ],
+            "tags": [
+              "permission"
+            ]
+          },
+          {
+            "statement": "Theo Jira MTRO-92 AC §3 (tóm tắt trong QA KB Mailtro \"Security & Abuse guard\" v1, chưa kiểm trên staging), workspace ở trạng thái Sending suspended không tạo được API key mới, nhưng vẫn Rotate và Revoke được.",
+            "knowledge_kind": "CONFIRMED_EXPECTED",
+            "confidence": "MEDIUM",
+            "kb_refs": [
+              "KB-031"
+            ],
+            "tags": [
+              "data-deletion",
+              "permission"
+            ]
+          },
+          {
+            "statement": "Theo Jira MTRO-92 AC §3 (tóm tắt trong QA KB Mailtro \"Security & Abuse guard\" v1, chưa kiểm trên staging), workspace ở trạng thái Disabled chỉ được xem API key.",
+            "knowledge_kind": "CONFIRMED_EXPECTED",
+            "confidence": "MEDIUM",
+            "kb_refs": [
+              "KB-032"
+            ],
+            "tags": [
+              "permission"
+            ]
+          }
+        ],
+        "observed_behavior": [],
+        "observed_validations": [],
+        "permissions": [
+          {
+            "statement": "Khách hàng không tự mở lại được API key đã bị staff chuyển sang paused; chỉ staff có thao tác Report as leaked.",
+            "kb_refs": [
+              "KB-027",
+              "KB-028"
+            ]
+          },
+          {
+            "statement": "Workspace Sending suspended không tạo được API key mới nhưng vẫn Rotate và Revoke; workspace Disabled chỉ được xem API key.",
+            "kb_refs": [
+              "KB-031",
+              "KB-032"
+            ]
+          },
+          {
+            "statement": "Role nào (Owner, Admin, role thứ ba đang tranh chấp tên) được quản lý API key và mời thành viên chưa được xác định; profile không tự suy role.",
+            "kb_refs": [
+              "KB-033",
+              "KB-P-051"
+            ]
+          }
+        ],
+        "surface_mapping": {
+          "portal": [
+            {
+              "item": "Thao tác mời thành viên và các thông báo từ chối lời mời",
+              "kb_refs": [
+                "KB-014",
+                "KB-015",
+                "KB-P-039"
+              ]
+            },
+            {
+              "item": "Dialog Create API key (chưa có ô IP allowlist trên staging 29/09/2026), danh sách key và trạng thái, Rotate / Revoke",
+              "kb_refs": [
+                "KB-018",
+                "KB-020",
+                "KB-023",
+                "KB-030"
+              ]
+            }
+          ],
+          "storefront": [],
+          "api": [
+            {
+              "item": "Lời gọi bằng API key: 403 \"key paused\" khi paused, ngừng ngay sau Revoke, key cũ còn 24 giờ sau Rotate; 403 khi IP ngoài allowlist (đang tranh chấp)",
+              "kb_refs": [
+                "KB-019",
+                "KB-024",
+                "KB-025",
+                "KB-027"
+              ]
+            },
+            {
+              "item": "Giới hạn 120 request/phút/key của Public API (product-level)",
+              "kb_refs": [
+                "KB-P-065"
+              ]
+            }
+          ],
+          "data": [
+            {
+              "item": "Trạng thái API key: active, paused, expired, revoked",
+              "kb_refs": [
+                "KB-030"
+              ]
+            },
+            {
+              "item": "Bộ đếm lời mời theo hộp thư chuẩn hoá (gộp +tag, dấu chấm Gmail), theo ngày và theo phút",
+              "kb_refs": [
+                "KB-016",
+                "KB-017"
+              ]
+            }
+          ],
+          "code": [],
+          "auth": [
+            {
+              "item": "Form Sign in (`/login`): thông báo lỗi chung, chặn tạm theo email",
+              "kb_refs": [
+                "KB-001",
+                "KB-002",
+                "KB-P-027"
+              ]
+            },
+            {
+              "item": "Đăng ký (`/signup`): chặn tạm theo mạng",
+              "kb_refs": [
+                "KB-003",
+                "KB-P-027"
+              ]
+            },
+            {
+              "item": "Bước nhập mã email khi đăng nhập (đang tranh chấp, chưa thấy trên staging)",
+              "kb_refs": [
+                "KB-004",
+                "KB-005"
+              ]
+            }
+          ],
+          "staff": [
+            {
+              "item": "Report as leaked, Put back trên trang quản trị staff riêng",
+              "kb_refs": [
+                "KB-027",
+                "KB-029",
+                "KB-100"
+              ]
+            }
+          ]
+        },
+        "dependencies": [
+          {
+            "target": "abuse-guard / sending-suspension-and-staff-review",
+            "relation": "state_source",
+            "note": "Giới hạn thao tác API key dùng trạng thái gửi của workspace (Sending suspended, Disabled).",
+            "kb_refs": [
+              "KB-031",
+              "KB-032",
+              "KB-063"
+            ]
+          },
+          {
+            "target": "auth / sign-in-and-workspace-selection, two-factor-challenge",
+            "relation": "overlap",
+            "note": "Cùng rule đăng nhập của Jira MTRO-92 §1 cũng có ở luồng đăng nhập của auth; phía staging của tranh chấp mã email nằm ở two-factor-challenge.",
+            "kb_refs": [
+              "KB-001",
+              "KB-002",
+              "KB-005"
+            ]
+          },
+          {
+            "target": "auth / signup-and-workspace-creation",
+            "relation": "see_also",
+            "note": "Captcha ở đăng ký là cơ chế product-level; chặn theo mạng là rule của feature này.",
+            "kb_refs": [
+              "KB-003",
+              "KB-P-066"
+            ]
+          },
+          {
+            "target": "workspace-settings / team-members-and-invitations",
+            "relation": "overlap",
+            "note": "Rule lời mời của Jira MTRO-92 §2 cũng có ở feature mời thành viên.",
+            "kb_refs": [
+              "KB-014",
+              "KB-016",
+              "KB-017"
+            ]
+          },
+          {
+            "target": "workspace-settings / api-keys-and-public-api",
+            "relation": "overlap",
+            "note": "Rule API key của Jira MTRO-92 §3 cũng có ở feature API keys; quy tắc người dùng thao tác Rotate / Revoke (kể cả từ chối Rotate key đã revoke) do feature đó sở hữu. Phía staging của tranh chấp IP allowlist ở đó là thành viên của cùng tranh chấp IP allowlist trong profile này.",
+            "kb_refs": [
+              "KB-018",
+              "KB-019",
+              "KB-020",
+              "KB-031"
+            ]
+          },
+          {
+            "target": "workspace-settings / roles-and-permissions",
+            "relation": "permission_source",
+            "note": "Ma trận quyền và tên role thứ ba chưa chốt.",
+            "kb_refs": [
+              "KB-033",
+              "KB-P-051"
+            ]
+          }
+        ],
+        "risks": [
+          {
+            "statement": "Tranh chấp chưa phân xử về mã email khi đăng nhập: Jira MTRO-92 §1 yêu cầu tài khoản không bật TOTP nhập mã 6 số gửi qua email (kèm hết hạn 10 phút, gửi lại chờ khoảng 60 giây, sai 5 lần quay về form với \"That code has expired or been used up\", khoá nhập với \"Too many incorrect codes. Try again in N seconds\", F5 quay về form, câu cảnh báo trong email), trong khi Known issues và staging 23/09/2026, bundle 29/09/2026, Jira MTRO-88 nói không có email OTP. Không dùng bên nào làm kết quả mong đợi.",
+            "knowledge_kind": "INFERRED",
+            "confidence": "LOW",
+            "kb_refs": [
+              "KB-004",
+              "KB-005",
+              "KB-006",
+              "KB-007",
+              "KB-008",
+              "KB-009",
+              "KB-010",
+              "KB-011",
+              "KB-012"
+            ],
+            "status": "UNRESOLVED",
+            "conflict_group": "CONF-MTRO-abuse-guard-01",
+            "tags": [
+              "permission"
+            ]
+          },
+          {
+            "statement": "Tranh chấp chưa phân xử về IP allowlist của API key: Jira MTRO-92 §3 mô tả giới hạn theo IP / dải IP (IP ngoài danh sách nhận 403, Rotate giữ allowlist) nhưng staging 29/09/2026 chưa thấy ô IP allowlist trong dialog Create API key. Không dùng bên nào làm kết quả mong đợi.",
+            "knowledge_kind": "INFERRED",
+            "confidence": "LOW",
+            "kb_refs": [
+              "KB-019",
+              "KB-020",
+              "KB-021"
+            ],
+            "status": "UNRESOLVED",
+            "conflict_group": "CONF-MTRO-abuse-guard-02",
+            "tags": [
+              "permission"
+            ]
+          },
+          {
+            "statement": "Theo QA KB Mailtro \"Security & Abuse guard\" v1 (mục Edge Cases), định dạng IP allowlist (IPv4, IPv6, CIDR) và nguồn lấy IP (kết nối hay header X-Forwarded-For) chưa được xác nhận (GAP-09).",
+            "knowledge_kind": "INFERRED",
+            "confidence": "LOW",
+            "kb_refs": [
+              "KB-022"
+            ],
+            "tags": [
+              "permission"
+            ]
+          },
+          {
+            "statement": "Theo QA KB Mailtro \"Security & Abuse guard\" v1 (mục Edge Cases), chưa xác nhận role nào (Owner / Admin / role thứ ba) được quản lý API key và mời thành viên (GAP-07); ma trận quyền của Mailtro chưa chốt.",
+            "knowledge_kind": "INFERRED",
+            "confidence": "LOW",
+            "kb_refs": [
+              "KB-033"
+            ],
+            "tags": [
+              "permission"
+            ]
+          },
+          {
+            "statement": "Phần lớn rule CE của feature này chỉ dựa trên Jira MTRO-92 AC và được ghi rõ là chưa kiểm trên staging (đăng ký theo mạng, toàn bộ rule lời mời, Rotate, Revoke, paused, trạng thái key, giới hạn theo trạng thái workspace); chỉ thông báo lỗi chung và chặn đăng nhập theo email (khớp staging 20/08/2026) cùng hiển thị key một lần (khớp staging 29/09/2026) có ghi khớp staging.",
+            "knowledge_kind": "CONFIRMED_EXPECTED",
+            "confidence": "MEDIUM",
+            "kb_refs": [
+              "KB-001",
+              "KB-002",
+              "KB-003",
+              "KB-013",
+              "KB-018",
+              "KB-023",
+              "KB-025",
+              "KB-027",
+              "KB-031",
+              "KB-032"
+            ]
+          },
+          {
+            "statement": "Ghi chú cấu hình test của QA nói endpoint auth bị giới hạn 10 request mỗi 60 giây (INFERRED, chưa có nguồn PO/Dev); không gộp con số này với rule chặn đăng nhập 10 lần/phút theo email của Jira MTRO-92 vì phạm vi đếm khác nhau.",
+            "knowledge_kind": "INFERRED",
+            "confidence": "LOW",
+            "kb_refs": [
+              "KB-P-070"
+            ]
+          }
+        ],
+        "freshness": {
+          "observed_at": "2026-10-07",
+          "run_id": "CTX-20261008-02",
+          "basis": "Ngày QA đọc và tóm tắt Jira MTRO-92 (07/10/2026); các điểm khớp staging được tài liệu ghi ngày 20/08/2026 và 29/09/2026; không có quan sát runtime trong lần dựng này."
+        },
+        "unknown_areas": [
+          {
+            "question": "Khi đăng nhập, tài khoản không bật TOTP có phải nhập mã 6 số gửi qua email như Jira MTRO-92 §1 mô tả không, hay luồng này ngoài phạm vi như Jira MTRO-88 và staging cho thấy? Nếu có, đã deploy lên staging chưa (GAP-03)?",
+            "why_it_matters": "Hai nguồn nói ngược nhau về cùng luồng đăng nhập; mọi chi tiết mã email (hết hạn, gửi lại, khoá nhập) chưa có oracle.",
+            "kb_refs": [
+              "KB-004",
+              "KB-005",
+              "KB-006",
+              "KB-007",
+              "KB-008",
+              "KB-009",
+              "KB-010",
+              "KB-011",
+              "KB-012"
+            ]
+          },
+          {
+            "question": "API key có hỗ trợ IP allowlist (IP ngoài danh sách nhận 403, Rotate giữ allowlist) không, và nếu có thì ô nhập nằm ở dialog nào trên staging?",
+            "why_it_matters": "Jira AC và khảo sát staging 29/09/2026 lệch nhau, không có quyết định PO/Dev phân xử.",
+            "kb_refs": [
+              "KB-019",
+              "KB-020",
+              "KB-021"
+            ]
+          },
+          {
+            "question": "IP allowlist chấp nhận định dạng nào (IPv4, IPv6, CIDR) và IP nguồn lấy từ kết nối hay từ header X-Forwarded-For (GAP-09)?",
+            "why_it_matters": "Không viết được case biên cho allowlist khi chưa biết định dạng và nguồn IP.",
+            "kb_refs": [
+              "KB-022"
+            ]
+          },
+          {
+            "question": "Role nào (Owner, Admin, role thứ ba đang tranh chấp tên Member / Marketer / Editor) được quản lý API key và mời thành viên (GAP-07)?",
+            "why_it_matters": "Ma trận quyền chưa chốt; không có expected result cho kiểm thử phân quyền.",
+            "kb_refs": [
+              "KB-033",
+              "KB-P-051"
+            ]
+          },
+          {
+            "question": "Khi bị chặn tạm vì quá 10 lượt đăng ký/phút/mạng hoặc quá 20 lời mời/phút thì bị chặn bao lâu, hiện thông báo gì và trả HTTP status nào; khi đăng nhập bị chặn tạm 1 phút thì hiện thông báo gì?",
+            "why_it_matters": "Chỉ chặn đăng nhập có thời lượng; không viết được expected result cho case biên của các giới hạn còn lại.",
+            "kb_refs": [
+              "KB-002",
+              "KB-003",
+              "KB-017"
+            ]
+          },
+          {
+            "question": "Khi nào API key chuyển sang trạng thái expired, và ai (staff hay khách) thực hiện Put back cho key đang paused?",
+            "why_it_matters": "Trạng thái expired và thao tác Put back có tên nhưng không có quy tắc chuyển trạng thái.",
+            "kb_refs": [
+              "KB-029",
+              "KB-030"
+            ]
+          }
+        ]
+      }
+    ],
+    "profile_relationships": [
+      {
+        "from": "account-and-access-abuse-limits",
+        "to": "sending-suspension-and-staff-review",
+        "relation": "DEPENDS_ON_STATE",
+        "kb_refs": [
+          "KB-031",
+          "KB-032",
+          "KB-050",
+          "KB-058"
+        ]
+      },
+      {
+        "from": "account-and-access-abuse-limits",
+        "to": "auth/two-factor-challenge",
+        "relation": "CONFLICT_COUNTERPART",
+        "kb_refs": [
+          "KB-004",
+          "KB-005"
+        ]
+      },
+      {
+        "from": "account-and-access-abuse-limits",
+        "to": "workspace-settings/api-keys-and-public-api",
+        "relation": "SHARES_RULES",
+        "kb_refs": [
+          "KB-018",
+          "KB-019",
+          "KB-031"
+        ]
+      },
+      {
+        "from": "account-and-access-abuse-limits",
+        "to": "workspace-settings/team-members-and-invitations",
+        "relation": "SHARES_RULES",
+        "kb_refs": [
+          "KB-014",
+          "KB-016",
+          "KB-017"
+        ]
+      }
+    ],
+    "coverage_matrix": [
+      {
+        "feature_id": "account-and-access-abuse-limits",
+        "layer": "auth",
+        "role": "unspecified",
+        "state": "đăng nhập sai / email không tồn tại / dồn dập theo email",
+        "environment": "documented",
+        "covered": true,
+        "note": "Jira MTRO-92 AC, tài liệu ghi khớp staging 20/08/2026"
+      },
+      {
+        "feature_id": "account-and-access-abuse-limits",
+        "layer": "auth",
+        "role": "unspecified",
+        "state": "đăng ký dồn dập theo mạng",
+        "environment": "documented",
+        "covered": true,
+        "note": "Chỉ Jira AC; thời lượng và thông báo thiếu"
+      },
+      {
+        "feature_id": "account-and-access-abuse-limits",
+        "layer": "auth",
+        "role": "unspecified",
+        "state": "mã email khi đăng nhập",
+        "environment": "documented",
+        "covered": false,
+        "note": "Tranh chấp chưa phân xử"
+      },
+      {
+        "feature_id": "account-and-access-abuse-limits",
+        "layer": "portal",
+        "role": "unspecified",
+        "state": "mời thành viên: trùng lời mời, huỷ rồi mời lại, giới hạn ngày / phút",
+        "environment": "documented",
+        "covered": true,
+        "note": "Chỉ Jira AC, chưa kiểm staging"
+      },
+      {
+        "feature_id": "account-and-access-abuse-limits",
+        "layer": "portal",
+        "role": "unspecified",
+        "state": "API key: tạo, Rotate, Revoke",
+        "environment": "documented",
+        "covered": true,
+        "note": "Hiển thị một lần khớp staging 29/09/2026; phần còn lại chỉ Jira AC; Rotate key đã revoke thuộc workspace-settings"
+      },
+      {
+        "feature_id": "account-and-access-abuse-limits",
+        "layer": "portal",
+        "role": "unspecified",
+        "state": "API key khi workspace Sending suspended / Disabled",
+        "environment": "documented",
+        "covered": true,
+        "note": "Chỉ Jira AC"
+      },
+      {
+        "feature_id": "account-and-access-abuse-limits",
+        "layer": "portal",
+        "role": "Owner/Admin/role thứ ba",
+        "state": "phân quyền quản lý API key, mời thành viên",
+        "environment": "documented",
+        "covered": false,
+        "note": "Ma trận quyền chưa chốt"
+      },
+      {
+        "feature_id": "account-and-access-abuse-limits",
+        "layer": "api",
+        "role": "api-caller",
+        "state": "key paused / revoked / sau Rotate",
+        "environment": "documented",
+        "covered": true,
+        "note": "Chỉ Jira AC"
+      },
+      {
+        "feature_id": "account-and-access-abuse-limits",
+        "layer": "api",
+        "role": "api-caller",
+        "state": "key expired",
+        "environment": "documented",
+        "covered": false,
+        "note": "Không có quy tắc khi nào expired"
+      },
+      {
+        "feature_id": "account-and-access-abuse-limits",
+        "layer": "api",
+        "role": "api-caller",
+        "state": "IP ngoài allowlist",
+        "environment": "documented",
+        "covered": false,
+        "note": "Tranh chấp chưa phân xử"
+      },
+      {
+        "feature_id": "account-and-access-abuse-limits",
+        "layer": "staff",
+        "role": "staff",
+        "state": "Report as leaked, Put back",
+        "environment": "documented",
+        "covered": true,
+        "note": "Chỉ Jira AC; chưa có tài khoản staff"
+      },
+      {
+        "feature_id": "account-and-access-abuse-limits",
+        "layer": "code",
+        "role": "unspecified",
+        "state": "any",
+        "environment": "documented",
+        "covered": false,
+        "note": "Không có nguồn mã"
+      }
+    ],
+    "unassigned_kb_items": [],
+    "profile_conflicts": [
+      {
+        "type": "KB_CONFLICT_GROUP",
+        "conflict_group": "CONF-MTRO-abuse-guard-01",
+        "summary": "Mã email khi đăng nhập: Jira MTRO-92 §1 vs staging / Jira MTRO-88.",
+        "kb_refs": [
+          "KB-004",
+          "KB-005"
+        ],
+        "status": "UNRESOLVED"
+      },
+      {
+        "type": "KB_CONFLICT_GROUP",
+        "conflict_group": "CONF-MTRO-abuse-guard-02",
+        "summary": "IP allowlist API key: Jira MTRO-92 §3 vs staging 29/09/2026. Nhóm có thêm thành viên chéo object ở workspace-settings / api-keys-and-public-api (phía staging); OQ CONFLICT do abuse-guard sở hữu.",
+        "kb_refs": [
+          "KB-019",
+          "KB-020",
+          "KB-021"
+        ],
+        "status": "UNRESOLVED",
+        "cross_object_refs": [
+          {
+            "object_id": "workspace-settings",
+            "relation": "conflict_member",
+            "note": "Item phía staging (dialog Create API key chưa có ô IP allowlist) của feature api-keys-and-public-api là thành viên của cùng conflict group."
+          }
+        ]
+      },
+      {
+        "type": "OWNERSHIP_RESOLVED_R1",
+        "summary": "Rate limit đăng nhập và chống dò tài khoản (KB-001, KB-002) do abuse-guard sở hữu (auth đã bỏ bản trùng). Quy tắc người dùng Rotate / Revoke API key do workspace-settings sở hữu; item Rotate key đã revoke của abuse-guard đã bị bỏ (rework r1).",
+        "kb_refs": [
+          "KB-001",
+          "KB-002"
+        ],
+        "status": "RESOLVED"
+      },
+      {
+        "type": "CROSS_OBJECT_OVERLAP_ACCEPTED",
+        "summary": "Rule lời mời (KB-014, KB-016, KB-017) và phần còn lại của rule API key (KB-018..KB-031) vẫn có phát biểu tương ứng ở workspace-settings; vòng rework r1 không yêu cầu bỏ.",
+        "kb_refs": [
+          "KB-014",
+          "KB-016",
+          "KB-017",
+          "KB-018",
+          "KB-031"
+        ],
+        "status": "NOTED"
+      }
+    ],
+    "profile_change_summary": [
+      "Rework r1: bỏ item Rotate key đã revoke (kb_id bị normalizer bỏ) khỏi capability, transition, confirmed_rules, surface và coverage vì workspace-settings sở hữu quy tắc Rotate / Revoke phía người dùng.",
+      "Rework r1: CONF-MTRO-abuse-guard-02 ghi thêm thành viên chéo object ở workspace-settings / api-keys-and-public-api; ghi nhận quyền sở hữu KB-001 / KB-002 thuộc abuse-guard."
+    ],
+    "kb_trace_complete": true
+  },
+  "gate": {
+    "decision": "CONDITIONAL_PASS",
+    "blocking_findings": [],
+    "conditions": [
+      "Hai tranh chấp chưa phân xử (mã email khi đăng nhập, IP allowlist) không có oracle; checklist chỉ được hỏi, không được khẳng định.",
+      "Phần lớn rule CE chỉ dựa trên Jira AC chưa kiểm staging; thời lượng/thông báo khi chặn tạm đăng ký và lời mời, điều kiện expired, người thực hiện Put back chưa có.",
+      "Role cho từng thao tác chưa xác định; không viết expected result phân quyền."
+    ],
+    "reason": "Profile có identity ổn định, user goal, mọi field trace về kb_id, coverage và freshness; đủ cho regression discovery nhưng oracle còn thiếu ở các vùng tranh chấp và vùng tài liệu không nêu.",
+    "allowed_next_steps": [
+      "qa-checklist-builder",
+      "knowledge-diff-analyzer"
+    ]
+  }
+}

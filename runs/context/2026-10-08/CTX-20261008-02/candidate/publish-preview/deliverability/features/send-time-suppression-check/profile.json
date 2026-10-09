@@ -1,0 +1,568 @@
+{
+  "feature_id": "send-time-suppression-check",
+  "feature_key": "send-time-suppression-check",
+  "name": "Chặn gửi tới địa chỉ bị suppress hoặc đã unsubscribe ở các lane gửi",
+  "user_goal": "Không mail marketing hay automation nào đi tới địa chỉ nằm trong sổ suppression (bounce / complaint) hoặc sổ consent (người nhận đã opt-out), và tập người nhận hiển thị trước khi gửi đã loại các địa chỉ đó.",
+  "stable_since_version": "v1",
+  "actors": [
+    {
+      "role": "system (bước kiểm `SuppressionChecker` trước khi gửi)",
+      "permission_observed": "Không có thao tác người dùng; mọi lane gửi dùng chung bước kiểm này với reason-set riêng của từng lane.",
+      "kb_refs": [
+        "KB-045",
+        "KB-P-023"
+      ]
+    },
+    {
+      "role": "unspecified (người gửi campaign hoặc chạy automation)",
+      "permission_observed": "Gián tiếp: thấy kết quả qua segment count / preview, danh sách Recipients và kết cục run automation. Role không được tài liệu ghi.",
+      "kb_refs": [
+        "KB-049",
+        "KB-050",
+        "KB-055",
+        "KB-056"
+      ]
+    }
+  ],
+  "entry_points": [
+    {
+      "path": "Bước gửi của campaign marketing",
+      "precondition": "Campaign được gửi; danh sách người nhận được chốt lúc dựng lần gửi (thời điểm cụ thể chưa rõ).",
+      "kb_refs": [
+        "KB-046",
+        "KB-053"
+      ]
+    },
+    {
+      "path": "Bước Send email của automation (dùng chung send stack với campaign)",
+      "precondition": "Contact chạy tới bước gửi.",
+      "kb_refs": [
+        "KB-047",
+        "KB-055",
+        "KB-056"
+      ]
+    },
+    {
+      "path": "Segment preview / count và các màn dùng chung query cơ sở của Contacts",
+      "precondition": "Workspace có contact bị suppress hoặc đã unsubscribe.",
+      "kb_refs": [
+        "KB-049",
+        "KB-078"
+      ]
+    }
+  ],
+  "capabilities": [
+    {
+      "name": "Tra cả hai sổ trước khi gửi",
+      "description": "`SuppressionChecker` tra `unsubscribes` (consent) và `suppressions` (deliverability), lọc theo reason-set riêng của từng sending lane; các lane dùng chung thành phần này.",
+      "kb_refs": [
+        "KB-045",
+        "KB-089",
+        "KB-P-023"
+      ]
+    },
+    {
+      "name": "Lane marketing chặn cả hai sổ",
+      "description": "Campaign marketing không gửi tới contact đã unsubscribe cũng như địa chỉ bị suppress. Reason-set của các lane khác chưa được mô tả; một tài liệu tổng quan ghi chặn cả hai sổ ở mọi lane (chưa chốt).",
+      "kb_refs": [
+        "KB-046",
+        "KB-048"
+      ]
+    },
+    {
+      "name": "Automation dùng chung bước kiểm và kết cục run",
+      "description": "Automation đi qua cùng send stack; gặp contact unsubscribed thì run `Failed`, gặp contact bị suppressed thì run `Completed` và được đếm vào số Bounced / Spam complaints.",
+      "kb_refs": [
+        "KB-047",
+        "KB-055",
+        "KB-056",
+        "KB-057"
+      ]
+    },
+    {
+      "name": "Loại khỏi tập người nhận hiển thị trước khi gửi",
+      "description": "Segment preview / count loại contact bị suppress qua query cơ sở dùng chung (`ContactsResource::baseQuery`); contact đã unsubscribe không hiện trong segment. Trên staging contact bị suppress bị loại khỏi segment count / preview, Recipients và lần gửi sau, nhưng vẫn hiện ở màn Contacts với Consent `Subscribed`.",
+      "kb_refs": [
+        "KB-049",
+        "KB-078",
+        "KB-050",
+        "KB-051",
+        "KB-052"
+      ]
+    }
+  ],
+  "state_transitions": [
+    {
+      "from": "run automation tới bước gửi, contact Unsubscribed",
+      "to": "run `Failed`",
+      "trigger": "Bước Send email gặp contact đã unsubscribe",
+      "condition": "Quyết định PO 02/10/2026",
+      "kb_refs": [
+        "KB-055"
+      ]
+    },
+    {
+      "from": "run automation tới bước gửi, contact bị suppressed",
+      "to": "run `Completed`, đếm vào Bounced / Spam complaints",
+      "trigger": "Bước Send email gặp contact bị suppress",
+      "condition": "Quyết định PO 02/10/2026; tiêu chí chia hai số chưa mô tả",
+      "kb_refs": [
+        "KB-056",
+        "KB-057"
+      ]
+    },
+    {
+      "from": "contact được tính trong segment / Recipients",
+      "to": "contact bị loại khỏi segment count, Recipients và lần gửi sau",
+      "trigger": "Contact bị suppress",
+      "condition": "Quan sát staging 08–09/09/2026; độ trễ tạo suppression mẫu 8–62 giây",
+      "kb_refs": [
+        "KB-050",
+        "KB-049",
+        "KB-054"
+      ]
+    }
+  ],
+  "confirmed_rules": [
+    {
+      "statement": "Theo Jira MTRO-64 (use case B4) và MTRO-78 (rule 07/09/2026 trong QA business rule Mailtro), trước khi gửi, `SuppressionChecker` tra cả hai sổ — `unsubscribes` (consent) và `suppressions` (deliverability) — và lọc theo reason-set riêng của từng sending lane; các lane gửi dùng chung thành phần này.",
+      "knowledge_kind": "CONFIRMED_EXPECTED",
+      "confidence": "MEDIUM",
+      "kb_refs": [
+        "KB-045"
+      ]
+    },
+    {
+      "statement": "Theo Jira MTRO-64 (use case B4) và MTRO-78 (rule 07/09/2026 trong QA business rule Mailtro), lane gửi marketing chặn địa chỉ có trong cả hai sổ: contact đã unsubscribe và địa chỉ bị suppress đều không được gửi.",
+      "knowledge_kind": "CONFIRMED_EXPECTED",
+      "confidence": "MEDIUM",
+      "kb_refs": [
+        "KB-046"
+      ]
+    },
+    {
+      "statement": "Theo Jira MTRO-64 (use case B4) và MTRO-78 (rule 07/09/2026 trong QA business rule Mailtro), automation dùng chung send stack với campaign nên được cover bởi cùng bước kiểm tra suppression mà không cần code riêng.",
+      "knowledge_kind": "CONFIRMED_EXPECTED",
+      "confidence": "MEDIUM",
+      "kb_refs": [
+        "KB-047"
+      ]
+    },
+    {
+      "statement": "Theo Jira MTRO-78 (rule 07/09/2026, tóm tắt trong QA KB Mailtro \"Suppressions\" v1), segment preview / count loại contact bị suppress thông qua điều kiện `whereNotExists` trong `ContactsResource::baseQuery`, và việc loại này ảnh hưởng mọi màn hình dùng query đó; tài liệu không liệt kê đủ các màn.",
+      "knowledge_kind": "CONFIRMED_EXPECTED",
+      "confidence": "MEDIUM",
+      "kb_refs": [
+        "KB-049"
+      ]
+    },
+    {
+      "statement": "Theo quyết định PO 02/10/2026 (task Testlane MTRO-018 BR-28, BR-29), khi automation gặp contact đã unsubscribed thì run kết thúc với trạng thái `Failed`.",
+      "knowledge_kind": "CONFIRMED_EXPECTED",
+      "confidence": "MEDIUM",
+      "kb_refs": [
+        "KB-055"
+      ]
+    },
+    {
+      "statement": "Theo quyết định PO 02/10/2026 (task Testlane MTRO-018 BR-28, BR-29), khi automation gặp contact bị suppressed thì run kết thúc với trạng thái `Completed` (không phải `Failed`).",
+      "knowledge_kind": "CONFIRMED_EXPECTED",
+      "confidence": "MEDIUM",
+      "kb_refs": [
+        "KB-056"
+      ]
+    },
+    {
+      "statement": "Theo quyết định PO 02/10/2026 (task Testlane MTRO-018 BR-28, BR-29), run automation gặp contact bị suppressed được đếm vào số Bounced / Spam complaints; tài liệu không nêu tiêu chí chia giữa hai số này.",
+      "knowledge_kind": "CONFIRMED_EXPECTED",
+      "confidence": "MEDIUM",
+      "kb_refs": [
+        "KB-057"
+      ]
+    },
+    {
+      "statement": "Theo quyết định PO 24/08/2026 (Jira MTRO-17, MTRO-66), contact đã unsubscribe không hiện trong segment.",
+      "knowledge_kind": "CONFIRMED_EXPECTED",
+      "confidence": "MEDIUM",
+      "kb_refs": [
+        "KB-078"
+      ]
+    },
+    {
+      "statement": "Theo Jira MTRO-64 (use case B4) và MTRO-78 (rule 07/09/2026 trong QA business rule Mailtro), Mailtro có hai sổ riêng: sổ consent `unsubscribes` và sổ deliverability `suppressions`; trước khi gửi, `SuppressionChecker` tra cả hai sổ.",
+      "knowledge_kind": "CONFIRMED_EXPECTED",
+      "confidence": "MEDIUM",
+      "kb_refs": [
+        "KB-089"
+      ]
+    },
+    {
+      "statement": "Theo Jira MTRO-78 (tóm tắt trong QA KB Mailtro \"Glossary\" v1), sending lane là một luồng gửi (ví dụ marketing) có bộ lý do suppression (reason-set) riêng.",
+      "knowledge_kind": "CONFIRMED_EXPECTED",
+      "confidence": "MEDIUM",
+      "kb_refs": [
+        "KB-P-023"
+      ]
+    }
+  ],
+  "observed_behavior": [
+    {
+      "statement": "Trên staging (lượt chạy 08–09/09/2026), contact bị suppress bị loại khỏi segment count / preview, khỏi danh sách Recipients và khỏi lần gửi sau.",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "confidence": "LOW",
+      "status": "CURRENT_STATE",
+      "kb_refs": [
+        "KB-050"
+      ]
+    },
+    {
+      "statement": "Trên staging (lượt chạy 08–09/09/2026), contact bị suppress vẫn còn hiển thị ở màn Contacts; nguồn không gọi đây là lỗi và không nêu màn Contacts có dùng chung query loại suppression hay không.",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "confidence": "LOW",
+      "status": "CURRENT_STATE",
+      "kb_refs": [
+        "KB-051"
+      ]
+    },
+    {
+      "statement": "Trên staging (lượt chạy 08–09/09/2026), contact bị suppress vẫn có Consent `Subscribed`; chỉ trang chi tiết contact ghi Deliverability bounced — hai sổ consent và suppression hiển thị độc lập.",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "confidence": "LOW",
+      "status": "CURRENT_STATE",
+      "kb_refs": [
+        "KB-052"
+      ]
+    },
+    {
+      "statement": "Trên staging (lượt chạy 08–09/09/2026), danh sách người nhận của campaign được chốt tại thời điểm dựng lần gửi; tài liệu không nói rõ \"lúc dựng\" là lúc bấm Send, lúc schedule hay lúc bắt đầu gửi.",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "confidence": "LOW",
+      "status": "CURRENT_STATE",
+      "kb_refs": [
+        "KB-053"
+      ]
+    },
+    {
+      "statement": "Trên staging (lượt chạy 08–09/09/2026), độ trễ từ lúc gửi tới lúc suppression được tạo đo được trong khoảng 8–62 giây; đây là số đo mẫu, không phải SLA.",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "confidence": "LOW",
+      "status": "CURRENT_STATE",
+      "kb_refs": [
+        "KB-054"
+      ]
+    }
+  ],
+  "observed_validations": [],
+  "permissions": [],
+  "surface_mapping": {
+    "portal": [
+      {
+        "item": "Segment count / preview, danh sách Recipients của campaign (loại contact bị suppress)",
+        "kb_refs": [
+          "KB-049",
+          "KB-050"
+        ]
+      },
+      {
+        "item": "Màn Contacts vẫn liệt kê contact bị suppress; trang chi tiết contact ghi Deliverability bounced, Consent vẫn `Subscribed`",
+        "kb_refs": [
+          "KB-051",
+          "KB-052"
+        ]
+      },
+      {
+        "item": "Kết cục run automation `Failed` / `Completed` và số Bounced / Spam complaints",
+        "kb_refs": [
+          "KB-055",
+          "KB-056",
+          "KB-057"
+        ]
+      }
+    ],
+    "storefront": [],
+    "api": [],
+    "data": [
+      {
+        "item": "Hai sổ `unsubscribes` và `suppressions` được tra trước khi gửi",
+        "kb_refs": [
+          "KB-045",
+          "KB-089"
+        ]
+      }
+    ],
+    "code": [
+      {
+        "item": "`SuppressionChecker` dùng chung cho các lane gửi; `ContactsResource::baseQuery` với điều kiện `whereNotExists` loại contact bị suppress (theo tài liệu, không có mã nguồn)",
+        "kb_refs": [
+          "KB-045",
+          "KB-049"
+        ]
+      }
+    ]
+  },
+  "dependencies": [
+    {
+      "target": "deliverability / bounce-complaint-suppression",
+      "relation": "data_source",
+      "note": "Sổ suppression được tạo bởi luồng tự suppress.",
+      "kb_refs": [
+        "KB-029",
+        "KB-030",
+        "KB-045"
+      ]
+    },
+    {
+      "target": "deliverability / unsubscribe-handling",
+      "relation": "data_source",
+      "note": "Sổ consent được tạo khi người nhận opt-out.",
+      "kb_refs": [
+        "KB-076",
+        "KB-045"
+      ]
+    },
+    {
+      "target": "automations / automation-run-history",
+      "relation": "consumer",
+      "note": "Kết cục run khi gặp contact unsubscribed / suppressed hiển thị ở run history và reports của automation.",
+      "kb_refs": [
+        "KB-055",
+        "KB-056",
+        "KB-057"
+      ]
+    },
+    {
+      "target": "segments / segment-audience-evaluation",
+      "relation": "near_duplicate_different_view",
+      "note": "Rule segment chỉ gồm contact Subscribed sống ở object segments, gần trùng với cơ chế lọc phía gửi ở đây; giữ cả hai vì khác góc nhìn — segments sở hữu oracle số đếm / preview, profile này giữ cơ chế lọc.",
+      "kb_refs": [
+        "KB-049",
+        "KB-078"
+      ]
+    },
+    {
+      "target": "campaigns / campaign-send-and-schedule",
+      "relation": "consumer",
+      "note": "Danh sách người nhận campaign được chốt lúc dựng lần gửi.",
+      "kb_refs": [
+        "KB-053"
+      ]
+    },
+    {
+      "target": "contacts / contact-list-and-search, contact-detail",
+      "relation": "see_also",
+      "note": "Màn Contacts vẫn hiện contact bị suppress; trang chi tiết hiển thị Deliverability riêng với Consent.",
+      "kb_refs": [
+        "KB-051",
+        "KB-052"
+      ]
+    }
+  ],
+  "risks": [
+    {
+      "statement": "Câu 'chặn cả hai sổ ở mọi lane gửi' rộng hơn rule (rule chỉ khẳng định lane marketing); không dùng làm expected cho lane transactional.",
+      "knowledge_kind": "INFERRED",
+      "confidence": "LOW",
+      "status": null,
+      "conflict_group": null,
+      "kb_refs": [
+        "KB-048"
+      ]
+    },
+    {
+      "statement": "Contact bị suppress vẫn hiện ở màn Contacts trên staging; chưa biết màn Contacts có phải dùng query loại suppression hay không, nên không phải expected cũng chưa phải lỗi.",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "confidence": "LOW",
+      "status": null,
+      "conflict_group": null,
+      "kb_refs": [
+        "KB-051",
+        "KB-049"
+      ]
+    },
+    {
+      "statement": "Thời điểm chốt danh sách người nhận campaign chưa rõ (bấm Send / schedule / bắt đầu gửi); contact bị suppress sau thời điểm đó có còn nhận mail không chưa có expected.",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "confidence": "LOW",
+      "status": null,
+      "conflict_group": null,
+      "kb_refs": [
+        "KB-053"
+      ]
+    },
+    {
+      "statement": "Độ trễ 8–62 giây từ lúc gửi tới lúc có suppression là số đo mẫu, không phải SLA.",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "confidence": "LOW",
+      "status": null,
+      "conflict_group": null,
+      "kb_refs": [
+        "KB-054"
+      ]
+    }
+  ],
+  "freshness": {
+    "observed_at": "2026-10-07",
+    "basis": "Rule 07/09/2026, quyết định PO 02/10/2026; quan sát staging 08–09/09/2026"
+  },
+  "unknown_areas": [
+    {
+      "question": "Reason-set của các sending lane khác marketing (transactional, và automation nếu khác) là gì — lane nào chặn sổ suppression, lane nào chặn sổ consent?",
+      "why_it_matters": "Rule chỉ khẳng định lane marketing chặn cả hai sổ; tài liệu tổng quan ghi mọi lane chặn cả hai.",
+      "kb_refs": [
+        "KB-045",
+        "KB-046",
+        "KB-048"
+      ],
+      "oq_id": "OQ-deliverability-013"
+    },
+    {
+      "question": "Những màn nào dùng query cơ sở loại contact bị suppress; màn Contacts vẫn hiện contact bị suppress có phải expected không?",
+      "why_it_matters": "Xác định phạm vi check số đếm / danh sách sau khi một contact bị suppress.",
+      "kb_refs": [
+        "KB-049",
+        "KB-051"
+      ],
+      "oq_id": "OQ-deliverability-014"
+    },
+    {
+      "question": "Danh sách người nhận campaign 'chốt lúc dựng' là lúc bấm Send, lúc schedule hay lúc bắt đầu gửi; contact bị suppress sau thời điểm đó còn nhận mail không?",
+      "why_it_matters": "Quyết định expected cho campaign đã schedule khi sổ suppression thay đổi.",
+      "kb_refs": [
+        "KB-053"
+      ],
+      "oq_id": "OQ-deliverability-014"
+    },
+    {
+      "question": "Khi so địa chỉ với hai sổ trước lúc gửi, email được chuẩn hoá thế nào (chữ hoa / thường, plus-addressing)?",
+      "why_it_matters": "Địa chỉ biến thể có thể lọt qua bước chặn.",
+      "kb_refs": [
+        "KB-045"
+      ],
+      "oq_id": "OQ-deliverability-015"
+    },
+    {
+      "question": "Run automation gặp contact bị suppressed được đếm vào Bounced hay Spam complaints theo tiêu chí nào?",
+      "why_it_matters": "Không kiểm được số đếm trong reports của automation.",
+      "kb_refs": [
+        "KB-057"
+      ],
+      "oq_id": "OQ-deliverability-026"
+    }
+  ],
+  "last_updated": {
+    "date": "2026-10-08",
+    "ccr_ref": "bootstrap"
+  },
+  "coverage_matrix": [
+    {
+      "feature_id": "send-time-suppression-check",
+      "layer": "backend",
+      "role": "system",
+      "state": "campaign marketing gửi tới contact Unsubscribed",
+      "environment": "documented",
+      "covered": true,
+      "note": "Rule đã chốt"
+    },
+    {
+      "feature_id": "send-time-suppression-check",
+      "layer": "backend",
+      "role": "system",
+      "state": "campaign marketing gửi tới địa chỉ bị suppress",
+      "environment": "documented",
+      "covered": true,
+      "note": "Rule đã chốt; hiện trạng staging khớp"
+    },
+    {
+      "feature_id": "send-time-suppression-check",
+      "layer": "backend",
+      "role": "system",
+      "state": "lane transactional",
+      "environment": "documented",
+      "covered": false,
+      "note": "Reason-set chưa mô tả"
+    },
+    {
+      "feature_id": "send-time-suppression-check",
+      "layer": "backend",
+      "role": "system",
+      "state": "automation gặp contact Unsubscribed",
+      "environment": "documented",
+      "covered": true,
+      "note": "Quyết định PO 02/10/2026: run Failed"
+    },
+    {
+      "feature_id": "send-time-suppression-check",
+      "layer": "backend",
+      "role": "system",
+      "state": "automation gặp contact bị suppress",
+      "environment": "documented",
+      "covered": true,
+      "note": "Quyết định PO 02/10/2026: run Completed"
+    },
+    {
+      "feature_id": "send-time-suppression-check",
+      "layer": "portal",
+      "role": "unspecified",
+      "state": "segment count / preview có contact bị suppress",
+      "environment": "documented",
+      "covered": true,
+      "note": "Rule đã chốt; danh sách màn chưa đủ"
+    },
+    {
+      "feature_id": "send-time-suppression-check",
+      "layer": "portal",
+      "role": "unspecified",
+      "state": "màn Contacts có contact bị suppress",
+      "environment": "documented",
+      "covered": true,
+      "note": "Chỉ hiện trạng; expected chưa rõ"
+    },
+    {
+      "feature_id": "send-time-suppression-check",
+      "layer": "backend",
+      "role": "system",
+      "state": "suppress sau khi chốt danh sách người nhận",
+      "environment": "documented",
+      "covered": false,
+      "note": "Thời điểm chốt chưa rõ"
+    },
+    {
+      "feature_id": "send-time-suppression-check",
+      "layer": "backend",
+      "role": "system",
+      "state": "địa chỉ biến thể (hoa / thường, plus)",
+      "environment": "documented",
+      "covered": false,
+      "note": "Chưa mô tả"
+    }
+  ],
+  "profile_conflicts": [],
+  "profile_relationships": [
+    {
+      "from": "send-time-suppression-check",
+      "to": "bounce-complaint-suppression",
+      "relation": "READS_LEDGER_FROM",
+      "kb_refs": [
+        "KB-045",
+        "KB-029"
+      ]
+    },
+    {
+      "from": "send-time-suppression-check",
+      "to": "unsubscribe-handling",
+      "relation": "READS_LEDGER_FROM",
+      "kb_refs": [
+        "KB-045",
+        "KB-076"
+      ]
+    },
+    {
+      "from": "send-time-suppression-check",
+      "to": "suppression-list-management",
+      "relation": "SHARES_LEDGERS_WITH",
+      "kb_refs": [
+        "KB-089"
+      ]
+    }
+  ]
+}

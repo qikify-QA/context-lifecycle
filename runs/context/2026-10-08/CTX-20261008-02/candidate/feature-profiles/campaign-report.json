@@ -1,0 +1,1522 @@
+{
+  "schema_version": "1.0",
+  "artifact_type": "FeatureProfileCandidate",
+  "artifact_id": "ART-FEATURE-PROFILE-campaign-report-CTX-20261008-02",
+  "workflow_id": "CTX-20261008-02",
+  "producer": "feature-profile-builder",
+  "source_refs": [
+    "candidate/product-kb/campaign-report.json",
+    "candidate/product-kb/_product-level.json",
+    "input/scope-plan.json",
+    "input/orchestrator-directives.json",
+    "input/profile-checklist-brief.md"
+  ],
+  "upstream_artifact_ids": [
+    "PKBC-CTX-20261008-02-campaigns-campaign-report",
+    "PKBC-CTX-20261008-02-_product-level"
+  ],
+  "status": "PARTIAL",
+  "confidence": "MEDIUM",
+  "observations": [
+    "Profile dựng hoàn toàn từ bộ tài liệu (bootstrap lần đầu), không có quan sát runtime trong lần chạy này; act_ids rỗng ở mọi nơi và observed_validations rỗng.",
+    "Shard feature có 72 item: CONFIRMED_EXPECTED=25, OBSERVED_CURRENT=19, OBSERVED_CURRENT/KNOWN_DEFECT=6, INFERRED=22. CE nằm ở confirmed_rules, OBSERVED ở observed_behavior (KNOWN_DEFECT gắn status riêng), INFERRED ở risks; không trộn.",
+    "Object campaigns không có shard object-level riêng; kb_refs chỉ trỏ tới item của object campaigns (KB-xxx) hoặc product-level (KB-P-xxx).",
+    "feature_id dùng giá trị feature_key như toàn bộ KB của feature; chưa có mã FEAT dạng số được cấp."
+  ],
+  "assumptions": [],
+  "unknowns": [
+    "Click vào link `{{preferences_url}}` có bị loại khỏi Click rate không (Epic Jira MTRO-16 nói có, caveat trên report chỉ nêu link unsubscribe)?",
+    "Lọc bot có áp cho Total opens / Total clicks hay chỉ cho số unique? Event trước 07/08/2026 (chưa có cờ bot) được xử lý thế nào?",
+    "Bấm thẻ metric trên report thì kỳ vọng xảy ra gì (chỉ tooltip theo Jira MTRO-31, hay chuyển tab)? Staging 29/09 và 01/10/2026 ghi hai hành vi khác nhau.",
+    "PO/Dev xác nhận preview nội dung đã gửi hiện merge tag thô và không xem được bản từng người nhận là giới hạn có chủ ý?",
+    "Người nhận campaign Sent 30/09/2026 (lưu merge tag một ngoặc) thực nhận gì: tên có được thay không, link Huỷ đăng ký có trỏ tới trang unsubscribe thật không?",
+    "Campaign ở trạng thái Running / Partly sent / Cancelled / Failed có mở được report không, report hiển thị gì, và thẻ Sent to hiện dạng \"so far, of …\" khi nào?",
+    "Campaign gửi từ 09/09/2026 trở về trước hiện `—` là thiết kế hay do chưa backfill? Có kế hoạch backfill không?",
+    "Khi chưa có số liệu, report phải hiện `—` hay `0`? Report Draft hiện `—` và `GET /campaigns/{id}/broadcast` của Draft trả 404 thay vì 6 số 0 là thiết kế hay lỗi?",
+    "Campaign Draft có được phép vào trang `/report` không (hiện mở thẳng URL vẫn vào được bố cục 4 tab cũ)?",
+    "Report campaign Sent bỏ tab Recipients / Content / Settings và khối \"What recipients saw\" là chủ ý hay tạm ẩn? Danh sách người nhận và cảnh báo gửi qua shared host của campaign Sent xem ở đâu?",
+    "Mở report với id campaign không tồn tại hiện khung trống thay vì \"Not Found.\" như module khác: có cần thêm trạng thái not-found không?",
+    "Có trang giao diện `/analytics` (analytics global) không, hay analytics global chỉ có ở mức API?",
+    "Contact bị suppressed trong một campaign có được đếm vào Bounce / Spam complaint và vào mẫu số Sent của report campaign không?",
+    "Danh sách đủ 10 nhãn lý do bounce là gì, UI hiện rate thế nào khi mẫu số bằng 0, UI có tách hard / soft bounce không, và ở report từng campaign resubscribe có làm giảm số Unsubscribe không?",
+    "Hợp đồng đầy đủ của Analytics API và MCP report là gì: method / route của list campaigns và `/campaigns/{id}/broadcast`, shape response report, tên tham số khoảng thời gian và mặc định, tên hai sổ ledger dùng để COUNT, tool MCP (Jira MTRO-60 trống)?",
+    "Role nào (Owner, Admin, role thứ 3 đang tranh chấp tên Member hay Marketer/Editor, custom role) được tạo, Save, Send, Schedule, xoá campaign và xem report; quyền có được chặn ở API không?"
+  ],
+  "conflicts": [],
+  "blocking_issues": [],
+  "payload": {
+    "feature_profiles": [
+      {
+        "feature_id": "campaign-report",
+        "feature_key": "campaign-report",
+        "name": "Campaign report và Analytics API",
+        "user_goal": "Người dùng xem kết quả của campaign đã gửi (delivery, open, click, unsubscribe, audience và nội dung đã gửi) với số liệu được định nghĩa thống nhất, và hệ thống bên ngoài lấy được cùng số liệu qua Analytics API.",
+        "stable_since_version": "v1",
+        "actors": [
+          {
+            "role": "unspecified (người dùng workspace thao tác trên Campaigns)",
+            "permission_observed": "Tài liệu Campaigns không gán role cho bất kỳ thao tác nào. Mô hình role chung có Owner, Admin, một role thứ 3 (UI staging gọi là Member, tên chính thức đang tranh chấp) và custom role; ma trận quyền chi tiết chưa chốt. Router của app không khai báo phân quyền theo role nên mọi chặn quyền phải nằm ở API (suy luận từ bundle). Hiện trạng staging chỉ được khảo sát bằng Owner.",
+            "kb_refs": [
+              "KB-P-051",
+              "KB-P-052",
+              "KB-P-036"
+            ]
+          },
+          {
+            "role": "api-caller (hệ thống bên ngoài dùng API key)",
+            "permission_observed": "Scope `campaigns` cần quyền `campaigns:read`, scope `automations` cần `automations:read`, scope `all` cần cả hai; key thiếu quyền bị trả 403.",
+            "kb_refs": [
+              "KB-186",
+              "KB-182"
+            ]
+          },
+          {
+            "role": "recipient (người nhận campaign)",
+            "permission_observed": "Không thao tác trên report; trải nghiệm người nhận của campaign Sent 30/09/2026 (merge tag một ngoặc) chưa được quan sát.",
+            "kb_refs": [
+              "KB-154"
+            ]
+          }
+        ],
+        "entry_points": [
+          {
+            "path": "Click dòng campaign Sent / Running ở danh sách → `/campaigns/:id/report`",
+            "precondition": "Campaign đã gửi hoặc đang chạy.",
+            "kb_refs": [
+              "KB-017",
+              "KB-119"
+            ]
+          },
+          {
+            "path": "Tự chuyển tới report sau Send now",
+            "precondition": "Vừa gửi campaign.",
+            "kb_refs": [
+              "KB-104"
+            ]
+          },
+          {
+            "path": "Mở thẳng URL `/campaigns/<id>/report` (kể cả Draft hoặc id không tồn tại)",
+            "precondition": "Đã đăng nhập app workspace.",
+            "kb_refs": [
+              "KB-170",
+              "KB-176"
+            ]
+          },
+          {
+            "path": "API `GET /api/teams/{slug}/campaigns/{id}/report` và `GET /api/teams/{slug}/analytics?scope=…`",
+            "precondition": "API key có scope đọc tương ứng.",
+            "kb_refs": [
+              "KB-180",
+              "KB-182",
+              "KB-186"
+            ]
+          }
+        ],
+        "capabilities": [
+          {
+            "name": "Định nghĩa số liệu delivery / open / click / unsubscribe",
+            "description": "Định nghĩa thống nhất cho Sent, Delivery rate, Bounce rate, Open rate, Click rate, Click-to-open, Spam complaint rate, Unsubscribe rate; đếm theo unique contact (trừ total opens/clicks), lọc bot, loại link unsubscribe khỏi click, rate tính theo ngày gửi, cộng số đếm trước khi chia. Dùng chung cho Automation Reports.",
+            "kb_refs": [
+              "KB-120",
+              "KB-121",
+              "KB-122",
+              "KB-123",
+              "KB-124",
+              "KB-125",
+              "KB-126",
+              "KB-127",
+              "KB-128",
+              "KB-129",
+              "KB-132",
+              "KB-139",
+              "KB-140",
+              "KB-190"
+            ],
+            "act_ids": []
+          },
+          {
+            "name": "Nguồn và cách tính số liệu",
+            "description": "Sáu số raw count tính bằng COUNT tại thời điểm đọc, không counter, không cache; FE tự tính rate và chặn chia 0. Breakdown %, suppressed-profiles, performance theo segment, inbox placement, heatmap và opt-out theo topic ngoài phạm vi hiện tại.",
+            "kb_refs": [
+              "KB-133",
+              "KB-134",
+              "KB-135",
+              "KB-136",
+              "KB-137",
+              "KB-138"
+            ],
+            "act_ids": []
+          },
+          {
+            "name": "Xem report campaign đã gửi",
+            "description": "Header \"Sent on … · as of …\", 5 tab Overview / Deliverability / Opens / Clicks / Unsubscribe với các thẻ metric, tooltip, bảng Bounce reasons và Clicks by link, caveat về bot / Gmail. Headline Opens dùng số all-time trên biểu đồ 24h là hiện tượng đã biết.",
+            "kb_refs": [
+              "KB-119",
+              "KB-141",
+              "KB-142",
+              "KB-143",
+              "KB-144",
+              "KB-145",
+              "KB-155",
+              "KB-156",
+              "KB-157",
+              "KB-158",
+              "KB-159",
+              "KB-160",
+              "KB-161",
+              "KB-162",
+              "KB-163"
+            ],
+            "act_ids": []
+          },
+          {
+            "name": "Audience và nội dung đã gửi",
+            "description": "Khối Campaign audience hiện snapshot điều kiện segment lúc gửi; báo segment đã bị xoá / đã sửa; khối Campaign content và dialog preview hiện email đúng như đã submit, merge tag ở dạng thô. Campaign Sent 30/09/2026 lưu merge tag một ngoặc là trạng thái lệch đã biết.",
+            "kb_refs": [
+              "KB-146",
+              "KB-147",
+              "KB-148",
+              "KB-149",
+              "KB-150",
+              "KB-151",
+              "KB-152",
+              "KB-153",
+              "KB-154"
+            ],
+            "act_ids": []
+          },
+          {
+            "name": "Report khi chưa có số liệu hoặc campaign chưa gửi xong",
+            "description": "Campaign gửi trước pipeline số liệu hiện `—`; report campaign Draft vào được bằng URL trực tiếp với bố cục 4 tab cũ; id không tồn tại hiện khung trống; report campaign Sent không còn tab Recipients / Content / Settings; UI campaign đang gửi chỉ biết qua bundle. Nhiều lỗi `—` / 404 đã biết đang chờ PO/Dev chốt.",
+            "kb_refs": [
+              "KB-164",
+              "KB-165",
+              "KB-166",
+              "KB-167",
+              "KB-168",
+              "KB-169",
+              "KB-170",
+              "KB-171",
+              "KB-172",
+              "KB-173",
+              "KB-174",
+              "KB-175",
+              "KB-176",
+              "KB-177",
+              "KB-178",
+              "KB-179"
+            ],
+            "act_ids": []
+          },
+          {
+            "name": "Analytics API cho campaign",
+            "description": "Endpoint report của một campaign (campaign chưa gửi trả 404), object `report` trong danh sách campaign, endpoint `broadcast`; thời gian phải UTC+0, chỉ trả số đếm kèm `as_of`, phân quyền theo scope API key.",
+            "kb_refs": [
+              "KB-180",
+              "KB-181",
+              "KB-183",
+              "KB-184",
+              "KB-186"
+            ],
+            "act_ids": []
+          },
+          {
+            "name": "Analytics global và MCP",
+            "description": "Endpoint analytics với `scope` all/campaigns/automations, không tính transactional, chỉ số đếm, unsubscribe theo ngày event, totals có thể nhỏ hơn tổng sources; route UI `/analytics` hiện trang trắng; MCP report chưa có mô tả.",
+            "kb_refs": [
+              "KB-130",
+              "KB-131",
+              "KB-182",
+              "KB-185",
+              "KB-187",
+              "KB-188",
+              "KB-189"
+            ],
+            "act_ids": []
+          }
+        ],
+        "state_transitions": [
+          {
+            "from": "campaign chưa gửi xong",
+            "to": "report đầy đủ 5 tab",
+            "trigger": "Campaign được gửi xong",
+            "condition": "Tab Overview của campaign chưa gửi xong ghi report chi tiết chỉ hiện khi đã gửi hết (hiện trạng staging 01/10)",
+            "knowledge_kind": "OBSERVED_CURRENT",
+            "kb_refs": [
+              "KB-171",
+              "KB-142"
+            ]
+          },
+          {
+            "from": "khối Campaign audience hiện snapshot segment",
+            "to": "báo \"Segment deleted since this send\"",
+            "trigger": "Segment của campaign bị xoá sau khi gửi",
+            "condition": "Quyết định PO/BA 02/10/2026; chưa thấy trên UI",
+            "knowledge_kind": "CONFIRMED_EXPECTED",
+            "kb_refs": [
+              "KB-147",
+              "KB-114"
+            ]
+          },
+          {
+            "from": "khối Campaign audience hiện snapshot segment",
+            "to": "báo \"Segment edited since this send —\" kèm link xem bản hiện tại",
+            "trigger": "Segment bị sửa sau khi gửi",
+            "condition": "Chỉ từ chuỗi i18n, chưa đối chiếu UI",
+            "knowledge_kind": "INFERRED",
+            "kb_refs": [
+              "KB-148"
+            ]
+          }
+        ],
+        "confirmed_rules": [
+          {
+            "statement": "Theo Epic Jira MTRO-16 (định nghĩa metric, tóm tắt trong QA KB Mailtro \"Campaign report & Analytics API\" v1, đọc 07/10/2026), Sent là số mail SES đã nhận; Delivery rate = delivered ÷ sent; Bounce rate = bounce ÷ sent, tách riêng hard bounce và soft bounce.",
+            "knowledge_kind": "CONFIRMED_EXPECTED",
+            "confidence": "MEDIUM",
+            "kb_refs": [
+              "KB-120"
+            ]
+          },
+          {
+            "statement": "Theo Epic Jira MTRO-16 (định nghĩa metric, tóm tắt trong QA KB Mailtro \"Campaign report & Analytics API\" v1, đọc 07/10/2026), Open rate = số người mở (bỏ bot) ÷ delivered; Click rate = số người click (bỏ bot) ÷ delivered; Click-to-open = số người click ÷ số người mở.",
+            "knowledge_kind": "CONFIRMED_EXPECTED",
+            "confidence": "MEDIUM",
+            "kb_refs": [
+              "KB-121"
+            ]
+          },
+          {
+            "statement": "Theo Epic Jira MTRO-16 (định nghĩa metric, tóm tắt trong QA KB Mailtro \"Campaign report & Analytics API\" v1, đọc 07/10/2026), Spam complaint rate = complaint ÷ delivered và Unsubscribe rate = unsubscribe ÷ delivered.",
+            "knowledge_kind": "CONFIRMED_EXPECTED",
+            "confidence": "MEDIUM",
+            "kb_refs": [
+              "KB-122"
+            ],
+            "tags": [
+              "unsubscribe-consent"
+            ]
+          },
+          {
+            "statement": "Theo Epic Jira MTRO-16 (định nghĩa metric, tóm tắt trong QA KB Mailtro \"Campaign report & Analytics API\" v1, đọc 07/10/2026), click vào link unsubscribe không được tính vào Click rate; caveat i18n trên report (\"Bot clicks and unsubscribe links are excluded.\") khớp. Phần link preference xem item riêng (đang chờ xác nhận).",
+            "knowledge_kind": "CONFIRMED_EXPECTED",
+            "confidence": "MEDIUM",
+            "kb_refs": [
+              "KB-123"
+            ],
+            "tags": [
+              "unsubscribe-consent"
+            ]
+          },
+          {
+            "statement": "Theo quyết định PO 18/09/2026 (comment Jira MTRO-16, MTRO-94), mọi số liệu report đếm theo người (unique contact), trừ `total_opens` và `total_clicks`; Click rate tính theo người; report có cả total clicks và unique clicks.",
+            "knowledge_kind": "CONFIRMED_EXPECTED",
+            "confidence": "MEDIUM",
+            "kb_refs": [
+              "KB-125"
+            ]
+          },
+          {
+            "statement": "Theo quyết định PO 17/09/2026 (comment Jira MTRO-16), trong analytics mỗi link trong email tương ứng một tag.",
+            "knowledge_kind": "CONFIRMED_EXPECTED",
+            "confidence": "MEDIUM",
+            "kb_refs": [
+              "KB-126"
+            ]
+          },
+          {
+            "statement": "Theo quyết định Dev BE 24/09/2026 (comment Jira MTRO-16), bảng Clicks by link gộp theo tag; link không có tag thì gộp theo link gốc trong template, và link có merge tag (vd `?ref={{contact_id}}`) không bị tách thành nhiều dòng.",
+            "knowledge_kind": "CONFIRMED_EXPECTED",
+            "confidence": "MEDIUM",
+            "kb_refs": [
+              "KB-127"
+            ],
+            "tags": [
+              "merge-tag-syntax"
+            ]
+          },
+          {
+            "statement": "Theo quyết định PO 17/09/2026 (comment Jira MTRO-16), số Unsubscribe của campaign chỉ tính unsubscribe global gắn với campaign có link; bỏ một topic (opt-out một topic) không được tính là unsubscribe.",
+            "knowledge_kind": "CONFIRMED_EXPECTED",
+            "confidence": "MEDIUM",
+            "kb_refs": [
+              "KB-128"
+            ],
+            "tags": [
+              "unsubscribe-consent"
+            ]
+          },
+          {
+            "statement": "Theo quyết định PO 21/09/2026 (comment Jira MTRO-16), rate được tính theo ngày gửi.",
+            "knowledge_kind": "CONFIRMED_EXPECTED",
+            "confidence": "MEDIUM",
+            "kb_refs": [
+              "KB-129"
+            ]
+          },
+          {
+            "statement": "Theo quyết định PO 21/09/2026 (comment Jira MTRO-16), trang analytics global chỉ hiện số đếm, không hiện rate.",
+            "knowledge_kind": "CONFIRMED_EXPECTED",
+            "confidence": "MEDIUM",
+            "kb_refs": [
+              "KB-130"
+            ]
+          },
+          {
+            "statement": "Theo Epic Jira MTRO-16 (tóm tắt trong QA KB Mailtro \"Campaign report & Analytics API\" v1, đọc 07/10/2026), trang analytics global đếm unsubscribe theo ngày xảy ra event, và contact resubscribe không làm trừ số unsubscribe đã đếm.",
+            "knowledge_kind": "CONFIRMED_EXPECTED",
+            "confidence": "MEDIUM",
+            "kb_refs": [
+              "KB-131"
+            ],
+            "tags": [
+              "unsubscribe-consent"
+            ]
+          },
+          {
+            "statement": "Theo Epic Jira MTRO-16 (tóm tắt trong QA KB Mailtro \"Campaign report & Analytics API\" v1, đọc 07/10/2026), khi gộp số liệu nhiều cấp thì cộng số đếm trước rồi mới chia để ra rate, và rate luôn được hiển thị kèm số đếm.",
+            "knowledge_kind": "CONFIRMED_EXPECTED",
+            "confidence": "MEDIUM",
+            "kb_refs": [
+              "KB-132"
+            ]
+          },
+          {
+            "statement": "Theo quyết định Dev BE 18/09/2026, PO đồng ý (comment Jira MTRO-16), report không làm performance theo segment (campaign chỉ có một segment), inbox placement (cần bên thứ ba), click heatmap và số opt-out theo topic; Decision log Mailtro ghi ba mục đầu là hoãn.",
+            "knowledge_kind": "CONFIRMED_EXPECTED",
+            "confidence": "MEDIUM",
+            "kb_refs": [
+              "KB-133"
+            ]
+          },
+          {
+            "statement": "Theo Jira MTRO-64 (B6) và MTRO-82 (tóm tắt trong QA business rule Mailtro, cập nhật 07/09/2026), `CampaignBroadcastResource` trả 6 số raw count: `delivered`, `bounced`, `complained`, `unsubscribed`, `opens`, `clicks`.",
+            "knowledge_kind": "CONFIRMED_EXPECTED",
+            "confidence": "MEDIUM",
+            "kb_refs": [
+              "KB-135"
+            ]
+          },
+          {
+            "statement": "Theo Jira MTRO-64 (B6) và MTRO-82 (tóm tắt trong QA business rule Mailtro, cập nhật 07/09/2026), sáu số delivery được tính bằng COUNT trên `ses_events` và hai sổ ledger tại thời điểm đọc, không có cột counter, không cache.",
+            "knowledge_kind": "CONFIRMED_EXPECTED",
+            "confidence": "MEDIUM",
+            "kb_refs": [
+              "KB-136"
+            ],
+            "tags": [
+              "suppression"
+            ]
+          },
+          {
+            "statement": "Theo Jira MTRO-64 (B6) và MTRO-82 (tóm tắt trong QA business rule Mailtro, cập nhật 07/09/2026), frontend tự tính tỉ lệ từ các số raw count; Jira MTRO-94 cũng ghi FE tính rate từ số đếm API trả về và chặn phép chia cho 0.",
+            "knowledge_kind": "CONFIRMED_EXPECTED",
+            "confidence": "MEDIUM",
+            "kb_refs": [
+              "KB-137"
+            ]
+          },
+          {
+            "statement": "Theo Epic Jira MTRO-16 (tóm tắt trong QA KB Mailtro \"Campaign report & Analytics API\" v1, đọc 07/10/2026), SES gắn cờ `isBotEvent` (Likely / Unlikely) cho event từ ngày 07/08/2026, và việc lọc bot dựa trên trường `is_bot_event`.",
+            "knowledge_kind": "CONFIRMED_EXPECTED",
+            "confidence": "MEDIUM",
+            "kb_refs": [
+              "KB-139"
+            ]
+          },
+          {
+            "statement": "Theo Jira MTRO-31 (Story, QA Review; tóm tắt trong QA KB Mailtro \"Campaign report & Analytics API\" v1, đọc 07/10/2026), thẻ metric có chi tiết hiện tooltip khi hover hoặc focus; staging 01/10/2026 khớp.",
+            "knowledge_kind": "CONFIRMED_EXPECTED",
+            "confidence": "MEDIUM",
+            "kb_refs": [
+              "KB-143"
+            ]
+          },
+          {
+            "statement": "Theo quyết định PO/BA 02/10/2026 (task Testlane MTRO-011 BR-15, ghi trong QA KB Mailtro \"Feature map\" v1), khi segment của campaign đã bị xoá, report hiện \"Segment deleted since this send\"; chuỗi i18n 01/10/2026 (\"Segment deleted since this send.\") khớp, chưa thấy trên UI.",
+            "knowledge_kind": "CONFIRMED_EXPECTED",
+            "confidence": "MEDIUM",
+            "kb_refs": [
+              "KB-147"
+            ],
+            "tags": [
+              "data-deletion"
+            ]
+          },
+          {
+            "statement": "Theo Jira MTRO-94 ([BE] Analytic, QA Review; tóm tắt trong QA KB Mailtro \"Campaign report & Analytics API\" v1, đọc 07/10/2026), có endpoint `GET /api/teams/{slug}/campaigns/{id}/report` trả report của một campaign; gọi report của campaign chưa gửi trả 404.",
+            "knowledge_kind": "CONFIRMED_EXPECTED",
+            "confidence": "MEDIUM",
+            "kb_refs": [
+              "KB-180"
+            ]
+          },
+          {
+            "statement": "Theo Jira MTRO-94 (tóm tắt trong QA KB Mailtro \"Campaign report & Analytics API\" v1, đọc 07/10/2026), response danh sách campaigns có object `report: {sent, delivered, unique_opens}`, và endpoint `/campaigns/{id}/broadcast` trả segment, template và snapshot rules của lần gửi.",
+            "knowledge_kind": "CONFIRMED_EXPECTED",
+            "confidence": "MEDIUM",
+            "kb_refs": [
+              "KB-181"
+            ]
+          },
+          {
+            "statement": "Theo Jira MTRO-94 (tóm tắt trong QA KB Mailtro \"Campaign report & Analytics API\" v1, đọc 07/10/2026), có endpoint `GET /api/teams/{slug}/analytics` với tham số `scope` nhận một trong ba giá trị `all`, `campaigns`, `automations`; trang analytics global không tính email transactional.",
+            "knowledge_kind": "CONFIRMED_EXPECTED",
+            "confidence": "MEDIUM",
+            "kb_refs": [
+              "KB-182"
+            ]
+          },
+          {
+            "statement": "Theo Jira MTRO-94 (tóm tắt trong QA KB Mailtro \"Campaign report & Analytics API\" v1, đọc 07/10/2026), thời gian gửi lên API analytics phải luôn là UTC+0 dạng `2026-10-01T07:00:00` (có hoặc không có hậu tố `Z`); thời gian kèm offset, chỉ có ngày hoặc ở dạng tương đối bị trả 422.",
+            "knowledge_kind": "CONFIRMED_EXPECTED",
+            "confidence": "MEDIUM",
+            "kb_refs": [
+              "KB-183"
+            ]
+          },
+          {
+            "statement": "Theo Jira MTRO-94 (tóm tắt trong QA KB Mailtro \"Campaign report & Analytics API\" v1, đọc 07/10/2026), API analytics chỉ trả số đếm (không trả rate); vì số liệu tăng dần theo thời gian nên response luôn có trường `as_of` và không cache.",
+            "knowledge_kind": "CONFIRMED_EXPECTED",
+            "confidence": "MEDIUM",
+            "kb_refs": [
+              "KB-184"
+            ]
+          },
+          {
+            "statement": "Theo Jira MTRO-94 (tóm tắt trong QA KB Mailtro \"Campaign report & Analytics API\" v1, đọc 07/10/2026), gọi analytics với scope `campaigns` cần quyền `campaigns:read`, scope `automations` cần `automations:read`, scope `all` cần cả hai; key thiếu quyền tương ứng bị trả 403.",
+            "knowledge_kind": "CONFIRMED_EXPECTED",
+            "confidence": "MEDIUM",
+            "kb_refs": [
+              "KB-186"
+            ],
+            "tags": [
+              "permission"
+            ]
+          }
+        ],
+        "observed_behavior": [
+          {
+            "statement": "Trên staging (khảo sát 01/10/2026), report của một campaign nằm ở route `/campaigns/:id/report`.",
+            "knowledge_kind": "OBSERVED_CURRENT",
+            "confidence": "MEDIUM",
+            "kb_refs": [
+              "KB-119"
+            ],
+            "status": "CURRENT_STATE"
+          },
+          {
+            "statement": "Trên staging (khảo sát 01/10/2026), header report campaign Sent gồm h1 tên campaign và dòng dạng \"Sent on <ngày giờ gửi> · as of <giờ>\"; không có subtitle \"Results for this campaign…\" và không có nút `Duplicate` / `Stop send`.",
+            "knowledge_kind": "OBSERVED_CURRENT",
+            "confidence": "MEDIUM",
+            "kb_refs": [
+              "KB-141"
+            ],
+            "status": "CURRENT_STATE"
+          },
+          {
+            "statement": "Trên staging (khảo sát 01/10/2026), report campaign Sent có 5 tab `Overview`, `Deliverability`, `Opens`, `Clicks`, `Unsubscribe`, mặc định mở `Overview`; bố cục 4 tab ghi nhận 16/09 nay chỉ còn ở report của campaign chưa gửi xong.",
+            "knowledge_kind": "OBSERVED_CURRENT",
+            "confidence": "MEDIUM",
+            "kb_refs": [
+              "KB-142"
+            ],
+            "status": "CURRENT_STATE"
+          },
+          {
+            "statement": "Trên staging (khảo sát 01/10/2026), tab Overview có khối `Campaign performance` gồm 4 thẻ `Delivery rate`, `Open rate`, `Click rate`, `Unsubscribe rate`.",
+            "knowledge_kind": "OBSERVED_CURRENT",
+            "confidence": "MEDIUM",
+            "kb_refs": [
+              "KB-144"
+            ],
+            "status": "CURRENT_STATE"
+          },
+          {
+            "statement": "Trên staging, khảo sát 01/10/2026 ghi ba thẻ `Delivery rate`, `Open rate`, `Click rate` là nút bấm được còn `Unsubscribe rate` không bấm được, trong khi lượt 29/09/2026 ghi bấm vào thẻ metric không mở gì; tài liệu không nêu bấm thẻ thì kỳ vọng xảy ra điều gì.",
+            "knowledge_kind": "OBSERVED_CURRENT",
+            "confidence": "MEDIUM",
+            "kb_refs": [
+              "KB-145"
+            ],
+            "status": "CURRENT_STATE"
+          },
+          {
+            "statement": "Trên staging (khảo sát 01/10/2026), khối `Campaign audience` của report hiện tên segment và điều kiện ở dạng read-only (field, operator, value đều disabled) theo snapshot lúc bắt đầu gửi (`segment_rules_snapshot`), không phải segment hiện tại.",
+            "knowledge_kind": "OBSERVED_CURRENT",
+            "confidence": "MEDIUM",
+            "kb_refs": [
+              "KB-146"
+            ],
+            "status": "CURRENT_STATE"
+          },
+          {
+            "statement": "Hiện tượng đã biết (Jira MTRO-96, Task To Do, không report bug lại): audience card của campaign có field đã bị xoá khỏi catalog báo \"too complex\" thay vì \"field removed\"; cần đổi copy. Đây là hành vi sai đang tồn tại, không phải hành vi đúng.",
+            "knowledge_kind": "OBSERVED_CURRENT",
+            "confidence": "LOW",
+            "kb_refs": [
+              "KB-149"
+            ],
+            "status": "KNOWN_DEFECT"
+          },
+          {
+            "statement": "Trên staging (khảo sát 01/10/2026), khối `Campaign content` của report có iframe `Preview the email` với \"Click to preview\" và các trường `Subject`, `Preview text` (hiện `Not set` khi trống), `From`, `Reply-to` (`Same as sender (…)`).",
+            "knowledge_kind": "OBSERVED_CURRENT",
+            "confidence": "MEDIUM",
+            "kb_refs": [
+              "KB-150"
+            ],
+            "status": "CURRENT_STATE"
+          },
+          {
+            "statement": "Trên staging (khảo sát 01/10/2026), dialog preview trên report ghi \"This is the email exactly as it was submitted, kept separately from the design — so editing or deleting the template afterwards does not change it.\" và \"Merge tags appear as written, because what each recipient received is not stored per address.\"",
+            "knowledge_kind": "OBSERVED_CURRENT",
+            "confidence": "MEDIUM",
+            "kb_refs": [
+              "KB-151"
+            ],
+            "tags": [
+              "merge-tag-syntax"
+            ],
+            "status": "CURRENT_STATE"
+          },
+          {
+            "statement": "Trên staging (Inventory 01/10/2026), một campaign Sent ngày 30/09/2026 lưu merge tag dạng một ngoặc (`{contact.first_name}`, `{contact.email}`, `{preferences_url}`, `{unsubscribe_url}`) và dialog preview hiện các tag thô này; tài liệu còn chờ Dev xác nhận người nhận thực nhận gì. Đây là trạng thái lệch đang tồn tại, không phải hành vi đúng.",
+            "knowledge_kind": "OBSERVED_CURRENT",
+            "confidence": "LOW",
+            "kb_refs": [
+              "KB-153"
+            ],
+            "tags": [
+              "merge-tag-syntax",
+              "unsubscribe-consent"
+            ],
+            "status": "KNOWN_DEFECT"
+          },
+          {
+            "statement": "Trên staging (khảo sát 01/10/2026), tab Deliverability có các thẻ `Sent to` (\"of N recipients\"), `Delivered` (vd \"100% of 3 sent\"), `Delivery rate`, `Bounce`, và bảng `Bounce reasons` hiện `No bounces recorded.` khi không có bounce.",
+            "knowledge_kind": "OBSERVED_CURRENT",
+            "confidence": "MEDIUM",
+            "kb_refs": [
+              "KB-155"
+            ],
+            "status": "CURRENT_STATE"
+          },
+          {
+            "statement": "Trên staging (khảo sát 01/10/2026, kèm chuỗi i18n), thẻ Bounce ghi \"Hard bounces leave the list automatically.\" (địa chỉ hard bounce tự rời danh sách gửi).",
+            "knowledge_kind": "OBSERVED_CURRENT",
+            "confidence": "MEDIUM",
+            "kb_refs": [
+              "KB-157"
+            ],
+            "tags": [
+              "suppression"
+            ],
+            "status": "CURRENT_STATE"
+          },
+          {
+            "statement": "Trên staging (khảo sát 01/10/2026), tab Opens có thẻ `Total opens` (\"every open, the same person counted again\"), `Unique opens` (\"people who opened\"), `Open rate` (dạng \"3 of 3 delivered\"), và \"Opens over time (first 24h)\" gồm biểu đồ cùng bảng 8 khối 3 giờ.",
+            "knowledge_kind": "OBSERVED_CURRENT",
+            "confidence": "MEDIUM",
+            "kb_refs": [
+              "KB-159"
+            ],
+            "status": "CURRENT_STATE"
+          },
+          {
+            "statement": "Hiện tượng đã biết (Jira MTRO-97, Task To Do, chưa chốt cách sửa): dòng headline \"{total_opens} opens from {unique_opens} people\" của biểu đồ Opens dùng số all-time trong khi các cột chỉ thể hiện 24 giờ đầu. Đây là hành vi lệch đang tồn tại, không phải hành vi đúng.",
+            "knowledge_kind": "OBSERVED_CURRENT",
+            "confidence": "LOW",
+            "kb_refs": [
+              "KB-160"
+            ],
+            "status": "KNOWN_DEFECT"
+          },
+          {
+            "statement": "Trên staging (khảo sát 01/10/2026), tab Clicks có thẻ `Total clicks`, `Unique clicks`, `Click rate` (dạng \"1 of 3 delivered\"), `Click-to-open` (dạng \"1 of 3 openers\") và bảng `Clicks by link` với cột Link, Unique clicks, Total clicks.",
+            "knowledge_kind": "OBSERVED_CURRENT",
+            "confidence": "MEDIUM",
+            "kb_refs": [
+              "KB-161"
+            ],
+            "status": "CURRENT_STATE"
+          },
+          {
+            "statement": "Trên staging (khảo sát 01/10/2026), tab Unsubscribe có thẻ `Unsubscribe` (\"left all email\"), `Unsubscribe rate`, `Spam complaint` (\"reported as spam\") và `Spam complaint rate`.",
+            "knowledge_kind": "OBSERVED_CURRENT",
+            "confidence": "MEDIUM",
+            "kb_refs": [
+              "KB-162"
+            ],
+            "tags": [
+              "unsubscribe-consent"
+            ],
+            "status": "CURRENT_STATE"
+          },
+          {
+            "statement": "Trên staging (khảo sát 01/10/2026, task Testlane MTRO-020 BR-43), campaign gửi trước khi có pipeline số liệu (gửi ngày 09/09/2026 trở về trước) hiện `—` ở cả 4 thẻ Overview của report và ở cột Delivered / Opened của danh sách; QA KB Mailtro \"Feature map\" v1 cũng ghi quy tắc này.",
+            "knowledge_kind": "OBSERVED_CURRENT",
+            "confidence": "MEDIUM",
+            "kb_refs": [
+              "KB-164"
+            ],
+            "status": "CURRENT_STATE"
+          },
+          {
+            "statement": "Lỗi đã biết BUG-SUPP-03 theo QA KB Mailtro \"Campaign report & Analytics API\" v1 và \"Known issues\" v1: report của campaign có đủ 6 số raw vẫn hiện `—` kèm câu \"the backend records none yet\"; trạng thái chờ PO/Dev chốt. Đây là hành vi đang tồn tại được ghi là lỗi, không phải hành vi đúng.",
+            "knowledge_kind": "OBSERVED_CURRENT",
+            "confidence": "LOW",
+            "kb_refs": [
+              "KB-166"
+            ],
+            "status": "KNOWN_DEFECT"
+          },
+          {
+            "statement": "Lỗi đã ghi trong bug log suppression 08/09/2026 (QA KB Mailtro \"Suppressions\" v1 gắn mã BUG-SUPP-03): report của campaign Draft hiện `—` thay vì `0`; còn chờ PO xác nhận là thiết kế hay lỗi. Đây là hành vi đang tồn tại được ghi là lỗi, không phải hành vi đúng.",
+            "knowledge_kind": "OBSERVED_CURRENT",
+            "confidence": "LOW",
+            "kb_refs": [
+              "KB-167"
+            ],
+            "status": "KNOWN_DEFECT"
+          },
+          {
+            "statement": "Lỗi đã ghi BUG-SUPP-05 (bug log suppression 08/09/2026): campaign ở trạng thái Draft gọi `GET /campaigns/{id}/broadcast` nhận 404 thay vì 6 số 0; trạng thái chờ PO/Dev chốt là thiết kế hay lỗi. Đây là hành vi đang tồn tại được ghi là lỗi, không phải hành vi đúng.",
+            "knowledge_kind": "OBSERVED_CURRENT",
+            "confidence": "LOW",
+            "kb_refs": [
+              "KB-168"
+            ],
+            "status": "KNOWN_DEFECT"
+          },
+          {
+            "statement": "Trên staging (khảo sát 01/10/2026), mở thẳng URL `/campaigns/<id draft>/report` vẫn vào được trang report (không redirect về wizard): hiện tên, badge `Draft`, subtitle \"Results for this campaign. Only a draft can be edited — duplicate it to change anything here.\" và bố cục 4 tab cũ `Overview`, `Recipients`, `Content`, `Settings`.",
+            "knowledge_kind": "OBSERVED_CURRENT",
+            "confidence": "MEDIUM",
+            "kb_refs": [
+              "KB-170"
+            ],
+            "status": "CURRENT_STATE"
+          },
+          {
+            "statement": "Trên staging (khảo sát 01/10/2026), tab Overview của report campaign chưa gửi xong ghi \"The detailed report — delivery, opens, clicks and unsubscribes — appears once the campaign has been fully sent.\", và tab Settings có khối `Campaign settings` gồm Subject, Preview text, From, Reply-to, Created by, Sent at (`Not set`).",
+            "knowledge_kind": "OBSERVED_CURRENT",
+            "confidence": "MEDIUM",
+            "kb_refs": [
+              "KB-171"
+            ],
+            "status": "CURRENT_STATE"
+          },
+          {
+            "statement": "Trên staging (khảo sát 01/10/2026), với campaign Sent không còn chỗ xem tab `Recipients` (Handed over / Attempts / Last message), tab `Content` hay khối `What recipients saw`; ba tab Recipients / Content / Settings chỉ mất ở report campaign Sent.",
+            "knowledge_kind": "OBSERVED_CURRENT",
+            "confidence": "MEDIUM",
+            "kb_refs": [
+              "KB-174"
+            ],
+            "status": "CURRENT_STATE"
+          },
+          {
+            "statement": "Trên staging (khảo sát 01/10/2026), mở report với id campaign không tồn tại hiện khung trống (breadcrumb `Campaign report`, h1 `Campaign`, thân trống), không có thông báo `Not Found.` như các module khác; tài liệu không gọi đây là lỗi.",
+            "knowledge_kind": "OBSERVED_CURRENT",
+            "confidence": "MEDIUM",
+            "kb_refs": [
+              "KB-176"
+            ],
+            "status": "CURRENT_STATE"
+          },
+          {
+            "statement": "Trên staging (ghi trong QA KB Mailtro \"Campaign report & Analytics API\" v1, ngày khảo sát không ghi riêng), route `/analytics` hiện trang trắng.",
+            "knowledge_kind": "OBSERVED_CURRENT",
+            "confidence": "LOW",
+            "kb_refs": [
+              "KB-188"
+            ],
+            "status": "CURRENT_STATE"
+          }
+        ],
+        "observed_validations": [],
+        "permissions": [
+          {
+            "statement": "Mailtro có 3 role chuẩn (Owner, Admin, role thứ 3 đang tranh chấp tên) cộng custom role; ma trận quyền chi tiết cho Campaigns chưa được chốt nên profile này không gán quyền theo role cho thao tác nào.",
+            "knowledge_kind": "CONFIRMED_EXPECTED",
+            "kb_refs": [
+              "KB-P-051"
+            ]
+          },
+          {
+            "statement": "Router front-end không có meta phân quyền theo role; việc chặn quyền (nếu có) phải nằm ở API. Đây là suy luận từ bundle, chưa kiểm trên staging.",
+            "knowledge_kind": "INFERRED",
+            "kb_refs": [
+              "KB-P-052"
+            ]
+          },
+          {
+            "statement": "Analytics API phân quyền theo scope API key: `campaigns:read`, `automations:read`, cả hai cho scope `all`; thiếu quyền trả 403.",
+            "knowledge_kind": "CONFIRMED_EXPECTED",
+            "kb_refs": [
+              "KB-186"
+            ]
+          }
+        ],
+        "surface_mapping": {
+          "portal": [
+            {
+              "item": "Trang `/campaigns/:id/report`: header, 5 tab của campaign Sent; bố cục 4 tab cũ của campaign chưa gửi",
+              "kb_refs": [
+                "KB-119",
+                "KB-141",
+                "KB-142",
+                "KB-170",
+                "KB-171"
+              ]
+            },
+            {
+              "item": "Thẻ metric + tooltip, bảng Bounce reasons, Opens over time, Clicks by link",
+              "kb_refs": [
+                "KB-143",
+                "KB-144",
+                "KB-155",
+                "KB-159",
+                "KB-161",
+                "KB-162"
+              ]
+            },
+            {
+              "item": "Khối Campaign audience, Campaign content, dialog preview nội dung đã gửi",
+              "kb_refs": [
+                "KB-146",
+                "KB-150",
+                "KB-151"
+              ]
+            },
+            {
+              "item": "Route `/analytics` (trang trắng)",
+              "kb_refs": [
+                "KB-188",
+                "KB-P-061",
+                "KB-P-049"
+              ]
+            }
+          ],
+          "storefront": [],
+          "api": [
+            {
+              "item": "`GET /api/teams/{slug}/campaigns/{id}/report` (campaign chưa gửi → 404)",
+              "kb_refs": [
+                "KB-180"
+              ]
+            },
+            {
+              "item": "Danh sách campaigns có object `report: {sent, delivered, unique_opens}`; `/campaigns/{id}/broadcast` trả segment, template, snapshot rules và 6 raw count",
+              "kb_refs": [
+                "KB-181",
+                "KB-135",
+                "KB-168"
+              ]
+            },
+            {
+              "item": "`GET /api/teams/{slug}/analytics?scope=all|campaigns|automations`, thời gian UTC+0, response có `as_of`",
+              "kb_refs": [
+                "KB-182",
+                "KB-183",
+                "KB-184",
+                "KB-185"
+              ]
+            }
+          ],
+          "data": [
+            {
+              "item": "Sáu raw count `delivered`, `bounced`, `complained`, `unsubscribed`, `opens`, `clicks` tính bằng COUNT trên `ses_events` và hai sổ ledger lúc đọc",
+              "kb_refs": [
+                "KB-135",
+                "KB-136",
+                "KB-P-073"
+              ]
+            },
+            {
+              "item": "Cờ bot `is_bot_event` từ 07/08/2026; `segment_rules_snapshot` lúc gửi",
+              "kb_refs": [
+                "KB-139",
+                "KB-146"
+              ]
+            }
+          ],
+          "code": []
+        },
+        "dependencies": [
+          {
+            "target": "automations / automation-reports",
+            "relation": "shared_metric_definitions",
+            "note": "Định nghĩa số liệu sống ở campaign-report và được Automation Reports dùng chung.",
+            "kb_refs": [
+              "KB-120",
+              "KB-121",
+              "KB-122",
+              "KB-182"
+            ]
+          },
+          {
+            "target": "deliverability / ses-event-pipeline",
+            "relation": "ses_events_source",
+            "note": "Số liệu đọc từ `ses_events`; campaign gửi trước pipeline hiện `—`.",
+            "kb_refs": [
+              "KB-136",
+              "KB-164",
+              "KB-P-073"
+            ]
+          },
+          {
+            "target": "segments / segment-list-management",
+            "relation": "audience_snapshot",
+            "note": "Report hiện snapshot điều kiện segment; segment đã xoá / đã sửa sau khi gửi.",
+            "kb_refs": [
+              "KB-146",
+              "KB-147",
+              "KB-148"
+            ]
+          },
+          {
+            "target": "email-content / merge-tags",
+            "relation": "conflict_owner",
+            "note": "Campaign Sent 30/09/2026 lưu merge tag một ngoặc thuộc conflict cú pháp merge tag.",
+            "kb_refs": [
+              "KB-153",
+              "KB-154"
+            ]
+          },
+          {
+            "target": "workspace-settings / api-keys-and-public-api",
+            "relation": "permission_source",
+            "note": "Scope API key `campaigns:read` / `automations:read`.",
+            "kb_refs": [
+              "KB-186"
+            ]
+          },
+          {
+            "target": "workspace-settings / claude-connector",
+            "relation": "consumer",
+            "note": "API analytics phục vụ cả Claude MCP; tool chưa được mô tả.",
+            "kb_refs": [
+              "KB-187",
+              "KB-P-029"
+            ]
+          }
+        ],
+        "risks": [
+          {
+            "statement": "Theo QA KB Mailtro \"Campaign report & Analytics API\" v1, Epic Jira MTRO-16 ghi Click rate không tính link unsubscribe và link preference, nhưng caveat trên staging chỉ nêu link unsubscribe; việc link `{{preferences_url}}` có bị loại khỏi Click rate hay không còn chờ xác nhận (GAP-23).",
+            "knowledge_kind": "INFERRED",
+            "confidence": "LOW",
+            "kb_refs": [
+              "KB-124"
+            ],
+            "tags": [
+              "unsubscribe-consent"
+            ],
+            "risk_type": "undecided_or_bundle_only"
+          },
+          {
+            "statement": "Theo QA KB Mailtro \"Campaign report & Analytics API\" v1 (tóm tắt Epic Jira MTRO-16), ở vòng phát triển hiện tại report chỉ hiện bảng Clicks by link, không có cách nhóm click khác; đây là phạm vi tạm thời.",
+            "knowledge_kind": "INFERRED",
+            "confidence": "LOW",
+            "kb_refs": [
+              "KB-134"
+            ],
+            "risk_type": "undecided_or_bundle_only"
+          },
+          {
+            "statement": "Theo QA business rule Mailtro (Jira MTRO-64 B6, MTRO-82, cập nhật 07/09/2026), breakdown % và màn suppressed-profiles thuộc wave analytics sau, chưa nằm trong phạm vi hiện tại.",
+            "knowledge_kind": "INFERRED",
+            "confidence": "LOW",
+            "kb_refs": [
+              "KB-138"
+            ],
+            "risk_type": "undecided_or_bundle_only"
+          },
+          {
+            "statement": "Theo QA KB Mailtro \"Campaign report & Analytics API\" v1, chưa chốt việc lọc bot có áp cho Total opens / Total clicks hay không, và xử lý thế nào với event trước ngày 07/08/2026 (trước khi SES gắn cờ bot) — GAP-03.",
+            "knowledge_kind": "INFERRED",
+            "confidence": "LOW",
+            "kb_refs": [
+              "KB-140"
+            ],
+            "risk_type": "undecided_or_bundle_only"
+          },
+          {
+            "statement": "Theo chuỗi i18n trong bundle front-end 01/10/2026 (chưa đối chiếu UI), khối Campaign audience báo \"Segment edited since this send —\" kèm link `see it as it is now` khi segment đã bị sửa sau lần gửi, và \"This audience uses rules too complex to show as cards.\" khi rule quá phức tạp.",
+            "knowledge_kind": "INFERRED",
+            "confidence": "LOW",
+            "kb_refs": [
+              "KB-148"
+            ],
+            "risk_type": "undecided_or_bundle_only"
+          },
+          {
+            "statement": "Theo QA KB Mailtro \"Campaign report & Analytics API\" v1 và \"Known issues\" v1, việc preview nội dung đã gửi hiện merge tag thô và không xem được bản từng người nhận đã nhận được QA đánh giá là theo thiết kế / intentional limitation, dựa trên chữ trên dialog; không có quyết định PO/Dev đi kèm.",
+            "knowledge_kind": "INFERRED",
+            "confidence": "LOW",
+            "kb_refs": [
+              "KB-152"
+            ],
+            "tags": [
+              "merge-tag-syntax"
+            ],
+            "risk_type": "undecided_or_bundle_only"
+          },
+          {
+            "statement": "Theo QA KB Mailtro \"Campaign report & Analytics API\" v1 và Inventory staging Mailtro \"Campaigns\" (01/10/2026), chưa biết người nhận campaign gửi 30/09/2026 (lưu merge tag một ngoặc) thực nhận gì: tên có được thay không, và link Huỷ đăng ký có trỏ tới trang unsubscribe thật không (rủi ro tuân thủ nếu link chết); cần Dev xác nhận (GAP-22, GAP-05).",
+            "knowledge_kind": "INFERRED",
+            "confidence": "LOW",
+            "kb_refs": [
+              "KB-154"
+            ],
+            "tags": [
+              "merge-tag-syntax",
+              "unsubscribe-consent"
+            ],
+            "risk_type": "undecided_or_bundle_only"
+          },
+          {
+            "statement": "Theo QA KB Mailtro \"Campaign report & Analytics API\" v1, khi campaign đang gửi thẻ `Sent to` hiện dạng \"so far, of …\", nhưng staging không có campaign đang gửi để kiểm và thời điểm hiện \"so far\" chưa chốt (GAP-01, task Testlane MTRO-020).",
+            "knowledge_kind": "INFERRED",
+            "confidence": "LOW",
+            "kb_refs": [
+              "KB-156"
+            ],
+            "risk_type": "undecided_or_bundle_only"
+          },
+          {
+            "statement": "Theo chuỗi i18n trong bundle front-end 01/10/2026, bảng Bounce reasons có 10 nhãn lý do bounce, ví dụ `Address doesn't exist`, `Mailbox full`; tài liệu không liệt kê đủ 10 nhãn.",
+            "knowledge_kind": "INFERRED",
+            "confidence": "LOW",
+            "kb_refs": [
+              "KB-158"
+            ],
+            "risk_type": "undecided_or_bundle_only"
+          },
+          {
+            "statement": "Theo chuỗi i18n trong bundle front-end 01/10/2026 (chưa nói đã thấy trên UI), report có caveat rằng lượt mở bởi máy (Apple Mail Privacy, scanner) bị loại khỏi số liệu, và Gmail không báo complaint theo từng người nhận nên số complaint của Gmail bị đếm thiếu.",
+            "knowledge_kind": "INFERRED",
+            "confidence": "LOW",
+            "kb_refs": [
+              "KB-163"
+            ],
+            "risk_type": "undecided_or_bundle_only"
+          },
+          {
+            "statement": "Theo QA KB Mailtro \"Campaign report & Analytics API\" v1, chưa chốt việc backfill số liệu cho campaign gửi trước pipeline đã chạy chưa, và việc hiện `—` là thiết kế hay do thiếu backfill (GAP-10).",
+            "knowledge_kind": "INFERRED",
+            "confidence": "LOW",
+            "kb_refs": [
+              "KB-165"
+            ],
+            "risk_type": "undecided_or_bundle_only"
+          },
+          {
+            "statement": "Theo QA KB Mailtro \"Suppressions\" v1 và \"Campaign report & Analytics API\" v1, chưa chốt khi không có số liệu thì report hiện `—` hay `0`, và hành vi 404 / `—` của campaign Draft là thiết kế hay lỗi; cần PO xác nhận.",
+            "knowledge_kind": "INFERRED",
+            "confidence": "LOW",
+            "kb_refs": [
+              "KB-169"
+            ],
+            "risk_type": "undecided_or_bundle_only"
+          },
+          {
+            "statement": "Theo chuỗi i18n trong bundle front-end 01/10/2026, tab Recipients / Content của report campaign chưa gửi báo \"This campaign has not been sent, so there are no recipients to list yet.\" / \"…no email to show yet.\"",
+            "knowledge_kind": "INFERRED",
+            "confidence": "LOW",
+            "kb_refs": [
+              "KB-172"
+            ],
+            "risk_type": "undecided_or_bundle_only"
+          },
+          {
+            "statement": "Theo QA KB Mailtro \"Campaign report & Analytics API\" v1 và Inventory staging Mailtro \"Campaigns\" (01/10/2026), chưa chốt campaign Draft có được phép vào trang `/report` hay không; cần PO xác nhận (GAP-19).",
+            "knowledge_kind": "INFERRED",
+            "confidence": "LOW",
+            "kb_refs": [
+              "KB-173"
+            ],
+            "risk_type": "undecided_or_bundle_only"
+          },
+          {
+            "statement": "Theo QA KB Mailtro \"Campaign report & Analytics API\" v1 và Inventory staging Mailtro \"Campaigns\" (01/10/2026), chưa chốt việc report campaign Sent bỏ các tab Recipients / Content / Settings và khối \"What recipients saw\" là chủ ý gỡ hay tạm ẩn, cũng như danh sách người nhận và cảnh báo gửi qua shared host của campaign Sent được xem ở đâu; cần PO xác nhận (GAP-02).",
+            "knowledge_kind": "INFERRED",
+            "confidence": "LOW",
+            "kb_refs": [
+              "KB-175"
+            ],
+            "risk_type": "undecided_or_bundle_only"
+          },
+          {
+            "statement": "Theo QA KB Mailtro \"Campaign report & Analytics API\" v1 và Inventory staging Mailtro \"Campaigns\" (01/10/2026), hành vi report với id campaign lạ hiện khung trống chưa được chốt là đúng hay sai (GAP-20); QA đề xuất Dev thêm trạng thái not-found nhưng chưa được xác nhận là lỗi.",
+            "knowledge_kind": "INFERRED",
+            "confidence": "LOW",
+            "kb_refs": [
+              "KB-177"
+            ],
+            "risk_type": "undecided_or_bundle_only"
+          },
+          {
+            "statement": "Theo bundle front-end 01/10/2026 (chưa đối chiếu UI vì staging không có campaign đang gửi), report có khối `Send progress` (Recipients / Accepted / Rejected / Remaining, \"The provider is pacing this send…\"), bảng `Recipients of this send` (Handed over / Attempts / Last message), action `Stop send` / `Resume send` với hộp xác nhận \"Stop this send?\" / \"Resume this send?\", trạng thái `This campaign never went out` khi không ai được gửi mail, và khối `What recipients saw` (cờ `senderSwapped`).",
+            "knowledge_kind": "INFERRED",
+            "confidence": "LOW",
+            "kb_refs": [
+              "KB-178"
+            ],
+            "risk_type": "undecided_or_bundle_only"
+          },
+          {
+            "statement": "Theo QA KB Mailtro \"Campaign report & Analytics API\" v1, chưa chốt campaign ở trạng thái nào (Running / Partly sent / Cancelled / Failed) thì mở được report (GAP-01, task Testlane MTRO-020).",
+            "knowledge_kind": "INFERRED",
+            "confidence": "LOW",
+            "kb_refs": [
+              "KB-179"
+            ],
+            "risk_type": "undecided_or_bundle_only"
+          },
+          {
+            "statement": "Theo Jira MTRO-94 (tóm tắt trong QA KB Mailtro \"Campaign report & Analytics API\" v1, đọc 07/10/2026), trên trang analytics global `totals` có thể nhỏ hơn tổng các `sources` vì một người nhận cả campaign lẫn automation chỉ được tính 1.",
+            "knowledge_kind": "INFERRED",
+            "confidence": "LOW",
+            "kb_refs": [
+              "KB-185"
+            ],
+            "risk_type": "undecided_or_bundle_only"
+          },
+          {
+            "statement": "Theo Jira MTRO-60 \"MCP for report\" (Story In Progress, mô tả trống; ghi trong QA KB Mailtro \"Campaign report & Analytics API\" v1), API analytics phục vụ cả giao diện report lẫn Claude MCP; chưa có mô tả tool hay dữ liệu trả về.",
+            "knowledge_kind": "INFERRED",
+            "confidence": "LOW",
+            "kb_refs": [
+              "KB-187"
+            ],
+            "risk_type": "undecided_or_bundle_only"
+          },
+          {
+            "statement": "Theo QA KB Mailtro \"Campaign report & Analytics API\" v1, chưa chốt có trang giao diện `/analytics` hay không (GAP-05); hiện analytics global mới được kiểm ở mức API.",
+            "knowledge_kind": "INFERRED",
+            "confidence": "LOW",
+            "kb_refs": [
+              "KB-189"
+            ],
+            "risk_type": "undecided_or_bundle_only"
+          },
+          {
+            "statement": "Theo QA KB Mailtro \"Campaign report & Analytics API\" v1, chưa chốt contact bị suppressed trong campaign có được đếm vào Bounce / Spam complaint và vào mẫu số Sent hay không (GAP-21); quyết định PO 02/10/2026 về việc này chỉ áp cho automation.",
+            "knowledge_kind": "INFERRED",
+            "confidence": "LOW",
+            "kb_refs": [
+              "KB-190"
+            ],
+            "tags": [
+              "suppression"
+            ],
+            "risk_type": "undecided_or_bundle_only"
+          },
+          {
+            "statement": "Theo dõi hồi quy các lỗi / hiện tượng đã biết của report (không dùng làm expected result): BUG-SUPP-03 report có đủ số vẫn hiện `—` và report Draft hiện `—` thay vì 0; BUG-SUPP-05 broadcast của Draft trả 404; Jira MTRO-96 audience card báo \"too complex\" thay vì \"field removed\"; Jira MTRO-97 headline Opens dùng số all-time trên biểu đồ 24h; campaign Sent 30/09/2026 lưu merge tag một ngoặc.",
+            "knowledge_kind": "OBSERVED_CURRENT",
+            "status": "KNOWN_DEFECT",
+            "risk_type": "known_defect_regression_watch",
+            "kb_refs": [
+              "KB-166",
+              "KB-167",
+              "KB-168",
+              "KB-149",
+              "KB-160",
+              "KB-153"
+            ]
+          },
+          {
+            "statement": "Rủi ro tuân thủ unsubscribe: chưa biết link Huỷ đăng ký trong campaign Sent 30/09/2026 (merge tag một ngoặc) có trỏ tới trang unsubscribe thật không.",
+            "knowledge_kind": "INFERRED",
+            "risk_type": "compliance",
+            "tags": [
+              "unsubscribe-consent",
+              "merge-tag-syntax"
+            ],
+            "kb_refs": [
+              "KB-153",
+              "KB-154",
+              "KB-088"
+            ]
+          }
+        ],
+        "freshness": {
+          "observed_at": "2026-10-07",
+          "run_id": "CTX-20261008-02",
+          "basis": "Epic Jira MTRO-16, Jira MTRO-31/64/82/94 tóm tắt trong QA KB Mailtro \"Campaign report & Analytics API\" v1 (đọc 07/10/2026); quyết định PO / Dev BE 17/09–24/09/2026, PO/BA 02/10/2026; khảo sát staging 08/09 và 01/10/2026."
+        },
+        "unknown_areas": [
+          {
+            "question": "Click vào link `{{preferences_url}}` có bị loại khỏi Click rate không (Epic Jira MTRO-16 nói có, caveat trên report chỉ nêu link unsubscribe)?",
+            "why_it_matters": "Ảnh hưởng công thức Click rate dùng chung cho campaign và automation.",
+            "kb_refs": [
+              "KB-123",
+              "KB-124"
+            ]
+          },
+          {
+            "question": "Lọc bot có áp cho Total opens / Total clicks hay chỉ cho số unique? Event trước 07/08/2026 (chưa có cờ bot) được xử lý thế nào?",
+            "why_it_matters": "Không có oracle cho số total và cho campaign cũ.",
+            "kb_refs": [
+              "KB-139",
+              "KB-140"
+            ]
+          },
+          {
+            "question": "Bấm thẻ metric trên report thì kỳ vọng xảy ra gì (chỉ tooltip theo Jira MTRO-31, hay chuyển tab)? Staging 29/09 và 01/10/2026 ghi hai hành vi khác nhau.",
+            "why_it_matters": "Hai lượt khảo sát lệch nhau, không có quy định.",
+            "kb_refs": [
+              "KB-143",
+              "KB-144",
+              "KB-145"
+            ]
+          },
+          {
+            "question": "PO/Dev xác nhận preview nội dung đã gửi hiện merge tag thô và không xem được bản từng người nhận là giới hạn có chủ ý?",
+            "why_it_matters": "QA đánh giá theo thiết kế chỉ dựa trên chữ trên dialog.",
+            "kb_refs": [
+              "KB-151",
+              "KB-152"
+            ]
+          },
+          {
+            "question": "Người nhận campaign Sent 30/09/2026 (lưu merge tag một ngoặc) thực nhận gì: tên có được thay không, link Huỷ đăng ký có trỏ tới trang unsubscribe thật không?",
+            "why_it_matters": "Rủi ro tuân thủ (unsubscribe-consent, merge-tag-syntax); cần Dev xác nhận.",
+            "kb_refs": [
+              "KB-153",
+              "KB-154"
+            ]
+          },
+          {
+            "question": "Campaign ở trạng thái Running / Partly sent / Cancelled / Failed có mở được report không, report hiển thị gì, và thẻ Sent to hiện dạng \"so far, of …\" khi nào?",
+            "why_it_matters": "Staging không có campaign ở các trạng thái này; UI chỉ biết qua bundle.",
+            "kb_refs": [
+              "KB-156",
+              "KB-178",
+              "KB-179",
+              "KB-008"
+            ]
+          },
+          {
+            "question": "Campaign gửi từ 09/09/2026 trở về trước hiện `—` là thiết kế hay do chưa backfill? Có kế hoạch backfill không?",
+            "why_it_matters": "Không phân biệt được lỗi với giới hạn dữ liệu.",
+            "kb_refs": [
+              "KB-164",
+              "KB-165"
+            ]
+          },
+          {
+            "question": "Khi chưa có số liệu, report phải hiện `—` hay `0`? Report Draft hiện `—` và `GET /campaigns/{id}/broadcast` của Draft trả 404 thay vì 6 số 0 là thiết kế hay lỗi?",
+            "why_it_matters": "BUG-SUPP-03 / BUG-SUPP-05 đang chờ PO/Dev chốt.",
+            "kb_refs": [
+              "KB-166",
+              "KB-167",
+              "KB-168",
+              "KB-169"
+            ]
+          },
+          {
+            "question": "Campaign Draft có được phép vào trang `/report` không (hiện mở thẳng URL vẫn vào được bố cục 4 tab cũ)?",
+            "why_it_matters": "Không có quy định truy cập report theo status.",
+            "kb_refs": [
+              "KB-170",
+              "KB-173"
+            ]
+          },
+          {
+            "question": "Report campaign Sent bỏ tab Recipients / Content / Settings và khối \"What recipients saw\" là chủ ý hay tạm ẩn? Danh sách người nhận và cảnh báo gửi qua shared host của campaign Sent xem ở đâu?",
+            "why_it_matters": "Bố cục staging 01/10 khác lượt 16/09; mất chỗ xem người nhận.",
+            "kb_refs": [
+              "KB-174",
+              "KB-175"
+            ]
+          },
+          {
+            "question": "Mở report với id campaign không tồn tại hiện khung trống thay vì \"Not Found.\" như module khác: có cần thêm trạng thái not-found không?",
+            "why_it_matters": "Chưa được chốt là lỗi hay chấp nhận được.",
+            "kb_refs": [
+              "KB-176",
+              "KB-177"
+            ]
+          },
+          {
+            "question": "Có trang giao diện `/analytics` (analytics global) không, hay analytics global chỉ có ở mức API?",
+            "why_it_matters": "Route `/analytics` hiện trang trắng.",
+            "kb_refs": [
+              "KB-130",
+              "KB-188",
+              "KB-189"
+            ]
+          },
+          {
+            "question": "Contact bị suppressed trong một campaign có được đếm vào Bounce / Spam complaint và vào mẫu số Sent của report campaign không?",
+            "why_it_matters": "Quyết định PO 02/10/2026 về việc này chỉ áp cho automation.",
+            "kb_refs": [
+              "KB-190"
+            ]
+          },
+          {
+            "question": "Danh sách đủ 10 nhãn lý do bounce là gì, UI hiện rate thế nào khi mẫu số bằng 0, UI có tách hard / soft bounce không, và ở report từng campaign resubscribe có làm giảm số Unsubscribe không?",
+            "why_it_matters": "Thiếu đặc tả UI report; không suy diễn từ ví dụ.",
+            "kb_refs": [
+              "KB-158",
+              "KB-155",
+              "KB-137",
+              "KB-128",
+              "KB-120"
+            ]
+          },
+          {
+            "question": "Hợp đồng đầy đủ của Analytics API và MCP report là gì: method / route của list campaigns và `/campaigns/{id}/broadcast`, shape response report, tên tham số khoảng thời gian và mặc định, tên hai sổ ledger dùng để COUNT, tool MCP (Jira MTRO-60 trống)?",
+            "why_it_matters": "Không viết được test API chính xác cho các endpoint chỉ được liệt kê tên.",
+            "kb_refs": [
+              "KB-180",
+              "KB-181",
+              "KB-183",
+              "KB-187",
+              "KB-136"
+            ]
+          },
+          {
+            "question": "Role nào (Owner, Admin, role thứ 3 đang tranh chấp tên Member hay Marketer/Editor, custom role) được tạo, Save, Send, Schedule, xoá campaign và xem report; quyền có được chặn ở API không?",
+            "why_it_matters": "Toàn bộ tài liệu Campaigns không ghi role, staging chỉ khảo sát bằng Owner, Admin chưa từng được quan sát; không viết được expected result cho kiểm thử phân quyền.",
+            "kb_refs": [
+              "KB-102",
+              "KB-104",
+              "KB-107",
+              "KB-023",
+              "KB-186",
+              "KB-P-051"
+            ]
+          }
+        ]
+      }
+    ],
+    "profile_relationships": [
+      {
+        "from": "campaign-report",
+        "to": "automations/automation-reports",
+        "relation": "SHARES_METRIC_DEFINITIONS",
+        "kb_refs": [
+          "KB-120",
+          "KB-121"
+        ]
+      },
+      {
+        "from": "campaign-report",
+        "to": "campaign-list-and-folders",
+        "relation": "OPENED_FROM",
+        "kb_refs": [
+          "KB-017"
+        ]
+      }
+    ],
+    "coverage_matrix": [
+      {
+        "layer": "portal",
+        "role": "unspecified",
+        "state": "campaign Sent: 5 tab report",
+        "covered": true,
+        "note": "Staging 01/10 + định nghĩa Epic Jira MTRO-16",
+        "kb_refs": [
+          "KB-142",
+          "KB-144",
+          "KB-155",
+          "KB-159",
+          "KB-161",
+          "KB-162"
+        ],
+        "feature_id": "campaign-report",
+        "environment": "documented"
+      },
+      {
+        "layer": "portal",
+        "role": "unspecified",
+        "state": "campaign Draft / chưa gửi xong",
+        "covered": true,
+        "note": "Chỉ hiện trạng; quyền truy cập chưa chốt",
+        "kb_refs": [
+          "KB-170",
+          "KB-171",
+          "KB-173"
+        ],
+        "feature_id": "campaign-report",
+        "environment": "documented"
+      },
+      {
+        "layer": "portal",
+        "role": "unspecified",
+        "state": "campaign Running / Partly sent / Cancelled / Failed",
+        "covered": false,
+        "note": "Staging không có data; chỉ bundle",
+        "kb_refs": [
+          "KB-178",
+          "KB-179"
+        ],
+        "feature_id": "campaign-report",
+        "environment": "documented"
+      },
+      {
+        "layer": "portal",
+        "role": "unspecified",
+        "state": "campaign gửi trước pipeline số liệu",
+        "covered": true,
+        "note": "Hiện trạng `—`; thiết kế hay thiếu backfill chưa chốt",
+        "kb_refs": [
+          "KB-164",
+          "KB-165"
+        ],
+        "feature_id": "campaign-report",
+        "environment": "documented"
+      },
+      {
+        "layer": "portal",
+        "role": "unspecified",
+        "state": "segment đã xoá / đã sửa sau khi gửi",
+        "covered": true,
+        "note": "Xoá: PO/BA 02/10; sửa: i18n",
+        "kb_refs": [
+          "KB-147",
+          "KB-148"
+        ],
+        "feature_id": "campaign-report",
+        "environment": "documented"
+      },
+      {
+        "layer": "portal",
+        "role": "unspecified",
+        "state": "id campaign không tồn tại",
+        "covered": true,
+        "note": "Hiện trạng khung trống",
+        "kb_refs": [
+          "KB-176"
+        ],
+        "feature_id": "campaign-report",
+        "environment": "documented"
+      },
+      {
+        "layer": "backend",
+        "role": "unspecified",
+        "state": "định nghĩa và cách tính số liệu",
+        "covered": true,
+        "note": "Epic Jira MTRO-16, MTRO-64/82, quyết định PO/Dev BE",
+        "kb_refs": [
+          "KB-120",
+          "KB-125",
+          "KB-136"
+        ],
+        "feature_id": "campaign-report",
+        "environment": "documented"
+      },
+      {
+        "layer": "api",
+        "role": "api-caller",
+        "state": "report campaign, list, analytics global, scope quyền, định dạng thời gian",
+        "covered": true,
+        "note": "Jira MTRO-94 (QA Review)",
+        "kb_refs": [
+          "KB-180",
+          "KB-182",
+          "KB-183",
+          "KB-186"
+        ],
+        "feature_id": "campaign-report",
+        "environment": "documented"
+      },
+      {
+        "layer": "mcp",
+        "role": "unspecified",
+        "state": "MCP đọc report",
+        "covered": false,
+        "note": "Jira MTRO-60 trống",
+        "kb_refs": [
+          "KB-187"
+        ],
+        "feature_id": "campaign-report",
+        "environment": "documented"
+      },
+      {
+        "layer": "recipient",
+        "role": "recipient",
+        "state": "mail thực nhận của campaign Sent 30/09/2026",
+        "covered": false,
+        "note": "Chưa quan sát",
+        "kb_refs": [
+          "KB-154"
+        ],
+        "feature_id": "campaign-report",
+        "environment": "documented"
+      },
+      {
+        "layer": "portal",
+        "role": "Owner",
+        "state": "any",
+        "covered": true,
+        "note": "Hiện trạng staging khảo sát bằng Owner",
+        "kb_refs": [
+          "KB-P-036"
+        ],
+        "feature_id": "campaign-report",
+        "environment": "documented"
+      },
+      {
+        "layer": "portal",
+        "role": "Member",
+        "state": "any",
+        "covered": false,
+        "note": "Chưa khảo sát cho Campaigns",
+        "kb_refs": [
+          "KB-P-051"
+        ],
+        "feature_id": "campaign-report",
+        "environment": "documented"
+      },
+      {
+        "layer": "portal",
+        "role": "Admin",
+        "state": "any",
+        "covered": false,
+        "note": "Chưa từng quan sát",
+        "kb_refs": [
+          "KB-P-051"
+        ],
+        "feature_id": "campaign-report",
+        "environment": "documented"
+      },
+      {
+        "layer": "code",
+        "role": "unspecified",
+        "state": "any",
+        "covered": false,
+        "note": "Không có nguồn mã",
+        "kb_refs": [],
+        "feature_id": "campaign-report",
+        "environment": "documented"
+      }
+    ],
+    "unassigned_kb_items": [],
+    "profile_conflicts": [],
+    "profile_change_summary": [
+      "Rework r1: dựng lại từ shard đã sửa; bỏ ba item trùng với object email-content (nội dung merge tag một ngoặc không được migrate, không có copy-on-write giữa các Draft dùng chung email, nội dung campaign Sent được đóng băng) vì campaigns không giữ bản sao; statement CE được rút phần chi tiết staging theo shard hiện tại.",
+      "Rủi ro tuân thủ của campaign Sent lưu merge tag một ngoặc nay trỏ tới item conflict cú pháp merge tag thay cho item không migrate đã bỏ."
+    ],
+    "kb_trace_complete": true
+  },
+  "gate": {
+    "decision": "CONDITIONAL_PASS",
+    "blocking_findings": [],
+    "conditions": [
+      "Đủ cho regression discovery của định nghĩa số liệu, report campaign Sent và Analytics API; oracle cho report khi thiếu số liệu (`—` / `0` / 404), trạng thái ngoài Draft/Sent, preference link trong Click rate và suppressed counting còn là câu hỏi mở.",
+      "Role cho từng thao tác chưa xác định; không viết expected result phân quyền.",
+      "Mục ở risks và observed_behavior không dùng làm expected result; observed_behavior là hiện trạng tại thời điểm khảo sát, KNOWN_DEFECT chỉ dùng để theo dõi hồi quy."
+    ],
+    "allowed_next_steps": [
+      "qa-checklist-builder",
+      "knowledge-diff-analyzer"
+    ]
+  }
+}

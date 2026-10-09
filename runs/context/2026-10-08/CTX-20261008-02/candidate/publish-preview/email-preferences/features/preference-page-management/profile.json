@@ -1,0 +1,993 @@
+{
+  "feature_id": "preference-page-management",
+  "feature_key": "preference-page-management",
+  "name": "Tạo và quản lý preference page",
+  "user_goal": "Người dùng workspace tạo, sửa, xem trước và xoá các preference page (tên page, heading/message, danh sách choice, tuỳ chọn nút Unsubscribe from all) để người nhận có thể chọn loại email muốn nhận thay vì huỷ nhận toàn bộ. Trên bản dựng staging mỗi choice gắn vào một custom field Boolean của contact; mô hình này đang tranh chấp với Jira MTRO-73 (cấu hình theo list).",
+  "stable_since_version": "v1",
+  "actors": [
+    {
+      "role": "unspecified (người dùng đã đăng nhập workspace; tài liệu không ghi role của tài khoản khảo sát)",
+      "permission_observed": "Ba route `/preferences`, `/preferences/new`, `/preferences/:id` chỉ yêu cầu đăng nhập, router không khai báo phân quyền theo role (theo bundle, chưa thử với role khác). Ma trận quyền Owner / Admin / role thứ 3 cho preference page chưa được chốt.",
+      "kb_refs": [
+        "KB-001",
+        "KB-044",
+        "KB-P-051",
+        "KB-P-052"
+      ]
+    },
+    {
+      "role": "recipient (chỉ qua preview trong builder)",
+      "permission_observed": "Người nhận không thao tác trong feature này; nội dung trang người nhận thấy chỉ được mô tả qua khung preview `What people see` của form, trang công khai chưa có trên staging.",
+      "kb_refs": [
+        "KB-041",
+        "KB-043",
+        "KB-P-062"
+      ]
+    }
+  ],
+  "entry_points": [
+    {
+      "path": "Sidebar `Email preferences` (giữa `Email library` và `Campaigns`) → `/preferences` (danh sách)",
+      "precondition": "Đã đăng nhập workspace.",
+      "kb_refs": [
+        "KB-001",
+        "KB-002"
+      ]
+    },
+    {
+      "path": "Nút `New preferences page` ở header hoặc ở trạng thái rỗng của `/preferences` → `/preferences/new` (`New page`)",
+      "precondition": "Đang ở trang danh sách.",
+      "kb_refs": [
+        "KB-002",
+        "KB-004",
+        "KB-016"
+      ]
+    },
+    {
+      "path": "Bấm dòng / Enter hoặc menu `Actions for {name}` › `Edit` trên danh sách → `/preferences/:id` (`Edit page`)",
+      "precondition": "Workspace có ít nhất 1 preference page.",
+      "kb_refs": [
+        "KB-005",
+        "KB-017",
+        "KB-010"
+      ]
+    },
+    {
+      "path": "Link `Manage pages` trong khối `Email preferences` ở bước Recipients của campaign → Email preferences",
+      "precondition": "Đang soạn campaign.",
+      "kb_refs": [
+        "KB-048"
+      ]
+    }
+  ],
+  "capabilities": [
+    {
+      "name": "Xem danh sách preference page và hướng dẫn dùng",
+      "description": "Trang `/preferences` có mô tả module, 3 bước hướng dẫn luôn hiện, trạng thái rỗng khi chưa có page và bảng `Name` / `Choices` / `Used in` / `Last edited` khi có page (bảng chỉ thấy ngày 29/09/2026). Câu lỗi tải danh sách chỉ biết qua bundle.",
+      "kb_refs": [
+        "KB-002",
+        "KB-003",
+        "KB-004",
+        "KB-005",
+        "KB-009"
+      ]
+    },
+    {
+      "name": "Soạn nội dung trang người nhận đọc",
+      "description": "Form New/Edit có `Page name`, `Heading`, `Message` với giá trị mặc định và switch `Show “Unsubscribe from all emails”` mặc định bật; tắt switch thì hiện cảnh báo về nút unsubscribe của hộp thư. Form Edit dùng cùng component (theo bundle).",
+      "kb_refs": [
+        "KB-016",
+        "KB-017",
+        "KB-018",
+        "KB-019",
+        "KB-020"
+      ]
+    },
+    {
+      "name": "Định nghĩa các choice và gắn mỗi choice vào custom field Boolean",
+      "description": "Mỗi choice có tên, custom field, mô tả tuỳ chọn, nút đổi thứ tự và xoá; picker `Custom field` chỉ liệt kê field Boolean (từ 01/10/2026), field đã dùng cho choice khác trên cùng page bị disable. Page cũ trỏ vào field text là điểm chưa rõ.",
+      "kb_refs": [
+        "KB-021",
+        "KB-022",
+        "KB-023",
+        "KB-024",
+        "KB-025",
+        "KB-026",
+        "KB-038"
+      ]
+    },
+    {
+      "name": "Tạo custom field Boolean ngay từ picker",
+      "description": "Mục `Create a new field…` mở dialog `New custom field` chỉ có `Field name` (luôn tạo Boolean); kiểm định dạng tên do BE làm, dialog hiện bật nút với tên sai định dạng (nghi lỗi). Field tạo xong được gán vào choice đang mở (theo bundle).",
+      "kb_refs": [
+        "KB-027",
+        "KB-028",
+        "KB-029",
+        "KB-030"
+      ]
+    },
+    {
+      "name": "Lưu preference page",
+      "description": "Nút `Save` luôn bấm được; kiểm tra phía client theo thứ tự cố định và lỗi BE theo từng choice chỉ biết qua bundle (một lần quan sát lỗi choice chưa đặt tên ngày 29/09/2026); lưu thành công được ghi ở BE (quan sát 29/09/2026). Form có mục giải thích lựa chọn được ghi true/false lên contact.",
+      "kb_refs": [
+        "KB-031",
+        "KB-032",
+        "KB-033",
+        "KB-034",
+        "KB-035",
+        "KB-036",
+        "KB-037",
+        "KB-039"
+      ]
+    },
+    {
+      "name": "Xem trước trang người nhận",
+      "description": "Khung `What people see` (Desktop / Mobile) hiện tên workspace, heading, message, các choice đã đặt tên (mặc định tick) và nút `Save my choices` / `Unsubscribe from all emails`; bấm nút chỉ đổi trạng thái phía client, không phải trang công khai.",
+      "kb_refs": [
+        "KB-041",
+        "KB-042",
+        "KB-043"
+      ]
+    },
+    {
+      "name": "Xoá preference page",
+      "description": "`Delete` mở hộp xác nhận `Delete {name}?` (chỉ mở rồi Cancel ngày 29/09/2026); câu cảnh báo khi page đang được campaign dùng và toast kết quả chỉ biết qua bundle.",
+      "kb_refs": [
+        "KB-006",
+        "KB-007",
+        "KB-008"
+      ]
+    },
+    {
+      "name": "Mở page theo id và xử lý page không tồn tại",
+      "description": "Màn Edit nạp toàn bộ danh sách rồi tìm id; id không tồn tại hiện alert not-found với câu đã lỗi thời; lỗi tải danh sách bị hiện như not-found (nghi lỗi, theo bundle); nếu API phân trang thì page ngoài trang đầu có thể bị báo không tồn tại (suy luận).",
+      "kb_refs": [
+        "KB-010",
+        "KB-011",
+        "KB-012",
+        "KB-013",
+        "KB-014",
+        "KB-015"
+      ]
+    }
+  ],
+  "state_transitions": [
+    {
+      "from": "workspace chưa có preference page (trạng thái rỗng)",
+      "to": "form `New page` với giá trị mặc định",
+      "trigger": "Bấm `New preferences page`",
+      "condition": "Đã đăng nhập workspace",
+      "kb_refs": [
+        "KB-002",
+        "KB-004",
+        "KB-018"
+      ]
+    },
+    {
+      "from": "form New/Edit chưa hợp lệ",
+      "to": "vẫn ở form, toast lỗi",
+      "trigger": "Bấm `Save`",
+      "condition": "Quan sát 1 lần ngày 29/09/2026 với choice chưa đặt tên (`Every choice needs a name.`); thứ tự kiểm tra đầy đủ và toast `Can't save yet` chỉ theo bundle",
+      "kb_refs": [
+        "KB-032",
+        "KB-033",
+        "KB-034"
+      ]
+    },
+    {
+      "from": "form New hợp lệ",
+      "to": "page đã lưu ở BE",
+      "trigger": "Bấm `Save`",
+      "condition": "Quan sát 1 lần ngày 29/09/2026 (page còn sau reload); toast `Preferences page saved` và chuyển sang `/preferences/<id>` chỉ theo bundle",
+      "kb_refs": [
+        "KB-036",
+        "KB-037",
+        "KB-039"
+      ]
+    },
+    {
+      "from": "form có thay đổi chưa lưu",
+      "to": "trang danh sách, thay đổi bị mất",
+      "trigger": "Bấm `Back` (đóng tab / reload cũng không bị chặn theo bundle)",
+      "condition": "Hiện trạng staging 01/10/2026, được ghi là lỗi đang mở; không phải hành vi mong đợi",
+      "kb_refs": [
+        "KB-040"
+      ]
+    },
+    {
+      "from": "switch `Show “Unsubscribe from all emails”` bật (mặc định)",
+      "to": "switch tắt: hiện cảnh báo, preview mất nút `Unsubscribe from all emails`",
+      "trigger": "Tắt switch trên form",
+      "condition": "Hiện trạng staging 01/10/2026; việc có được phép tắt chưa được PO xác nhận",
+      "kb_refs": [
+        "KB-019"
+      ]
+    },
+    {
+      "from": "preview ở trạng thái chọn",
+      "to": "`Thanks, you're all set!` hoặc `You're unsubscribed`",
+      "trigger": "Bấm `Save my choices` hoặc `Unsubscribe from all emails` trong preview",
+      "condition": "Chỉ đổi trạng thái phía client, không gọi API",
+      "kb_refs": [
+        "KB-043"
+      ]
+    },
+    {
+      "from": "preference page tồn tại",
+      "to": "page đã xoá",
+      "trigger": "`Delete` trong menu dòng rồi xác nhận",
+      "condition": "Xoá thật chưa từng được thực hiện; toast kết quả và cảnh báo khi đang dùng chỉ theo bundle",
+      "kb_refs": [
+        "KB-006",
+        "KB-007",
+        "KB-008"
+      ]
+    },
+    {
+      "from": "mở `/preferences/:id`",
+      "to": "alert not-found",
+      "trigger": "id không tồn tại hoặc page đã xoá (và theo bundle, cả khi danh sách tải lỗi)",
+      "condition": "Quan sát 01/10/2026 với id của page đã xoá",
+      "kb_refs": [
+        "KB-012",
+        "KB-013",
+        "KB-014"
+      ]
+    }
+  ],
+  "confirmed_rules": [],
+  "observed_behavior": [
+    {
+      "statement": "Trên staging (khảo sát 29/09/2026 và 01/10/2026), module Email preferences mở từ mục sidebar `Email preferences` (nằm giữa `Email library` và `Campaigns`) và có 3 route: `/preferences` (danh sách), `/preferences/new` (tiêu đề `New page`) và `/preferences/:id` (tiêu đề `Edit page`). Nhãn UI liên quan: nút `New preferences page`, combobox `Preferences page` ở campaign và `Email preferences page` ở automation.",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "confidence": "MEDIUM",
+      "status": "CURRENT_STATE",
+      "kb_refs": [
+        "KB-001"
+      ]
+    },
+    {
+      "statement": "Trên staging (khảo sát 01/10/2026), trang `/preferences` có h1 `Email preferences`, mô tả \"Let people pick which emails they get, instead of unsubscribing from everything.\" và nút `New preferences page` ở header; bấm nút này chuyển sang `/preferences/new`.",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "confidence": "MEDIUM",
+      "status": "CURRENT_STATE",
+      "kb_refs": [
+        "KB-002"
+      ]
+    },
+    {
+      "statement": "Trên staging (khảo sát 01/10/2026; trạng thái có dữ liệu thấy ngày 29/09/2026), trang `/preferences` luôn hiện 3 bước hướng dẫn đánh số, kể cả khi đã có preference page; bước 1 là `List your kinds of email`. Nội dung bước 2 và bước 3 được ghi thành item riêng vì đang lệch với hành vi gửi.",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "confidence": "MEDIUM",
+      "status": "CURRENT_STATE",
+      "kb_refs": [
+        "KB-003"
+      ]
+    },
+    {
+      "statement": "Trên staging (khảo sát 01/10/2026, workspace chưa có preference page nào), trang `/preferences` hiện trạng thái rỗng `No preferences pages yet` / \"Create one so people can say no to some emails without leaving all of them.\" kèm nút `New preferences page`.",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "confidence": "MEDIUM",
+      "status": "CURRENT_STATE",
+      "kb_refs": [
+        "KB-004"
+      ]
+    },
+    {
+      "statement": "Trên staging (khảo sát 29/09/2026 khi workspace còn page; chưa đối chiếu lại ngày 01/10/2026), bảng danh sách preference page có 4 cột `Name`, `Choices` (tối đa 3 badge tên choice, phần dư gộp thành `+{count} more`), `Used in` (`Not used yet` / `1 campaign` / `{count} campaigns`) và `Last edited`; bấm vào dòng hoặc nhấn Enter mở `/preferences/:id`; menu dòng `Actions for {name}` có `Edit` và `Delete`.",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "confidence": "LOW",
+      "status": "CURRENT_STATE",
+      "kb_refs": [
+        "KB-005"
+      ]
+    },
+    {
+      "statement": "Trên staging (khảo sát 29/09/2026: mở hộp xác nhận rồi Cancel, chưa xoá thật), `Delete` một preference page mở hộp xác nhận `Delete {name}?` với nội dung \"This can't be undone.\" và nút `Delete`.",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "confidence": "LOW",
+      "status": "CURRENT_STATE",
+      "kb_refs": [
+        "KB-006"
+      ]
+    },
+    {
+      "statement": "Trên staging (network khảo sát 01/10/2026, khớp bundle), mở `/preferences/:id` không gọi API lấy page theo id: màn Edit nạp toàn bộ danh sách qua `GET /api/teams/{slug}/preference-pages` rồi tìm id trong danh sách đó.",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "confidence": "LOW",
+      "status": "CURRENT_STATE",
+      "kb_refs": [
+        "KB-010"
+      ]
+    },
+    {
+      "statement": "Trên staging (khảo sát 01/10/2026, mở id của một page đã xoá), `/preferences/:id` với id không tồn tại hiện breadcrumb `Email preferences › Edit page` và alert \"This preferences page doesn't exist. It may have been deleted, or the sample data reset when the app reloaded.\".",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "confidence": "LOW",
+      "status": "CURRENT_STATE",
+      "kb_refs": [
+        "KB-012"
+      ]
+    },
+    {
+      "statement": "Trên staging (khảo sát 01/10/2026), thông báo not-found của preference page vẫn nhắc \"…or the sample data reset when the app reloaded.\"; QA KB Mailtro \"Known issues\" v1 ghi đây là lỗi đang mở (trạng thái open) vì câu đã lỗi thời khi module đã lưu dữ liệu ở BE. Chưa có PO/Dev xác nhận.",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "confidence": "LOW",
+      "status": "KNOWN_DEFECT",
+      "kb_refs": [
+        "KB-013"
+      ]
+    },
+    {
+      "statement": "Theo đọc bundle FE (Inventory staging Mailtro \"Email preferences\" (01/10/2026), chưa tái hiện lỗi tải), khi danh sách preference page tải lỗi thì màn Edit vẫn hiện alert \"This preferences page doesn't exist…\" thay vì báo lỗi tải; QA xếp là nghi lỗi nhỏ, đang mở, chưa có PO/Dev xác nhận.",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "confidence": "LOW",
+      "status": "KNOWN_DEFECT",
+      "kb_refs": [
+        "KB-014"
+      ]
+    },
+    {
+      "statement": "Trên staging (khảo sát 01/10/2026), form tạo preference page ở `/preferences/new` có breadcrumb `Email preferences › New page`.",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "confidence": "MEDIUM",
+      "status": "CURRENT_STATE",
+      "kb_refs": [
+        "KB-016"
+      ]
+    },
+    {
+      "statement": "Trên staging (khảo sát 01/10/2026), form `/preferences/new` mặc định có `Page name` = `Untitled preferences page`; phần What people read (mô tả \"Shown at the top of the page people reach from your unsubscribe link.\") có `Heading` = `Choose the emails you want` và `Message` = \"Untick anything you'd rather not get. You can change this any time.\"; phần Choices có sẵn 1 choice rỗng.",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "confidence": "MEDIUM",
+      "status": "CURRENT_STATE",
+      "kb_refs": [
+        "KB-018"
+      ]
+    },
+    {
+      "statement": "Trên staging (khảo sát 01/10/2026; BR-05 và BR-11 của task Testlane MTRO-024 là quan sát staging, chưa có PO/Dev xác nhận), switch `Show “Unsubscribe from all emails”` của form mặc định bật, helper ghi \"Recommended. People who want no email at all can leave in one click, instead of marking you as spam.\"; tắt switch thì form hiện cảnh báo \"Inboxes like Gmail still show their own unsubscribe button, and that one always unsubscribes from everything.\" và preview mất nút `Unsubscribe from all emails`.",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "confidence": "MEDIUM",
+      "status": "CURRENT_STATE",
+      "kb_refs": [
+        "KB-019"
+      ]
+    },
+    {
+      "statement": "Trên staging (khảo sát 01/10/2026), mỗi choice trong form có nút `Move this choice up` / `Move this choice down` (đổi thành `Move {name} up/down` khi đã đặt tên, bị disable ở choice đầu/cuối danh sách), ô `Choice name` (placeholder `e.g. App updates`), combobox `Custom field` (placeholder `Choose a field`, badge `Checkbox · true / false`), ô `Short description (optional)` và nút `Remove this choice` (thành `Remove {name}` khi đã có tên); nút `Add a choice` thêm 1 choice rỗng vào cuối danh sách; xoá hết choice thì hiện \"No choices yet. Add at least one.\".",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "confidence": "MEDIUM",
+      "status": "CURRENT_STATE",
+      "kb_refs": [
+        "KB-021"
+      ]
+    },
+    {
+      "statement": "Trên staging (khảo sát 01/10/2026, khớp bộ lọc trong bundle), picker `Custom field` của choice chỉ liệt kê custom field kiểu Boolean cùng mục `Create a new field…`; field kiểu text/datetime không còn xuất hiện (hành vi trước 01/10/2026 liệt kê cả field text đã được thay).",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "confidence": "MEDIUM",
+      "status": "CURRENT_STATE",
+      "kb_refs": [
+        "KB-023"
+      ]
+    },
+    {
+      "statement": "Trên staging (khảo sát 01/10/2026; BR-08 của task Testlane MTRO-024 là quan sát), field đã được một choice khác trên cùng page dùng sẽ bị disable trong picker `Custom field` kèm nhãn `· already used on this page`.",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "confidence": "MEDIUM",
+      "status": "CURRENT_STATE",
+      "kb_refs": [
+        "KB-024"
+      ]
+    },
+    {
+      "statement": "Trên staging (khảo sát 01/10/2026), hint dưới ô `Custom field` của choice ghi: \"This field holds a true/false value. Unticking this choice saves \"false\" in this field, ticking it saves \"true\". Your segments read the same field, so changing it later points this choice somewhere else — whatever the old field already holds stays put.\" Việc ghi giá trị từ trang công khai cho người nhận chưa được quan sát.",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "confidence": "MEDIUM",
+      "status": "CURRENT_STATE",
+      "kb_refs": [
+        "KB-025"
+      ]
+    },
+    {
+      "statement": "Trên staging (khảo sát 01/10/2026), chọn `Create a new field…` trong picker mở dialog `New custom field` (\"A true/false field, created right away so your segments can read it — empty until someone saves their choices.\") chỉ có ô `Field name`, không có ô Type (field tạo ra luôn là Boolean); hint ô ghi \"Lowercase letters, numbers and _ only, starting with a letter. This is what segments read, and it cannot be changed later.\"; nút `Create field` bị disable khi ô rỗng.",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "confidence": "MEDIUM",
+      "status": "CURRENT_STATE",
+      "kb_refs": [
+        "KB-027"
+      ]
+    },
+    {
+      "statement": "Trên staging (khảo sát 01/10/2026), dialog `New custom field` mở từ picker của Email preferences bật nút `Create field` ngay khi gõ tên sai định dạng (vd `Bad Name` — có chữ hoa và dấu cách), không cảnh báo phía client, trái với hint định dạng của chính dialog; QA xếp là nghi lỗi nhỏ (chưa có PO/Dev xác nhận) và chưa bấm `Create field` để xem phản hồi của BE.",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "confidence": "LOW",
+      "status": "KNOWN_DEFECT",
+      "kb_refs": [
+        "KB-028"
+      ]
+    },
+    {
+      "statement": "Trên staging (khảo sát 01/10/2026; BR-13 của task Testlane MTRO-024 là quan sát, chưa có PO/Dev xác nhận), form có mục What happens when someone saves ghi: \"Each choice is saved straight onto the contact: unticked is false, ticked is true. Build your campaign's segment on that field and it skips everyone who unticked it.\" và \"No automation needed. If you want one anyway — a follow-up email, say — start it with “Contact field changed” watching that field.\". Việc lưu thật từ trang công khai và việc phát event chưa được quan sát.",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "confidence": "MEDIUM",
+      "status": "CURRENT_STATE",
+      "kb_refs": [
+        "KB-031"
+      ]
+    },
+    {
+      "statement": "Trên staging (khảo sát 01/10/2026), nút `Save` của form preference page luôn bấm được, không bị disable kể cả khi form chưa hợp lệ.",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "confidence": "MEDIUM",
+      "status": "CURRENT_STATE",
+      "kb_refs": [
+        "KB-032"
+      ]
+    },
+    {
+      "statement": "Trên staging (khảo sát 29/09/2026, một lần), bấm Save khi có choice chưa đặt tên hiện toast lỗi `Every choice needs a name.`.",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "confidence": "LOW",
+      "status": "CURRENT_STATE",
+      "kb_refs": [
+        "KB-034"
+      ]
+    },
+    {
+      "statement": "Trên staging (khảo sát 29/09/2026, một lần), lưu preference page thành công và dữ liệu được lưu thật ở BE: page vẫn còn sau khi reload và `GET /api/teams/{slug}/preference-pages` trả 200.",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "confidence": "LOW",
+      "status": "CURRENT_STATE",
+      "kb_refs": [
+        "KB-036"
+      ]
+    },
+    {
+      "statement": "Trên staging (network khảo sát 01/10/2026), mở form preference page gọi `GET contacts/attributes` để nạp dữ liệu cho picker `Custom field`.",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "confidence": "LOW",
+      "status": "CURRENT_STATE",
+      "kb_refs": [
+        "KB-038"
+      ]
+    },
+    {
+      "statement": "Trên staging (khảo sát 01/10/2026, tái hiện với form có 2 choice và switch tắt), bấm `Back` khi form preference page có thay đổi chưa lưu thì về list ngay, không có hộp xác nhận rời trang và thay đổi bị mất — khác Email editor và Automation builder; theo đọc bundle, đóng tab hoặc reload cũng không bị chặn. QA KB Mailtro \"Known issues\" v1 ghi lỗi đang mở (trạng thái open), chưa có PO/Dev xác nhận.",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "confidence": "LOW",
+      "status": "KNOWN_DEFECT",
+      "kb_refs": [
+        "KB-040"
+      ]
+    },
+    {
+      "statement": "Trên staging (khảo sát 01/10/2026), form có khung preview `What people see` với tab `Desktop` / `Mobile`, hiện tên workspace, heading, message, danh sách checkbox chỉ gồm các choice đã có tên (mặc định được tick, kèm mô tả) — hoặc \"Add a choice to see it here.\" khi chưa có choice nào có tên — cùng nút `Save my choices` và nút `Unsubscribe from all emails` (khi switch bật).",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "confidence": "MEDIUM",
+      "status": "CURRENT_STATE",
+      "kb_refs": [
+        "KB-041"
+      ]
+    },
+    {
+      "statement": "Trên staging (khảo sát 01/10/2026; BR-12 của task Testlane MTRO-024 là quan sát), bấm nút trong preview của builder chỉ đổi trạng thái phía client, không gọi API: `Save my choices` → `Thanks, you're all set!` / \"Your email choices are saved. Changed your mind? Just open this link again — you can update them any time.\" + nút `Open the page again`; `Unsubscribe from all emails` → `You're unsubscribed` / \"You won't get any more marketing emails from {workspace}.\" + nút `I clicked by mistake — resubscribe`. Đây là preview trong builder, không phải trang công khai cho người nhận.",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "confidence": "MEDIUM",
+      "status": "CURRENT_STATE",
+      "kb_refs": [
+        "KB-043"
+      ]
+    }
+  ],
+  "observed_validations": [],
+  "permissions": [
+    {
+      "statement": "Theo router trong bundle FE (01/10/2026), ba route của Email preferences chỉ yêu cầu đăng nhập, không có khai báo phân quyền theo role; chưa đối chiếu bằng tài khoản role khác.",
+      "knowledge_kind": "INFERRED",
+      "confidence": "LOW",
+      "kb_refs": [
+        "KB-044",
+        "KB-P-052"
+      ]
+    },
+    {
+      "statement": "Sản phẩm có 3 role chuẩn (Owner, Admin, role thứ 3 có tên đang tranh chấp) cộng custom role; ma trận quyền chi tiết, gồm quyền với preference page, chưa được chốt. Profile này không tự suy role nào được làm gì.",
+      "knowledge_kind": "CONFIRMED_EXPECTED",
+      "confidence": "MEDIUM",
+      "kb_refs": [
+        "KB-P-051",
+        "KB-044"
+      ]
+    }
+  ],
+  "surface_mapping": {
+    "portal": [
+      {
+        "item": "Mục sidebar `Email preferences`; route `/preferences`, `/preferences/new`, `/preferences/:id`",
+        "kb_refs": [
+          "KB-001"
+        ]
+      },
+      {
+        "item": "Trang danh sách: h1, mô tả, 3 bước hướng dẫn, trạng thái rỗng, bảng 4 cột, menu dòng `Edit` / `Delete`, hộp xác nhận xoá",
+        "kb_refs": [
+          "KB-002",
+          "KB-003",
+          "KB-004",
+          "KB-005",
+          "KB-006",
+          "KB-007"
+        ]
+      },
+      {
+        "item": "Form New/Edit: breadcrumb, `Page name`, `Heading`, `Message`, switch `Show “Unsubscribe from all emails”`, trình soạn choice, picker `Custom field`, dialog `New custom field`, mục What happens when someone saves, nút `Save` / `Back`",
+        "kb_refs": [
+          "KB-016",
+          "KB-017",
+          "KB-018",
+          "KB-019",
+          "KB-021",
+          "KB-023",
+          "KB-024",
+          "KB-025",
+          "KB-027",
+          "KB-031",
+          "KB-032",
+          "KB-040"
+        ]
+      },
+      {
+        "item": "Khung preview `What people see` (Desktop / Mobile) và các trạng thái client-only của nút trong preview",
+        "kb_refs": [
+          "KB-041",
+          "KB-042",
+          "KB-043"
+        ]
+      },
+      {
+        "item": "Alert not-found ở `/preferences/:id`",
+        "kb_refs": [
+          "KB-012",
+          "KB-013"
+        ]
+      }
+    ],
+    "storefront": [],
+    "api": [
+      {
+        "item": "`GET /api/teams/{slug}/preference-pages` (danh sách, nạp một lần, dùng chung cho Edit / Recipients / Send email)",
+        "kb_refs": [
+          "KB-010",
+          "KB-011",
+          "KB-036"
+        ]
+      },
+      {
+        "item": "`POST preference-pages`, `PUT preference-pages/{id}`, `DELETE preference-pages/{id}` (theo bundle, chưa thấy trên network)",
+        "kb_refs": [
+          "KB-039"
+        ]
+      },
+      {
+        "item": "`GET contacts/attributes` nạp dữ liệu cho picker `Custom field`",
+        "kb_refs": [
+          "KB-038"
+        ]
+      },
+      {
+        "item": "Tạo custom field từ dialog gửi `{key, type: boolean}` lên resource custom field; định dạng tên do BE kiểm (theo bundle)",
+        "kb_refs": [
+          "KB-029"
+        ]
+      }
+    ],
+    "data": [
+      {
+        "item": "Payload lưu page: `name`, `heading`, `intro`, `show_unsubscribe_all`, `choices[{key,label,description}]`; `heading` / `intro` trống gửi `null` (theo bundle)",
+        "kb_refs": [
+          "KB-039"
+        ]
+      },
+      {
+        "item": "Mỗi choice ghi true/false vào một custom field Boolean của contact (mô hình bản dựng staging, đang tranh chấp)",
+        "kb_refs": [
+          "KB-025",
+          "KB-031",
+          "KB-045",
+          "KB-046"
+        ]
+      }
+    ],
+    "code": []
+  },
+  "dependencies": [
+    {
+      "target": "contacts / custom-fields",
+      "relation": "boolean_field_backing",
+      "note": "Choice đọc và tạo custom field Boolean; ràng buộc khi xoá hoặc đổi field thuộc object contacts.",
+      "kb_refs": [
+        "KB-023",
+        "KB-027",
+        "KB-029"
+      ]
+    },
+    {
+      "target": "segments / segment-builder",
+      "relation": "filter_by_boolean_field",
+      "note": "Copy trên form nói segment đọc cùng field để bỏ qua người đã bỏ tick.",
+      "kb_refs": [
+        "KB-025",
+        "KB-031"
+      ]
+    },
+    {
+      "target": "automations / automation-triggers-and-entry",
+      "relation": "see_also",
+      "note": "Copy trên form gợi ý dùng trigger `Contact field changed` theo dõi field của choice; việc phát event khi người nhận lưu chưa được quan sát.",
+      "kb_refs": [
+        "KB-031"
+      ]
+    },
+    {
+      "target": "email-preferences / preference-page-in-sends",
+      "relation": "consumer",
+      "note": "Page được gắn vào campaign / step Send email và mở qua `{{preferences_url}}`.",
+      "kb_refs": [
+        "KB-011",
+        "KB-037",
+        "KB-048",
+        "KB-055"
+      ]
+    }
+  ],
+  "risks": [
+    {
+      "statement": "Mô hình preference center đang tranh chấp: bản dựng staging dùng custom field Boolean, Jira MTRO-73 (To Do) mô tả cấu hình theo list; chưa có PO phân xử (GAP-01 Blocker). Không phía nào được dùng làm expected result.",
+      "knowledge_kind": "INFERRED",
+      "confidence": "LOW",
+      "kb_refs": [
+        "KB-045",
+        "KB-046"
+      ]
+    },
+    {
+      "statement": "Theo chuỗi trong bundle FE (01/10/2026, chưa thấy trên UI), khi xoá page đang được campaign dùng thì link unsubscribe của các campaign đó quay về trang `Unsubscribe from all`.",
+      "knowledge_kind": "INFERRED",
+      "confidence": "LOW",
+      "kb_refs": [
+        "KB-007"
+      ]
+    },
+    {
+      "statement": "Toast xoá thành công / thất bại và câu lỗi tải danh sách chỉ biết qua bundle FE, chưa đối chiếu UI.",
+      "knowledge_kind": "INFERRED",
+      "confidence": "LOW",
+      "kb_refs": [
+        "KB-008",
+        "KB-009"
+      ]
+    },
+    {
+      "statement": "Nếu API `preference-pages` có phân trang thì màn Edit có thể báo \"không tồn tại\" cho page ngoài trang đầu (suy luận từ bundle, chưa xác định có phân trang).",
+      "knowledge_kind": "INFERRED",
+      "confidence": "LOW",
+      "kb_refs": [
+        "KB-015",
+        "KB-010"
+      ]
+    },
+    {
+      "statement": "Màn Edit dùng chung component với màn New và danh sách được nạp một lần dùng chung cho nhiều màn (theo bundle).",
+      "knowledge_kind": "INFERRED",
+      "confidence": "LOW",
+      "kb_refs": [
+        "KB-011",
+        "KB-017"
+      ]
+    },
+    {
+      "statement": "Ô Heading để trống thì preview dùng lại heading mặc định; preview rơi về tên `Acme` khi workspace không có tên; notice khi workspace chưa có field Boolean — đều theo bundle, chưa thấy trên UI.",
+      "knowledge_kind": "INFERRED",
+      "confidence": "LOW",
+      "kb_refs": [
+        "KB-020",
+        "KB-042",
+        "KB-022"
+      ]
+    },
+    {
+      "statement": "Page lưu trước 01/10/2026 trỏ vào field text vẫn giữ field đó trong picker của riêng choice ấy, nên có thể vẫn ghi true/false vào field text; chưa rõ có migrate không.",
+      "knowledge_kind": "INFERRED",
+      "confidence": "LOW",
+      "kb_refs": [
+        "KB-026"
+      ]
+    },
+    {
+      "statement": "Định dạng tên field khi tạo từ picker chỉ được BE kiểm, client chỉ chặn tên rỗng; field tạo xong được gán ngay vào choice — theo bundle, nút `Create field` chưa từng được bấm trên staging.",
+      "knowledge_kind": "INFERRED",
+      "confidence": "LOW",
+      "kb_refs": [
+        "KB-029",
+        "KB-030",
+        "KB-028"
+      ]
+    },
+    {
+      "statement": "Thứ tự kiểm tra phía client khi Save, lỗi BE theo `choices.N.key`, toast lưu thành công và chuyển trang chỉ theo bundle; ngày 01/10/2026 không bấm Save.",
+      "knowledge_kind": "INFERRED",
+      "confidence": "LOW",
+      "kb_refs": [
+        "KB-033",
+        "KB-035",
+        "KB-037"
+      ]
+    },
+    {
+      "statement": "Bốn lỗi đã biết trên builder (Back không cảnh báo rời trang và mất dữ liệu; câu not-found nhắc \"sample data reset\"; lỗi tải hiện thành not-found; dialog tạo field bật nút với tên sai định dạng) là hiện trạng, chưa có PO/Dev xác nhận — cần theo dõi hồi quy, không dùng làm expected.",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "confidence": "LOW",
+      "kb_refs": [
+        "KB-040",
+        "KB-013",
+        "KB-014",
+        "KB-028"
+      ]
+    }
+  ],
+  "freshness": {
+    "observed_at": "2026-10-01",
+    "basis": "Khảo sát staging 29/09/2026 và 01/10/2026 (workspace 0 page ngày 01/10, không bấm Save/Delete); đọc bundle FE 01/10/2026; Jira MTRO-73 đọc 07/10/2026"
+  },
+  "unknown_areas": [
+    {
+      "question": "Preference center theo mô hình nào: mỗi choice ghi true/false vào một custom field Boolean của contact (như bản dựng staging 01/10/2026), hay cấu hình theo list như Jira MTRO-73 mô tả, trong khi sản phẩm hiện không có khái niệm list tĩnh?",
+      "why_it_matters": "Mọi hành vi của form (picker field, dialog tạo field, copy giải thích) phụ thuộc mô hình; chưa có PO chốt (GAP-01 Blocker).",
+      "kb_refs": [
+        "KB-045",
+        "KB-046",
+        "KB-P-016"
+      ],
+      "oq_id": "OQ-email-preferences-001"
+    },
+    {
+      "question": "Có được phép tắt switch Show “Unsubscribe from all emails” trên preference page không, xét yêu cầu CAN-SPAM / GDPR (GAP-11)?",
+      "why_it_matters": "Staging cho tắt và chỉ hiện cảnh báo; đây là chủ đề consent, không được suy ra từ hiện trạng.",
+      "kb_refs": [
+        "KB-019"
+      ],
+      "oq_id": "OQ-email-preferences-002"
+    },
+    {
+      "question": "Preference page lưu trước 01/10/2026 có choice trỏ vào field kiểu text có được migrate sang field Boolean không, hay vẫn ghi true/false vào field text (GAP-14)?",
+      "why_it_matters": "Dữ liệu cũ có thể ghi sai kiểu lên contact và làm segment lọc sai.",
+      "kb_refs": [
+        "KB-026",
+        "KB-023"
+      ],
+      "oq_id": "OQ-email-preferences-003"
+    },
+    {
+      "question": "Giới hạn của preference page là gì: độ dài tối đa của tên page / tên choice / mô tả, số choice tối đa, có cho trùng tên page không, và API `preference-pages` có phân trang hay giới hạn số page không (GAP-09, GAP-10, GAP-17)?",
+      "why_it_matters": "Không có boundary nào được nêu; nếu API phân trang, màn Edit có thể báo không tồn tại cho page ngoài trang đầu.",
+      "kb_refs": [
+        "KB-015",
+        "KB-010",
+        "KB-033"
+      ],
+      "oq_id": "OQ-email-preferences-004"
+    },
+    {
+      "question": "Role nào (Owner / Admin / role thứ 3) được xem, tạo, sửa, xoá preference page, và việc chặn có nằm ở API không?",
+      "why_it_matters": "Route không khai báo quyền theo role, ma trận quyền chưa chốt và chưa khảo sát bằng role khác ngoài tài khoản mặc định.",
+      "kb_refs": [
+        "KB-044",
+        "KB-P-051",
+        "KB-P-052"
+      ],
+      "oq_id": "OQ-email-preferences-005"
+    },
+    {
+      "question": "Bốn hành vi hiện trạng của builder — Back không cảnh báo rời trang, câu not-found nhắc \"sample data reset\", lỗi tải danh sách hiện thành not-found, dialog New custom field bật Create field với tên sai định dạng — sẽ được sửa thành hành vi nào?",
+      "why_it_matters": "Đây là lỗi đã biết chưa có PO/Dev xác nhận; không có hành vi đúng để làm oracle, chỉ theo dõi hồi quy.",
+      "kb_refs": [
+        "KB-040",
+        "KB-013",
+        "KB-014",
+        "KB-028"
+      ],
+      "oq_id": "OQ-email-preferences-006"
+    },
+    {
+      "question": "Danh sách có dữ liệu, menu Edit/Delete, xoá thật, kiểm tra khi Save, Save thành công kèm toast, và khác biệt giữa form Edit với form New hiện hoạt động thế nào trên staging khi workspace có page?",
+      "why_it_matters": "Lần khảo sát 01/10/2026 có 0 page và không bấm Save/Delete; các item tương ứng chỉ dựa trên quan sát 29/09/2026 hoặc bundle.",
+      "kb_refs": [
+        "KB-005",
+        "KB-006",
+        "KB-008",
+        "KB-017",
+        "KB-033",
+        "KB-036",
+        "KB-037"
+      ],
+      "oq_id": "OQ-email-preferences-008"
+    },
+    {
+      "question": "Module Email preferences có nguồn thẩm quyền nào (business rule, AC Jira) để làm expected result không, khi business rule chưa có mục này, Jira MTRO-70 có description trống và AC của Jira MTRO-17 chưa được kiểm?",
+      "why_it_matters": "Thiếu nguồn thẩm quyền nên toàn bộ object không có kỳ vọng đã xác nhận.",
+      "kb_refs": [
+        "KB-045",
+        "KB-047"
+      ],
+      "oq_id": "OQ-email-preferences-007"
+    }
+  ],
+  "last_updated": {
+    "date": "2026-10-08",
+    "ccr_ref": "bootstrap"
+  },
+  "coverage_matrix": [
+    {
+      "feature_id": "preference-page-management",
+      "layer": "portal",
+      "role": "unspecified",
+      "state": "danh sách rỗng",
+      "environment": "documented",
+      "covered": true,
+      "note": "Khảo sát staging 01/10/2026"
+    },
+    {
+      "feature_id": "preference-page-management",
+      "layer": "portal",
+      "role": "unspecified",
+      "state": "danh sách có page",
+      "environment": "documented",
+      "covered": true,
+      "note": "Chỉ quan sát 29/09/2026, chưa đối chiếu lại; LOW"
+    },
+    {
+      "feature_id": "preference-page-management",
+      "layer": "portal",
+      "role": "unspecified",
+      "state": "form New: nội dung, choice, picker, dialog tạo field, preview",
+      "environment": "documented",
+      "covered": true,
+      "note": "Khảo sát staging 01/10/2026; một số chuỗi chỉ theo bundle"
+    },
+    {
+      "feature_id": "preference-page-management",
+      "layer": "portal",
+      "role": "unspecified",
+      "state": "form Edit",
+      "environment": "documented",
+      "covered": false,
+      "note": "Chỉ theo bundle (cùng component với New)"
+    },
+    {
+      "feature_id": "preference-page-management",
+      "layer": "portal",
+      "role": "unspecified",
+      "state": "Save không hợp lệ",
+      "environment": "documented",
+      "covered": true,
+      "note": "1 lần quan sát 29/09/2026; thứ tự kiểm tra đầy đủ chỉ theo bundle"
+    },
+    {
+      "feature_id": "preference-page-management",
+      "layer": "portal",
+      "role": "unspecified",
+      "state": "Save thành công",
+      "environment": "documented",
+      "covered": true,
+      "note": "1 lần quan sát 29/09/2026; toast/redirect theo bundle"
+    },
+    {
+      "feature_id": "preference-page-management",
+      "layer": "portal",
+      "role": "unspecified",
+      "state": "xoá page (không dùng / đang được campaign dùng / chỉ automation dùng)",
+      "environment": "documented",
+      "covered": false,
+      "note": "Chưa xoá thật; cảnh báo chỉ theo bundle"
+    },
+    {
+      "feature_id": "preference-page-management",
+      "layer": "portal",
+      "role": "unspecified",
+      "state": "id không tồn tại / danh sách tải lỗi",
+      "environment": "documented",
+      "covered": true,
+      "note": "Not-found quan sát 01/10/2026; lỗi tải chỉ theo bundle"
+    },
+    {
+      "feature_id": "preference-page-management",
+      "layer": "portal",
+      "role": "unspecified",
+      "state": "rời form khi có thay đổi chưa lưu",
+      "environment": "documented",
+      "covered": true,
+      "note": "Hiện trạng là lỗi đã biết"
+    },
+    {
+      "feature_id": "preference-page-management",
+      "layer": "portal",
+      "role": "Owner/Admin/role thứ 3",
+      "state": "phân quyền theo role",
+      "environment": "documented",
+      "covered": false,
+      "note": "Ma trận quyền chưa chốt; chưa khảo sát role khác"
+    },
+    {
+      "feature_id": "preference-page-management",
+      "layer": "api",
+      "role": "unspecified",
+      "state": "đọc danh sách / tạo / sửa / xoá page",
+      "environment": "documented",
+      "covered": true,
+      "note": "GET quan sát network; POST/PUT/DELETE chỉ theo bundle"
+    },
+    {
+      "feature_id": "preference-page-management",
+      "layer": "api",
+      "role": "unspecified",
+      "state": "phân trang / giới hạn số page",
+      "environment": "documented",
+      "covered": false,
+      "note": "Tài liệu không mô tả"
+    },
+    {
+      "feature_id": "preference-page-management",
+      "layer": "data",
+      "role": "unspecified",
+      "state": "payload page, liên kết choice ↔ custom field",
+      "environment": "documented",
+      "covered": true,
+      "note": "Theo bundle; mô hình dữ liệu đang tranh chấp"
+    },
+    {
+      "feature_id": "preference-page-management",
+      "layer": "code",
+      "role": "unspecified",
+      "state": "any",
+      "environment": "documented",
+      "covered": false,
+      "note": "Không có nguồn mã"
+    }
+  ],
+  "profile_conflicts": [
+    {
+      "conflict_id": "CONF-MTRO-email-preferences-01",
+      "topic": "Mô hình preference center: custom field Boolean (bản dựng staging 01/10/2026) hay cấu hình theo list (Jira MTRO-73)",
+      "resolution": "UNRESOLVED",
+      "kb_refs": [
+        "KB-045",
+        "KB-046"
+      ],
+      "never_supersede_topic": "unsubscribe-consent",
+      "profile_handling": "Giữ cả hai phía ở risks và unknown_areas; không đưa phía nào vào confirmed_rules hay surface mapping như kỳ vọng."
+    }
+  ],
+  "profile_relationships": [
+    {
+      "from": "preference-page-management",
+      "to": "preference-page-in-sends",
+      "relation": "CONSUMED_BY",
+      "kb_refs": [
+        "KB-011",
+        "KB-048",
+        "KB-055"
+      ]
+    },
+    {
+      "from": "preference-page-management",
+      "to": "contacts/custom-fields",
+      "relation": "DEPENDS_ON",
+      "kb_refs": [
+        "KB-023",
+        "KB-027"
+      ]
+    }
+  ]
+}

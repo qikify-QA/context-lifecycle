@@ -1,0 +1,946 @@
+{
+  "feature_id": "signup-and-workspace-creation",
+  "feature_key": "signup-and-workspace-creation",
+  "name": "Tạo tài khoản, xác minh email và tạo workspace đầu tiên (kể cả đăng ký qua link mời)",
+  "user_goal": "Người mới tạo tài khoản Mailtro ID (tự đăng ký kèm workspace đầu tiên, hoặc nhận lời mời vào một workspace có sẵn), xác minh email và có workspace để vào app.",
+  "stable_since_version": "v1",
+  "actors": [
+    {
+      "role": "visitor (người mới, chưa có tài khoản)",
+      "permission_observed": "Mở /signup, điền 5 field gồm Workspace name và Workspace URL; thời điểm workspace đầu tiên được tạo chưa được PO/Dev xác nhận.",
+      "kb_refs": [
+        "KB-048",
+        "KB-049",
+        "KB-079"
+      ]
+    },
+    {
+      "role": "invited-user (nhận link mời, chưa đăng nhập)",
+      "permission_observed": "Mở /signup?invite=<token>: tiêu đề Accept your invitation, ẩn 2 field workspace, Email điền sẵn và chỉ đọc.",
+      "kb_refs": [
+        "KB-061",
+        "KB-062",
+        "KB-063",
+        "KB-064",
+        "KB-065"
+      ]
+    },
+    {
+      "role": "unspecified (người đã đăng nhập mở link mời)",
+      "permission_observed": "Trên staging, link mời không hợp lệ khi đang đăng nhập bị bỏ im lặng (lỗi đã biết).",
+      "kb_refs": [
+        "KB-080"
+      ]
+    }
+  ],
+  "entry_points": [
+    {
+      "path": "Mailtro ID /signup (Create your account), từ link \"Don't have an account? Create one\" ở /login",
+      "precondition": "Chưa có tài khoản.",
+      "kb_refs": [
+        "KB-048",
+        "KB-049",
+        "KB-005"
+      ]
+    },
+    {
+      "path": "Mailtro ID /signup?invite={token}&email=...&team=... (Accept your invitation)",
+      "precondition": "Có link mời; chưa đăng nhập.",
+      "kb_refs": [
+        "KB-061",
+        "KB-065"
+      ]
+    },
+    {
+      "path": "Mailtro ID /verify (Check your email)",
+      "precondition": "Vừa register thành công, hoặc đăng nhập bằng tài khoản chưa verify email.",
+      "kb_refs": [
+        "KB-057",
+        "KB-068",
+        "KB-069"
+      ]
+    },
+    {
+      "path": "Mailtro ID /onboarding (Create your workspace)",
+      "precondition": "Đã đăng nhập, đã verify email, tài khoản chưa có workspace.",
+      "kb_refs": [
+        "KB-069",
+        "KB-P-060",
+        "KB-P-027"
+      ]
+    }
+  ],
+  "capabilities": [
+    {
+      "name": "Tạo tài khoản kèm workspace đầu tiên",
+      "description": "Form 5 field (Full name, Email, Password, Workspace name, Workspace URL); nút Create account chỉ bật khi toàn bộ form hợp lệ; mật khẩu tối thiểu 8 ký tự; Workspace URL tự slugify từ Workspace name và ngừng đồng bộ khi sửa tay; submit gửi POST /register với {name, email, password, team_name, team_slug}; lỗi 422 hiện dưới field tương ứng (Jira MTRO-30).",
+      "kb_refs": [
+        "KB-048",
+        "KB-049",
+        "KB-050",
+        "KB-051",
+        "KB-052",
+        "KB-053",
+        "KB-056",
+        "KB-070",
+        "KB-071",
+        "KB-P-006"
+      ]
+    },
+    {
+      "name": "Đăng ký qua link mời",
+      "description": "Biến thể mời đổi tiêu đề, ẩn 2 field workspace, Email chỉ đọc và gửi invitation_token thay cho team_name / team_slug (Jira MTRO-20 / MTRO-30).",
+      "kb_refs": [
+        "KB-061",
+        "KB-062",
+        "KB-063",
+        "KB-064",
+        "KB-065"
+      ]
+    },
+    {
+      "name": "Xác minh email",
+      "description": "Register thành công thì sang /verify; có nút Resend verification email; bấm \"I've verified — continue\" khi chưa verify thì vẫn ở /verify; tài khoản chưa verify đăng nhập được nhưng dừng ở /verify (Jira MTRO-30).",
+      "kb_refs": [
+        "KB-057",
+        "KB-066",
+        "KB-067",
+        "KB-068",
+        "KB-069"
+      ]
+    },
+    {
+      "name": "Tạo workspace đầu tiên",
+      "description": "Thời điểm tạo workspace đầu tiên chưa chốt: tiêu đề Jira MTRO-42 nói tạo trong lúc đăng ký, ghi chú Jira MTRO-30 lại có bước Create workspace sau Login; cả hai chỉ là tiêu đề / ghi chú ticket, không phải AC. Route /onboarding (theo router) chỉ dành cho tài khoản đã verify và chưa có workspace; nội dung chưa được khảo sát.",
+      "kb_refs": [
+        "KB-069",
+        "KB-078",
+        "KB-079",
+        "KB-P-060"
+      ]
+    },
+    {
+      "name": "Chống lạm dụng khi đăng ký",
+      "description": "Form đăng ký có captcha (Jira MTRO-92); staging gửi captcha_token, có hai thông báo lỗi captcha, chuẩn hoá email (chữ thường, bỏ +tag, bỏ dấu chấm Gmail) và giới hạn /register 10 request / 60 giây.",
+      "kb_refs": [
+        "KB-058",
+        "KB-059",
+        "KB-P-069",
+        "KB-072",
+        "KB-073",
+        "KB-074",
+        "KB-075",
+        "KB-P-066",
+        "KB-P-067"
+      ]
+    }
+  ],
+  "state_transitions": [
+    {
+      "from": "/signup, form chưa hợp lệ (Create account disabled)",
+      "to": "/signup, Create account bật",
+      "trigger": "Điền hợp lệ cả form",
+      "condition": "Gating phía client",
+      "kb_refs": [
+        "KB-050"
+      ]
+    },
+    {
+      "from": "/signup, Workspace URL đang tự đồng bộ",
+      "to": "Workspace URL không còn tự đồng bộ",
+      "trigger": "Người dùng sửa tay Workspace URL",
+      "condition": "Ngừng vĩnh viễn trong phiên",
+      "kb_refs": [
+        "KB-052",
+        "KB-053"
+      ]
+    },
+    {
+      "from": "/signup",
+      "to": "/verify",
+      "trigger": "Bấm Create account, register thành công (signup thường)",
+      "condition": "POST /register thành công",
+      "kb_refs": [
+        "KB-056",
+        "KB-057"
+      ]
+    },
+    {
+      "from": "/signup",
+      "to": "/signup, lỗi dưới field",
+      "trigger": "Server trả 422 (email đã tồn tại, slug đã dùng)",
+      "condition": "Lỗi không thuộc field nào ở alert chung",
+      "kb_refs": [
+        "KB-070",
+        "KB-071",
+        "KB-072"
+      ]
+    },
+    {
+      "from": "/signup",
+      "to": "bị chặn tạm (429)",
+      "trigger": "Vượt 10 request / 60 giây",
+      "condition": "Quan sát staging",
+      "kb_refs": [
+        "KB-075"
+      ]
+    },
+    {
+      "from": "/verify, email chưa verify",
+      "to": "/verify",
+      "trigger": "Bấm \"I've verified — continue\"",
+      "condition": "Email chưa thực sự verify",
+      "kb_refs": [
+        "KB-067"
+      ]
+    },
+    {
+      "from": "chưa verify, đăng nhập",
+      "to": "/verify",
+      "trigger": "Đăng nhập",
+      "condition": "Tài khoản chưa verify",
+      "kb_refs": [
+        "KB-068"
+      ]
+    },
+    {
+      "from": "chưa đăng nhập",
+      "to": "/login",
+      "trigger": "Mở /verify hoặc /onboarding",
+      "condition": "Theo router bundle + route-probe (suy luận)",
+      "kb_refs": [
+        "KB-069"
+      ]
+    },
+    {
+      "from": "đang đăng nhập, mở link mời không hợp lệ",
+      "to": "Choose a workspace, tham số ?invite bị bỏ",
+      "trigger": "Màn chọn workspace gọi accept lời mời, BE trả 405",
+      "condition": "Lỗi đã biết: không có toast báo lỗi",
+      "kb_refs": [
+        "KB-080"
+      ]
+    }
+  ],
+  "confirmed_rules": [
+    {
+      "statement": "Theo Jira MTRO-30 (AC rule 07/08/2026, tóm tắt trong QA business rule Mailtro), form signup gồm 5 field: Full name, Email, Password, Workspace name, Workspace URL; staging khảo sát 29/09/2026 thấy đúng 5 field này.",
+      "knowledge_kind": "CONFIRMED_EXPECTED",
+      "confidence": "MEDIUM",
+      "kb_refs": [
+        "KB-048"
+      ]
+    },
+    {
+      "statement": "Theo Jira MTRO-30 (AC rule 07/08/2026, tóm tắt trong QA business rule Mailtro), nút \"Create account\" bị disabled cho tới khi toàn bộ form signup hợp lệ (gating phía client); staging khảo sát 29/09/2026 thấy nút disabled khi form trống.",
+      "knowledge_kind": "CONFIRMED_EXPECTED",
+      "confidence": "MEDIUM",
+      "kb_refs": [
+        "KB-050"
+      ]
+    },
+    {
+      "statement": "Theo Jira MTRO-30 (AC rule 07/08/2026, tóm tắt trong QA business rule Mailtro), mật khẩu khi signup tối thiểu 8 ký tự.",
+      "knowledge_kind": "CONFIRMED_EXPECTED",
+      "confidence": "MEDIUM",
+      "kb_refs": [
+        "KB-051"
+      ]
+    },
+    {
+      "statement": "Theo Jira MTRO-30 (AC rule 07/08/2026, tóm tắt trong QA business rule Mailtro), Workspace URL được slugify tự động từ Workspace name: chuyển chữ thường, khoảng trắng thành '-', loại mọi ký tự ngoài a-z0-9-.",
+      "knowledge_kind": "CONFIRMED_EXPECTED",
+      "confidence": "MEDIUM",
+      "kb_refs": [
+        "KB-052"
+      ]
+    },
+    {
+      "statement": "Theo Jira MTRO-30 (AC rule 07/08/2026, tóm tắt trong QA business rule Mailtro), ngay khi người dùng sửa tay ô Workspace URL thì việc tự đồng bộ từ Workspace name ngừng vĩnh viễn trong phiên đó.",
+      "knowledge_kind": "CONFIRMED_EXPECTED",
+      "confidence": "MEDIUM",
+      "kb_refs": [
+        "KB-053"
+      ]
+    },
+    {
+      "statement": "Theo Jira MTRO-30 / MTRO-20 (AC rule 07/08/2026, tóm tắt trong QA business rule Mailtro), signup thường gọi POST {apiUrl}/register với payload {name, email, password, team_name, team_slug}; staging (ô ghi 23/09/2026) thấy nút \"Create account\" gửi POST /register.",
+      "knowledge_kind": "CONFIRMED_EXPECTED",
+      "confidence": "MEDIUM",
+      "kb_refs": [
+        "KB-056"
+      ]
+    },
+    {
+      "statement": "Theo Jira MTRO-30 (AC rule 07/08/2026, tóm tắt trong QA business rule Mailtro), sau khi register thành công, signup thường điều hướng sang /verify.",
+      "knowledge_kind": "CONFIRMED_EXPECTED",
+      "confidence": "MEDIUM",
+      "kb_refs": [
+        "KB-057"
+      ]
+    },
+    {
+      "statement": "Theo Jira MTRO-92 AC §1 (tóm tắt trong QA KB Mailtro \"Security & Abuse guard\" v1, đọc 07/10/2026), form đăng ký và form quên mật khẩu có captcha. Chi tiết khi nào bắt buộc và hành vi khi token captcha thiếu hoặc sai ở server chưa có business rule.",
+      "knowledge_kind": "CONFIRMED_EXPECTED",
+      "confidence": "MEDIUM",
+      "kb_refs": [
+        "KB-059"
+      ]
+    },
+    {
+      "statement": "Theo Jira MTRO-20 / MTRO-30 (AC rule 07/08/2026, tóm tắt trong QA business rule Mailtro), khi mở /signup kèm tham số invite thì tiêu đề đổi thành \"Accept your invitation\".",
+      "knowledge_kind": "CONFIRMED_EXPECTED",
+      "confidence": "MEDIUM",
+      "kb_refs": [
+        "KB-061"
+      ]
+    },
+    {
+      "statement": "Theo Jira MTRO-20 / MTRO-30 (AC rule 07/08/2026, tóm tắt trong QA business rule Mailtro), ở signup qua link mời, 2 field Workspace name và Workspace URL bị ẩn.",
+      "knowledge_kind": "CONFIRMED_EXPECTED",
+      "confidence": "MEDIUM",
+      "kb_refs": [
+        "KB-063"
+      ]
+    },
+    {
+      "statement": "Theo Jira MTRO-20 / MTRO-30 (AC rule 07/08/2026, tóm tắt trong QA business rule Mailtro), ở signup qua link mời, ô Email được điền sẵn và chỉ đọc.",
+      "knowledge_kind": "CONFIRMED_EXPECTED",
+      "confidence": "MEDIUM",
+      "kb_refs": [
+        "KB-064"
+      ]
+    },
+    {
+      "statement": "Theo Jira MTRO-30 / MTRO-20 (AC rule 07/08/2026, tóm tắt trong QA business rule Mailtro), signup qua link mời (/signup?invite={token}&email=...&team=...) gửi invitation_token thay cho team_name / team_slug.",
+      "knowledge_kind": "CONFIRMED_EXPECTED",
+      "confidence": "MEDIUM",
+      "kb_refs": [
+        "KB-065"
+      ]
+    },
+    {
+      "statement": "Theo Jira MTRO-30 (AC rule 07/08/2026, tóm tắt trong QA business rule Mailtro), trang /verify có nút \"Resend verification email\" gọi POST /api/auth/email/verification-notification.",
+      "knowledge_kind": "CONFIRMED_EXPECTED",
+      "confidence": "MEDIUM",
+      "kb_refs": [
+        "KB-066"
+      ]
+    },
+    {
+      "statement": "Theo Jira MTRO-30 (AC rule 07/08/2026, tóm tắt trong QA business rule Mailtro), bấm \"I've verified — continue\" khi email chưa thực sự được verify thì người dùng vẫn bị giữ lại ở /verify.",
+      "knowledge_kind": "CONFIRMED_EXPECTED",
+      "confidence": "MEDIUM",
+      "kb_refs": [
+        "KB-067"
+      ]
+    },
+    {
+      "statement": "Theo Jira MTRO-30 (AC rule 07/08/2026 ghi \"đã xác nhận\", tóm tắt trong QA KB Mailtro \"Mailtro ID (Auth)\" v1, dẫn task Testlane MTRO-004), tài khoản chưa verify email vẫn đăng nhập được nhưng dừng ở /verify.",
+      "knowledge_kind": "CONFIRMED_EXPECTED",
+      "confidence": "MEDIUM",
+      "kb_refs": [
+        "KB-068"
+      ]
+    },
+    {
+      "statement": "Theo Jira MTRO-30 (AC rule 07/08/2026, tóm tắt trong QA business rule Mailtro), lỗi validate từ server (HTTP 422) khi signup hiển thị ngay dưới field tương ứng: email đã tồn tại thì dưới ô Email, slug workspace đã bị dùng thì dưới ô Workspace URL; lỗi không thuộc field nào hiển thị ở alert chung của form.",
+      "knowledge_kind": "CONFIRMED_EXPECTED",
+      "confidence": "MEDIUM",
+      "kb_refs": [
+        "KB-070"
+      ]
+    }
+  ],
+  "observed_behavior": [
+    {
+      "statement": "Trên staging (khảo sát 29/09/2026), trang /signup có tiêu đề \"Create your account\" và phụ đề \"Start your free 14-day trial. No credit card required.\"; Password có placeholder \"Create a password\", Workspace name có placeholder \"Qikify\", Workspace URL có placeholder \"qikify\" kèm hậu tố cố định .wisle.app (workspace được tạo cùng lúc với tài khoản); link \"Already have an account? Log in\" dẫn sang /login.",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "confidence": "MEDIUM",
+      "status": "CURRENT_STATE",
+      "kb_refs": [
+        "KB-049"
+      ]
+    },
+    {
+      "statement": "Theo test-run 25/08/2026 trên staging (sau khi BUG-AUTH-05 được sửa), slug từ tên workspace tiếng Việt có dấu được chuyển tự, ví dụ \"Đội QA Mailtro\" thành \"doi-qa-mailtro\". Cách xử lý ký tự có dấu chưa được chốt trong rule, và PO chưa xác nhận đây là chủ ý.",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "confidence": "MEDIUM",
+      "status": "CURRENT_STATE",
+      "kb_refs": [
+        "KB-054"
+      ]
+    },
+    {
+      "statement": "Theo test-run 25/08/2026 trên staging, Workspace name chỉ gồm khoảng trắng cho slug rỗng và nút \"Create account\" bị disabled. Với Full name chỉ gồm khoảng trắng, việc trim rồi báo required hay không chưa được Dev chốt.",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "confidence": "LOW",
+      "status": "CURRENT_STATE",
+      "kb_refs": [
+        "KB-055"
+      ]
+    },
+    {
+      "statement": "Trên staging (khảo sát 29/09/2026), submit form signup gửi kèm captcha_token.",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "confidence": "LOW",
+      "status": "CURRENT_STATE",
+      "kb_refs": [
+        "KB-058"
+      ]
+    },
+    {
+      "statement": "Trên staging (khảo sát 29/09/2026 bằng token giả, khi chưa đăng nhập), /signup?invite=<token> hiện biến thể mời với tiêu đề \"Accept your invitation\" và phụ đề \"Create your account to join the workspace.\".",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "confidence": "LOW",
+      "status": "CURRENT_STATE",
+      "kb_refs": [
+        "KB-062"
+      ]
+    },
+    {
+      "statement": "Theo test-run 25/08/2026 trên staging, slug workspace trùng thì server trả 422 và hiện lỗi inline \"The team slug has already been taken.\".",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "confidence": "LOW",
+      "status": "CURRENT_STATE",
+      "kb_refs": [
+        "KB-071"
+      ]
+    },
+    {
+      "statement": "Trên staging (quan sát 25/08/2026), email đăng ký được chuẩn hoá: chuyển chữ thường, bỏ phần +tag ở mọi domain, bỏ dấu chấm với địa chỉ Gmail; email sau chuẩn hoá trùng với tài khoản có sẵn thì trả 422 (\"The email has already been taken.\" / \"An account already exists for this mailbox...\"), nên không tạo được tài khoản mới bằng alias +tag.",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "confidence": "MEDIUM",
+      "status": "CURRENT_STATE",
+      "kb_refs": [
+        "KB-072"
+      ]
+    },
+    {
+      "statement": "Theo test-run 25/08/2026 trên staging (sau khi BUG-AUTH-09 được sửa), phía client chặn email thiếu TLD (dạng abc@domain) bằng cách disable nút \"Create account\".",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "confidence": "LOW",
+      "status": "CURRENT_STATE",
+      "kb_refs": [
+        "KB-073"
+      ]
+    },
+    {
+      "statement": "Theo test-run 25/08/2026 trên staging, email có hai dấu chấm liền nhau ở phần local (dạng abc..def tại một domain) qua được kiểm tra phía client nhưng server trả 422.",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "confidence": "LOW",
+      "status": "CURRENT_STATE",
+      "kb_refs": [
+        "KB-074"
+      ]
+    },
+    {
+      "statement": "Trên staging (quan sát QA 20/08/2026, nhắc lại ở khảo sát 23/09/2026), /register bị giới hạn 10 request / 60 giây theo IP/session, bộ đếm trừ cả các request bị 422 (BUG-AUTH-04 về điểm này được kết luận là not-bug, tài liệu không ghi ai kết luận); vượt giới hạn thì trả 429 và UI hiện \"Too many sign-up attempts. Please try again later.\".",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "confidence": "MEDIUM",
+      "status": "CURRENT_STATE",
+      "kb_refs": [
+        "KB-075"
+      ]
+    },
+    {
+      "statement": "Trên staging (khảo sát 29/09 và 01/10/2026), app workspace chưa có onboarding; route `/onboarding` chỉ tồn tại trên Mailtro ID và chỉ dành cho tài khoản chưa có workspace.",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "confidence": "MEDIUM",
+      "status": "CURRENT_STATE",
+      "kb_refs": [
+        "KB-P-060"
+      ]
+    },
+    {
+      "statement": "Trên staging (quan sát 23/09, 29/09 và 01/10/2026), captcha Cloudflare Turnstile chỉ có ở `/signup` và `/forgot-password` của Mailtro ID.",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "confidence": "MEDIUM",
+      "status": "CURRENT_STATE",
+      "kb_refs": [
+        "KB-P-066"
+      ]
+    },
+    {
+      "statement": "Trên staging (đọc HTML/cấu hình trang 23/09 và 29/09/2026), cờ `window.__MAILTRO__.captcha.enabled` là `true` và Turnstile cấu hình `appearance: interaction-only`, nên captcha thường không hiện ra với người dùng.",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "confidence": "MEDIUM",
+      "status": "CURRENT_STATE",
+      "kb_refs": [
+        "KB-P-067"
+      ]
+    },
+    {
+      "statement": "Trên staging (quan sát 23/09/2026), khi captcha không tải được thì hiện lỗi \"The security check couldn't load. Please reload the page and try again.\"; khi kiểm tra captcha thất bại thì hiện lỗi \"The security check failed. Please try again.\". QA ghi đây là bản đính chính so với copy lỗi trong ticket Jira MTRO-92.",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "confidence": "MEDIUM",
+      "status": "CURRENT_STATE",
+      "kb_refs": [
+        "KB-P-069"
+      ]
+    }
+  ],
+  "observed_validations": [],
+  "permissions": [
+    {
+      "statement": "Đăng ký diễn ra trên Mailtro ID trước khi vào workspace; người tự đăng ký điền thông tin workspace trong form, người nhận lời mời tham gia workspace có sẵn. Role được gán sau khi tham gia không được mô tả trong feature này.",
+      "kb_refs": [
+        "KB-048",
+        "KB-061",
+        "KB-P-051"
+      ]
+    }
+  ],
+  "surface_mapping": {
+    "portal": [
+      {
+        "item": "Mailtro ID /signup: Create your account, 5 field, hậu tố .wisle.app cố định cho Workspace URL, link Log in sang /login",
+        "kb_refs": [
+          "KB-048",
+          "KB-049"
+        ]
+      },
+      {
+        "item": "Mailtro ID /signup?invite=: Accept your invitation, ẩn field workspace, Email chỉ đọc",
+        "kb_refs": [
+          "KB-061",
+          "KB-062",
+          "KB-063",
+          "KB-064"
+        ]
+      },
+      {
+        "item": "Mailtro ID /verify: Resend verification email, I've verified — continue",
+        "kb_refs": [
+          "KB-066",
+          "KB-067"
+        ]
+      },
+      {
+        "item": "Mailtro ID /onboarding (chưa khảo sát nội dung)",
+        "kb_refs": [
+          "KB-069",
+          "KB-P-060"
+        ]
+      },
+      {
+        "item": "Thông báo lỗi captcha (không tải được / kiểm tra thất bại)",
+        "kb_refs": [
+          "KB-P-069"
+        ]
+      }
+    ],
+    "storefront": [],
+    "api": [
+      {
+        "item": "POST {apiUrl}/register với {name, email, password, team_name, team_slug} hoặc invitation_token (biến thể mời), kèm captcha_token",
+        "kb_refs": [
+          "KB-056",
+          "KB-058",
+          "KB-065"
+        ]
+      },
+      {
+        "item": "POST /api/auth/email/verification-notification (Resend verification email)",
+        "kb_refs": [
+          "KB-066"
+        ]
+      },
+      {
+        "item": "422 \"The team slug has already been taken.\" / \"The email has already been taken.\"",
+        "kb_refs": [
+          "KB-071",
+          "KB-072"
+        ]
+      },
+      {
+        "item": "429 khi vượt 10 request / 60 giây ở /register",
+        "kb_refs": [
+          "KB-075"
+        ]
+      }
+    ],
+    "data": [
+      {
+        "item": "Slug workspace: chữ thường, khoảng trắng thành '-', chỉ giữ a-z0-9-",
+        "kb_refs": [
+          "KB-052",
+          "KB-054"
+        ]
+      },
+      {
+        "item": "Email được chuẩn hoá trước khi kiểm trùng (quan sát staging)",
+        "kb_refs": [
+          "KB-072"
+        ]
+      },
+      {
+        "item": "API / DB gọi workspace là team (team_name, team_slug)",
+        "kb_refs": [
+          "KB-P-006"
+        ]
+      }
+    ],
+    "code": [
+      {
+        "item": "Router bundle: /verify requiresAuth, /onboarding requiresAuth + requiresVerified (suy luận)",
+        "kb_refs": [
+          "KB-069"
+        ]
+      }
+    ]
+  },
+  "dependencies": [
+    {
+      "target": "auth / sign-in-and-workspace-selection",
+      "relation": "see_also",
+      "note": "Luồng chính có bước Login; tài khoản chưa verify đăng nhập thì dừng ở /verify.",
+      "kb_refs": [
+        "KB-078",
+        "KB-068"
+      ]
+    },
+    {
+      "target": "auth / two-factor-challenge",
+      "relation": "see_also",
+      "note": "Chấp nhận lời mời sau khi qua 2FA với ?invite=.",
+      "kb_refs": [
+        "KB-047",
+        "KB-062"
+      ]
+    },
+    {
+      "target": "workspace-settings / team-members-and-invitations",
+      "relation": "invite_source",
+      "note": "Link mời được tạo và chấp nhận ở phần thành viên workspace.",
+      "kb_refs": [
+        "KB-061",
+        "KB-080"
+      ]
+    },
+    {
+      "target": "abuse-guard / account-and-access-abuse-limits",
+      "relation": "shared_rule",
+      "note": "Giới hạn số lượt đăng ký theo mạng (Jira MTRO-92 §1) nằm ở object abuse-guard.",
+      "kb_refs": [
+        "KB-075"
+      ]
+    },
+    {
+      "target": "product / captcha và CSRF",
+      "relation": "see_also",
+      "note": "Captcha Turnstile và cơ chế CSRF là fact tầng product.",
+      "kb_refs": [
+        "KB-P-066",
+        "KB-P-033"
+      ]
+    }
+  ],
+  "risks": [
+    {
+      "statement": "Theo router Mailtro ID trong bundle frontend 28/09/2026 và route-probe trên staging 29/09/2026, /verify yêu cầu đã đăng nhập (requiresAuth), /onboarding yêu cầu đã đăng nhập và đã verify email (requiresAuth + requiresVerified); mở /verify hoặc /onboarding khi chưa đăng nhập thì bị chuyển về /login. Nội dung hai trang này chưa được khảo sát.",
+      "knowledge_kind": "INFERRED",
+      "confidence": "LOW",
+      "kb_refs": [
+        "KB-069"
+      ]
+    },
+    {
+      "statement": "Theo test-run 25/08/2026 trên staging, /register không còn kiểm CSRF (gửi token rác vẫn trả 201); chưa chốt đây là chủ ý hay lỗi, đang chờ Dev xác nhận.",
+      "knowledge_kind": "INFERRED",
+      "confidence": "LOW",
+      "kb_refs": [
+        "KB-077"
+      ]
+    },
+    {
+      "statement": "Theo dòng liệt kê Jira MTRO-30 (Epic Login / Signup, trạng thái PASS) trong QA KB Mailtro \"Mailtro ID (Auth)\" v1, luồng được mô tả là Sign up → Verify → Login → Create workspace; đây chỉ là tiêu đề/ghi chú của ticket, không phải AC, và chưa rõ workspace đầu tiên được tạo lúc signup hay ở bước Create workspace sau đăng nhập.",
+      "knowledge_kind": "INFERRED",
+      "confidence": "LOW",
+      "kb_refs": [
+        "KB-078"
+      ]
+    },
+    {
+      "statement": "Theo tiêu đề Jira MTRO-42 (\"Create workspace during new user sign up\", Story, trạng thái PASS; liệt kê trong QA KB Mailtro \"Mailtro ID (Auth)\" v1), workspace đầu tiên được tạo trong lúc người dùng mới đăng ký; đây chỉ là tiêu đề ticket, không phải AC, và thời điểm tạo workspace đầu tiên chưa được PO/Dev xác nhận.",
+      "knowledge_kind": "INFERRED",
+      "confidence": "LOW",
+      "kb_refs": [
+        "KB-079"
+      ]
+    },
+    {
+      "statement": "Theo bug log auth (BUG-AUTH-08, ghi 20/08/2026, open khi test-run 25/08/2026), khi bị rate limit 429 (tài liệu KB Auth ghi ở /register) UI chỉ hiện alert chung \"Something went wrong\", không nói là bị khoá và nút vẫn enable, thay vì thông báo riêng về giới hạn. Đây là lỗi đã biết, không phải hành vi đúng.",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "confidence": "LOW",
+      "status": "KNOWN_DEFECT",
+      "kb_refs": [
+        "KB-076"
+      ]
+    },
+    {
+      "statement": "Trên staging (khảo sát 23/09/2026, QA ghi là lỗi nghi vấn, chưa kiểm lại), mở /signup?invite=<token không hợp lệ> khi đang đăng nhập thì màn chọn workspace gọi POST /api/invitations/<token>/accept, BE trả 405, UI im lặng bỏ tham số ?invite và không hiện toast \"We couldn't add you to that workspace…\". Đây là lỗi đã biết, không phải hành vi đúng.",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "confidence": "LOW",
+      "status": "KNOWN_DEFECT",
+      "kb_refs": [
+        "KB-080"
+      ]
+    },
+    {
+      "statement": "Theo test-run 25/08/2026 trên staging (sau khi BUG-AUTH-05 được sửa), slug từ tên workspace tiếng Việt có dấu được chuyển tự, ví dụ \"Đội QA Mailtro\" thành \"doi-qa-mailtro\". Cách xử lý ký tự có dấu chưa được chốt trong rule, và PO chưa xác nhận đây là chủ ý.",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "confidence": "MEDIUM",
+      "status": "CURRENT_STATE",
+      "kb_refs": [
+        "KB-054"
+      ],
+      "note": "Chưa được PO xác nhận là chủ ý, không dùng làm expected."
+    },
+    {
+      "statement": "Theo bug log auth (BUG-AUTH-10, mức P2, open), document.title luôn là \"Mailtro Staging — Sign in\" ở cả /signup và /verify. Đây là lỗi đã biết, không phải hành vi đúng.",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "confidence": "LOW",
+      "status": "KNOWN_DEFECT",
+      "kb_refs": [
+        "KB-027"
+      ],
+      "note": "Lỗi tiêu đề trang ở /signup và /verify (item thuộc nhóm lỗi đăng nhập)."
+    }
+  ],
+  "freshness": {
+    "observed_at": "2026-09-29",
+    "basis": "Jira MTRO-30 / MTRO-20 AC 07/08/2026; Jira MTRO-42 / MTRO-92 đọc 07/10/2026; test-run 25/08/2026; khảo sát staging 23/09, 29/09/2026"
+  },
+  "unknown_areas": [
+    {
+      "question": "Workspace đầu tiên được tạo ngay khi submit signup hay ở bước Create workspace (/onboarding) sau khi verify và đăng nhập; trường hợp nào người dùng gặp /onboarding?",
+      "why_it_matters": "Hai nguồn chỉ là tiêu đề / ghi chú ticket (không phải AC) và nói khác nhau; không rõ khi nào cần test /onboarding.",
+      "kb_refs": [
+        "KB-078",
+        "KB-079",
+        "KB-069",
+        "KB-P-060"
+      ],
+      "oq_id": "OQ-auth-011"
+    },
+    {
+      "question": "Sau khi submit đăng ký qua link mời, người dùng có phải verify email không và được đưa thẳng vào workspace mời hay sang màn nào?",
+      "why_it_matters": "Tài liệu chỉ nói signup thường sang /verify; kết quả của biến thể mời không được mô tả.",
+      "kb_refs": [
+        "KB-057",
+        "KB-061",
+        "KB-065"
+      ],
+      "oq_id": "OQ-auth-027"
+    },
+    {
+      "question": "Slug từ tên workspace tiếng Việt có dấu được chuyển tự (\"Đội QA Mailtro\" thành \"doi-qa-mailtro\") có phải hành vi mong đợi không?",
+      "why_it_matters": "Rule slugify chỉ nói loại ký tự ngoài a-z0-9-; hiện trạng chuyển tự chưa được PO xác nhận.",
+      "kb_refs": [
+        "KB-052",
+        "KB-054"
+      ],
+      "oq_id": "OQ-auth-010"
+    },
+    {
+      "question": "Full name hoặc Workspace name chỉ gồm khoảng trắng có được trim rồi báo required (ở client và/hoặc server) không?",
+      "why_it_matters": "Chỉ có quan sát Workspace name toàn khoảng trắng làm nút bị disabled; Full name chưa chốt.",
+      "kb_refs": [
+        "KB-055"
+      ],
+      "oq_id": "OQ-auth-012"
+    },
+    {
+      "question": "Người đã đăng nhập mở /signup thì bị redirect hay vẫn thấy form đăng ký?",
+      "why_it_matters": "Router không ghi guard cho /signup; chưa có expected.",
+      "kb_refs": [
+        "KB-049",
+        "KB-069"
+      ],
+      "oq_id": "OQ-auth-013"
+    },
+    {
+      "question": "/register không kiểm CSRF (gửi token rác vẫn trả 201) là chủ ý hay lỗi?",
+      "why_it_matters": "Ảnh hưởng tới case bảo mật của form đăng ký.",
+      "kb_refs": [
+        "KB-077"
+      ],
+      "oq_id": "OQ-auth-014"
+    },
+    {
+      "question": "Captcha ở form đăng ký bắt buộc khi nào, server xử lý thế nào khi captcha_token thiếu hoặc sai, và có áp cho biến thể mời không?",
+      "why_it_matters": "Rule chỉ nói form đăng ký có captcha; chi tiết chưa có business rule.",
+      "kb_refs": [
+        "KB-058",
+        "KB-059",
+        "KB-P-069"
+      ],
+      "oq_id": "OQ-auth-017"
+    },
+    {
+      "question": "Chính sách mật khẩu khi đăng ký ngoài mức tối thiểu 8 ký tự là gì (yêu cầu chữ cái, chặn mật khẩu bị rò rỉ như ở luồng reset có áp dụng không)?",
+      "why_it_matters": "Luồng reset có quan sát quy tắc chặt hơn nhưng QA tự ghi là áp dụng chung, chưa có rule PO/Dev.",
+      "kb_refs": [
+        "KB-051",
+        "KB-101"
+      ],
+      "oq_id": "OQ-auth-017"
+    },
+    {
+      "question": "Workspace URL có giới hạn độ dài, slug dành riêng hoặc ký tự đầu / cuối nào bị cấm không?",
+      "why_it_matters": "Chỉ có rule slugify và lỗi slug trùng; validation khác chưa có nguồn.",
+      "kb_refs": [
+        "KB-052",
+        "KB-070"
+      ],
+      "oq_id": "OQ-auth-040"
+    },
+    {
+      "question": "Nội dung /verify và /onboarding, thời hạn link xác minh, hành vi khi bấm link xác minh lúc đã / chưa đăng nhập, và giới hạn của Resend verification email là gì?",
+      "why_it_matters": "Hai trang này chưa được khảo sát; cần tài khoản chưa verify / chưa có workspace và hộp thư kiểm soát được.",
+      "kb_refs": [
+        "KB-066",
+        "KB-067",
+        "KB-068",
+        "KB-069"
+      ],
+      "oq_id": "OQ-auth-016"
+    }
+  ],
+  "last_updated": {
+    "date": "2026-10-08",
+    "ccr_ref": "bootstrap"
+  },
+  "coverage_matrix": [
+    {
+      "feature_id": "signup-and-workspace-creation",
+      "layer": "auth",
+      "role": "visitor",
+      "state": "đăng ký thường, form hợp lệ",
+      "environment": "documented",
+      "covered": true,
+      "note": "Rule Jira MTRO-30"
+    },
+    {
+      "feature_id": "signup-and-workspace-creation",
+      "layer": "auth",
+      "role": "visitor",
+      "state": "form chưa hợp lệ / validate client",
+      "environment": "documented",
+      "covered": true,
+      "note": "Rule gating + quan sát test-run"
+    },
+    {
+      "feature_id": "signup-and-workspace-creation",
+      "layer": "auth",
+      "role": "visitor",
+      "state": "lỗi 422 từ server",
+      "environment": "documented",
+      "covered": true,
+      "note": "Rule Jira MTRO-30 + quan sát"
+    },
+    {
+      "feature_id": "signup-and-workspace-creation",
+      "layer": "auth",
+      "role": "visitor",
+      "state": "vượt rate limit",
+      "environment": "documented",
+      "covered": true,
+      "note": "Quan sát staging; UI 429 là lỗi đã biết"
+    },
+    {
+      "feature_id": "signup-and-workspace-creation",
+      "layer": "auth",
+      "role": "invited-user",
+      "state": "đăng ký qua link mời",
+      "environment": "documented",
+      "covered": true,
+      "note": "Rule Jira MTRO-20 / MTRO-30; kết quả sau submit chưa có"
+    },
+    {
+      "feature_id": "signup-and-workspace-creation",
+      "layer": "auth",
+      "role": "unspecified",
+      "state": "đang đăng nhập mở link mời không hợp lệ",
+      "environment": "documented",
+      "covered": false,
+      "note": "Lỗi đã biết, chưa có expected"
+    },
+    {
+      "feature_id": "signup-and-workspace-creation",
+      "layer": "auth",
+      "role": "unspecified (chưa verify)",
+      "state": "ở /verify",
+      "environment": "documented",
+      "covered": true,
+      "note": "Rule Jira MTRO-30; nội dung trang chưa khảo sát"
+    },
+    {
+      "feature_id": "signup-and-workspace-creation",
+      "layer": "auth",
+      "role": "unspecified (chưa có workspace)",
+      "state": "/onboarding",
+      "environment": "documented",
+      "covered": false,
+      "note": "Chưa khảo sát"
+    },
+    {
+      "feature_id": "signup-and-workspace-creation",
+      "layer": "auth",
+      "role": "visitor",
+      "state": "captcha thiếu / sai",
+      "environment": "documented",
+      "covered": false,
+      "note": "Chưa có business rule"
+    },
+    {
+      "feature_id": "signup-and-workspace-creation",
+      "layer": "api",
+      "role": "visitor",
+      "state": "POST /register",
+      "environment": "documented",
+      "covered": true,
+      "note": "Rule payload Jira MTRO-30"
+    },
+    {
+      "feature_id": "signup-and-workspace-creation",
+      "layer": "code",
+      "role": "unspecified",
+      "state": "route guard",
+      "environment": "documented",
+      "covered": false,
+      "note": "Chỉ suy luận từ bundle"
+    }
+  ],
+  "profile_conflicts": [],
+  "profile_relationships": [
+    {
+      "from": "signup-and-workspace-creation",
+      "to": "sign-in-and-workspace-selection",
+      "relation": "PRECEDES",
+      "kb_refs": [
+        "KB-078",
+        "KB-068"
+      ]
+    },
+    {
+      "from": "signup-and-workspace-creation",
+      "to": "workspace-settings/team-members-and-invitations",
+      "relation": "ACCEPTS_INVITE_FROM",
+      "kb_refs": [
+        "KB-061",
+        "KB-065",
+        "KB-080"
+      ]
+    },
+    {
+      "from": "signup-and-workspace-creation",
+      "to": "abuse-guard/account-and-access-abuse-limits",
+      "relation": "SHARES_RULE_WITH",
+      "kb_refs": [
+        "KB-075"
+      ]
+    }
+  ]
+}

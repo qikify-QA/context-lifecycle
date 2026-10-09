@@ -1,0 +1,551 @@
+{
+  "schema_version": "1.0",
+  "artifact_type": "FeatureProfileCandidate",
+  "artifact_id": "ART-FEATURE-PROFILE-uninstall-reinstall-token-cleanup-CTX-20261009-01",
+  "workflow_id": "CTX-20261009-01",
+  "producer": "feature-profile-builder",
+  "source_refs": [
+    "candidate/product-kb/uninstall-reinstall-token-cleanup.json",
+    "candidate/product-kb/_object-level.auth-token.json",
+    "candidate/product-kb/_product-level.json",
+    "input/scope-plan.json",
+    "input/orchestrator-directives.json",
+    "input/profile-checklist-brief.md"
+  ],
+  "upstream_artifact_ids": [
+    "PKBC-CTX-20261009-01-auth-token-uninstall-reinstall-token-cleanup",
+    "PKBC-CTX-20261009-01-auth-token-object-level",
+    "PKBC-CTX-20261009-01-_product-level",
+    "SCOPE-PLAN-CTX-20261009-01"
+  ],
+  "status": "PARTIAL",
+  "confidence": "MEDIUM",
+  "observations": [
+    "Profile dựng từ tài liệu; không có quan sát runtime nên act_ids, observed_behavior và observed_validations rỗng.",
+    "8 quy tắc đã xác nhận đều đến từ Jira DUOS-399 (description/AC, cập nhật 07/07/2026), tóm tắt trong QA business rule Duos; mọi phát biểu chỉ có trong tóm tắt QA nằm ở risks / unknown_areas.",
+    "Object auth-token không có tranh chấp (conflict_group) nào; BUG-36 (nội dung chưa đọc được) được theo dõi như regression watch."
+  ],
+  "assumptions": [
+    "feature_id dùng chính feature_key (ổn định qua các version); FEATURE-ID dạng FEAT-nn do orchestrator mint lúc publish.",
+    "surface_mapping thêm khoá `backend` / `admin_panel` cho job, webhook, email và admin panel nội bộ — các surface không thuộc portal/storefront/api/data/code.",
+    "coverage_matrix: covered=true khi có rule CONFIRMED_EXPECTED cho ô đó (environment luôn documented); covered=false khi chỉ có tóm tắt QA chưa xác nhận hoặc tài liệu không nêu."
+  ],
+  "unknowns": [
+    "Email reinstall có tiêu đề, nội dung, người nhận và ngôn ngữ nào, và luồng reinstall sync những dữ liệu gì?",
+    "Soft-delete khi uninstall ảnh hưởng những dữ liệu nào ngoài session, field token và cached shop (company, quote, ledger, cấu hình…), và reinstall có khôi phục chúng không?",
+    "Khi lỡ webhook uninstall, có cơ chế nào khác ngoài safety net lúc reinstall để dọn field token cũ và ngừng job/email cho shop không?",
+    "Shop uninstall có làm token legacy cũ chết ngay phía Shopify không?",
+    "BUG-36 (gắn TC-DUOS-001, trạng thái \"open?\") là lỗi gì, thuộc hành vi token nào (phát hiện token chết, refresh/migrate, re-auth khi mở app, uninstall/reinstall hay admin panel), còn mở hay đã fix?"
+  ],
+  "conflicts": [],
+  "blocking_issues": [],
+  "payload": {
+    "feature_profiles": [
+      {
+        "feature_id": "uninstall-reinstall-token-cleanup",
+        "feature_key": "uninstall-reinstall-token-cleanup",
+        "name": "Dọn token khi uninstall, nhận token mới khi reinstall",
+        "user_goal": "Khi shop gỡ app, session và mọi field token của shop được dọn sạch và hệ thống ngừng refresh token / gửi email reconnect cho shop đó; khi cài lại, shop luôn nhận token expiring sạch và chạy luồng reinstall bình thường.",
+        "user_goal_kb_refs": [
+          "KB-037",
+          "KB-039",
+          "KB-040",
+          "KB-041",
+          "KB-044"
+        ],
+        "stable_since_version": "v1",
+        "actors": [
+          {
+            "role": "system (backend xử lý uninstall / reinstall)",
+            "permission_observed": "Theo rule Jira DUOS-399: xoá session, clear field token, clear cached shop, soft-delete shop khi uninstall; khi reinstall clear field cũ còn sót, ghi token expiring mới, sync dữ liệu và gửi email reinstall.",
+            "kb_refs": [
+              "KB-037",
+              "KB-038",
+              "KB-039",
+              "KB-040",
+              "KB-041",
+              "KB-042"
+            ]
+          },
+          {
+            "role": "shop / merchant (gỡ hoặc cài lại app trên Shopify)",
+            "permission_observed": "Tài liệu chỉ nêu sự kiện uninstall / reinstall của shop, không nêu ai thao tác.",
+            "kb_refs": [
+              "KB-037",
+              "KB-040"
+            ]
+          }
+        ],
+        "entry_points": [
+          {
+            "path": "Shop uninstall app (webhook uninstall)",
+            "precondition": "Shop đang cài app (có thể đang chờ reconnect).",
+            "kb_refs": [
+              "KB-037",
+              "KB-041",
+              "KB-043"
+            ]
+          },
+          {
+            "path": "Shop reinstall app → lần login mới",
+            "precondition": "Shop đã uninstall trước đó (có thể còn field token cũ sót nếu lỡ webhook uninstall).",
+            "kb_refs": [
+              "KB-040",
+              "KB-041"
+            ]
+          }
+        ],
+        "capabilities": [
+          {
+            "name": "Dọn session và token khi uninstall",
+            "description": "Xoá session; clear `Access Token Expires At`, `Refresh Token`, `Refresh Token Expires At`, `Re-auth Required At`; clear cached shop; soft-delete shop (uninstalled).",
+            "kb_refs": [
+              "KB-037",
+              "KB-038",
+              "KB-039"
+            ],
+            "act_ids": []
+          },
+          {
+            "name": "Uninstall khi shop đang chờ reconnect",
+            "description": "Shop bị soft-delete, `Re-auth Required At` bị clear; sau đó không còn email reconnect và không còn refresh token (trừ khi reinstall). Luồng email reopen cũng bỏ qua shop đã uninstall.",
+            "kb_refs": [
+              "KB-043",
+              "KB-044",
+              "KB-012"
+            ],
+            "act_ids": []
+          },
+          {
+            "name": "Ngừng job token cho shop đã uninstall",
+            "description": "Cả `tokens:refresh-expiring` và `tokens:migrate-legacy` bỏ qua shop đã uninstall.",
+            "kb_refs": [
+              "KB-025",
+              "KB-044"
+            ],
+            "act_ids": []
+          },
+          {
+            "name": "Reinstall nhận token expiring sạch",
+            "description": "Lần login mới luôn nhận token expiring (app luôn request expiring); app clear field token cũ còn sót (safety net khi lỡ webhook uninstall) trước khi ghi token mới.",
+            "kb_refs": [
+              "KB-040",
+              "KB-041"
+            ],
+            "act_ids": []
+          },
+          {
+            "name": "Luồng reinstall thông thường",
+            "description": "Reinstall kích hoạt sync dữ liệu và gửi email reinstall; phạm vi sync và nội dung email chưa nêu.",
+            "kb_refs": [
+              "KB-042"
+            ],
+            "act_ids": []
+          }
+        ],
+        "state_transitions": [
+          {
+            "from": "shop đang cài app",
+            "to": "shop soft-delete (uninstalled), session xoá, 4 field token và cached shop được clear",
+            "trigger": "Shop uninstall app",
+            "condition": "—",
+            "kb_refs": [
+              "KB-037",
+              "KB-038",
+              "KB-039"
+            ]
+          },
+          {
+            "from": "shop đang chờ reconnect (`Re-auth Required At` có giá trị)",
+            "to": "shop soft-delete, cờ được clear, không còn email reconnect / refresh",
+            "trigger": "Shop uninstall app",
+            "condition": "—",
+            "kb_refs": [
+              "KB-043",
+              "KB-044"
+            ]
+          },
+          {
+            "from": "shop uninstalled",
+            "to": "shop dùng token expiring mới, đã sync và gửi email reinstall",
+            "trigger": "Shop reinstall và login",
+            "condition": "Field token cũ còn sót được clear trước khi ghi token mới",
+            "kb_refs": [
+              "KB-040",
+              "KB-041",
+              "KB-042"
+            ]
+          }
+        ],
+        "confirmed_rules": [
+          {
+            "statement": "Theo Jira DUOS-399 (description/AC, cập nhật 07/07/2026; tóm tắt trong QA business rule Duos và QA KB Duos \"Auth & Token lifecycle\" v1), khi shop uninstall app xoá session và clear 4 field token: `Access Token Expires At`, `Refresh Token`, `Refresh Token Expires At`, `Re-auth Required At`.",
+            "knowledge_kind": "CONFIRMED_EXPECTED",
+            "confidence": "MEDIUM",
+            "kb_refs": [
+              "KB-037"
+            ]
+          },
+          {
+            "statement": "Theo Jira DUOS-399 (description/AC, cập nhật 07/07/2026; tóm tắt trong QA business rule Duos và QA KB Duos \"Auth & Token lifecycle\" v1), khi shop uninstall app clear cached shop.",
+            "knowledge_kind": "CONFIRMED_EXPECTED",
+            "confidence": "MEDIUM",
+            "kb_refs": [
+              "KB-038"
+            ]
+          },
+          {
+            "statement": "Theo Jira DUOS-399 (description/AC, cập nhật 07/07/2026; tóm tắt trong QA business rule Duos và QA KB Duos \"Auth & Token lifecycle\" v1), khi shop uninstall, shop được đánh dấu soft-delete uninstalled.",
+            "knowledge_kind": "CONFIRMED_EXPECTED",
+            "confidence": "MEDIUM",
+            "kb_refs": [
+              "KB-039"
+            ]
+          },
+          {
+            "statement": "Theo Jira DUOS-399 (description/AC, cập nhật 07/07/2026; tóm tắt trong QA business rule Duos và QA KB Duos \"Auth & Token lifecycle\" v1), khi reinstall, lần login mới luôn nhận token dạng expiring vì app luôn request expiring.",
+            "knowledge_kind": "CONFIRMED_EXPECTED",
+            "confidence": "MEDIUM",
+            "kb_refs": [
+              "KB-040"
+            ]
+          },
+          {
+            "statement": "Theo Jira DUOS-399 (description/AC, cập nhật 07/07/2026; tóm tắt trong QA business rule Duos và QA KB Duos \"Auth & Token lifecycle\" v1), khi reinstall, app clear các field token cũ còn sót (safety net khi trước đó lỡ webhook uninstall) trước khi ghi token mới.",
+            "knowledge_kind": "CONFIRMED_EXPECTED",
+            "confidence": "MEDIUM",
+            "kb_refs": [
+              "KB-041"
+            ]
+          },
+          {
+            "statement": "Theo Jira DUOS-399 (description/AC, cập nhật 07/07/2026; tóm tắt trong QA business rule Duos và QA KB Duos \"Auth & Token lifecycle\" v1), reinstall kích hoạt luồng reinstall thông thường: sync dữ liệu và gửi email reinstall.",
+            "knowledge_kind": "CONFIRMED_EXPECTED",
+            "confidence": "MEDIUM",
+            "kb_refs": [
+              "KB-042"
+            ]
+          },
+          {
+            "statement": "Theo Jira DUOS-399 (description/AC, cập nhật 07/07/2026; tóm tắt trong QA business rule Duos và QA KB Duos \"Auth & Token lifecycle\" v1), khi shop uninstall trong lúc đang chờ reconnect, shop bị soft-delete và field `Re-auth Required At` bị clear.",
+            "knowledge_kind": "CONFIRMED_EXPECTED",
+            "confidence": "MEDIUM",
+            "kb_refs": [
+              "KB-043"
+            ]
+          },
+          {
+            "statement": "Theo Jira DUOS-399 (description/AC, cập nhật 07/07/2026; tóm tắt trong QA business rule Duos và QA KB Duos \"Auth & Token lifecycle\" v1), sau khi shop đang chờ reconnect bị uninstall, app không còn gửi email reconnect và không còn refresh token cho shop đó (trừ khi shop reinstall lại).",
+            "knowledge_kind": "CONFIRMED_EXPECTED",
+            "confidence": "MEDIUM",
+            "kb_refs": [
+              "KB-044"
+            ]
+          }
+        ],
+        "observed_behavior": [],
+        "observed_validations": [],
+        "permissions": [
+          {
+            "statement": "Rule chỉ mô tả hành vi hệ thống khi shop uninstall / reinstall, không nêu ràng buộc role.",
+            "kb_refs": [
+              "KB-037",
+              "KB-040"
+            ]
+          }
+        ],
+        "surface_mapping": {
+          "portal": [],
+          "storefront": [],
+          "api": [
+            {
+              "item": "Webhook uninstall của Shopify (lỡ webhook được bù bằng safety net khi reinstall)",
+              "kb_refs": [
+                "KB-041"
+              ]
+            },
+            {
+              "item": "Login mới khi reinstall luôn request token expiring",
+              "kb_refs": [
+                "KB-040"
+              ]
+            }
+          ],
+          "data": [
+            {
+              "item": "Session của shop (xoá khi uninstall)",
+              "kb_refs": [
+                "KB-037"
+              ]
+            },
+            {
+              "item": "`Access Token Expires At`, `Refresh Token`, `Refresh Token Expires At`, `Re-auth Required At` (clear khi uninstall và khi reinstall còn sót)",
+              "kb_refs": [
+                "KB-037",
+                "KB-041"
+              ]
+            },
+            {
+              "item": "Cached shop; trạng thái soft-delete uninstalled",
+              "kb_refs": [
+                "KB-038",
+                "KB-039"
+              ]
+            }
+          ],
+          "code": [],
+          "backend": [
+            {
+              "item": "Email reinstall và sync dữ liệu khi reinstall",
+              "kb_refs": [
+                "KB-042"
+              ]
+            }
+          ]
+        },
+        "dependencies": [
+          {
+            "target": "auth-token / dead-token-detection-and-reconnect",
+            "relation": "constrains",
+            "note": "Uninstall chấm dứt trạng thái chờ reconnect và email reconnect; luồng reopen bỏ qua shop đã uninstall.",
+            "kb_refs": [
+              "KB-043",
+              "KB-044",
+              "KB-012"
+            ]
+          },
+          {
+            "target": "auth-token / token-refresh-and-legacy-migration",
+            "relation": "constrains",
+            "note": "Job refresh và migrate bỏ qua shop đã uninstall.",
+            "kb_refs": [
+              "KB-025"
+            ]
+          },
+          {
+            "target": "auth-token / admin-token-and-scopes",
+            "relation": "read_by",
+            "note": "Các field token được clear cũng là các field admin panel hiển thị.",
+            "kb_refs": [
+              "KB-046"
+            ]
+          }
+        ],
+        "risks": [
+          {
+            "statement": "Nếu lỡ webhook uninstall, field token cũ vẫn còn trên shop tới khi reinstall; rule chỉ bù bằng safety net lúc reinstall, nên trong khoảng giữa shop có thể vẫn bị job hoặc email xử lý như shop đang cài.",
+            "knowledge_kind": "CONFIRMED_EXPECTED",
+            "confidence": "MEDIUM",
+            "kb_refs": [
+              "KB-041",
+              "KB-025",
+              "KB-044"
+            ]
+          },
+          {
+            "statement": "Uninstall là hành vi xoá/soft-delete dữ liệu (topic data-deletion); tài liệu chỉ nêu phần token/session/cached shop, không nêu dữ liệu khác của shop được giữ hay xoá.",
+            "knowledge_kind": "CONFIRMED_EXPECTED",
+            "confidence": "MEDIUM",
+            "kb_refs": [
+              "KB-039",
+              "KB-037"
+            ]
+          },
+          {
+            "statement": "Known issues Duos ghi BUG-36 (trạng thái \"open?\") gắn với TC-DUOS-001 của nhóm Auth & Token lifecycle nhưng nội dung lỗi chưa đọc được; chưa biết lỗi chạm hành vi nào của token lifecycle, nên theo dõi như regression watch và không dùng TC-DUOS-001 làm bằng chứng PASS.",
+            "knowledge_kind": "OBSERVED_CURRENT",
+            "confidence": "LOW",
+            "kb_refs": [
+              "KB-057"
+            ],
+            "status": "KNOWN_DEFECT"
+          }
+        ],
+        "unknown_areas": [
+          {
+            "question": "Email reinstall có tiêu đề, nội dung, người nhận và ngôn ngữ nào, và luồng reinstall sync những dữ liệu gì?",
+            "why_it_matters": "Rule chỉ nói có sync và gửi email reinstall.",
+            "kb_refs": [
+              "KB-042"
+            ]
+          },
+          {
+            "question": "Soft-delete khi uninstall ảnh hưởng những dữ liệu nào ngoài session, field token và cached shop (company, quote, ledger, cấu hình…), và reinstall có khôi phục chúng không?",
+            "why_it_matters": "Phạm vi dữ liệu bị xoá/giữ quyết định check sau reinstall.",
+            "kb_refs": [
+              "KB-039",
+              "KB-042"
+            ]
+          },
+          {
+            "question": "Khi lỡ webhook uninstall, có cơ chế nào khác ngoài safety net lúc reinstall để dọn field token cũ và ngừng job/email cho shop không?",
+            "why_it_matters": "Rule chỉ nêu safety net khi reinstall.",
+            "kb_refs": [
+              "KB-041",
+              "KB-025"
+            ]
+          },
+          {
+            "question": "Shop uninstall có làm token legacy cũ chết ngay phía Shopify không?",
+            "why_it_matters": "Chỉ có trong tóm tắt QA về các tình huống token legacy chết.",
+            "kb_refs": [
+              "KB-008"
+            ]
+          },
+          {
+            "question": "BUG-36 (gắn TC-DUOS-001, trạng thái \"open?\") là lỗi gì, thuộc hành vi token nào (phát hiện token chết, refresh/migrate, re-auth khi mở app, uninstall/reinstall hay admin panel), còn mở hay đã fix?",
+            "why_it_matters": "Nếu lỗi chạm hành vi của tính năng này thì check theo rule tương ứng cần theo dõi regression; test case liên quan đang passed nên không phải bằng chứng PASS.",
+            "kb_refs": [
+              "KB-057"
+            ]
+          }
+        ],
+        "freshness": {
+          "observed_at": "2026-10-08",
+          "run_id": "CTX-20261009-01",
+          "earliest_source_date": "2026-07-07",
+          "basis": "Ngày nguồn mới nhất trong các KB item được tham chiếu (ngày cập nhật Jira trong rule, ngày phân tích QA, ngày cập nhật danh sách lỗi); không có quan sát runtime trong lần chạy này."
+        }
+      }
+    ],
+    "profile_relationships": [
+      {
+        "from": "uninstall-reinstall-token-cleanup",
+        "to": "dead-token-detection-and-reconnect",
+        "relation": "CONSTRAINS",
+        "kb_refs": [
+          "KB-043",
+          "KB-044"
+        ]
+      },
+      {
+        "from": "uninstall-reinstall-token-cleanup",
+        "to": "token-refresh-and-legacy-migration",
+        "relation": "CONSTRAINS",
+        "kb_refs": [
+          "KB-025"
+        ]
+      },
+      {
+        "from": "uninstall-reinstall-token-cleanup",
+        "to": "admin-token-and-scopes",
+        "relation": "READ_BY",
+        "kb_refs": [
+          "KB-046"
+        ]
+      }
+    ],
+    "coverage_matrix": [
+      {
+        "feature_id": "uninstall-reinstall-token-cleanup",
+        "layer": "data",
+        "role": "system",
+        "state": "uninstall: session, 4 field token, cached shop, soft-delete",
+        "environment": "documented",
+        "covered": true,
+        "note": "Rule Jira DUOS-399"
+      },
+      {
+        "feature_id": "uninstall-reinstall-token-cleanup",
+        "layer": "data",
+        "role": "system",
+        "state": "uninstall khi đang chờ reconnect",
+        "environment": "documented",
+        "covered": true,
+        "note": "Rule Jira DUOS-399"
+      },
+      {
+        "feature_id": "uninstall-reinstall-token-cleanup",
+        "layer": "backend",
+        "role": "system",
+        "state": "shop đã uninstall: job token, email reconnect",
+        "environment": "documented",
+        "covered": true,
+        "note": "Rule Jira DUOS-399"
+      },
+      {
+        "feature_id": "uninstall-reinstall-token-cleanup",
+        "layer": "api",
+        "role": "system",
+        "state": "reinstall: token expiring, clear field sót",
+        "environment": "documented",
+        "covered": true,
+        "note": "Rule Jira DUOS-399"
+      },
+      {
+        "feature_id": "uninstall-reinstall-token-cleanup",
+        "layer": "backend",
+        "role": "system",
+        "state": "reinstall: sync + email reinstall",
+        "environment": "documented",
+        "covered": true,
+        "note": "Rule Jira DUOS-399; nội dung chưa nêu"
+      },
+      {
+        "feature_id": "uninstall-reinstall-token-cleanup",
+        "layer": "data",
+        "role": "system",
+        "state": "dữ liệu khác của shop khi soft-delete",
+        "environment": "documented",
+        "covered": false,
+        "note": "Tài liệu không nêu"
+      },
+      {
+        "feature_id": "uninstall-reinstall-token-cleanup",
+        "layer": "email",
+        "role": "merchant",
+        "state": "nội dung email reinstall",
+        "environment": "documented",
+        "covered": false,
+        "note": "Tài liệu không nêu"
+      },
+      {
+        "feature_id": "uninstall-reinstall-token-cleanup",
+        "layer": "code",
+        "role": "unspecified",
+        "state": "any",
+        "environment": "documented",
+        "covered": false,
+        "note": "Không có nguồn mã"
+      },
+      {
+        "feature_id": "uninstall-reinstall-token-cleanup",
+        "layer": "api",
+        "role": "unspecified",
+        "state": "đặc tả API (endpoint, request/response, mã lỗi)",
+        "environment": "documented",
+        "covered": false,
+        "note": "Bộ tài liệu QA không có đặc tả API/data model cho feature này"
+      },
+      {
+        "feature_id": "uninstall-reinstall-token-cleanup",
+        "layer": "db",
+        "role": "unspecified",
+        "state": "đặc tả data model (bảng/cột, kiểu dữ liệu)",
+        "environment": "documented",
+        "covered": false,
+        "note": "Bộ tài liệu QA không có đặc tả API/data model cho feature này"
+      }
+    ],
+    "unassigned_kb_items": [],
+    "profile_conflicts": [],
+    "profile_change_summary": [
+      "Profile mới dựng từ KB tài liệu của object auth-token; chưa có bản publish trước để so.",
+      "coverage_matrix ghi rõ phần đặc tả API và data model chưa có trong bộ tài liệu QA."
+    ],
+    "kb_trace_complete": true
+  },
+  "gate": {
+    "decision": "CONDITIONAL_PASS",
+    "blocking_findings": [],
+    "conditions": [
+      "Identity ổn định, user goal, capability theo mục tiêu và mapping KB đầy đủ (mọi item của shard được tham chiếu, mọi kb_refs tồn tại).",
+      "Oracle mạnh có cho 8 rule Jira DUOS-399; chưa có baseline staging nào cho tính năng này.",
+      "Các phát biểu chỉ có trong tóm tắt QA và các khoảng trống (xem unknown_areas) không có oracle — check tương ứng phải NEEDS_CONFIRMATION."
+    ],
+    "allowed_next_steps": [
+      "qa-checklist-builder",
+      "knowledge-diff-analyzer"
+    ]
+  }
+}

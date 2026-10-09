@@ -1,0 +1,769 @@
+{
+  "feature_id": "automation-triggers-and-entry",
+  "feature_key": "automation-triggers-and-entry",
+  "name": "Trigger và luật contact vào flow (khởi chạy theo sự kiện, re-entry, chống vòng lặp, nguồn không kích hoạt)",
+  "user_goal": "Flow bắt đầu đúng lúc một contact được tạo hoặc có field thay đổi, mỗi contact vào flow đúng số lần cho phép, và các flow không tự kích hoạt nhau thành vòng lặp.",
+  "stable_since_version": "v1",
+  "actors": [
+    {
+      "role": "unspecified (người cấu hình trigger trong builder)",
+      "permission_observed": "Không có quy tắc role riêng cho cấu hình trigger.",
+      "kb_refs": [
+        "KB-067",
+        "KB-026"
+      ]
+    },
+    {
+      "role": "system (runtime engine)",
+      "permission_observed": "Xử lý sự kiện contact ngay khi xảy ra, chỉ cho automation active; chặn sự kiện do chính flow phát ra.",
+      "kb_refs": [
+        "KB-064",
+        "KB-065",
+        "KB-078"
+      ]
+    },
+    {
+      "role": "nguồn tạo / sửa contact (dialog New contact, API tạo từng contact, import CSV, step Update contact field)",
+      "permission_observed": "Contact tạo lẻ đi vào trigger; import CSV không kích hoạt automation (QA lead chốt); step Update contact field của flow khác có thể kích hoạt trigger.",
+      "kb_refs": [
+        "KB-084",
+        "KB-077"
+      ]
+    }
+  ],
+  "entry_points": [
+    {
+      "path": "Node `Trigger` trên canvas builder → panel Trigger (nhóm Contacts)",
+      "precondition": "Đang ở builder; node chưa cấu hình hiện `Click to configure →`.",
+      "kb_refs": [
+        "KB-075",
+        "KB-067",
+        "KB-028"
+      ]
+    },
+    {
+      "path": "Sự kiện contact ở backend (contact được tạo, field thay đổi)",
+      "precondition": "Automation ở trạng thái active.",
+      "kb_refs": [
+        "KB-064",
+        "KB-065"
+      ]
+    }
+  ],
+  "capabilities": [
+    {
+      "name": "Chọn trigger",
+      "description": "Panel Trigger có đúng 2 lựa chọn `Contact created` / `Contact field changed` (đổi tên từ Contact updated, hành vi giữ nguyên); sau khi chọn chỉ hiện tên, mô tả và `Change trigger`. Node Trigger đổi nhãn theo trigger đã chọn. Trigger \"Contact joins segment\" mới ở dạng dự kiến (Jira MTRO-122, To Do).",
+      "kb_refs": [
+        "KB-067",
+        "KB-068",
+        "KB-075",
+        "KB-076",
+        "KB-085"
+      ]
+    },
+    {
+      "name": "Giới hạn field theo dõi cho Contact field changed",
+      "description": "Ô `Which fields?` phải chọn từ dropdown (PO 02/10); danh sách gồm First name, Last name, Country code, Address, SMS và key thô của custom field; để trống = mọi field. Không có biến / điều kiện \"Changed fields\" (PO 02/10) — UI staging vẫn hiện (lỗi đã biết).",
+      "kb_refs": [
+        "KB-069",
+        "KB-070",
+        "KB-071",
+        "KB-072",
+        "KB-073",
+        "KB-074"
+      ]
+    },
+    {
+      "name": "Khởi chạy flow theo sự kiện",
+      "description": "Automation xử lý ngay khi sự kiện contact xảy ra, không chạy định kỳ; chỉ automation active mới kích hoạt (Jira AC; test-run 27/09 thấy Draft và Paused không chạy); bật lại flow Paused không chạy bù sự kiện trong lúc dừng (quan sát).",
+      "kb_refs": [
+        "KB-064",
+        "KB-065",
+        "KB-219",
+        "KB-066"
+      ]
+    },
+    {
+      "name": "Chống vòng lặp giữa các flow",
+      "description": "Step Update contact field phát event contact-updated nên có thể kích hoạt flow khác; event do chính flow phát ra bị chặn (run Skipped \"would have looped\") — QA lead chốt. Cơ chế khi 2 flow ghi field của nhau chưa chốt.",
+      "kb_refs": [
+        "KB-077",
+        "KB-078",
+        "KB-079"
+      ]
+    },
+    {
+      "name": "Luật re-entry",
+      "description": "Một contact khớp trigger nhiều lần có được thêm run không đang mâu thuẫn (re-entry once vs staging tạo nhiều run); payload có `re_entry {mode, cooldown_days}` nhưng không có UI.",
+      "kb_refs": [
+        "KB-080",
+        "KB-081",
+        "KB-082",
+        "KB-083"
+      ]
+    },
+    {
+      "name": "Nguồn không kích hoạt automation",
+      "description": "Contact tạo / cập nhật hàng loạt qua bulk upload / import CSV không kích hoạt automation nào; chỉ contact tạo lẻ mới vào trigger (QA lead chốt thay PO 05/10, chưa có PO/Dev).",
+      "kb_refs": [
+        "KB-084"
+      ]
+    }
+  ],
+  "state_transitions": [
+    {
+      "from": "trigger chưa cấu hình",
+      "to": "trigger đã cấu hình",
+      "trigger": "Chọn radio Contact created / Contact field changed",
+      "condition": "Đổi lại cần bấm `Change trigger`",
+      "kb_refs": [
+        "KB-067",
+        "KB-068",
+        "KB-075"
+      ]
+    },
+    {
+      "from": "sự kiện contact",
+      "to": "run mới bắt đầu",
+      "trigger": "Contact được tạo lẻ hoặc field được theo dõi thay đổi",
+      "condition": "Automation đang active; không áp cho import CSV",
+      "kb_refs": [
+        "KB-064",
+        "KB-065",
+        "KB-084",
+        "KB-071"
+      ]
+    },
+    {
+      "from": "sự kiện do chính flow phát ra",
+      "to": "run Skipped",
+      "trigger": "Step Update contact field của chính flow ghi field mà flow theo dõi",
+      "condition": "Lý do \"…would have looped\" (QA lead chốt, test-run 27/09 khớp)",
+      "kb_refs": [
+        "KB-078",
+        "KB-181"
+      ]
+    },
+    {
+      "from": "automation paused",
+      "to": "automation active",
+      "trigger": "Activate lại",
+      "condition": "Sự kiện trong lúc dừng không được chạy bù (quan sát một lần)",
+      "kb_refs": [
+        "KB-066"
+      ]
+    },
+    {
+      "from": "contact đã có run (hoặc đang Waiting)",
+      "to": "run thêm cho cùng flow?",
+      "trigger": "Contact khớp trigger lần nữa",
+      "condition": "Chưa phân xử (CONF-MTRO-automations-02)",
+      "kb_refs": [
+        "KB-080",
+        "KB-081"
+      ]
+    }
+  ],
+  "confirmed_rules": [
+    {
+      "statement": "Theo mục đích do PO nêu 03/07/2026 (Epic Jira MTRO-13), ghi trong QA KB Mailtro \"Automations — list & builder\" v1, automation được xử lý ngay khi sự kiện contact xảy ra, không chạy định kỳ.",
+      "knowledge_kind": "CONFIRMED_EXPECTED",
+      "confidence": "MEDIUM",
+      "tags": [],
+      "kb_refs": [
+        "KB-064"
+      ]
+    },
+    {
+      "statement": "Theo Jira MTRO-32 AC §2 (tóm tắt trong QA business rule Mailtro, cập nhật 11/09/2026), chỉ automation ở trạng thái active mới kích hoạt flow cho contact khớp trigger.",
+      "knowledge_kind": "CONFIRMED_EXPECTED",
+      "confidence": "MEDIUM",
+      "tags": [],
+      "kb_refs": [
+        "KB-065"
+      ]
+    },
+    {
+      "statement": "Theo quyết định PO 02/10/2026 (task Testlane MTRO-018 BR-31), ô `Which fields?` của trigger `Contact field changed` phải chọn field từ dropdown, không nhập tự do.",
+      "knowledge_kind": "CONFIRMED_EXPECTED",
+      "confidence": "MEDIUM",
+      "tags": [],
+      "kb_refs": [
+        "KB-069"
+      ]
+    },
+    {
+      "statement": "Theo quyết định PO 02/10/2026 (task Testlane MTRO-018 BR-34), automation không có biến / điều kiện \"Changed fields\"; câu hint trong panel Trigger nhắc tới \"Changed fields\" (\"…To act on only one, add a condition on Changed fields…\") là copy sai.",
+      "knowledge_kind": "CONFIRMED_EXPECTED",
+      "confidence": "MEDIUM",
+      "tags": [],
+      "kb_refs": [
+        "KB-072"
+      ]
+    }
+  ],
+  "observed_behavior": [
+    {
+      "statement": "Trên staging (test-run 27/09/2026), bật lại một automation đang Paused không chạy bù cho các sự kiện contact xảy ra trong lúc tạm dừng.",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "confidence": "LOW",
+      "status": "CURRENT_STATE",
+      "tags": [],
+      "kb_refs": [
+        "KB-066"
+      ]
+    },
+    {
+      "statement": "Trên staging (khảo sát 01/10/2026), panel Trigger có badge `Not configured` / `Configured` và nhóm `Contacts` với đúng 2 lựa chọn radio `Contact created` / `Contact field changed`; tên `Contact field changed` thay cho `Contact updated` của rule 18/09 (chỉ đổi tên, hành vi giữ nguyên).",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "confidence": "MEDIUM",
+      "status": "CURRENT_STATE",
+      "tags": [],
+      "kb_refs": [
+        "KB-067"
+      ]
+    },
+    {
+      "statement": "Trên staging (khảo sát 01/10/2026), khi đã chọn trigger panel chỉ hiện tên trigger, nút `Change trigger` và mô tả — `Contact created`: \"Starts once, when a new contact is created.\"; `Contact field changed`: \"Starts every time a contact field you pick changes.\" — phải bấm `Change trigger` mới hiện lại 2 radio.",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "confidence": "MEDIUM",
+      "status": "CURRENT_STATE",
+      "tags": [],
+      "kb_refs": [
+        "KB-068"
+      ]
+    },
+    {
+      "statement": "Trên staging (khảo sát 01/10/2026), combobox `Which fields?` (`Search fields, or leave empty for any field`) liệt kê First name · Last name · Country code · Address · SMS và key thô của custom field.",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "confidence": "MEDIUM",
+      "status": "CURRENT_STATE",
+      "tags": [],
+      "kb_refs": [
+        "KB-070"
+      ]
+    },
+    {
+      "statement": "Trên staging (khảo sát 01/10/2026; khớp placeholder \"leave empty for any field\"), để trống ô `Which fields?` nghĩa là flow bắt đầu khi bất kỳ field nào thay đổi.",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "confidence": "MEDIUM",
+      "status": "CURRENT_STATE",
+      "tags": [],
+      "kb_refs": [
+        "KB-071"
+      ]
+    },
+    {
+      "statement": "Trên staging (khảo sát 01/10/2026), khi dùng trigger `Contact field changed` menu biến vẫn có nhóm `What changed` › `Changed fields` và hint của `Which fields?` vẫn ghi \"To act on only one, add a condition on Changed fields\" — trái quyết định PO 02/10 BR-34; QA business rule Mailtro ghi case này fail kèm nghi vấn bug.",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "confidence": "MEDIUM",
+      "status": "KNOWN_DEFECT",
+      "tags": [],
+      "kb_refs": [
+        "KB-073"
+      ]
+    },
+    {
+      "statement": "QA lead chốt 18/09/2026 theo bản dựng staging, chưa có xác nhận PO/Dev (bản dựng thắng câu \"Choose trigger\" của Jira MTRO-33 AC §5; staging 01/10 khớp): node Trigger chưa cấu hình hiện `Click to configure →`; đã cấu hình hiện `This flow starts when a new contact is created` hoặc `This flow starts every time a contact field changes`.",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "confidence": "MEDIUM",
+      "status": "CURRENT_STATE",
+      "tags": [],
+      "kb_refs": [
+        "KB-075"
+      ]
+    },
+    {
+      "statement": "QA lead chốt 18/09/2026 theo bản dựng staging (TC-MTRO-841, GAP-06), chưa có xác nhận PO/Dev: step `Update contact field` ghi field lên contact cũng phát event contact-updated, nên một flow khác có trigger `Contact field changed` có thể chạy vì automation vừa ghi field (không chỉ khi người dùng sửa contact), kể cả với contact vừa được tạo.",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "confidence": "MEDIUM",
+      "status": "CURRENT_STATE",
+      "tags": [],
+      "kb_refs": [
+        "KB-077"
+      ]
+    },
+    {
+      "statement": "QA lead chốt 18/09/2026 theo bản dựng staging, chưa có xác nhận PO/Dev; staging test-run 27/09/2026 khớp: event thay đổi field do chính flow phát ra bị chặn, không kích hoạt lại chính flow đó (run Skipped, lý do \"…would have looped\").",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "confidence": "MEDIUM",
+      "status": "CURRENT_STATE",
+      "tags": [],
+      "kb_refs": [
+        "KB-078"
+      ]
+    },
+    {
+      "statement": "QA lead chốt 05/10/2026 thay PO (task Testlane MTRO-018 BR-35), chưa có xác nhận PO/Dev: contact được tạo hoặc cập nhật hàng loạt qua bulk upload / import CSV không kích hoạt automation nào — kể cả flow có trigger `Contact created`, hoặc `Contact field changed` khi import ghi đè contact có sẵn; chỉ contact tạo lẻ (dialog `New contact`, API tạo từng contact) mới đi vào trigger.",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "confidence": "MEDIUM",
+      "status": "CURRENT_STATE",
+      "tags": [],
+      "kb_refs": [
+        "KB-084"
+      ]
+    },
+    {
+      "statement": "Trên staging (test-run 27/09/2026), automation Draft và Paused không chạy khi có sự kiện contact khớp trigger.",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "confidence": "LOW",
+      "status": "CURRENT_STATE",
+      "tags": [],
+      "kb_refs": [
+        "KB-219"
+      ]
+    }
+  ],
+  "observed_validations": [],
+  "permissions": [
+    {
+      "statement": "Không có quy tắc role cho cấu hình trigger; xem phần phân quyền automation chưa chốt.",
+      "kb_refs": [
+        "KB-026",
+        "KB-P-051"
+      ]
+    }
+  ],
+  "surface_mapping": {
+    "portal": [
+      {
+        "item": "Panel Trigger: badge Not configured / Configured, radio Contact created / Contact field changed, Change trigger, mô tả",
+        "kb_refs": [
+          "KB-067",
+          "KB-068"
+        ]
+      },
+      {
+        "item": "Combobox `Which fields?` (Search fields, or leave empty for any field) và hint",
+        "kb_refs": [
+          "KB-070",
+          "KB-071",
+          "KB-073"
+        ]
+      },
+      {
+        "item": "Nhãn node Trigger",
+        "kb_refs": [
+          "KB-075",
+          "KB-076"
+        ]
+      },
+      {
+        "item": "Menu biến nhóm `What changed` › `Changed fields` (đang có trên staging, trái quyết định PO)",
+        "kb_refs": [
+          "KB-073"
+        ]
+      }
+    ],
+    "storefront": [],
+    "api": [
+      {
+        "item": "Payload automation trường `re_entry {mode, cooldown_days}` (once / can_reenter, cooldown sàn 60 giây), không có UI",
+        "kb_refs": [
+          "KB-082"
+        ]
+      }
+    ],
+    "data": [
+      {
+        "item": "Event contact-updated phát từ step Update contact field",
+        "kb_refs": [
+          "KB-077"
+        ]
+      }
+    ],
+    "code": []
+  },
+  "dependencies": [
+    {
+      "target": "automations / automation-steps",
+      "relation": "emits_event",
+      "note": "Step Update contact field phát event contact-updated có thể kích hoạt flow khác.",
+      "kb_refs": [
+        "KB-077"
+      ]
+    },
+    {
+      "target": "automations / automation-run-history",
+      "relation": "produces",
+      "note": "Mỗi lượt vào flow tạo một run; run Skipped do vòng lặp hiện ở Run history.",
+      "kb_refs": [
+        "KB-078",
+        "KB-081"
+      ]
+    },
+    {
+      "target": "contacts / contact-import, contact-create-and-edit",
+      "relation": "trigger_source",
+      "note": "Import CSV không kích hoạt automation, contact tạo lẻ thì có; nhãn SMS dùng chung ở Which fields? (theo tham chiếu chéo của KB).",
+      "kb_refs": [
+        "KB-084",
+        "KB-070"
+      ]
+    },
+    {
+      "target": "contacts / custom-fields",
+      "relation": "data_source",
+      "note": "Which fields? liệt kê key thô của custom field.",
+      "kb_refs": [
+        "KB-070"
+      ]
+    },
+    {
+      "target": "email-preferences / preference-page-in-sends",
+      "relation": "trigger_source",
+      "note": "Theo tham chiếu chéo của KB, chưa chốt việc người nhận lưu lựa chọn ở trang preference có phát event Contact field changed hay không (GAP-16).",
+      "kb_refs": [
+        "KB-071"
+      ]
+    }
+  ],
+  "risks": [
+    {
+      "statement": "Mâu thuẫn chưa phân xử về re-entry: QA lead 18/09 (re-entry once) vs staging 27/09 (sửa 3 lần tạo 3 run, contact Waiting khớp lại tạo run thứ hai — nguy cơ gửi trùng mail). Không dùng phía nào làm oracle.",
+      "knowledge_kind": "INFERRED",
+      "confidence": "LOW",
+      "conflict_group": "CONF-MTRO-automations-02",
+      "kb_refs": [
+        "KB-080",
+        "KB-081"
+      ]
+    },
+    {
+      "statement": "Import không kích hoạt automation, Update contact field phát event và chặn event tự phát là quyết định QA lead (18/09, 05/10) chưa có PO/Dev — baseline, không phải rule.",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "confidence": "MEDIUM",
+      "kb_refs": [
+        "KB-077",
+        "KB-078",
+        "KB-084"
+      ]
+    },
+    {
+      "statement": "Trên staging test-run 27/09/2026 (trước quyết định PO 02/10 BR-34), điều kiện Changed fields khớp theo key `first_name` chứ không theo nhãn hiển thị; tài liệu ghi cần Dev xác nhận.",
+      "knowledge_kind": "INFERRED",
+      "confidence": "LOW",
+      "conflict_group": null,
+      "tags": [],
+      "kb_refs": [
+        "KB-074"
+      ]
+    },
+    {
+      "statement": "Theo bundle (khảo sát 01/10/2026, chưa thấy trên UI), node Trigger có thể hiện \"This flow starts every time one of these changes: {fields}\" khi chọn field cụ thể trong `Which fields?`.",
+      "knowledge_kind": "INFERRED",
+      "confidence": "LOW",
+      "conflict_group": null,
+      "tags": [],
+      "kb_refs": [
+        "KB-076"
+      ]
+    },
+    {
+      "statement": "Theo QA KB Mailtro \"Automations — list & builder\" v1, cơ chế cắt vòng lặp khi 2 flow ghi field của nhau chưa được chốt (GAP-05, mức Major); tài liệu chỉ nêu việc chặn event do chính flow phát ra.",
+      "knowledge_kind": "INFERRED",
+      "confidence": "LOW",
+      "conflict_group": null,
+      "tags": [],
+      "kb_refs": [
+        "KB-079"
+      ]
+    },
+    {
+      "statement": "Một phía của mâu thuẫn chưa phân xử: QA lead chốt 18/09/2026 theo bản dựng staging (chưa có xác nhận PO/Dev) rule re-entry once — sửa cùng một contact nhiều lần không tạo thêm run cho cùng flow.",
+      "knowledge_kind": "INFERRED",
+      "confidence": "LOW",
+      "conflict_group": "CONF-MTRO-automations-02",
+      "tags": [],
+      "kb_refs": [
+        "KB-080"
+      ]
+    },
+    {
+      "statement": "Phía còn lại của mâu thuẫn chưa phân xử: trên staging test-run 27/09/2026 (TC-MTRO-1116, 1107), sửa cùng một contact 3 lần tạo 3 run, và contact đang Waiting mà khớp trigger lần nữa vẫn tạo run thứ hai (nguy cơ gửi trùng mail); Known issues ghi mục này đang mở, tài liệu feature ghi cần Dev xác nhận.",
+      "knowledge_kind": "INFERRED",
+      "confidence": "LOW",
+      "conflict_group": "CONF-MTRO-automations-02",
+      "tags": [],
+      "kb_refs": [
+        "KB-081"
+      ]
+    },
+    {
+      "statement": "Theo QA KB Mailtro \"Automations — list & builder\" v1, payload automation có trường `re_entry {mode, cooldown_days}` với giá trị `once` / `can_reenter` và cooldown có sàn 60 giây, nhưng builder không có giao diện để cấu hình re-entry; giá trị mặc định khi tạo automation không được nêu.",
+      "knowledge_kind": "INFERRED",
+      "confidence": "LOW",
+      "conflict_group": null,
+      "tags": [],
+      "kb_refs": [
+        "KB-082"
+      ]
+    },
+    {
+      "statement": "Theo QA KB Mailtro \"Automations — list & builder\" v1, quan hệ giữa luật re-entry và ô `Which fields?` của trigger `Contact field changed` chưa rõ (GAP-20, mức Major).",
+      "knowledge_kind": "INFERRED",
+      "confidence": "LOW",
+      "conflict_group": null,
+      "tags": [],
+      "kb_refs": [
+        "KB-083"
+      ]
+    },
+    {
+      "statement": "Theo Jira MTRO-122 (To Do khi QA đọc 07/10/2026), dự kiến thêm trigger mới \"Contact joins segment\"; chưa triển khai, staging 01/10 chỉ có 2 trigger.",
+      "knowledge_kind": "INFERRED",
+      "confidence": "LOW",
+      "conflict_group": null,
+      "tags": [],
+      "kb_refs": [
+        "KB-085"
+      ]
+    }
+  ],
+  "freshness": {
+    "observed_at": "2026-10-07",
+    "basis": "Epic PO 03/07/2026, Jira AC (11/09/2026), QA lead chốt 18/09 và 05/10/2026, quyết định PO 02/10/2026, test-run 27/09 và khảo sát staging 01/10/2026"
+  },
+  "unknown_areas": [
+    {
+      "question": "Một contact khớp trigger nhiều lần (sửa nhiều lần, hoặc đang Waiting mà khớp lại) có được tạo thêm run cho cùng flow không?",
+      "why_it_matters": "Rule re-entry once (QA lead 18/09) trái với staging 27/09; chưa có quyết định PO/Dev; ảnh hưởng gửi trùng mail.",
+      "kb_refs": [
+        "KB-080",
+        "KB-081",
+        "KB-158"
+      ],
+      "oq_id": "OQ-automations-009"
+    },
+    {
+      "question": "Nếu giữ re-entry once thì phạm vi là gì: cùng flow, trong khoảng thời gian nào, có tính contact đang Waiting không; và giá trị mặc định của `re_entry.mode` / `cooldown_days` khi tạo automation là gì?",
+      "why_it_matters": "Rule không có định nghĩa đủ để viết case, payload có re_entry nhưng không có UI và không nêu mặc định.",
+      "kb_refs": [
+        "KB-080",
+        "KB-082"
+      ],
+      "oq_id": "OQ-automations-009"
+    },
+    {
+      "question": "Khi hai flow ghi field của nhau thì engine cắt vòng lặp thế nào, và step Update contact field ghi một field nằm ngoài `Which fields?` có kích hoạt flow khác không?",
+      "why_it_matters": "Chỉ có quy tắc chặn event do chính flow phát ra; GAP-05 và GAP-20 (Major) chưa chốt.",
+      "kb_refs": [
+        "KB-079",
+        "KB-083",
+        "KB-077"
+      ],
+      "oq_id": "OQ-automations-013"
+    },
+    {
+      "question": "PO có xác nhận contact tạo hoặc cập nhật qua bulk upload / import CSV không kích hoạt automation (kể cả Contact created và Contact field changed khi import ghi đè) là hành vi mong đợi không?",
+      "why_it_matters": "Chỉ là QA lead chốt thay PO 05/10, chưa có xác nhận PO/Dev.",
+      "kb_refs": [
+        "KB-084"
+      ],
+      "oq_id": "OQ-automations-012"
+    },
+    {
+      "question": "Khi nào UI gỡ nhóm biến `What changed` › `Changed fields` và sửa hint của `Which fields?` theo quyết định PO 02/10; flow đã lưu có điều kiện Changed fields sẽ được xử lý thế nào?",
+      "why_it_matters": "Staging 01/10 còn hiện Changed fields (lỗi đã biết); test-run 27/09 thấy điều kiện này khớp theo key.",
+      "kb_refs": [
+        "KB-073",
+        "KB-072",
+        "KB-074"
+      ],
+      "oq_id": "OQ-automations-010"
+    },
+    {
+      "question": "Trigger \"Contact joins segment\" (Jira MTRO-122) có lịch deploy chưa và panel Trigger sẽ thay đổi thế nào?",
+      "why_it_matters": "Hiện chỉ có 2 trigger; thay đổi sẽ mở rộng phạm vi kiểm thử.",
+      "kb_refs": [
+        "KB-085",
+        "KB-067"
+      ],
+      "oq_id": "OQ-automations-014"
+    },
+    {
+      "question": "Bật lại flow Paused có chạy bù sự kiện trong lúc tạm dừng không — đây là hành vi mong đợi hay chỉ là quan sát?",
+      "why_it_matters": "Chỉ có một quan sát test-run 27/09, không có rule.",
+      "kb_refs": [
+        "KB-066"
+      ],
+      "oq_id": "OQ-automations-040"
+    },
+    {
+      "question": "Node Trigger có hiện nhãn \"This flow starts every time one of these changes: {fields}\" khi chọn field cụ thể không?",
+      "why_it_matters": "Chuỗi chỉ thấy trong bundle, chưa thấy trên UI.",
+      "kb_refs": [
+        "KB-076"
+      ],
+      "oq_id": "OQ-automations-041"
+    }
+  ],
+  "last_updated": {
+    "date": "2026-10-08",
+    "ccr_ref": "bootstrap"
+  },
+  "coverage_matrix": [
+    {
+      "feature_id": "automation-triggers-and-entry",
+      "layer": "portal",
+      "role": "unspecified",
+      "state": "cấu hình trigger (2 lựa chọn, Change trigger)",
+      "environment": "documented",
+      "covered": true,
+      "note": "Khảo sát staging 01/10; QA lead chốt nhãn node"
+    },
+    {
+      "feature_id": "automation-triggers-and-entry",
+      "layer": "portal",
+      "role": "unspecified",
+      "state": "Which fields? chọn từ dropdown / để trống",
+      "environment": "documented",
+      "covered": true,
+      "note": "PO 02/10 BR-31 + quan sát"
+    },
+    {
+      "feature_id": "automation-triggers-and-entry",
+      "layer": "portal",
+      "role": "unspecified",
+      "state": "biến Changed fields",
+      "environment": "documented",
+      "covered": true,
+      "note": "PO 02/10 BR-34 xác nhận không có; staging còn hiện (lỗi đã biết)"
+    },
+    {
+      "feature_id": "automation-triggers-and-entry",
+      "layer": "backend",
+      "role": "system (runtime engine)",
+      "state": "automation active nhận sự kiện",
+      "environment": "documented",
+      "covered": true,
+      "note": "Epic PO + Jira AC; test-run 27/09 khớp"
+    },
+    {
+      "feature_id": "automation-triggers-and-entry",
+      "layer": "backend",
+      "role": "system (runtime engine)",
+      "state": "automation draft / paused",
+      "environment": "documented",
+      "covered": true,
+      "note": "Jira AC; không chạy bù khi bật lại chỉ là quan sát"
+    },
+    {
+      "feature_id": "automation-triggers-and-entry",
+      "layer": "backend",
+      "role": "system (runtime engine)",
+      "state": "contact khớp trigger nhiều lần / đang Waiting",
+      "environment": "documented",
+      "covered": false,
+      "note": "CONF-MTRO-automations-02 chưa phân xử"
+    },
+    {
+      "feature_id": "automation-triggers-and-entry",
+      "layer": "backend",
+      "role": "system (runtime engine)",
+      "state": "event do chính flow phát ra",
+      "environment": "documented",
+      "covered": true,
+      "note": "QA lead chốt, test-run 27/09 khớp"
+    },
+    {
+      "feature_id": "automation-triggers-and-entry",
+      "layer": "backend",
+      "role": "system (runtime engine)",
+      "state": "hai flow ghi field của nhau",
+      "environment": "documented",
+      "covered": false,
+      "note": "GAP-05 chưa chốt"
+    },
+    {
+      "feature_id": "automation-triggers-and-entry",
+      "layer": "backend",
+      "role": "unspecified",
+      "state": "contact từ import CSV",
+      "environment": "documented",
+      "covered": true,
+      "note": "QA lead chốt thay PO 05/10, chưa PO/Dev"
+    },
+    {
+      "feature_id": "automation-triggers-and-entry",
+      "layer": "api",
+      "role": "unspecified",
+      "state": "cấu hình re_entry qua payload",
+      "environment": "documented",
+      "covered": false,
+      "note": "Không có UI, không có mặc định"
+    },
+    {
+      "feature_id": "automation-triggers-and-entry",
+      "layer": "portal",
+      "role": "Member / Admin / custom role",
+      "state": "cấu hình trigger",
+      "environment": "documented",
+      "covered": false,
+      "note": "Ma trận quyền chưa chốt"
+    },
+    {
+      "feature_id": "automation-triggers-and-entry",
+      "layer": "code",
+      "role": "unspecified",
+      "state": "any",
+      "environment": "documented",
+      "covered": false,
+      "note": "Không có nguồn mã"
+    }
+  ],
+  "profile_conflicts": [
+    {
+      "conflict_group": "CONF-MTRO-automations-02",
+      "topic": "re-entry-policy",
+      "resolution": "UNRESOLVED",
+      "question": "Luật re-entry của automation: một contact khớp trigger nhiều lần (sửa nhiều lần, hoặc đang Waiting mà khớp lại) có được tạo thêm run cho cùng flow không? Hai nguồn trái nhau, chưa có quyết định PO/Dev; cần Dev / PO xác nhận staging là lỗi hay rule cần đổi.",
+      "sides": [
+        {
+          "statement": "Một phía của mâu thuẫn chưa phân xử: QA lead chốt 18/09/2026 theo bản dựng staging (chưa có xác nhận PO/Dev) rule re-entry once — sửa cùng một contact nhiều lần không tạo thêm run cho cùng flow.",
+          "kb_refs": [
+            "KB-080"
+          ]
+        },
+        {
+          "statement": "Phía còn lại của mâu thuẫn chưa phân xử: trên staging test-run 27/09/2026 (TC-MTRO-1116, 1107), sửa cùng một contact 3 lần tạo 3 run, và contact đang Waiting mà khớp trigger lần nữa vẫn tạo run thứ hai (nguy cơ gửi trùng mail); Known issues ghi mục này đang mở, tài liệu feature ghi cần Dev xác nhận.",
+          "kb_refs": [
+            "KB-081"
+          ]
+        }
+      ],
+      "kb_refs": [
+        "KB-080",
+        "KB-081"
+      ]
+    }
+  ],
+  "profile_relationships": [
+    {
+      "from": "automation-triggers-and-entry",
+      "to": "automation-builder",
+      "relation": "PART_OF",
+      "kb_refs": [
+        "KB-075"
+      ]
+    },
+    {
+      "from": "automation-triggers-and-entry",
+      "to": "automation-steps",
+      "relation": "TRIGGERED_BY_EVENT_FROM",
+      "kb_refs": [
+        "KB-077"
+      ]
+    },
+    {
+      "from": "automation-triggers-and-entry",
+      "to": "automation-run-history",
+      "relation": "PRODUCES",
+      "kb_refs": [
+        "KB-078",
+        "KB-181"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,562 @@
+{
+  "feature_id": "checkout-blocking-by-permission",
+  "feature_key": "checkout-blocking-by-permission",
+  "name": "Chặn checkout theo permission của member",
+  "user_goal": "Buyer không có quyền mua trực tiếp (Junior Buyer, custom role không có quyền mua như View Only) không tự hoàn tất được checkout — Junior phải qua duyệt shopping list, Senior Buyer mua trực tiếp — với ngoại lệ đơn giá trị 0 tuỳ cấu hình merchant.",
+  "user_goal_kb_refs": [
+    "KB-053",
+    "KB-055",
+    "KB-058"
+  ],
+  "stable_since_version": "v1",
+  "never_supersede_topics": [
+    "permission",
+    "checkout-blocking",
+    "pricing-plan"
+  ],
+  "actors": [
+    {
+      "role": "buyer-junior",
+      "permission_observed": "Không tự hoàn tất checkout; cần Senior Buyer hoặc Admin duyệt qua shopping list. Trên staging modal quyền không tick Complete purchases. Checkout chưa quan sát.",
+      "kb_refs": [
+        "KB-053",
+        "KB-010"
+      ]
+    },
+    {
+      "role": "buyer-senior",
+      "permission_observed": "Mua trực tiếp.",
+      "kb_refs": [
+        "KB-053"
+      ]
+    },
+    {
+      "role": "buyer-admin",
+      "permission_observed": "Modal quyền staging tick Complete purchases (hiện trạng); rule chặn không nêu Admin riêng.",
+      "kb_refs": [
+        "KB-010",
+        "KB-003"
+      ]
+    },
+    {
+      "role": "buyer-custom-role (vd View Only)",
+      "permission_observed": "Theo ticket: map sang Ordering Only, bị chặn đặt hàng ở checkout extension; chỉ thanh toán khi tổng order gồm shipping bằng 0 (rule draft).",
+      "kb_refs": [
+        "KB-058",
+        "KB-054"
+      ]
+    },
+    {
+      "role": "merchant",
+      "permission_observed": "Sửa được warning message ở checkout (theo ticket trống); nơi cấu hình chưa rõ.",
+      "kb_refs": [
+        "KB-057"
+      ]
+    },
+    {
+      "role": "internal-ops",
+      "permission_observed": "Bật `allowZeroSubtotalCheckout` cho từng merchant qua users.config ở admin panel.",
+      "kb_refs": [
+        "KB-055"
+      ]
+    }
+  ],
+  "entry_points": [
+    {
+      "path": "Storefront › cart › checkout (Checkout extension của Duos chặn theo permission)",
+      "precondition": "Store Shopify Plus, module được bật, buyer đăng nhập thuộc company location và có cart.",
+      "kb_refs": [
+        "KB-053",
+        "KB-056",
+        "KB-P-009"
+      ]
+    },
+    {
+      "path": "Admin panel nội bộ › users.config › `allowZeroSubtotalCheckout`",
+      "precondition": "Team nội bộ bật cho merchant.",
+      "kb_refs": [
+        "KB-055"
+      ]
+    }
+  ],
+  "capabilities": [
+    {
+      "name": "Chặn Junior Buyer tự checkout, cho Senior mua trực tiếp",
+      "description": "Junior Buyer cần Senior Buyer hoặc Admin duyệt (qua Shopping list) trước khi mua; Senior Buyer mua trực tiếp.",
+      "kb_refs": [
+        "KB-053",
+        "KB-006"
+      ]
+    },
+    {
+      "name": "Chặn đặt hàng với custom role không có quyền mua",
+      "description": "Theo ticket: custom role View Only map sang Ordering Only nhưng việc chặn nằm ở checkout extension; chỉ thanh toán khi tổng order gồm cả shipping bằng 0 (rule draft, chưa xác nhận).",
+      "kb_refs": [
+        "KB-058",
+        "KB-054"
+      ]
+    },
+    {
+      "name": "Ngoại lệ đơn giá trị 0 theo cấu hình merchant",
+      "description": "`allowZeroSubtotalCheckout` là key users.config bật theo merchant liên quan ngoại lệ thanh toán đơn giá trị 0 của role không có quyền mua; điều kiện cụ thể chưa xác nhận.",
+      "kb_refs": [
+        "KB-055",
+        "KB-054"
+      ]
+    },
+    {
+      "name": "Thông báo chặn ở checkout",
+      "description": "Merchant sửa được warning message ở trang checkout (theo ticket không có mô tả); text mặc định và nơi cấu hình chưa ghi.",
+      "kb_refs": [
+        "KB-057"
+      ]
+    }
+  ],
+  "state_transitions": [
+    {
+      "from": "Junior Buyer có cart",
+      "to": "checkout bị chặn; cần duyệt qua shopping list",
+      "trigger": "Junior vào checkout",
+      "condition": "Store Shopify Plus, module bật; cách hiển thị chặn chưa có nguồn.",
+      "kb_refs": [
+        "KB-053"
+      ]
+    },
+    {
+      "from": "Senior Buyer có cart",
+      "to": "hoàn tất checkout",
+      "trigger": "Senior checkout",
+      "condition": "Không cần duyệt.",
+      "kb_refs": [
+        "KB-053"
+      ]
+    },
+    {
+      "from": "custom role không có quyền mua, cart có item giá 0, shipping > 0",
+      "to": "bị chặn (theo ticket; trước đây vào được \"Pay now\")",
+      "trigger": "Vào checkout",
+      "condition": "Rule draft chỉ theo ticket Jira DUOS-407; phụ thuộc `allowZeroSubtotalCheckout` chưa rõ.",
+      "kb_refs": [
+        "KB-054",
+        "KB-055"
+      ]
+    }
+  ],
+  "confirmed_rules": [
+    {
+      "statement": "Theo quyết định PO (Jira DUOS-88, comment 09/04/2025) và tài liệu sản phẩm Duos (docs 09/07/2026), tóm tắt trong QA business rule Duos: Junior Buyer không tự hoàn tất checkout mà cần Senior Buyer hoặc Admin duyệt (qua Shopping list); Senior Buyer được mua trực tiếp.",
+      "knowledge_kind": "CONFIRMED_EXPECTED",
+      "confidence": "MEDIUM",
+      "tags": [
+        "permission",
+        "checkout-blocking"
+      ],
+      "kb_refs": [
+        "KB-053"
+      ]
+    },
+    {
+      "statement": "Theo Dev FE 28/07/2026 (Jira DUOS-403 comment, ghi trong QA business rule Duos), `allowZeroSubtotalCheckout` là một key users.config bật riêng theo merchant (cấu hình ở admin panel, không có UI Portal), liên quan tới ngoại lệ thanh toán đơn giá trị 0 của role không có quyền mua. Điều kiện cụ thể của ngoại lệ này chưa được xác nhận (đang theo ticket Jira DUOS-407).",
+      "knowledge_kind": "CONFIRMED_EXPECTED",
+      "confidence": "MEDIUM",
+      "tags": [
+        "permission",
+        "checkout-blocking"
+      ],
+      "kb_refs": [
+        "KB-055"
+      ],
+      "note": "Chỉ khẳng định key tồn tại và bật theo merchant; điều kiện ngoại lệ chưa xác nhận."
+    }
+  ],
+  "observed_behavior": [],
+  "observed_validations": [],
+  "permissions": [
+    {
+      "statement": "Junior Buyer cần Senior Buyer hoặc Admin duyệt trước khi mua; Senior Buyer mua trực tiếp.",
+      "kb_refs": [
+        "KB-053"
+      ]
+    },
+    {
+      "statement": "Permission \"Purchase from online store\" (theo ticket) gồm thêm vào cart, checkout và thanh toán order.",
+      "kb_refs": [
+        "KB-006"
+      ]
+    },
+    {
+      "statement": "Trên staging, \"Complete purchases from online store\" tick cho Admin và Senior buyer, không tick cho Junior buyer (hiện trạng modal quyền).",
+      "kb_refs": [
+        "KB-010"
+      ]
+    },
+    {
+      "statement": "Custom role View Only map sang contact role Shopify Ordering Only; chặn đặt hàng nằm ở checkout extension (theo ticket).",
+      "kb_refs": [
+        "KB-058"
+      ]
+    }
+  ],
+  "surface_mapping": {
+    "portal": [],
+    "storefront": [
+      {
+        "item": "Checkout extension: chặn checkout theo permission của member, warning message ở trang checkout",
+        "kb_refs": [
+          "KB-053",
+          "KB-057",
+          "KB-P-009"
+        ]
+      }
+    ],
+    "api": [],
+    "data": [
+      {
+        "item": "Key users.config `allowZeroSubtotalCheckout` (theo merchant)",
+        "kb_refs": [
+          "KB-055"
+        ]
+      }
+    ],
+    "code": [],
+    "admin_panel": [
+      {
+        "item": "JSON editor users.config bật `allowZeroSubtotalCheckout`",
+        "kb_refs": [
+          "KB-055",
+          "KB-P-030"
+        ]
+      }
+    ]
+  },
+  "dependencies": [
+    {
+      "target": "pricing-subscription / module-entitlement-gating",
+      "relation": "entitlement",
+      "note": "\"Block checkout by customer permissions\" chỉ chạy trên Shopify Plus; giới hạn theo Shopify plan do module-entitlement-gating sở hữu.",
+      "kb_refs": [
+        "KB-053",
+        "KB-P-009"
+      ]
+    },
+    {
+      "target": "finance-credit / checkout-credit-validation",
+      "relation": "see_also",
+      "note": "Chặn checkout theo credit (Shopify Function) do finance-credit sở hữu — không gộp với chặn theo permission.",
+      "kb_refs": [
+        "KB-P-009"
+      ]
+    },
+    {
+      "target": "shopping-list / shopping-list-approval",
+      "relation": "downstream",
+      "note": "Luồng duyệt shopping list cho Junior Buyer thuộc shopping-list.",
+      "kb_refs": [
+        "KB-053"
+      ]
+    },
+    {
+      "target": "roles-permissions / default-and-custom-roles",
+      "relation": "permission_source",
+      "note": "Quyền mua theo role mặc định / custom role.",
+      "kb_refs": [
+        "KB-003",
+        "KB-010",
+        "KB-006"
+      ]
+    },
+    {
+      "target": "roles-permissions / merchant-role-customization-config",
+      "relation": "configured_by",
+      "note": "Key `allowZeroSubtotalCheckout` thuộc bộ users.config theo merchant.",
+      "kb_refs": [
+        "KB-055",
+        "KB-059"
+      ]
+    }
+  ],
+  "risks": [
+    {
+      "statement": "Theo Known issues Duos và QA KB Duos \"Roles & permissions\" v1 (dẫn tài liệu sản phẩm Duos), checkout extension từng bỏ qua member role khi chặn checkout theo permission (Jira DUOS-273), trạng thái đã sửa và được giữ trong regression; chưa quan sát lại trên staging. Cần theo dõi regression với đủ từng role (Junior Buyer, Senior Buyer, Admin, custom role).",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "confidence": "LOW",
+      "status": "KNOWN_DEFECT",
+      "tags": [
+        "permission",
+        "checkout-blocking"
+      ],
+      "kb_refs": [
+        "KB-056"
+      ],
+      "note": "Lỗi đã sửa (Jira DUOS-273) — chỉ regression watch, không làm oracle."
+    },
+    {
+      "statement": "Theo ticket Jira DUOS-407 (status PASS 18/08/2026; QA business rule Duos để rule ở trạng thái draft, mức tin \"chỉ theo ticket\"; Decision log Duos ghi nó thay cách hiểu \"cart subtotal\" của Jira DUOS-403), role không có quyền mua (ví dụ custom role \"View Only\") chỉ được thanh toán khi tổng order gồm cả shipping bằng 0, không chỉ xét cart subtotal (trước đây item giá 0 cộng shipping lớn hơn 0 vẫn vào được \"Pay now\"). Chưa có PO/Dev xác nhận; chưa rõ rule còn phụ thuộc config `allowZeroSubtotalCheckout` và discount/thuế có tính vào tổng order hay không.",
+      "knowledge_kind": "INFERRED",
+      "confidence": "MEDIUM",
+      "tags": [
+        "permission",
+        "checkout-blocking"
+      ],
+      "kb_refs": [
+        "KB-054"
+      ],
+      "note": "Rule draft chỉ theo ticket; không làm oracle."
+    },
+    {
+      "statement": "Theo các ticket Jira DUOS-401, DUOS-403 và DUOS-407 (QA KB Duos ghi \"Resolved theo ticket\"), custom role \"View Only\" được ánh xạ sang contact role Shopify Ordering Only; việc chặn đặt hàng của role này nằm ở checkout extension chứ không ở contact role Shopify.",
+      "knowledge_kind": "INFERRED",
+      "confidence": "MEDIUM",
+      "tags": [
+        "permission",
+        "checkout-blocking"
+      ],
+      "kb_refs": [
+        "KB-058"
+      ],
+      "note": "Chỉ theo ticket."
+    },
+    {
+      "statement": "Theo Jira DUOS-266 (story Done, ticket không có mô tả), merchant sửa được nội dung warning message hiển thị ở trang checkout; text mặc định và nơi cấu hình chưa được ghi.",
+      "knowledge_kind": "INFERRED",
+      "confidence": "LOW",
+      "tags": [
+        "permission",
+        "checkout-blocking"
+      ],
+      "kb_refs": [
+        "KB-057"
+      ],
+      "note": "Ticket không có mô tả."
+    },
+    {
+      "statement": "Theo ticket Jira DUOS-88 (comment PO 09/04/2025; QA KB Duos \"Roles & permissions\" v1 ghi mức tin \"theo ticket (2025)\"), permission \"Purchase from online store\" bao gồm thêm sản phẩm vào cart, tiến hành checkout và thanh toán order. Chưa có rule active trong QA business rule Duos cho định nghĩa này nên chưa dùng làm kết quả mong đợi.",
+      "knowledge_kind": "INFERRED",
+      "confidence": "MEDIUM",
+      "tags": [
+        "permission"
+      ],
+      "kb_refs": [
+        "KB-006"
+      ],
+      "note": "Định nghĩa phạm vi quyền mua chỉ theo ticket."
+    },
+    {
+      "statement": "Checkout extension chưa quan sát được: store staging Plus đang Free plan, extension Inactive, app embed Disabled, storefront có password và không có tài khoản buyer; mọi hành vi chặn checkout chỉ dựa trên rule/Jira.",
+      "knowledge_kind": "INFERRED",
+      "confidence": "LOW",
+      "tags": [
+        "permission",
+        "checkout-blocking"
+      ],
+      "kb_refs": [
+        "KB-053",
+        "KB-054",
+        "KB-056",
+        "KB-058",
+        "KB-P-009"
+      ]
+    }
+  ],
+  "unknown_areas": [
+    {
+      "question": "Rule \"role không có quyền mua chỉ thanh toán khi tổng order gồm cả shipping bằng 0\" (Jira DUOS-407) có được PO/Dev xác nhận không; có còn phụ thuộc `allowZeroSubtotalCheckout` không; áp cho mọi role không có quyền mua hay chỉ store bật config; discount/thuế có tính vào tổng order không?",
+      "why_it_matters": "Rule draft chỉ theo ticket; không viết được kết quả mong đợi cho đơn giá trị 0.",
+      "kb_refs": [
+        "KB-054",
+        "KB-055"
+      ],
+      "oq_id": "OQ-roles-permissions-004"
+    },
+    {
+      "question": "Khi Junior Buyer (hoặc View Only) vào checkout bị chặn, buyer thấy gì (message, nút bị disable, chuyển hướng), text warning mặc định là gì và merchant sửa ở đâu (Portal, checkout editor, users.config)?",
+      "why_it_matters": "Rule chỉ nói chặn; Jira DUOS-266 không có mô tả.",
+      "kb_refs": [
+        "KB-053",
+        "KB-057"
+      ],
+      "oq_id": "OQ-roles-permissions-015"
+    },
+    {
+      "question": "Lỗi checkout extension bỏ qua member role (Jira DUOS-273, đã sửa) có còn tái hiện khi regression với đủ Junior Buyer, Senior Buyer, Admin và custom role trên store Shopify Plus không?",
+      "why_it_matters": "Lỗi đã sửa cần theo dõi regression; chưa có lần chạy lại được ghi.",
+      "kb_refs": [
+        "KB-056"
+      ],
+      "oq_id": "OQ-roles-permissions-016"
+    },
+    {
+      "question": "Custom role tạo từ role nền Senior Buyer hoặc Admin nhưng bỏ quyền mua có bị chặn ở checkout giống View Only không?",
+      "why_it_matters": "Nguồn chỉ nêu View Only và role mặc định.",
+      "kb_refs": [
+        "KB-058",
+        "KB-017"
+      ],
+      "oq_id": "OQ-roles-permissions-016"
+    },
+    {
+      "question": "Khi nào có store Shopify Plus với module bật, buyer và cart để quan sát checkout extension?",
+      "why_it_matters": "Feature không có quan sát nào; mọi check chỉ dựa trên tài liệu.",
+      "kb_refs": [
+        "KB-053",
+        "KB-P-009"
+      ],
+      "oq_id": "OQ-roles-permissions-016"
+    }
+  ],
+  "freshness": {
+    "observed_at": "2026-10-08",
+    "earliest_source_date": "2025-04-09",
+    "basis": "Ngày nguồn mới nhất trong các KB item được tham chiếu; quyết định PO (Jira DUOS-88), tài liệu sản phẩm 09/07/2026, Dev FE 28/07/2026 (Jira DUOS-403), ticket Jira DUOS-407 (18/08/2026). Không có quan sát runtime trong lần chạy này."
+  },
+  "last_updated": {
+    "date": "2026-10-09",
+    "ccr_ref": "bootstrap"
+  },
+  "coverage_matrix": [
+    {
+      "feature_id": "checkout-blocking-by-permission",
+      "layer": "checkout",
+      "role": "buyer-junior",
+      "state": "store Plus, cart có hàng",
+      "environment": "documented",
+      "covered": true,
+      "note": "Quyết định PO (Jira DUOS-88) + tài liệu sản phẩm; chưa quan sát."
+    },
+    {
+      "feature_id": "checkout-blocking-by-permission",
+      "layer": "checkout",
+      "role": "buyer-senior",
+      "state": "store Plus, cart có hàng",
+      "environment": "documented",
+      "covered": true,
+      "note": "Quyết định PO; chưa quan sát."
+    },
+    {
+      "feature_id": "checkout-blocking-by-permission",
+      "layer": "checkout",
+      "role": "buyer-admin",
+      "state": "store Plus, cart có hàng",
+      "environment": "documented",
+      "covered": false,
+      "note": "Rule không nêu Admin riêng; chỉ có hiện trạng modal quyền."
+    },
+    {
+      "feature_id": "checkout-blocking-by-permission",
+      "layer": "checkout",
+      "role": "buyer-custom-role (View Only)",
+      "state": "cart giá 0, shipping > 0",
+      "environment": "documented",
+      "covered": true,
+      "note": "Rule draft chỉ theo ticket — không có oracle."
+    },
+    {
+      "feature_id": "checkout-blocking-by-permission",
+      "layer": "checkout",
+      "role": "buyer-custom-role",
+      "state": "custom role khác bỏ quyền mua",
+      "environment": "documented",
+      "covered": false,
+      "note": "Không có nguồn."
+    },
+    {
+      "feature_id": "checkout-blocking-by-permission",
+      "layer": "checkout",
+      "role": "buyer (mọi role)",
+      "state": "regression lỗi bỏ qua member role",
+      "environment": "documented",
+      "covered": true,
+      "note": "Regression watch."
+    },
+    {
+      "feature_id": "checkout-blocking-by-permission",
+      "layer": "checkout",
+      "role": "buyer",
+      "state": "store non-Plus",
+      "environment": "documented",
+      "covered": false,
+      "note": "Giới hạn Plus thuộc module-entitlement-gating."
+    },
+    {
+      "feature_id": "checkout-blocking-by-permission",
+      "layer": "admin_panel",
+      "role": "internal-ops",
+      "state": "bật allowZeroSubtotalCheckout",
+      "environment": "documented",
+      "covered": true,
+      "note": "Dev FE 28/07/2026; điều kiện ngoại lệ chưa xác nhận."
+    },
+    {
+      "feature_id": "checkout-blocking-by-permission",
+      "layer": "checkout",
+      "role": "merchant",
+      "state": "sửa warning message",
+      "environment": "documented",
+      "covered": true,
+      "note": "Chỉ theo ticket trống."
+    },
+    {
+      "feature_id": "checkout-blocking-by-permission",
+      "layer": "api",
+      "role": "any",
+      "state": "any",
+      "environment": "documented",
+      "covered": false,
+      "note": "Bộ tài liệu QA không có đặc tả API/data model cho feature này"
+    },
+    {
+      "feature_id": "checkout-blocking-by-permission",
+      "layer": "db",
+      "role": "any",
+      "state": "any",
+      "environment": "documented",
+      "covered": false,
+      "note": "Bộ tài liệu QA không có đặc tả API/data model cho feature này"
+    }
+  ],
+  "profile_conflicts": [],
+  "profile_relationships": [
+    {
+      "from": "checkout-blocking-by-permission",
+      "to": "default-and-custom-roles",
+      "relation": "ENFORCES",
+      "kb_refs": [
+        "KB-053",
+        "KB-010"
+      ]
+    },
+    {
+      "from": "checkout-blocking-by-permission",
+      "to": "merchant-role-customization-config",
+      "relation": "CONFIGURED_BY",
+      "kb_refs": [
+        "KB-055",
+        "KB-059"
+      ]
+    },
+    {
+      "from": "checkout-blocking-by-permission",
+      "to": "pricing-subscription/module-entitlement-gating",
+      "relation": "CONSTRAINED_BY",
+      "kb_refs": [
+        "KB-P-009"
+      ]
+    },
+    {
+      "from": "checkout-blocking-by-permission",
+      "to": "finance-credit/checkout-credit-validation",
+      "relation": "SEE_ALSO",
+      "kb_refs": [
+        "KB-P-009"
+      ]
+    },
+    {
+      "from": "checkout-blocking-by-permission",
+      "to": "shopping-list/shopping-list-approval",
+      "relation": "HANDS_OFF_TO",
+      "kb_refs": [
+        "KB-053"
+      ]
+    }
+  ]
+}

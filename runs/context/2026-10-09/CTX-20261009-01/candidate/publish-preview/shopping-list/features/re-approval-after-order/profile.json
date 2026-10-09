@@ -1,0 +1,541 @@
+{
+  "feature_id": "re-approval-after-order",
+  "feature_key": "re-approval-after-order",
+  "name": "Đưa list đã duyệt về chờ duyệt sau mỗi order",
+  "user_goal": "Merchant bật setting để shopping list Approved tự về trạng thái chờ duyệt ngay khi order được submit từ list, buộc duyệt lại trước lần đặt sau; reminder của list tạm dừng khi về trạng thái chờ duyệt và tiếp tục khi list được duyệt lại.",
+  "user_goal_kb_refs": [
+    "KB-013",
+    "KB-014",
+    "KB-018",
+    "KB-019"
+  ],
+  "stable_since_version": "v1",
+  "actors": [
+    {
+      "role": "merchant",
+      "permission_observed": "Trên staging 08/10/2026 bật / tắt checkbox \"Reset approved list to pending after order submission\" ở trang Shopping list settings của Portal; giá trị mặc định chưa xác nhận.",
+      "kb_refs": [
+        "KB-014",
+        "KB-016"
+      ]
+    },
+    {
+      "role": "Junior Buyer và role không có quyền duyệt shopping list",
+      "permission_observed": "Help text trên staging nói setting áp cho nhóm này; quyết định gốc Jira DUOS-382 không nêu giới hạn role; hành vi reset chưa quan sát.",
+      "kb_refs": [
+        "KB-015",
+        "KB-013"
+      ]
+    },
+    {
+      "role": "Senior Buyer và Admin",
+      "permission_observed": "Nhận lại mail duyệt shopping list trong luồng re-approval (PO + Dev 29/04/2026). Có bị reset list khi tự đặt order hay không là câu hỏi mở.",
+      "kb_refs": [
+        "KB-020",
+        "KB-015"
+      ]
+    },
+    {
+      "role": "system",
+      "permission_observed": "Reset list Approved về trạng thái chờ duyệt khi order được submit, gắn note_attributes `duos_shopping_list_id` vào order, pause / resume reminder, gửi lại mail duyệt.",
+      "kb_refs": [
+        "KB-013",
+        "KB-017",
+        "KB-018",
+        "KB-019",
+        "KB-020"
+      ]
+    }
+  ],
+  "entry_points": [
+    {
+      "path": "Portal › Shopping list settings › checkbox \"Reset approved list to pending after order submission\" (kèm link \"Learn more\")",
+      "precondition": "Merchant đăng nhập Portal; store dùng module Shopping list.",
+      "kb_refs": [
+        "KB-014",
+        "KB-016"
+      ]
+    },
+    {
+      "path": "Đặt order từ một shopping list Approved",
+      "precondition": "Setting re-approval đang bật.",
+      "kb_refs": [
+        "KB-013",
+        "KB-017"
+      ]
+    },
+    {
+      "path": "Approve lại list đang ở trạng thái chờ duyệt do re-approval",
+      "precondition": "List đã bị reset về trạng thái chờ duyệt sau order.",
+      "kb_refs": [
+        "KB-019",
+        "KB-020"
+      ]
+    }
+  ],
+  "capabilities": [
+    {
+      "name": "Bật / tắt re-approval sau order",
+      "description": "Checkbox \"Reset approved list to pending after order submission\" ở trang Shopping list settings (label theo staging, QA lead xác nhận lưu); trên store khảo sát đang tắt, chưa rõ là mặc định.",
+      "kb_refs": [
+        "KB-014",
+        "KB-016",
+        "KB-015"
+      ]
+    },
+    {
+      "name": "Tự đưa list Approved về trạng thái chờ duyệt khi order được submit",
+      "description": "Khi setting bật, list Approved về trạng thái chờ duyệt (tên hiển thị đang tranh chấp) ngay khi order được submit (không đợi paid / fulfilled); lần đặt sau phải duyệt lại. Order từ list mang note_attributes `duos_shopping_list_id`.",
+      "kb_refs": [
+        "KB-013",
+        "KB-017"
+      ]
+    },
+    {
+      "name": "Đồng bộ reminder theo trạng thái duyệt lại",
+      "description": "List về trạng thái chờ duyệt thì reminder pause, frequency giữ nguyên; list được approve lại thì reminder resume.",
+      "kb_refs": [
+        "KB-018",
+        "KB-019"
+      ]
+    },
+    {
+      "name": "Thông báo duyệt lại",
+      "description": "Mail duyệt shopping list được gửi lại cho Senior Buyer và Admin trong luồng re-approval; thời điểm gửi chưa rõ.",
+      "kb_refs": [
+        "KB-020"
+      ]
+    }
+  ],
+  "state_transitions": [
+    {
+      "from": "Approved",
+      "to": "trạng thái chờ duyệt (tên hiển thị đang tranh chấp)",
+      "trigger": "Order được submit từ list",
+      "condition": "Setting re-approval đang bật; không đợi paid / fulfilled; phạm vi role đang chờ chốt",
+      "kb_refs": [
+        "KB-013",
+        "KB-015"
+      ]
+    },
+    {
+      "from": "reminder đang chạy",
+      "to": "reminder pause (giữ frequency)",
+      "trigger": "List về trạng thái chờ duyệt do re-approval",
+      "condition": "List có reminder",
+      "kb_refs": [
+        "KB-018"
+      ]
+    },
+    {
+      "from": "trạng thái chờ duyệt (do re-approval)",
+      "to": "Approved",
+      "trigger": "Senior Buyer hoặc Admin approve lại",
+      "condition": "Reminder đã pause được resume",
+      "kb_refs": [
+        "KB-019",
+        "KB-020"
+      ]
+    },
+    {
+      "from": "order đã tạo từ list",
+      "to": "chưa xác định",
+      "trigger": "Order bị edit / cancel / refund",
+      "condition": "Không có hành vi nào được khẳng định",
+      "kb_refs": [
+        "KB-021"
+      ]
+    }
+  ],
+  "confirmed_rules": [
+    {
+      "statement": "Theo quyết định Dev 28/04/2026 (Jira DUOS-382 comment; description Done 18/05/2026), ghi trong QA business rule Duos và được Decision log Duos ghi lại ở mục PO + Dev 29/04/2026: khi merchant bật checkbox re-approval trong Shopping list settings, sau khi đặt order từ một list Approved, list tự về trạng thái chờ duyệt (tên hiển thị đang tranh chấp, xem nhóm conflict tên trạng thái) ngay khi order được submit (không đợi paid hay fulfilled), và lần đặt sau phải được duyệt lại. Nguồn quyết định không nêu giới hạn role; giới hạn role chỉ đến từ help text quan sát trên staging.",
+      "knowledge_kind": "CONFIRMED_EXPECTED",
+      "confidence": "MEDIUM",
+      "kb_refs": [
+        "KB-013"
+      ]
+    },
+    {
+      "statement": "Theo Dev 28/04/2026 (Jira DUOS-382 comment), ghi trong QA business rule Duos và QA KB Duos \"B2B Shopping List\" v1: order đặt từ shopping list được gắn note_attributes `duos_shopping_list_id`.",
+      "knowledge_kind": "CONFIRMED_EXPECTED",
+      "confidence": "MEDIUM",
+      "kb_refs": [
+        "KB-017"
+      ]
+    },
+    {
+      "statement": "Theo quyết định PO + Dev 29/04/2026 (Jira DUOS-382 comment), ghi trong QA business rule Duos, Decision log Duos và QA KB Duos \"B2B Shopping List\" v1: khi shopping list về trạng thái chờ duyệt (tên hiển thị đang tranh chấp, xem nhóm conflict tên trạng thái) trong luồng re-approval, reminder của list bị pause và frequency được giữ nguyên.",
+      "knowledge_kind": "CONFIRMED_EXPECTED",
+      "confidence": "MEDIUM",
+      "kb_refs": [
+        "KB-018"
+      ]
+    },
+    {
+      "statement": "Theo quyết định PO + Dev 29/04/2026 (Jira DUOS-382 comment), ghi trong QA business rule Duos, Decision log Duos và QA KB Duos \"B2B Shopping List\" v1: khi shopping list đang ở trạng thái chờ duyệt (tên hiển thị đang tranh chấp, xem nhóm conflict tên trạng thái) được approve lại, reminder đã pause được resume.",
+      "knowledge_kind": "CONFIRMED_EXPECTED",
+      "confidence": "MEDIUM",
+      "kb_refs": [
+        "KB-019"
+      ]
+    },
+    {
+      "statement": "Theo quyết định PO + Dev 29/04/2026 (Jira DUOS-382 comment), ghi trong QA business rule Duos, Decision log Duos và QA KB Duos \"B2B Shopping List\" v1: trong luồng re-approval, mail duyệt shopping list được gửi lại cho Senior Buyer và Admin. Nguồn không nói rõ thời điểm gửi (lúc list về trạng thái chờ duyệt (tên hiển thị đang tranh chấp) hay lúc approve lại).",
+      "knowledge_kind": "CONFIRMED_EXPECTED",
+      "confidence": "MEDIUM",
+      "kb_refs": [
+        "KB-020"
+      ]
+    }
+  ],
+  "observed_behavior": [
+    {
+      "statement": "Trên staging (khảo sát 08/10/2026, store staging Plus (Free plan), 0 shopping list), trang Shopping list settings có checkbox \"Reset approved list to pending after order submission\" kèm link \"Learn more\"; QA lead xác nhận lưu label này vào QA business rule Duos ngày 08/10/2026. Chưa có PO/Dev xác nhận label; Jira DUOS-382 chỉ có label trong ảnh.",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "confidence": "MEDIUM",
+      "kb_refs": [
+        "KB-014"
+      ],
+      "status": "CURRENT_STATE"
+    },
+    {
+      "statement": "Trên staging (khảo sát 08/10/2026, store staging Plus (Free plan)), checkbox re-approval có help text \"Applies to junior buyers and any role without shopping list approval permission.\"; QA business rule Duos (QA lead xác nhận lưu 08/10/2026) diễn giải rằng role có quyền \"Approve draft status list\" (Admin, Senior buyer) không bị reset list. Quyết định gốc Jira DUOS-382 không nêu giới hạn role, và hành vi reset chưa được quan sát thực tế (store chưa có list); độ lệch này chưa có PO/Dev chốt.",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "confidence": "MEDIUM",
+      "kb_refs": [
+        "KB-015"
+      ],
+      "status": "CURRENT_STATE"
+    },
+    {
+      "statement": "QA business rule Duos ghi checkbox \"Reset approved list to pending after order submission\" mặc định tắt, dựa trên quan sát staging 08/10/2026 (store staging Plus (Free plan), QA lead xác nhận lưu); QA KB Duos \"B2B Shopping List\" v1 lại ghi chưa rõ trạng thái tắt trên store đó là mặc định khi cài mới hay đã bị đổi. Một store, một lần khảo sát, chưa có PO/Dev xác nhận giá trị mặc định.",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "confidence": "LOW",
+      "kb_refs": [
+        "KB-016"
+      ],
+      "status": "CURRENT_STATE"
+    }
+  ],
+  "observed_validations": [],
+  "permissions": [
+    {
+      "statement": "Chỉ merchant bật / tắt setting re-approval trên Portal.",
+      "kb_refs": [
+        "KB-014"
+      ]
+    },
+    {
+      "statement": "Phạm vi role bị reset: quyết định Jira DUOS-382 không giới hạn role; help text staging giới hạn ở junior buyer và role không có quyền duyệt — chưa chốt.",
+      "kb_refs": [
+        "KB-013",
+        "KB-015"
+      ]
+    }
+  ],
+  "surface_mapping": {
+    "portal": [
+      {
+        "item": "Shopping list settings: checkbox \"Reset approved list to pending after order submission\", link \"Learn more\", help text giới hạn role",
+        "kb_refs": [
+          "KB-014",
+          "KB-015",
+          "KB-016"
+        ]
+      }
+    ],
+    "storefront": [
+      {
+        "item": "Customer Account: list Approved chuyển về trạng thái chờ duyệt sau order, approve lại (chưa quan sát)",
+        "kb_refs": [
+          "KB-013",
+          "KB-019"
+        ]
+      }
+    ],
+    "api": [],
+    "data": [
+      {
+        "item": "Order note_attributes `duos_shopping_list_id`",
+        "kb_refs": [
+          "KB-017"
+        ]
+      },
+      {
+        "item": "Reminder của list: trạng thái pause / resume, frequency giữ nguyên",
+        "kb_refs": [
+          "KB-018",
+          "KB-019"
+        ]
+      }
+    ],
+    "code": []
+  },
+  "dependencies": [
+    {
+      "target": "shopping-list / shopping-list-approval",
+      "relation": "extends",
+      "note": "Dùng status Approved / chờ duyệt và quyền duyệt của luồng duyệt list.",
+      "kb_refs": [
+        "KB-013",
+        "KB-007",
+        "KB-010"
+      ]
+    },
+    {
+      "target": "shopping-list / reorder-reminder",
+      "relation": "controls",
+      "note": "Pause / resume reminder theo trạng thái duyệt lại.",
+      "kb_refs": [
+        "KB-018",
+        "KB-019",
+        "KB-033"
+      ]
+    },
+    {
+      "target": "finance-credit / credit-ledger-and-transactions",
+      "relation": "see_also",
+      "note": "Order từ shopping list (mang `duos_shopping_list_id`) đi qua cùng webhook order mà Finance & Credit dùng cho ledger.",
+      "kb_refs": [
+        "KB-017"
+      ]
+    },
+    {
+      "target": "notifications / notification-settings-and-templates",
+      "relation": "emits",
+      "note": "Mail duyệt shopping list gửi lại cho Senior Buyer và Admin; template do notifications sở hữu.",
+      "kb_refs": [
+        "KB-020"
+      ]
+    }
+  ],
+  "risks": [
+    {
+      "statement": "Help text trên staging giới hạn re-approval ở junior buyer và role không có quyền duyệt, trong khi quyết định Jira DUOS-382 không giới hạn role; hành vi reset chưa được quan sát (store khảo sát có 0 list). Check theo role Senior Buyer / Admin chưa có oracle.",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "confidence": "MEDIUM",
+      "kb_refs": [
+        "KB-015",
+        "KB-013"
+      ]
+    },
+    {
+      "statement": "QA business rule Duos ghi checkbox \"Reset approved list to pending after order submission\" mặc định tắt, dựa trên quan sát staging 08/10/2026 (store staging Plus (Free plan), QA lead xác nhận lưu); QA KB Duos \"B2B Shopping List\" v1 lại ghi chưa rõ trạng thái tắt trên store đó là mặc định khi cài mới hay đã bị đổi. Một store, một lần khảo sát, chưa có PO/Dev xác nhận giá trị mặc định.",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "confidence": "LOW",
+      "kb_refs": [
+        "KB-016"
+      ]
+    },
+    {
+      "statement": "QA KB Duos \"Feature Map\" v1 ghi chưa rõ shopping list có phải duyệt lại khi order tạo từ list bị edit, cancel hoặc refund hay không (GAP-02 của task Testlane DUOS-006, chưa có PO/Dev trả lời). Không có hành vi nào được tài liệu khẳng định cho các sự kiện này.",
+      "knowledge_kind": "INFERRED",
+      "confidence": "LOW",
+      "kb_refs": [
+        "KB-021"
+      ]
+    },
+    {
+      "statement": "Order từ shopping list đi qua cùng webhook order với ledger tài chính; thay đổi xử lý webhook có thể ảnh hưởng tới việc reset list và gắn `duos_shopping_list_id`.",
+      "knowledge_kind": "INFERRED",
+      "confidence": "LOW",
+      "kb_refs": [
+        "KB-017",
+        "KB-013"
+      ]
+    }
+  ],
+  "unknown_areas": [
+    {
+      "question": "Khi bật \"Reset approved list to pending after order submission\", list Approved do Senior Buyer hoặc Admin (role có quyền \"Approve draft status list\") đặt order có bị reset về trạng thái chờ duyệt không?",
+      "why_it_matters": "Quyết định Jira DUOS-382 không nêu giới hạn role, help text staging thì giới hạn; chưa viết được expected cho role có quyền duyệt.",
+      "kb_refs": [
+        "KB-013",
+        "KB-015"
+      ],
+      "oq_id": "OQ-shopping-list-005"
+    },
+    {
+      "question": "Label \"Reset approved list to pending after order submission\" có phải label chính thức không, và setting mặc định bật hay tắt khi cài mới?",
+      "why_it_matters": "Label và trạng thái tắt chỉ dựa trên một lần khảo sát một store, QA lead xác nhận lưu, chưa có PO/Dev.",
+      "kb_refs": [
+        "KB-014",
+        "KB-016"
+      ],
+      "oq_id": "OQ-shopping-list-006"
+    },
+    {
+      "question": "Shopping list có phải duyệt lại khi order tạo từ list bị edit, cancel hoặc refund không (GAP-02 của task Testlane DUOS-006)?",
+      "why_it_matters": "Quyết định chỉ nói về lúc order được submit; các sự kiện order sau đó không có oracle.",
+      "kb_refs": [
+        "KB-021",
+        "KB-013",
+        "KB-017"
+      ],
+      "oq_id": "OQ-shopping-list-007"
+    },
+    {
+      "question": "Trong luồng re-approval, mail duyệt gửi lại cho Senior Buyer và Admin vào lúc list về trạng thái chờ duyệt sau order hay lúc list được approve lại?",
+      "why_it_matters": "Thời điểm gửi quyết định bước kiểm mail.",
+      "kb_refs": [
+        "KB-020"
+      ],
+      "oq_id": "OQ-shopping-list-008"
+    },
+    {
+      "question": "Trạng thái chờ duyệt mà list quay về sau order hiển thị tên \"Pending\" hay \"Waiting for Approval\" trên UI?",
+      "why_it_matters": "Quyết định re-approval không chốt tên hiển thị; tên status chờ duyệt đang tranh chấp ở luồng duyệt list.",
+      "kb_refs": [
+        "KB-013",
+        "KB-009",
+        "KB-010"
+      ],
+      "oq_id": "OQ-shopping-list-007"
+    }
+  ],
+  "freshness": {
+    "observed_at": "2026-10-08",
+    "earliest_source_date": "2026-04-28",
+    "basis": "Ngày nguồn mới nhất trong các KB item được tham chiếu (ngày quyết định PO/Dev, ngày đọc Jira, khảo sát staging 08/10/2026); không có quan sát runtime trong lần chạy này."
+  },
+  "last_updated": {
+    "date": "2026-10-09",
+    "ccr_ref": "bootstrap"
+  },
+  "coverage_matrix": [
+    {
+      "feature_id": "re-approval-after-order",
+      "layer": "portal",
+      "role": "merchant",
+      "state": "setting re-approval bật / tắt",
+      "environment": "documented",
+      "covered": true,
+      "note": "Hiện trạng staging; mặc định chưa xác nhận"
+    },
+    {
+      "feature_id": "re-approval-after-order",
+      "layer": "backend",
+      "role": "system",
+      "state": "setting bật, order submit từ list Approved",
+      "environment": "documented",
+      "covered": true,
+      "note": "Dev 28/04/2026 + PO/Dev 29/04/2026"
+    },
+    {
+      "feature_id": "re-approval-after-order",
+      "layer": "backend",
+      "role": "system",
+      "state": "setting tắt, order submit từ list Approved",
+      "environment": "documented",
+      "covered": false,
+      "note": "Không có quy tắc tường minh cho trạng thái tắt"
+    },
+    {
+      "feature_id": "re-approval-after-order",
+      "layer": "backend",
+      "role": "buyer-senior / buyer-admin",
+      "state": "list do role có quyền duyệt đặt order",
+      "environment": "documented",
+      "covered": false,
+      "note": "Phạm vi role chờ chốt"
+    },
+    {
+      "feature_id": "re-approval-after-order",
+      "layer": "backend",
+      "role": "system",
+      "state": "list có reminder về trạng thái chờ duyệt / approve lại",
+      "environment": "documented",
+      "covered": true,
+      "note": "PO + Dev 29/04/2026"
+    },
+    {
+      "feature_id": "re-approval-after-order",
+      "layer": "backend",
+      "role": "system",
+      "state": "order edit / cancel / refund",
+      "environment": "documented",
+      "covered": false,
+      "note": "GAP-02 chưa có trả lời"
+    },
+    {
+      "feature_id": "re-approval-after-order",
+      "layer": "data",
+      "role": "system",
+      "state": "order có note_attributes `duos_shopping_list_id`",
+      "environment": "documented",
+      "covered": true,
+      "note": "Dev 28/04/2026"
+    },
+    {
+      "feature_id": "re-approval-after-order",
+      "layer": "storefront",
+      "role": "buyer-junior",
+      "state": "list Approved về trạng thái chờ duyệt trong Customer Account",
+      "environment": "documented",
+      "covered": false,
+      "note": "Customer Account chưa quan sát"
+    },
+    {
+      "feature_id": "re-approval-after-order",
+      "layer": "api",
+      "role": "unspecified",
+      "state": "any",
+      "environment": "documented",
+      "covered": false,
+      "note": "Bộ tài liệu QA không có đặc tả API/data model cho feature này"
+    },
+    {
+      "feature_id": "re-approval-after-order",
+      "layer": "code",
+      "role": "unspecified",
+      "state": "any",
+      "environment": "documented",
+      "covered": false,
+      "note": "Không có nguồn mã"
+    }
+  ],
+  "profile_conflicts": [
+    {
+      "conflict_group": null,
+      "owner_feature": "shopping-list/re-approval-after-order",
+      "topic": "Phạm vi role của re-approval sau order",
+      "side_a": "Theo quyết định Dev 28/04/2026 và PO + Dev 29/04/2026 (Jira DUOS-382), list Approved về trạng thái chờ duyệt khi order được submit, không nêu giới hạn role.",
+      "side_b": "Trên staging 08/10/2026, help text của checkbox ghi \"Applies to junior buyers and any role without shopping list approval permission.\"",
+      "resolution": "UNRESOLVED",
+      "impact": "Khác phạm vi nên không mở conflict_group; giữ quy tắc đã xác nhận, phần role có quyền duyệt chưa có oracle.",
+      "kb_refs": [
+        "KB-013",
+        "KB-015"
+      ]
+    }
+  ],
+  "profile_relationships": [
+    {
+      "from": "re-approval-after-order",
+      "to": "shopping-list/shopping-list-approval",
+      "relation": "EXTENDS",
+      "kb_refs": [
+        "KB-013",
+        "KB-007"
+      ]
+    },
+    {
+      "from": "re-approval-after-order",
+      "to": "shopping-list/reorder-reminder",
+      "relation": "CONTROLS",
+      "kb_refs": [
+        "KB-018",
+        "KB-019"
+      ]
+    },
+    {
+      "from": "re-approval-after-order",
+      "to": "finance-credit/credit-ledger-and-transactions",
+      "relation": "SHARES_EVENT_SOURCE",
+      "kb_refs": [
+        "KB-017"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,32 @@
+# Rework sau review r1 (REJECTED) — duos CTX-20261009-01
+
+Verdict: review/verdict.r1.json (đọc finding đầy đủ ở đó). Quyết định orchestrator dưới đây là CUỐI CÙNG cho round này — áp đúng, không mở rộng phạm vi. Mọi luật cũ (normalizer-brief.md, orchestrator-directives.json, profile-checklist-brief.md) vẫn áp, TRỪ hai điểm directives được sửa ở mục "Sửa directive". Không đụng intermediate/doc/*. Mỗi agent chỉ sửa shard/file của object mình. Script/nháp đặt trong thư mục scratchpad RIÊNG theo object + vai trò (vd scratchpad/<object>-norm-r1/, scratchpad/<object>-chk-r1/) — KHÔNG dùng lại script trong thư mục dùng chung (sự cố ghi đè checklist company-submissions round 1). kb_id bị bỏ để trống (không đánh số lại). Không ghi dấu vết quá trình (rework, r1, F-nn) vào statement/summary/topic/note sẽ publish.
+
+## Sửa directive (orchestrator)
+- D-1 (F-02/F-08): "Dev xác nhận hành vi hiện tại" mà nguồn ghi rõ PO/client CHƯA chấp nhận ("Chưa chốt PO có chấp nhận", known-issue "open — chờ PO/client chấp nhận", "chưa có expected pass/fail") → KHÔNG phải CONFIRMED_EXPECTED. Phát biểu hành vi do Dev mô tả → INFERRED MEDIUM (không confirmation_source), statement nêu "Theo Dev BE <ngày>, hiện trạng là …; PO chưa chấp nhận đây là hành vi đúng", gắn vào OQ NEEDS_CONFIRMATION sẵn có của mục đó. Directive known_conflicts_handling (8)(9)(10) được hiểu lại theo D-1.
+- D-2 (F-03): Dev FE giải thích code FE (Slack 05/10/2026) mà claim nguồn có normativity IMPLIED_BY_CODE_ARTIFACT → confirmation_source {type:'dev_doc', derivation:'code_artifact'} (tài liệu Dev mô tả code hiện là gì). Claim EXPLICIT cùng nguồn (câu văn Dev tự diễn đạt điều kiện) → dev_doc + prose. Check có oracle gồm item CE derivation code_artifact → BASELINE (không STRONG) + NEEDS_CONFIRMATION + OQ.
+
+## qa-knowledge-normalizer
+- company-submissions (F-01, F-11, F-12):
+  - F-01: KB-001 (status chỉ pending/completed/failed) là một phần của phía "không có Reject / không có status rejected" → đưa vào CONF-DUOS-company-submissions-01 (INFERRED LOW, UNRESOLVED, statement nêu nguồn+ngày). Nếu có phần không tranh chấp (vd Approve ghi `completed`, `failed` hiện badge đỏ, tab All/Pending/Approved/Failed quan sát staging) thì tách thành item riêng theo đúng tier (CE chỉ cho mệnh đề Dev có ngày KHÔNG liên quan đến việc có/không có trạng thái rejected; OBSERVED cho tab staging). Cập nhật side_b của OQ CONFLICT để liệt kê KB-001.
+  - F-11: KB-057 rút statement: "Theo PO (chuyển lời qua QA lead) 30/09/2026 — một phía của tranh chấp Reject/Delete — …", không mô tả như sự thật đã chốt; related_kb_ids tới item của CONF-01.
+  - F-12: KB-060 thêm tag 'permission' (orchestrator quyết: truy cập tài khoản buyer trước Approve thuộc topic quyền truy cập — bảo thủ).
+- b2b-registration (F-02, F-08): KB-038, KB-039 (BE không validate regex / tự tạo company từ giá trị sai) và KB-030, KB-032, KB-033 (pattern có flag không khớp, pattern sai cú pháp bị bỏ qua, Portal không kiểm cú pháp — known-issue "open — chờ PO chấp nhận (GAP-22)") → áp D-1: INFERRED MEDIUM, bỏ confirmation_source, gắn OQ NEEDS_CONFIRMATION GAP-22 sẵn có (kb_ids thêm). Giữ tags.
+- company-member (F-02): KB-030 (search prefix match) → áp D-1 (INFERRED MEDIUM + OQ prefix match sẵn có). Mệnh đề "search trong location hiện tại / theo name+email" nếu có authority riêng không tranh chấp thì giữ ở item CE riêng.
+- pricing-subscription (F-03): áp D-2 cho KB-032 và rà KB-033, KB-034, KB-035, KB-046 (cùng nguồn Slack 05/10/2026): item nào neo claim IMPLIED_BY_CODE_ARTIFACT → dev_doc + code_artifact; item neo claim EXPLICIT → dev_doc + prose, ghi lý do vào assumptions từng item. confidence giữ MEDIUM.
+- roles-permissions + quote-request (F-05): owner = quote-request/quote-negotiation-and-status (fact_owner_hints). roles-permissions BỎ KB-025 (đưa vào discarded_by_normalizer reason 'owned_by_other_object' + cross_object_refs → quote-request). quote-request KB-038: CE chỉ phát biểu điều Dev 14/07/2026 nói (webhook revoke role chờ 5 phút rồi kiểm tra reassign cho owner location; config `quotation.skip_reassign_on_revoke` không reassign quote — neo câu Dev có ngày); mệnh đề "đối tượng reassign là quote" lấy từ Feature Map → tách item INFERRED MEDIUM riêng nếu không neo được câu Dev có ngày, related hai chiều.
+- shopping-list (F-10): KB-013, KB-018, KB-019 (CE) không dùng nhãn "Pending" như tên UI đã chốt — viết "trạng thái chờ duyệt (tên hiển thị đang tranh chấp, xem nhóm conflict tên trạng thái)"; related_kb_ids tới KB-009/KB-010.
+- Mỗi normalizer: gate PASS, handoff ngắn liệt kê id đã đổi.
+
+## feature-profile-builder (sau khi normalizer xong)
+- Dựng lại profile của các object có KB đổi kind/bỏ id (company-submissions, b2b-registration, company-member, pricing-subscription, roles-permissions, quote-request, shopping-list): item hạ khỏi CE chuyển từ confirmed_rules sang risks/unknown_areas; không còn kb_ref tới id đã bỏ; kb_trace_complete true.
+- F-07 (TẤT CẢ 12 object): thêm vào coverage_matrix của mỗi feature không có đặc tả API/data trong bộ tài liệu một dòng {layer:'api' (và/hoặc 'db'), covered:false, note:'Bộ tài liệu QA không có đặc tả API/data model cho feature này'} — KHÔNG thêm unknown_area (orchestrator sẽ mint 1 OQ OPEN_ISSUE / object).
+
+## qa-checklist-builder (sau khi profile xong)
+- Dựng lại checklist của các object có KB/profile đổi; tính lại oracle_strength (CE derivation code_artifact → BASELINE theo D-2). Bắt buộc: company-submissions submission-review-and-decision CHK-001 không còn STRONG khẳng định "chỉ ba status" (F-01) — tách: STRONG cho mệnh đề CE không tranh chấp (nếu còn), NONE + NEEDS_CONFIRMATION cho tập status đầy đủ; company-member CHK-001 và các check dựa KB-030 → NONE; b2b-registration check dựa KB-030/032/033/038/039 → NONE; pricing-subscription suggested-plans-and-trial CHK-001/002/004/005 tính lại; quote-request CHK-011 và roles-permissions member-role-assignment-sync CHK-003 trỏ lại kb_id sau gộp (check ở roles dựa KB-025 → bỏ, ghi duplicates_removed 'covered in quote-request/quote-negotiation-and-status').
+
+## Orchestrator (publish-strip)
+- F-04: quét cả check BASELINE; mỗi object 1 OQ NEEDS_CONFIRMATION "hiện trạng staging chưa có PO/Dev xác nhận" gom check BASELINE chưa được OQ nào phủ.
+- F-06: gộp OQ mint từ unknown_area vào OQ đã hỏi đúng câu (kể cả OQ mức object), không gộp OQ OPEN_ISSUE của KNOWN_DEFECT.
+- F-07: 1 OQ OPEN_ISSUE / object liệt kê feature thiếu đặc tả API/data.
+- F-09: OQ portal-shell về module chưa subscribe → tham chiếu OQ owner pricing-subscription (also_affects).

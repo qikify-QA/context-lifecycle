@@ -1,0 +1,673 @@
+{
+  "schema_version": "1.0",
+  "artifact_type": "FeatureProfileCandidate",
+  "artifact_id": "ART-FEATURE-PROFILE-bounce-complaint-suppression-CTX-20261008-02",
+  "workflow_id": "CTX-20261008-02",
+  "producer": "feature-profile-builder",
+  "source_refs": [
+    "candidate/product-kb/bounce-complaint-suppression.json",
+    "candidate/product-kb/_object-level.deliverability.json",
+    "candidate/product-kb/_product-level.json",
+    "input/scope-plan.json",
+    "input/orchestrator-directives.json"
+  ],
+  "upstream_artifact_ids": [
+    "PKBC-CTX-20261008-02-deliverability-bounce-complaint-suppression",
+    "PKBC-CTX-20261008-02-deliverability-_object-level",
+    "PKBC-CTX-20261008-02-_product-level"
+  ],
+  "status": "PARTIAL",
+  "confidence": "MEDIUM",
+  "observations": [
+    "Profile dựng hoàn toàn từ tài liệu (DOC_BOOTSTRAP), không có quan sát runtime trong lần chạy này; act_ids rỗng ở mọi nơi và observed_validations rỗng.",
+    "confirmed_rules chỉ chứa item CONFIRMED_EXPECTED; hiện trạng khảo sát staging nằm ở observed_behavior; item INFERRED, item thuộc conflict_group và lỗi đã ghi nhận nằm ở risks/unknown_areas, không dùng làm expected result.",
+    "feature_id dùng giá trị feature_key như toàn bộ KB của feature; chưa có mã FEAT dạng số được cấp.",
+    "Feature chạy hoàn toàn ở backend / DB; không có quan sát staging trực tiếp của worker ngoài độ trễ mẫu và một lượt TC-MTRO-601."
+  ],
+  "assumptions": [
+    "Độ trễ gửi → suppression (8–62 giây) và nhãn cột Reason thuộc shard khác của cùng object nhưng được dẫn ở observed_behavior vì mô tả kết quả quan sát được của feature này; không nhân bản item."
+  ],
+  "unknowns": [
+    "Reset counter soft bounce mỗi khi có Delivery khiến ngưỡng 7 lần liên tiếp gần như không đạt — PO muốn giữ cách reset này hay đổi?",
+    "Địa chỉ có sẵn trên danh sách suppression của SES có đúng là sinh row `reason = hard_bounce` ở tầng ứng dụng không; event `bounceSubType = Suppressed` tạo row với reason gì; mọi `complaintFeedbackType` đều dẫn tới suppress hay chỉ loại `abuse`?",
+    "Soft bounce (Epic B2 'Later') và 6 số delivery (Epic B6 'Later') có thuộc phạm vi hiện hành không, khi task MTRO-77 và MTRO-82 đã DONE?",
+    "Tài liệu thiết kế bounce / complaint của repo sản phẩm (26/08/2026) mô tả gì thêm ngoài rule 07/09/2026 — cách chọn region / account SES cho một lần gửi, cập nhật trạng thái contact?",
+    "Địa chỉ nằm trên danh sách suppression account-global của SES (không có row trong workspace) có hiện ở trang Suppressions của workspace không?",
+    "Suppression do soft bounce hiển thị nhãn gì ở cột `Reason` của trang Suppressions?"
+  ],
+  "conflicts": [
+    "Phạm vi Epic MTRO-64 ('Later') vs task MTRO-77 / MTRO-82 DONE — UNRESOLVED, không lập conflict_group (trạng thái ticket, không phải hai hành vi trái nhau)."
+  ],
+  "blocking_issues": [],
+  "payload": {
+    "feature_profiles": [
+      {
+        "feature_id": "bounce-complaint-suppression",
+        "feature_key": "bounce-complaint-suppression",
+        "name": "Tự động suppress khi hard bounce, complaint và soft bounce lặp lại",
+        "user_goal": "Workspace được bảo vệ uy tín gửi: địa chỉ hard bounce hoặc complaint bị chặn ngay và vĩnh viễn; địa chỉ soft bounce bị chặn khi đủ số lần liên tiếp; suppression tính theo từng workspace và có lớp SES account-level làm lưới bảo vệ.",
+        "stable_since_version": "v1",
+        "actors": [
+          {
+            "role": "system (worker xử lý sự kiện SES)",
+            "permission_observed": "Không có thao tác người dùng; quyết định suppress chạy ở backend khi nhận event Bounce / Complaint / Delivery.",
+            "kb_refs": [
+              "KB-029",
+              "KB-030",
+              "KB-031",
+              "KB-034"
+            ]
+          },
+          {
+            "role": "system (SES account-level suppression list)",
+            "permission_observed": "Danh sách suppression của SES bật `BOUNCE + COMPLAINT` trên cả 2 AWS account, là lưới account-global tách biệt với suppression theo workspace.",
+            "kb_refs": [
+              "KB-041"
+            ]
+          }
+        ],
+        "entry_points": [
+          {
+            "path": "Event SES `Bounce` (`bounceType = Permanent` hoặc `Transient`) tới worker",
+            "precondition": "Event hợp lệ đã qua pipeline sự kiện SES.",
+            "kb_refs": [
+              "KB-029",
+              "KB-031",
+              "KB-058"
+            ]
+          },
+          {
+            "path": "Event SES `Complaint` tới worker",
+            "precondition": "Event hợp lệ đã qua pipeline sự kiện SES.",
+            "kb_refs": [
+              "KB-030",
+              "KB-058"
+            ]
+          },
+          {
+            "path": "Event SES `Delivery` cho cặp (team_id, email) đang có counter soft bounce",
+            "precondition": "Counter soft bounce > 0.",
+            "kb_refs": [
+              "KB-034"
+            ]
+          },
+          {
+            "path": "Task import chạy một lần lúc triển khai đầu, kéo danh sách suppression của SES vào bảng `suppressions`",
+            "precondition": "Lần triển khai đầu.",
+            "kb_refs": [
+              "KB-043"
+            ]
+          }
+        ],
+        "capabilities": [
+          {
+            "name": "Suppress ngay khi hard bounce",
+            "description": "`bounceType = Permanent` tạo ngay row `reason = hard_bounce`, vĩnh viễn, không độ trễ, không ngưỡng.",
+            "kb_refs": [
+              "KB-029"
+            ],
+            "act_ids": []
+          },
+          {
+            "name": "Suppress ngay khi complaint",
+            "description": "Event `Complaint` tạo ngay row `reason = complaint`, vĩnh viễn. Loại `complaintFeedbackType` nào dẫn tới suppress chưa được mô tả.",
+            "kb_refs": [
+              "KB-030"
+            ],
+            "act_ids": []
+          },
+          {
+            "name": "Đếm soft bounce và suppress theo ngưỡng",
+            "description": "Mỗi `Transient` tăng counter của (team_id, email); đủ 7 lần liên tiếp không xen Delivery thì tạo row `reason = soft_bounce` và xoá counter; một Delivery xoá hẳn counter. SES không tự xử lý soft bounce.",
+            "kb_refs": [
+              "KB-031",
+              "KB-032",
+              "KB-033",
+              "KB-034",
+              "KB-035"
+            ],
+            "act_ids": []
+          },
+          {
+            "name": "Giữ một suppression active cho mỗi cặp (team_id, email)",
+            "description": "Partial unique trên row chưa soft-delete; verdict đầu tiên quyết định `reason` và không bị ghi đè; row đã gỡ giữ làm audit và event bounce mới vẫn tạo được row active mới.",
+            "kb_refs": [
+              "KB-036",
+              "KB-037",
+              "KB-038",
+              "KB-039"
+            ],
+            "act_ids": []
+          },
+          {
+            "name": "Phạm vi theo workspace cộng lưới SES account-global",
+            "description": "Suppression trong DB khoá theo (team_id, email), không ảnh hưởng workspace khác; bảng không có cột region / account (provenance nằm ở `ses_events`); danh sách SES account-level là lớp riêng, được đồng bộ một lần vào bảng lúc triển khai đầu.",
+            "kb_refs": [
+              "KB-040",
+              "KB-041",
+              "KB-042",
+              "KB-043",
+              "KB-044"
+            ],
+            "act_ids": []
+          }
+        ],
+        "state_transitions": [
+          {
+            "from": "địa chỉ không bị suppress",
+            "to": "suppression active, reason hard_bounce",
+            "trigger": "Event `bounceType = Permanent`",
+            "condition": "Ngay lập tức, vĩnh viễn",
+            "kb_refs": [
+              "KB-029"
+            ]
+          },
+          {
+            "from": "địa chỉ không bị suppress",
+            "to": "suppression active, reason complaint",
+            "trigger": "Event `Complaint`",
+            "condition": "Ngay lập tức, vĩnh viễn",
+            "kb_refs": [
+              "KB-030"
+            ]
+          },
+          {
+            "from": "counter soft bounce = n",
+            "to": "counter = n + 1",
+            "trigger": "Event `bounceType = Transient`",
+            "condition": "Theo cặp (team_id, email)",
+            "kb_refs": [
+              "KB-031"
+            ]
+          },
+          {
+            "from": "counter soft bounce = 6 (liên tiếp)",
+            "to": "suppression active, reason soft_bounce; counter bị xoá",
+            "trigger": "Soft bounce thứ 7 liên tiếp",
+            "condition": "Không xen event Delivery",
+            "kb_refs": [
+              "KB-032"
+            ]
+          },
+          {
+            "from": "counter soft bounce > 0",
+            "to": "không còn counter (về 0)",
+            "trigger": "Event `Delivery`",
+            "condition": "Xoá hẳn, không giảm 1",
+            "kb_refs": [
+              "KB-034"
+            ]
+          },
+          {
+            "from": "suppression active với reason X",
+            "to": "suppression active, vẫn reason X",
+            "trigger": "Event bounce / complaint khác loại cho cùng cặp",
+            "condition": "Verdict đầu tiên thắng",
+            "kb_refs": [
+              "KB-037",
+              "KB-036"
+            ]
+          },
+          {
+            "from": "suppression đã gỡ (soft-deleted)",
+            "to": "suppression active mới",
+            "trigger": "Event bounce mới cho cùng cặp",
+            "condition": "Row cũ vẫn giữ làm audit",
+            "kb_refs": [
+              "KB-039",
+              "KB-038"
+            ]
+          }
+        ],
+        "confirmed_rules": [
+          {
+            "statement": "Theo Jira MTRO-64 (use case B1) và MTRO-76 (rule 07/09/2026 trong QA business rule Mailtro, cùng quyết định 07/09/2026 trong Decision log Mailtro), event SES có `bounceType = Permanent` tạo ngay một row `suppressions` với `reason = hard_bounce` cho cặp `(team_id, email)`, vĩnh viễn, không độ trễ và không ngưỡng số lần.",
+            "knowledge_kind": "CONFIRMED_EXPECTED",
+            "confidence": "MEDIUM",
+            "kb_refs": [
+              "KB-029"
+            ]
+          },
+          {
+            "statement": "Theo Jira MTRO-64 (use case B3) và MTRO-76 (rule 07/09/2026 trong QA business rule Mailtro, cùng quyết định 07/09/2026 trong Decision log Mailtro), event `Complaint` tạo ngay một row `suppressions` với `reason = complaint`, vĩnh viễn.",
+            "knowledge_kind": "CONFIRMED_EXPECTED",
+            "confidence": "MEDIUM",
+            "kb_refs": [
+              "KB-030"
+            ]
+          },
+          {
+            "statement": "Theo Jira MTRO-64 (use case B2) và MTRO-77 (rule 07/09/2026 trong QA business rule Mailtro), mỗi event `bounceType = Transient` (soft bounce) tăng `soft_bounce_counters` của cặp `(team_id, email)` thêm 1.",
+            "knowledge_kind": "CONFIRMED_EXPECTED",
+            "confidence": "MEDIUM",
+            "kb_refs": [
+              "KB-031"
+            ]
+          },
+          {
+            "statement": "Theo Jira MTRO-64 (use case B2) và MTRO-77 (rule 07/09/2026 trong QA business rule Mailtro, cùng quyết định 07/09/2026 trong Decision log Mailtro), khi cặp `(team_id, email)` đủ 7 soft bounce liên tiếp (không xen event Delivery) thì hệ thống tạo row `suppressions` với `reason = soft_bounce` và xoá counter.",
+            "knowledge_kind": "CONFIRMED_EXPECTED",
+            "confidence": "MEDIUM",
+            "kb_refs": [
+              "KB-032"
+            ]
+          },
+          {
+            "statement": "Theo Jira MTRO-64 (use case B2) và MTRO-77 (rule 07/09/2026 trong QA business rule Mailtro), SES không tự xử lý soft bounce; logic đếm và suppress soft bounce hoàn toàn do Mailtro thực hiện.",
+            "knowledge_kind": "CONFIRMED_EXPECTED",
+            "confidence": "MEDIUM",
+            "kb_refs": [
+              "KB-033"
+            ]
+          },
+          {
+            "statement": "Theo Jira MTRO-77 (rule 07/09/2026 trong QA business rule Mailtro, cùng quyết định 07/09/2026 trong Decision log Mailtro), một event `Delivery` xoá hẳn row `soft_bounce_counters` của cặp `(team_id, email)` — counter về 0, không phải giảm 1.",
+            "knowledge_kind": "CONFIRMED_EXPECTED",
+            "confidence": "MEDIUM",
+            "kb_refs": [
+              "KB-034"
+            ]
+          },
+          {
+            "statement": "Theo Jira MTRO-76 (rule 07/09/2026 trong QA business rule Mailtro), bảng `suppressions` dùng soft-delete cùng partial unique `(team_id, email) WHERE deleted_at IS NULL`, nên mỗi cặp `(team_id, email)` chỉ có đúng 1 row active.",
+            "knowledge_kind": "CONFIRMED_EXPECTED",
+            "confidence": "MEDIUM",
+            "kb_refs": [
+              "KB-036"
+            ]
+          },
+          {
+            "statement": "Theo Jira MTRO-76 (rule 07/09/2026 trong QA business rule Mailtro), verdict đầu tiên quyết định `reason` của suppression và không bị ghi đè: hard bounce trước rồi complaint sau thì `reason` vẫn là `hard_bounce`.",
+            "knowledge_kind": "CONFIRMED_EXPECTED",
+            "confidence": "MEDIUM",
+            "kb_refs": [
+              "KB-037"
+            ]
+          },
+          {
+            "statement": "Theo Jira MTRO-76 (rule 07/09/2026 trong QA business rule Mailtro), row suppression đã gỡ (soft-delete) được giữ lại làm audit trail, không bị xoá hẳn.",
+            "knowledge_kind": "CONFIRMED_EXPECTED",
+            "confidence": "MEDIUM",
+            "kb_refs": [
+              "KB-038"
+            ]
+          },
+          {
+            "statement": "Theo Jira MTRO-76 (rule 07/09/2026 trong QA business rule Mailtro), sau khi một suppression đã được gỡ, event bounce mới cho cùng cặp `(team_id, email)` vẫn tạo được một row suppression active mới.",
+            "knowledge_kind": "CONFIRMED_EXPECTED",
+            "confidence": "MEDIUM",
+            "kb_refs": [
+              "KB-039"
+            ]
+          },
+          {
+            "statement": "Theo Jira MTRO-64 (use case B5) (rule 07/09/2026 trong QA business rule Mailtro) và Jira MTRO-92 (QA KB Mailtro \"Security & Abuse guard\" v1), suppression trong DB khoá theo cặp `(team_id, email)`: địa chỉ đã bounce / complaint bị chặn gửi lại trong chính workspace đó, còn một địa chỉ bị chặn ở team A không ảnh hưởng team B.",
+            "knowledge_kind": "CONFIRMED_EXPECTED",
+            "confidence": "MEDIUM",
+            "kb_refs": [
+              "KB-040"
+            ]
+          },
+          {
+            "statement": "Theo Jira MTRO-64 (use case B5) và MTRO-79 (rule 07/09/2026 trong QA business rule Mailtro), SES account-level suppression list (bật `BOUNCE + COMPLAINT` trên cả 2 AWS account) là lưới bảo vệ account-global, tách biệt với suppression theo từng workspace của Mailtro.",
+            "knowledge_kind": "CONFIRMED_EXPECTED",
+            "confidence": "MEDIUM",
+            "kb_refs": [
+              "KB-041"
+            ]
+          },
+          {
+            "statement": "Theo Jira MTRO-64 (use case B5), MTRO-79 và MTRO-80 (rule 07/09/2026 trong QA business rule Mailtro), bảng `suppressions` không có cột region/account; nguồn phát sinh (provenance) của suppression nằm ở bảng `ses_events`.",
+            "knowledge_kind": "CONFIRMED_EXPECTED",
+            "confidence": "MEDIUM",
+            "kb_refs": [
+              "KB-042"
+            ]
+          },
+          {
+            "statement": "Theo Jira MTRO-79 và MTRO-80 (rule 07/09/2026 trong QA business rule Mailtro), một task import chạy một lần kéo các entry đang có trên danh sách suppression của SES vào bảng `suppressions`, để hai lớp khớp nhau từ ngày đầu.",
+            "knowledge_kind": "CONFIRMED_EXPECTED",
+            "confidence": "MEDIUM",
+            "kb_refs": [
+              "KB-043"
+            ]
+          }
+        ],
+        "observed_behavior": [
+          {
+            "statement": "Trên staging (lượt chạy 08–09/09/2026), độ trễ từ lúc gửi tới lúc suppression được tạo đo được trong khoảng 8–62 giây; đây là số đo mẫu, không phải SLA.",
+            "knowledge_kind": "OBSERVED_CURRENT",
+            "confidence": "LOW",
+            "status": "CURRENT_STATE",
+            "kb_refs": [
+              "KB-054"
+            ]
+          },
+          {
+            "statement": "Trên staging (khảo sát 01/10/2026), cột `Reason` của tab `Bounce & complaint` hiển thị một trong hai nhãn `Bounced` hoặc `Spam complaint`; tài liệu không mô tả nhãn nào ứng với suppression do soft bounce.",
+            "knowledge_kind": "OBSERVED_CURRENT",
+            "confidence": "MEDIUM",
+            "status": "CURRENT_STATE",
+            "kb_refs": [
+              "KB-004"
+            ]
+          }
+        ],
+        "observed_validations": [],
+        "permissions": [],
+        "surface_mapping": {
+          "portal": [
+            {
+              "item": "Kết quả hiển thị ở cột `Reason` của tab `Bounce & complaint` (`Bounced` / `Spam complaint`); nhãn cho soft_bounce chưa mô tả",
+              "kb_refs": [
+                "KB-004"
+              ]
+            }
+          ],
+          "storefront": [],
+          "api": [],
+          "data": [
+            {
+              "item": "Bảng `suppressions`: reason hard_bounce / complaint / soft_bounce, soft-delete, partial unique (team_id, email), không có cột region / account",
+              "kb_refs": [
+                "KB-029",
+                "KB-030",
+                "KB-032",
+                "KB-036",
+                "KB-042"
+              ]
+            },
+            {
+              "item": "Bảng `soft_bounce_counters` theo (team_id, email)",
+              "kb_refs": [
+                "KB-031",
+                "KB-034"
+              ]
+            },
+            {
+              "item": "Provenance của suppression nằm ở `ses_events`",
+              "kb_refs": [
+                "KB-042",
+                "KB-064"
+              ]
+            }
+          ],
+          "code": [
+            {
+              "item": "SES account-level suppression list bật `BOUNCE + COMPLAINT` trên 2 AWS account; task import một lần từ danh sách SES (theo tài liệu, không có mã nguồn)",
+              "kb_refs": [
+                "KB-041",
+                "KB-043"
+              ]
+            }
+          ]
+        },
+        "dependencies": [
+          {
+            "target": "deliverability / ses-event-pipeline",
+            "relation": "upstream",
+            "note": "Chỉ event đã qua kiểm whitelist / chữ ký / attribution mới tới bước quyết định suppress.",
+            "kb_refs": [
+              "KB-058",
+              "KB-063"
+            ]
+          },
+          {
+            "target": "deliverability / suppression-list-management",
+            "relation": "consumer",
+            "note": "Row suppression hiển thị ở trang Suppressions và được gỡ qua Portal API.",
+            "kb_refs": [
+              "KB-004",
+              "KB-015"
+            ]
+          },
+          {
+            "target": "deliverability / send-time-suppression-check",
+            "relation": "consumer",
+            "note": "Row suppression active chặn gửi ở lần sau.",
+            "kb_refs": [
+              "KB-045",
+              "KB-046"
+            ]
+          },
+          {
+            "target": "Hạ tầng gửi SES 5 region × 2 account",
+            "relation": "see_also",
+            "note": "Hạ tầng gửi là fact cấp sản phẩm.",
+            "kb_refs": [
+              "KB-P-073"
+            ]
+          }
+        ],
+        "risks": [
+          {
+            "statement": "Vì mỗi event Delivery reset chuỗi soft bounce về 0, rule 7 soft bounce liên tiếp gần như không kích hoạt trong thực tế; PO chưa xác nhận là chủ ý hay thiếu sót.",
+            "knowledge_kind": "INFERRED",
+            "confidence": "LOW",
+            "status": null,
+            "conflict_group": null,
+            "kb_refs": [
+              "KB-035",
+              "KB-034",
+              "KB-032"
+            ]
+          },
+          {
+            "statement": "Trên staging (TC-MTRO-601, 09/09/2026) gửi tới địa chỉ có trên danh sách SES sinh row `reason = hard_bounce`; Dev chưa xác nhận đúng Expected — không dùng làm oracle.",
+            "knowledge_kind": "INFERRED",
+            "confidence": "LOW",
+            "status": null,
+            "conflict_group": null,
+            "kb_refs": [
+              "KB-044"
+            ]
+          },
+          {
+            "statement": "Epic Jira MTRO-64 ghi soft bounce (B2) là 'Later' trong khi task MTRO-77 đã DONE và rule 07/09/2026 coi là hành vi hiện hành; phạm vi cần PO xác nhận.",
+            "knowledge_kind": "CONFIRMED_EXPECTED",
+            "confidence": "MEDIUM",
+            "status": null,
+            "conflict_group": null,
+            "kb_refs": [
+              "KB-031",
+              "KB-032"
+            ]
+          }
+        ],
+        "freshness": {
+          "observed_at": "2026-09-09",
+          "run_id": "CTX-20261008-02",
+          "basis": "Rule và quyết định 07/09/2026; quan sát staging 08–09/09/2026"
+        },
+        "unknown_areas": [
+          {
+            "question": "Reset counter soft bounce mỗi khi có Delivery khiến ngưỡng 7 lần liên tiếp gần như không đạt — PO muốn giữ cách reset này hay đổi?",
+            "why_it_matters": "Quyết định có thể kiểm suppress soft bounce trong điều kiện thực tế hay không.",
+            "kb_refs": [
+              "KB-035",
+              "KB-034",
+              "KB-032"
+            ]
+          },
+          {
+            "question": "Địa chỉ có sẵn trên danh sách suppression của SES có đúng là sinh row `reason = hard_bounce` ở tầng ứng dụng không; event `bounceSubType = Suppressed` tạo row với reason gì; mọi `complaintFeedbackType` đều dẫn tới suppress hay chỉ loại `abuse`?",
+            "why_it_matters": "Các điểm biên của rule suppress chưa có expected.",
+            "kb_refs": [
+              "KB-044",
+              "KB-030",
+              "KB-018",
+              "KB-029"
+            ]
+          },
+          {
+            "question": "Soft bounce (Epic B2 'Later') và 6 số delivery (Epic B6 'Later') có thuộc phạm vi hiện hành không, khi task MTRO-77 và MTRO-82 đã DONE?",
+            "why_it_matters": "Nếu ngoài phạm vi, các check soft bounce có thể không cần chạy regression.",
+            "kb_refs": [
+              "KB-031",
+              "KB-032",
+              "KB-033",
+              "KB-034",
+              "KB-069"
+            ]
+          },
+          {
+            "question": "Tài liệu thiết kế bounce / complaint của repo sản phẩm (26/08/2026) mô tả gì thêm ngoài rule 07/09/2026 — cách chọn region / account SES cho một lần gửi, cập nhật trạng thái contact?",
+            "why_it_matters": "QA chưa truy cập được; chi tiết ngoài rule chưa được mô tả.",
+            "kb_refs": [
+              "KB-029",
+              "KB-030",
+              "KB-041"
+            ]
+          },
+          {
+            "question": "Địa chỉ nằm trên danh sách suppression account-global của SES (không có row trong workspace) có hiện ở trang Suppressions của workspace không?",
+            "why_it_matters": "Ảnh hưởng tới kỳ vọng hiển thị và quan hệ giữa hai lớp suppression.",
+            "kb_refs": [
+              "KB-041",
+              "KB-043"
+            ]
+          },
+          {
+            "question": "Suppression do soft bounce hiển thị nhãn gì ở cột `Reason` của trang Suppressions?",
+            "why_it_matters": "UI chỉ quan sát thấy `Bounced` và `Spam complaint`.",
+            "kb_refs": [
+              "KB-004",
+              "KB-032"
+            ]
+          }
+        ]
+      }
+    ],
+    "profile_relationships": [
+      {
+        "from": "bounce-complaint-suppression",
+        "to": "ses-event-pipeline",
+        "relation": "CONSUMES_EVENTS_FROM",
+        "kb_refs": [
+          "KB-058",
+          "KB-029"
+        ]
+      },
+      {
+        "from": "bounce-complaint-suppression",
+        "to": "suppression-list-management",
+        "relation": "FEEDS",
+        "kb_refs": [
+          "KB-004",
+          "KB-015"
+        ]
+      },
+      {
+        "from": "bounce-complaint-suppression",
+        "to": "send-time-suppression-check",
+        "relation": "FEEDS",
+        "kb_refs": [
+          "KB-045"
+        ]
+      }
+    ],
+    "coverage_matrix": [
+      {
+        "feature_id": "bounce-complaint-suppression",
+        "layer": "data",
+        "role": "system",
+        "state": "hard bounce",
+        "environment": "documented",
+        "covered": true,
+        "note": "Rule đã chốt"
+      },
+      {
+        "feature_id": "bounce-complaint-suppression",
+        "layer": "data",
+        "role": "system",
+        "state": "complaint",
+        "environment": "documented",
+        "covered": true,
+        "note": "Rule đã chốt; complaintFeedbackType chưa mô tả"
+      },
+      {
+        "feature_id": "bounce-complaint-suppression",
+        "layer": "data",
+        "role": "system",
+        "state": "soft bounce đủ 7 lần liên tiếp",
+        "environment": "documented",
+        "covered": true,
+        "note": "Rule đã chốt; phạm vi Epic cần xác nhận"
+      },
+      {
+        "feature_id": "bounce-complaint-suppression",
+        "layer": "data",
+        "role": "system",
+        "state": "Delivery reset counter",
+        "environment": "documented",
+        "covered": true,
+        "note": "Rule đã chốt"
+      },
+      {
+        "feature_id": "bounce-complaint-suppression",
+        "layer": "data",
+        "role": "system",
+        "state": "event khác loại trên địa chỉ đã suppress",
+        "environment": "documented",
+        "covered": true,
+        "note": "Verdict đầu tiên thắng"
+      },
+      {
+        "feature_id": "bounce-complaint-suppression",
+        "layer": "data",
+        "role": "system",
+        "state": "bounce mới sau khi đã gỡ",
+        "environment": "documented",
+        "covered": true,
+        "note": "Rule đã chốt"
+      },
+      {
+        "feature_id": "bounce-complaint-suppression",
+        "layer": "data",
+        "role": "system",
+        "state": "địa chỉ có trên danh sách SES / bounceSubType Suppressed",
+        "environment": "documented",
+        "covered": false,
+        "note": "Chỉ có quan sát chờ Dev xác nhận"
+      },
+      {
+        "feature_id": "bounce-complaint-suppression",
+        "layer": "portal",
+        "role": "Owner",
+        "state": "nhãn Reason của suppression soft bounce",
+        "environment": "documented",
+        "covered": false,
+        "note": "Chưa mô tả"
+      },
+      {
+        "feature_id": "bounce-complaint-suppression",
+        "layer": "code",
+        "role": "unspecified",
+        "state": "any",
+        "environment": "documented",
+        "covered": false,
+        "note": "Không có nguồn mã; tài liệu thiết kế chưa truy cập"
+      }
+    ],
+    "unassigned_kb_items": [],
+    "profile_conflicts": [],
+    "profile_change_summary": [
+      "Rework r1: dựng lại từ shard hiện tại; object deliverability không có kb_id bị bỏ và không có item tách F-03.",
+      "Không đổi nội dung so với lượt trước."
+    ],
+    "kb_trace_complete": true
+  },
+  "gate": {
+    "decision": "CONDITIONAL_PASS",
+    "blocking_findings": [],
+    "conditions": [
+      "Đủ cho regression discovery: các quyết định suppress chính có rule đã chốt.",
+      "Điểm biên (SES list, bounceSubType Suppressed, complaintFeedbackType) và tính thực tế của ngưỡng soft bounce chưa có oracle.",
+      "Kiểm các rule này cần quyền DB / AWS staging mà tài liệu ghi là còn thiếu."
+    ],
+    "allowed_next_steps": [
+      "qa-checklist-builder",
+      "knowledge-diff-analyzer"
+    ]
+  }
+}

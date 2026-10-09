@@ -1,0 +1,606 @@
+{
+  "schema_version": "1.0",
+  "artifact_type": "RegressionChecklistCandidate",
+  "artifact_id": "RCCAND-checkout-credit-validation-CTX-20261009-01",
+  "workflow_id": "CTX-20261009-01",
+  "producer": "qa-checklist-builder",
+  "source_refs": [
+    "candidate/feature-profiles/checkout-credit-validation.json",
+    "candidate/product-kb/checkout-credit-validation.json",
+    "candidate/product-kb/_object-level.finance-credit.json",
+    "candidate/product-kb/_product-level.json",
+    "input/orchestrator-directives.json",
+    "input/scope-plan.json",
+    "intermediate/doc/DOC-21.json"
+  ],
+  "upstream_artifact_ids": [
+    "ART-FEATURE-PROFILE-checkout-credit-validation-CTX-20261009-01",
+    "PKBC-CTX-20261009-01-finance-credit-checkout-credit-validation",
+    "PKBC-CTX-20261009-01-finance-credit-_object-level",
+    "PKBC-CTX-20261009-01-_product-level"
+  ],
+  "status": "PARTIAL",
+  "confidence": "MEDIUM",
+  "observations": [
+    "11 check; theo oracle_strength {'STRONG': 6, 'NONE': 5}; theo status {'READY': 6, 'NEEDS_CONFIRMATION': 5}; theo dimension {'CORE': 3, 'INTEGRATION': 1, 'NEGATIVE': 3, 'BOUNDARY': 1, 'STATE_DATA': 1, 'PERMISSION': 2}.",
+    "oracle_strength tính bằng script theo luật orchestrator: STRONG khi mọi kb_id là CONFIRMED_EXPECTED ngoài conflict_group; có OBSERVED_CURRENT (không KNOWN_DEFECT) thì BASELINE; có INFERRED, item thuộc conflict_group hoặc không có kb_id thì NONE + NEEDS_CONFIRMATION. Item KNOWN_DEFECT chỉ nằm ở regression_watch_kb_ids, không bao giờ ở oracle.kb_ids.",
+    "related_kb_ids là ngữ cảnh truy vết của check (item INFERRED, item chỉ theo ticket, item cùng độ lệch), KHÔNG phải oracle.",
+    "Checklist regression của QA Duos chỉ được dùng làm gợi ý risk/độ phủ, không dùng làm oracle.",
+    "Expected của check BASELINE ghi theo hiện trạng staging 08/10/2026 (store Free plan); lệch = cần điều tra, không phải bug.",
+    "Check STRONG chỉ khẳng định việc chặn theo rule Dev 20/05/2026 (Jira DUOS-397); text thông báo cho buyer và banner draft order nằm ở check NEEDS_CONFIRMATION riêng.",
+    "Check chặn dùng cart lớn hơn Credit limit để không phụ thuộc ngưỡng chưa chốt (so với Available credit hay Credit limit); ngưỡng biên ở check BOUNDARY NEEDS_CONFIRMATION.",
+    "Giới hạn chỉ chạy trên Shopify Plus và banner cho store non-Plus do pricing-subscription sở hữu; chặn theo permission do roles-permissions sở hữu; draft order từ quote do quote-request sở hữu — không nhân bản check."
+  ],
+  "assumptions": [
+    "Placeholder có cấu trúc (<store-plus>, <store-plus-fresh>, <store-no-b2b>, <company-a>, <location-a1>, <buyer-a1>, <email-buyer>…) thay cho store / tài khoản thật; QA chọn dữ liệu thật lúc chạy.",
+    "Điểm quan sát (bảng giao dịch Portal, Checkout rules trong Shopify admin, mục Financial ledger ở Customer Account) là nơi thực tế để đọc kết quả; việc các bề mặt đó hiển thị đúng cột / nhãn không phải là oracle của check STRONG.",
+    "Hành vi Finance & Credit trong tài liệu không phụ thuộc cờ users.config; không check nào cần config key."
+  ],
+  "unknowns": [
+    "Banner draft order vượt credit \"This order has exceeded this location available credit. Available credit: [X] / Credit limit: [Y]\" (theo Jira DUOS-397) có đúng là hành vi hiện hành không, và [X], [Y] lấy theo số liệu nào của location?",
+    "Sau khi validate credit chuyển sang Shopify Function (Jira DUOS-397), buyer thấy thông báo gì ở Cart và ở Checkout khi giá trị order vượt available credit của location?",
+    "Validate credit so tổng order với Available credit hay với Credit limit, tổng có gồm thuế / phí ship không, và khi tổng đúng bằng Available credit thì order bị chặn hay được đặt?",
+    "Khi merchant chưa approve scope bổ sung cho Shopify Function validate credit, validate có chạy không, checkout / draft order có bị chặn không, và Portal hiển thị lời nhắc approve ở đâu, nội dung gì?",
+    "Chặn checkout theo credit áp cho mọi buyer của location hay tuỳ role (Admin, Senior buyer, Junior buyer, custom role), và nhóm permission \"Finance & credit\" trên modal role có ảnh hưởng tới việc chặn không?"
+  ],
+  "conflicts": [],
+  "blocking_issues": [],
+  "payload": {
+    "checklists": [
+      {
+        "feature_id": "checkout-credit-validation",
+        "feature_key": "checkout-credit-validation",
+        "checklist_version": "v1",
+        "checks": [
+          {
+            "check_id": "CHK-001",
+            "dimension": "CORE",
+            "layer": "storefront",
+            "title": "Cart / Checkout vượt hạn mức credit của location bị chặn",
+            "applicability": {
+              "role": "buyer",
+              "state": "location có credit limit active, payment term Net",
+              "environment": "documented",
+              "theme_or_device": "store Shopify Plus"
+            },
+            "precondition": "<store-plus> (store Shopify Plus đã cài Duos, dùng được module B2B Finance & Credit); <location-a1> thuộc <company-a> có credit limit active (đã gán), payment term Net (vd Net 30); Shopify Function validate credit đã có trên store và merchant đã approve scope cần thiết ở Portal; <buyer-a1> (<email-buyer>) là buyer của <location-a1>, đăng nhập storefront.",
+            "steps": [
+              "Ghi lại Credit limit và Available credit của <location-a1> ở Portal.",
+              "Đối chứng: <buyer-a1> thêm sản phẩm với tổng nhỏ hơn hẳn Available credit, đi tới Checkout (không cần đặt).",
+              "<buyer-a1> tạo cart có tổng lớn hơn Credit limit của <location-a1>; ở Cart bấm Checkout.",
+              "Nếu vào được Checkout, thử hoàn tất order."
+            ],
+            "observation_point": "Cart và Checkout: có cho đi tiếp / hoàn tất order không, thông báo hiển thị.",
+            "expected_result": "Validate credit chạy ở cả Cart và Checkout: cart vượt hạn mức không hoàn tất được order. Text thông báo chưa có căn cứ: chỉ ghi lại, không đánh giá.",
+            "oracle": {
+              "kb_ids": [
+                "KB-033",
+                "KB-038",
+                "KB-002"
+              ],
+              "oracle_strength": "STRONG"
+            },
+            "status": "READY",
+            "open_question_draft": null,
+            "related_kb_ids": [
+              "KB-040",
+              "KB-051",
+              "KB-001"
+            ],
+            "regression_watch_kb_ids": [],
+            "risk_refs": [
+              "RISK-checkout-credit-01"
+            ],
+            "priority": "P1",
+            "act_ids": [],
+            "evidence_refs": [],
+            "automation_suitability": "HYBRID"
+          },
+          {
+            "check_id": "CHK-002",
+            "dimension": "INTEGRATION",
+            "layer": "storefront",
+            "title": "Chặn credit không còn phụ thuộc block Checkout extension cũ",
+            "applicability": {
+              "role": "buyer",
+              "state": "location có credit limit active, payment term Net",
+              "environment": "documented",
+              "theme_or_device": "store Shopify Plus"
+            },
+            "precondition": "<store-plus> (store Shopify Plus đã cài Duos, dùng được module B2B Finance & Credit); <location-a1> thuộc <company-a> có credit limit active (đã gán), payment term Net (vd Net 30); Shopify Function validate credit đã có trên store và merchant đã approve scope cần thiết ở Portal; <buyer-a1> (<email-buyer>) là buyer của <location-a1>, đăng nhập storefront.",
+            "steps": [
+              "Shopify admin › Settings › Checkout › Customize: ghi lại block nào của Duos đang đặt trong checkout.",
+              "Trên bản theme checkout thử nghiệm, gỡ block Duos liên quan credit (nếu có) và publish.",
+              "<buyer-a1> tạo cart có tổng lớn hơn Credit limit của <location-a1> và đi Checkout."
+            ],
+            "observation_point": "Checkout khi không có block Duos cũ: order có hoàn tất được không.",
+            "expected_result": "Việc chặn vẫn xảy ra khi không có block Checkout extension cũ, vì validate credit do Shopify Function đảm nhận (logic chặn của block cũ đã bỏ).",
+            "oracle": {
+              "kb_ids": [
+                "KB-034",
+                "KB-033"
+              ],
+              "oracle_strength": "STRONG"
+            },
+            "status": "READY",
+            "open_question_draft": null,
+            "related_kb_ids": [
+              "KB-040",
+              "KB-P-009"
+            ],
+            "regression_watch_kb_ids": [],
+            "risk_refs": [
+              "RISK-checkout-credit-01"
+            ],
+            "priority": "P2",
+            "act_ids": [],
+            "evidence_refs": [],
+            "automation_suitability": "NOT_SUITABLE"
+          },
+          {
+            "check_id": "CHK-003",
+            "dimension": "NEGATIVE",
+            "layer": "storefront",
+            "title": "Location không có credit limit active không bị chặn theo credit",
+            "applicability": {
+              "role": "buyer",
+              "state": "location chưa gán / không có credit limit active",
+              "environment": "documented",
+              "theme_or_device": "store Shopify Plus"
+            },
+            "precondition": "<store-plus> (store Shopify Plus đã cài Duos, dùng được module B2B Finance & Credit); <location-b1> không có credit limit active, payment term Net; <buyer-b1> là buyer của <location-b1>, đăng nhập storefront; Shopify Function validate credit đã có trên store.",
+            "steps": [
+              "<buyer-b1> tạo cart có tổng lớn (vd lớn hơn credit limit của các location khác) và đi tới hoàn tất order."
+            ],
+            "observation_point": "Cart / Checkout của <buyer-b1>: có bị chặn vì credit không.",
+            "expected_result": "Validate credit không áp cho location này: order không bị chặn vì credit.",
+            "oracle": {
+              "kb_ids": [
+                "KB-038"
+              ],
+              "oracle_strength": "STRONG"
+            },
+            "status": "READY",
+            "open_question_draft": null,
+            "related_kb_ids": [
+              "KB-003"
+            ],
+            "regression_watch_kb_ids": [],
+            "risk_refs": [
+              "RISK-checkout-credit-02"
+            ],
+            "priority": "P1",
+            "act_ids": [],
+            "evidence_refs": [],
+            "automation_suitability": "HYBRID"
+          },
+          {
+            "check_id": "CHK-004",
+            "dimension": "NEGATIVE",
+            "layer": "storefront",
+            "title": "Order không dùng payment term Net không bị chặn theo credit",
+            "applicability": {
+              "role": "buyer",
+              "state": "location có credit limit active, payment term Due on receipt / Due on fulfillment / Due on fixed date",
+              "environment": "documented",
+              "theme_or_device": "store Shopify Plus"
+            },
+            "precondition": "<store-plus> (store Shopify Plus đã cài Duos, dùng được module B2B Finance & Credit); <location-a2> có credit limit active, payment term không phải Net (lần lượt Due on receipt, Due on fulfillment, Due on fixed date); <buyer-a2> là buyer của <location-a2>, đăng nhập storefront.",
+            "steps": [
+              "Với từng payment term, <buyer-a2> tạo cart có tổng lớn hơn Credit limit của <location-a2> và đi tới hoàn tất order."
+            ],
+            "observation_point": "Cart / Checkout của <buyer-a2> với từng payment term.",
+            "expected_result": "Credit không được áp cho các order này: order không bị chặn vì credit. Đây là giới hạn có chủ đích, không phải lỗi.",
+            "oracle": {
+              "kb_ids": [
+                "KB-002",
+                "KB-038"
+              ],
+              "oracle_strength": "STRONG"
+            },
+            "status": "READY",
+            "open_question_draft": null,
+            "related_kb_ids": [],
+            "regression_watch_kb_ids": [],
+            "risk_refs": [
+              "RISK-checkout-credit-02"
+            ],
+            "priority": "P2",
+            "act_ids": [],
+            "evidence_refs": [],
+            "automation_suitability": "HYBRID"
+          },
+          {
+            "check_id": "CHK-005",
+            "dimension": "CORE",
+            "layer": "portal",
+            "title": "Draft order vượt credit do CS/sales tạo trong Shopify admin bị chặn",
+            "applicability": {
+              "role": "merchant (CS/sales)",
+              "state": "draft order cho location có credit limit active",
+              "environment": "documented",
+              "theme_or_device": "Shopify admin"
+            },
+            "precondition": "<store-plus> (store Shopify Plus đã cài Duos, dùng được module B2B Finance & Credit); <location-a1> có credit limit active, payment term Net; Shopify Function validate credit đã có trên store; đăng nhập Shopify admin bằng tài khoản staff tạo được draft order.",
+            "steps": [
+              "Shopify admin › Orders › Drafts › Create order: chọn customer thuộc <company-a> / <location-a1>.",
+              "Thêm sản phẩm để tổng lớn hơn Credit limit của <location-a1>; thử tạo order / gửi invoice / đánh dấu đã thanh toán theo payment term Net."
+            ],
+            "observation_point": "Draft order: có tạo / hoàn tất được không, thông báo hiển thị.",
+            "expected_result": "Validate credit chạy ở CreateDraftOrder: draft order vượt hạn mức của location bị chặn. Text banner chưa có căn cứ: chỉ ghi lại.",
+            "oracle": {
+              "kb_ids": [
+                "KB-035",
+                "KB-033"
+              ],
+              "oracle_strength": "STRONG"
+            },
+            "status": "READY",
+            "open_question_draft": null,
+            "related_kb_ids": [
+              "KB-039"
+            ],
+            "regression_watch_kb_ids": [],
+            "risk_refs": [
+              "RISK-checkout-credit-03"
+            ],
+            "priority": "P1",
+            "act_ids": [],
+            "evidence_refs": [],
+            "automation_suitability": "HYBRID"
+          },
+          {
+            "check_id": "CHK-006",
+            "dimension": "CORE",
+            "layer": "portal",
+            "title": "Thông báo khi draft order vượt credit",
+            "applicability": {
+              "role": "merchant (CS/sales)",
+              "state": "draft order vượt available credit",
+              "environment": "documented",
+              "theme_or_device": "Shopify admin"
+            },
+            "precondition": "Như CHK-005: <store-plus> (store Shopify Plus đã cài Duos, dùng được module B2B Finance & Credit); <location-a1> có credit limit active, payment term Net.",
+            "steps": [
+              "Tạo draft order cho <location-a1> có tổng lớn hơn Available credit.",
+              "Ghi lại nguyên văn banner / thông báo và giá trị [X], [Y] trong đó; đối chiếu với Available credit và Credit limit ở Portal."
+            ],
+            "observation_point": "Banner / thông báo trên draft order.",
+            "expected_result": "Chưa có căn cứ: ghi lại nguyên văn thông báo và các giá trị; không đánh giá pass/fail cho tới khi PO/Dev xác nhận.",
+            "oracle": {
+              "kb_ids": [],
+              "oracle_strength": "NONE"
+            },
+            "status": "NEEDS_CONFIRMATION",
+            "open_question_draft": "Banner draft order vượt credit \"This order has exceeded this location available credit. Available credit: [X] / Credit limit: [Y]\" (theo Jira DUOS-397) có đúng là hành vi hiện hành không, và [X], [Y] lấy theo số liệu nào của location?",
+            "related_kb_ids": [
+              "KB-039",
+              "KB-035"
+            ],
+            "regression_watch_kb_ids": [],
+            "risk_refs": [
+              "RISK-checkout-credit-03"
+            ],
+            "priority": "P2",
+            "act_ids": [],
+            "evidence_refs": [],
+            "automation_suitability": "HYBRID"
+          },
+          {
+            "check_id": "CHK-007",
+            "dimension": "NEGATIVE",
+            "layer": "storefront",
+            "title": "Thông báo buyer thấy ở Cart / Checkout khi vượt credit",
+            "applicability": {
+              "role": "buyer",
+              "state": "cart vượt available credit, payment term Net",
+              "environment": "documented",
+              "theme_or_device": "store Shopify Plus"
+            },
+            "precondition": "<store-plus> (store Shopify Plus đã cài Duos, dùng được module B2B Finance & Credit); <location-a1> thuộc <company-a> có credit limit active (đã gán), payment term Net (vd Net 30); Shopify Function validate credit đã có trên store và merchant đã approve scope cần thiết ở Portal; <buyer-a1> (<email-buyer>) là buyer của <location-a1>, đăng nhập storefront.",
+            "steps": [
+              "<buyer-a1> tạo cart có tổng lớn hơn Available credit của <location-a1>.",
+              "Ghi lại nguyên văn thông báo ở Cart và ở Checkout (chụp màn hình), kể cả khi không có thông báo."
+            ],
+            "observation_point": "Thông báo ở Cart và Checkout.",
+            "expected_result": "Chưa có căn cứ: ghi lại nguyên văn thông báo ở từng bề mặt; banner của checkout extension cũ không còn là hành vi hiện hành. Không đánh giá pass/fail cho tới khi PO/Dev xác nhận.",
+            "oracle": {
+              "kb_ids": [],
+              "oracle_strength": "NONE"
+            },
+            "status": "NEEDS_CONFIRMATION",
+            "open_question_draft": "Sau khi validate credit chuyển sang Shopify Function (Jira DUOS-397), buyer thấy thông báo gì ở Cart và ở Checkout khi giá trị order vượt available credit của location?",
+            "related_kb_ids": [
+              "KB-040",
+              "KB-033",
+              "KB-034"
+            ],
+            "regression_watch_kb_ids": [],
+            "risk_refs": [
+              "RISK-checkout-credit-05"
+            ],
+            "priority": "P2",
+            "act_ids": [],
+            "evidence_refs": [],
+            "automation_suitability": "NOT_SUITABLE"
+          },
+          {
+            "check_id": "CHK-008",
+            "dimension": "BOUNDARY",
+            "layer": "storefront",
+            "title": "Ngưỡng chặn: tổng bằng đúng available credit, và vượt available credit nhưng chưa vượt credit limit",
+            "applicability": {
+              "role": "buyer",
+              "state": "location có credit limit active và Outstanding balance > 0",
+              "environment": "documented",
+              "theme_or_device": "store Shopify Plus"
+            },
+            "precondition": "<store-plus> (store Shopify Plus đã cài Duos, dùng được module B2B Finance & Credit); <location-a1> thuộc <company-a> có credit limit active (đã gán), payment term Net (vd Net 30); Shopify Function validate credit đã có trên store và merchant đã approve scope cần thiết ở Portal; <buyer-a1> (<email-buyer>) là buyer của <location-a1>, đăng nhập storefront. <location-a1> đang có Outstanding balance > 0 (order Net chưa thanh toán).",
+            "steps": [
+              "Ghi lại Credit limit, Outstanding balance, Available credit của <location-a1>.",
+              "<buyer-a1> tạo cart có tổng đúng bằng Available credit (tính cả thuế / phí ship theo cách checkout tính tổng) và đi tới hoàn tất.",
+              "<buyer-a1> tạo cart có tổng lớn hơn Available credit nhưng nhỏ hơn Credit limit và đi tới hoàn tất.",
+              "Lặp lại hai bước trên với draft order trong Shopify admin."
+            ],
+            "observation_point": "Kết quả chặn / cho đặt ở từng trường hợp.",
+            "expected_result": "Chưa có căn cứ: ghi lại trường hợp nào bị chặn và tổng nào được so (có thuế / phí ship hay không); không đánh giá pass/fail cho tới khi PO/Dev trả lời.",
+            "oracle": {
+              "kb_ids": [],
+              "oracle_strength": "NONE"
+            },
+            "status": "NEEDS_CONFIRMATION",
+            "open_question_draft": "Validate credit so tổng order với Available credit hay với Credit limit, tổng có gồm thuế / phí ship không, và khi tổng đúng bằng Available credit thì order bị chặn hay được đặt?",
+            "related_kb_ids": [
+              "KB-033",
+              "KB-038",
+              "KB-001",
+              "KB-039"
+            ],
+            "regression_watch_kb_ids": [],
+            "risk_refs": [
+              "RISK-checkout-credit-01"
+            ],
+            "priority": "P1",
+            "act_ids": [],
+            "evidence_refs": [],
+            "automation_suitability": "HYBRID"
+          },
+          {
+            "check_id": "CHK-009",
+            "dimension": "STATE_DATA",
+            "layer": "api",
+            "title": "Shopify Function validate credit được thêm khi merchant sửa credit limit lần đầu",
+            "applicability": {
+              "role": "merchant",
+              "state": "store chưa từng sửa credit limit",
+              "environment": "documented",
+              "theme_or_device": null
+            },
+            "precondition": "<store-plus-fresh> (store Shopify Plus mới cài Duos, chưa từng sửa credit limit); đăng nhập Portal và Shopify admin bằng tài khoản merchant.",
+            "steps": [
+              "Shopify admin › Settings › Checkout › Checkout rules: ghi lại các rule / function của Duos đang có.",
+              "Ở Portal sửa credit limit của một location lần đầu; lưu.",
+              "Tải lại Checkout rules; ghi lại rule / function validate credit của Duos (tên, trạng thái)."
+            ],
+            "observation_point": "Danh sách Checkout rules (validation) trước và sau lần sửa credit limit đầu tiên.",
+            "expected_result": "Trước lần sửa đầu tiên store chưa có Shopify Function validate credit của Duos; sau khi merchant sửa credit limit lần đầu, Function được thêm vào store.",
+            "oracle": {
+              "kb_ids": [
+                "KB-036"
+              ],
+              "oracle_strength": "STRONG"
+            },
+            "status": "READY",
+            "open_question_draft": null,
+            "related_kb_ids": [
+              "KB-037"
+            ],
+            "regression_watch_kb_ids": [],
+            "risk_refs": [
+              "RISK-checkout-credit-04"
+            ],
+            "priority": "P1",
+            "act_ids": [],
+            "evidence_refs": [],
+            "automation_suitability": "NOT_SUITABLE"
+          },
+          {
+            "check_id": "CHK-010",
+            "dimension": "PERMISSION",
+            "layer": "portal",
+            "title": "Merchant chưa approve scope cho Shopify Function",
+            "applicability": {
+              "role": "merchant",
+              "state": "store dùng validate credit bằng Shopify Function, scope chưa approve",
+              "environment": "documented",
+              "theme_or_device": null
+            },
+            "precondition": "<store-plus-fresh> chưa approve scope bổ sung cho Shopify Function; <location-a1> có credit limit active, payment term Net; <buyer-a1> là buyer của <location-a1>.",
+            "steps": [
+              "Mở Portal; ghi lại mọi lời nhắc approve scope (vị trí, nội dung).",
+              "Chưa approve: <buyer-a1> tạo cart vượt Credit limit và đi tới hoàn tất; tạo draft order vượt credit trong Shopify admin.",
+              "Approve scope ở Portal; lặp lại bước 2."
+            ],
+            "observation_point": "Lời nhắc approve ở Portal; kết quả chặn trước và sau khi approve.",
+            "expected_result": "Chưa có căn cứ: ghi lại lời nhắc và kết quả chặn trước / sau khi approve; việc cần approve scope ở Portal là rule đã chốt, nhưng hệ quả khi chưa approve chưa có căn cứ nên không đánh giá pass/fail.",
+            "oracle": {
+              "kb_ids": [],
+              "oracle_strength": "NONE"
+            },
+            "status": "NEEDS_CONFIRMATION",
+            "open_question_draft": "Khi merchant chưa approve scope bổ sung cho Shopify Function validate credit, validate có chạy không, checkout / draft order có bị chặn không, và Portal hiển thị lời nhắc approve ở đâu, nội dung gì?",
+            "related_kb_ids": [
+              "KB-037",
+              "KB-036"
+            ],
+            "regression_watch_kb_ids": [],
+            "risk_refs": [
+              "RISK-checkout-credit-04"
+            ],
+            "priority": "P1",
+            "act_ids": [],
+            "evidence_refs": [],
+            "automation_suitability": "NOT_SUITABLE"
+          },
+          {
+            "check_id": "CHK-011",
+            "dimension": "PERMISSION",
+            "layer": "storefront",
+            "title": "Chặn theo credit áp cho mọi role buyer của location",
+            "applicability": {
+              "role": "buyer (Admin / Senior buyer / Junior buyer / custom role)",
+              "state": "location có credit limit active, payment term Net",
+              "environment": "documented",
+              "theme_or_device": "store Shopify Plus"
+            },
+            "precondition": "<store-plus> (store Shopify Plus đã cài Duos, dùng được module B2B Finance & Credit); <location-a1> thuộc <company-a> có credit limit active (đã gán), payment term Net (vd Net 30); Shopify Function validate credit đã có trên store và merchant đã approve scope cần thiết ở Portal; <buyer-a1> (<email-buyer>) là buyer của <location-a1>, đăng nhập storefront. <location-a1> có buyer ở mỗi role: Admin, Senior buyer, Junior buyer, một custom role; các role đều được phép checkout theo permission.",
+            "steps": [
+              "Với từng buyer, tạo cart có tổng lớn hơn Credit limit của <location-a1> và đi tới hoàn tất."
+            ],
+            "observation_point": "Kết quả chặn theo từng role.",
+            "expected_result": "Chưa có căn cứ: ghi lại kết quả theo từng role, tách khỏi chặn theo permission; không đánh giá pass/fail cho tới khi PO trả lời.",
+            "oracle": {
+              "kb_ids": [],
+              "oracle_strength": "NONE"
+            },
+            "status": "NEEDS_CONFIRMATION",
+            "open_question_draft": "Chặn checkout theo credit áp cho mọi buyer của location hay tuỳ role (Admin, Senior buyer, Junior buyer, custom role), và nhóm permission \"Finance & credit\" trên modal role có ảnh hưởng tới việc chặn không?",
+            "related_kb_ids": [
+              "KB-033",
+              "KB-038"
+            ],
+            "regression_watch_kb_ids": [],
+            "risk_refs": [
+              "RISK-checkout-credit-05"
+            ],
+            "priority": "P1",
+            "act_ids": [],
+            "evidence_refs": [],
+            "automation_suitability": "NOT_SUITABLE"
+          }
+        ]
+      }
+    ],
+    "coverage_by_feature_and_risk": [
+      {
+        "feature_id": "checkout-credit-validation",
+        "risk_ref": "RISK-checkout-credit-01",
+        "risk_description": "Buyer đặt được order vượt hạn mức credit của location",
+        "covered_by_checks": [
+          "CHK-001",
+          "CHK-002",
+          "CHK-008"
+        ],
+        "kb_ids": [
+          "KB-002",
+          "KB-033",
+          "KB-034",
+          "KB-038"
+        ],
+        "coverage_status": "PARTIAL"
+      },
+      {
+        "feature_id": "checkout-credit-validation",
+        "risk_ref": "RISK-checkout-credit-02",
+        "risk_description": "Chặn nhầm order không thuộc phạm vi validate (location không có limit active, payment term không phải Net)",
+        "covered_by_checks": [
+          "CHK-003",
+          "CHK-004"
+        ],
+        "kb_ids": [
+          "KB-002",
+          "KB-038"
+        ],
+        "coverage_status": "COVERED"
+      },
+      {
+        "feature_id": "checkout-credit-validation",
+        "risk_ref": "RISK-checkout-credit-03",
+        "risk_description": "Draft order do CS/sales tạo vượt credit không bị chặn hoặc báo sai",
+        "covered_by_checks": [
+          "CHK-005",
+          "CHK-006"
+        ],
+        "kb_ids": [
+          "KB-033",
+          "KB-035"
+        ],
+        "coverage_status": "PARTIAL"
+      },
+      {
+        "feature_id": "checkout-credit-validation",
+        "risk_ref": "RISK-checkout-credit-04",
+        "risk_description": "Validate credit không được kích hoạt cho store (Function chưa thêm, scope chưa approve)",
+        "covered_by_checks": [
+          "CHK-009",
+          "CHK-010"
+        ],
+        "kb_ids": [
+          "KB-036"
+        ],
+        "coverage_status": "PARTIAL"
+      },
+      {
+        "feature_id": "checkout-credit-validation",
+        "risk_ref": "RISK-checkout-credit-05",
+        "risk_description": "Buyer không nhận đúng thông báo hoặc bị chặn sai theo role",
+        "covered_by_checks": [
+          "CHK-007",
+          "CHK-011"
+        ],
+        "kb_ids": [],
+        "coverage_status": "FLAGGED_NEEDS_CONFIRMATION"
+      }
+    ],
+    "kb_items_without_dedicated_check": [],
+    "checks_needing_confirmation": [
+      {
+        "check_id": "CHK-006",
+        "open_question_draft": "Banner draft order vượt credit \"This order has exceeded this location available credit. Available credit: [X] / Credit limit: [Y]\" (theo Jira DUOS-397) có đúng là hành vi hiện hành không, và [X], [Y] lấy theo số liệu nào của location?",
+        "reason": "Câu chỉ dựa trên ticket (QA business rule ghi \"theo ticket\", rule draft), chưa có PO/Dev xác nhận."
+      },
+      {
+        "check_id": "CHK-007",
+        "open_question_draft": "Sau khi validate credit chuyển sang Shopify Function (Jira DUOS-397), buyer thấy thông báo gì ở Cart và ở Checkout khi giá trị order vượt available credit của location?",
+        "reason": "Text của checkout extension cũ không còn hiện hành và text hiện tại chưa được xác nhận."
+      },
+      {
+        "check_id": "CHK-008",
+        "open_question_draft": "Validate credit so tổng order với Available credit hay với Credit limit, tổng có gồm thuế / phí ship không, và khi tổng đúng bằng Available credit thì order bị chặn hay được đặt?",
+        "reason": "Rule Dev 20/05/2026 chỉ nói validate credit limit chạy ở đâu và áp cho location nào, không nêu ngưỡng so sánh và trường hợp biên."
+      },
+      {
+        "check_id": "CHK-010",
+        "open_question_draft": "Khi merchant chưa approve scope bổ sung cho Shopify Function validate credit, validate có chạy không, checkout / draft order có bị chặn không, và Portal hiển thị lời nhắc approve ở đâu, nội dung gì?",
+        "reason": "Rule Dev 20/05/2026 chỉ nêu merchant cần approve thêm scope, không nêu hành vi khi chưa approve."
+      },
+      {
+        "check_id": "CHK-011",
+        "open_question_draft": "Chặn checkout theo credit áp cho mọi buyer của location hay tuỳ role (Admin, Senior buyer, Junior buyer, custom role), và nhóm permission \"Finance & credit\" trên modal role có ảnh hưởng tới việc chặn không?",
+        "reason": "Ma trận quyền của Finance & Credit chưa được tài liệu nêu; chặn theo permission là hành vi riêng của object roles-permissions."
+      }
+    ],
+    "duplicates_removed": [],
+    "excluded_dimensions": [
+      {
+        "dimension": "REGRESSION",
+        "reason": "Bản bootstrap đầu tiên từ tài liệu; chưa có thay đổi hành vi từ phân tích diff để kiểm hồi quy."
+      }
+    ]
+  },
+  "gate": {
+    "decision": "PASS",
+    "blocking_findings": [],
+    "conditions": [
+      "5 check NEEDS_CONFIRMATION mang open_question_draft; không check nào có expected khẳng định trên oracle NONE; item KNOWN_DEFECT chỉ ở regression_watch_kb_ids."
+    ],
+    "allowed_next_steps": [
+      "knowledge-diff-analyzer",
+      "context-quality-reviewer"
+    ]
+  },
+  "last_updated": {
+    "date": "2026-10-09",
+    "ccr_ref": "bootstrap"
+  }
+}

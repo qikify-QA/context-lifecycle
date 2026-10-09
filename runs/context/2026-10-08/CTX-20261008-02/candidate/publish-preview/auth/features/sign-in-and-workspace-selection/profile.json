@@ -1,0 +1,879 @@
+{
+  "feature_id": "sign-in-and-workspace-selection",
+  "feature_key": "sign-in-and-workspace-selection",
+  "name": "Đăng nhập Mailtro ID, chọn workspace và phiên đăng nhập",
+  "user_goal": "Người dùng đã có tài khoản đăng nhập ở Mailtro ID bằng email và mật khẩu, chọn workspace muốn vào và được chuyển sang app workspace <slug>.wisle.app; phiên giữ trong thời hạn đã chốt và Sign out kết thúc phiên.",
+  "stable_since_version": "v1",
+  "actors": [
+    {
+      "role": "visitor (chưa đăng nhập)",
+      "permission_observed": "Mở được /login của Mailtro ID; mở route cần đăng nhập của app workspace thì bị chuyển về /login kèm returnTo.",
+      "kb_refs": [
+        "KB-P-030",
+        "KB-005",
+        "KB-138"
+      ]
+    },
+    {
+      "role": "unspecified (người dùng đã đăng nhập, thuộc một hoặc nhiều workspace)",
+      "permission_observed": "Thấy màn Choose a workspace với danh sách workspace của tài khoản; một tài khoản có thể có role khác nhau ở từng workspace (Owner ở workspace này, Member ở workspace khác). Tài liệu không gán role cho thao tác đăng nhập.",
+      "kb_refs": [
+        "KB-018",
+        "KB-P-031",
+        "KB-P-051"
+      ]
+    }
+  ],
+  "entry_points": [
+    {
+      "path": "Mailtro ID, route /login (Sign in)",
+      "precondition": "Chưa đăng nhập.",
+      "kb_refs": [
+        "KB-005",
+        "KB-138",
+        "KB-P-027"
+      ]
+    },
+    {
+      "path": "Route cần đăng nhập trên app workspace <slug>.wisle.app, bị chuyển sang /login của Mailtro ID kèm returnTo trỏ về /authorize",
+      "precondition": "Chưa đăng nhập.",
+      "kb_refs": [
+        "KB-P-030"
+      ]
+    },
+    {
+      "path": "Mailtro ID, route / (Choose a workspace)",
+      "precondition": "Đã đăng nhập (và đã qua 2FA nếu tài khoản bật 2FA).",
+      "kb_refs": [
+        "KB-004",
+        "KB-018"
+      ]
+    },
+    {
+      "path": "App workspace: workspace switcher (nhóm Teams, Sign out) và user menu (Sign out)",
+      "precondition": "Đã vào app workspace.",
+      "kb_refs": [
+        "KB-P-041",
+        "KB-P-042"
+      ]
+    }
+  ],
+  "capabilities": [
+    {
+      "name": "Đăng nhập bằng email và mật khẩu",
+      "description": "Form Sign in gồm Email và Password; nút Sign in chỉ bật khi đủ hai field; submit gửi POST /login. Sai thông tin thì hiện alert \"Sign in failed\" / \"Incorrect email or password.\". Hiện trạng từ khảo sát staging; rule chống dò tài khoản thuộc object abuse-guard (xem dependencies).",
+      "kb_refs": [
+        "KB-005",
+        "KB-006",
+        "KB-007",
+        "KB-008",
+        "KB-009",
+        "KB-012",
+        "KB-013"
+      ]
+    },
+    {
+      "name": "Giới hạn số lần đăng nhập (hiện trạng)",
+      "description": "Rule chống dò tài khoản và giới hạn số lần đăng nhập do object abuse-guard sở hữu. Trong feature này chỉ còn hiện trạng: staging giới hạn /login 10 request / 60 giây theo email, vượt thì trả 429 \"Too Many Attempts.\" kèm retry-after; ghi chú cấu hình test cho endpoint auth cùng ngưỡng.",
+      "kb_refs": [
+        "KB-015",
+        "KB-P-070"
+      ]
+    },
+    {
+      "name": "Chọn workspace và vào app workspace",
+      "description": "Sau khi đăng nhập người dùng tới màn Choose a workspace trên Mailtro ID; mỗi workspace là link sang https://<slug>.wisle.app/ (điều hướng cross-domain theo Jira MTRO-30).",
+      "kb_refs": [
+        "KB-001",
+        "KB-004",
+        "KB-018",
+        "KB-P-025",
+        "KB-P-026",
+        "KB-P-074"
+      ]
+    },
+    {
+      "name": "Quay về đích ban đầu sau khi bị yêu cầu đăng nhập",
+      "description": "Mở route cần đăng nhập của workspace khi chưa đăng nhập thì sang /login kèm returnTo về /authorize với redirect_uri là /callback của workspace (khảo sát staging). Tài liệu không mô tả bước quay lại sau khi đăng nhập xong.",
+      "kb_refs": [
+        "KB-P-030"
+      ]
+    },
+    {
+      "name": "Duy trì phiên và đăng xuất",
+      "description": "Phiên đăng nhập kéo dài 1 ngày theo quyết định Dev BE / PO (29–30/09/2026); lỗi đăng xuất sau khoảng 2 giờ chưa được kiểm lại. Sign out có ở màn Choose a workspace và trong app workspace; Sign out ở Choose a workspace bị nghi không huỷ phiên workspace. CSRF hết hạn (419) thì frontend tự lấy token mới và gửi lại.",
+      "kb_refs": [
+        "KB-016",
+        "KB-017",
+        "KB-018",
+        "KB-021",
+        "KB-P-033",
+        "KB-P-041",
+        "KB-P-042"
+      ]
+    },
+    {
+      "name": "Dùng phiên giữa nhiều workspace",
+      "description": "Hành vi khi vào workspace thứ hai trong cùng phiên đang mâu thuẫn: một quan sát vào được ngay không hỏi lại mật khẩu / 2FA, một test-run bị bắt đăng nhập lại. Chưa có xác nhận Dev.",
+      "kb_refs": [
+        "KB-019",
+        "KB-020"
+      ]
+    }
+  ],
+  "state_transitions": [
+    {
+      "from": "chưa đăng nhập, ở route cần đăng nhập của workspace",
+      "to": "Mailtro ID /login kèm returnTo",
+      "trigger": "Mở route",
+      "condition": "Khảo sát staging 29/09/2026",
+      "kb_refs": [
+        "KB-P-030"
+      ]
+    },
+    {
+      "from": "/login, form thiếu Email hoặc Password",
+      "to": "/login, nút Sign in bật",
+      "trigger": "Nhập đủ hai field",
+      "condition": "Khảo sát staging",
+      "kb_refs": [
+        "KB-006"
+      ]
+    },
+    {
+      "from": "/login",
+      "to": "/login/two-factor-challenge",
+      "trigger": "Bấm Sign in, đăng nhập đúng",
+      "condition": "Response của POST /login có khoá two_factor",
+      "kb_refs": [
+        "KB-007"
+      ]
+    },
+    {
+      "from": "/login",
+      "to": "/ (Choose a workspace)",
+      "trigger": "Bấm Sign in, đăng nhập đúng",
+      "condition": "Response không có khoá two_factor",
+      "kb_refs": [
+        "KB-004",
+        "KB-007"
+      ]
+    },
+    {
+      "from": "/login",
+      "to": "/login, hiện alert Sign in failed",
+      "trigger": "Bấm Sign in với email hoặc mật khẩu sai",
+      "condition": "Rule chống dò tài khoản thuộc object abuse-guard",
+      "kb_refs": [
+        "KB-008"
+      ]
+    },
+    {
+      "from": "/login",
+      "to": "bị chặn tạm (429)",
+      "trigger": "Vượt 10 request / 60 giây với cùng email (quan sát staging)",
+      "condition": "Rule thuộc object abuse-guard; thông báo trên UI không được mô tả",
+      "kb_refs": [
+        "KB-015"
+      ]
+    },
+    {
+      "from": "đăng nhập bằng tài khoản chưa verify email",
+      "to": "/verify",
+      "trigger": "Đăng nhập",
+      "condition": "Tài khoản chưa verify email",
+      "kb_refs": [
+        "KB-068"
+      ]
+    },
+    {
+      "from": "/ (Choose a workspace)",
+      "to": "app workspace https://<slug>.wisle.app/",
+      "trigger": "Bấm một workspace trong danh sách",
+      "condition": "Điều hướng cross-domain",
+      "kb_refs": [
+        "KB-001",
+        "KB-018"
+      ]
+    },
+    {
+      "from": "đã đăng nhập",
+      "to": "hết phiên, phải đăng nhập lại",
+      "trigger": "Hết thời hạn phiên",
+      "condition": "Thời hạn đã chốt 1 ngày; hiện trạng lỗi đăng xuất sau khoảng 2 giờ chưa kiểm lại",
+      "kb_refs": [
+        "KB-016",
+        "KB-017"
+      ]
+    },
+    {
+      "from": "/ (Choose a workspace), đã đăng nhập",
+      "to": "đã đăng xuất Mailtro ID",
+      "trigger": "Bấm Sign out",
+      "condition": "Phiên app workspace có thể vẫn còn (lỗi nghi vấn, cần tái hiện)",
+      "kb_refs": [
+        "KB-018",
+        "KB-021"
+      ]
+    }
+  ],
+  "confirmed_rules": [
+    {
+      "statement": "Theo Jira MTRO-30 (AC rule 07/08/2026, tóm tắt trong QA business rule Mailtro), điều hướng sau signup, verify và login là điều hướng cross-domain: màn xác thực chạy trên Mailtro ID, còn tính năng chạy trên subdomain workspace <slug>.wisle.app.",
+      "knowledge_kind": "CONFIRMED_EXPECTED",
+      "confidence": "MEDIUM",
+      "kb_refs": [
+        "KB-001"
+      ]
+    },
+    {
+      "statement": "Theo quyết định Dev BE ngày 29/09/2026 được PO đồng ý ngày 30/09/2026 (comment Jira MTRO-106, ghi trong Decision log Mailtro), phiên đăng nhập Mailtro kéo dài 1 ngày (tăng từ khoảng 2 giờ trước đó).",
+      "knowledge_kind": "CONFIRMED_EXPECTED",
+      "confidence": "MEDIUM",
+      "kb_refs": [
+        "KB-016"
+      ]
+    },
+    {
+      "statement": "Theo Jira MTRO-30 (QA business rule Mailtro, cập nhật lần cuối 07/08/2026), Mailtro tách 2 domain: các màn auth (signup, login, verify, forgot/reset password, chọn workspace) chạy trên Mailtro ID, còn tính năng trong app chạy trên subdomain riêng của từng workspace dạng `<workspace-slug>.wisle.app`; điều hướng sau signup, verify và login là điều hướng cross-domain.",
+      "knowledge_kind": "CONFIRMED_EXPECTED",
+      "confidence": "MEDIUM",
+      "kb_refs": [
+        "KB-P-025"
+      ]
+    },
+    {
+      "statement": "Theo Jira MTRO-30 (QA business rule Mailtro, cập nhật lần cuối 07/08/2026), khi CSRF token hết hạn (HTTP 419), frontend tự lấy token mới và gửi lại request thay vì báo lỗi cho người dùng.",
+      "knowledge_kind": "CONFIRMED_EXPECTED",
+      "confidence": "MEDIUM",
+      "kb_refs": [
+        "KB-P-033"
+      ]
+    }
+  ],
+  "observed_behavior": [
+    {
+      "statement": "Trên staging (khảo sát 29/09/2026), mở một route cần đăng nhập trên subdomain workspace khi chưa đăng nhập thì bị chuyển tới `/login` của Mailtro ID với `returnTo` trỏ về `/authorize?redirect_uri=https://<slug>.wisle.app/callback&state=<random>` trên Mailtro ID.",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "confidence": "LOW",
+      "status": "CURRENT_STATE",
+      "kb_refs": [
+        "KB-P-030"
+      ]
+    },
+    {
+      "statement": "Trên staging (khảo sát 29/09/2026, theo QA KB Mailtro \"Tổng quan sản phẩm\" v1), toàn bộ tính năng trong app nằm trên subdomain riêng của workspace dạng `<workspace-slug>.wisle.app` và điều hướng sau signup, verify, login là cross-domain từ Mailtro ID sang `<slug>.wisle.app`; Decision log Mailtro (mục 17/08/2026) ghi Mailtro có 2 host tách biệt cho auth và cho app workspace.",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "confidence": "MEDIUM",
+      "status": "CURRENT_STATE",
+      "kb_refs": [
+        "KB-P-074"
+      ]
+    },
+    {
+      "statement": "Trên staging (khảo sát 29/09/2026), sau khi đăng nhập ở /login người dùng sang route gốc / của Mailtro ID là màn Choose a workspace; tài liệu ghi đây là đính chính so với mô tả /signin → /workspaces trong ticket prototype Jira MTRO-41.",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "confidence": "LOW",
+      "status": "CURRENT_STATE",
+      "kb_refs": [
+        "KB-004"
+      ]
+    },
+    {
+      "statement": "Trên staging (khảo sát 29/09/2026), trang /login có tiêu đề \"Sign in\" và phụ đề \"Welcome back. Enter your details to continue.\", gồm field Email (placeholder là một địa chỉ email mẫu) và Password (placeholder \"Enter your password\"); link \"Forgot password?\" nằm cùng hàng label Password và dẫn sang /forgot-password; link \"Don't have an account? Create one\" dẫn sang /signup.",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "confidence": "MEDIUM",
+      "status": "CURRENT_STATE",
+      "kb_refs": [
+        "KB-005"
+      ]
+    },
+    {
+      "statement": "Trên staging (khảo sát 29/09/2026), nút \"Sign in\" bị disabled cho tới khi cả Email và Password đều có giá trị.",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "confidence": "MEDIUM",
+      "status": "CURRENT_STATE",
+      "kb_refs": [
+        "KB-006"
+      ]
+    },
+    {
+      "statement": "Trên staging (khảo sát 23/09 và 29/09/2026), bấm \"Sign in\" gửi POST /login với body {email, password}; nếu response có khoá two_factor thì người dùng được chuyển tới /login/two-factor-challenge, nếu không có thì vào thẳng màn Choose a workspace.",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "confidence": "MEDIUM",
+      "status": "CURRENT_STATE",
+      "kb_refs": [
+        "KB-007"
+      ]
+    },
+    {
+      "statement": "Trên staging (khảo sát 23/09, giữ nguyên ở bản 29/09/2026), đăng nhập sai thông tin thì hiện alert \"Sign in failed\" với nội dung \"Incorrect email or password.\" (chuỗi i18n auth.signIn.errors.incorrect).",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "confidence": "MEDIUM",
+      "status": "CURRENT_STATE",
+      "kb_refs": [
+        "KB-008"
+      ]
+    },
+    {
+      "statement": "Trên staging (quan sát QA ghi trong bug log auth 20/08/2026), message phía server khi đăng nhập sai là \"These credentials do not match our records.\", khác với chữ hiển thị trên UI.",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "confidence": "LOW",
+      "status": "CURRENT_STATE",
+      "kb_refs": [
+        "KB-009"
+      ]
+    },
+    {
+      "statement": "Trên staging (khảo sát 29/09/2026), trang /login không có captcha (captcha chỉ có ở đăng ký và quên mật khẩu).",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "confidence": "MEDIUM",
+      "status": "CURRENT_STATE",
+      "kb_refs": [
+        "KB-010"
+      ]
+    },
+    {
+      "statement": "Trên staging (QA kiểm lại 23/09/2026 qua TC-MTRO-015, tài liệu không ghi kết quả PASS), email không phân biệt hoa thường khi đăng nhập; lỗi BUG-AUTH-02 về điểm này được ghi là đã sửa.",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "confidence": "LOW",
+      "status": "CURRENT_STATE",
+      "kb_refs": [
+        "KB-012"
+      ]
+    },
+    {
+      "statement": "Trên staging (test-run trước hoặc trong ngày 20/08/2026, lỗi được ghi là đã sửa), double-click nút \"Sign in\" chỉ gửi 1 request.",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "confidence": "LOW",
+      "status": "CURRENT_STATE",
+      "kb_refs": [
+        "KB-013"
+      ]
+    },
+    {
+      "statement": "Trên staging (quan sát QA 20/08/2026), /login bị giới hạn 10 request / 60 giây đếm theo email, bộ đếm trừ cả các lần đăng nhập thành công; khi vượt giới hạn trả 429 với body {\"message\":\"Too Many Attempts.\"} kèm header retry-after.",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "confidence": "LOW",
+      "status": "CURRENT_STATE",
+      "kb_refs": [
+        "KB-015"
+      ]
+    },
+    {
+      "statement": "Trên staging (khảo sát 29/09/2026), màn / của Mailtro ID có tiêu đề \"Choose a workspace\" và phụ đề \"Pick a workspace to continue.\"; mỗi workspace trong danh sách là link tuyệt đối tới https://<slug>.wisle.app/ (app workspace chạy trên domain khác Mailtro ID); màn có nút \"Sign out\" để đăng xuất.",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "confidence": "MEDIUM",
+      "status": "CURRENT_STATE",
+      "kb_refs": [
+        "KB-018"
+      ]
+    },
+    {
+      "statement": "Trên staging (khảo sát 01/10/2026), nhóm màn Sign in · 2FA · Choose a workspace · Sign up · Forgot / Reset password nằm trên domain riêng của Mailtro ID (staging-id.mailtro.ai), tách khỏi app workspace.",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "confidence": "LOW",
+      "status": "CURRENT_STATE",
+      "kb_refs": [
+        "KB-138"
+      ]
+    },
+    {
+      "statement": "Trên staging (khảo sát 29/09–01/10/2026), Mailtro ID chạy ở `https://staging-id.mailtro.ai`, còn app workspace chạy trên subdomain của `wisle.app` (mỗi workspace một subdomain riêng), tách khỏi domain Mailtro ID.",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "confidence": "MEDIUM",
+      "status": "CURRENT_STATE",
+      "kb_refs": [
+        "KB-P-026"
+      ]
+    }
+  ],
+  "observed_validations": [],
+  "permissions": [
+    {
+      "statement": "Các màn đăng nhập và chọn workspace diễn ra trên Mailtro ID trước khi vào workspace; tài liệu không gán role cho các thao tác này.",
+      "kb_refs": [
+        "KB-138",
+        "KB-P-008"
+      ]
+    },
+    {
+      "statement": "Một tài khoản Mailtro ID có thể thuộc nhiều workspace với role khác nhau; ma trận quyền trong workspace thuộc object workspace-settings, profile này không tự suy role.",
+      "kb_refs": [
+        "KB-P-031",
+        "KB-P-051"
+      ]
+    }
+  ],
+  "surface_mapping": {
+    "portal": [
+      {
+        "item": "Mailtro ID /login: tiêu đề Sign in, field Email, Password, link Forgot password? sang /forgot-password, link Create one sang /signup; không có captcha",
+        "kb_refs": [
+          "KB-005",
+          "KB-010"
+        ]
+      },
+      {
+        "item": "Mailtro ID / (Choose a workspace): danh sách link tuyệt đối tới https://<slug>.wisle.app/, nút Sign out",
+        "kb_refs": [
+          "KB-018"
+        ]
+      },
+      {
+        "item": "App workspace: workspace switcher (Teams, Sign out) và user menu (Sign out)",
+        "kb_refs": [
+          "KB-P-041",
+          "KB-P-042"
+        ]
+      }
+    ],
+    "storefront": [],
+    "api": [
+      {
+        "item": "POST /login với body {email, password}; response có khoá two_factor khi tài khoản bật 2FA",
+        "kb_refs": [
+          "KB-007"
+        ]
+      },
+      {
+        "item": "POST /login vượt giới hạn: 429, body {\"message\":\"Too Many Attempts.\"}, header retry-after",
+        "kb_refs": [
+          "KB-015"
+        ]
+      },
+      {
+        "item": "Message server khi sai thông tin: \"These credentials do not match our records.\"",
+        "kb_refs": [
+          "KB-009"
+        ]
+      },
+      {
+        "item": "/authorize với redirect_uri https://<slug>.wisle.app/callback và state (returnTo)",
+        "kb_refs": [
+          "KB-P-030"
+        ]
+      },
+      {
+        "item": "CSRF 419: frontend tự lấy token mới và gửi lại request",
+        "kb_refs": [
+          "KB-P-033"
+        ]
+      }
+    ],
+    "data": [
+      {
+        "item": "Email đăng nhập không phân biệt hoa thường (quan sát staging)",
+        "kb_refs": [
+          "KB-012"
+        ]
+      },
+      {
+        "item": "Thời hạn phiên đăng nhập 1 ngày (quyết định Dev BE / PO)",
+        "kb_refs": [
+          "KB-016"
+        ]
+      }
+    ],
+    "code": [
+      {
+        "item": "Router Mailtro ID trong bundle frontend: /login có guard guestOnly (suy luận, chưa đối chiếu)",
+        "kb_refs": [
+          "KB-003"
+        ]
+      }
+    ]
+  },
+  "dependencies": [
+    {
+      "target": "auth / two-factor-challenge",
+      "relation": "next_step",
+      "note": "Đăng nhập đúng với tài khoản bật 2FA chuyển sang màn challenge.",
+      "kb_refs": [
+        "KB-007",
+        "KB-046"
+      ]
+    },
+    {
+      "target": "auth / signup-and-workspace-creation",
+      "relation": "see_also",
+      "note": "Tài khoản chưa verify email đăng nhập được nhưng dừng ở /verify; link Create one dẫn sang /signup.",
+      "kb_refs": [
+        "KB-068",
+        "KB-005"
+      ]
+    },
+    {
+      "target": "auth / password-reset",
+      "relation": "see_also",
+      "note": "Link Forgot password? ở /login dẫn sang /forgot-password.",
+      "kb_refs": [
+        "KB-005",
+        "KB-081"
+      ]
+    },
+    {
+      "target": "abuse-guard / account-and-access-abuse-limits",
+      "relation": "rule_owner",
+      "note": "Rule chống dò tài khoản và giới hạn số lần đăng nhập (Jira MTRO-92 §1) do object abuse-guard sở hữu; feature này chỉ giữ thông báo lỗi và hiện trạng 429 của /login.",
+      "kb_refs": [
+        "KB-008",
+        "KB-015"
+      ]
+    },
+    {
+      "target": "product / khung app (workspace switcher, user menu)",
+      "relation": "see_also",
+      "note": "Sign out và chuyển workspace trong app workspace thuộc khung app chung.",
+      "kb_refs": [
+        "KB-P-041",
+        "KB-P-042"
+      ]
+    }
+  ],
+  "risks": [
+    {
+      "statement": "Theo router Mailtro ID đọc từ bundle frontend 28/09/2026 (chưa có rule PO/Dev, chưa đối chiếu hành vi), route /login chỉ dành cho người chưa đăng nhập (guard guestOnly).",
+      "knowledge_kind": "INFERRED",
+      "confidence": "LOW",
+      "kb_refs": [
+        "KB-003"
+      ]
+    },
+    {
+      "statement": "Trên staging (quan sát 23/09/2026), mở thẳng URL https://<slug>.wisle.app/ của một workspace khác trong phiên đang đăng nhập thì vào được luôn, không bị hỏi lại mật khẩu hay 2FA. Đây là một phía của mâu thuẫn chưa chốt: test-run 27/09/2026 ghi nhận ngược lại; tài liệu ghi cần Dev xác nhận đây có phải SSO cố ý (cookie trên domain Mailtro ID) hay không.",
+      "knowledge_kind": "INFERRED",
+      "confidence": "LOW",
+      "status": "UNRESOLVED",
+      "conflict_group": "CONF-MTRO-auth-01",
+      "kb_refs": [
+        "KB-019"
+      ]
+    },
+    {
+      "statement": "Theo test-run 27/09/2026 (chạy trong phiên trình duyệt tự động), đổi sang workspace khác qua workspace switcher thì bị bắt đăng nhập lại. Đây là phía còn lại của mâu thuẫn với quan sát staging 23/09/2026 (vào workspace thứ hai không bị hỏi lại); chưa có xác nhận Dev.",
+      "knowledge_kind": "INFERRED",
+      "confidence": "LOW",
+      "status": "UNRESOLVED",
+      "conflict_group": "CONF-MTRO-auth-01",
+      "kb_refs": [
+        "KB-020"
+      ]
+    },
+    {
+      "statement": "Theo Jira MTRO-106 (loại Bug, trạng thái To Do khi QA đọc 07/10/2026), người dùng bị đăng xuất khoảng 2 giờ sau khi đăng nhập, giữa chừng (kể cả đã qua 2FA) và có thể mất phần đang sửa template hoặc campaign. Đây là lỗi đã biết, không phải hành vi đúng; Dev đã tăng thời lượng phiên ngày 29/09/2026 nhưng tài liệu không ghi lần kiểm lại nào sau thay đổi.",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "confidence": "LOW",
+      "status": "KNOWN_DEFECT",
+      "kb_refs": [
+        "KB-017"
+      ]
+    },
+    {
+      "statement": "Trên staging (quan sát 1 lần ngày 23/09/2026, TC-MTRO-932), bấm \"Sign out\" ở màn Choose a workspace (Mailtro ID) có thể không huỷ phiên của app workspace *.wisle.app (phiên workspace vẫn còn). Đây là lỗi nghi vấn đã ghi trong danh sách lỗi đã biết, mức High nếu đúng, trạng thái cần tái hiện; không phải hành vi đúng.",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "confidence": "LOW",
+      "status": "KNOWN_DEFECT",
+      "kb_refs": [
+        "KB-021"
+      ]
+    },
+    {
+      "statement": "Trên staging (TC-MTRO-040, 23/09/2026), bấm Back của trình duyệt sau khi đăng nhập thành công thì đứng ở form /login trống dù phiên vẫn còn, trang không tự điều hướng lại vào app. Đây là lỗi đã biết (open 23/09/2026, chưa report), không phải hành vi đúng.",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "confidence": "LOW",
+      "status": "KNOWN_DEFECT",
+      "kb_refs": [
+        "KB-022"
+      ]
+    },
+    {
+      "statement": "Theo bug log auth (BUG-AUTH-06, ghi 20/08/2026, open khi test-run 25/08/2026), mật khẩu gồm 8 dấu cách không bị phía client chặn; khi đăng nhập BE trả 422 và UI báo \"Incorrect email or password.\" tức báo sai loại lỗi. Đây là lỗi đã biết, không phải hành vi đúng; tầng nào phải chặn mật khẩu toàn dấu cách chưa được Dev chốt.",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "confidence": "LOW",
+      "status": "KNOWN_DEFECT",
+      "kb_refs": [
+        "KB-023"
+      ]
+    },
+    {
+      "statement": "Theo bug log auth (BUG-AUTH-03, partial, open khi test-run 25/08/2026), cấu hình APP_DEBUG từng làm lộ stack trace và nhánh 429 của /login chưa được đo lại. Đây là lỗi đã biết, không phải hành vi đúng.",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "confidence": "LOW",
+      "status": "KNOWN_DEFECT",
+      "kb_refs": [
+        "KB-024"
+      ]
+    },
+    {
+      "statement": "Theo bug log auth (BUG-AUTH-07, mức P2, open 20–25/08/2026), nút \"Sign in\" thiếu focus ring (WCAG 2.4.7). Đây là lỗi đã biết, không phải hành vi đúng.",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "confidence": "LOW",
+      "status": "KNOWN_DEFECT",
+      "kb_refs": [
+        "KB-025"
+      ]
+    },
+    {
+      "statement": "Theo bug log auth (BUG-AUTH-11, mức P2, open), lỗi inline của các form auth thiếu role=\"alert\" / aria-live nên screen reader không đọc được. Đây là lỗi đã biết, không phải hành vi đúng.",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "confidence": "LOW",
+      "status": "KNOWN_DEFECT",
+      "kb_refs": [
+        "KB-026"
+      ]
+    },
+    {
+      "statement": "Theo bug log auth (BUG-AUTH-10, mức P2, open), document.title luôn là \"Mailtro Staging — Sign in\" ở cả /signup và /verify. Đây là lỗi đã biết, không phải hành vi đúng.",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "confidence": "LOW",
+      "status": "KNOWN_DEFECT",
+      "kb_refs": [
+        "KB-027"
+      ],
+      "note": "Lỗi này nằm ở /signup và /verify nhưng được ghi cùng nhóm lỗi đăng nhập."
+    },
+    {
+      "statement": "Theo ghi chú cấu hình test API của repo automation QA (Decision log Mailtro mục 17/08/2026 và QA KB Mailtro \"Environments\" v1), endpoint auth bị giới hạn 10 request mỗi 60 giây. Chưa có nguồn PO/Dev hay số đo trên staging cho giới hạn này.",
+      "knowledge_kind": "INFERRED",
+      "confidence": "LOW",
+      "kb_refs": [
+        "KB-P-070"
+      ]
+    }
+  ],
+  "freshness": {
+    "observed_at": "2026-09-29",
+    "basis": "Jira MTRO-30 AC 07/08/2026; Jira MTRO-92 / MTRO-106 đọc 07/10/2026; quyết định phiên 29–30/09/2026; khảo sát staging 20/08, 23/09, 29/09/2026"
+  },
+  "unknown_areas": [
+    {
+      "question": "Khi đang có phiên, vào workspace thứ hai (mở thẳng URL hoặc qua workspace switcher) có bị hỏi lại mật khẩu / 2FA không, và việc dùng chung phiên giữa các workspace có phải SSO cố ý không?",
+      "why_it_matters": "Hai nguồn quan sát nói ngược nhau; nếu không cố ý thì 2FA có thể bị bỏ qua khi đổi workspace.",
+      "kb_refs": [
+        "KB-019",
+        "KB-020"
+      ],
+      "conflict_group": "CONF-MTRO-auth-01",
+      "oq_id": "OQ-auth-002"
+    },
+    {
+      "question": "Thời hạn phiên 1 ngày có phải giá trị cuối cùng không (description Jira MTRO-106 vẫn ghi 1 tháng, ticket còn To Do), và lỗi bị đăng xuất sau khoảng 2 giờ đã được kiểm lại sau thay đổi 29/09/2026 chưa?",
+      "why_it_matters": "Không xác định được expected cho test thời hạn phiên và không biết lỗi đăng xuất giữa chừng còn hay hết.",
+      "kb_refs": [
+        "KB-016",
+        "KB-017"
+      ],
+      "oq_id": "OQ-auth-003"
+    },
+    {
+      "question": "Sign out ở màn Choose a workspace và Sign out trong app workspace (switcher, user menu) huỷ phiên ở Mailtro ID, ở app workspace, hay cả hai?",
+      "why_it_matters": "Lỗi nghi vấn mức High mới thấy một lần; không có rule nào nói Sign out phải huỷ những phiên nào.",
+      "kb_refs": [
+        "KB-018",
+        "KB-021",
+        "KB-P-041",
+        "KB-P-042"
+      ],
+      "oq_id": "OQ-auth-005"
+    },
+    {
+      "question": "Mật khẩu chỉ gồm dấu cách phải bị chặn ở tầng nào (client, server hay cả hai) và thông báo lỗi đúng là gì?",
+      "why_it_matters": "Hiện UI báo \"Incorrect email or password.\" tức sai loại lỗi; chưa có expected thay thế.",
+      "kb_refs": [
+        "KB-023"
+      ],
+      "oq_id": "OQ-auth-004"
+    },
+    {
+      "question": "Khi /login trả 429 vì vượt giới hạn số lần đăng nhập, màn Sign in phải hiển thị thông báo gì và nút Sign in có bị khoá không?",
+      "why_it_matters": "Chỉ biết response 429 phía server; nhánh 429 trên UI của /login chưa được đo lại.",
+      "kb_refs": [
+        "KB-015",
+        "KB-024"
+      ],
+      "oq_id": "OQ-auth-005"
+    },
+    {
+      "question": "Người đã đăng nhập mở /login (hoặc bấm Back của trình duyệt sau khi đăng nhập) thì phải được chuyển đi đâu?",
+      "why_it_matters": "Router có guard guestOnly theo bundle nhưng staging đứng ở form /login trống; không có rule PO/Dev.",
+      "kb_refs": [
+        "KB-003",
+        "KB-022"
+      ],
+      "oq_id": "OQ-auth-005"
+    },
+    {
+      "question": "Sau khi đăng nhập từ một returnTo của workspace, người dùng có được đưa thẳng về đúng route ban đầu của workspace đó không, hay luôn qua màn Choose a workspace?",
+      "why_it_matters": "Tài liệu chỉ mô tả bước chuyển sang /login kèm returnTo, không mô tả bước quay lại.",
+      "kb_refs": [
+        "KB-004",
+        "KB-P-030"
+      ],
+      "oq_id": "OQ-auth-023"
+    },
+    {
+      "question": "Đặc tả BE của đăng nhập (status, body, message chuẩn cho từng nhánh lỗi) là gì, khi ticket spec BE Auth/Login (Jira MTRO-54) có description trống?",
+      "why_it_matters": "Hành vi Sign in hiện gần như chỉ là quan sát staging; UI và server dùng hai chuỗi lỗi khác nhau.",
+      "kb_refs": [
+        "KB-005",
+        "KB-007",
+        "KB-008",
+        "KB-009"
+      ],
+      "oq_id": "OQ-auth-006"
+    }
+  ],
+  "last_updated": {
+    "date": "2026-10-08",
+    "ccr_ref": "bootstrap"
+  },
+  "coverage_matrix": [
+    {
+      "feature_id": "sign-in-and-workspace-selection",
+      "layer": "auth",
+      "role": "visitor",
+      "state": "đăng nhập đúng, không bật 2FA",
+      "environment": "documented",
+      "covered": true,
+      "note": "Quan sát staging + rule cross-domain Jira MTRO-30"
+    },
+    {
+      "feature_id": "sign-in-and-workspace-selection",
+      "layer": "auth",
+      "role": "visitor",
+      "state": "đăng nhập sai thông tin",
+      "environment": "documented",
+      "covered": true,
+      "note": "Quan sát staging; rule chống dò tài khoản ở object abuse-guard"
+    },
+    {
+      "feature_id": "sign-in-and-workspace-selection",
+      "layer": "auth",
+      "role": "visitor",
+      "state": "vượt giới hạn số lần đăng nhập",
+      "environment": "documented",
+      "covered": true,
+      "note": "Quan sát staging 429; rule ở object abuse-guard; thông báo UI chưa có"
+    },
+    {
+      "feature_id": "sign-in-and-workspace-selection",
+      "layer": "auth",
+      "role": "visitor",
+      "state": "mở route workspace khi chưa đăng nhập (returnTo)",
+      "environment": "documented",
+      "covered": true,
+      "note": "Chỉ quan sát staging, LOW"
+    },
+    {
+      "feature_id": "sign-in-and-workspace-selection",
+      "layer": "auth",
+      "role": "unspecified",
+      "state": "đã đăng nhập mở lại /login",
+      "environment": "documented",
+      "covered": false,
+      "note": "Suy luận từ bundle + lỗi đã biết; không có expected"
+    },
+    {
+      "feature_id": "sign-in-and-workspace-selection",
+      "layer": "auth",
+      "role": "unspecified",
+      "state": "chọn workspace",
+      "environment": "documented",
+      "covered": true,
+      "note": "Quan sát staging"
+    },
+    {
+      "feature_id": "sign-in-and-workspace-selection",
+      "layer": "auth",
+      "role": "Owner/Member",
+      "state": "vào workspace thứ hai trong cùng phiên",
+      "environment": "documented",
+      "covered": false,
+      "note": "Mâu thuẫn chưa chốt"
+    },
+    {
+      "feature_id": "sign-in-and-workspace-selection",
+      "layer": "auth",
+      "role": "unspecified",
+      "state": "hết hạn phiên",
+      "environment": "documented",
+      "covered": true,
+      "note": "Quyết định 1 ngày; lỗi ~2 giờ chưa kiểm lại"
+    },
+    {
+      "feature_id": "sign-in-and-workspace-selection",
+      "layer": "auth",
+      "role": "unspecified",
+      "state": "Sign out",
+      "environment": "documented",
+      "covered": false,
+      "note": "Chưa có rule; lỗi nghi vấn cần tái hiện"
+    },
+    {
+      "feature_id": "sign-in-and-workspace-selection",
+      "layer": "api",
+      "role": "unspecified",
+      "state": "POST /login các nhánh",
+      "environment": "documented",
+      "covered": true,
+      "note": "Quan sát staging; spec BE trống"
+    },
+    {
+      "feature_id": "sign-in-and-workspace-selection",
+      "layer": "code",
+      "role": "unspecified",
+      "state": "any",
+      "environment": "documented",
+      "covered": false,
+      "note": "Chỉ có router đọc từ bundle"
+    }
+  ],
+  "profile_conflicts": [
+    {
+      "conflict_group": "CONF-MTRO-auth-01",
+      "kb_refs": [
+        "KB-019",
+        "KB-020"
+      ],
+      "resolution": "UNRESOLVED",
+      "handling": "Giữ cả hai phía ở risks, câu hỏi ở unknown_areas; không chọn phía nào làm expected."
+    }
+  ],
+  "profile_relationships": [
+    {
+      "from": "sign-in-and-workspace-selection",
+      "to": "two-factor-challenge",
+      "relation": "HANDS_OFF_TO",
+      "kb_refs": [
+        "KB-007"
+      ]
+    },
+    {
+      "from": "sign-in-and-workspace-selection",
+      "to": "signup-and-workspace-creation",
+      "relation": "SEE_ALSO",
+      "kb_refs": [
+        "KB-068",
+        "KB-005"
+      ]
+    },
+    {
+      "from": "sign-in-and-workspace-selection",
+      "to": "password-reset",
+      "relation": "SEE_ALSO",
+      "kb_refs": [
+        "KB-005"
+      ]
+    },
+    {
+      "from": "sign-in-and-workspace-selection",
+      "to": "abuse-guard/account-and-access-abuse-limits",
+      "relation": "RULE_OWNED_BY",
+      "kb_refs": [
+        "KB-008",
+        "KB-015"
+      ]
+    }
+  ]
+}

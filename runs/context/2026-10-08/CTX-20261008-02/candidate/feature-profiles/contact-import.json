@@ -1,0 +1,750 @@
+{
+  "schema_version": "1.0",
+  "artifact_type": "FeatureProfileCandidate",
+  "artifact_id": "ART-FEATURE-PROFILE-contact-import-CTX-20261008-02",
+  "workflow_id": "CTX-20261008-02",
+  "producer": "feature-profile-builder",
+  "source_refs": [
+    "candidate/product-kb/contact-import.json",
+    "candidate/product-kb/custom-fields.json",
+    "candidate/product-kb/contact-list-and-search.json",
+    "candidate/product-kb/contact-export.json",
+    "candidate/product-kb/contact-create-and-edit.json",
+    "candidate/product-kb/_object-level.contacts.json",
+    "candidate/product-kb/_product-level.json",
+    "input/scope-plan.json",
+    "input/orchestrator-directives.json",
+    "input/profile-checklist-brief.md",
+    "intermediate/doc/DOC-27.json"
+  ],
+  "upstream_artifact_ids": [
+    "PKBC-CTX-20261008-02-contacts-contact-import",
+    "PKBC-CTX-20261008-02-contacts-custom-fields",
+    "PKBC-CTX-20261008-02-contacts-contact-list-and-search",
+    "PKBC-CTX-20261008-02-contacts-contact-export",
+    "PKBC-CTX-20261008-02-contacts-contact-create-and-edit",
+    "PKBC-CTX-20261008-02-contacts-object-level",
+    "PKBC-CTX-20261008-02-_product-level"
+  ],
+  "status": "PARTIAL",
+  "confidence": "MEDIUM",
+  "observations": [
+    "Profile dựng hoàn toàn từ tài liệu (DOC_BOOTSTRAP); act_ids rỗng, observed_validations rỗng.",
+    "Các item chỉ từ bundle FE (INFERRED) được gom vào risks, không đưa vào observed_behavior hay confirmed_rules.",
+    "Item import không kích hoạt automation do automations sở hữu item chính; ở đây chỉ mô tả phía import."
+  ],
+  "assumptions": [],
+  "unknowns": [
+    "Khi import, key của custom field sinh từ cột lạ giữ nguyên tên header hay được hạ chữ thường (GAP-01)?",
+    "Danh sách chính xác các \"cột chuẩn\" / \"field chuẩn\" khi import là gì?",
+    "Một dòng có giá trị không hợp lệ thì bỏ cả dòng hay chỉ bỏ ô (GAP-04)? Email đang bị suppress trong file được xử lý thế nào?",
+    "File có BOM hoặc dùng `;` làm phân cách, file 50.001 dòng, hai lượt import chạy đồng thời thì hệ thống xử lý ra sao; ngưỡng thời gian import 50.000 dòng là bao nhiêu?",
+    "Ngưỡng rate limit import (`tooMany`) và số cột tối đa (`tooManyColumns`) là bao nhiêu?",
+    "Bước Map columns, Review and import, tiến trình nền và các lỗi file trên UI thật hoạt động thế nào?"
+  ],
+  "conflicts": [
+    "CONF-MTRO-contacts-03"
+  ],
+  "blocking_issues": [],
+  "payload": {
+    "feature_profiles": [
+      {
+        "feature_id": "contact-import",
+        "feature_key": "contact-import",
+        "name": "Import contacts từ CSV",
+        "user_goal": "Người dùng đưa danh sách contact hàng loạt từ file CSV vào workspace (thay cho Brevo): map cột chuẩn vào field chuẩn, cột lạ thành custom field, chọn cập nhật hay giữ nguyên contact đã có, và ghi nhận người đã opt-out.",
+        "stable_since_version": "v1",
+        "actors": [
+          {
+            "role": "Owner",
+            "permission_observed": "Quan sát staging 01/10/2026 bằng Owner: mở trang import, đọc copy UI, tải template, thấy màn kết quả của một lượt import do người khác chạy. Chưa upload file nào.",
+            "kb_refs": [
+              "KB-076",
+              "KB-078",
+              "KB-079",
+              "KB-094",
+              "KB-096"
+            ]
+          },
+          {
+            "role": "Admin / role thứ ba (tên đang tranh chấp)",
+            "permission_observed": "Chưa quan sát; quyền import theo role chưa chốt.",
+            "kb_refs": [
+              "KB-P-051"
+            ]
+          }
+        ],
+        "entry_points": [
+          {
+            "path": "Trang `/contacts` → nút `Import` → route `/contacts/import`",
+            "precondition": "Đã ở trong workspace.",
+            "kb_refs": [
+              "KB-005",
+              "KB-076"
+            ]
+          },
+          {
+            "path": "Mở lại `/contacts/import` sau một lượt import → màn kết quả lượt import cuối cùng của cả workspace",
+            "precondition": "Workspace đã có lượt import trước đó.",
+            "kb_refs": [
+              "KB-096"
+            ]
+          }
+        ],
+        "capabilities": [
+          {
+            "name": "Tải file CSV lên",
+            "description": "Bước `1 Upload file`: dòng đầu là tên cột, tối đa 10 MB / 50,000 contact; có link tải template rỗng kèm mọi custom field; các lỗi file (không phải CSV, quá lớn, rỗng…) chỉ thấy trong bundle FE.",
+            "kb_refs": [
+              "KB-077",
+              "KB-078",
+              "KB-079",
+              "KB-098"
+            ],
+            "act_ids": []
+          },
+          {
+            "name": "Map cột vào field",
+            "description": "Cột chuẩn → field chuẩn, cột lạ → custom field (PO 28/09/2026); tên key của field sinh ra đang tranh chấp. Bước `2 Map columns` (chọn cột email, Import as, New field, Don't import, tự khớp tên cột) chỉ có từ bundle FE.",
+            "kb_refs": [
+              "KB-085",
+              "KB-086",
+              "KB-087",
+              "KB-088",
+              "KB-090",
+              "KB-091"
+            ],
+            "act_ids": []
+          },
+          {
+            "name": "Quyết định cách xử lý contact đã có",
+            "description": "Khớp theo email; chọn giữ nguyên hoặc cập nhật; khi cập nhật chỉ cột được import thay đổi, ô trống giữ giá trị cũ; email trùng trong file thì dùng dòng đầu.",
+            "kb_refs": [
+              "KB-081",
+              "KB-082",
+              "KB-084",
+              "KB-089"
+            ],
+            "act_ids": []
+          },
+          {
+            "name": "Ghi nhận opt-out qua cột Consent",
+            "description": "Cột Consent có thể đánh unsubscribed nhưng không bao giờ subscribe lại người đã opt-out; người bị đánh unsubscribed hiện ở tab Unsubscribe với nguồn `Other`.",
+            "kb_refs": [
+              "KB-083",
+              "KB-097"
+            ],
+            "act_ids": []
+          },
+          {
+            "name": "Chạy import và xem kết quả",
+            "description": "Bước `3 Review and import` tóm tắt theo nhóm (bundle FE); kết quả thành công hiện `Import finished` với Added / Updated / Left as they were / Not imported và số người bị đánh unsubscribed; import chạy nền khi rời trang (bundle FE).",
+            "kb_refs": [
+              "KB-092",
+              "KB-093",
+              "KB-094",
+              "KB-095",
+              "KB-096",
+              "KB-100"
+            ],
+            "act_ids": []
+          }
+        ],
+        "state_transitions": [
+          {
+            "from": "`1 Upload file`",
+            "to": "`2 Map columns`",
+            "trigger": "Tải lên file CSV hợp lệ",
+            "condition": "File ≤10 MB / ≤50,000 contact (copy UI); lỗi file chỉ có từ bundle FE",
+            "kb_refs": [
+              "KB-077",
+              "KB-078",
+              "KB-098"
+            ]
+          },
+          {
+            "from": "`2 Map columns`",
+            "to": "`3 Review and import`",
+            "trigger": "Chọn cột email và cách map các cột (bundle FE)",
+            "condition": "Chưa quan sát trên UI",
+            "kb_refs": [
+              "KB-088",
+              "KB-089"
+            ]
+          },
+          {
+            "from": "`3 Review and import`",
+            "to": "đang import (chạy nền)",
+            "trigger": "Bấm `Import {count} contacts` (bundle FE)",
+            "condition": "Rời trang khi chưa import thì có dialog `Leave this import?` (bundle FE)",
+            "kb_refs": [
+              "KB-092",
+              "KB-093"
+            ]
+          },
+          {
+            "from": "đang import",
+            "to": "`Import finished` / kết quả một phần / `Import stopped`",
+            "trigger": "Import chạy xong hoặc dừng",
+            "condition": "Chỉ trạng thái thành công đã thấy trên staging; hai trạng thái còn lại từ bundle FE",
+            "kb_refs": [
+              "KB-094",
+              "KB-095"
+            ]
+          },
+          {
+            "from": "contact Subscribed (hoặc chưa có)",
+            "to": "contact Unsubscribed, có trong tab Unsubscribe với nguồn Other",
+            "trigger": "Dòng trong file có Consent = unsubscribed",
+            "condition": "Người đã opt-out không bao giờ được subscribe lại qua import",
+            "kb_refs": [
+              "KB-083",
+              "KB-097"
+            ]
+          }
+        ],
+        "confirmed_rules": [
+          {
+            "statement": "Theo quyết định PO 28/09/2026 (comment Jira MTRO-95), khi import CSV, cột chuẩn được ghi vào field chuẩn của contact và cột không phải cột chuẩn được import thành custom field; tên key của custom field sinh ra đang tranh chấp (xem nhóm CONF-MTRO-contacts-03).",
+            "knowledge_kind": "CONFIRMED_EXPECTED",
+            "confidence": "MEDIUM",
+            "kb_refs": [
+              "KB-085"
+            ]
+          }
+        ],
+        "observed_behavior": [
+          {
+            "statement": "Trên staging (khảo sát 29/09 và 01/10/2026), màn Import contacts ở route `/contacts/import` (thuộc mục Contacts) đã có trên staging từ 01/10/2026.",
+            "knowledge_kind": "OBSERVED_CURRENT",
+            "confidence": "MEDIUM",
+            "status": "CURRENT_STATE",
+            "kb_refs": [
+              "KB-076"
+            ]
+          },
+          {
+            "statement": "Trên staging (khảo sát 01/10/2026), trang Import contacts có mô tả \"Add or update contacts from a CSV file.\" và stepper 3 bước `1 Upload file` · `2 Map columns` · `3 Review and import`.",
+            "knowledge_kind": "OBSERVED_CURRENT",
+            "confidence": "MEDIUM",
+            "status": "CURRENT_STATE",
+            "kb_refs": [
+              "KB-077"
+            ]
+          },
+          {
+            "statement": "Trên staging (khảo sát 01/10/2026, chỉ đọc copy UI, chưa upload), dropzone import ghi dòng đầu của file CSV là tên cột, mỗi dòng sau là một contact, và file tối đa 10 MB / 50,000 contact.",
+            "knowledge_kind": "OBSERVED_CURRENT",
+            "confidence": "MEDIUM",
+            "status": "CURRENT_STATE",
+            "kb_refs": [
+              "KB-078"
+            ]
+          },
+          {
+            "statement": "Trên staging (khảo sát 01/10/2026), link `Download an empty file with your columns` tải `contacts-template.csv` với header bắt đầu bằng `Email`, `First name`, `Last name`, `Country code`, `Phone`, `Address`, `Consent`, theo sau là mọi custom field của workspace.",
+            "knowledge_kind": "OBSERVED_CURRENT",
+            "confidence": "MEDIUM",
+            "status": "CURRENT_STATE",
+            "kb_refs": [
+              "KB-079"
+            ]
+          },
+          {
+            "statement": "Trên staging (khảo sát 01/10/2026), header số điện thoại trong template CSV import vẫn là `Phone`, lệch với quyết định QA lead 05/10/2026 dùng nhãn `SMS` ở mọi nơi kể cả CSV; header `Phone` cũ còn được khớp vào trường SMS sau 05/10 hay không chưa được PO chốt (GAP-05).",
+            "knowledge_kind": "OBSERVED_CURRENT",
+            "confidence": "LOW",
+            "status": "CURRENT_STATE",
+            "kb_refs": [
+              "KB-080"
+            ]
+          },
+          {
+            "statement": "Trên staging (copy UI \"How your contacts are handled\", khảo sát 01/10/2026), import khớp contact theo email và người dùng chọn giữ nguyên hay cập nhật contact đã có trong danh sách.",
+            "knowledge_kind": "OBSERVED_CURRENT",
+            "confidence": "MEDIUM",
+            "status": "CURRENT_STATE",
+            "kb_refs": [
+              "KB-081"
+            ]
+          },
+          {
+            "statement": "Trên staging (copy UI trang import, khảo sát 01/10/2026), khi cập nhật contact đã có thì chỉ các cột được import mới thay đổi, và ô trống trong file giữ nguyên giá trị contact đang có.",
+            "knowledge_kind": "OBSERVED_CURRENT",
+            "confidence": "MEDIUM",
+            "status": "CURRENT_STATE",
+            "kb_refs": [
+              "KB-082"
+            ]
+          },
+          {
+            "statement": "Trên staging (copy UI trang import, khảo sát 01/10/2026) và bundle FE bước Review and import, cột Consent trong file import có thể đánh dấu contact là unsubscribed nhưng không bao giờ subscribe lại người đã opt-out: người được đánh unsubscribed trong file sẽ bị unsubscribe, người đã opt-out vẫn unsubscribed bất kể file ghi gì.",
+            "knowledge_kind": "OBSERVED_CURRENT",
+            "confidence": "MEDIUM",
+            "status": "CURRENT_STATE",
+            "kb_refs": [
+              "KB-083"
+            ]
+          },
+          {
+            "statement": "Trên staging (copy UI trang import, khảo sát 01/10/2026), nếu một email xuất hiện hai lần trong cùng file thì dòng đầu được dùng, dòng còn lại bị liệt kê là không import.",
+            "knowledge_kind": "OBSERVED_CURRENT",
+            "confidence": "MEDIUM",
+            "status": "CURRENT_STATE",
+            "kb_refs": [
+              "KB-084"
+            ]
+          },
+          {
+            "statement": "Trên staging (khảo sát 01/10/2026, thấy thật một lượt import do người khác chạy), màn kết quả import thành công hiện `Import finished` / `Every row was imported.`, bốn ô số `Added` · `Updated` · `Left as they were` · `Not imported`, dòng báo số contact bị đánh unsubscribed (dạng \"N contacts were marked unsubscribed.\"), và hai nút `Import another file` / `View contacts`.",
+            "knowledge_kind": "OBSERVED_CURRENT",
+            "confidence": "LOW",
+            "status": "CURRENT_STATE",
+            "kb_refs": [
+              "KB-094"
+            ]
+          },
+          {
+            "statement": "Trên staging (khảo sát 01/10/2026, task Testlane MTRO-025 BR-13 — vai trò người trả lời không ghi), mở lại `/contacts/import` sau một lượt import hiện màn kết quả của lượt import cuối cùng trong cả workspace (gọi `GET bulk-operations?type=contacts.import`), kể cả lượt do người khác chạy.",
+            "knowledge_kind": "OBSERVED_CURRENT",
+            "confidence": "LOW",
+            "status": "CURRENT_STATE",
+            "kb_refs": [
+              "KB-096"
+            ]
+          },
+          {
+            "statement": "Trên staging (khảo sát 01/10/2026, task Testlane MTRO-025 BR-14 — vai trò người trả lời không ghi), contact bị đánh unsubscribed qua import hiện ở tab Unsubscribe của Suppressions với nguồn opt-out `Other`.",
+            "knowledge_kind": "OBSERVED_CURRENT",
+            "confidence": "LOW",
+            "status": "CURRENT_STATE",
+            "kb_refs": [
+              "KB-097"
+            ]
+          },
+          {
+            "statement": "QA lead chốt 05/10/2026 theo bản dựng staging, chưa có xác nhận PO/Dev: contact tạo bằng import CSV không kích hoạt automation; chỉ contact tạo lẻ (dialog New contact hoặc API tạo từng contact) mới đi vào trigger của automation.",
+            "knowledge_kind": "OBSERVED_CURRENT",
+            "confidence": "MEDIUM",
+            "status": "CURRENT_STATE",
+            "kb_refs": [
+              "KB-101"
+            ]
+          },
+          {
+            "statement": "Theo QA KB Mailtro \"Contacts\" v1 §Purpose (tóm tắt của QA, không gắn nguồn PO/Dev), Contacts cho nhập hàng loạt contact từ CSV (thay cho Brevo) và xuất CSV.",
+            "knowledge_kind": "OBSERVED_CURRENT",
+            "confidence": "LOW",
+            "status": "CURRENT_STATE",
+            "kb_refs": [
+              "KB-102"
+            ]
+          }
+        ],
+        "observed_validations": [],
+        "permissions": [
+          {
+            "statement": "Quyền import theo role chưa được chốt; màn kết quả hiện lượt import cuối của cả workspace kể cả lượt do người khác chạy (quan sát Owner).",
+            "kb_refs": [
+              "KB-P-051",
+              "KB-096"
+            ]
+          }
+        ],
+        "surface_mapping": {
+          "portal": [
+            {
+              "item": "Trang `/contacts/import`: mô tả \"Add or update contacts from a CSV file.\", stepper 3 bước, dropzone, link `Download an empty file with your columns`",
+              "kb_refs": [
+                "KB-076",
+                "KB-077",
+                "KB-078",
+                "KB-079"
+              ]
+            },
+            {
+              "item": "Màn kết quả: `Import finished`, bốn ô số, dòng số contact bị đánh unsubscribed, nút `Import another file` / `View contacts`",
+              "kb_refs": [
+                "KB-094"
+              ]
+            }
+          ],
+          "storefront": [],
+          "api": [
+            {
+              "item": "`POST contacts/imports/preview`, `POST contacts/imports`, `GET bulk-operations?type=contacts.import`, `bulk-operations/{id}`, `bulk-operations/{id}/failures` (từ bundle FE, trừ GET bulk-operations đã thấy gọi)",
+              "kb_refs": [
+                "KB-100",
+                "KB-096"
+              ]
+            }
+          ],
+          "data": [
+            {
+              "item": "Template `contacts-template.csv`: Email, First name, Last name, Country code, Phone, Address, Consent + mọi custom field",
+              "kb_refs": [
+                "KB-079",
+                "KB-080"
+              ]
+            },
+            {
+              "item": "Consent unsubscribed qua import ghi vào sổ unsubscribe với nguồn opt-out Other",
+              "kb_refs": [
+                "KB-097"
+              ]
+            }
+          ],
+          "code": []
+        },
+        "dependencies": [
+          {
+            "target": "contacts / custom-fields",
+            "relation": "creates",
+            "note": "Cột lạ được import thành custom field; field mới khai ở bước Map được tạo khi import chạy; quy tắc key áp dụng.",
+            "kb_refs": [
+              "KB-085",
+              "KB-091",
+              "KB-127"
+            ]
+          },
+          {
+            "target": "automations / automation-triggers-and-entry",
+            "relation": "does_not_trigger",
+            "note": "Contact tạo bằng import không kích hoạt automation (QA lead chốt 05/10/2026, chưa có PO/Dev).",
+            "kb_refs": [
+              "KB-101"
+            ]
+          },
+          {
+            "target": "deliverability / suppression-list-management",
+            "relation": "writes_unsubscribe",
+            "note": "Người bị đánh unsubscribed qua import hiện ở tab Unsubscribe.",
+            "kb_refs": [
+              "KB-097"
+            ]
+          },
+          {
+            "target": "contacts / contact-export",
+            "relation": "symmetric_format",
+            "note": "File export được thiết kế để import lại tự khớp (header custom field là key).",
+            "kb_refs": [
+              "KB-107"
+            ]
+          }
+        ],
+        "risks": [
+          {
+            "statement": "Key custom field sinh từ cột lạ: giữ nguyên tên header (PO 28/09/2026) hay hạ chữ thường (PO/Dev 01/10/2026) đang mâu thuẫn (nhóm CONF-MTRO-contacts-03, GAP-01 Major); giữ header chữ hoa còn trái quy tắc key.",
+            "knowledge_kind": "INFERRED",
+            "confidence": "LOW",
+            "kb_refs": [
+              "KB-086",
+              "KB-087"
+            ]
+          },
+          {
+            "statement": "Import không kích hoạt automation chỉ do QA lead chốt 05/10/2026 theo bản dựng; nếu PO/Dev quyết khác thì import lớn có thể kéo hàng loạt contact vào flow.",
+            "knowledge_kind": "OBSERVED_CURRENT",
+            "confidence": "MEDIUM",
+            "kb_refs": [
+              "KB-101"
+            ]
+          },
+          {
+            "statement": "Toàn bộ bước 2, bước 3, tiến trình, kết quả một phần, lỗi file, rate limit và endpoint import chỉ chép từ bundle FE 01/10/2026; chưa upload file nào trên staging.",
+            "knowledge_kind": "INFERRED",
+            "confidence": "LOW",
+            "kb_refs": [
+              "KB-088",
+              "KB-089",
+              "KB-090",
+              "KB-091",
+              "KB-092",
+              "KB-093",
+              "KB-095",
+              "KB-098",
+              "KB-099",
+              "KB-100"
+            ]
+          },
+          {
+            "statement": "Template import vẫn ghi header `Phone` trong khi QA lead chốt nhãn `SMS` ở mọi nơi; chưa rõ header `Phone` cũ còn được khớp vào trường SMS (GAP-05).",
+            "knowledge_kind": "OBSERVED_CURRENT",
+            "confidence": "LOW",
+            "kb_refs": [
+              "KB-080",
+              "KB-079"
+            ]
+          },
+          {
+            "statement": "Import có thể đánh unsubscribed hàng loạt (topic unsubscribe-consent); quy tắc không subscribe lại chỉ đến từ copy UI / bundle, chưa có rule PO/Dev.",
+            "knowledge_kind": "OBSERVED_CURRENT",
+            "confidence": "MEDIUM",
+            "kb_refs": [
+              "KB-083",
+              "KB-097"
+            ]
+          }
+        ],
+        "freshness": {
+          "observed_at": "2026-10-05",
+          "run_id": "CTX-20261008-02",
+          "basis": "Quyết định PO 28/09/2026 (Jira MTRO-95), PO/Dev 01/10/2026; khảo sát staging 29/09 và 01/10/2026 (không upload thật); QA lead chốt 05/10/2026. Build staging không được ghi."
+        },
+        "unknown_areas": [
+          {
+            "question": "Khi import, key của custom field sinh từ cột lạ giữ nguyên tên header hay được hạ chữ thường (GAP-01)?",
+            "why_it_matters": "Hai quyết định trái nhau (nhóm CONF-MTRO-contacts-03); ảnh hưởng tên field dùng cho segment và merge tag.",
+            "kb_refs": [
+              "KB-086",
+              "KB-087"
+            ]
+          },
+          {
+            "question": "Danh sách chính xác các \"cột chuẩn\" / \"field chuẩn\" khi import là gì?",
+            "why_it_matters": "Rule PO 28/09/2026 dựa vào khái niệm này nhưng không liệt kê.",
+            "kb_refs": [
+              "KB-085",
+              "KB-079"
+            ]
+          },
+          {
+            "question": "Một dòng có giá trị không hợp lệ thì bỏ cả dòng hay chỉ bỏ ô (GAP-04)? Email đang bị suppress trong file được xử lý thế nào?",
+            "why_it_matters": "Không có expected cho nhóm `Rows that won't be imported`.",
+            "kb_refs": [
+              "KB-082",
+              "KB-092"
+            ]
+          },
+          {
+            "question": "File có BOM hoặc dùng `;` làm phân cách, file 50.001 dòng, hai lượt import chạy đồng thời thì hệ thống xử lý ra sao; ngưỡng thời gian import 50.000 dòng là bao nhiêu?",
+            "why_it_matters": "Các điểm biên đã được QA hỏi nhưng PO chưa chốt.",
+            "kb_refs": [
+              "KB-078",
+              "KB-088"
+            ]
+          },
+          {
+            "question": "Ngưỡng rate limit import (`tooMany`) và số cột tối đa (`tooManyColumns`) là bao nhiêu?",
+            "why_it_matters": "Chỉ có khoá thông báo, không có con số để test biên.",
+            "kb_refs": [
+              "KB-098",
+              "KB-099"
+            ]
+          },
+          {
+            "question": "Bước Map columns, Review and import, tiến trình nền và các lỗi file trên UI thật hoạt động thế nào?",
+            "why_it_matters": "Hiện chỉ có chuỗi bundle FE, chưa thao tác thật.",
+            "kb_refs": [
+              "KB-088",
+              "KB-092",
+              "KB-093",
+              "KB-095"
+            ]
+          },
+          {
+            "question": "Header `Phone` trong file import còn được khớp vào trường SMS sau quyết định nhãn 05/10/2026 không, và template đã đổi sang `SMS` chưa (GAP-05)?",
+            "why_it_matters": "Lệch giữa quyết định nhãn và template trên staging.",
+            "kb_refs": [
+              "KB-080",
+              "KB-041"
+            ]
+          },
+          {
+            "question": "PO/Dev có xác nhận contact tạo bằng import CSV không kích hoạt automation?",
+            "why_it_matters": "Hiện chỉ là quyết định QA lead theo bản dựng.",
+            "kb_refs": [
+              "KB-101"
+            ]
+          },
+          {
+            "question": "Ai được import, và có nên cho mọi người thấy kết quả lượt import của người khác không?",
+            "why_it_matters": "Ma trận quyền chưa chốt; màn kết quả hiện lượt của cả workspace.",
+            "kb_refs": [
+              "KB-096",
+              "KB-P-051"
+            ]
+          }
+        ]
+      }
+    ],
+    "profile_relationships": [
+      {
+        "from": "contact-import",
+        "to": "custom-fields",
+        "relation": "CREATES",
+        "kb_refs": [
+          "KB-085",
+          "KB-091"
+        ]
+      },
+      {
+        "from": "contact-import",
+        "to": "contact-export",
+        "relation": "SYMMETRIC_WITH",
+        "kb_refs": [
+          "KB-107"
+        ]
+      },
+      {
+        "from": "contact-import",
+        "to": "contact-list-and-search",
+        "relation": "OPENED_FROM",
+        "kb_refs": [
+          "KB-005"
+        ]
+      },
+      {
+        "from": "contact-import",
+        "to": "automations/automation-triggers-and-entry",
+        "relation": "DOES_NOT_TRIGGER",
+        "kb_refs": [
+          "KB-101"
+        ]
+      },
+      {
+        "from": "contact-import",
+        "to": "deliverability/suppression-list-management",
+        "relation": "WRITES_UNSUBSCRIBE",
+        "kb_refs": [
+          "KB-097"
+        ]
+      }
+    ],
+    "coverage_matrix": [
+      {
+        "feature_id": "contact-import",
+        "layer": "portal",
+        "role": "Owner",
+        "state": "bước Upload file (copy UI, template)",
+        "environment": "documented",
+        "covered": true,
+        "note": "Hiện trạng staging, chưa upload"
+      },
+      {
+        "feature_id": "contact-import",
+        "layer": "portal",
+        "role": "unspecified",
+        "state": "map cột chuẩn / cột lạ",
+        "environment": "documented",
+        "covered": true,
+        "note": "Rule PO 28/09/2026; tên key đang tranh chấp"
+      },
+      {
+        "feature_id": "contact-import",
+        "layer": "portal",
+        "role": "unspecified",
+        "state": "bước Map columns / Review and import trên UI",
+        "environment": "documented",
+        "covered": false,
+        "note": "Chỉ bundle FE"
+      },
+      {
+        "feature_id": "contact-import",
+        "layer": "portal",
+        "role": "Owner",
+        "state": "contact đã tồn tại (giữ / cập nhật)",
+        "environment": "documented",
+        "covered": true,
+        "note": "Copy UI staging, chưa chạy thật"
+      },
+      {
+        "feature_id": "contact-import",
+        "layer": "portal",
+        "role": "Owner",
+        "state": "cột Consent = unsubscribed",
+        "environment": "documented",
+        "covered": true,
+        "note": "Copy UI + một lượt quan sát"
+      },
+      {
+        "feature_id": "contact-import",
+        "layer": "portal",
+        "role": "Owner",
+        "state": "import thành công",
+        "environment": "documented",
+        "covered": true,
+        "note": "Một lượt quan sát do người khác chạy"
+      },
+      {
+        "feature_id": "contact-import",
+        "layer": "portal",
+        "role": "unspecified",
+        "state": "import một phần / dừng / file lỗi",
+        "environment": "documented",
+        "covered": false,
+        "note": "Chỉ bundle FE"
+      },
+      {
+        "feature_id": "contact-import",
+        "layer": "backend",
+        "role": "unspecified",
+        "state": "import khi có automation Active",
+        "environment": "documented",
+        "covered": true,
+        "note": "QA lead 05/10/2026, chưa PO/Dev"
+      },
+      {
+        "feature_id": "contact-import",
+        "layer": "api",
+        "role": "unspecified",
+        "state": "endpoint import / bulk-operations",
+        "environment": "documented",
+        "covered": false,
+        "note": "Chỉ bundle FE, chưa gọi thật"
+      },
+      {
+        "feature_id": "contact-import",
+        "layer": "portal",
+        "role": "Admin",
+        "state": "import",
+        "environment": "documented",
+        "covered": false,
+        "note": "Chưa khảo sát"
+      },
+      {
+        "feature_id": "contact-import",
+        "layer": "portal",
+        "role": "Member",
+        "state": "import",
+        "environment": "documented",
+        "covered": false,
+        "note": "Chưa khảo sát"
+      }
+    ],
+    "unassigned_kb_items": [],
+    "profile_conflicts": [
+      {
+        "conflict_group": "CONF-MTRO-contacts-03",
+        "topic": "Tên key custom field sinh từ cột lạ khi import",
+        "kb_ids": [
+          "KB-086",
+          "KB-087"
+        ],
+        "related_kb_ids": [
+          "KB-085",
+          "KB-127"
+        ],
+        "status": "UNRESOLVED",
+        "owner_feature": "contact-import"
+      }
+    ],
+    "profile_change_summary": [
+      "Rework r1: dựng lại từ shard hiện tại; shard contact-import không có thay đổi nội dung."
+    ],
+    "kb_trace_complete": true
+  },
+  "gate": {
+    "decision": "CONDITIONAL_PASS",
+    "blocking_findings": [],
+    "conditions": [
+      "Chỉ một rule CE (cột chuẩn → field chuẩn, cột lạ → custom field); không có Jira AC cho import.",
+      "Tên key custom field khi import đang mâu thuẫn — không viết expected.",
+      "Phần lớn luồng (bước 2–3, lỗi, kết quả một phần) chỉ từ bundle FE: checklist chỉ dùng làm risk / cần xác nhận."
+    ],
+    "allowed_next_steps": [
+      "qa-checklist-builder",
+      "knowledge-diff-analyzer"
+    ]
+  }
+}

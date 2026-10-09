@@ -1,0 +1,548 @@
+{
+  "schema_version": "1.0",
+  "artifact_type": "FeatureProfileCandidate",
+  "artifact_id": "ART-FEATURE-PROFILE-ses-event-pipeline-CTX-20261008-02",
+  "workflow_id": "CTX-20261008-02",
+  "producer": "feature-profile-builder",
+  "source_refs": [
+    "candidate/product-kb/ses-event-pipeline.json",
+    "candidate/product-kb/_object-level.deliverability.json",
+    "candidate/product-kb/_product-level.json",
+    "input/scope-plan.json",
+    "input/orchestrator-directives.json"
+  ],
+  "upstream_artifact_ids": [
+    "PKBC-CTX-20261008-02-deliverability-ses-event-pipeline",
+    "PKBC-CTX-20261008-02-deliverability-_object-level",
+    "PKBC-CTX-20261008-02-_product-level"
+  ],
+  "status": "PARTIAL",
+  "confidence": "MEDIUM",
+  "observations": [
+    "Profile dựng hoàn toàn từ tài liệu (DOC_BOOTSTRAP), không có quan sát runtime trong lần chạy này; act_ids rỗng ở mọi nơi và observed_validations rỗng.",
+    "confirmed_rules chỉ chứa item CONFIRMED_EXPECTED; hiện trạng khảo sát staging nằm ở observed_behavior; item INFERRED, item thuộc conflict_group và lỗi đã ghi nhận nằm ở risks/unknown_areas, không dùng làm expected result.",
+    "feature_id dùng giá trị feature_key như toàn bộ KB của feature; chưa có mã FEAT dạng số được cấp.",
+    "Feature backend thuần: không có surface portal / API, không có observed_behavior."
+  ],
+  "assumptions": [],
+  "unknowns": [
+    "Worker có dedupe message SQS (giao at-least-once) không — event trùng có làm counter soft bounce tăng hai lần?",
+    "Message SNS có chữ ký sai bị xử lý thế nào (drop, log, cảnh báo)?",
+    "Ngưỡng 'câm bất thường' và lịch chạy của scheduled command cảnh báo region là gì?",
+    "Khi nào QA có quyền AWS / DB staging để quan sát trực tiếp pipeline (whitelist, drop, `ses_events`, `last_event_at`)?"
+  ],
+  "conflicts": [],
+  "blocking_issues": [],
+  "payload": {
+    "feature_profiles": [
+      {
+        "feature_id": "ses-event-pipeline",
+        "feature_key": "ses-event-pipeline",
+        "name": "Thu nhận sự kiện SES (SNS → SQS → worker), lưu ses_events và giám sát region",
+        "user_goal": "Mọi sự kiện delivery / bounce / complaint / open / click từ SES được nhận an toàn, gắn đúng workspace và campaign, là nguồn duy nhất cho số liệu gửi, và region câm được cảnh báo kịp thời.",
+        "stable_since_version": "v1",
+        "actors": [
+          {
+            "role": "system (SNS / SQS / worker)",
+            "permission_observed": "Worker chỉ nhận message có chữ ký SNS hợp lệ và `TopicArn` nằm trong whitelist; không có thao tác người dùng.",
+            "kb_refs": [
+              "KB-058",
+              "KB-060",
+              "KB-061"
+            ]
+          },
+          {
+            "role": "người nhận cảnh báo (AdminNotification + Slack, role không nêu)",
+            "permission_observed": "Nhận cảnh báo khi một region active câm; tài liệu không nêu role cụ thể.",
+            "kb_refs": [
+              "KB-071"
+            ]
+          }
+        ],
+        "entry_points": [
+          {
+            "path": "SES phát event qua SNS → SQS → worker, từ 10 nguồn (5 region × 2 AWS account)",
+            "precondition": "Subscription SNS → SQS để raw message delivery OFF.",
+            "kb_refs": [
+              "KB-058",
+              "KB-059",
+              "KB-P-073"
+            ]
+          },
+          {
+            "path": "Message `SubscriptionConfirmation` của SNS",
+            "precondition": "Khi SNS xác nhận subscription.",
+            "kb_refs": [
+              "KB-062"
+            ]
+          },
+          {
+            "path": "Scheduled command quét các region active",
+            "precondition": "Lịch chạy chưa được mô tả.",
+            "kb_refs": [
+              "KB-071"
+            ]
+          }
+        ],
+        "capabilities": [
+          {
+            "name": "Nhận và xác thực event",
+            "description": "Worker validate chữ ký SNS, đối chiếu `TopicArn` với whitelist `sending_account_regions.sns_topic_arn`, tự xử lý `SubscriptionConfirmation`; event không khớp whitelist hoặc thiếu tag attribution bị log rồi drop, không lưu và không tạo suppression.",
+            "kb_refs": [
+              "KB-058",
+              "KB-059",
+              "KB-060",
+              "KB-061",
+              "KB-062",
+              "KB-063"
+            ],
+            "act_ids": []
+          },
+          {
+            "name": "Lưu event kèm attribution",
+            "description": "Bảng `ses_events` lưu mọi loại event (kể cả open / click native của AWS) kèm `team_id`, `campaign_id`, `campaign_broadcast_recipient_id`, `source_domain` (lowercase) và các trường chẩn đoán; có index `message_id`, `occurred_at`; không lưu raw payload.",
+            "kb_refs": [
+              "KB-064",
+              "KB-065",
+              "KB-066",
+              "KB-067"
+            ],
+            "act_ids": []
+          },
+          {
+            "name": "Tính số liệu gửi lúc đọc",
+            "description": "Không có bảng analytics riêng; 6 số liệu delivery của campaign tính bằng COUNT trên `ses_events` tại thời điểm đọc, không cache.",
+            "kb_refs": [
+              "KB-068",
+              "KB-069"
+            ],
+            "act_ids": []
+          },
+          {
+            "name": "Giám sát region câm",
+            "description": "Worker stamp `last_event_at` lên region khớp trong bước kiểm whitelist; scheduled command cảnh báo (AdminNotification + Slack) khi region active chưa từng nhận event hoặc câm bất thường trong lúc vẫn có broadcast gửi qua đó. Ngưỡng và lịch chạy chưa mô tả.",
+            "kb_refs": [
+              "KB-070",
+              "KB-071"
+            ],
+            "act_ids": []
+          }
+        ],
+        "state_transitions": [
+          {
+            "from": "message SNS trong SQS",
+            "to": "event được lưu vào `ses_events`",
+            "trigger": "Worker xử lý message",
+            "condition": "Chữ ký hợp lệ, `TopicArn` trong whitelist, có tag attribution",
+            "kb_refs": [
+              "KB-060",
+              "KB-061",
+              "KB-063",
+              "KB-064"
+            ]
+          },
+          {
+            "from": "message SNS trong SQS",
+            "to": "log và drop (không lưu, không suppress)",
+            "trigger": "Worker xử lý message",
+            "condition": "`TopicArn` không khớp whitelist hoặc thiếu tag attribution",
+            "kb_refs": [
+              "KB-063"
+            ]
+          },
+          {
+            "from": "region active, `last_event_at` cũ",
+            "to": "`last_event_at` được cập nhật",
+            "trigger": "Nhận event hợp lệ từ region đó",
+            "condition": "Stamp ngay trong bước kiểm whitelist",
+            "kb_refs": [
+              "KB-070"
+            ]
+          },
+          {
+            "from": "region active câm",
+            "to": "cảnh báo AdminNotification + Slack được gửi",
+            "trigger": "Scheduled command quét region",
+            "condition": "Chưa từng nhận event, hoặc câm bất thường khi vẫn có broadcast; ngưỡng chưa mô tả",
+            "kb_refs": [
+              "KB-071"
+            ]
+          }
+        ],
+        "confirmed_rules": [
+          {
+            "statement": "Theo Jira MTRO-74 (rule 07/09/2026 trong QA business rule Mailtro), sự kiện SES đi theo đường SNS → SQS → worker, từ 10 nguồn (5 region × 2 AWS account).",
+            "knowledge_kind": "CONFIRMED_EXPECTED",
+            "confidence": "MEDIUM",
+            "kb_refs": [
+              "KB-058"
+            ]
+          },
+          {
+            "statement": "Theo Jira MTRO-74 (rule 07/09/2026 trong QA business rule Mailtro), subscription SNS → SQS của pipeline sự kiện SES để raw message delivery ở trạng thái OFF.",
+            "knowledge_kind": "CONFIRMED_EXPECTED",
+            "confidence": "MEDIUM",
+            "kb_refs": [
+              "KB-059"
+            ]
+          },
+          {
+            "statement": "Theo Jira MTRO-74 (rule 07/09/2026 trong QA business rule Mailtro), worker validate chữ ký SNS của mỗi message (`aws/aws-php-sns-message-validator`); tài liệu không nêu cách xử lý message có chữ ký sai.",
+            "knowledge_kind": "CONFIRMED_EXPECTED",
+            "confidence": "MEDIUM",
+            "kb_refs": [
+              "KB-060"
+            ]
+          },
+          {
+            "statement": "Theo Jira MTRO-74 (rule 07/09/2026 trong QA business rule Mailtro), worker đối chiếu `TopicArn` của message với whitelist `sending_account_regions.sns_topic_arn`.",
+            "knowledge_kind": "CONFIRMED_EXPECTED",
+            "confidence": "MEDIUM",
+            "kb_refs": [
+              "KB-061"
+            ]
+          },
+          {
+            "statement": "Theo Jira MTRO-74 (rule 07/09/2026 trong QA business rule Mailtro), worker tự xử lý message `SubscriptionConfirmation` của SNS.",
+            "knowledge_kind": "CONFIRMED_EXPECTED",
+            "confidence": "MEDIUM",
+            "kb_refs": [
+              "KB-062"
+            ]
+          },
+          {
+            "statement": "Theo Jira MTRO-74 (rule 07/09/2026 trong QA business rule Mailtro), event không khớp whitelist `TopicArn` hoặc không gắn tag attribution bị log rồi drop — không lưu và không tạo suppression.",
+            "knowledge_kind": "CONFIRMED_EXPECTED",
+            "confidence": "MEDIUM",
+            "kb_refs": [
+              "KB-063"
+            ]
+          },
+          {
+            "statement": "Theo Jira MTRO-75 (rule 07/09/2026 trong QA business rule Mailtro, cùng quyết định 07/09/2026 trong Decision log Mailtro), bảng `ses_events` lưu mọi loại event SES, kể cả open / click native của AWS, kèm attribution `team_id`, `campaign_id`, `campaign_broadcast_recipient_id`.",
+            "knowledge_kind": "CONFIRMED_EXPECTED",
+            "confidence": "MEDIUM",
+            "kb_refs": [
+              "KB-064"
+            ]
+          },
+          {
+            "statement": "Theo Jira MTRO-75 (rule 07/09/2026 trong QA business rule Mailtro), `ses_events.source_domain` lấy từ `mail.source` (lowercase), và bảng có các trường chẩn đoán `bounce_type`, `bounce_sub_type`, `diagnostic_code`, `complaint_feedback_type`, `ip_address`, `user_agent`, `link_url`.",
+            "knowledge_kind": "CONFIRMED_EXPECTED",
+            "confidence": "MEDIUM",
+            "kb_refs": [
+              "KB-065"
+            ]
+          },
+          {
+            "statement": "Theo Jira MTRO-75 (rule 07/09/2026 trong QA business rule Mailtro), cột `message_id` và `occurred_at` của bảng `ses_events` có index.",
+            "knowledge_kind": "CONFIRMED_EXPECTED",
+            "confidence": "MEDIUM",
+            "kb_refs": [
+              "KB-066"
+            ]
+          },
+          {
+            "statement": "Theo Jira MTRO-75 (rule 07/09/2026 trong QA business rule Mailtro, cùng quyết định 07/09/2026 trong Decision log Mailtro), bảng `ses_events` không lưu raw payload JSONB của event.",
+            "knowledge_kind": "CONFIRMED_EXPECTED",
+            "confidence": "MEDIUM",
+            "kb_refs": [
+              "KB-067"
+            ]
+          },
+          {
+            "statement": "Theo Jira MTRO-75 (rule 07/09/2026 trong QA business rule Mailtro), không có bảng analytics riêng: mọi con số thống kê được tính bằng COUNT trên bảng `ses_events`.",
+            "knowledge_kind": "CONFIRMED_EXPECTED",
+            "confidence": "MEDIUM",
+            "kb_refs": [
+              "KB-068"
+            ]
+          },
+          {
+            "statement": "Theo quyết định 07/09/2026 (Jira MTRO-75, MTRO-82) ghi trong Decision log Mailtro, 6 số liệu delivery của campaign được tính bằng COUNT trên event tại thời điểm đọc và không được cache.",
+            "knowledge_kind": "CONFIRMED_EXPECTED",
+            "confidence": "MEDIUM",
+            "kb_refs": [
+              "KB-069"
+            ]
+          },
+          {
+            "statement": "Theo Jira MTRO-83 (rule 07/09/2026 trong QA business rule Mailtro), worker stamp `last_event_at` lên row `sending_account_regions` khớp ngay trong bước kiểm whitelist `TopicArn`.",
+            "knowledge_kind": "CONFIRMED_EXPECTED",
+            "confidence": "MEDIUM",
+            "kb_refs": [
+              "KB-070"
+            ]
+          },
+          {
+            "statement": "Theo Jira MTRO-83 (rule 07/09/2026 trong QA business rule Mailtro), một scheduled command quét các region active và gửi cảnh báo (`AdminNotification` + Slack) khi region chưa từng nhận event, hoặc câm bất thường trong khi vẫn có broadcast gửi qua region đó; tài liệu không nêu ngưỡng \"câm bất thường\" và lịch chạy.",
+            "knowledge_kind": "CONFIRMED_EXPECTED",
+            "confidence": "MEDIUM",
+            "kb_refs": [
+              "KB-071"
+            ]
+          }
+        ],
+        "observed_behavior": [],
+        "observed_validations": [],
+        "permissions": [],
+        "surface_mapping": {
+          "portal": [],
+          "storefront": [],
+          "api": [],
+          "data": [
+            {
+              "item": "Bảng `ses_events`: mọi loại event, attribution, `source_domain`, trường chẩn đoán, index `message_id` / `occurred_at`, không raw payload",
+              "kb_refs": [
+                "KB-064",
+                "KB-065",
+                "KB-066",
+                "KB-067"
+              ]
+            },
+            {
+              "item": "Bảng `sending_account_regions`: `sns_topic_arn` (whitelist), `last_event_at` (heartbeat)",
+              "kb_refs": [
+                "KB-061",
+                "KB-070"
+              ]
+            },
+            {
+              "item": "Không có bảng analytics; số liệu = COUNT trên `ses_events`",
+              "kb_refs": [
+                "KB-068",
+                "KB-069"
+              ]
+            }
+          ],
+          "code": [
+            {
+              "item": "Worker SQS validate chữ ký bằng `aws/aws-php-sns-message-validator`; scheduled command cảnh báo region câm (theo tài liệu, không có mã nguồn)",
+              "kb_refs": [
+                "KB-060",
+                "KB-071"
+              ]
+            }
+          ]
+        },
+        "dependencies": [
+          {
+            "target": "Hạ tầng gửi SES 5 region × 2 account",
+            "relation": "infrastructure",
+            "note": "Fact cấp sản phẩm.",
+            "kb_refs": [
+              "KB-P-073",
+              "KB-058"
+            ]
+          },
+          {
+            "target": "deliverability / bounce-complaint-suppression",
+            "relation": "downstream",
+            "note": "Event hợp lệ là đầu vào của quyết định suppress; provenance suppression nằm ở `ses_events`.",
+            "kb_refs": [
+              "KB-029",
+              "KB-042",
+              "KB-063"
+            ]
+          },
+          {
+            "target": "campaigns / campaign-report",
+            "relation": "near_duplicate_different_view",
+            "note": "6 số liệu delivery của campaign đọc từ `ses_events`; object campaigns có item gần trùng — giữ cả hai vì khác góc nhìn: campaigns sở hữu oracle hiển thị trên report, profile này giữ nguồn dữ liệu / không cache.",
+            "kb_refs": [
+              "KB-069"
+            ]
+          }
+        ],
+        "risks": [
+          {
+            "statement": "Sự kiện complaint có thể về chậm tới 15 phút sau khi gửi (đặc tính phía AWS, chưa xác nhận) — check complaint cần chờ đủ lâu.",
+            "knowledge_kind": "INFERRED",
+            "confidence": "LOW",
+            "status": null,
+            "conflict_group": null,
+            "kb_refs": [
+              "KB-072"
+            ]
+          },
+          {
+            "statement": "Pipeline chỉ có mô tả từ rule 07/09/2026 và Decision log; chưa có quan sát staging trực tiếp của worker (thiếu credential AWS và quyền DB staging).",
+            "knowledge_kind": "CONFIRMED_EXPECTED",
+            "confidence": "MEDIUM",
+            "status": null,
+            "conflict_group": null,
+            "kb_refs": [
+              "KB-058",
+              "KB-063",
+              "KB-070",
+              "KB-071"
+            ]
+          },
+          {
+            "statement": "SQS giao at-least-once; tài liệu không nêu worker có dedupe hay không, nên event trùng có thể làm tăng counter soft bounce hai lần.",
+            "knowledge_kind": "CONFIRMED_EXPECTED",
+            "confidence": "MEDIUM",
+            "status": null,
+            "conflict_group": null,
+            "kb_refs": [
+              "KB-058",
+              "KB-031"
+            ]
+          }
+        ],
+        "freshness": {
+          "observed_at": "2026-10-07",
+          "run_id": "CTX-20261008-02",
+          "basis": "Rule 07/09/2026 (Jira MTRO-74, 75, 83) và quyết định 07/09/2026; không có quan sát staging"
+        },
+        "unknown_areas": [
+          {
+            "question": "Worker có dedupe message SQS (giao at-least-once) không — event trùng có làm counter soft bounce tăng hai lần?",
+            "why_it_matters": "Ảnh hưởng trực tiếp tới ngưỡng soft bounce và số liệu đếm.",
+            "kb_refs": [
+              "KB-058",
+              "KB-031"
+            ]
+          },
+          {
+            "question": "Message SNS có chữ ký sai bị xử lý thế nào (drop, log, cảnh báo)?",
+            "why_it_matters": "Rule chỉ nói worker validate chữ ký, không nói hậu quả.",
+            "kb_refs": [
+              "KB-060"
+            ]
+          },
+          {
+            "question": "Ngưỡng 'câm bất thường' và lịch chạy của scheduled command cảnh báo region là gì?",
+            "why_it_matters": "Không có expected về thời điểm cảnh báo.",
+            "kb_refs": [
+              "KB-071"
+            ]
+          },
+          {
+            "question": "Khi nào QA có quyền AWS / DB staging để quan sát trực tiếp pipeline (whitelist, drop, `ses_events`, `last_event_at`)?",
+            "why_it_matters": "Toàn bộ feature hiện chỉ có tài liệu; mọi check đều chưa có baseline staging.",
+            "kb_refs": [
+              "KB-058",
+              "KB-063",
+              "KB-070",
+              "KB-071"
+            ]
+          }
+        ]
+      }
+    ],
+    "profile_relationships": [
+      {
+        "from": "ses-event-pipeline",
+        "to": "bounce-complaint-suppression",
+        "relation": "FEEDS_EVENTS_TO",
+        "kb_refs": [
+          "KB-058",
+          "KB-029"
+        ]
+      },
+      {
+        "from": "ses-event-pipeline",
+        "to": "suppression-list-management",
+        "relation": "SUPPORTS",
+        "kb_refs": [
+          "KB-015",
+          "KB-061"
+        ]
+      }
+    ],
+    "coverage_matrix": [
+      {
+        "feature_id": "ses-event-pipeline",
+        "layer": "backend",
+        "role": "system",
+        "state": "event hợp lệ",
+        "environment": "documented",
+        "covered": true,
+        "note": "Rule đã chốt"
+      },
+      {
+        "feature_id": "ses-event-pipeline",
+        "layer": "backend",
+        "role": "system",
+        "state": "TopicArn ngoài whitelist / thiếu attribution",
+        "environment": "documented",
+        "covered": true,
+        "note": "Rule đã chốt: log và drop"
+      },
+      {
+        "feature_id": "ses-event-pipeline",
+        "layer": "backend",
+        "role": "system",
+        "state": "chữ ký SNS sai",
+        "environment": "documented",
+        "covered": false,
+        "note": "Hậu quả chưa mô tả"
+      },
+      {
+        "feature_id": "ses-event-pipeline",
+        "layer": "backend",
+        "role": "system",
+        "state": "message trùng (at-least-once)",
+        "environment": "documented",
+        "covered": false,
+        "note": "Dedupe chưa mô tả"
+      },
+      {
+        "feature_id": "ses-event-pipeline",
+        "layer": "backend",
+        "role": "system",
+        "state": "SubscriptionConfirmation",
+        "environment": "documented",
+        "covered": true,
+        "note": "Rule đã chốt"
+      },
+      {
+        "feature_id": "ses-event-pipeline",
+        "layer": "db",
+        "role": "system",
+        "state": "lưu ses_events",
+        "environment": "documented",
+        "covered": true,
+        "note": "Rule đã chốt, không có schema dump"
+      },
+      {
+        "feature_id": "ses-event-pipeline",
+        "layer": "backend",
+        "role": "system",
+        "state": "region câm",
+        "environment": "documented",
+        "covered": true,
+        "note": "Rule đã chốt; ngưỡng / lịch chưa mô tả"
+      },
+      {
+        "feature_id": "ses-event-pipeline",
+        "layer": "code",
+        "role": "unspecified",
+        "state": "any",
+        "environment": "documented",
+        "covered": false,
+        "note": "Không có nguồn mã"
+      }
+    ],
+    "unassigned_kb_items": [],
+    "profile_conflicts": [],
+    "profile_change_summary": [
+      "Rework r1: dựng lại từ shard hiện tại; object deliverability không có kb_id bị bỏ và không có item tách F-03.",
+      "Ghi chú gần trùng hai phía với object campaigns cho cách tính 6 số liệu delivery."
+    ],
+    "kb_trace_complete": true
+  },
+  "gate": {
+    "decision": "CONDITIONAL_PASS",
+    "blocking_findings": [],
+    "conditions": [
+      "Đủ cho regression discovery: luồng nhận / lọc / lưu / giám sát có rule đã chốt.",
+      "Dedupe, chữ ký sai, ngưỡng region câm chưa có oracle; không có quan sát staging nào cho feature này."
+    ],
+    "allowed_next_steps": [
+      "qa-checklist-builder",
+      "knowledge-diff-analyzer"
+    ]
+  }
+}

@@ -1,0 +1,743 @@
+{
+  "schema_version": "1.0",
+  "artifact_type": "RegressionChecklistCandidate",
+  "artifact_id": "RCCAND-unsubscribe-handling-CTX-20261008-02-r1",
+  "workflow_id": "CTX-20261008-02",
+  "producer": "qa-checklist-builder",
+  "source_refs": [
+    "candidate/feature-profiles/unsubscribe-handling.json",
+    "candidate/product-kb/suppression-list-management.json",
+    "candidate/product-kb/send-time-suppression-check.json",
+    "candidate/product-kb/unsubscribe-handling.json",
+    "candidate/product-kb/_object-level.deliverability.json",
+    "input/orchestrator-directives.json",
+    "input/scope-plan.json",
+    "input/rework-r1-builders.md",
+    "intermediate/doc/DOC-27.json"
+  ],
+  "upstream_artifact_ids": [
+    "ART-FEATURE-PROFILE-unsubscribe-handling-CTX-20261008-02",
+    "PKBC-CTX-20261008-02-deliverability-suppression-list-management",
+    "PKBC-CTX-20261008-02-deliverability-send-time-suppression-check",
+    "PKBC-CTX-20261008-02-deliverability-unsubscribe-handling",
+    "PKBC-CTX-20261008-02-deliverability-_object-level"
+  ],
+  "status": "PARTIAL",
+  "confidence": "MEDIUM",
+  "observations": [
+    "12 check; theo oracle_strength {'STRONG': 7, 'NONE': 4, 'BASELINE': 1}; theo status {'READY': 8, 'NEEDS_CONFIRMATION': 4}; theo dimension {'CORE': 4, 'STATE_DATA': 3, 'NEGATIVE': 4, 'INTEGRATION': 1}; theo priority {'P1': 6, 'P2': 5, 'P3': 1}.",
+    "Rework r1: dựng lại từ shard hiện tại (không có id bị bỏ, không có tách F-03 trong object deliverability). oracle_strength tính lại bằng script theo luật orchestrator: STRONG khi mọi kb_id trong oracle là CONFIRMED_EXPECTED, không thuộc conflict_group và không mang depends_on_conflict_group; có OBSERVED_CURRENT (không KNOWN_DEFECT) thì BASELINE; có INFERRED, item thuộc conflict_group hoặc phụ thuộc conflict_group chưa phân xử (depends_on_conflict_group), hoặc chỉ có gap thì NONE + NEEDS_CONFIRMATION. Item KNOWN_DEFECT không bao giờ nằm trong oracle mà ở regression_watch_kb_ids.",
+    "context_kb_ids là item KB được tham chiếu để hiểu bối cảnh / câu hỏi mở nhưng KHÔNG dùng làm oracle (INFERRED, hoặc phát biểu không trả lời đúng điều check cần kiểm).",
+    "Mode DOC_BOOTSTRAP: chưa có quan sát runtime nên act_ids và evidence_refs rỗng; checklist regression QA trong bộ tài liệu chỉ dùng làm gợi ý risk / phạm vi phủ, không làm oracle."
+  ],
+  "assumptions": [
+    "layer `storefront` ở checklist này chỉ bề mặt phía người nhận (hộp thư, header mail, trang unsubscribe công khai) vì Mailtro không có storefront; enum layer không có giá trị riêng cho recipient.",
+    "Đường gửi email transactional thuộc object khác; check transactional giả định QA có cách phát một email theo lane đó, nếu không phát được thì ghi lại và dừng."
+  ],
+  "unknowns": [
+    "Unsubscribe qua header one-click hiện đã có hiệu lực chưa: POST tới URL `List-Unsubscribe` có ghi entry opt-out (nguồn `One-click header`) không, và domain cần gửi đủ bao nhiêu thì Gmail mới hỗ trợ (ghi chú PO 24/08/2026 nói 'chưa có hiệu lực ngay')?",
+    "Trang xác nhận unsubscribe phía người nhận (dạng `/u/{token}` theo tổng quan bản dựng 03/09/2026, chưa đối chiếu staging) hiển thị gì, có nút resubscribe không, và phản hồi thế nào khi token sai, hết hạn hoặc đã dùng?",
+    "Sau khi người nhận unsubscribe, Consent của contact đổi sang Unsubscribed trong bao lâu (Jira MTRO-69 'trong vài giây' đang To Do)? Consent ở danh sách, trang chi tiết và sổ consent có luôn khớp nhau không?",
+    "Link huỷ đăng ký trong mail đã gửi còn hoạt động (mở trang xác nhận và ghi opt-out) khi workspace bị Sending suspended hoặc Disabled không (GAP-10)?"
+  ],
+  "conflicts": [],
+  "blocking_issues": [],
+  "payload": {
+    "checklists": [
+      {
+        "feature_id": "unsubscribe-handling",
+        "feature_key": "unsubscribe-handling",
+        "checklist_version": "v1",
+        "checks": [
+          {
+            "check_id": "CHK-001",
+            "dimension": "CORE",
+            "layer": "storefront",
+            "title": "Mail campaign marketing tự có link unsubscribe ở footer",
+            "applicability": {
+              "role": "recipient",
+              "state": "campaign marketing có nội dung KHÔNG chèn link unsubscribe",
+              "environment": "documented",
+              "theme_or_device": null
+            },
+            "precondition": "Workspace test gửi được campaign marketing; có contact dùng hộp thư test mà QA đọc được (xem được header và HTML gốc). Có quyền đọc `rendered_html` của lần gửi (DB staging) nếu có thể.",
+            "steps": [
+              "Tạo campaign marketing với nội dung email không có link / merge tag unsubscribe.",
+              "Gửi tới contact dùng hộp thư test.",
+              "Mở mail nhận được, tìm link unsubscribe ở footer; đọc `rendered_html` của lần gửi (nếu có quyền)."
+            ],
+            "observation_point": "Footer của mail nhận được và `rendered_html` của lần gửi.",
+            "expected_result": "Mail campaign marketing có link unsubscribe ở footer dù nội dung gốc không chèn link; link bấm được.",
+            "oracle": {
+              "kb_ids": [
+                "KB-073"
+              ],
+              "oracle_strength": "STRONG"
+            },
+            "status": "READY",
+            "open_question_draft": null,
+            "regression_watch_kb_ids": [
+              "KB-085"
+            ],
+            "context_kb_ids": [
+              "KB-084",
+              "KB-086"
+            ],
+            "risk_refs": [
+              "RISK-unsubscribe-handling-01"
+            ],
+            "priority": "P1",
+            "act_ids": [],
+            "evidence_refs": [],
+            "automation_suitability": "HYBRID"
+          },
+          {
+            "check_id": "CHK-002",
+            "dimension": "CORE",
+            "layer": "storefront",
+            "title": "Bấm link unsubscribe: trang xác nhận tự host, huỷ đăng ký ngay, không có survey",
+            "applicability": {
+              "role": "recipient",
+              "state": "hộp thư test vừa nhận mail campaign có link unsubscribe",
+              "environment": "documented",
+              "theme_or_device": null
+            },
+            "precondition": "Workspace test gửi được campaign marketing; có contact dùng hộp thư test mà QA đọc được (xem được header và HTML gốc). Đã đăng nhập portal bằng Owner ở một trình duyệt khác để kiểm tra kết quả.",
+            "steps": [
+              "Bấm link unsubscribe ở footer mail.",
+              "Ghi lại domain / route của trang mở ra và các bước trên trang.",
+              "Ngay sau đó, ở portal mở tab `Unsubscribe` của trang Suppressions và trang chi tiết contact."
+            ],
+            "observation_point": "Trang mở ra sau khi bấm link, có bước hỏi lý do không, và trạng thái opt-out của contact ngay sau đó.",
+            "expected_result": "Link dẫn tới trang xác nhận do Mailtro tự host; người nhận được huỷ đăng ký ngay lập tức, không có bước survey hỏi lý do; entry opt-out của contact có ngay trong sổ consent.",
+            "oracle": {
+              "kb_ids": [
+                "KB-075",
+                "KB-076",
+                "KB-077"
+              ],
+              "oracle_strength": "STRONG"
+            },
+            "status": "READY",
+            "open_question_draft": null,
+            "regression_watch_kb_ids": [
+              "KB-085"
+            ],
+            "context_kb_ids": [
+              "KB-087",
+              "KB-008"
+            ],
+            "risk_refs": [
+              "RISK-unsubscribe-handling-02"
+            ],
+            "priority": "P1",
+            "act_ids": [],
+            "evidence_refs": [],
+            "automation_suitability": "HYBRID"
+          },
+          {
+            "check_id": "CHK-003",
+            "dimension": "STATE_DATA",
+            "layer": "db",
+            "title": "Sau khi unsubscribe, lần gửi marketing kế tiếp không tới người nhận",
+            "applicability": {
+              "role": "recipient",
+              "state": "vừa unsubscribe ở CHK-002",
+              "environment": "documented",
+              "theme_or_device": null
+            },
+            "precondition": "Workspace test gửi được campaign marketing; có contact dùng hộp thư test mà QA đọc được (xem được header và HTML gốc). Có quyền đọc `ses_events` hoặc hộp thư test.",
+            "steps": [
+              "Ngay sau khi unsubscribe, gửi một campaign marketing mới tới segment có contact đó.",
+              "Kiểm tra event gửi / hộp thư của contact."
+            ],
+            "observation_point": "Contact có được gửi mail ở lần gửi kế tiếp không.",
+            "expected_result": "Unsubscribe có hiệu lực ngay: lần gửi marketing kế tiếp không gửi tới contact đã unsubscribe.",
+            "oracle": {
+              "kb_ids": [
+                "KB-076",
+                "KB-046"
+              ],
+              "oracle_strength": "STRONG"
+            },
+            "status": "READY",
+            "open_question_draft": null,
+            "regression_watch_kb_ids": [],
+            "context_kb_ids": [],
+            "risk_refs": [
+              "RISK-unsubscribe-handling-02"
+            ],
+            "priority": "P1",
+            "act_ids": [],
+            "evidence_refs": [],
+            "automation_suitability": "HYBRID"
+          },
+          {
+            "check_id": "CHK-004",
+            "dimension": "CORE",
+            "layer": "storefront",
+            "title": "Header one-click List-Unsubscribe trên email bulk khi sender domain đã xác thực",
+            "applicability": {
+              "role": "recipient",
+              "state": "workspace có sending domain đã verify; gửi email bulk (marketing)",
+              "environment": "documented",
+              "theme_or_device": null
+            },
+            "precondition": "Workspace test gửi được campaign marketing; có contact dùng hộp thư test mà QA đọc được (xem được header và HTML gốc). Workspace có sending domain đã verify.",
+            "steps": [
+              "Gửi một campaign marketing tới hộp thư test.",
+              "Xem header gốc của mail: `List-Unsubscribe`, `List-Unsubscribe-Post`, `DKIM-Signature` (danh sách `h=`)."
+            ],
+            "observation_point": "Header của mail nhận được.",
+            "expected_result": "Mail có `List-Unsubscribe` và `List-Unsubscribe-Post` (one-click, RFC 8058), và hai header này nằm trong danh sách header được ký DKIM.",
+            "oracle": {
+              "kb_ids": [
+                "KB-079",
+                "KB-080"
+              ],
+              "oracle_strength": "STRONG"
+            },
+            "status": "READY",
+            "open_question_draft": null,
+            "regression_watch_kb_ids": [],
+            "context_kb_ids": [],
+            "risk_refs": [
+              "RISK-unsubscribe-handling-03"
+            ],
+            "priority": "P1",
+            "act_ids": [],
+            "evidence_refs": [],
+            "automation_suitability": "SUITABLE"
+          },
+          {
+            "check_id": "CHK-005",
+            "dimension": "NEGATIVE",
+            "layer": "storefront",
+            "title": "Không gắn header one-click khi sender domain chưa xác thực",
+            "applicability": {
+              "role": "recipient",
+              "state": "workspace chưa có sending domain verified nhưng vẫn gửi được email bulk (ví dụ automation qua shared host); không áp nếu workspace không gửi được",
+              "environment": "documented",
+              "theme_or_device": null
+            },
+            "precondition": "Workspace test chưa verify sending domain; có contact dùng hộp thư test xem được header.",
+            "steps": [
+              "Gửi một email bulk (campaign hoặc automation, tuỳ đường gửi được) tới hộp thư test.",
+              "Xem header gốc của mail."
+            ],
+            "observation_point": "Có `List-Unsubscribe` / `List-Unsubscribe-Post` trong header không.",
+            "expected_result": "Mail không có header one-click `List-Unsubscribe` + `List-Unsubscribe-Post` (header chỉ gắn khi sender domain đã xác thực).",
+            "oracle": {
+              "kb_ids": [
+                "KB-079"
+              ],
+              "oracle_strength": "STRONG"
+            },
+            "status": "READY",
+            "open_question_draft": null,
+            "regression_watch_kb_ids": [],
+            "context_kb_ids": [],
+            "risk_refs": [
+              "RISK-unsubscribe-handling-03"
+            ],
+            "priority": "P2",
+            "act_ids": [],
+            "evidence_refs": [],
+            "automation_suitability": "SUITABLE"
+          },
+          {
+            "check_id": "CHK-006",
+            "dimension": "NEGATIVE",
+            "layer": "storefront",
+            "title": "Email transactional không có footer unsubscribe tự động và không có header one-click",
+            "applicability": {
+              "role": "recipient",
+              "state": "có cách phát email theo lane transactional",
+              "environment": "documented",
+              "theme_or_device": null
+            },
+            "precondition": "Có cách phát một email transactional tới hộp thư test (theo lane transactional đang có trên môi trường); workspace có sending domain đã verify.",
+            "steps": [
+              "Phát một email transactional tới hộp thư test.",
+              "Đọc footer và header gốc của mail."
+            ],
+            "observation_point": "Footer và header của email transactional.",
+            "expected_result": "Email transactional không được tự thêm link unsubscribe ở footer và không có header one-click `List-Unsubscribe` / `List-Unsubscribe-Post`.",
+            "oracle": {
+              "kb_ids": [
+                "KB-074",
+                "KB-079"
+              ],
+              "oracle_strength": "STRONG"
+            },
+            "status": "READY",
+            "open_question_draft": null,
+            "regression_watch_kb_ids": [],
+            "context_kb_ids": [],
+            "risk_refs": [
+              "RISK-unsubscribe-handling-04"
+            ],
+            "priority": "P2",
+            "act_ids": [],
+            "evidence_refs": [],
+            "automation_suitability": "HYBRID"
+          },
+          {
+            "check_id": "CHK-007",
+            "dimension": "INTEGRATION",
+            "layer": "storefront",
+            "title": "Unsubscribe bằng one-click header (POST và nút của mailbox provider)",
+            "applicability": {
+              "role": "recipient",
+              "state": "mail bulk có header one-click (CHK-004)",
+              "environment": "documented",
+              "theme_or_device": null
+            },
+            "precondition": "Workspace test gửi được campaign marketing; có contact dùng hộp thư test mà QA đọc được (xem được header và HTML gốc). Đã đăng nhập portal bằng Owner để kiểm tra kết quả.",
+            "steps": [
+              "Gửi POST `List-Unsubscribe=One-Click` tới URL trong header `List-Unsubscribe` của mail.",
+              "Ở portal, kiểm tra tab `Unsubscribe` và nguồn `Opt-out from` của contact.",
+              "Với hộp thư Gmail, ghi lại nút unsubscribe của Gmail có hiện không."
+            ],
+            "observation_point": "Phản hồi của POST, entry opt-out và nhãn nguồn, sự hiện diện nút unsubscribe của Gmail.",
+            "expected_result": "Chưa có kết quả mong đợi được xác nhận. Ghi lại nguyên văn hành vi thực tế (phản hồi, thông báo, dữ liệu sau thao tác) và chuyển cho PO/Dev xác nhận; không kết luận pass/fail ở lần chạy này.",
+            "oracle": {
+              "kb_ids": [
+                "KB-081"
+              ],
+              "oracle_strength": "NONE"
+            },
+            "status": "NEEDS_CONFIRMATION",
+            "open_question_draft": "Unsubscribe qua header one-click hiện đã có hiệu lực chưa: POST tới URL `List-Unsubscribe` có ghi entry opt-out (nguồn `One-click header`) không, và domain cần gửi đủ bao nhiêu thì Gmail mới hỗ trợ (ghi chú PO 24/08/2026 nói 'chưa có hiệu lực ngay')?",
+            "regression_watch_kb_ids": [],
+            "context_kb_ids": [
+              "KB-079",
+              "KB-009"
+            ],
+            "risk_refs": [
+              "RISK-unsubscribe-handling-03"
+            ],
+            "priority": "P2",
+            "act_ids": [],
+            "evidence_refs": [],
+            "automation_suitability": "HYBRID"
+          },
+          {
+            "check_id": "CHK-008",
+            "dimension": "STATE_DATA",
+            "layer": "portal",
+            "title": "Contact đã unsubscribe không hiện trong segment",
+            "applicability": {
+              "role": "Owner",
+              "state": "segment có điều kiện khớp một contact Subscribed",
+              "environment": "documented",
+              "theme_or_device": null
+            },
+            "precondition": "Đã đăng nhập portal bằng Owner; có segment chứa contact test đang Subscribed.",
+            "steps": [
+              "Ghi lại count và preview của segment.",
+              "Cho contact unsubscribe qua link ở footer mail.",
+              "Mở lại segment, đọc count và preview."
+            ],
+            "observation_point": "Contact có còn trong preview / count của segment không.",
+            "expected_result": "Contact đã unsubscribe không còn hiện trong segment (preview) và count giảm tương ứng.",
+            "oracle": {
+              "kb_ids": [
+                "KB-078"
+              ],
+              "oracle_strength": "STRONG"
+            },
+            "status": "READY",
+            "open_question_draft": null,
+            "regression_watch_kb_ids": [],
+            "context_kb_ids": [],
+            "risk_refs": [
+              "RISK-unsubscribe-handling-05"
+            ],
+            "priority": "P1",
+            "act_ids": [],
+            "evidence_refs": [],
+            "automation_suitability": "SUITABLE"
+          },
+          {
+            "check_id": "CHK-009",
+            "dimension": "NEGATIVE",
+            "layer": "storefront",
+            "title": "Trang unsubscribe công khai với token sai, token hết hạn và resubscribe",
+            "applicability": {
+              "role": "recipient",
+              "state": "có link unsubscribe hợp lệ của một mail",
+              "environment": "documented",
+              "theme_or_device": null
+            },
+            "precondition": "Workspace test gửi được campaign marketing; có contact dùng hộp thư test mà QA đọc được (xem được header và HTML gốc).",
+            "steps": [
+              "Mở link unsubscribe hợp lệ, ghi lại route và nội dung trang (có nút resubscribe không).",
+              "Sửa token trong link thành giá trị sai rồi mở.",
+              "Mở lại link hợp lệ lần thứ hai sau khi đã unsubscribe."
+            ],
+            "observation_point": "Route, nội dung trang và phản hồi với token sai / dùng lại.",
+            "expected_result": "Chưa có kết quả mong đợi được xác nhận. Ghi lại nguyên văn hành vi thực tế (phản hồi, thông báo, dữ liệu sau thao tác) và chuyển cho PO/Dev xác nhận; không kết luận pass/fail ở lần chạy này.",
+            "oracle": {
+              "kb_ids": [
+                "KB-087"
+              ],
+              "oracle_strength": "NONE"
+            },
+            "status": "NEEDS_CONFIRMATION",
+            "open_question_draft": "Trang xác nhận unsubscribe phía người nhận (dạng `/u/{token}` theo tổng quan bản dựng 03/09/2026, chưa đối chiếu staging) hiển thị gì, có nút resubscribe không, và phản hồi thế nào khi token sai, hết hạn hoặc đã dùng?",
+            "regression_watch_kb_ids": [],
+            "context_kb_ids": [
+              "KB-075"
+            ],
+            "risk_refs": [
+              "RISK-unsubscribe-handling-06"
+            ],
+            "priority": "P2",
+            "act_ids": [],
+            "evidence_refs": [],
+            "automation_suitability": "HYBRID"
+          },
+          {
+            "check_id": "CHK-010",
+            "dimension": "STATE_DATA",
+            "layer": "portal",
+            "title": "Consent của contact sau khi người nhận unsubscribe",
+            "applicability": {
+              "role": "Owner",
+              "state": "contact Subscribed vừa unsubscribe qua link footer",
+              "environment": "documented",
+              "theme_or_device": null
+            },
+            "precondition": "Đã đăng nhập portal bằng Owner.",
+            "steps": [
+              "Ghi lại thời điểm bấm unsubscribe.",
+              "Theo dõi cột Consent ở danh sách contact và trang chi tiết contact, ghi lại thời điểm Consent đổi.",
+              "So với entry ở tab `Unsubscribe`."
+            ],
+            "observation_point": "Consent của contact theo thời gian sau unsubscribe.",
+            "expected_result": "Chưa có kết quả mong đợi được xác nhận. Ghi lại nguyên văn hành vi thực tế (phản hồi, thông báo, dữ liệu sau thao tác) và chuyển cho PO/Dev xác nhận; không kết luận pass/fail ở lần chạy này.",
+            "oracle": {
+              "kb_ids": [
+                "KB-088"
+              ],
+              "oracle_strength": "NONE"
+            },
+            "status": "NEEDS_CONFIRMATION",
+            "open_question_draft": "Sau khi người nhận unsubscribe, Consent của contact đổi sang Unsubscribed trong bao lâu (Jira MTRO-69 'trong vài giây' đang To Do)? Consent ở danh sách, trang chi tiết và sổ consent có luôn khớp nhau không?",
+            "regression_watch_kb_ids": [],
+            "context_kb_ids": [
+              "KB-076",
+              "KB-052"
+            ],
+            "risk_refs": [
+              "RISK-unsubscribe-handling-07"
+            ],
+            "priority": "P2",
+            "act_ids": [],
+            "evidence_refs": [],
+            "automation_suitability": "HYBRID"
+          },
+          {
+            "check_id": "CHK-011",
+            "dimension": "NEGATIVE",
+            "layer": "storefront",
+            "title": "Link unsubscribe khi workspace đang Sending suspended / Disabled",
+            "applicability": {
+              "role": "recipient",
+              "state": "workspace đã gửi mail rồi chuyển sang Sending suspended hoặc Disabled",
+              "environment": "documented",
+              "theme_or_device": null
+            },
+            "precondition": "Có mail đã nhận từ workspace test; có cách đưa workspace về Sending suspended / Disabled (thao tác staff).",
+            "steps": [
+              "Đưa workspace sang Sending suspended.",
+              "Bấm link unsubscribe trong mail đã nhận; ghi lại kết quả và sổ consent.",
+              "Lặp lại với trạng thái Disabled."
+            ],
+            "observation_point": "Trang mở ra và entry opt-out được ghi hay không.",
+            "expected_result": "Chưa có kết quả mong đợi được xác nhận. Ghi lại nguyên văn hành vi thực tế (phản hồi, thông báo, dữ liệu sau thao tác) và chuyển cho PO/Dev xác nhận; không kết luận pass/fail ở lần chạy này.",
+            "oracle": {
+              "kb_ids": [],
+              "oracle_strength": "NONE"
+            },
+            "status": "NEEDS_CONFIRMATION",
+            "open_question_draft": "Link huỷ đăng ký trong mail đã gửi còn hoạt động (mở trang xác nhận và ghi opt-out) khi workspace bị Sending suspended hoặc Disabled không (GAP-10)?",
+            "regression_watch_kb_ids": [],
+            "context_kb_ids": [
+              "KB-075",
+              "KB-076"
+            ],
+            "risk_refs": [
+              "RISK-unsubscribe-handling-08"
+            ],
+            "priority": "P1",
+            "act_ids": [],
+            "evidence_refs": [],
+            "automation_suitability": "NOT_SUITABLE"
+          },
+          {
+            "check_id": "CHK-012",
+            "dimension": "CORE",
+            "layer": "portal",
+            "title": "Merge tag link unsubscribe trong picker của Email editor",
+            "applicability": {
+              "role": "Owner",
+              "state": "mở Email editor của một email",
+              "environment": "documented",
+              "theme_or_device": null
+            },
+            "precondition": "Đã đăng nhập portal bằng Owner.",
+            "steps": [
+              "Mở Email editor, mở picker merge tag.",
+              "Tìm nhóm System và mục link unsubscribe, đọc mô tả."
+            ],
+            "observation_point": "Mục link unsubscribe trong picker.",
+            "expected_result": "Theo hiện trạng staging (tổng quan bản dựng 03/09/2026): picker có merge tag `unsubscribe_url` trong nhóm System, mô tả \"The recipient's personal unsubscribe link.\" Không dùng check này để phân xử cú pháp ngoặc của merge tag (đang tranh chấp ở object khác). Lệch = cần điều tra.",
+            "oracle": {
+              "kb_ids": [
+                "KB-083"
+              ],
+              "oracle_strength": "BASELINE"
+            },
+            "status": "READY",
+            "open_question_draft": null,
+            "regression_watch_kb_ids": [],
+            "context_kb_ids": [],
+            "risk_refs": [
+              "RISK-unsubscribe-handling-09"
+            ],
+            "priority": "P3",
+            "act_ids": [],
+            "evidence_refs": [],
+            "automation_suitability": "SUITABLE"
+          }
+        ]
+      }
+    ],
+    "coverage_by_feature_and_risk": [
+      {
+        "feature_id": "unsubscribe-handling",
+        "risk_ref": "RISK-unsubscribe-handling-01",
+        "risk_description": "Mail campaign marketing thiếu link unsubscribe ở footer (rủi ro tuân thủ; BUG-SUPP-06 đang chờ retest)",
+        "covered_by_checks": [
+          "CHK-001"
+        ],
+        "kb_ids": [
+          "KB-073",
+          "KB-084",
+          "KB-085",
+          "KB-086"
+        ],
+        "oracle_strengths": [
+          "STRONG"
+        ],
+        "coverage_status": "COVERED"
+      },
+      {
+        "feature_id": "unsubscribe-handling",
+        "risk_ref": "RISK-unsubscribe-handling-02",
+        "risk_description": "Người nhận bấm unsubscribe nhưng không được huỷ đăng ký ngay, hoặc vẫn nhận mail ở lần gửi sau",
+        "covered_by_checks": [
+          "CHK-002",
+          "CHK-003"
+        ],
+        "kb_ids": [
+          "KB-008",
+          "KB-046",
+          "KB-075",
+          "KB-076",
+          "KB-077",
+          "KB-085",
+          "KB-087"
+        ],
+        "oracle_strengths": [
+          "STRONG"
+        ],
+        "coverage_status": "COVERED"
+      },
+      {
+        "feature_id": "unsubscribe-handling",
+        "risk_ref": "RISK-unsubscribe-handling-03",
+        "risk_description": "Header one-click List-Unsubscribe thiếu, sai điều kiện hoặc không có hiệu lực",
+        "covered_by_checks": [
+          "CHK-004",
+          "CHK-005",
+          "CHK-007"
+        ],
+        "kb_ids": [
+          "KB-009",
+          "KB-079",
+          "KB-080",
+          "KB-081"
+        ],
+        "oracle_strengths": [
+          "NONE",
+          "STRONG"
+        ],
+        "coverage_status": "PARTIAL"
+      },
+      {
+        "feature_id": "unsubscribe-handling",
+        "risk_ref": "RISK-unsubscribe-handling-04",
+        "risk_description": "Email transactional bị gắn footer / header unsubscribe không đúng",
+        "covered_by_checks": [
+          "CHK-006"
+        ],
+        "kb_ids": [
+          "KB-074",
+          "KB-079"
+        ],
+        "oracle_strengths": [
+          "STRONG"
+        ],
+        "coverage_status": "COVERED"
+      },
+      {
+        "feature_id": "unsubscribe-handling",
+        "risk_ref": "RISK-unsubscribe-handling-05",
+        "risk_description": "Contact đã unsubscribe vẫn được tính vào segment",
+        "covered_by_checks": [
+          "CHK-008"
+        ],
+        "kb_ids": [
+          "KB-078"
+        ],
+        "oracle_strengths": [
+          "STRONG"
+        ],
+        "coverage_status": "COVERED"
+      },
+      {
+        "feature_id": "unsubscribe-handling",
+        "risk_ref": "RISK-unsubscribe-handling-06",
+        "risk_description": "Trang xác nhận unsubscribe phía người nhận chưa được mô tả (token sai / hết hạn, resubscribe)",
+        "covered_by_checks": [
+          "CHK-009"
+        ],
+        "kb_ids": [
+          "KB-075",
+          "KB-087"
+        ],
+        "oracle_strengths": [
+          "NONE"
+        ],
+        "coverage_status": "COVERED_PENDING_CONFIRMATION"
+      },
+      {
+        "feature_id": "unsubscribe-handling",
+        "risk_ref": "RISK-unsubscribe-handling-07",
+        "risk_description": "Consent của contact không đồng bộ với sổ consent sau unsubscribe",
+        "covered_by_checks": [
+          "CHK-010"
+        ],
+        "kb_ids": [
+          "KB-052",
+          "KB-076",
+          "KB-088"
+        ],
+        "oracle_strengths": [
+          "NONE"
+        ],
+        "coverage_status": "COVERED_PENDING_CONFIRMATION"
+      },
+      {
+        "feature_id": "unsubscribe-handling",
+        "risk_ref": "RISK-unsubscribe-handling-08",
+        "risk_description": "Link unsubscribe khi workspace bị Sending suspended / Disabled",
+        "covered_by_checks": [
+          "CHK-011"
+        ],
+        "kb_ids": [
+          "KB-075",
+          "KB-076"
+        ],
+        "oracle_strengths": [
+          "NONE"
+        ],
+        "coverage_status": "COVERED_PENDING_CONFIRMATION"
+      },
+      {
+        "feature_id": "unsubscribe-handling",
+        "risk_ref": "RISK-unsubscribe-handling-09",
+        "risk_description": "Merge tag link unsubscribe trong Email editor",
+        "covered_by_checks": [
+          "CHK-012"
+        ],
+        "kb_ids": [
+          "KB-083"
+        ],
+        "oracle_strengths": [
+          "BASELINE"
+        ],
+        "coverage_status": "COVERED"
+      }
+    ],
+    "kb_items_without_dedicated_check": [
+      {
+        "kb_id": "KB-082",
+        "note": "Preference center để sang giai đoạn sau trong MVP (INFERRED, không rõ còn hiệu lực) — thuộc phạm vi object email-preferences; không có hành vi kiểm được ở feature này."
+      }
+    ],
+    "checks_needing_confirmation": [
+      {
+        "check_id": "CHK-007",
+        "open_question_draft": "Unsubscribe qua header one-click hiện đã có hiệu lực chưa: POST tới URL `List-Unsubscribe` có ghi entry opt-out (nguồn `One-click header`) không, và domain cần gửi đủ bao nhiêu thì Gmail mới hỗ trợ (ghi chú PO 24/08/2026 nói 'chưa có hiệu lực ngay')?",
+        "reason": "Hiệu lực của one-click header và ngưỡng khối lượng chỉ có ghi chú chưa xác nhận (INFERRED); nhãn nguồn chỉ thấy trong i18n."
+      },
+      {
+        "check_id": "CHK-009",
+        "open_question_draft": "Trang xác nhận unsubscribe phía người nhận (dạng `/u/{token}` theo tổng quan bản dựng 03/09/2026, chưa đối chiếu staging) hiển thị gì, có nút resubscribe không, và phản hồi thế nào khi token sai, hết hạn hoặc đã dùng?",
+        "reason": "Route chỉ có từ tài liệu tổng quan chưa đối chiếu (INFERRED); hành vi trang chưa được mô tả (gap, role recipient)."
+      },
+      {
+        "check_id": "CHK-010",
+        "open_question_draft": "Sau khi người nhận unsubscribe, Consent của contact đổi sang Unsubscribed trong bao lâu (Jira MTRO-69 'trong vài giây' đang To Do)? Consent ở danh sách, trang chi tiết và sổ consent có luôn khớp nhau không?",
+        "reason": "Yêu cầu đồng bộ Consent nằm trong ticket chưa làm (INFERRED); hành vi hiện hành chưa được mô tả."
+      },
+      {
+        "check_id": "CHK-011",
+        "open_question_draft": "Link huỷ đăng ký trong mail đã gửi còn hoạt động (mở trang xác nhận và ghi opt-out) khi workspace bị Sending suspended hoặc Disabled không (GAP-10)?",
+        "reason": "Gap: tài liệu không mô tả; topic unsubscribe-consent."
+      }
+    ],
+    "duplicates_removed": [
+      {
+        "candidate": "Kiểm lại BUG-SUPP-06 (link unsubscribe trong mail campaign)",
+        "kept_in": "CHK-001",
+        "reason": "Cùng hành vi với rule footer unsubscribe tự động; lỗi đã biết đặt ở regression_watch_kb_ids thay vì tạo check riêng."
+      },
+      {
+        "candidate": "BE tự chèn link unsubscribe khi nội dung không có",
+        "kept_in": "CHK-001",
+        "reason": "Cùng hành vi quan sát được của rule footer tự động; giữ ở context_kb_ids, oracle dùng rule đã chốt."
+      }
+    ],
+    "excluded_dimensions": [
+      {
+        "dimension": "PERMISSION",
+        "reason": "Luồng unsubscribe do người nhận thực hiện qua link chứa token, không có phân quyền role workspace; token sai / dùng lại ở CHK-009 (NEGATIVE). Quyền resubscribe hộ người nhận đã phủ ở suppression-list-management."
+      },
+      {
+        "dimension": "BOUNDARY",
+        "reason": "Tài liệu không mô tả giới hạn kích thước / số lượng nào cho luồng unsubscribe; ngưỡng khối lượng one-click của Gmail chưa được nêu (thuộc CHK-007)."
+      },
+      {
+        "dimension": "REGRESSION",
+        "reason": "Phiên bản đầu tiên (DOC_BOOTSTRAP), chưa có thay đổi hành vi từ knowledge-diff-analyzer. Lỗi đã biết BUG-SUPP-06 được theo dõi qua regression_watch_kb_ids của CHK-001 / CHK-002 (oracle là rule đã chốt), không tạo check REGRESSION trùng."
+      }
+    ]
+  },
+  "gate": {
+    "decision": "PASS",
+    "blocking_findings": [],
+    "conditions": [
+      "4 check NEEDS_CONFIRMATION chỉ ghi nhận hành vi thực tế, không kết luận pass/fail cho tới khi PO/Dev trả lời open_question_draft tương ứng."
+    ],
+    "rationale": "Rework r1 dựng lại từ shard hiện tại. Mọi capability chính và risk P0/P1 của feature có check; mỗi check có applicability, layer, trace về feature và ≥1 kb_id (hoặc đánh dấu gap kèm context_kb_ids); không có expected khẳng định trên oracle NONE; không có check trùng ngữ nghĩa.",
+    "allowed_next_steps": [
+      "knowledge-diff-analyzer",
+      "context-quality-reviewer"
+    ]
+  }
+}

@@ -1,0 +1,848 @@
+{
+  "schema_version": "1.0",
+  "artifact_type": "FeatureProfileCandidate",
+  "artifact_id": "ART-FEATURE-PROFILE-registration-spam-protection-CTX-20261009-01",
+  "workflow_id": "CTX-20261009-01",
+  "producer": "feature-profile-builder",
+  "source_refs": [
+    "candidate/product-kb/registration-spam-protection.json",
+    "candidate/product-kb/_object-level.b2b-registration.json",
+    "candidate/product-kb/_product-level.json",
+    "input/scope-plan.json",
+    "input/orchestrator-directives.json",
+    "input/profile-checklist-brief.md"
+  ],
+  "upstream_artifact_ids": [
+    "PKBC-CTX-20261009-01-b2b-registration-registration-spam-protection",
+    "PKBC-CTX-20261009-01-b2b-registration-object-level.b2b-registration",
+    "PKBC-CTX-20261009-01-_product-level",
+    "SCOPE-PLAN-CTX-20261009-01"
+  ],
+  "status": "PARTIAL",
+  "confidence": "MEDIUM",
+  "observations": [
+    "Profile dựng từ tài liệu; không có quan sát runtime nên act_ids và observed_validations rỗng.",
+    "Chuỗi 429 \"You've submitted too many times. Please try again later.\" và route Portal là quan sát staging, tách khỏi quy tắc đã xác nhận."
+  ],
+  "assumptions": [
+    "feature_id dùng chính feature_key.",
+    "Lệch nhãn đường vào (ticket vs staging) không phải tranh chấp hành vi nên không có profile_conflict; ghi ở risks và unknown_areas."
+  ],
+  "unknowns": [
+    "Thông báo trên form storefront khi submit nhận lỗi 422 (token sai/thiếu/hết hạn) và khi script reCAPTCHA không load được là chuỗi gì, và có dịch theo ngôn ngữ storefront không (GAP-14 của task Testlane DUOS-004)?",
+    "Giới hạn submit theo IP (4 request/phút, 20 request/ngày) có áp dụng cho mọi store không, hay có store được cấu hình khác?",
+    "Nhãn hiện hành đúng của trang chứa nút \"Spam protection settings\" (\"Company submissions\" hay \"B2B Company management\") và của tiêu đề trang (\"Spam protection settings\" hay \"Spam protection\") là gì?",
+    "Khi bật \"Enable reCAPTCHA\", ô site key / secret key hiển thị thế nào; min_score thực tế của từng store là bao nhiêu; lỗi 422 errors.recaptcha_token trả từ endpoint nào (có phải POST /company-submissions); và giới hạn submit theo IP quan hệ thế nào với giới hạn tạo company theo shop?",
+    "Nhân viên merchant cần quyền gì để bật reCAPTCHA và lưu key, và ai được submit form storefront?",
+    "Hành vi reCAPTCHA và giới hạn IP trên form storefront ở bản dựng hiện tại có khớp lời Dev không (khảo sát trên store có form publish, app embed bật, quyền bật reCAPTCHA), và các lần quan sát trước thuộc build nào?"
+  ],
+  "conflicts": [],
+  "blocking_issues": [],
+  "payload": {
+    "feature_profiles": [
+      {
+        "feature_id": "registration-spam-protection",
+        "feature_key": "registration-spam-protection",
+        "name": "Chống spam form đăng ký (reCAPTCHA v3, giới hạn submit theo IP)",
+        "user_goal": "Merchant bật reCAPTCHA v3 cho form đăng ký và hệ thống giới hạn số lần submit theo IP để chặn bot/spam submission, trong khi người điền thật vẫn được báo lỗi và gửi lại được.",
+        "user_goal_kb_refs": [
+          "KB-044",
+          "KB-047",
+          "KB-053",
+          "KB-056",
+          "KB-059"
+        ],
+        "stable_since_version": "v1",
+        "actors": [
+          {
+            "role": "merchant",
+            "permission_observed": "Cấu hình chống spam ở màn Spam protection settings (enabled, site key, secret key). Trên staging 08/10/2026 tài khoản khảo sát không bật được checkbox \"Enable reCAPTCHA\"; quyền cần có chưa được ghi.",
+            "kb_refs": [
+              "KB-044",
+              "KB-046",
+              "KB-067"
+            ]
+          },
+          {
+            "role": "buyer (người điền form trên storefront)",
+            "permission_observed": "Submit form kèm token reCAPTCHA khi chống spam bật; bị chặn khi token sai/script lỗi hoặc vượt giới hạn theo IP.",
+            "kb_refs": [
+              "KB-051",
+              "KB-052",
+              "KB-056",
+              "KB-057",
+              "KB-060"
+            ]
+          },
+          {
+            "role": "system (backend, cấu hình users.config)",
+            "permission_observed": "Verify token theo min_score và action; min_score chỉ do BE đặt trong users.config, không có UI Portal.",
+            "kb_refs": [
+              "KB-049",
+              "KB-053",
+              "KB-054"
+            ]
+          }
+        ],
+        "entry_points": [
+          {
+            "path": "Portal › hub B2B extensions › row \"B2B registration\" › trang \"B2B Company management\" › nút \"Spam protection settings\" (route /extensions/company-submissions/settings, h1 \"Spam protection\")",
+            "precondition": "Nhãn theo staging 30/09 và 08/10/2026; ticket gọi trang chứa nút là \"Company submissions\" — nhãn hiện hành chờ xác nhận.",
+            "kb_refs": [
+              "KB-044",
+              "KB-045",
+              "KB-P-011"
+            ]
+          },
+          {
+            "path": "users.config › key company_submission_captcha (enabled, site_key, secret_key, min_score)",
+            "precondition": "Do BE đặt; không có UI Portal cho min_score.",
+            "kb_refs": [
+              "KB-049",
+              "KB-P-029"
+            ]
+          },
+          {
+            "path": "Storefront › form đăng ký › Submit",
+            "precondition": "Chống spam đang bật (với reCAPTCHA); giới hạn IP áp dụng cho mọi lần gọi.",
+            "kb_refs": [
+              "KB-051",
+              "KB-052"
+            ]
+          },
+          {
+            "path": "API › POST /company-submissions",
+            "precondition": "Giới hạn theo IP 4 request/phút, 20 request/ngày.",
+            "kb_refs": [
+              "KB-059"
+            ]
+          }
+        ],
+        "capabilities": [
+          {
+            "name": "Cấu hình reCAPTCHA v3 trên Portal",
+            "description": "Màn duy nhất để cấu hình chống spam là Spam protection settings, gồm enabled / site key / secret key, yêu cầu key reCAPTCHA v3, không có ô min_score. Trên staging trang có section \"Google reCAPTCHA v3\", checkbox \"Enable reCAPTCHA\" và hộp info \"Use a reCAPTCHA v3 key\"; ô key chưa được thấy trực tiếp.",
+            "kb_refs": [
+              "KB-044",
+              "KB-045",
+              "KB-046",
+              "KB-047",
+              "KB-048",
+              "KB-065",
+              "KB-066",
+              "KB-067"
+            ],
+            "act_ids": []
+          },
+          {
+            "name": "Ngưỡng điểm và bảo vệ secret",
+            "description": "Cấu hình nằm ở users.config key company_submission_captcha; min_score mặc định 0.5 (thiếu / không phải số / ngoài 0–1 → 0.5); secret_key bị loại trước khi sync lên metafield storefront.",
+            "kb_refs": [
+              "KB-049",
+              "KB-050",
+              "KB-054"
+            ],
+            "act_ids": []
+          },
+          {
+            "name": "reCAPTCHA trên form storefront",
+            "description": "Script api.js?render={site_key} chỉ load khi chống spam bật; token lấy lúc bấm Submit với action company_submission, gửi trong field recaptcha_token; script không load được thì form báo lỗi và không gửi.",
+            "kb_refs": [
+              "KB-051",
+              "KB-052",
+              "KB-057"
+            ],
+            "act_ids": []
+          },
+          {
+            "name": "Backend verify token",
+            "description": "Verify score ≥ min_score và đúng action company_submission; token sai/thiếu/hết hạn → HTTP 422 errors.recaptcha_token, không lưu submission; form báo lỗi và cho gửi lại. Nội dung thông báo chưa chốt.",
+            "kb_refs": [
+              "KB-053",
+              "KB-054",
+              "KB-055",
+              "KB-056",
+              "KB-058"
+            ],
+            "act_ids": []
+          },
+          {
+            "name": "Giới hạn submit theo IP",
+            "description": "POST /company-submissions giới hạn 4 request/phút và 20 request/ngày theo IP (cửa sổ ngày cố định 24 giờ từ lần gọi đầu, không theo múi giờ); vượt thì HTTP 429 và form báo gửi quá nhiều lần. Phạm vi áp dụng cho mọi store chưa xác nhận.",
+            "kb_refs": [
+              "KB-059",
+              "KB-060",
+              "KB-061",
+              "KB-062",
+              "KB-063",
+              "KB-064"
+            ],
+            "act_ids": []
+          }
+        ],
+        "state_transitions": [
+          {
+            "from": "chống spam tắt",
+            "to": "chống spam bật",
+            "trigger": "Merchant tick \"Enable reCAPTCHA\", nhập site key + secret key, lưu",
+            "condition": "Key reCAPTCHA v3; ô key chưa được thấy trên staging",
+            "kb_refs": [
+              "KB-046",
+              "KB-047",
+              "KB-065",
+              "KB-067"
+            ]
+          },
+          {
+            "from": "chống spam bật",
+            "to": "form storefront load script reCAPTCHA",
+            "trigger": "Mở form trên storefront",
+            "condition": "Chỉ load khi chống spam bật",
+            "kb_refs": [
+              "KB-051"
+            ]
+          },
+          {
+            "from": "đang submit (có token)",
+            "to": "submission được lưu",
+            "trigger": "Bấm Submit",
+            "condition": "score ≥ min_score (mặc định 0.5) và action = company_submission",
+            "kb_refs": [
+              "KB-052",
+              "KB-053",
+              "KB-054"
+            ]
+          },
+          {
+            "from": "đang submit (token sai/thiếu/hết hạn)",
+            "to": "bị từ chối 422, form báo lỗi, gửi lại được",
+            "trigger": "Bấm Submit",
+            "condition": "Verify thất bại; không lưu submission",
+            "kb_refs": [
+              "KB-055",
+              "KB-056"
+            ]
+          },
+          {
+            "from": "script reCAPTCHA không load",
+            "to": "không gửi submission, form báo lỗi",
+            "trigger": "Bấm Submit",
+            "condition": "Ví dụ bị adblock",
+            "kb_refs": [
+              "KB-057"
+            ]
+          },
+          {
+            "from": "trong giới hạn IP",
+            "to": "bị giới hạn (429)",
+            "trigger": "Request thứ 5 trong một phút hoặc thứ 21 trong cửa sổ ngày",
+            "condition": "Cùng IP",
+            "kb_refs": [
+              "KB-059",
+              "KB-060"
+            ]
+          },
+          {
+            "from": "bị giới hạn theo ngày",
+            "to": "gửi lại được",
+            "trigger": "Hết cửa sổ 24 giờ tính từ lần gọi đầu",
+            "condition": "Cửa sổ cố định, không theo múi giờ",
+            "kb_refs": [
+              "KB-062"
+            ]
+          }
+        ],
+        "confirmed_rules": [
+          {
+            "statement": "Theo Dev FE 23/09 và 30/09/2026 (Jira DUOS-425), màn duy nhất trên Portal để cấu hình chống spam cho form đăng ký là \"Spam protection settings\", mở từ trang quản lý submission của B2B Registration (ticket gọi là Company submissions).",
+            "knowledge_kind": "CONFIRMED_EXPECTED",
+            "confidence": "MEDIUM",
+            "kb_refs": [
+              "KB-044"
+            ]
+          },
+          {
+            "statement": "Theo Dev FE 23/09 và 30/09/2026, Dev BE 23/09/2026 (Jira DUOS-425), Spam protection settings trên Portal gồm các trường enabled, site key và secret key.",
+            "knowledge_kind": "CONFIRMED_EXPECTED",
+            "confidence": "MEDIUM",
+            "kb_refs": [
+              "KB-046"
+            ]
+          },
+          {
+            "statement": "Theo Dev FE 23/09 và 30/09/2026, Dev BE 23/09/2026 (Jira DUOS-425), màn Spam protection settings ghi rõ phải dùng key reCAPTCHA v3.",
+            "knowledge_kind": "CONFIRMED_EXPECTED",
+            "confidence": "MEDIUM",
+            "kb_refs": [
+              "KB-047"
+            ]
+          },
+          {
+            "statement": "Theo Dev FE 23/09 và 30/09/2026, Dev BE 23/09/2026 (Jira DUOS-425), màn Spam protection settings không có ô nhập min_score.",
+            "knowledge_kind": "CONFIRMED_EXPECTED",
+            "confidence": "MEDIUM",
+            "kb_refs": [
+              "KB-048"
+            ]
+          },
+          {
+            "statement": "Theo Dev 23/09/2026 (Jira DUOS-425), cấu hình reCAPTCHA v3 của form đăng ký nằm ở key company_submission_captcha trong users.config, gồm enabled, site_key, secret_key và min_score; min_score chỉ do BE đặt, không có UI trên Portal.",
+            "knowledge_kind": "CONFIRMED_EXPECTED",
+            "confidence": "MEDIUM",
+            "kb_refs": [
+              "KB-049"
+            ]
+          },
+          {
+            "statement": "Theo Dev FE và Dev BE (23/09 và 30/09/2026, Jira DUOS-425), secret_key bị loại bỏ trước khi cấu hình chống spam được sync lên metafield storefront, nên secret key không lộ ra storefront.",
+            "knowledge_kind": "CONFIRMED_EXPECTED",
+            "confidence": "MEDIUM",
+            "kb_refs": [
+              "KB-050"
+            ]
+          },
+          {
+            "statement": "Theo Dev BE và Dev FE 23/09/2026 (Jira DUOS-425), script reCAPTCHA api.js?render={site_key} chỉ được load trên form storefront khi chống spam đang bật.",
+            "knowledge_kind": "CONFIRMED_EXPECTED",
+            "confidence": "MEDIUM",
+            "kb_refs": [
+              "KB-051"
+            ]
+          },
+          {
+            "statement": "Theo Dev BE và Dev FE 23/09/2026 (Jira DUOS-425), token reCAPTCHA được lấy lúc bấm Submit với action company_submission và được gửi lên trong field recaptcha_token.",
+            "knowledge_kind": "CONFIRMED_EXPECTED",
+            "confidence": "MEDIUM",
+            "kb_refs": [
+              "KB-052"
+            ]
+          },
+          {
+            "statement": "Theo Dev BE 23/09/2026 (Jira DUOS-425), backend verify token reCAPTCHA với điều kiện score ≥ min_score và token phải đúng action company_submission.",
+            "knowledge_kind": "CONFIRMED_EXPECTED",
+            "confidence": "MEDIUM",
+            "kb_refs": [
+              "KB-053"
+            ]
+          },
+          {
+            "statement": "Theo Dev BE 23/09/2026 (Jira DUOS-425), min_score mặc định là 0.5; khi min_score bị thiếu, không phải số hoặc nằm ngoài khoảng 0–1 thì backend dùng 0.5.",
+            "knowledge_kind": "CONFIRMED_EXPECTED",
+            "confidence": "MEDIUM",
+            "kb_refs": [
+              "KB-054"
+            ]
+          },
+          {
+            "statement": "Theo Dev BE 23/09/2026 (Jira DUOS-425), token reCAPTCHA sai, thiếu hoặc hết hạn thì API trả HTTP 422 với lỗi errors.recaptcha_token và không lưu submission.",
+            "knowledge_kind": "CONFIRMED_EXPECTED",
+            "confidence": "MEDIUM",
+            "kb_refs": [
+              "KB-055"
+            ]
+          },
+          {
+            "statement": "Theo Dev FE 23/09/2026 (Jira DUOS-425), khi submit nhận HTTP 422, form storefront báo lỗi và cho buyer submit lại.",
+            "knowledge_kind": "CONFIRMED_EXPECTED",
+            "confidence": "MEDIUM",
+            "kb_refs": [
+              "KB-056"
+            ]
+          },
+          {
+            "statement": "Theo Dev FE 23/09/2026 (Jira DUOS-425), khi script reCAPTCHA không load được (ví dụ bị adblock), form storefront báo lỗi và không gửi submission.",
+            "knowledge_kind": "CONFIRMED_EXPECTED",
+            "confidence": "MEDIUM",
+            "kb_refs": [
+              "KB-057"
+            ]
+          },
+          {
+            "statement": "Theo Dev BE 23/09, 25/09 và 30/09/2026 (Jira DUOS-425), POST /company-submissions bị giới hạn theo IP: 4 request/phút và 20 request/ngày; Known issues Duos xếp đây là giới hạn theo thiết kế.",
+            "knowledge_kind": "CONFIRMED_EXPECTED",
+            "confidence": "MEDIUM",
+            "kb_refs": [
+              "KB-059"
+            ]
+          },
+          {
+            "statement": "Theo Dev BE (23/09–30/09/2026) và Dev FE 23/09/2026 (Jira DUOS-425), vượt giới hạn submit theo IP thì API trả HTTP 429 và form storefront báo đã gửi quá nhiều lần.",
+            "knowledge_kind": "CONFIRMED_EXPECTED",
+            "confidence": "MEDIUM",
+            "kb_refs": [
+              "KB-060"
+            ]
+          },
+          {
+            "statement": "Theo Dev BE 23/09, 25/09 và 30/09/2026 (Jira DUOS-425), cửa sổ giới hạn theo ngày là cố định 24 giờ tính từ lần gọi đầu tiên, không theo múi giờ.",
+            "knowledge_kind": "CONFIRMED_EXPECTED",
+            "confidence": "MEDIUM",
+            "kb_refs": [
+              "KB-062"
+            ]
+          }
+        ],
+        "observed_behavior": [
+          {
+            "statement": "Trên staging (quan sát 30/09/2026 và khảo sát 08/10/2026, store staging Plus (Free plan)), đường vào là hub B2B extensions, row \"B2B registration\", tới trang có header \"B2B Company management\" (trang mà ticket gọi là Company submissions), rồi nút \"Spam protection settings\"; nút này mở route Portal /extensions/company-submissions/settings với tiêu đề h1 \"Spam protection\".",
+            "knowledge_kind": "OBSERVED_CURRENT",
+            "confidence": "MEDIUM",
+            "status": "CURRENT_STATE",
+            "kb_refs": [
+              "KB-045"
+            ]
+          },
+          {
+            "statement": "Trên staging (quan sát 01/10/2026, case TC-DUOS-166 — không dùng làm test-case authority; QA business rule Duos ghi lại cùng chuỗi), khi bị giới hạn submit, form storefront hiện \"You've submitted too many times. Please try again later.\"",
+            "knowledge_kind": "OBSERVED_CURRENT",
+            "confidence": "LOW",
+            "status": "CURRENT_STATE",
+            "kb_refs": [
+              "KB-061"
+            ]
+          },
+          {
+            "statement": "Trên staging, QA ghi nhận khi test giới hạn submit theo IP của POST /company-submissions là 4 lần/phút và 20 lần/ngày (cửa sổ cố định 24 giờ); phần 4 lần/phút được ghi là kiểm đạt ngày 01/10/2026 (case TC-DUOS-166, thuộc dải case của task Testlane DUOS-004 không dùng làm test-case authority), phần 20 lần/ngày không có ngày hay kết quả kiểm riêng.",
+            "knowledge_kind": "OBSERVED_CURRENT",
+            "confidence": "LOW",
+            "status": "CURRENT_STATE",
+            "kb_refs": [
+              "KB-063"
+            ]
+          },
+          {
+            "statement": "Trên staging (khảo sát 08/10/2026, store staging Plus (Free plan)), trang Spam protection có section \"Google reCAPTCHA v3\" với checkbox \"Enable reCAPTCHA\" kèm help text \"Block spam and bot submissions on your B2B registration form.\"; lúc khảo sát checkbox đang tắt.",
+            "knowledge_kind": "OBSERVED_CURRENT",
+            "confidence": "MEDIUM",
+            "status": "CURRENT_STATE",
+            "kb_refs": [
+              "KB-065"
+            ]
+          },
+          {
+            "statement": "Trên staging (khảo sát 08/10/2026, store staging Plus (Free plan)), trang Spam protection có hộp info \"Use a reCAPTCHA v3 key\" với nội dung \"Create a key on the Google reCAPTCHA admin and choose reCAPTCHA v3 — reCAPTCHA v2 keys are not supported. Add your storefront domain to the key's domain list.\"",
+            "knowledge_kind": "OBSERVED_CURRENT",
+            "confidence": "MEDIUM",
+            "status": "CURRENT_STATE",
+            "kb_refs": [
+              "KB-066"
+            ]
+          },
+          {
+            "statement": "Trên staging (khảo sát 08/10/2026, store staging Plus (Free plan)), khi \"Enable reCAPTCHA\" đang tắt thì không thấy ô site key và secret key; tài liệu ghi hai ô này chỉ hiện khi bật nhưng người khảo sát không bật được checkbox nên chưa thấy trực tiếp hai ô này.",
+            "knowledge_kind": "OBSERVED_CURRENT",
+            "confidence": "LOW",
+            "status": "CURRENT_STATE",
+            "kb_refs": [
+              "KB-067"
+            ]
+          }
+        ],
+        "observed_validations": [],
+        "permissions": [
+          {
+            "statement": "Chưa có ma trận quyền cho màn Spam protection; trên staging 08/10/2026 thao tác bật reCAPTCHA bị hệ thống quyền của tài khoản khảo sát chặn.",
+            "kb_refs": [
+              "KB-044",
+              "KB-067"
+            ]
+          },
+          {
+            "statement": "secret_key không được sync ra storefront; min_score chỉ BE đặt qua users.config.",
+            "kb_refs": [
+              "KB-050",
+              "KB-049"
+            ]
+          }
+        ],
+        "surface_mapping": {
+          "portal": [
+            {
+              "item": "Đường vào: hub B2B extensions › \"B2B registration\" › \"B2B Company management\" › \"Spam protection settings\" (route /extensions/company-submissions/settings)",
+              "kb_refs": [
+                "KB-044",
+                "KB-045"
+              ]
+            },
+            {
+              "item": "Trang Spam protection: section \"Google reCAPTCHA v3\", checkbox \"Enable reCAPTCHA\", hộp info \"Use a reCAPTCHA v3 key\", ô site key / secret key (chưa thấy trên staging), không có min_score",
+              "kb_refs": [
+                "KB-046",
+                "KB-047",
+                "KB-048",
+                "KB-065",
+                "KB-066",
+                "KB-067"
+              ]
+            }
+          ],
+          "storefront": [
+            {
+              "item": "Load script reCAPTCHA khi bật; token action company_submission trong field recaptcha_token",
+              "kb_refs": [
+                "KB-051",
+                "KB-052"
+              ]
+            },
+            {
+              "item": "Báo lỗi và cho gửi lại khi 422; báo lỗi không gửi khi script lỗi; nội dung thông báo chưa chốt",
+              "kb_refs": [
+                "KB-056",
+                "KB-057",
+                "KB-058"
+              ]
+            },
+            {
+              "item": "Thông báo khi bị giới hạn (quan sát 01/10/2026): \"You've submitted too many times. Please try again later.\"",
+              "kb_refs": [
+                "KB-060",
+                "KB-061"
+              ]
+            }
+          ],
+          "api": [
+            {
+              "item": "Token sai/thiếu/hết hạn → HTTP 422 errors.recaptcha_token, không lưu",
+              "kb_refs": [
+                "KB-055"
+              ]
+            },
+            {
+              "item": "POST /company-submissions: 4 request/phút, 20 request/ngày theo IP; vượt → HTTP 429",
+              "kb_refs": [
+                "KB-059",
+                "KB-060",
+                "KB-063"
+              ]
+            }
+          ],
+          "data": [
+            {
+              "item": "users.config key company_submission_captcha: enabled, site_key, secret_key, min_score (mặc định 0.5)",
+              "kb_refs": [
+                "KB-049",
+                "KB-054"
+              ]
+            },
+            {
+              "item": "Metafield storefront chứa cấu hình chống spam không có secret_key",
+              "kb_refs": [
+                "KB-050"
+              ]
+            }
+          ],
+          "code": []
+        },
+        "dependencies": [
+          {
+            "target": "b2b-registration / registration-form-builder",
+            "relation": "extends",
+            "note": "Chống spam bảo vệ form đăng ký trên storefront.",
+            "kb_refs": [
+              "KB-051",
+              "KB-P-007"
+            ]
+          },
+          {
+            "target": "company-submissions / auto-company-creation-on-submit",
+            "relation": "related",
+            "note": "Giới hạn tạo company theo shop là cơ chế khác giới hạn submit theo IP và thuộc Company submissions; quan hệ hai giới hạn chưa được mô tả.",
+            "kb_refs": [
+              "KB-059"
+            ]
+          },
+          {
+            "target": "portal-shell / portal-navigation",
+            "relation": "related",
+            "note": "Hub B2B extensions và route map thuộc portal-shell.",
+            "kb_refs": [
+              "KB-045"
+            ]
+          },
+          {
+            "target": "Cơ chế users.config (mức product)",
+            "relation": "configured_by",
+            "note": "users.config là cơ chế bật hành vi theo merchant do BE đặt; key company_submission_captcha thuộc feature này.",
+            "kb_refs": [
+              "KB-049",
+              "KB-P-029"
+            ]
+          }
+        ],
+        "risks": [
+          {
+            "statement": "Theo QA KB Duos \"B2B Registration\" v1 (GAP-14 của task Testlane DUOS-004, ghi \"Need confirm\"), nội dung thông báo storefront cho lỗi 422 và cho trường hợp script reCAPTCHA lỗi chưa được chốt, và chưa rõ các thông báo này có hỗ trợ đa ngôn ngữ hay không.",
+            "knowledge_kind": "INFERRED",
+            "confidence": "LOW",
+            "kb_refs": [
+              "KB-058"
+            ]
+          },
+          {
+            "statement": "Theo một giả định QA trong task Testlane DUOS-004 (chưa có xác nhận PO/Dev), giới hạn submit theo IP áp dụng cho mọi store.",
+            "knowledge_kind": "INFERRED",
+            "confidence": "LOW",
+            "kb_refs": [
+              "KB-064"
+            ]
+          },
+          {
+            "statement": "Nhãn đường vào lệch giữa ticket và staging: ticket gọi trang chứa nút là \"Company submissions\", staging 08/10/2026 hiện header \"B2B Company management\"; nút \"Spam protection settings\" mở trang có h1 \"Spam protection\". Hành vi (màn duy nhất cấu hình chống spam) không tranh chấp.",
+            "knowledge_kind": "OBSERVED_CURRENT",
+            "confidence": "MEDIUM",
+            "kb_refs": [
+              "KB-044",
+              "KB-045"
+            ]
+          },
+          {
+            "statement": "Ô site key / secret key chưa từng được thấy trên staging (không bật được checkbox), giá trị min_score thực tế của từng store không được ghi; hành vi verify và storefront chỉ dựa trên lời Dev, storefront chưa quan sát 08/10/2026.",
+            "knowledge_kind": "OBSERVED_CURRENT",
+            "confidence": "LOW",
+            "kb_refs": [
+              "KB-067",
+              "KB-049",
+              "KB-051"
+            ]
+          }
+        ],
+        "unknown_areas": [
+          {
+            "question": "Thông báo trên form storefront khi submit nhận lỗi 422 (token sai/thiếu/hết hạn) và khi script reCAPTCHA không load được là chuỗi gì, và có dịch theo ngôn ngữ storefront không (GAP-14 của task Testlane DUOS-004)?",
+            "why_it_matters": "Rule chỉ nói \"báo lỗi\"; không có chuỗi để làm kết quả mong đợi.",
+            "kb_refs": [
+              "KB-058",
+              "KB-056",
+              "KB-057"
+            ]
+          },
+          {
+            "question": "Giới hạn submit theo IP (4 request/phút, 20 request/ngày) có áp dụng cho mọi store không, hay có store được cấu hình khác?",
+            "why_it_matters": "Hiện chỉ là giả định QA; ảnh hưởng phạm vi check rate limit.",
+            "kb_refs": [
+              "KB-064",
+              "KB-059"
+            ]
+          },
+          {
+            "question": "Nhãn hiện hành đúng của trang chứa nút \"Spam protection settings\" (\"Company submissions\" hay \"B2B Company management\") và của tiêu đề trang (\"Spam protection settings\" hay \"Spam protection\") là gì?",
+            "why_it_matters": "Check điều hướng phải dùng nhãn đúng; staging và ticket lệch nhau.",
+            "kb_refs": [
+              "KB-044",
+              "KB-045"
+            ]
+          },
+          {
+            "question": "Khi bật \"Enable reCAPTCHA\", ô site key / secret key hiển thị thế nào; min_score thực tế của từng store là bao nhiêu; lỗi 422 errors.recaptcha_token trả từ endpoint nào (có phải POST /company-submissions); và giới hạn submit theo IP quan hệ thế nào với giới hạn tạo company theo shop?",
+            "why_it_matters": "Thiếu các điểm này thì không viết được check ngưỡng khác 0.5, check API 422 và check thứ tự áp dụng hai giới hạn.",
+            "kb_refs": [
+              "KB-067",
+              "KB-046",
+              "KB-049",
+              "KB-055",
+              "KB-059"
+            ]
+          },
+          {
+            "question": "Nhân viên merchant cần quyền gì để bật reCAPTCHA và lưu key, và ai được submit form storefront?",
+            "why_it_matters": "Tài khoản khảo sát bị chặn khi bật reCAPTCHA; không có ma trận quyền.",
+            "kb_refs": [
+              "KB-044",
+              "KB-067"
+            ]
+          },
+          {
+            "question": "Hành vi reCAPTCHA và giới hạn IP trên form storefront ở bản dựng hiện tại có khớp lời Dev không (khảo sát trên store có form publish, app embed bật, quyền bật reCAPTCHA), và các lần quan sát trước thuộc build nào?",
+            "why_it_matters": "Storefront chưa quan sát 08/10/2026; quan sát 01/10/2026 thuộc dải case không làm authority và không ghi build.",
+            "kb_refs": [
+              "KB-051",
+              "KB-056",
+              "KB-061",
+              "KB-063",
+              "KB-065"
+            ]
+          }
+        ],
+        "freshness": {
+          "observed_at": "2026-10-08",
+          "run_id": "CTX-20261009-01",
+          "earliest_source_date": "2026-09-23",
+          "basis": "Ngày nguồn mới nhất trong các KB item được tham chiếu (ngày quyết định Dev/PO, ngày ghi Jira hoặc khảo sát staging); không có quan sát runtime trong lần chạy này."
+        }
+      }
+    ],
+    "profile_relationships": [
+      {
+        "from": "registration-spam-protection",
+        "to": "b2b-registration/registration-form-builder",
+        "relation": "EXTENDS",
+        "kb_refs": [
+          "KB-051"
+        ]
+      },
+      {
+        "from": "registration-spam-protection",
+        "to": "company-submissions/auto-company-creation-on-submit",
+        "relation": "RELATED",
+        "kb_refs": [
+          "KB-059"
+        ]
+      },
+      {
+        "from": "registration-spam-protection",
+        "to": "portal-shell/portal-navigation",
+        "relation": "RELATED",
+        "kb_refs": [
+          "KB-045"
+        ]
+      }
+    ],
+    "coverage_matrix": [
+      {
+        "feature_id": "registration-spam-protection",
+        "layer": "portal",
+        "role": "merchant",
+        "state": "chống spam tắt (mặc định)",
+        "environment": "documented",
+        "covered": true,
+        "note": "Hiện trạng staging 08/10/2026"
+      },
+      {
+        "feature_id": "registration-spam-protection",
+        "layer": "portal",
+        "role": "merchant",
+        "state": "bật reCAPTCHA + nhập key",
+        "environment": "documented",
+        "covered": true,
+        "note": "Dev FE/Dev BE; UI ô key chưa thấy"
+      },
+      {
+        "feature_id": "registration-spam-protection",
+        "layer": "portal",
+        "role": "merchant (role khác nhau)",
+        "state": "any",
+        "environment": "documented",
+        "covered": false,
+        "note": "Ma trận quyền chưa có"
+      },
+      {
+        "feature_id": "registration-spam-protection",
+        "layer": "backend",
+        "role": "system",
+        "state": "min_score mặc định / giá trị không hợp lệ",
+        "environment": "documented",
+        "covered": true,
+        "note": "Dev BE"
+      },
+      {
+        "feature_id": "registration-spam-protection",
+        "layer": "backend",
+        "role": "system",
+        "state": "min_score khác 0.5 cấu hình qua users.config",
+        "environment": "documented",
+        "covered": false,
+        "note": "Giá trị thực tế không ghi"
+      },
+      {
+        "feature_id": "registration-spam-protection",
+        "layer": "storefront",
+        "role": "buyer",
+        "state": "chống spam bật: token hợp lệ",
+        "environment": "documented",
+        "covered": true,
+        "note": "Dev BE/Dev FE"
+      },
+      {
+        "feature_id": "registration-spam-protection",
+        "layer": "storefront",
+        "role": "buyer",
+        "state": "token sai / thiếu / hết hạn (422)",
+        "environment": "documented",
+        "covered": true,
+        "note": "Dev; chuỗi thông báo chưa chốt"
+      },
+      {
+        "feature_id": "registration-spam-protection",
+        "layer": "storefront",
+        "role": "buyer",
+        "state": "script reCAPTCHA không load",
+        "environment": "documented",
+        "covered": true,
+        "note": "Dev FE; chuỗi thông báo chưa chốt"
+      },
+      {
+        "feature_id": "registration-spam-protection",
+        "layer": "storefront",
+        "role": "buyer",
+        "state": "chống spam tắt: không load script",
+        "environment": "documented",
+        "covered": true,
+        "note": "Dev"
+      },
+      {
+        "feature_id": "registration-spam-protection",
+        "layer": "api",
+        "role": "client theo IP",
+        "state": "dưới / vượt 4 request/phút",
+        "environment": "documented",
+        "covered": true,
+        "note": "Dev BE + quan sát 01/10/2026"
+      },
+      {
+        "feature_id": "registration-spam-protection",
+        "layer": "api",
+        "role": "client theo IP",
+        "state": "dưới / vượt 20 request/ngày, reset sau 24 giờ",
+        "environment": "documented",
+        "covered": true,
+        "note": "Dev BE"
+      },
+      {
+        "feature_id": "registration-spam-protection",
+        "layer": "api",
+        "role": "client theo IP",
+        "state": "store khác nhau",
+        "environment": "documented",
+        "covered": false,
+        "note": "Phạm vi mọi store chưa xác nhận"
+      },
+      {
+        "feature_id": "registration-spam-protection",
+        "layer": "api",
+        "role": "any",
+        "state": "đặc tả API (request/response, mã lỗi)",
+        "environment": "documented",
+        "covered": false,
+        "note": "Bộ tài liệu QA không có đặc tả API/data model cho feature này"
+      },
+      {
+        "feature_id": "registration-spam-protection",
+        "layer": "db",
+        "role": "any",
+        "state": "data model",
+        "environment": "documented",
+        "covered": false,
+        "note": "Bộ tài liệu QA không có đặc tả API/data model cho feature này"
+      }
+    ],
+    "unassigned_kb_items": [],
+    "profile_conflicts": [],
+    "profile_change_summary": [
+      "Profile v1 dựng từ tài liệu (bootstrap), chưa có canon trước để so sánh."
+    ],
+    "kb_trace_complete": true
+  },
+  "gate": {
+    "decision": "CONDITIONAL_PASS",
+    "blocking_findings": [],
+    "conditions": [
+      "Identity, user goal, capability theo mục tiêu và mapping KB đầy đủ; phần lớn hành vi có quy tắc xác nhận từ Dev FE/Dev BE (Jira DUOS-425).",
+      "Chuỗi thông báo lỗi 422 / script lỗi, phạm vi rate limit theo store và UI ô key chưa có oracle; nhãn đường vào chờ xác nhận.",
+      "Storefront chưa quan sát 08/10/2026."
+    ],
+    "allowed_next_steps": [
+      "qa-checklist-builder",
+      "knowledge-diff-analyzer"
+    ]
+  }
+}

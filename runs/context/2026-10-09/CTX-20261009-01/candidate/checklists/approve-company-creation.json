@@ -1,0 +1,887 @@
+{
+  "schema_version": "1.0",
+  "artifact_type": "RegressionChecklistCandidate",
+  "artifact_id": "RCCAND-approve-company-creation-CTX-20261009-01",
+  "workflow_id": "CTX-20261009-01",
+  "producer": "qa-checklist-builder",
+  "source_refs": [
+    "candidate/feature-profiles/approve-company-creation.json",
+    "candidate/product-kb/approve-company-creation.json",
+    "candidate/product-kb/_product-level.json",
+    "input/orchestrator-directives.json",
+    "input/scope-plan.json",
+    "intermediate/doc/DOC-21.json"
+  ],
+  "upstream_artifact_ids": [
+    "ART-FEATURE-PROFILE-approve-company-creation-CTX-20261009-01",
+    "PKBC-CTX-20261009-01-company-submissions-approve-company-creation",
+    "PKBC-CTX-20261009-01-_product-level"
+  ],
+  "status": "PARTIAL",
+  "confidence": "MEDIUM",
+  "observations": [
+    "17 check; theo oracle_strength {'STRONG': 11, 'NONE': 4, 'BASELINE': 2}; theo status {'READY': 13, 'NEEDS_CONFIRMATION': 4}; theo dimension {'CORE': 3, 'STATE_DATA': 5, 'INTEGRATION': 4, 'NEGATIVE': 5}.",
+    "oracle_strength tính bằng script theo luật orchestrator: STRONG khi mọi kb_id là CONFIRMED_EXPECTED ngoài conflict_group; có OBSERVED_CURRENT (không KNOWN_DEFECT) thì BASELINE; có INFERRED, item thuộc conflict_group hoặc không có kb_id thì NONE + NEEDS_CONFIRMATION. Item KNOWN_DEFECT chỉ nằm ở regression_watch_kb_ids.",
+    "related_kb_ids là ngữ cảnh truy vết, KHÔNG phải oracle. Object không có shard object-level; oracle chỉ lấy từ shard của 4 feature cùng object và product-level.",
+    "Checklist QA regression của Duos chỉ được dùng làm gợi ý risk/độ phủ, không làm oracle.",
+    "Check STRONG chỉ khẳng định đúng nội dung quy tắc PO/Dev/Jira; chi tiết hiện trạng staging (nhãn, toast, quan sát test case) nằm ở check BASELINE riêng.",
+    "Expected của check BASELINE ghi đúng ngày/bối cảnh của quan sát nguồn (khảo sát 08/10/2026 store Free plan, hoặc quan sát test case 30/09/2026 / không ghi ngày) thay vì một ngày chung, vì phần lớn quan sát của object này không đến từ lần khảo sát 08/10/2026.",
+    "Luồng Approve cũ chưa có store tắt cờ trên staging; check luồng cũ là STRONG theo quyết định Dev nhưng chưa xác minh được trên build hiện tại.",
+    "Shopify Flow chưa được mở trong lần khảo sát 08/10/2026; check trigger dựa trên Jira DUOS-425 và Dev FE 30/09/2026."
+  ],
+  "assumptions": [
+    "layer: `portal` = màn Portal; `storefront` = form đăng ký / Customer Account; `api` = trạng thái phía Shopify (Customers, Companies, Shopify Flow) hoặc request HTTP; `db` = dữ liệu của submission (`status`, `data.company_id`, `company_creation_error`) và users.config — xem qua admin panel nội bộ hoặc DB tuỳ quyền QA.",
+    "Placeholder có cấu trúc: `<store-flag-on>` / `<store-flag-off>` = store test bật / tắt `enable_company_creation_on_submit`; `<email-buyer-new>`, `<email-buyer>`, `<email-existing-customer>`, `<phone-existing-customer>`, `<phone-buyer>`, `<customer-in-company-a>` = dữ liệu test do QA chuẩn bị.",
+    "Các check cần giả lập lỗi (trigger lỗi, lỗi sau bước tạo company, đưa lại job) giả định QA có hướng dẫn của Dev; tài liệu chưa mô tả cách giả lập."
+  ],
+  "unknowns": [
+    "Luồng Approve cũ (submission không có `company_id`) tạo ra chính xác những gì trên Shopify: Company + Location + customer làm Main contact với Shopify role Location admin + role Admin của app như Jira DUOS-425 mô tả? Chưa có rule đang hiệu lực nào mô tả riêng các bước tạo của luồng này.",
+    "Submission đang setup_incomplete mà company chưa được gán contact thì khi merchant Approve có báo không tìm thấy customer (`customer_not_found`, không bắn trigger, giữ status) hay không (task Testlane GAP-28)?",
+    "Khi merchant đổi email của customer trên Shopify admin, submission ở nhánh có `company_id` bị kẹt Pending vì Approve không tìm lại được customer và app không có đường gỡ (quan sát TC-DUOS-160, 30/09/2026). PO chấp nhận giới hạn này hay cần đường gỡ trong app (task Testlane GAP-29)?",
+    "Ở luồng Approve cũ, khi bước gán contact lỗi thì company được tạo nhưng không có contact, submission vẫn `completed` và không có banner báo. Đây là lỗi cần sửa hay hành vi được chấp nhận (task Testlane GAP-23)? Nếu là lỗi, kết quả mong đợi là gì?"
+  ],
+  "conflicts": [],
+  "blocking_issues": [],
+  "payload": {
+    "checklists": [
+      {
+        "feature_id": "approve-company-creation",
+        "feature_key": "approve-company-creation",
+        "checklist_version": "v1",
+        "checks": [
+          {
+            "check_id": "CHK-001",
+            "dimension": "CORE",
+            "layer": "portal",
+            "title": "Approve submission đã có `company_id` chỉ bắn trigger, không tạo company mới",
+            "applicability": {
+              "role": "merchant",
+              "state": "store bật cờ, submission pending đã có `company_id` (job lúc submit thành công)",
+              "environment": "documented",
+              "theme_or_device": null
+            },
+            "precondition": "Store test `<store-flag-on>` có key `enable_company_creation_on_submit` ở root users.config của shop đặt `true` (cấu hình qua JSON editor của admin panel nội bộ, không có UI trong Portal) và có registration form đang hoạt động trên storefront. Đã mở Portal (embedded app trong Shopify admin) bằng tài khoản merchant của store test. Có quyền xem Customers / Companies trong Shopify admin của store test. Có workflow Shopify Flow dùng trigger \"company approved\" (`duos-approve-company`) để xem run history.",
+            "steps": [
+              "Buyer submit registration form với `<email-buyer-new>`; chờ job ghi `company_id`.",
+              "Đếm số Company trên Shopify admin ứng với buyer này.",
+              "Trong Portal, mở trang chi tiết submission, bấm \"Approve company\".",
+              "Tải lại trang; đếm lại Company trên Shopify; xem run history của Flow."
+            ],
+            "observation_point": "Status submission sau khi tải lại, số Company trên Shopify, run của trigger `duos-approve-company`.",
+            "expected_result": "Approve chỉ bắn Flow trigger `duos-approve-company` rồi set status `completed` (badge \"Approved\"); không có Company nào được tạo thêm.",
+            "oracle": {
+              "kb_ids": [
+                "KB-018",
+                "KB-002"
+              ],
+              "oracle_strength": "STRONG"
+            },
+            "status": "READY",
+            "open_question_draft": null,
+            "related_kb_ids": [],
+            "regression_watch_kb_ids": [],
+            "risk_refs": [
+              "RISK-approve-01",
+              "RISK-approve-04"
+            ],
+            "priority": "P1",
+            "act_ids": [],
+            "evidence_refs": [],
+            "automation_suitability": "HYBRID"
+          },
+          {
+            "check_id": "CHK-002",
+            "dimension": "CORE",
+            "layer": "portal",
+            "title": "Approve submission chưa có `company_id` trên store tắt cờ — Portal tự tạo company",
+            "applicability": {
+              "role": "merchant",
+              "state": "store tắt cờ, submission pending không có `company_id` (luồng cũ)",
+              "environment": "documented",
+              "theme_or_device": null
+            },
+            "precondition": "Store test `<store-flag-off>` không có key `enable_company_creation_on_submit` trong users.config (hoặc giá trị khác `true` / \"true\") và có registration form đang hoạt động trên storefront. Đã mở Portal (embedded app trong Shopify admin) bằng tài khoản merchant của store test. Có quyền xem Customers / Companies trong Shopify admin của store test. Lưu ý: staging hiện chưa có store tắt cờ dành cho luồng này.",
+            "steps": [
+              "Buyer submit registration form với `<email-buyer-new>`; xác nhận chưa có Company nào cho buyer trên Shopify.",
+              "Trong Portal, mở submission, bấm \"Approve company\".",
+              "Tải lại trang; kiểm tra Company trên Shopify admin; xem run history của Flow."
+            ],
+            "observation_point": "Status submission, Company trên Shopify, run của trigger.",
+            "expected_result": "Submission không có `company_id` đi luồng cũ: Portal tự tạo company trên Shopify và submission chuyển `completed` (badge \"Approved\"). Thành phần của company (contact, role) thuộc CHK-003.",
+            "oracle": {
+              "kb_ids": [
+                "KB-018",
+                "KB-002"
+              ],
+              "oracle_strength": "STRONG"
+            },
+            "status": "READY",
+            "open_question_draft": null,
+            "related_kb_ids": [],
+            "regression_watch_kb_ids": [
+              "KB-043"
+            ],
+            "risk_refs": [
+              "RISK-approve-01"
+            ],
+            "priority": "P1",
+            "act_ids": [],
+            "evidence_refs": [],
+            "automation_suitability": "HYBRID"
+          },
+          {
+            "check_id": "CHK-003",
+            "dimension": "STATE_DATA",
+            "layer": "api",
+            "title": "Thực thể được tạo bởi luồng Approve cũ",
+            "applicability": {
+              "role": "merchant",
+              "state": "vừa Approve submission không có `company_id`",
+              "environment": "documented",
+              "theme_or_device": null
+            },
+            "precondition": "Store test `<store-flag-off>` không có key `enable_company_creation_on_submit` trong users.config (hoặc giá trị khác `true` / \"true\") và có registration form đang hoạt động trên storefront. Có quyền xem Customers / Companies trong Shopify admin của store test. Đã chạy CHK-002.",
+            "steps": [
+              "Trên Shopify admin mở Company vừa tạo: xem Location, contact, Shopify role của contact.",
+              "Trong app, xem role của contact đó."
+            ],
+            "observation_point": "Location, Main contact, Shopify role và role trong app của company do luồng cũ tạo.",
+            "expected_result": "Chưa có căn cứ: ghi lại số Location, có Main contact không, Shopify role (vd Location admin) và role trong app; không đánh giá pass/fail cho tới khi PO/Dev trả lời.",
+            "oracle": {
+              "kb_ids": [
+                "KB-019"
+              ],
+              "oracle_strength": "NONE"
+            },
+            "status": "NEEDS_CONFIRMATION",
+            "open_question_draft": "Luồng Approve cũ (submission không có `company_id`) tạo ra chính xác những gì trên Shopify: Company + Location + customer làm Main contact với Shopify role Location admin + role Admin của app như Jira DUOS-425 mô tả? Chưa có rule đang hiệu lực nào mô tả riêng các bước tạo của luồng này.",
+            "related_kb_ids": [
+              "KB-018"
+            ],
+            "regression_watch_kb_ids": [],
+            "risk_refs": [
+              "RISK-approve-06"
+            ],
+            "priority": "P1",
+            "act_ids": [],
+            "evidence_refs": [],
+            "automation_suitability": "HYBRID"
+          },
+          {
+            "check_id": "CHK-004",
+            "dimension": "STATE_DATA",
+            "layer": "portal",
+            "title": "Approve submission failed không có `company_id` đi luồng cũ",
+            "applicability": {
+              "role": "merchant",
+              "state": "store bật cờ, submission `failed` không có `company_id` (job lỗi trước bước tạo company)",
+              "environment": "documented",
+              "theme_or_device": null
+            },
+            "precondition": "Store test `<store-flag-on>` có key `enable_company_creation_on_submit` ở root users.config của shop đặt `true` (cấu hình qua JSON editor của admin panel nội bộ, không có UI trong Portal) và có registration form đang hoạt động trên storefront. Đã mở Portal (embedded app trong Shopify admin) bằng tài khoản merchant của store test. Có cách xem dữ liệu của submission (`status`, `data.company_id`, `company_creation_error`) — qua JSON viewer của admin panel nội bộ hoặc truy vấn DB, tuỳ quyền QA được cấp. Có quyền xem Customers / Companies trong Shopify admin của store test. Có submission `failed` không có `company_id` (vd do customer đã là contact company khác — sau đó gỡ contact đó khỏi company cũ để Approve có thể thành công).",
+            "steps": [
+              "Mở trang chi tiết submission failed; quan sát nút \"Approve company\".",
+              "Bấm \"Approve company\"; quan sát toast/thông báo.",
+              "Tải lại trang; kiểm tra status và Company trên Shopify."
+            ],
+            "observation_point": "Nút Approve, phản hồi sau khi bấm, status sau khi tải lại, Company trên Shopify.",
+            "expected_result": "Nút \"Approve company\" hiện với submission `failed`; vì không có `company_id`, Approve đi luồng cũ — Portal tự tạo company (Portal không đọc cờ, cờ ON vẫn chọn nhánh theo `company_id`).",
+            "oracle": {
+              "kb_ids": [
+                "KB-018",
+                "KB-005"
+              ],
+              "oracle_strength": "STRONG"
+            },
+            "status": "READY",
+            "open_question_draft": null,
+            "related_kb_ids": [],
+            "regression_watch_kb_ids": [
+              "KB-029",
+              "KB-017"
+            ],
+            "risk_refs": [
+              "RISK-approve-02"
+            ],
+            "priority": "P1",
+            "act_ids": [],
+            "evidence_refs": [],
+            "automation_suitability": "HYBRID"
+          },
+          {
+            "check_id": "CHK-005",
+            "dimension": "STATE_DATA",
+            "layer": "portal",
+            "title": "Approve submission bị rate_limited đi luồng cũ",
+            "applicability": {
+              "role": "merchant",
+              "state": "store bật cờ, submission pending có `company_creation_error = \"rate_limited\"`, không có `company_id`",
+              "environment": "documented",
+              "theme_or_device": null
+            },
+            "precondition": "Store test `<store-flag-on>` có key `enable_company_creation_on_submit` ở root users.config của shop đặt `true` (cấu hình qua JSON editor của admin panel nội bộ, không có UI trong Portal) và có registration form đang hoạt động trên storefront. Đã mở Portal (embedded app trong Shopify admin) bằng tài khoản merchant của store test. Có cách xem dữ liệu của submission (`status`, `data.company_id`, `company_creation_error`) — qua JSON viewer của admin panel nội bộ hoặc truy vấn DB, tuỳ quyền QA được cấp. Có quyền xem Customers / Companies trong Shopify admin của store test. Có submission bị rate_limited (cách tạo: xem check rate limit của feature auto-company-creation-on-submit).",
+            "steps": [
+              "Xác nhận submission có `company_creation_error = \"rate_limited\"` và không có `company_id`.",
+              "Trong Portal, bấm \"Approve company\".",
+              "Tải lại; kiểm tra Company trên Shopify và status submission."
+            ],
+            "observation_point": "Company trên Shopify và status submission sau Approve.",
+            "expected_result": "Submission `rate_limited` khi Approve đi luồng cũ — Portal tự tạo company.",
+            "oracle": {
+              "kb_ids": [
+                "KB-028",
+                "KB-018"
+              ],
+              "oracle_strength": "STRONG"
+            },
+            "status": "READY",
+            "open_question_draft": null,
+            "related_kb_ids": [],
+            "regression_watch_kb_ids": [],
+            "risk_refs": [
+              "RISK-approve-02"
+            ],
+            "priority": "P2",
+            "act_ids": [],
+            "evidence_refs": [],
+            "automation_suitability": "HYBRID"
+          },
+          {
+            "check_id": "CHK-006",
+            "dimension": "STATE_DATA",
+            "layer": "portal",
+            "title": "Điều kiện hiện banner setup_incomplete",
+            "applicability": {
+              "role": "merchant",
+              "state": "ma trận: có `company_id` + `company_creation_error`; chỉ `company_creation_error`; chỉ `company_id`",
+              "environment": "documented",
+              "theme_or_device": null
+            },
+            "precondition": "Store test `<store-flag-on>` có key `enable_company_creation_on_submit` ở root users.config của shop đặt `true` (cấu hình qua JSON editor của admin panel nội bộ, không có UI trong Portal) và có registration form đang hoạt động trên storefront. Đã mở Portal (embedded app trong Shopify admin) bằng tài khoản merchant của store test. Có cách xem dữ liệu của submission (`status`, `data.company_id`, `company_creation_error`) — qua JSON viewer của admin panel nội bộ hoặc truy vấn DB, tuỳ quyền QA được cấp. Có ba submission ứng với ba tổ hợp trạng thái trên.",
+            "steps": [
+              "Mở trang chi tiết từng submission trước khi Approve; quan sát banner.",
+              "Với submission có cả `company_id` và `company_creation_error`: đóng banner; Approve; quan sát lại banner sau Approve.",
+              "Đọc nội dung banner, đối chiếu với giá trị `company_creation_error` đã lưu."
+            ],
+            "observation_point": "Có/không banner vàng setup_incomplete theo tổ hợp, trước và sau Approve; nội dung banner; nút đóng.",
+            "expected_result": "Banner vàng setup_incomplete (\"Company created, but setup could not be completed…\") chỉ hiện khi submission có cả `company_id` lẫn `company_creation_error`; hiện cả trước và sau Approve; đóng được; không hiển thị error thô.",
+            "oracle": {
+              "kb_ids": [
+                "KB-020"
+              ],
+              "oracle_strength": "STRONG"
+            },
+            "status": "READY",
+            "open_question_draft": null,
+            "related_kb_ids": [],
+            "regression_watch_kb_ids": [],
+            "risk_refs": [
+              "RISK-approve-03"
+            ],
+            "priority": "P2",
+            "act_ids": [],
+            "evidence_refs": [],
+            "automation_suitability": "SUITABLE"
+          },
+          {
+            "check_id": "CHK-007",
+            "dimension": "INTEGRATION",
+            "layer": "api",
+            "title": "Approve submission setup_incomplete không tự hoàn tất phần thiếu",
+            "applicability": {
+              "role": "merchant",
+              "state": "submission có `company_id` + `company_creation_error`, phần thiếu không phải contact (vd role hoặc catalog)",
+              "environment": "documented",
+              "theme_or_device": null
+            },
+            "precondition": "Store test `<store-flag-on>` có key `enable_company_creation_on_submit` ở root users.config của shop đặt `true` (cấu hình qua JSON editor của admin panel nội bộ, không có UI trong Portal) và có registration form đang hoạt động trên storefront. Đã mở Portal (embedded app trong Shopify admin) bằng tài khoản merchant của store test. Có quyền xem Customers / Companies trong Shopify admin của store test. Có submission setup_incomplete; ghi lại contact / role / catalog hiện có của company trên Shopify.",
+            "steps": [
+              "Trong Portal, Approve submission đó.",
+              "Trên Shopify admin, so sánh contact / role / catalog của company trước và sau Approve; xem run history Flow."
+            ],
+            "observation_point": "Contact / role / catalog của company trước-sau Approve; run của trigger.",
+            "expected_result": "Hệ thống không tự hoàn tất phần thiếu (merchant tự gán contact / role / catalog trên Shopify); Approve ở nhánh này chỉ bắn Flow trigger.",
+            "oracle": {
+              "kb_ids": [
+                "KB-021"
+              ],
+              "oracle_strength": "STRONG"
+            },
+            "status": "READY",
+            "open_question_draft": null,
+            "related_kb_ids": [
+              "KB-034"
+            ],
+            "regression_watch_kb_ids": [],
+            "risk_refs": [
+              "RISK-approve-03"
+            ],
+            "priority": "P2",
+            "act_ids": [],
+            "evidence_refs": [],
+            "automation_suitability": "HYBRID"
+          },
+          {
+            "check_id": "CHK-008",
+            "dimension": "NEGATIVE",
+            "layer": "portal",
+            "title": "Approve submission setup_incomplete chưa gán contact",
+            "applicability": {
+              "role": "merchant",
+              "state": "submission có `company_id` + `company_creation_error`, company chưa có contact",
+              "environment": "documented",
+              "theme_or_device": null
+            },
+            "precondition": "Store test `<store-flag-on>` có key `enable_company_creation_on_submit` ở root users.config của shop đặt `true` (cấu hình qua JSON editor của admin panel nội bộ, không có UI trong Portal) và có registration form đang hoạt động trên storefront. Đã mở Portal (embedded app trong Shopify admin) bằng tài khoản merchant của store test. Có quyền xem Customers / Companies trong Shopify admin của store test. Có submission setup_incomplete mà company chưa có contact.",
+            "steps": [
+              "Bấm \"Approve company\".",
+              "Quan sát toast; tải lại trang; xem status và run history Flow."
+            ],
+            "observation_point": "Toast, status sau khi tải lại, có run trigger hay không.",
+            "expected_result": "Chưa có căn cứ: ghi lại toast (có phải thông báo không tìm thấy customer không), status và việc trigger có bắn; không đánh giá pass/fail cho tới khi PO/Dev trả lời.",
+            "oracle": {
+              "kb_ids": [
+                "KB-034"
+              ],
+              "oracle_strength": "NONE"
+            },
+            "status": "NEEDS_CONFIRMATION",
+            "open_question_draft": "Submission đang setup_incomplete mà company chưa được gán contact thì khi merchant Approve có báo không tìm thấy customer (`customer_not_found`, không bắn trigger, giữ status) hay không (task Testlane GAP-28)?",
+            "related_kb_ids": [
+              "KB-020",
+              "KB-025"
+            ],
+            "regression_watch_kb_ids": [],
+            "risk_refs": [
+              "RISK-approve-03"
+            ],
+            "priority": "P2",
+            "act_ids": [],
+            "evidence_refs": [],
+            "automation_suitability": "HYBRID"
+          },
+          {
+            "check_id": "CHK-009",
+            "dimension": "INTEGRATION",
+            "layer": "api",
+            "title": "Flow trigger company approved chỉ bắn lúc Approve",
+            "applicability": {
+              "role": "merchant",
+              "state": "store bật cờ và store tắt cờ; có workflow dùng trigger `duos-approve-company`",
+              "environment": "documented",
+              "theme_or_device": null
+            },
+            "precondition": "Trên `<store-flag-on>` và `<store-flag-off>` có workflow Shopify Flow đang bật dùng trigger \"company approved\" (`duos-approve-company`). Đã mở Portal (embedded app trong Shopify admin) bằng tài khoản merchant của store test.",
+            "steps": [
+              "Buyer submit registration form; chờ job (nếu cờ ON) chạy xong.",
+              "Xem run history của workflow.",
+              "Approve submission trong Portal; xem lại run history."
+            ],
+            "observation_point": "Run history của workflow sau submit và sau Approve.",
+            "expected_result": "Trigger `duos-approve-company` không bắn lúc buyer submit (kể cả store bật cờ); chỉ bắn lúc merchant Approve submission.",
+            "oracle": {
+              "kb_ids": [
+                "KB-022"
+              ],
+              "oracle_strength": "STRONG"
+            },
+            "status": "READY",
+            "open_question_draft": null,
+            "related_kb_ids": [],
+            "regression_watch_kb_ids": [],
+            "risk_refs": [
+              "RISK-approve-04"
+            ],
+            "priority": "P2",
+            "act_ids": [],
+            "evidence_refs": [],
+            "automation_suitability": "HYBRID"
+          },
+          {
+            "check_id": "CHK-010",
+            "dimension": "INTEGRATION",
+            "layer": "api",
+            "title": "Payload trigger company approved giống nhau ở hai nhánh",
+            "applicability": {
+              "role": "merchant",
+              "state": "Approve một submission có `company_id` và một submission không có `company_id`",
+              "environment": "documented",
+              "theme_or_device": null
+            },
+            "precondition": "Có workflow Shopify Flow dùng trigger `duos-approve-company` ghi lại payload (vd action log / gửi tới endpoint test). Đã mở Portal (embedded app trong Shopify admin) bằng tài khoản merchant của store test.",
+            "steps": [
+              "Approve một submission có `company_id` (store bật cờ); lưu payload.",
+              "Approve một submission không có `company_id` (luồng cũ); lưu payload.",
+              "So sánh cấu trúc hai payload."
+            ],
+            "observation_point": "Cấu trúc payload của hai lần trigger.",
+            "expected_result": "Payload ở cả hai nhánh có cùng cấu trúc: Submission {id, data, formattedData, submittedEmail, createdAt} cộng `customer_id` của Main Contact.",
+            "oracle": {
+              "kb_ids": [
+                "KB-023"
+              ],
+              "oracle_strength": "STRONG"
+            },
+            "status": "READY",
+            "open_question_draft": null,
+            "related_kb_ids": [],
+            "regression_watch_kb_ids": [],
+            "risk_refs": [
+              "RISK-approve-04"
+            ],
+            "priority": "P2",
+            "act_ids": [],
+            "evidence_refs": [],
+            "automation_suitability": "HYBRID"
+          },
+          {
+            "check_id": "CHK-011",
+            "dimension": "INTEGRATION",
+            "layer": "api",
+            "title": "Run Flow và email \"B2B account created\" sau khi Approve",
+            "applicability": {
+              "role": "merchant",
+              "state": "workflow dùng trigger company approved có bước gửi email cho buyer",
+              "environment": "documented",
+              "theme_or_device": null
+            },
+            "precondition": "Store test có workflow Shopify Flow dùng trigger `duos-approve-company` kèm bước gửi email; buyer dùng hộp thư test `<email-buyer>`. Đã mở Portal (embedded app trong Shopify admin) bằng tài khoản merchant của store test.",
+            "steps": [
+              "Approve một submission của `<email-buyer>`.",
+              "Xem run history của workflow.",
+              "Kiểm tra hộp thư `<email-buyer>`."
+            ],
+            "observation_point": "Run history Flow và email nhận được ở hộp thư buyer.",
+            "expected_result": "Theo hiện trạng staging (quan sát qua TC-DUOS-151 và TC-DUOS-194, ngày và build không ghi), lệch = cần điều tra: sau khi Approve có 1 run Shopify Flow, và email \"B2B account created\" được gửi cho buyer thông qua Shopify Flow. Nội dung/template email và điều kiện gửi khi workflow tắt chưa có trong tài liệu.",
+            "oracle": {
+              "kb_ids": [
+                "KB-024",
+                "KB-032"
+              ],
+              "oracle_strength": "BASELINE"
+            },
+            "status": "READY",
+            "open_question_draft": null,
+            "related_kb_ids": [],
+            "regression_watch_kb_ids": [],
+            "risk_refs": [
+              "RISK-approve-04"
+            ],
+            "priority": "P3",
+            "act_ids": [],
+            "evidence_refs": [],
+            "automation_suitability": "HYBRID"
+          },
+          {
+            "check_id": "CHK-012",
+            "dimension": "NEGATIVE",
+            "layer": "portal",
+            "title": "Nhánh `company_id`: không tìm thấy customer khi Approve",
+            "applicability": {
+              "role": "merchant",
+              "state": "submission pending có `company_id`, email của customer đã bị đổi trên Shopify admin",
+              "environment": "documented",
+              "theme_or_device": null
+            },
+            "precondition": "Store test `<store-flag-on>` có key `enable_company_creation_on_submit` ở root users.config của shop đặt `true` (cấu hình qua JSON editor của admin panel nội bộ, không có UI trong Portal) và có registration form đang hoạt động trên storefront. Đã mở Portal (embedded app trong Shopify admin) bằng tài khoản merchant của store test. Có quyền xem Customers / Companies trong Shopify admin của store test. Có submission pending có `company_id`; trên Shopify admin đổi email của customer ứng với submission sang giá trị khác.",
+            "steps": [
+              "Bấm \"Approve company\"; ghi lại toast.",
+              "Tải lại trang; xem status.",
+              "Xem run history của trigger `duos-approve-company`."
+            ],
+            "observation_point": "Toast, status sau khi tải lại, có run trigger hay không.",
+            "expected_result": "Portal hiện toast \"Could not find the customer for this submission in Shopify. The company approved trigger was not fired.\", không bắn trigger và giữ nguyên status submission.",
+            "oracle": {
+              "kb_ids": [
+                "KB-025"
+              ],
+              "oracle_strength": "STRONG"
+            },
+            "status": "READY",
+            "open_question_draft": null,
+            "related_kb_ids": [
+              "KB-031"
+            ],
+            "regression_watch_kb_ids": [],
+            "risk_refs": [
+              "RISK-approve-05"
+            ],
+            "priority": "P2",
+            "act_ids": [],
+            "evidence_refs": [],
+            "automation_suitability": "HYBRID"
+          },
+          {
+            "check_id": "CHK-013",
+            "dimension": "STATE_DATA",
+            "layer": "portal",
+            "title": "Đường gỡ submission kẹt sau khi customer đổi email",
+            "applicability": {
+              "role": "merchant",
+              "state": "submission pending có `company_id`, Approve báo không tìm thấy customer",
+              "environment": "documented",
+              "theme_or_device": null
+            },
+            "precondition": "Đã chạy CHK-012 và submission đang kẹt Pending. Đã mở Portal (embedded app trong Shopify admin) bằng tài khoản merchant của store test.",
+            "steps": [
+              "Tìm trong trang chi tiết submission mọi thao tác cho phép cập nhật customer / email hoặc Approve lại.",
+              "Đổi email customer trên Shopify về giá trị gốc rồi Approve lại; ghi kết quả."
+            ],
+            "observation_point": "Các thao tác có sẵn trong app để gỡ submission kẹt; kết quả Approve lại.",
+            "expected_result": "Chưa có căn cứ: ghi lại app có/không có thao tác gỡ và kết quả Approve lại sau khi khôi phục email; không đánh giá pass/fail cho tới khi PO/Dev trả lời.",
+            "oracle": {
+              "kb_ids": [],
+              "oracle_strength": "NONE"
+            },
+            "status": "NEEDS_CONFIRMATION",
+            "open_question_draft": "Khi merchant đổi email của customer trên Shopify admin, submission ở nhánh có `company_id` bị kẹt Pending vì Approve không tìm lại được customer và app không có đường gỡ (quan sát TC-DUOS-160, 30/09/2026). PO chấp nhận giới hạn này hay cần đường gỡ trong app (task Testlane GAP-29)?",
+            "related_kb_ids": [
+              "KB-031",
+              "KB-025"
+            ],
+            "regression_watch_kb_ids": [],
+            "risk_refs": [
+              "RISK-approve-05"
+            ],
+            "priority": "P2",
+            "act_ids": [],
+            "evidence_refs": [],
+            "automation_suitability": "NOT_SUITABLE"
+          },
+          {
+            "check_id": "CHK-014",
+            "dimension": "NEGATIVE",
+            "layer": "portal",
+            "title": "Nhánh `company_id`: trigger lỗi chuyển submission failed, Approve lại chỉ bắn lại trigger",
+            "applicability": {
+              "role": "merchant",
+              "state": "submission có `company_id`, trigger `duos-approve-company` bắn lỗi",
+              "environment": "documented",
+              "theme_or_device": null
+            },
+            "precondition": "Store test `<store-flag-on>` có key `enable_company_creation_on_submit` ở root users.config của shop đặt `true` (cấu hình qua JSON editor của admin panel nội bộ, không có UI trong Portal) và có registration form đang hoạt động trên storefront. Đã mở Portal (embedded app trong Shopify admin) bằng tài khoản merchant của store test. Có cách xem dữ liệu của submission (`status`, `data.company_id`, `company_creation_error`) — qua JSON viewer của admin panel nội bộ hoặc truy vấn DB, tuỳ quyền QA được cấp. Có quyền xem Customers / Companies trong Shopify admin của store test. Có cách làm trigger bắn lỗi theo hướng dẫn của Dev (tài liệu chưa mô tả cách giả lập).",
+            "steps": [
+              "Approve submission khi trigger đang lỗi; tải lại; xem status và `company_creation_error`.",
+              "Khôi phục trigger; Approve lại submission đó.",
+              "Đếm Company trên Shopify trước-sau lần Approve lại; xem run history."
+            ],
+            "observation_point": "Status, dữ liệu lỗi của submission, số Company và run trigger.",
+            "expected_result": "Trigger lỗi làm submission chuyển `failed` kèm `trigger_failed`; Approve lại chỉ bắn lại trigger (không tạo company mới).",
+            "oracle": {
+              "kb_ids": [
+                "KB-026"
+              ],
+              "oracle_strength": "STRONG"
+            },
+            "status": "READY",
+            "open_question_draft": null,
+            "related_kb_ids": [],
+            "regression_watch_kb_ids": [],
+            "risk_refs": [
+              "RISK-approve-04"
+            ],
+            "priority": "P2",
+            "act_ids": [],
+            "evidence_refs": [],
+            "automation_suitability": "NOT_SUITABLE"
+          },
+          {
+            "check_id": "CHK-015",
+            "dimension": "NEGATIVE",
+            "layer": "portal",
+            "title": "Luồng cũ không kiểm tra kết quả trigger",
+            "applicability": {
+              "role": "merchant",
+              "state": "submission không có `company_id`, trigger `duos-approve-company` bắn lỗi",
+              "environment": "documented",
+              "theme_or_device": null
+            },
+            "precondition": "Store test `<store-flag-off>` không có key `enable_company_creation_on_submit` trong users.config (hoặc giá trị khác `true` / \"true\") và có registration form đang hoạt động trên storefront. Đã mở Portal (embedded app trong Shopify admin) bằng tài khoản merchant của store test. Có cách làm trigger bắn lỗi theo hướng dẫn của Dev.",
+            "steps": [
+              "Approve submission khi trigger đang lỗi.",
+              "Tải lại; xem status; xem run history Flow."
+            ],
+            "observation_point": "Status submission và run Flow.",
+            "expected_result": "Luồng cũ không kiểm tra kết quả trigger và luôn set `completed`: Portal báo Approved dù Flow của merchant không chạy (giới hạn có chủ đích).",
+            "oracle": {
+              "kb_ids": [
+                "KB-027"
+              ],
+              "oracle_strength": "STRONG"
+            },
+            "status": "READY",
+            "open_question_draft": null,
+            "related_kb_ids": [],
+            "regression_watch_kb_ids": [],
+            "risk_refs": [
+              "RISK-approve-04"
+            ],
+            "priority": "P3",
+            "act_ids": [],
+            "evidence_refs": [],
+            "automation_suitability": "NOT_SUITABLE"
+          },
+          {
+            "check_id": "CHK-016",
+            "dimension": "CORE",
+            "layer": "portal",
+            "title": "Phản hồi trên Portal sau khi Approve thành công",
+            "applicability": {
+              "role": "merchant",
+              "state": "Approve thành công một submission",
+              "environment": "documented",
+              "theme_or_device": null
+            },
+            "precondition": "Đã mở Portal (embedded app trong Shopify admin) bằng tài khoản merchant của store test. Có submission pending Approve được.",
+            "steps": [
+              "Bấm \"Approve company\"; ghi lại toast.",
+              "Quan sát banner trên trang chi tiết; bấm link trong banner."
+            ],
+            "observation_point": "Toast, banner và đích của link trong banner.",
+            "expected_result": "Theo hiện trạng staging (quan sát qua TC-DUOS-151, ngày, build và nhánh Approve không ghi), lệch = cần điều tra: sau Approve có toast báo submission đã được approve (nhãn nguyên văn \"Company submisison approved\" — chính tả sai là lỗi đang mở, không phải mong đợi) và banner \"B2B company created\" trỏ tới company vừa tạo.",
+            "oracle": {
+              "kb_ids": [
+                "KB-033"
+              ],
+              "oracle_strength": "BASELINE"
+            },
+            "status": "READY",
+            "open_question_draft": null,
+            "related_kb_ids": [],
+            "regression_watch_kb_ids": [
+              "KB-016"
+            ],
+            "risk_refs": [
+              "RISK-approve-01"
+            ],
+            "priority": "P3",
+            "act_ids": [],
+            "evidence_refs": [],
+            "automation_suitability": "SUITABLE"
+          },
+          {
+            "check_id": "CHK-017",
+            "dimension": "NEGATIVE",
+            "layer": "api",
+            "title": "Luồng cũ: bước gán contact lỗi",
+            "applicability": {
+              "role": "merchant",
+              "state": "submission không có `company_id`; bước gán contact lỗi khi Approve",
+              "environment": "documented",
+              "theme_or_device": null
+            },
+            "precondition": "Store test `<store-flag-off>` không có key `enable_company_creation_on_submit` trong users.config (hoặc giá trị khác `true` / \"true\") và có registration form đang hoạt động trên storefront. Đã mở Portal (embedded app trong Shopify admin) bằng tài khoản merchant của store test. Có quyền xem Customers / Companies trong Shopify admin của store test. Có tình huống làm bước gán contact lỗi (theo hướng dẫn Dev).",
+            "steps": [
+              "Approve submission.",
+              "Kiểm tra company trên Shopify (có contact không), status submission, banner trên Portal."
+            ],
+            "observation_point": "Company trên Shopify, status submission, banner.",
+            "expected_result": "Chưa có căn cứ: ghi lại company có contact không, status submission và có banner/thông báo nào; không đánh giá pass/fail cho tới khi PO/Dev trả lời.",
+            "oracle": {
+              "kb_ids": [
+                "KB-030"
+              ],
+              "oracle_strength": "NONE"
+            },
+            "status": "NEEDS_CONFIRMATION",
+            "open_question_draft": "Ở luồng Approve cũ, khi bước gán contact lỗi thì company được tạo nhưng không có contact, submission vẫn `completed` và không có banner báo. Đây là lỗi cần sửa hay hành vi được chấp nhận (task Testlane GAP-23)? Nếu là lỗi, kết quả mong đợi là gì?",
+            "related_kb_ids": [
+              "KB-019"
+            ],
+            "regression_watch_kb_ids": [
+              "KB-043"
+            ],
+            "risk_refs": [
+              "RISK-approve-06"
+            ],
+            "priority": "P1",
+            "act_ids": [],
+            "evidence_refs": [],
+            "automation_suitability": "NOT_SUITABLE"
+          }
+        ]
+      }
+    ],
+    "coverage_by_feature_and_risk": [
+      {
+        "feature_id": "approve-company-creation",
+        "risk_ref": "RISK-approve-01",
+        "risk_description": "Approve chọn sai nhánh theo `company_id` → tạo company thứ hai hoặc không tạo company",
+        "covered_by_checks": [
+          "CHK-001",
+          "CHK-002",
+          "CHK-016"
+        ],
+        "kb_ids": [
+          "KB-002",
+          "KB-016",
+          "KB-018",
+          "KB-033",
+          "KB-043"
+        ],
+        "coverage_status": "COVERED"
+      },
+      {
+        "feature_id": "approve-company-creation",
+        "risk_ref": "RISK-approve-02",
+        "risk_description": "Submission failed / rate_limited không có `company_id` không tạo được company khi Approve",
+        "covered_by_checks": [
+          "CHK-004",
+          "CHK-005"
+        ],
+        "kb_ids": [
+          "KB-005",
+          "KB-017",
+          "KB-018",
+          "KB-028",
+          "KB-029"
+        ],
+        "coverage_status": "COVERED"
+      },
+      {
+        "feature_id": "approve-company-creation",
+        "risk_ref": "RISK-approve-03",
+        "risk_description": "Setup chưa hoàn tất: banner sai điều kiện, Approve tự sửa phần thiếu hoặc báo sai",
+        "covered_by_checks": [
+          "CHK-006",
+          "CHK-007",
+          "CHK-008"
+        ],
+        "kb_ids": [
+          "KB-020",
+          "KB-021",
+          "KB-025",
+          "KB-034"
+        ],
+        "coverage_status": "PARTIAL"
+      },
+      {
+        "feature_id": "approve-company-creation",
+        "risk_ref": "RISK-approve-04",
+        "risk_description": "Flow trigger company approved bắn sai thời điểm / sai payload / lỗi không được báo",
+        "covered_by_checks": [
+          "CHK-001",
+          "CHK-009",
+          "CHK-010",
+          "CHK-011",
+          "CHK-014",
+          "CHK-015"
+        ],
+        "kb_ids": [
+          "KB-002",
+          "KB-018",
+          "KB-022",
+          "KB-023",
+          "KB-024",
+          "KB-026",
+          "KB-027",
+          "KB-032"
+        ],
+        "coverage_status": "COVERED"
+      },
+      {
+        "feature_id": "approve-company-creation",
+        "risk_ref": "RISK-approve-05",
+        "risk_description": "Không tìm thấy customer ở nhánh `company_id` làm submission kẹt Pending",
+        "covered_by_checks": [
+          "CHK-012",
+          "CHK-013"
+        ],
+        "kb_ids": [
+          "KB-025",
+          "KB-031"
+        ],
+        "coverage_status": "PARTIAL"
+      },
+      {
+        "feature_id": "approve-company-creation",
+        "risk_ref": "RISK-approve-06",
+        "risk_description": "Luồng Approve cũ: thực thể được tạo và xử lý lỗi gán contact chưa chốt",
+        "covered_by_checks": [
+          "CHK-003",
+          "CHK-017"
+        ],
+        "kb_ids": [
+          "KB-018",
+          "KB-019",
+          "KB-030",
+          "KB-043"
+        ],
+        "coverage_status": "FLAGGED_NEEDS_CONFIRMATION"
+      }
+    ],
+    "kb_items_without_dedicated_check": [
+      {
+        "kb_id": "KB-029",
+        "reason": "Nghi lỗi đang mở; theo dõi qua regression_watch_kb_ids của CHK-004 (check STRONG theo rule chọn nhánh)."
+      },
+      {
+        "kb_id": "KB-031",
+        "reason": "Hiện trạng kẹt đang chờ PO quyết; truy vết ở CHK-012 (STRONG theo rule không tìm thấy customer) và CHK-013 (NEEDS_CONFIRMATION)."
+      }
+    ],
+    "checks_needing_confirmation": [
+      {
+        "check_id": "CHK-003",
+        "open_question_draft": "Luồng Approve cũ (submission không có `company_id`) tạo ra chính xác những gì trên Shopify: Company + Location + customer làm Main contact với Shopify role Location admin + role Admin của app như Jira DUOS-425 mô tả? Chưa có rule đang hiệu lực nào mô tả riêng các bước tạo của luồng này.",
+        "reason": "Chỉ có ticket và câu tổng quan của QA, không có quy tắc PO/Dev có ngày cho các bước tạo của luồng cũ."
+      },
+      {
+        "check_id": "CHK-008",
+        "open_question_draft": "Submission đang setup_incomplete mà company chưa được gán contact thì khi merchant Approve có báo không tìm thấy customer (`customer_not_found`, không bắn trigger, giữ status) hay không (task Testlane GAP-28)?",
+        "reason": "Chỉ là câu hỏi Need confirm trong QA KB, chưa có quyết định PO/Dev."
+      },
+      {
+        "check_id": "CHK-013",
+        "open_question_draft": "Khi merchant đổi email của customer trên Shopify admin, submission ở nhánh có `company_id` bị kẹt Pending vì Approve không tìm lại được customer và app không có đường gỡ (quan sát TC-DUOS-160, 30/09/2026). PO chấp nhận giới hạn này hay cần đường gỡ trong app (task Testlane GAP-29)?",
+        "reason": "Chỉ có quan sát hiện trạng đang chờ PO quyết; không dùng hiện trạng kẹt làm baseline cho đường gỡ."
+      },
+      {
+        "check_id": "CHK-017",
+        "open_question_draft": "Ở luồng Approve cũ, khi bước gán contact lỗi thì company được tạo nhưng không có contact, submission vẫn `completed` và không có banner báo. Đây là lỗi cần sửa hay hành vi được chấp nhận (task Testlane GAP-23)? Nếu là lỗi, kết quả mong đợi là gì?",
+        "reason": "Chỉ là phân tích Need confirm của QA, chưa có quyết định PO/Dev."
+      }
+    ],
+    "duplicates_removed": [
+      {
+        "removed": "Check race Approve trong lúc job chưa ghi `company_id`",
+        "kept_as": "auto-company-creation-on-submit CHK-009",
+        "reason": "Cùng hành vi; đặt ở feature sở hữu item."
+      },
+      {
+        "removed": "Check customer thuộc company khác ở luồng Approve cũ",
+        "kept_as": "customer-matching CHK-006",
+        "reason": "Rule `customer_in_other_company` thuộc feature customer-matching."
+      }
+    ],
+    "excluded_dimensions": [
+      {
+        "dimension": "PERMISSION",
+        "reason": "Ma trận quyền cho thao tác Approve chưa có trong tài liệu; được phủ một lần ở check quyền của feature submission-review-and-decision (CHK-010) để không nhân bản câu hỏi role."
+      },
+      {
+        "dimension": "BOUNDARY",
+        "reason": "Giới hạn số lượng (rate limit tạo company) thuộc feature auto-company-creation-on-submit; Approve không có giới hạn kích thước/số lượng được tài liệu nêu."
+      },
+      {
+        "dimension": "REGRESSION",
+        "reason": "Bản bootstrap đầu tiên; chưa có thay đổi hành vi từ phân tích diff. Lỗi đang mở được theo dõi qua regression_watch_kb_ids."
+      }
+    ]
+  },
+  "gate": {
+    "decision": "PASS",
+    "blocking_findings": [],
+    "conditions": [
+      "4 check NEEDS_CONFIRMATION mang open_question_draft; không check nào có expected khẳng định trên oracle NONE; KNOWN_DEFECT chỉ ở regression_watch_kb_ids."
+    ],
+    "allowed_next_steps": [
+      "knowledge-diff-analyzer",
+      "context-quality-reviewer"
+    ]
+  },
+  "last_updated": {
+    "date": "2026-10-09",
+    "ccr_ref": "bootstrap"
+  }
+}

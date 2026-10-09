@@ -1,0 +1,1916 @@
+{
+  "schema_version": "1.0",
+  "artifact_type": "RegressionChecklistCandidate",
+  "artifact_id": "RCCAND-campaign-wizard-CTX-20261008-02",
+  "workflow_id": "CTX-20261008-02",
+  "producer": "qa-checklist-builder",
+  "source_refs": [
+    "candidate/feature-profiles/campaign-wizard.json",
+    "candidate/product-kb/campaign-wizard.json",
+    "candidate/product-kb/campaign-list-and-folders.json",
+    "candidate/product-kb/campaign-preview-and-test.json",
+    "candidate/product-kb/campaign-send-and-schedule.json",
+    "candidate/product-kb/campaign-report.json",
+    "candidate/product-kb/_product-level.json",
+    "input/orchestrator-directives.json",
+    "input/scope-plan.json",
+    "input/profile-checklist-brief.md",
+    "intermediate/doc/DOC-27.json"
+  ],
+  "upstream_artifact_ids": [
+    "ART-FEATURE-PROFILE-campaign-wizard-CTX-20261008-02",
+    "PKBC-CTX-20261008-02-campaigns-campaign-wizard",
+    "PKBC-CTX-20261008-02-campaigns-campaign-list-and-folders",
+    "PKBC-CTX-20261008-02-campaigns-campaign-preview-and-test",
+    "PKBC-CTX-20261008-02-campaigns-campaign-send-and-schedule",
+    "PKBC-CTX-20261008-02-campaigns-campaign-report",
+    "PKBC-CTX-20261008-02-_product-level",
+    "SCOPE-PLAN-CTX-20261008-02"
+  ],
+  "status": "PARTIAL",
+  "confidence": "MEDIUM",
+  "observations": [
+    "43 check; theo oracle_strength {'STRONG': 18, 'NONE': 10, 'BASELINE': 15}; theo status {'READY': 33, 'NEEDS_CONFIRMATION': 10}; theo dimension {'CORE': 21, 'STATE_DATA': 8, 'NEGATIVE': 5, 'BOUNDARY': 4, 'INTEGRATION': 4, 'PERMISSION': 1}; theo priority {'P2': 18, 'P1': 9, 'P3': 16}.",
+    "oracle_strength tính bằng script theo luật orchestrator: STRONG khi mọi kb_id là CONFIRMED_EXPECTED ngoài conflict_group; có OBSERVED_CURRENT (không KNOWN_DEFECT) thì BASELINE; có INFERRED / thuộc conflict_group / không có kb_id thì NONE + NEEDS_CONFIRMATION. Item KNOWN_DEFECT chỉ nằm ở regression_watch_kb_ids, không bao giờ ở oracle.kb_ids (script assert).",
+    "Shard KB không có object-level cho campaigns (không tồn tại _object-level.campaigns); oracle chỉ trích kb_id của 5 shard feature thuộc object campaigns (cùng một dải kb_id của object) và kb_id product-level.",
+    "Regression checklist của QA chỉ được dùng làm gợi ý rủi ro / độ phủ, không làm oracle.",
+    "Rework r1: dựng lại từ shard đã sửa — bỏ mọi tham chiếu tới item đã gỡ do trùng rule giữa object (check phụ thuộc chuyển vào duplicates_removed 'covered in <object>/<feature>'); với item CE đã rút statement về đúng nội dung authority, check STRONG chỉ khẳng định phần authority, chi tiết staging tách ra check BASELINE theo item OBSERVED mới; item KNOWN_DEFECT mới chỉ nằm ở regression_watch_kb_ids."
+  ],
+  "assumptions": [
+    "applicability.environment = 'documented' (DOC_BOOTSTRAP, không có quan sát runtime trong run này); act_ids và evidence_refs rỗng.",
+    "Check BASELINE mô tả hiện trạng staging theo ngày khảo sát ghi trong KB; lệch = cần điều tra, không mặc định là bug.",
+    "Dữ liệu người nhận khi chạy check gửi mail chỉ dùng địa chỉ do QA kiểm soát hoặc AWS SES mailbox simulator; mail tới simulator vẫn bị tính vào hạn mức gửi của workspace.",
+    "Check `Người nhận chỉ gồm contact Subscribed` cần gửi mail thật trên dữ liệu test; việc loại contact suppressed / unsubscribed ở query nền thuộc object segments / deliverability, không kiểm lặp ở đây.",
+    "Check nhãn Templates (quyết định PO 30/09/2026) để STRONG theo luật; trên build chưa deploy thay đổi, kết quả lệch là trạng thái chưa deploy chứ không phải lỗi mới."
+  ],
+  "unknowns": [
+    "Cú pháp merge tag đúng là hai ngoặc hay một ngoặc?",
+    "Wizard phải báo lỗi Save (422) thế nào; quy tắc validate From email / Reply-to?",
+    "Rời wizard khi còn thay đổi chưa lưu có phải cảnh báo không?",
+    "Người đã tắt một lựa chọn trên preferences page có bị loại tự động khỏi campaign không?",
+    "Giới hạn 50 email của picker có chủ ý không?",
+    "Thay đổi nhãn Templates đã deploy lên staging từ build nào?",
+    "PO xác nhận estimated recipients phải bằng cột Contacts của segment?"
+  ],
+  "conflicts": [],
+  "blocking_issues": [],
+  "payload": {
+    "checklists": [
+      {
+        "feature_id": "campaign-wizard",
+        "feature_key": "campaign-wizard",
+        "checklist_version": "v1",
+        "name": "Soạn campaign qua wizard 4 bước (Details → Sender → Recipients → Contents)",
+        "checks": [
+          {
+            "check_id": "CHK-001",
+            "dimension": "CORE",
+            "layer": "portal",
+            "title": "New campaign không tạo campaign cho tới khi Save; sau Save URL mang id",
+            "applicability": {
+              "role": "unspecified",
+              "state": "danh sách campaign",
+              "environment": "documented",
+              "theme_or_device": null
+            },
+            "precondition": "Đã đăng nhập app workspace bằng tài khoản Owner của một workspace test (Owner là role duy nhất đã được khảo sát; ma trận quyền Campaigns chưa chốt).",
+            "steps": [
+              "Mở DevTools tab Network.",
+              "Bấm `New campaign`, nhập Campaign name và Subject line, chưa bấm Save.",
+              "Bấm `Save`."
+            ],
+            "observation_point": "URL trước và sau Save; request tạo campaign trong Network.",
+            "expected_result": "Trước Save URL là `/campaigns/new/details`, builder rỗng ở bước 1 và chưa có request tạo campaign; sau Save có request tạo campaign và URL đổi thành `/campaigns/:id/details`.",
+            "oracle": {
+              "kb_ids": [
+                "KB-040",
+                "KB-041"
+              ],
+              "oracle_strength": "STRONG"
+            },
+            "status": "READY",
+            "open_question_draft": null,
+            "regression_watch_kb_ids": [],
+            "risk_refs": [
+              "RISK-campaign-wizard-01"
+            ],
+            "priority": "P2",
+            "act_ids": [],
+            "evidence_refs": [],
+            "automation_suitability": "SUITABLE"
+          },
+          {
+            "check_id": "CHK-002",
+            "dimension": "STATE_DATA",
+            "layer": "portal",
+            "title": "Không auto-save: thay đổi chỉ được lưu khi bấm Save",
+            "applicability": {
+              "role": "unspecified",
+              "state": "campaign Draft đã lưu",
+              "environment": "documented",
+              "theme_or_device": null
+            },
+            "precondition": "Đã đăng nhập app workspace bằng tài khoản Owner của một workspace test (Owner là role duy nhất đã được khảo sát; ma trận quyền Campaigns chưa chốt).",
+            "steps": [
+              "Mở campaign Draft, sửa `Preview text`, KHÔNG bấm Save, tải lại trang.",
+              "Sửa lại `Preview text`, bấm `Save`, tải lại trang."
+            ],
+            "observation_point": "Giá trị `Preview text` sau mỗi lần tải lại.",
+            "expected_result": "Thay đổi chưa Save không được lưu (mất sau khi tải lại); thay đổi đã Save còn nguyên sau khi tải lại.",
+            "oracle": {
+              "kb_ids": [
+                "KB-044"
+              ],
+              "oracle_strength": "STRONG"
+            },
+            "status": "READY",
+            "open_question_draft": null,
+            "regression_watch_kb_ids": [],
+            "risk_refs": [
+              "RISK-campaign-wizard-01"
+            ],
+            "priority": "P1",
+            "act_ids": [],
+            "evidence_refs": [],
+            "automation_suitability": "SUITABLE"
+          },
+          {
+            "check_id": "CHK-003",
+            "dimension": "NEGATIVE",
+            "layer": "portal",
+            "title": "Rời wizard khi còn thay đổi chưa lưu",
+            "applicability": {
+              "role": "unspecified",
+              "state": "campaign Draft có thay đổi chưa Save",
+              "environment": "documented",
+              "theme_or_device": null
+            },
+            "precondition": "Đã đăng nhập app workspace bằng tài khoản Owner của một workspace test (Owner là role duy nhất đã được khảo sát; ma trận quyền Campaigns chưa chốt).",
+            "steps": [
+              "Sửa một field ở bước 1, không Save.",
+              "Bấm link `Manage sending domains` ở bước Sender hoặc bấm một mục khác trên sidebar.",
+              "Lặp lại bằng cách đóng / tải lại tab trình duyệt."
+            ],
+            "observation_point": "Có hộp cảnh báo trước khi rời hay không; dữ liệu khi quay lại.",
+            "expected_result": "Chưa có oracle để kết luận pass/fail. Ghi lại có cảnh báo hay không và dữ liệu còn hay mất, đối chiếu khi PO trả lời câu hỏi kèm theo.",
+            "oracle": {
+              "kb_ids": [],
+              "oracle_strength": "NONE"
+            },
+            "status": "NEEDS_CONFIRMATION",
+            "open_question_draft": "Khi người dùng rời wizard campaign (đổi menu, bấm link `Manage sending domains`, đóng / tải lại tab) lúc còn thay đổi chưa Save, wizard có phải cảnh báo trước khi rời không? Lỗi đã biết BUG-WIZ-02 ghi thay đổi bị mất mà không có cảnh báo.",
+            "regression_watch_kb_ids": [
+              "KB-093"
+            ],
+            "risk_refs": [
+              "RISK-campaign-wizard-01"
+            ],
+            "priority": "P1",
+            "act_ids": [],
+            "evidence_refs": [],
+            "automation_suitability": "SUITABLE"
+          },
+          {
+            "check_id": "CHK-004",
+            "dimension": "STATE_DATA",
+            "layer": "portal",
+            "title": "Nút Save chỉ hiện khi có thay đổi chưa lưu",
+            "applicability": {
+              "role": "unspecified",
+              "state": "campaign Draft đã lưu và builder mới",
+              "environment": "documented",
+              "theme_or_device": null
+            },
+            "precondition": "Đã đăng nhập app workspace bằng tài khoản Owner của một workspace test (Owner là role duy nhất đã được khảo sát; ma trận quyền Campaigns chưa chốt).",
+            "steps": [
+              "Mở campaign Draft đã lưu, quan sát header.",
+              "Gõ thêm 1 ký tự vào `Preview text`, rồi xoá ký tự đó.",
+              "Mở `New campaign`, quan sát header."
+            ],
+            "observation_point": "Sự hiện diện của nút `Save` ở từng thời điểm.",
+            "expected_result": "Theo hiện trạng staging 01/10/2026, lệch = cần điều tra: Draft vừa mở không có `Save`; gõ thêm ký tự thì `Save` hiện, xoá lại thì biến mất; ở `/campaigns/new/*` `Save` hiện ngay.",
+            "oracle": {
+              "kb_ids": [
+                "KB-045"
+              ],
+              "oracle_strength": "BASELINE"
+            },
+            "status": "READY",
+            "open_question_draft": null,
+            "regression_watch_kb_ids": [],
+            "risk_refs": [
+              "RISK-campaign-wizard-01"
+            ],
+            "priority": "P3",
+            "act_ids": [],
+            "evidence_refs": [],
+            "automation_suitability": "SUITABLE"
+          },
+          {
+            "check_id": "CHK-005",
+            "dimension": "CORE",
+            "layer": "portal",
+            "title": "Stepper 4 bước và điều kiện một bước được tính done",
+            "applicability": {
+              "role": "unspecified",
+              "state": "builder mới",
+              "environment": "documented",
+              "theme_or_device": null
+            },
+            "precondition": "Đã đăng nhập app workspace bằng tài khoản Owner của một workspace test (Owner là role duy nhất đã được khảo sát; ma trận quyền Campaigns chưa chốt).",
+            "steps": [
+              "Quan sát stepper `Campaign steps` khi mới mở builder.",
+              "Điền lần lượt dữ liệu bắt buộc của từng bước (name + subject; danh tính người gửi; một segment; một email) và Save sau mỗi bước.",
+              "Xoá Subject line và Save."
+            ],
+            "observation_point": "Trạng thái done / active / upcoming của từng bước sau mỗi thao tác.",
+            "expected_result": "Stepper có 4 bước `Campaign details`, `Sender`, `Recipients`, `Contents` với trạng thái done / active / upcoming; một bước chỉ done khi đủ dữ liệu bắt buộc của bước đó; xoá Subject line làm bước 1 không còn done.",
+            "oracle": {
+              "kb_ids": [
+                "KB-038",
+                "KB-039"
+              ],
+              "oracle_strength": "STRONG"
+            },
+            "status": "READY",
+            "open_question_draft": null,
+            "regression_watch_kb_ids": [],
+            "risk_refs": [
+              "RISK-campaign-wizard-02"
+            ],
+            "priority": "P2",
+            "act_ids": [],
+            "evidence_refs": [],
+            "automation_suitability": "SUITABLE"
+          },
+          {
+            "check_id": "CHK-006",
+            "dimension": "NEGATIVE",
+            "layer": "portal",
+            "title": "Bấm Next khi bước 1 thiếu field bắt buộc",
+            "applicability": {
+              "role": "unspecified",
+              "state": "builder mới, bước 1 để trống Campaign name và Subject line",
+              "environment": "documented",
+              "theme_or_device": null
+            },
+            "precondition": "Đã đăng nhập app workspace bằng tài khoản Owner của một workspace test (Owner là role duy nhất đã được khảo sát; ma trận quyền Campaigns chưa chốt).",
+            "steps": [
+              "Bấm `Next: Sender →` khi chưa nhập gì.",
+              "Quan sát stepper."
+            ],
+            "observation_point": "Trạng thái của bước `Campaign details` trên stepper.",
+            "expected_result": "Bước `Campaign details` không được đánh dấu done khi thiếu Campaign name hoặc Subject line.",
+            "oracle": {
+              "kb_ids": [
+                "KB-039",
+                "KB-049"
+              ],
+              "oracle_strength": "STRONG"
+            },
+            "status": "READY",
+            "open_question_draft": null,
+            "regression_watch_kb_ids": [
+              "KB-056"
+            ],
+            "risk_refs": [
+              "RISK-campaign-wizard-02",
+              "RISK-campaign-wizard-03"
+            ],
+            "priority": "P2",
+            "act_ids": [],
+            "evidence_refs": [],
+            "automation_suitability": "SUITABLE"
+          },
+          {
+            "check_id": "CHK-007",
+            "dimension": "CORE",
+            "layer": "portal",
+            "title": "Send và Preview & test chỉ bật khi campaign đủ điều kiện gửi, ở mọi bước",
+            "applicability": {
+              "role": "unspecified",
+              "state": "campaign Draft chưa đủ 4 bước, sau đó đủ 4 bước",
+              "environment": "documented",
+              "theme_or_device": null
+            },
+            "precondition": "Đã đăng nhập app workspace bằng tài khoản Owner của một workspace test (Owner là role duy nhất đã được khảo sát; ma trận quyền Campaigns chưa chốt).",
+            "steps": [
+              "Với Draft chưa đủ 4 bước, quan sát `Preview & test` và `Send` trên header.",
+              "Hoàn tất cả 4 bước và Save.",
+              "Đi qua từng bước 1 → 4, quan sát hai nút ở mỗi bước."
+            ],
+            "observation_point": "Trạng thái enabled / disabled của `Preview & test` và `Send`.",
+            "expected_result": "Khi chưa đủ điều kiện gửi, `Send` bị disabled; khi đủ điều kiện gửi, `Preview & test` và `Send` dùng được ở mọi bước.",
+            "oracle": {
+              "kb_ids": [
+                "KB-047"
+              ],
+              "oracle_strength": "STRONG"
+            },
+            "status": "READY",
+            "open_question_draft": null,
+            "regression_watch_kb_ids": [],
+            "risk_refs": [
+              "RISK-campaign-wizard-02"
+            ],
+            "priority": "P2",
+            "act_ids": [],
+            "evidence_refs": [],
+            "automation_suitability": "SUITABLE"
+          },
+          {
+            "check_id": "CHK-008",
+            "dimension": "CORE",
+            "layer": "portal",
+            "title": "Draft chưa đủ 4 bước trên staging: Preview & test cũng disabled và tooltip của nút gửi",
+            "applicability": {
+              "role": "unspecified",
+              "state": "campaign Draft chưa đủ 4 bước",
+              "environment": "documented",
+              "theme_or_device": null
+            },
+            "precondition": "Đã đăng nhập app workspace bằng tài khoản Owner của một workspace test (Owner là role duy nhất đã được khảo sát; ma trận quyền Campaigns chưa chốt).",
+            "steps": [
+              "Quan sát trạng thái `Preview & test` và `Send` trên header.",
+              "Hover nút `Send` đang disabled, đọc tooltip.",
+              "Thử với Draft thiếu từng loại dữ liệu (subject, sender, segment, email)."
+            ],
+            "observation_point": "Nội dung tooltip ở từng trạng thái.",
+            "expected_result": "Theo hiện trạng staging 01/10/2026, lệch = cần điều tra: cả `Preview & test` và `Send` đều disabled; tooltip là `Finish every step before sending.` hoặc `This campaign is missing a subject, sender, audience or design, so it cannot be sent.` (tài liệu không nêu câu nào cho trường hợp nào — ghi lại ánh xạ thực tế).",
+            "oracle": {
+              "kb_ids": [
+                "KB-048",
+                "KB-198"
+              ],
+              "oracle_strength": "BASELINE"
+            },
+            "status": "READY",
+            "open_question_draft": null,
+            "regression_watch_kb_ids": [],
+            "risk_refs": [
+              "RISK-campaign-wizard-02"
+            ],
+            "priority": "P3",
+            "act_ids": [],
+            "evidence_refs": [],
+            "automation_suitability": "SUITABLE"
+          },
+          {
+            "check_id": "CHK-009",
+            "dimension": "CORE",
+            "layer": "portal",
+            "title": "Header chung của wizard",
+            "applicability": {
+              "role": "unspecified",
+              "state": "builder mới và campaign Draft đã đặt tên",
+              "environment": "documented",
+              "theme_or_device": null
+            },
+            "precondition": "Đã đăng nhập app workspace bằng tài khoản Owner của một workspace test (Owner là role duy nhất đã được khảo sát; ma trận quyền Campaigns chưa chốt).",
+            "steps": [
+              "Mở `New campaign`, đọc header.",
+              "Mở một Draft đã có tên, đọc header ở từng bước."
+            ],
+            "observation_point": "Tên, badge, status text và các action trên header.",
+            "expected_result": "Header dùng chung mọi bước: tên campaign (chưa có tên thì \"New campaign\"), badge Draft, status text và các action Save, Preview & test, Send.",
+            "oracle": {
+              "kb_ids": [
+                "KB-043"
+              ],
+              "oracle_strength": "STRONG"
+            },
+            "status": "READY",
+            "open_question_draft": null,
+            "regression_watch_kb_ids": [],
+            "risk_refs": [
+              "RISK-campaign-wizard-02"
+            ],
+            "priority": "P3",
+            "act_ids": [],
+            "evidence_refs": [],
+            "automation_suitability": "SUITABLE"
+          },
+          {
+            "check_id": "CHK-010",
+            "dimension": "CORE",
+            "layer": "portal",
+            "title": "Bước 1: Campaign name và Subject line bắt buộc, có dấu `*`",
+            "applicability": {
+              "role": "unspecified",
+              "state": "builder mới, bước Campaign details",
+              "environment": "documented",
+              "theme_or_device": null
+            },
+            "precondition": "Đã đăng nhập app workspace bằng tài khoản Owner của một workspace test (Owner là role duy nhất đã được khảo sát; ma trận quyền Campaigns chưa chốt).",
+            "steps": [
+              "Đọc nhãn và helper của các field ở bước 1.",
+              "Chỉ nhập Campaign name, Save, xem stepper; sau đó nhập thêm Subject line, Save."
+            ],
+            "observation_point": "Nhãn field, dấu `*`, helper; trạng thái bước 1.",
+            "expected_result": "`Campaign name *` (helper \"Internal only — recipients never see this.\") và `Subject line *` có dấu `*`; bước 1 chỉ done khi có cả hai.",
+            "oracle": {
+              "kb_ids": [
+                "KB-049",
+                "KB-039"
+              ],
+              "oracle_strength": "STRONG"
+            },
+            "status": "READY",
+            "open_question_draft": null,
+            "regression_watch_kb_ids": [],
+            "risk_refs": [
+              "RISK-campaign-wizard-03"
+            ],
+            "priority": "P2",
+            "act_ids": [],
+            "evidence_refs": [],
+            "automation_suitability": "SUITABLE"
+          },
+          {
+            "check_id": "CHK-011",
+            "dimension": "NEGATIVE",
+            "layer": "portal",
+            "title": "Save campaign khi chưa có tên",
+            "applicability": {
+              "role": "unspecified",
+              "state": "builder mới",
+              "environment": "documented",
+              "theme_or_device": null
+            },
+            "precondition": "Đã đăng nhập app workspace bằng tài khoản Owner của một workspace test (Owner là role duy nhất đã được khảo sát; ma trận quyền Campaigns chưa chốt).",
+            "steps": [
+              "Để trống Campaign name, nhập Subject line, bấm `Save`."
+            ],
+            "observation_point": "Thông báo hiển thị; campaign có được tạo không (danh sách, Network).",
+            "expected_result": "Chưa có oracle để kết luận pass/fail. Ghi lại thông báo và việc campaign có được tạo hay không, đối chiếu khi PO trả lời câu hỏi kèm theo.",
+            "oracle": {
+              "kb_ids": [
+                "KB-046"
+              ],
+              "oracle_strength": "NONE"
+            },
+            "status": "NEEDS_CONFIRMATION",
+            "open_question_draft": "Save campaign khi chưa có Campaign name phải bị chặn với thông báo gì? Bundle front-end có chuỗi \"Give this campaign a name before saving it.\" nhưng chưa thấy trên UI.",
+            "regression_watch_kb_ids": [],
+            "risk_refs": [
+              "RISK-campaign-wizard-03"
+            ],
+            "priority": "P2",
+            "act_ids": [],
+            "evidence_refs": [],
+            "automation_suitability": "SUITABLE"
+          },
+          {
+            "check_id": "CHK-012",
+            "dimension": "BOUNDARY",
+            "layer": "portal",
+            "title": "Subject line tối đa 255 ký tự",
+            "applicability": {
+              "role": "unspecified",
+              "state": "campaign Draft đã lưu",
+              "environment": "documented",
+              "theme_or_device": null
+            },
+            "precondition": "Đã đăng nhập app workspace bằng tài khoản Owner của một workspace test (Owner là role duy nhất đã được khảo sát; ma trận quyền Campaigns chưa chốt).",
+            "steps": [
+              "Nhập Subject line đúng 255 ký tự, Save, tải lại trang.",
+              "Nhập Subject line 256 ký tự, Save, tải lại trang."
+            ],
+            "observation_point": "Giá trị Subject line được lưu sau mỗi lần tải lại.",
+            "expected_result": "Subject 255 ký tự được lưu nguyên vẹn; subject 256 ký tự không được lưu (sau khi tải lại vẫn là giá trị cũ).",
+            "oracle": {
+              "kb_ids": [
+                "KB-050"
+              ],
+              "oracle_strength": "STRONG"
+            },
+            "status": "READY",
+            "open_question_draft": null,
+            "regression_watch_kb_ids": [
+              "KB-092"
+            ],
+            "risk_refs": [
+              "RISK-campaign-wizard-03"
+            ],
+            "priority": "P2",
+            "act_ids": [],
+            "evidence_refs": [],
+            "automation_suitability": "SUITABLE"
+          },
+          {
+            "check_id": "CHK-013",
+            "dimension": "BOUNDARY",
+            "layer": "api",
+            "title": "API từ chối Subject line dài hơn 255 ký tự",
+            "applicability": {
+              "role": "unspecified",
+              "state": "campaign Draft đã lưu",
+              "environment": "documented",
+              "theme_or_device": null
+            },
+            "precondition": "Đã đăng nhập app workspace bằng tài khoản Owner của một workspace test (Owner là role duy nhất đã được khảo sát; ma trận quyền Campaigns chưa chốt).",
+            "steps": [
+              "Gửi request cập nhật campaign với subject 256 ký tự (qua UI + DevTools hoặc gọi API trực tiếp)."
+            ],
+            "observation_point": "Status code và body của response.",
+            "expected_result": "Theo hiện trạng staging 01/10/2026, lệch = cần điều tra: API trả 422.",
+            "oracle": {
+              "kb_ids": [
+                "KB-051"
+              ],
+              "oracle_strength": "BASELINE"
+            },
+            "status": "READY",
+            "open_question_draft": null,
+            "regression_watch_kb_ids": [],
+            "risk_refs": [
+              "RISK-campaign-wizard-03"
+            ],
+            "priority": "P2",
+            "act_ids": [],
+            "evidence_refs": [],
+            "automation_suitability": "SUITABLE"
+          },
+          {
+            "check_id": "CHK-014",
+            "dimension": "NEGATIVE",
+            "layer": "portal",
+            "title": "Save bị BE từ chối (422) phải được báo cho người dùng",
+            "applicability": {
+              "role": "unspecified",
+              "state": "campaign Draft đã lưu",
+              "environment": "documented",
+              "theme_or_device": null
+            },
+            "precondition": "Đã đăng nhập app workspace bằng tài khoản Owner của một workspace test (Owner là role duy nhất đã được khảo sát; ma trận quyền Campaigns chưa chốt).",
+            "steps": [
+              "Ở bước Sender nhập From email sai định dạng, bấm `Save`.",
+              "Lặp lại với Subject line 256 ký tự.",
+              "Quan sát UI và Network, rồi tải lại trang."
+            ],
+            "observation_point": "Thông báo lỗi trên UI; status code; dữ liệu sau khi tải lại.",
+            "expected_result": "Chưa có oracle để kết luận pass/fail. Ghi lại wizard hiển thị gì khi Save bị từ chối, đối chiếu khi PO/Dev trả lời câu hỏi kèm theo.",
+            "oracle": {
+              "kb_ids": [],
+              "oracle_strength": "NONE"
+            },
+            "status": "NEEDS_CONFIRMATION",
+            "open_question_draft": "Khi Save ở wizard campaign bị BE từ chối (422, ví dụ From email sai định dạng hoặc subject dài hơn 255 ký tự), wizard phải hiển thị lỗi thế nào (inline theo field hay toast)? Quy tắc validate From email / Reply-to là gì? Lỗi đã biết BUG-WIZ-01 (P0) ghi wizard nuốt lỗi, người dùng tưởng đã lưu.",
+            "regression_watch_kb_ids": [
+              "KB-092"
+            ],
+            "risk_refs": [
+              "RISK-campaign-wizard-01",
+              "RISK-campaign-wizard-04"
+            ],
+            "priority": "P1",
+            "act_ids": [],
+            "evidence_refs": [],
+            "automation_suitability": "SUITABLE"
+          },
+          {
+            "check_id": "CHK-015",
+            "dimension": "CORE",
+            "layer": "portal",
+            "title": "Bước 1: Preview text tuỳ chọn",
+            "applicability": {
+              "role": "unspecified",
+              "state": "builder mới",
+              "environment": "documented",
+              "theme_or_device": null
+            },
+            "precondition": "Đã đăng nhập app workspace bằng tài khoản Owner của một workspace test (Owner là role duy nhất đã được khảo sát; ma trận quyền Campaigns chưa chốt).",
+            "steps": [
+              "Đọc nhãn và hint của `Preview text`.",
+              "Để trống `Preview text`, nhập đủ name + subject, Save và xem stepper."
+            ],
+            "observation_point": "Nhãn, hint; trạng thái bước 1.",
+            "expected_result": "Theo hiện trạng staging 01/10/2026, lệch = cần điều tra: `Preview text` không đánh dấu bắt buộc, có hint \"The snippet shown after the subject line in most inboxes.\"; để trống không cản bước 1 done.",
+            "oracle": {
+              "kb_ids": [
+                "KB-052"
+              ],
+              "oracle_strength": "BASELINE"
+            },
+            "status": "READY",
+            "open_question_draft": null,
+            "regression_watch_kb_ids": [],
+            "risk_refs": [
+              "RISK-campaign-wizard-03"
+            ],
+            "priority": "P3",
+            "act_ids": [],
+            "evidence_refs": [],
+            "automation_suitability": "SUITABLE"
+          },
+          {
+            "check_id": "CHK-016",
+            "dimension": "CORE",
+            "layer": "portal",
+            "title": "Bước 1 không có field Folder",
+            "applicability": {
+              "role": "unspecified",
+              "state": "builder mới",
+              "environment": "documented",
+              "theme_or_device": null
+            },
+            "precondition": "Đã đăng nhập app workspace bằng tài khoản Owner của một workspace test (Owner là role duy nhất đã được khảo sát; ma trận quyền Campaigns chưa chốt).",
+            "steps": [
+              "Liệt kê các field ở bước Campaign details."
+            ],
+            "observation_point": "Danh sách field ở bước 1.",
+            "expected_result": "Bước 1 không có field Folder; folder chỉ được gán qua `Add to folder` ở danh sách campaign.",
+            "oracle": {
+              "kb_ids": [
+                "KB-053"
+              ],
+              "oracle_strength": "STRONG"
+            },
+            "status": "READY",
+            "open_question_draft": null,
+            "regression_watch_kb_ids": [],
+            "risk_refs": [
+              "RISK-campaign-wizard-03"
+            ],
+            "priority": "P3",
+            "act_ids": [],
+            "evidence_refs": [],
+            "automation_suitability": "SUITABLE"
+          },
+          {
+            "check_id": "CHK-017",
+            "dimension": "CORE",
+            "layer": "portal",
+            "title": "Nút điều hướng giữa các bước",
+            "applicability": {
+              "role": "unspecified",
+              "state": "builder mới",
+              "environment": "documented",
+              "theme_or_device": null
+            },
+            "precondition": "Đã đăng nhập app workspace bằng tài khoản Owner của một workspace test (Owner là role duy nhất đã được khảo sát; ma trận quyền Campaigns chưa chốt).",
+            "steps": [
+              "Ở bước 1 đọc các nút cuối form, bấm `Next: Sender →`.",
+              "Ở bước 2 đọc nút, bấm `Next: Recipients →`.",
+              "Ở bước 3 đọc nút."
+            ],
+            "observation_point": "Nhãn nút ở từng bước; bước được mở sau khi bấm.",
+            "expected_result": "Bước 1 có `Back` / `Next: Sender →`; bước 2 có `Next: Recipients →`; bấm Next chuyển sang đúng bước kế tiếp.",
+            "oracle": {
+              "kb_ids": [
+                "KB-054"
+              ],
+              "oracle_strength": "STRONG"
+            },
+            "status": "READY",
+            "open_question_draft": null,
+            "regression_watch_kb_ids": [],
+            "risk_refs": [
+              "RISK-campaign-wizard-02"
+            ],
+            "priority": "P3",
+            "act_ids": [],
+            "evidence_refs": [],
+            "automation_suitability": "SUITABLE"
+          },
+          {
+            "check_id": "CHK-018",
+            "dimension": "CORE",
+            "layer": "portal",
+            "title": "Bước Sender: From name, From email, Reply-to mặc định bằng From email",
+            "applicability": {
+              "role": "unspecified",
+              "state": "campaign Draft đã qua bước 1",
+              "environment": "documented",
+              "theme_or_device": null
+            },
+            "precondition": "Đã đăng nhập app workspace bằng tài khoản Owner của một workspace test (Owner là role duy nhất đã được khảo sát; ma trận quyền Campaigns chưa chốt).",
+            "steps": [
+              "Đọc các field của bước Sender.",
+              "Nhập From name và From email, để trống Reply-to, Save.",
+              "Mở Preview & test (hoặc report sau khi gửi) và đọc giá trị Reply-to hiệu lực."
+            ],
+            "observation_point": "Các field của bước Sender; Reply-to hiệu lực.",
+            "expected_result": "Bước Sender có From name, From email, Reply-to (tuỳ chọn); khi để trống Reply-to thì reply-to mặc định bằng From email.",
+            "oracle": {
+              "kb_ids": [
+                "KB-057",
+                "KB-058"
+              ],
+              "oracle_strength": "STRONG"
+            },
+            "status": "READY",
+            "open_question_draft": null,
+            "regression_watch_kb_ids": [],
+            "risk_refs": [
+              "RISK-campaign-wizard-04"
+            ],
+            "priority": "P2",
+            "act_ids": [],
+            "evidence_refs": [],
+            "automation_suitability": "HYBRID"
+          },
+          {
+            "check_id": "CHK-019",
+            "dimension": "INTEGRATION",
+            "layer": "portal",
+            "title": "Địa chỉ gửi hiển thị khi From email không thuộc domain verified",
+            "applicability": {
+              "role": "unspecified",
+              "state": "workspace chưa có sending domain verified",
+              "environment": "documented",
+              "theme_or_device": null
+            },
+            "precondition": "Đã đăng nhập app workspace bằng tài khoản Owner của một workspace test (Owner là role duy nhất đã được khảo sát; ma trận quyền Campaigns chưa chốt).",
+            "steps": [
+              "Ở bước Sender nhập From email thuộc một domain chưa verify, đọc cảnh báo dưới field.",
+              "Hoàn tất các bước, xem From ở bước Contents và ở Preview & test.",
+              "Nếu gửi trên dữ liệu test: so sánh với địa chỉ gửi thật trong mail nhận được."
+            ],
+            "observation_point": "Cảnh báo ở bước Sender; From hiển thị ở Contents / Preview; From thực tế của mail.",
+            "expected_result": "Chưa có oracle để kết luận pass/fail. Ghi lại cảnh báo, From hiển thị và From thực tế, đối chiếu khi PO trả lời câu hỏi kèm theo.",
+            "oracle": {
+              "kb_ids": [
+                "KB-059",
+                "KB-061"
+              ],
+              "oracle_strength": "NONE"
+            },
+            "status": "NEEDS_CONFIRMATION",
+            "open_question_draft": "Khi From email của campaign không thuộc domain verified, người dùng có phải được báo rằng mail sẽ gửi từ host dùng chung (và địa chỉ gửi thật) không? Staging hiện cảnh báo \"Sending needs a verified domain — this address won't be accepted until its domain is verified.\" trong khi mail vẫn gửi qua host dùng chung, và bước Contents / Preview vẫn hiện địa chỉ người dùng gõ.",
+            "regression_watch_kb_ids": [
+              "KB-060"
+            ],
+            "risk_refs": [
+              "RISK-campaign-wizard-04"
+            ],
+            "priority": "P1",
+            "act_ids": [],
+            "evidence_refs": [],
+            "automation_suitability": "HYBRID"
+          },
+          {
+            "check_id": "CHK-020",
+            "dimension": "CORE",
+            "layer": "portal",
+            "title": "Bước Recipients: heading `Send to`, chọn đúng một segment, chỉ hiện tên",
+            "applicability": {
+              "role": "unspecified",
+              "state": "workspace có ≥2 segment",
+              "environment": "documented",
+              "theme_or_device": null
+            },
+            "precondition": "Đã đăng nhập app workspace bằng tài khoản Owner của một workspace test (Owner là role duy nhất đã được khảo sát; ma trận quyền Campaigns chưa chốt).",
+            "steps": [
+              "Mở bước Recipients, đọc heading.",
+              "Mở picker, quan sát thông tin mỗi segment.",
+              "Chọn segment A, rồi thử chọn thêm segment B."
+            ],
+            "observation_point": "Heading; nội dung mỗi mục trong picker; số segment được chọn.",
+            "expected_result": "Heading là \"Send to\"; picker chỉ hiện tên segment (không có helptext số contact); chỉ chọn được đúng một segment — chọn B thay cho A, không chọn đồng thời.",
+            "oracle": {
+              "kb_ids": [
+                "KB-062",
+                "KB-063",
+                "KB-064"
+              ],
+              "oracle_strength": "STRONG"
+            },
+            "status": "READY",
+            "open_question_draft": null,
+            "regression_watch_kb_ids": [],
+            "risk_refs": [
+              "RISK-campaign-wizard-05"
+            ],
+            "priority": "P2",
+            "act_ids": [],
+            "evidence_refs": [],
+            "automation_suitability": "SUITABLE"
+          },
+          {
+            "check_id": "CHK-021",
+            "dimension": "STATE_DATA",
+            "layer": "portal",
+            "title": "Bước Recipients khi workspace chưa có segment",
+            "applicability": {
+              "role": "unspecified",
+              "state": "workspace chưa có segment nào",
+              "environment": "documented",
+              "theme_or_device": null
+            },
+            "precondition": "Đã đăng nhập app workspace bằng tài khoản Owner của một workspace test (Owner là role duy nhất đã được khảo sát; ma trận quyền Campaigns chưa chốt).",
+            "steps": [
+              "Mở bước Recipients.",
+              "Bấm `Create segment`."
+            ],
+            "observation_point": "Empty state; màn được mở.",
+            "expected_result": "Hiện empty state \"There are no segments yet. Add a new segment to this folder to better manage your contacts.\" kèm nút \"Create segment\" điều hướng sang tạo segment.",
+            "oracle": {
+              "kb_ids": [
+                "KB-066"
+              ],
+              "oracle_strength": "STRONG"
+            },
+            "status": "READY",
+            "open_question_draft": null,
+            "regression_watch_kb_ids": [],
+            "risk_refs": [
+              "RISK-campaign-wizard-05"
+            ],
+            "priority": "P3",
+            "act_ids": [],
+            "evidence_refs": [],
+            "automation_suitability": "SUITABLE"
+          },
+          {
+            "check_id": "CHK-022",
+            "dimension": "CORE",
+            "layer": "portal",
+            "title": "Picker segment: search, chip và nút Remove",
+            "applicability": {
+              "role": "unspecified",
+              "state": "workspace có ≥2 segment",
+              "environment": "documented",
+              "theme_or_device": null
+            },
+            "precondition": "Đã đăng nhập app workspace bằng tài khoản Owner của một workspace test (Owner là role duy nhất đã được khảo sát; ma trận quyền Campaigns chưa chốt).",
+            "steps": [
+              "Mở picker `Select a segment…`, gõ một phần tên vào `Search segments…`.",
+              "Gõ chuỗi không khớp.",
+              "Chọn một segment, bấm `Remove {name}` trên chip."
+            ],
+            "observation_point": "Kết quả search; thông báo không khớp; chip segment.",
+            "expected_result": "Theo hiện trạng staging 01/10/2026, lệch = cần điều tra: picker là popover có ô `Search segments…`; không khớp hiện `No segments match your search.`; segment đã chọn hiện dạng chip kèm nút `Remove {name}` để bỏ chọn.",
+            "oracle": {
+              "kb_ids": [
+                "KB-065"
+              ],
+              "oracle_strength": "BASELINE"
+            },
+            "status": "READY",
+            "open_question_draft": null,
+            "regression_watch_kb_ids": [],
+            "risk_refs": [
+              "RISK-campaign-wizard-05"
+            ],
+            "priority": "P3",
+            "act_ids": [],
+            "evidence_refs": [],
+            "automation_suitability": "SUITABLE"
+          },
+          {
+            "check_id": "CHK-023",
+            "dimension": "STATE_DATA",
+            "layer": "portal",
+            "title": "Dòng estimated recipients sau khi chọn segment",
+            "applicability": {
+              "role": "unspecified",
+              "state": "có segment với số Contacts đã biết",
+              "environment": "documented",
+              "theme_or_device": null
+            },
+            "precondition": "Đã đăng nhập app workspace bằng tài khoản Owner của một workspace test (Owner là role duy nhất đã được khảo sát; ma trận quyền Campaigns chưa chốt).",
+            "steps": [
+              "Ghi lại cột Contacts của segment ở trang Segments.",
+              "Ở bước Recipients chọn segment đó, đọc dòng estimated recipients."
+            ],
+            "observation_point": "Giá trị N trong `N estimated recipients`.",
+            "expected_result": "Theo hiện trạng staging 01/10/2026, lệch = cần điều tra: N bằng cột Contacts của segment.",
+            "oracle": {
+              "kb_ids": [
+                "KB-067"
+              ],
+              "oracle_strength": "BASELINE"
+            },
+            "status": "READY",
+            "open_question_draft": null,
+            "regression_watch_kb_ids": [
+              "KB-035"
+            ],
+            "risk_refs": [
+              "RISK-campaign-wizard-05"
+            ],
+            "priority": "P2",
+            "act_ids": [],
+            "evidence_refs": [],
+            "automation_suitability": "SUITABLE"
+          },
+          {
+            "check_id": "CHK-024",
+            "dimension": "INTEGRATION",
+            "layer": "api",
+            "title": "Người nhận campaign chỉ gồm contact Subscribed của segment",
+            "applicability": {
+              "role": "unspecified",
+              "state": "segment chứa ít nhất 2 contact Subscribed và 1 contact Unsubscribed (địa chỉ do QA kiểm soát hoặc SES mailbox simulator)",
+              "environment": "documented",
+              "theme_or_device": null
+            },
+            "precondition": "Đã đăng nhập app workspace bằng tài khoản Owner của một workspace test (Owner là role duy nhất đã được khảo sát; ma trận quyền Campaigns chưa chốt). Có dữ liệu test được phép gửi mail thật.",
+            "steps": [
+              "Tạo campaign gửi tới segment đó, gửi ngay.",
+              "Mở report, tab Deliverability, đọc `Sent to`; kiểm tra hộp thư / log gửi của từng địa chỉ."
+            ],
+            "observation_point": "Số người nhận thực tế và danh sách địa chỉ nhận được mail.",
+            "expected_result": "Chỉ các contact Subscribed nhận campaign; contact Unsubscribed không được gửi.",
+            "oracle": {
+              "kb_ids": [
+                "KB-068"
+              ],
+              "oracle_strength": "STRONG"
+            },
+            "status": "READY",
+            "open_question_draft": null,
+            "regression_watch_kb_ids": [],
+            "risk_refs": [
+              "RISK-campaign-wizard-05"
+            ],
+            "priority": "P1",
+            "act_ids": [],
+            "evidence_refs": [],
+            "automation_suitability": "HYBRID"
+          },
+          {
+            "check_id": "CHK-025",
+            "dimension": "NEGATIVE",
+            "layer": "portal",
+            "title": "Phân biệt hai segment trùng tên trong picker Recipients",
+            "applicability": {
+              "role": "unspecified",
+              "state": "workspace có 2 segment trùng tên nhưng điều kiện khác nhau",
+              "environment": "documented",
+              "theme_or_device": null
+            },
+            "precondition": "Đã đăng nhập app workspace bằng tài khoản Owner của một workspace test (Owner là role duy nhất đã được khảo sát; ma trận quyền Campaigns chưa chốt).",
+            "steps": [
+              "Mở picker, tìm theo tên trùng.",
+              "Ghi lại thông tin giúp phân biệt hai mục (nếu có)."
+            ],
+            "observation_point": "Hai mục trùng tên trong picker.",
+            "expected_result": "Chưa có oracle để kết luận pass/fail. Ghi lại cách picker hiển thị hai segment trùng tên, đối chiếu khi PO trả lời câu hỏi kèm theo.",
+            "oracle": {
+              "kb_ids": [
+                "KB-070"
+              ],
+              "oracle_strength": "NONE"
+            },
+            "status": "NEEDS_CONFIRMATION",
+            "open_question_draft": "Picker Recipients phải hiện thêm thông tin gì để phân biệt hai segment trùng tên (ví dụ số contact, ngày tạo, người tạo), hay tên segment phải unique (GAP-19)? Lỗi đã biết BUG-69 ghi rủi ro gửi nhầm tập khách hàng.",
+            "regression_watch_kb_ids": [
+              "KB-069"
+            ],
+            "risk_refs": [
+              "RISK-campaign-wizard-05"
+            ],
+            "priority": "P1",
+            "act_ids": [],
+            "evidence_refs": [],
+            "automation_suitability": "SUITABLE"
+          },
+          {
+            "check_id": "CHK-026",
+            "dimension": "CORE",
+            "layer": "portal",
+            "title": "Khối Email preferences ở bước Recipients",
+            "applicability": {
+              "role": "unspecified",
+              "state": "workspace chưa có preferences page, sau đó có ≥1 page",
+              "environment": "documented",
+              "theme_or_device": null
+            },
+            "precondition": "Đã đăng nhập app workspace bằng tài khoản Owner của một workspace test (Owner là role duy nhất đã được khảo sát; ma trận quyền Campaigns chưa chốt).",
+            "steps": [
+              "Mở bước Recipients, đọc khối `Email preferences`.",
+              "Mở combobox `Preferences page`, ghi lại các lựa chọn.",
+              "Bấm `Manage pages`."
+            ],
+            "observation_point": "Nội dung khối; lựa chọn của combobox; đích của link.",
+            "expected_result": "Theo hiện trạng staging 01/10/2026, lệch = cần điều tra: khối có combobox `Preferences page` (hint \"The page people reach from this campaign's unsubscribe link.\") và link `Manage pages` tới `/preferences`; khi chưa có page chỉ có lựa chọn `None — people can only unsubscribe from everything`; không có ô tick lựa chọn nào.",
+            "oracle": {
+              "kb_ids": [
+                "KB-071",
+                "KB-072"
+              ],
+              "oracle_strength": "BASELINE"
+            },
+            "status": "READY",
+            "open_question_draft": null,
+            "regression_watch_kb_ids": [],
+            "risk_refs": [
+              "RISK-campaign-wizard-06"
+            ],
+            "priority": "P2",
+            "act_ids": [],
+            "evidence_refs": [],
+            "automation_suitability": "SUITABLE"
+          },
+          {
+            "check_id": "CHK-027",
+            "dimension": "INTEGRATION",
+            "layer": "portal",
+            "title": "Người đã tắt một lựa chọn trên preferences page có nhận campaign liên quan không",
+            "applicability": {
+              "role": "unspecified",
+              "state": "có preferences page với ít nhất 1 lựa chọn; contact Subscribed đã tắt lựa chọn đó; segment không lọc theo field của lựa chọn",
+              "environment": "documented",
+              "theme_or_device": null
+            },
+            "precondition": "Đã đăng nhập app workspace bằng tài khoản Owner của một workspace test (Owner là role duy nhất đã được khảo sát; ma trận quyền Campaigns chưa chốt).",
+            "steps": [
+              "Gắn preferences page vào campaign, chọn segment chứa contact trên.",
+              "Đọc mọi cảnh báo ở bước Recipients.",
+              "Nếu gửi trên dữ liệu test: kiểm tra contact đã tắt lựa chọn có nhận mail không."
+            ],
+            "observation_point": "Cảnh báo ở bước Recipients; việc contact nhận / không nhận mail.",
+            "expected_result": "Chưa có oracle để kết luận pass/fail. Ghi lại cảnh báo và kết quả gửi, đối chiếu khi PO trả lời câu hỏi kèm theo.",
+            "oracle": {
+              "kb_ids": [
+                "KB-073",
+                "KB-074",
+                "KB-075"
+              ],
+              "oracle_strength": "NONE"
+            },
+            "status": "NEEDS_CONFIRMATION",
+            "open_question_draft": "Người đã bỏ tick một lựa chọn trên preferences page có bị loại tự động khỏi campaign liên quan không, hay chỉ bị loại khi segment lọc theo field đó? Hướng dẫn \"tick the choices this campaign is about\" là copy cũ hay wizard còn thiếu ô chọn? Cảnh báo `Your email offers choices but has no page` và `Your segment ignores some of the page's choices` có phải hiện ở bước Recipients không?",
+            "regression_watch_kb_ids": [],
+            "risk_refs": [
+              "RISK-campaign-wizard-06"
+            ],
+            "priority": "P1",
+            "act_ids": [],
+            "evidence_refs": [],
+            "automation_suitability": "HYBRID"
+          },
+          {
+            "check_id": "CHK-028",
+            "dimension": "STATE_DATA",
+            "layer": "portal",
+            "title": "Bước Contents khi campaign chưa có design",
+            "applicability": {
+              "role": "unspecified",
+              "state": "campaign Draft chưa chọn email",
+              "environment": "documented",
+              "theme_or_device": null
+            },
+            "precondition": "Đã đăng nhập app workspace bằng tài khoản Owner của một workspace test (Owner là role duy nhất đã được khảo sát; ma trận quyền Campaigns chưa chốt).",
+            "steps": [
+              "Mở bước Contents, đọc empty state."
+            ],
+            "observation_point": "Tiêu đề và mô tả empty state.",
+            "expected_result": "Theo hiện trạng staging 01/10/2026, lệch = cần điều tra: hiện \"Add email content to this campaign\" / \"Use an email you already have, or start a new one.\"",
+            "oracle": {
+              "kb_ids": [
+                "KB-076"
+              ],
+              "oracle_strength": "BASELINE"
+            },
+            "status": "READY",
+            "open_question_draft": null,
+            "regression_watch_kb_ids": [],
+            "risk_refs": [
+              "RISK-campaign-wizard-07"
+            ],
+            "priority": "P3",
+            "act_ids": [],
+            "evidence_refs": [],
+            "automation_suitability": "SUITABLE"
+          },
+          {
+            "check_id": "CHK-029",
+            "dimension": "CORE",
+            "layer": "portal",
+            "title": "Nhãn hai nút ở bước Contents theo quyết định đổi sang Templates",
+            "applicability": {
+              "role": "unspecified",
+              "state": "campaign Draft chưa chọn email; build đã deploy thay đổi của Jira MTRO-99",
+              "environment": "documented",
+              "theme_or_device": null
+            },
+            "precondition": "Đã đăng nhập app workspace bằng tài khoản Owner của một workspace test (Owner là role duy nhất đã được khảo sát; ma trận quyền Campaigns chưa chốt). Chỉ chạy trên build đã deploy thay đổi nhãn (staging khảo sát 01/10/2026 vẫn hiện `Choose email library` / `Create email library`).",
+            "steps": [
+              "Mở bước Contents, đọc nhãn hai nút."
+            ],
+            "observation_point": "Nhãn hai nút.",
+            "expected_result": "Hai nút có nhãn `Choose a template` và `Create new template`.",
+            "oracle": {
+              "kb_ids": [
+                "KB-078"
+              ],
+              "oracle_strength": "STRONG"
+            },
+            "status": "READY",
+            "open_question_draft": null,
+            "regression_watch_kb_ids": [],
+            "risk_refs": [
+              "RISK-campaign-wizard-07"
+            ],
+            "priority": "P3",
+            "act_ids": [],
+            "evidence_refs": [],
+            "automation_suitability": "SUITABLE"
+          },
+          {
+            "check_id": "CHK-030",
+            "dimension": "CORE",
+            "layer": "portal",
+            "title": "Chọn email có sẵn cho campaign",
+            "applicability": {
+              "role": "unspecified",
+              "state": "workspace có ≥1 email trong thư viện",
+              "environment": "documented",
+              "theme_or_device": null
+            },
+            "precondition": "Đã đăng nhập app workspace bằng tài khoản Owner của một workspace test (Owner là role duy nhất đã được khảo sát; ma trận quyền Campaigns chưa chốt).",
+            "steps": [
+              "Ở bước Contents bấm nút chọn email có sẵn.",
+              "Đọc dialog, chọn một thẻ email."
+            ],
+            "observation_point": "Nội dung dialog; email được gắn vào campaign.",
+            "expected_result": "Theo hiện trạng staging 01/10/2026, lệch = cần điều tra: dialog có mô tả \"Pick an existing email design to use for this campaign.\", lưới thẻ (tên email, người tạo), nút Cancel / Close, không có search, không phân trang, không hiện ngày tạo; chọn một thẻ là gắn ngay vào campaign.",
+            "oracle": {
+              "kb_ids": [
+                "KB-079"
+              ],
+              "oracle_strength": "BASELINE"
+            },
+            "status": "READY",
+            "open_question_draft": null,
+            "regression_watch_kb_ids": [],
+            "risk_refs": [
+              "RISK-campaign-wizard-07"
+            ],
+            "priority": "P2",
+            "act_ids": [],
+            "evidence_refs": [],
+            "automation_suitability": "SUITABLE"
+          },
+          {
+            "check_id": "CHK-031",
+            "dimension": "BOUNDARY",
+            "layer": "api",
+            "title": "Picker email nạp 50 email sửa gần nhất",
+            "applicability": {
+              "role": "unspecified",
+              "state": "workspace có hơn 50 email",
+              "environment": "documented",
+              "theme_or_device": null
+            },
+            "precondition": "Đã đăng nhập app workspace bằng tài khoản Owner của một workspace test (Owner là role duy nhất đã được khảo sát; ma trận quyền Campaigns chưa chốt).",
+            "steps": [
+              "Mở DevTools tab Network, mở builder campaign.",
+              "Xem request lấy danh sách email; mở dialog chọn email và đếm số thẻ."
+            ],
+            "observation_point": "Query của request danh sách email; số thẻ trong dialog.",
+            "expected_result": "Theo hiện trạng staging 01/10/2026, lệch = cần điều tra: builder gọi một lần `GET mail-templates?per_page=50&sort=updated_at&direction=desc`; dialog có tối đa 50 email sửa gần nhất.",
+            "oracle": {
+              "kb_ids": [
+                "KB-080"
+              ],
+              "oracle_strength": "BASELINE"
+            },
+            "status": "READY",
+            "open_question_draft": null,
+            "regression_watch_kb_ids": [],
+            "risk_refs": [
+              "RISK-campaign-wizard-07"
+            ],
+            "priority": "P2",
+            "act_ids": [],
+            "evidence_refs": [],
+            "automation_suitability": "SUITABLE"
+          },
+          {
+            "check_id": "CHK-032",
+            "dimension": "BOUNDARY",
+            "layer": "portal",
+            "title": "Chọn email thứ 51 (cũ nhất) khi thư viện có hơn 50 email",
+            "applicability": {
+              "role": "unspecified",
+              "state": "workspace có đúng 51 email; email A là email sửa lâu nhất",
+              "environment": "documented",
+              "theme_or_device": null
+            },
+            "precondition": "Đã đăng nhập app workspace bằng tài khoản Owner của một workspace test (Owner là role duy nhất đã được khảo sát; ma trận quyền Campaigns chưa chốt).",
+            "steps": [
+              "Mở dialog chọn email ở bước Contents, tìm email A.",
+              "Mở `Duplicate design`, tìm email A."
+            ],
+            "observation_point": "Email A có chọn được ở hai nơi hay không.",
+            "expected_result": "Chưa có oracle để kết luận pass/fail. Ghi lại email A có xuất hiện / chọn được không, đối chiếu khi PO/Dev trả lời câu hỏi kèm theo.",
+            "oracle": {
+              "kb_ids": [
+                "KB-081"
+              ],
+              "oracle_strength": "NONE"
+            },
+            "status": "NEEDS_CONFIRMATION",
+            "open_question_draft": "Picker email ở bước Contents (và Duplicate design) chỉ nạp 50 email sửa gần nhất, không search hay phân trang. Workspace có hơn 50 email thì email cũ hơn có phải chọn được không? Giới hạn 50 có chủ ý không, có định thêm tìm kiếm / phân trang không?",
+            "regression_watch_kb_ids": [],
+            "risk_refs": [
+              "RISK-campaign-wizard-07"
+            ],
+            "priority": "P2",
+            "act_ids": [],
+            "evidence_refs": [],
+            "automation_suitability": "SUITABLE"
+          },
+          {
+            "check_id": "CHK-033",
+            "dimension": "STATE_DATA",
+            "layer": "portal",
+            "title": "Picker email khi thư viện trống",
+            "applicability": {
+              "role": "unspecified",
+              "state": "workspace chưa có email nào trong thư viện",
+              "environment": "documented",
+              "theme_or_device": null
+            },
+            "precondition": "Đã đăng nhập app workspace bằng tài khoản Owner của một workspace test (Owner là role duy nhất đã được khảo sát; ma trận quyền Campaigns chưa chốt).",
+            "steps": [
+              "Ở bước Contents bấm nút chọn email có sẵn."
+            ],
+            "observation_point": "Nội dung dialog.",
+            "expected_result": "Chưa có oracle để kết luận pass/fail. Ghi lại thông báo thực tế, đối chiếu khi PO trả lời câu hỏi kèm theo.",
+            "oracle": {
+              "kb_ids": [
+                "KB-082"
+              ],
+              "oracle_strength": "NONE"
+            },
+            "status": "NEEDS_CONFIRMATION",
+            "open_question_draft": "Khi thư viện email của workspace trống, picker email ở bước Contents phải hiện gì? Bundle có chuỗi `No emails in this workspace yet.` nhưng chưa thấy trên UI.",
+            "regression_watch_kb_ids": [],
+            "risk_refs": [
+              "RISK-campaign-wizard-07"
+            ],
+            "priority": "P3",
+            "act_ids": [],
+            "evidence_refs": [],
+            "automation_suitability": "SUITABLE"
+          },
+          {
+            "check_id": "CHK-034",
+            "dimension": "CORE",
+            "layer": "portal",
+            "title": "Tạo email mới từ bước Contents: from scratch hoặc Duplicate design",
+            "applicability": {
+              "role": "unspecified",
+              "state": "workspace có ≥1 email",
+              "environment": "documented",
+              "theme_or_device": null
+            },
+            "precondition": "Đã đăng nhập app workspace bằng tài khoản Owner của một workspace test (Owner là role duy nhất đã được khảo sát; ma trận quyền Campaigns chưa chốt).",
+            "steps": [
+              "Bấm nút tạo email mới, chọn `Create from scratch`, xác nhận builder mở; quay lại.",
+              "Bấm lại, chọn `Duplicate design`, chọn email X."
+            ],
+            "observation_point": "Lựa chọn trong dialog; builder được mở; tên bản sao.",
+            "expected_result": "Có hai cách: `Create from scratch` tạo email mới rồi mở builder; `Duplicate design` cho chọn một design có sẵn, tạo bản sao tên `{name} (copy)` rồi mở builder.",
+            "oracle": {
+              "kb_ids": [
+                "KB-084"
+              ],
+              "oracle_strength": "STRONG"
+            },
+            "status": "READY",
+            "open_question_draft": null,
+            "regression_watch_kb_ids": [],
+            "risk_refs": [
+              "RISK-campaign-wizard-07"
+            ],
+            "priority": "P2",
+            "act_ids": [],
+            "evidence_refs": [],
+            "automation_suitability": "SUITABLE"
+          },
+          {
+            "check_id": "CHK-035",
+            "dimension": "CORE",
+            "layer": "portal",
+            "title": "Bước Contents khi đã chọn email hiện preview kèm Subject / Preheader / From",
+            "applicability": {
+              "role": "unspecified",
+              "state": "campaign Draft đã gắn email, đã nhập Subject line, Preview text và sender",
+              "environment": "documented",
+              "theme_or_device": null
+            },
+            "precondition": "Đã đăng nhập app workspace bằng tài khoản Owner của một workspace test (Owner là role duy nhất đã được khảo sát; ma trận quyền Campaigns chưa chốt).",
+            "steps": [
+              "Mở bước Contents, đọc khối preview."
+            ],
+            "observation_point": "Preview template và các trường Subject / Preheader / From.",
+            "expected_result": "Khi đã chọn email, bước Contents hiện preview template kèm Subject, Preheader và From của campaign.",
+            "oracle": {
+              "kb_ids": [
+                "KB-085"
+              ],
+              "oracle_strength": "STRONG"
+            },
+            "status": "READY",
+            "open_question_draft": null,
+            "regression_watch_kb_ids": [],
+            "risk_refs": [
+              "RISK-campaign-wizard-07"
+            ],
+            "priority": "P2",
+            "act_ids": [],
+            "evidence_refs": [],
+            "automation_suitability": "SUITABLE"
+          },
+          {
+            "check_id": "CHK-036",
+            "dimension": "CORE",
+            "layer": "portal",
+            "title": "Chi tiết UI bước Contents khi đã có design trên staging",
+            "applicability": {
+              "role": "unspecified",
+              "state": "campaign Draft đã gắn email; một Draft khác đã gắn email nhưng chưa có Preview text và sender",
+              "environment": "documented",
+              "theme_or_device": null
+            },
+            "precondition": "Đã đăng nhập app workspace bằng tài khoản Owner của một workspace test (Owner là role duy nhất đã được khảo sát; ma trận quyền Campaigns chưa chốt).",
+            "steps": [
+              "Mở bước Contents của Draft thứ nhất, liệt kê các thành phần.",
+              "Mở bước Contents của Draft thứ hai, đọc giá trị Preheader và From."
+            ],
+            "observation_point": "Thành phần UI và placeholder khi trống.",
+            "expected_result": "Theo hiện trạng staging 01/10/2026, lệch = cần điều tra: bước Contents hiện tên design, nút `Edit design`, menu `Design actions` (có `Reset design`), `Subject`, `Preheader` (trống thì `(No preview text yet)`), iframe nội dung, `From` (trống thì `(No sender yet)`) và nút `Back`.",
+            "oracle": {
+              "kb_ids": [
+                "KB-201"
+              ],
+              "oracle_strength": "BASELINE"
+            },
+            "status": "READY",
+            "open_question_draft": null,
+            "regression_watch_kb_ids": [],
+            "risk_refs": [
+              "RISK-campaign-wizard-07"
+            ],
+            "priority": "P3",
+            "act_ids": [],
+            "evidence_refs": [],
+            "automation_suitability": "SUITABLE"
+          },
+          {
+            "check_id": "CHK-037",
+            "dimension": "CORE",
+            "layer": "portal",
+            "title": "Đổi email của campaign chỉ qua Reset design",
+            "applicability": {
+              "role": "unspecified",
+              "state": "campaign Draft đã gắn email",
+              "environment": "documented",
+              "theme_or_device": null
+            },
+            "precondition": "Đã đăng nhập app workspace bằng tài khoản Owner của một workspace test (Owner là role duy nhất đã được khảo sát; ma trận quyền Campaigns chưa chốt).",
+            "steps": [
+              "Mở menu `Design actions` cạnh nút sửa design, chọn `Reset design`.",
+              "Chọn một email khác."
+            ],
+            "observation_point": "Nội dung bước Contents sau Reset; email mới được gắn.",
+            "expected_result": "Menu `Design actions` có `Reset design` đưa bước Contents về empty state để chọn design khác; không có cách đổi email nào khác ngoài `Reset design`.",
+            "oracle": {
+              "kb_ids": [
+                "KB-086"
+              ],
+              "oracle_strength": "STRONG"
+            },
+            "status": "READY",
+            "open_question_draft": null,
+            "regression_watch_kb_ids": [],
+            "risk_refs": [
+              "RISK-campaign-wizard-07"
+            ],
+            "priority": "P2",
+            "act_ids": [],
+            "evidence_refs": [],
+            "automation_suitability": "SUITABLE"
+          },
+          {
+            "check_id": "CHK-038",
+            "dimension": "STATE_DATA",
+            "layer": "portal",
+            "title": "Preview ở bước Contents hiện merge tag thô",
+            "applicability": {
+              "role": "unspecified",
+              "state": "campaign Draft có email chứa merge tag",
+              "environment": "documented",
+              "theme_or_device": null
+            },
+            "precondition": "Đã đăng nhập app workspace bằng tài khoản Owner của một workspace test (Owner là role duy nhất đã được khảo sát; ma trận quyền Campaigns chưa chốt).",
+            "steps": [
+              "Mở bước Contents, đọc iframe preview."
+            ],
+            "observation_point": "Merge tag trong iframe.",
+            "expected_result": "Theo hiện trạng staging 01/10/2026, lệch = cần điều tra: iframe hiện nguyên chuỗi merge tag, không thay bằng giá trị.",
+            "oracle": {
+              "kb_ids": [
+                "KB-087"
+              ],
+              "oracle_strength": "BASELINE"
+            },
+            "status": "READY",
+            "open_question_draft": null,
+            "regression_watch_kb_ids": [],
+            "risk_refs": [
+              "RISK-campaign-wizard-08"
+            ],
+            "priority": "P3",
+            "act_ids": [],
+            "evidence_refs": [],
+            "automation_suitability": "SUITABLE"
+          },
+          {
+            "check_id": "CHK-039",
+            "dimension": "INTEGRATION",
+            "layer": "portal",
+            "title": "Cú pháp merge tag được chấp nhận trong nội dung campaign",
+            "applicability": {
+              "role": "unspecified",
+              "state": "campaign Draft",
+              "environment": "documented",
+              "theme_or_device": null
+            },
+            "precondition": "Đã đăng nhập app workspace bằng tài khoản Owner của một workspace test (Owner là role duy nhất đã được khảo sát; ma trận quyền Campaigns chưa chốt).",
+            "steps": [
+              "Soạn email cho campaign có merge tag hai ngoặc (vd `{{contact.first_name}}`), Save.",
+              "Soạn email khác có merge tag một ngoặc (vd `{contact.first_name}`), Save.",
+              "Gửi test (hoặc gửi trên dữ liệu test) và xem tag có được thay giá trị không."
+            ],
+            "observation_point": "Kết quả Save của mỗi cú pháp; giá trị render trong mail.",
+            "expected_result": "Chưa có oracle để kết luận pass/fail. Ghi lại cú pháp nào được lưu và được render, đối chiếu khi PO/Dev trả lời câu hỏi kèm theo.",
+            "oracle": {
+              "kb_ids": [
+                "KB-088"
+              ],
+              "oracle_strength": "NONE"
+            },
+            "status": "NEEDS_CONFIRMATION",
+            "open_question_draft": "Cú pháp merge tag đúng cho nội dung campaign là hai ngoặc {{…}} (quyết định PO 02/10/2026, staging 01/10/2026) hay một ngoặc như Jira MTRO-92 §10 (nội dung dùng {{…}} bị từ chối khi lưu)? Cần PO/Dev chốt một cú pháp duy nhất.",
+            "regression_watch_kb_ids": [],
+            "risk_refs": [
+              "RISK-campaign-wizard-08"
+            ],
+            "priority": "P1",
+            "act_ids": [],
+            "evidence_refs": [],
+            "automation_suitability": "HYBRID"
+          },
+          {
+            "check_id": "CHK-040",
+            "dimension": "STATE_DATA",
+            "layer": "api",
+            "title": "Cập nhật campaign đã có dùng phương thức PUT",
+            "applicability": {
+              "role": "unspecified",
+              "state": "campaign Draft đã lưu",
+              "environment": "documented",
+              "theme_or_device": null
+            },
+            "precondition": "Đã đăng nhập app workspace bằng tài khoản Owner của một workspace test (Owner là role duy nhất đã được khảo sát; ma trận quyền Campaigns chưa chốt).",
+            "steps": [
+              "Mở DevTools tab Network, sửa một field rồi Save."
+            ],
+            "observation_point": "Method của request cập nhật.",
+            "expected_result": "Theo hiện trạng staging 25/08/2026, lệch = cần điều tra: request cập nhật dùng `PUT`.",
+            "oracle": {
+              "kb_ids": [
+                "KB-091"
+              ],
+              "oracle_strength": "BASELINE"
+            },
+            "status": "READY",
+            "open_question_draft": null,
+            "regression_watch_kb_ids": [],
+            "risk_refs": [
+              "RISK-campaign-wizard-01"
+            ],
+            "priority": "P3",
+            "act_ids": [],
+            "evidence_refs": [],
+            "automation_suitability": "SUITABLE"
+          },
+          {
+            "check_id": "CHK-041",
+            "dimension": "CORE",
+            "layer": "portal",
+            "title": "Stepper trên staging: bước là link, bước đã xong có dấu tick",
+            "applicability": {
+              "role": "unspecified",
+              "state": "campaign Draft đã hoàn tất ít nhất bước 1",
+              "environment": "documented",
+              "theme_or_device": null
+            },
+            "precondition": "Đã đăng nhập app workspace bằng tài khoản Owner của một workspace test (Owner là role duy nhất đã được khảo sát; ma trận quyền Campaigns chưa chốt).",
+            "steps": [
+              "Quan sát stepper, bấm vào một bước khác trên stepper."
+            ],
+            "observation_point": "Dạng hiển thị bước đã xong; điều hướng khi bấm bước.",
+            "expected_result": "Theo hiện trạng staging 01/10/2026, lệch = cần điều tra: các bước trên stepper là link (bấm để chuyển bước) và bước đã hoàn tất hiện dấu tick.",
+            "oracle": {
+              "kb_ids": [
+                "KB-196"
+              ],
+              "oracle_strength": "BASELINE"
+            },
+            "status": "READY",
+            "open_question_draft": null,
+            "regression_watch_kb_ids": [],
+            "risk_refs": [
+              "RISK-campaign-wizard-02"
+            ],
+            "priority": "P3",
+            "act_ids": [],
+            "evidence_refs": [],
+            "automation_suitability": "SUITABLE"
+          },
+          {
+            "check_id": "CHK-042",
+            "dimension": "CORE",
+            "layer": "portal",
+            "title": "Placeholder và hint của bước Sender trên staging",
+            "applicability": {
+              "role": "unspecified",
+              "state": "campaign Draft ở bước Sender, các field đang trống",
+              "environment": "documented",
+              "theme_or_device": null
+            },
+            "precondition": "Đã đăng nhập app workspace bằng tài khoản Owner của một workspace test (Owner là role duy nhất đã được khảo sát; ma trận quyền Campaigns chưa chốt).",
+            "steps": [
+              "Đọc placeholder của From name, From email, Reply-to và hint dưới Reply-to."
+            ],
+            "observation_point": "Placeholder, nhãn và hint.",
+            "expected_result": "Theo hiện trạng staging 29/09/2026, lệch = cần điều tra: `From name` (placeholder `Mailtro Team`), `From email` (placeholder `hello@yourdomain.com`), `Reply-to (optional)` (placeholder `Defaults to the sender email`, hint \"Replies go to the sender address unless you set one here.\").",
+            "oracle": {
+              "kb_ids": [
+                "KB-199",
+                "KB-200"
+              ],
+              "oracle_strength": "BASELINE"
+            },
+            "status": "READY",
+            "open_question_draft": null,
+            "regression_watch_kb_ids": [],
+            "risk_refs": [
+              "RISK-campaign-wizard-04"
+            ],
+            "priority": "P3",
+            "act_ids": [],
+            "evidence_refs": [],
+            "automation_suitability": "SUITABLE"
+          },
+          {
+            "check_id": "CHK-043",
+            "dimension": "PERMISSION",
+            "layer": "portal",
+            "title": "Role khác Owner tạo / sửa / Save bản nháp campaign",
+            "applicability": {
+              "role": "Admin; role thứ 3 (Member / Marketer / Editor — tên đang tranh chấp)",
+              "state": "tài khoản role Admin và role thứ 3 trong cùng workspace",
+              "environment": "documented",
+              "theme_or_device": null
+            },
+            "precondition": "Có tài khoản test role Admin và role thứ 3 trong workspace test.",
+            "steps": [
+              "Đăng nhập role Admin, tạo campaign mới, sửa một Draft có sẵn, Save.",
+              "Lặp lại với role thứ 3.",
+              "Với thao tác bị ẩn, gọi thẳng API tương ứng và ghi status code."
+            ],
+            "observation_point": "Thao tác được phép / bị chặn; status code API.",
+            "expected_result": "Chưa có oracle để kết luận pass/fail. Ghi lại ma trận thực tế, đối chiếu khi PO trả lời câu hỏi kèm theo.",
+            "oracle": {
+              "kb_ids": [
+                "KB-P-051",
+                "KB-P-052"
+              ],
+              "oracle_strength": "NONE"
+            },
+            "status": "NEEDS_CONFIRMATION",
+            "open_question_draft": "Role nào (Owner / Admin / role thứ 3 đang tranh chấp tên / custom role) được tạo campaign mới, sửa và Save bản nháp campaign? Quyền có được chặn ở API không?",
+            "regression_watch_kb_ids": [],
+            "risk_refs": [
+              "RISK-campaign-wizard-09"
+            ],
+            "priority": "P1",
+            "act_ids": [],
+            "evidence_refs": [],
+            "automation_suitability": "HYBRID"
+          }
+        ]
+      }
+    ],
+    "coverage_by_feature_and_risk": [
+      {
+        "feature_id": "campaign-wizard",
+        "risk_ref": "RISK-campaign-wizard-01",
+        "risk_description": "Mất dữ liệu bản nháp: không auto-save, Save thất bại im lặng, rời wizard không cảnh báo",
+        "covered_by_checks": [
+          "CHK-001",
+          "CHK-002",
+          "CHK-003",
+          "CHK-004",
+          "CHK-014",
+          "CHK-040"
+        ],
+        "kb_ids": [
+          "KB-040",
+          "KB-041",
+          "KB-044",
+          "KB-045",
+          "KB-091"
+        ],
+        "coverage_status": "PARTIAL"
+      },
+      {
+        "feature_id": "campaign-wizard",
+        "risk_ref": "RISK-campaign-wizard-02",
+        "risk_description": "Stepper và điều kiện hoàn thành bước / điều kiện bật Send và Preview & test",
+        "covered_by_checks": [
+          "CHK-005",
+          "CHK-006",
+          "CHK-007",
+          "CHK-008",
+          "CHK-009",
+          "CHK-017",
+          "CHK-041"
+        ],
+        "kb_ids": [
+          "KB-038",
+          "KB-039",
+          "KB-043",
+          "KB-047",
+          "KB-048",
+          "KB-049",
+          "KB-054",
+          "KB-196",
+          "KB-198"
+        ],
+        "coverage_status": "COVERED"
+      },
+      {
+        "feature_id": "campaign-wizard",
+        "risk_ref": "RISK-campaign-wizard-03",
+        "risk_description": "Bước 1 Campaign details: field bắt buộc và giới hạn Subject line",
+        "covered_by_checks": [
+          "CHK-006",
+          "CHK-010",
+          "CHK-011",
+          "CHK-012",
+          "CHK-013",
+          "CHK-015",
+          "CHK-016"
+        ],
+        "kb_ids": [
+          "KB-039",
+          "KB-046",
+          "KB-049",
+          "KB-050",
+          "KB-051",
+          "KB-052",
+          "KB-053"
+        ],
+        "coverage_status": "PARTIAL"
+      },
+      {
+        "feature_id": "campaign-wizard",
+        "risk_ref": "RISK-campaign-wizard-04",
+        "risk_description": "Bước 2 Sender: Reply-to mặc định, địa chỉ gửi thật khi chưa có domain verified (sending-domain-verification)",
+        "covered_by_checks": [
+          "CHK-014",
+          "CHK-018",
+          "CHK-019",
+          "CHK-042"
+        ],
+        "kb_ids": [
+          "KB-057",
+          "KB-058",
+          "KB-059",
+          "KB-061",
+          "KB-199",
+          "KB-200"
+        ],
+        "coverage_status": "PARTIAL"
+      },
+      {
+        "feature_id": "campaign-wizard",
+        "risk_ref": "RISK-campaign-wizard-05",
+        "risk_description": "Bước 3 Recipients: đúng một segment, chỉ contact Subscribed, phân biệt segment trùng tên",
+        "covered_by_checks": [
+          "CHK-020",
+          "CHK-021",
+          "CHK-022",
+          "CHK-023",
+          "CHK-024",
+          "CHK-025"
+        ],
+        "kb_ids": [
+          "KB-062",
+          "KB-063",
+          "KB-064",
+          "KB-065",
+          "KB-066",
+          "KB-067",
+          "KB-068",
+          "KB-070"
+        ],
+        "coverage_status": "PARTIAL"
+      },
+      {
+        "feature_id": "campaign-wizard",
+        "risk_ref": "RISK-campaign-wizard-06",
+        "risk_description": "Email preferences gắn với campaign (unsubscribe-consent)",
+        "covered_by_checks": [
+          "CHK-026",
+          "CHK-027"
+        ],
+        "kb_ids": [
+          "KB-071",
+          "KB-072",
+          "KB-073",
+          "KB-074",
+          "KB-075"
+        ],
+        "coverage_status": "PARTIAL"
+      },
+      {
+        "feature_id": "campaign-wizard",
+        "risk_ref": "RISK-campaign-wizard-07",
+        "risk_description": "Bước 4 Contents: chọn / tạo / đổi email, giới hạn picker 50 email, đổi nhãn sang Templates",
+        "covered_by_checks": [
+          "CHK-028",
+          "CHK-029",
+          "CHK-030",
+          "CHK-031",
+          "CHK-032",
+          "CHK-033",
+          "CHK-034",
+          "CHK-035",
+          "CHK-036",
+          "CHK-037"
+        ],
+        "kb_ids": [
+          "KB-076",
+          "KB-078",
+          "KB-079",
+          "KB-080",
+          "KB-081",
+          "KB-082",
+          "KB-084",
+          "KB-085",
+          "KB-086",
+          "KB-201"
+        ],
+        "coverage_status": "PARTIAL"
+      },
+      {
+        "feature_id": "campaign-wizard",
+        "risk_ref": "RISK-campaign-wizard-08",
+        "risk_description": "Merge tag trong nội dung campaign (merge-tag-syntax) và design dùng chung giữa các Draft",
+        "covered_by_checks": [
+          "CHK-038",
+          "CHK-039"
+        ],
+        "kb_ids": [
+          "KB-087",
+          "KB-088"
+        ],
+        "coverage_status": "PARTIAL"
+      },
+      {
+        "feature_id": "campaign-wizard",
+        "risk_ref": "RISK-campaign-wizard-09",
+        "risk_description": "Phân quyền soạn campaign theo role",
+        "covered_by_checks": [
+          "CHK-043"
+        ],
+        "kb_ids": [
+          "KB-P-051",
+          "KB-P-052"
+        ],
+        "coverage_status": "FLAGGED_NEEDS_CONFIRMATION"
+      }
+    ],
+    "kb_items_without_dedicated_check": [
+      {
+        "kb_id": "KB-037",
+        "note": "Điều kiện cần segment có contact và ít nhất một email được kiểm ở checklist campaign-send-and-schedule (check điều kiện gửi), không nhân bản ở đây."
+      },
+      {
+        "kb_id": "KB-042",
+        "note": "Route từng bước wizard là hiện trạng; được quan sát kèm trong check New campaign / Save (URL), không tạo check riêng."
+      },
+      {
+        "kb_id": "KB-197",
+        "note": "Chi tiết bundle (param `new`) chỉ là suy luận từ bundle; hành vi không gọi API trước Save đã được kiểm theo Jira MTRO-29 AC trong check New campaign."
+      },
+      {
+        "kb_id": "KB-055",
+        "note": "Nhãn nút bước 3 là hiện trạng; quan sát kèm khi chạy check nút điều hướng nhưng không làm oracle của check đó."
+      },
+      {
+        "kb_id": "KB-077",
+        "note": "Nhãn cũ `Choose email library` / `Create email library` trên staging 01/10/2026 là trạng thái chưa deploy quyết định đổi nhãn; check nhãn dùng quyết định PO làm oracle."
+      },
+      {
+        "kb_id": "KB-083",
+        "note": "Copy dialog tạo email (\"How do you want to start?\") là hiện trạng; hai lựa chọn của dialog đã được kiểm theo quyết định PO trong check tạo email mới."
+      }
+    ],
+    "checks_needing_confirmation": [
+      {
+        "check_id": "CHK-003",
+        "open_question_draft": "Khi người dùng rời wizard campaign (đổi menu, bấm link `Manage sending domains`, đóng / tải lại tab) lúc còn thay đổi chưa Save, wizard có phải cảnh báo trước khi rời không? Lỗi đã biết BUG-WIZ-02 ghi thay đổi bị mất mà không có cảnh báo.",
+        "reason": "Không có rule CE về cảnh báo rời trang; chỉ có lỗi đã biết mô tả hành vi mất dữ liệu."
+      },
+      {
+        "check_id": "CHK-011",
+        "open_question_draft": "Save campaign khi chưa có Campaign name phải bị chặn với thông báo gì? Bundle front-end có chuỗi \"Give this campaign a name before saving it.\" nhưng chưa thấy trên UI.",
+        "reason": "Thông báo chỉ biết qua chuỗi i18n trong bundle, chưa đối chiếu UI và chưa có AC."
+      },
+      {
+        "check_id": "CHK-014",
+        "open_question_draft": "Khi Save ở wizard campaign bị BE từ chối (422, ví dụ From email sai định dạng hoặc subject dài hơn 255 ký tự), wizard phải hiển thị lỗi thế nào (inline theo field hay toast)? Quy tắc validate From email / Reply-to là gì? Lỗi đã biết BUG-WIZ-01 (P0) ghi wizard nuốt lỗi, người dùng tưởng đã lưu.",
+        "reason": "Không có rule CE về hiển thị lỗi Save và validate From email; chỉ có lỗi đã biết."
+      },
+      {
+        "check_id": "CHK-019",
+        "open_question_draft": "Khi From email của campaign không thuộc domain verified, người dùng có phải được báo rằng mail sẽ gửi từ host dùng chung (và địa chỉ gửi thật) không? Staging hiện cảnh báo \"Sending needs a verified domain — this address won't be accepted until its domain is verified.\" trong khi mail vẫn gửi qua host dùng chung, và bước Contents / Preview vẫn hiện địa chỉ người dùng gõ.",
+        "reason": "Gắn với mâu thuẫn chưa chốt về gửi campaign khi chưa có domain verified; UX báo đổi sender chưa chốt."
+      },
+      {
+        "check_id": "CHK-025",
+        "open_question_draft": "Picker Recipients phải hiện thêm thông tin gì để phân biệt hai segment trùng tên (ví dụ số contact, ngày tạo, người tạo), hay tên segment phải unique (GAP-19)? Lỗi đã biết BUG-69 ghi rủi ro gửi nhầm tập khách hàng.",
+        "reason": "Cách phân biệt segment trùng tên đang chờ PO quyết; chỉ có lỗi đã biết."
+      },
+      {
+        "check_id": "CHK-027",
+        "open_question_draft": "Người đã bỏ tick một lựa chọn trên preferences page có bị loại tự động khỏi campaign liên quan không, hay chỉ bị loại khi segment lọc theo field đó? Hướng dẫn \"tick the choices this campaign is about\" là copy cũ hay wizard còn thiếu ô chọn? Cảnh báo `Your email offers choices but has no page` và `Your segment ignores some of the page's choices` có phải hiện ở bước Recipients không?",
+        "reason": "Cơ chế loại người nhận theo lựa chọn preferences chưa chốt (unsubscribe-consent); cảnh báo chỉ biết qua bundle."
+      },
+      {
+        "check_id": "CHK-032",
+        "open_question_draft": "Picker email ở bước Contents (và Duplicate design) chỉ nạp 50 email sửa gần nhất, không search hay phân trang. Workspace có hơn 50 email thì email cũ hơn có phải chọn được không? Giới hạn 50 có chủ ý không, có định thêm tìm kiếm / phân trang không?",
+        "reason": "Ranh giới 50/51 chưa thử; ý định giới hạn đang chờ Dev trả lời."
+      },
+      {
+        "check_id": "CHK-033",
+        "open_question_draft": "Khi thư viện email của workspace trống, picker email ở bước Contents phải hiện gì? Bundle có chuỗi `No emails in this workspace yet.` nhưng chưa thấy trên UI.",
+        "reason": "Chỉ có chuỗi i18n trong bundle, chưa đối chiếu UI."
+      },
+      {
+        "check_id": "CHK-039",
+        "open_question_draft": "Cú pháp merge tag đúng cho nội dung campaign là hai ngoặc {{…}} (quyết định PO 02/10/2026, staging 01/10/2026) hay một ngoặc như Jira MTRO-92 §10 (nội dung dùng {{…}} bị từ chối khi lưu)? Cần PO/Dev chốt một cú pháp duy nhất.",
+        "reason": "Thuộc conflict_group cú pháp merge tag chưa phân xử (merge-tag-syntax); hai phía cùng phạm vi."
+      },
+      {
+        "check_id": "CHK-043",
+        "open_question_draft": "Role nào (Owner / Admin / role thứ 3 đang tranh chấp tên / custom role) được tạo campaign mới, sửa và Save bản nháp campaign? Quyền có được chặn ở API không?",
+        "reason": "Ma trận quyền Campaigns chưa chốt; chặn quyền (nếu có) phải ở API, chưa kiểm."
+      }
+    ],
+    "duplicates_removed": [
+      {
+        "merged": "Check field bắt buộc bước 1 và check stepper done",
+        "into": "Hai check riêng theo test intent (nhãn/dấu `*` vs trạng thái stepper), không tạo thêm check cho từng field",
+        "reason": "Tránh nhân bản theo field."
+      },
+      {
+        "merged": "Check nội dung cũ dùng merge tag một ngoặc không được migrate",
+        "into": "covered in email-content/merge-tags",
+        "reason": "Rework r1 (trùng rule giữa object): quy tắc này do email-content sở hữu; item phía campaigns đã bị gỡ."
+      },
+      {
+        "merged": "Check hai campaign Draft dùng chung email (không có copy-on-write)",
+        "into": "covered in email-content/email-library",
+        "reason": "Rework r1 (trùng rule giữa object): quy tắc này do email-content sở hữu; item phía campaigns đã bị gỡ."
+      },
+      {
+        "merged": "Check bước Contents gộp chi tiết UI staging với AC",
+        "into": "Tách thành check STRONG theo Jira MTRO-29 AC, check STRONG Reset design theo quyết định PO và check BASELINE chi tiết UI staging",
+        "reason": "Rework r1: check STRONG chỉ khẳng định đúng nội dung authority."
+      },
+      {
+        "merged": "Check Save nuốt lỗi với From email sai và với subject quá dài",
+        "into": "Một check NEGATIVE Save bị BE từ chối",
+        "reason": "Cùng hành vi xử lý lỗi Save."
+      }
+    ],
+    "excluded_dimensions": [
+      {
+        "dimension": "REGRESSION",
+        "reason": "Phiên bản đầu tiên (bootstrap) của bộ check; chưa có thay đổi hành vi từ knowledge-diff-analyzer. Lỗi đã biết được theo dõi qua regression_watch_kb_ids."
+      }
+    ]
+  },
+  "gate": {
+    "decision": "PASS",
+    "blocking_findings": [],
+    "conditions": [],
+    "allowed_next_steps": [
+      "knowledge-diff-analyzer",
+      "context-quality-reviewer"
+    ]
+  }
+}

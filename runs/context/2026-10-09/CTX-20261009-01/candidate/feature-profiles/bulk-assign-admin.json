@@ -1,0 +1,553 @@
+{
+  "schema_version": "1.0",
+  "artifact_type": "FeatureProfileCandidate",
+  "artifact_id": "ART-FEATURE-PROFILE-bulk-assign-admin-CTX-20261009-01",
+  "workflow_id": "CTX-20261009-01",
+  "producer": "feature-profile-builder",
+  "source_refs": [
+    "candidate/product-kb/bulk-assign-admin.json",
+    "candidate/product-kb/default-and-custom-roles.json",
+    "candidate/product-kb/member-role-assignment-sync.json",
+    "candidate/product-kb/_product-level.json",
+    "input/scope-plan.json",
+    "input/orchestrator-directives.json",
+    "input/profile-checklist-brief.md",
+    "intermediate/doc/DOC-21.json"
+  ],
+  "upstream_artifact_ids": [
+    "PKBC-CTX-20261009-01-roles-permissions-bulk-assign-admin",
+    "PKBC-CTX-20261009-01-roles-permissions-default-and-custom-roles",
+    "PKBC-CTX-20261009-01-roles-permissions-member-role-assignment-sync",
+    "PKBC-CTX-20261009-01-_product-level",
+    "SCOPE-PLAN-CTX-20261009-01"
+  ],
+  "status": "PARTIAL",
+  "confidence": "MEDIUM",
+  "observations": [
+    "Profile dựng từ tài liệu; không có quan sát runtime nên act_ids và observed_validations rỗng.",
+    "Quy tắc đã xác nhận: ghi đè role (Dev BE + PO 04/05/2026), continue-on-error không dấu vết, đếm success theo company (Jira DUOS-405); khối UI chỉ là hiện trạng staging chưa chạy."
+  ],
+  "assumptions": [
+    "feature_id dùng chính feature_key.",
+    "Tag company-creation giữ theo scope-plan vì bulk áp lên company tạo từ luồng duyệt."
+  ],
+  "unknowns": [
+    "Radio \"Main contacts\" / \"Location admin\" trên Portal ứng với type `assign_admin_main_contact` / `assign_admin_location_admin` như thế nào?",
+    "Merchant có được báo gì về item bị Shopify reject / bỏ qua không, và khi nào trạng thái là partial_completed thay vì completed?",
+    "Gặp Shopify API rate limit giữa batch thì bỏ qua hay retry?",
+    "Bulk member sync được khởi chạy ở đâu và bởi ai?",
+    "Sau khi bấm \"Run bulk assign\" trên staging, Portal hiển thị gì (\"Last synced at\", trạng thái, số company)?"
+  ],
+  "conflicts": [],
+  "blocking_issues": [],
+  "payload": {
+    "feature_profiles": [
+      {
+        "feature_id": "bulk-assign-admin",
+        "feature_key": "bulk-assign-admin",
+        "name": "Bulk assign role Admin cho main contact / Location admin",
+        "user_goal": "Merchant chạy một lệnh hàng loạt để mọi company có Admin trong app Duos — gán main contact thành Location admin hoặc đồng bộ những người đang là Location admin trên Shopify — và đọc được kết quả của lần chạy.",
+        "user_goal_kb_refs": [
+          "KB-046",
+          "KB-048",
+          "KB-050",
+          "KB-052"
+        ],
+        "stable_since_version": "v1",
+        "never_supersede_topics": [
+          "permission",
+          "company-creation"
+        ],
+        "actors": [
+          {
+            "role": "merchant (Portal)",
+            "permission_observed": "Trên staging 08/10/2026 (merchant staff, store staging Plus Free plan) thấy khối \"Apply admin role to:\" và nút \"Run bulk assign\"; chưa chạy. Staff role nào được chạy bulk chưa có nguồn.",
+            "kb_refs": [
+              "KB-052"
+            ]
+          },
+          {
+            "role": "system",
+            "permission_observed": "Xử lý bulk theo batch, ghi đè role đã có, bỏ qua item bị Shopify reject và chạy tiếp, đếm success theo company.",
+            "kb_refs": [
+              "KB-048",
+              "KB-049",
+              "KB-050"
+            ]
+          }
+        ],
+        "entry_points": [
+          {
+            "path": "Portal › Users & permission › khối \"Apply admin role to:\" (radio \"Main contacts\" / \"Location admin\") › nút \"Run bulk assign\"",
+            "precondition": "Merchant ở Portal; staging khảo sát với store chưa từng chạy bulk (\"Last synced at: Not synced yet\").",
+            "kb_refs": [
+              "KB-052"
+            ]
+          },
+          {
+            "path": "Bulk member sync (nơi khởi chạy chưa rõ)",
+            "precondition": "Không có nguồn.",
+            "kb_refs": [
+              "KB-049"
+            ]
+          }
+        ],
+        "capabilities": [
+          {
+            "name": "Chọn kiểu bulk và khởi chạy",
+            "description": "Hai type: `assign_admin_main_contact` (gán main contact thành Location admin ở location chưa gán và sync database app) và `assign_admin_location_admin` (chỉ sync database cho người đang là Location admin trên Shopify) — theo ticket; Portal có radio \"Main contacts\" / \"Location admin\" và nút \"Run bulk assign\" nhưng ánh xạ radio ↔ type chưa được ghi.",
+            "kb_refs": [
+              "KB-046",
+              "KB-052"
+            ],
+            "act_ids": []
+          },
+          {
+            "name": "Ghi đè role hiện có",
+            "description": "Bulk assign admin (cả hai type) ghi đè role của customer kể cả khi đã có role trong database app.",
+            "kb_refs": [
+              "KB-048"
+            ],
+            "act_ids": []
+          },
+          {
+            "name": "Chạy tiếp khi gặp lỗi Shopify",
+            "description": "Với bulk assign admin from main contact và bulk member sync, item bị Shopify reject được bỏ qua, batch chạy tới hết; item bỏ qua không để lại dấu vết trong bulk operation record lẫn log.",
+            "kb_refs": [
+              "KB-049"
+            ],
+            "act_ids": []
+          },
+          {
+            "name": "Đọc kết quả bulk",
+            "description": "Trạng thái theo ticket: pending / processing / completed / partial_completed / failed / canceled (chưa dùng); success đếm theo company; company có location bị reject vẫn tính success nên Completed không chứng minh mọi location đã được gán. Portal hiện \"Last synced at\".",
+            "kb_refs": [
+              "KB-047",
+              "KB-050",
+              "KB-051",
+              "KB-052"
+            ],
+            "act_ids": []
+          }
+        ],
+        "state_transitions": [
+          {
+            "from": "chưa chạy (\"Last synced at: Not synced yet\")",
+            "to": "pending / processing",
+            "trigger": "Bấm \"Run bulk assign\"",
+            "condition": "Chuỗi trạng thái chỉ theo ticket; chưa chạy trên staging.",
+            "kb_refs": [
+              "KB-052",
+              "KB-047"
+            ]
+          },
+          {
+            "from": "processing",
+            "to": "completed / partial_completed / failed",
+            "trigger": "Batch xử lý xong",
+            "condition": "Item bị Shopify reject bị bỏ qua, chạy tiếp; điều kiện ra partial_completed thay vì completed chưa rõ.",
+            "kb_refs": [
+              "KB-047",
+              "KB-049",
+              "KB-051"
+            ]
+          },
+          {
+            "from": "customer đã có role trong app",
+            "to": "customer giữ role Admin (role cũ bị ghi đè)",
+            "trigger": "Bulk assign admin chọn customer đó",
+            "condition": "Cả hai type.",
+            "kb_refs": [
+              "KB-048"
+            ]
+          }
+        ],
+        "confirmed_rules": [
+          {
+            "statement": "Theo quyết định Dev BE và PO 04/05/2026 (Jira DUOS-393 comment), bulk \"assign admin\" (cả `assign_admin_main_contact` và `assign_admin_location_admin`) ghi đè role của customer kể cả khi customer đó đã có role trong database của app — không bỏ qua customer đã có role.",
+            "knowledge_kind": "CONFIRMED_EXPECTED",
+            "confidence": "MEDIUM",
+            "tags": [
+              "permission"
+            ],
+            "kb_refs": [
+              "KB-048"
+            ]
+          },
+          {
+            "statement": "Theo Jira DUOS-405 (description/AC, cập nhật 11/08/2026; Dev BE 10/08/2026 chốt bulk continue-on-error), với bulk \"assign admin from main contact\" và bulk member sync: nếu Shopify reject 1 item thì batch bỏ qua item đó và chạy tiếp tới hết (trước đây 1 reject là dừng cả run); item bị bỏ qua không để lại dấu vết trong bulk operation record lẫn log.",
+            "knowledge_kind": "CONFIRMED_EXPECTED",
+            "confidence": "MEDIUM",
+            "tags": [
+              "permission"
+            ],
+            "kb_refs": [
+              "KB-049"
+            ]
+          },
+          {
+            "statement": "Theo Jira DUOS-405 (description/AC, cập nhật 11/08/2026), bulk operation đếm success theo company, không theo company location.",
+            "knowledge_kind": "CONFIRMED_EXPECTED",
+            "confidence": "MEDIUM",
+            "tags": [
+              "permission"
+            ],
+            "kb_refs": [
+              "KB-050"
+            ]
+          }
+        ],
+        "observed_behavior": [
+          {
+            "statement": "Trên staging (khảo sát 08/10/2026, store staging Plus (Free plan); quan sát tương tự ngày 30/09/2026), trang Users & permission trên Portal có tiêu đề h2 \"Users & permission\" (dòng của module ở hub B2B extensions ghi \"Users & permissions\"); khối gán admin hàng loạt không có tiêu đề \"Bulk assign admin role\" như ticket Jira DUOS-372 mà gồm nhãn \"Apply admin role to:\" với radio \"Main contacts\" (đang chọn) và \"Location admin\", dòng \"Last synced at: Not synced yet\" (store chưa chạy bulk) và nút \"Run bulk assign\". Chưa chạy \"Run bulk assign\" nên chưa quan sát kết quả.",
+            "knowledge_kind": "OBSERVED_CURRENT",
+            "confidence": "MEDIUM",
+            "tags": [
+              "permission"
+            ],
+            "kb_refs": [
+              "KB-052"
+            ],
+            "note": "Label UI theo staging; chưa chạy bulk nên chưa có quan sát kết quả.",
+            "status": "CURRENT_STATE"
+          }
+        ],
+        "observed_validations": [],
+        "permissions": [
+          {
+            "statement": "Bulk gán role Admin (Location admin) — role có quyền quản lý member và role — cho main contact hoặc người đang là Location admin.",
+            "kb_refs": [
+              "KB-046",
+              "KB-003"
+            ]
+          },
+          {
+            "statement": "Staff role nào của merchant được chạy bulk assign admin chưa có nguồn.",
+            "kb_refs": [
+              "KB-052"
+            ]
+          }
+        ],
+        "surface_mapping": {
+          "portal": [
+            {
+              "item": "Trang Users & permission: nhãn \"Apply admin role to:\", radio \"Main contacts\" / \"Location admin\", \"Last synced at: Not synced yet\", nút \"Run bulk assign\"",
+              "kb_refs": [
+                "KB-052"
+              ]
+            }
+          ],
+          "storefront": [],
+          "api": [],
+          "data": [
+            {
+              "item": "Bulk operation: `type` (`assign_admin_main_contact` / `assign_admin_location_admin`), trạng thái, đếm success theo company",
+              "kb_refs": [
+                "KB-046",
+                "KB-047",
+                "KB-050"
+              ]
+            },
+            {
+              "item": "Role của customer trong database app (bị ghi đè)",
+              "kb_refs": [
+                "KB-048"
+              ]
+            }
+          ],
+          "code": [
+            {
+              "item": "Bulk assign admin from main contact và bulk member sync dùng chung member-sync path",
+              "kb_refs": [
+                "KB-026",
+                "KB-049"
+              ]
+            }
+          ],
+          "backend": [
+            {
+              "item": "Batch continue-on-error, không ghi dấu vết item bị bỏ qua",
+              "kb_refs": [
+                "KB-049"
+              ]
+            }
+          ]
+        },
+        "dependencies": [
+          {
+            "target": "roles-permissions / member-role-assignment-sync",
+            "relation": "shared_write_path",
+            "note": "Bulk là 2 trong 4 luồng dùng chung member-sync path; role gán theo location trong khi bulk đếm theo company.",
+            "kb_refs": [
+              "KB-026",
+              "KB-030"
+            ]
+          },
+          {
+            "target": "company-submissions / approve-company-creation",
+            "relation": "see_also",
+            "note": "Company tạo từ luồng duyệt/job dùng được bulk assign admin from main contact (fact do company-submissions sở hữu).",
+            "kb_refs": [
+              "KB-046"
+            ]
+          },
+          {
+            "target": "company-member / member-list-view-access",
+            "relation": "see_also",
+            "note": "Portal không có màn danh sách member theo company để đối chiếu kết quả bulk (fact do company-member sở hữu).",
+            "kb_refs": [
+              "KB-052"
+            ]
+          }
+        ],
+        "risks": [
+          {
+            "statement": "Theo QA business rule Duos (Jira DUOS-405) và Known issues Duos (intentional limitation, ngoài phạm vi Jira DUOS-405), company có location bị Shopify reject vẫn được tính là success, nên bulk operation có thể báo Completed dù một số location chưa thực sự được gán; trạng thái Completed không chứng minh mọi location đã được gán.",
+            "knowledge_kind": "INFERRED",
+            "confidence": "MEDIUM",
+            "tags": [
+              "permission"
+            ],
+            "kb_refs": [
+              "KB-051"
+            ],
+            "note": "Completed không chứng minh mọi location đã được gán; phải đối chiếu từng location."
+          },
+          {
+            "statement": "Item bị Shopify reject được bỏ qua mà không để lại dấu vết trong bulk operation record lẫn log, nên lỗi gán một phần không truy được từ kết quả bulk.",
+            "knowledge_kind": "CONFIRMED_EXPECTED",
+            "confidence": "MEDIUM",
+            "tags": [
+              "permission"
+            ],
+            "kb_refs": [
+              "KB-049"
+            ]
+          },
+          {
+            "statement": "Bulk ghi đè role đã có của customer trong database app, không bỏ qua customer đã có role; chạy nhầm sẽ thay role hiện có của nhiều customer cùng lúc.",
+            "knowledge_kind": "CONFIRMED_EXPECTED",
+            "confidence": "MEDIUM",
+            "tags": [
+              "permission"
+            ],
+            "kb_refs": [
+              "KB-048"
+            ]
+          },
+          {
+            "statement": "Theo Jira DUOS-393 (description, story Done; QA KB Duos ghi mức tin \"theo ticket\"), bulk assign admin có `type` là `assign_admin_main_contact` (gán main contact thành Location admin ở các location chưa gán và sync database của app) hoặc `assign_admin_location_admin` (chỉ sync database cho những người đang là Location admin trên Shopify). Tài liệu không nêu lựa chọn nào trên Portal ứng với type nào.",
+            "knowledge_kind": "INFERRED",
+            "confidence": "MEDIUM",
+            "tags": [
+              "permission"
+            ],
+            "kb_refs": [
+              "KB-046"
+            ],
+            "note": "Hai type chỉ theo ticket; ánh xạ với radio Portal chưa rõ."
+          },
+          {
+            "statement": "Theo Jira DUOS-393 (description, theo ticket), trạng thái của bulk assign admin gồm `pending`, `processing`, `completed`, `partial_completed`, `failed` và `canceled` (`canceled` chưa được dùng).",
+            "knowledge_kind": "INFERRED",
+            "confidence": "MEDIUM",
+            "tags": [
+              "permission"
+            ],
+            "kb_refs": [
+              "KB-047"
+            ],
+            "note": "Danh sách trạng thái chỉ theo ticket."
+          },
+          {
+            "statement": "Theo QA KB Duos \"Glossary\" v1 (định nghĩa không ghi nguồn riêng), role Duos được gán theo company location chứ không theo company, trong khi thao tác bulk đếm theo company — glossary lưu ý điểm này dễ gây lệch số.",
+            "knowledge_kind": "INFERRED",
+            "confidence": "MEDIUM",
+            "tags": [
+              "permission"
+            ],
+            "kb_refs": [
+              "KB-030"
+            ],
+            "note": "Role gán theo location nhưng bulk đếm theo company — dễ lệch số khi đối chiếu."
+          }
+        ],
+        "unknown_areas": [
+          {
+            "question": "Radio \"Main contacts\" / \"Location admin\" trên Portal ứng với type `assign_admin_main_contact` / `assign_admin_location_admin` như thế nào?",
+            "why_it_matters": "Không viết được check theo lựa chọn trên UI.",
+            "kb_refs": [
+              "KB-046",
+              "KB-052"
+            ]
+          },
+          {
+            "question": "Merchant có được báo gì về item bị Shopify reject / bỏ qua không, và khi nào trạng thái là partial_completed thay vì completed?",
+            "why_it_matters": "Kết quả bulk có thể báo Completed dù location chưa được gán.",
+            "kb_refs": [
+              "KB-047",
+              "KB-049",
+              "KB-051"
+            ]
+          },
+          {
+            "question": "Gặp Shopify API rate limit giữa batch thì bỏ qua hay retry?",
+            "why_it_matters": "Continue-on-error chỉ nói item bị reject.",
+            "kb_refs": [
+              "KB-049"
+            ]
+          },
+          {
+            "question": "Bulk member sync được khởi chạy ở đâu và bởi ai?",
+            "why_it_matters": "Là một luồng của member-sync path nhưng không có entry point.",
+            "kb_refs": [
+              "KB-049"
+            ]
+          },
+          {
+            "question": "Sau khi bấm \"Run bulk assign\" trên staging, Portal hiển thị gì (\"Last synced at\", trạng thái, số company)?",
+            "why_it_matters": "Chưa chạy bulk khi khảo sát nên chưa có BASELINE cho kết quả.",
+            "kb_refs": [
+              "KB-052"
+            ]
+          }
+        ],
+        "freshness": {
+          "observed_at": "2026-10-08",
+          "earliest_source_date": "2026-05-04",
+          "run_id": "CTX-20261009-01",
+          "basis": "Ngày nguồn mới nhất trong các KB item được tham chiếu; Dev BE + PO 04/05/2026 (Jira DUOS-393), Jira DUOS-405 (cập nhật 11/08/2026), khảo sát staging 08/10/2026. Không có quan sát runtime trong lần chạy này."
+        }
+      }
+    ],
+    "profile_relationships": [
+      {
+        "from": "bulk-assign-admin",
+        "to": "member-role-assignment-sync",
+        "relation": "SHARES_WRITE_PATH",
+        "kb_refs": [
+          "KB-026",
+          "KB-049"
+        ]
+      },
+      {
+        "from": "bulk-assign-admin",
+        "to": "default-and-custom-roles",
+        "relation": "USES_ROLE_MODEL",
+        "kb_refs": [
+          "KB-003"
+        ]
+      },
+      {
+        "from": "bulk-assign-admin",
+        "to": "company-submissions/approve-company-creation",
+        "relation": "SEE_ALSO",
+        "kb_refs": [
+          "KB-046"
+        ]
+      }
+    ],
+    "coverage_matrix": [
+      {
+        "feature_id": "bulk-assign-admin",
+        "layer": "portal",
+        "role": "merchant",
+        "state": "store chưa chạy bulk",
+        "environment": "documented",
+        "covered": true,
+        "note": "Hiện trạng staging 08/10/2026."
+      },
+      {
+        "feature_id": "bulk-assign-admin",
+        "layer": "portal",
+        "role": "merchant",
+        "state": "chạy bulk với \"Main contacts\" / \"Location admin\"",
+        "environment": "documented",
+        "covered": false,
+        "note": "Chưa chạy; ánh xạ radio ↔ type chưa rõ."
+      },
+      {
+        "feature_id": "bulk-assign-admin",
+        "layer": "backend",
+        "role": "system",
+        "state": "customer đã có role",
+        "environment": "documented",
+        "covered": true,
+        "note": "Dev BE + PO 04/05/2026: ghi đè."
+      },
+      {
+        "feature_id": "bulk-assign-admin",
+        "layer": "backend",
+        "role": "system",
+        "state": "Shopify reject 1 item giữa batch",
+        "environment": "documented",
+        "covered": true,
+        "note": "Jira DUOS-405 + Dev BE 10/08/2026."
+      },
+      {
+        "feature_id": "bulk-assign-admin",
+        "layer": "backend",
+        "role": "system",
+        "state": "bulk hoàn tất — đếm success theo company",
+        "environment": "documented",
+        "covered": true,
+        "note": "Jira DUOS-405."
+      },
+      {
+        "feature_id": "bulk-assign-admin",
+        "layer": "backend",
+        "role": "system",
+        "state": "location bị reject nhưng bulk Completed",
+        "environment": "documented",
+        "covered": true,
+        "note": "Limitation, chỉ INFERRED."
+      },
+      {
+        "feature_id": "bulk-assign-admin",
+        "layer": "backend",
+        "role": "system",
+        "state": "rate limit Shopify giữa batch",
+        "environment": "documented",
+        "covered": false,
+        "note": "Chưa có nguồn."
+      },
+      {
+        "feature_id": "bulk-assign-admin",
+        "layer": "portal",
+        "role": "merchant-staff theo staff role",
+        "state": "chạy bulk",
+        "environment": "documented",
+        "covered": false,
+        "note": "Chưa có ma trận staff role."
+      },
+      {
+        "feature_id": "bulk-assign-admin",
+        "layer": "api",
+        "role": "any",
+        "state": "any",
+        "environment": "documented",
+        "covered": false,
+        "note": "Bộ tài liệu QA không có đặc tả API/data model cho feature này"
+      }
+    ],
+    "unassigned_kb_items": [],
+    "profile_conflicts": [],
+    "profile_change_summary": [
+      "Tạo mới profile ở bootstrap từ tài liệu (v1)."
+    ],
+    "kb_trace_complete": true
+  },
+  "gate": {
+    "decision": "CONDITIONAL_PASS",
+    "blocking_findings": [],
+    "conditions": [
+      "Identity, user goal, capability theo mục tiêu (khởi chạy, ghi đè, chạy tiếp khi lỗi, đọc kết quả) và mapping KB đầy đủ.",
+      "Oracle mạnh cho ghi đè role, continue-on-error, đếm theo company; khối UI là BASELINE.",
+      "Ánh xạ radio ↔ type, trạng thái partial_completed, báo lỗi cho merchant chưa có oracle — NEEDS_CONFIRMATION."
+    ],
+    "allowed_next_steps": [
+      "qa-checklist-builder",
+      "knowledge-diff-analyzer"
+    ]
+  }
+}

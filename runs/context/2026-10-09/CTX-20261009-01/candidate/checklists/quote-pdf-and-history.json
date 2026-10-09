@@ -1,0 +1,822 @@
+{
+  "schema_version": "1.0",
+  "artifact_type": "RegressionChecklistCandidate",
+  "artifact_id": "RCCAND-quote-pdf-and-history-CTX-20261009-01",
+  "workflow_id": "CTX-20261009-01",
+  "producer": "qa-checklist-builder",
+  "source_refs": [
+    "candidate/feature-profiles/quote-pdf-and-history.json",
+    "candidate/product-kb/quote-pdf-and-history.json",
+    "candidate/product-kb/_product-level.json",
+    "input/orchestrator-directives.json",
+    "input/scope-plan.json",
+    "intermediate/doc/DOC-21.json"
+  ],
+  "upstream_artifact_ids": [
+    "ART-FEATURE-PROFILE-quote-pdf-and-history-CTX-20261009-01",
+    "PKBC-CTX-20261009-01-quote-request-quote-pdf-and-history",
+    "PKBC-CTX-20261009-01-_product-level"
+  ],
+  "status": "PARTIAL",
+  "confidence": "MEDIUM",
+  "observations": [
+    "15 check; theo oracle_strength {'BASELINE': 5, 'NONE': 10}; theo status {'READY': 5, 'NEEDS_CONFIRMATION': 10}; theo dimension {'CORE': 8, 'INTEGRATION': 4, 'STATE_DATA': 1, 'PERMISSION': 2}.",
+    "oracle_strength tính bằng script theo luật orchestrator: STRONG khi mọi kb_id là CONFIRMED_EXPECTED ngoài conflict_group; có OBSERVED_CURRENT (không KNOWN_DEFECT) thì BASELINE; có INFERRED, item thuộc conflict_group hoặc không có kb_id thì NONE + NEEDS_CONFIRMATION. Item KNOWN_DEFECT chỉ nằm ở regression_watch_kb_ids, không bao giờ ở oracle.kb_ids.",
+    "related_kb_ids là ngữ cảnh truy vết của check (item chưa đủ điều kiện làm oracle hoặc item liên quan), KHÔNG phải oracle.",
+    "Expected của check BASELINE ghi theo hiện trạng staging 08/10/2026 (store Free plan, merchant staff, store có 0 quote); lệch = cần điều tra, không phải bug.",
+    "Checklist regression QA của Duos chỉ được dùng làm gợi ý risk/độ phủ (quote → order / draft order, quote PDF từ Portal + Customer Account, quote nhiều trang, logo, tiền tệ), không dùng làm oracle.",
+    "Precondition dùng placeholder có cấu trúc (<store-plus-free>, <store-quote-on>, <buyer-b2b>, <quote-submitted>…); không dùng tên store staging hay email thật.",
+    "Lỗi HTTP 403 tới Google Web Fonts API (nghi vấn chờ Dev) chỉ nằm ở regression_watch_kb_ids của check Design; không có rule đã xác nhận cho font nên không có check STRONG tương ứng."
+  ],
+  "assumptions": [
+    "Check storefront / Customer Account giả định có store staging đã kích hoạt module B2B Quote Request, app embed và extension My Quotes, cùng tài khoản buyer B2B — điều kiện này chưa có ở lần khảo sát 08/10/2026.",
+    "Layer `storefront` dùng cho cả storefront lẫn Customer Account (My Quotes) vì enum layer không có giá trị riêng cho Customer Account; applicability.role/state nêu rõ surface.",
+    "Check API history log giả định phiên Portal gọi được `/api/quotations/{id}/logs` trên host API staging; method và cách xác thực chưa có trong KB."
+  ],
+  "unknowns": [
+    "Mỗi tuỳ chọn Design / Content của trang \"Quote PDF template\" tác động thế nào lên preview và PDF của quote, giá trị mặc định là gì (kể cả Valid days — preview chỉ hiện giá trị mẫu \"Valid for 30 days\"), và cấu hình được lưu thế nào?",
+    "Theo Jira DUOS-211 / DUOS-217 (chưa xác nhận) quote export được PDF từ Portal. PDF của quote thật gồm những mục nào luôn có, và quote nhiều trang, logo, định dạng tiền tệ hiển thị ra sao?",
+    "Theo Jira DUOS-211 / DUOS-217 (chưa xác nhận) quote export được PDF từ Customer Account. PDF ở Customer Account có giống PDF ở Portal không, và buyer xuất được ở trạng thái quote nào?",
+    "Cấu hình trên trang \"Quote PDF template\" có áp lên PDF xuất từ cả Portal và Customer Account không, và áp ngay cho quote đã tạo trước đó?",
+    "Theo Jira DUOS-223 / DUOS-224 (chưa xác nhận) bản dịch của quote PDF quản lý ở trang Translations. Field nào của PDF dịch được, và PDF chọn ngôn ngữ theo gì (ngôn ngữ của buyer hay của store)?",
+    "History log của quote ghi những sự kiện nào (submit, báo giá, counter offer, accept, reject kèm lý do, reassign…) và mỗi dòng gồm những thông tin gì?",
+    "API `/api/quotations/{id}/logs` dùng method gì, trả response gì, và phiên của store khác hoặc không đăng nhập gọi tới thì trả mã gì?",
+    "Theo Jira DUOS-192 / DUOS-194 (chưa xác nhận) history log trên Customer Account có cùng format với Portal. Buyer có thấy toàn bộ sự kiện (kể cả ghi chú nội bộ của merchant) không?",
+    "Theo Jira DUOS-222 (chưa xác nhận) payment information của quote gồm Subtotal, Shipping, Estimated tax và Total. Nó hiển thị ở đâu (Portal, Customer Account, PDF) và Estimated tax được tính thế nào?",
+    "Role nào được sửa mẫu PDF, xuất PDF và xem history log của quote trên Portal và Customer Account?"
+  ],
+  "conflicts": [],
+  "blocking_issues": [],
+  "payload": {
+    "checklists": [
+      {
+        "feature_id": "quote-pdf-and-history",
+        "feature_key": "quote-pdf-and-history",
+        "checklist_version": "v1",
+        "checks": [
+          {
+            "check_id": "CHK-001",
+            "dimension": "CORE",
+            "layer": "portal",
+            "title": "Đường vào trang Quote PDF template và nút Back to Quotes",
+            "applicability": {
+              "role": "merchant",
+              "state": "store Free plan",
+              "environment": "documented",
+              "theme_or_device": null
+            },
+            "precondition": "Đăng nhập Portal (embedded app trong Shopify admin) của <store-plus-free> (store staging Plus, Free plan) bằng merchant staff.",
+            "steps": [
+              "Mở \"Quote management\" › \"Advanced settings\" › \"Quote PDF template\" › \"Manage\".",
+              "Quan sát nút \"Back to Quotes\" và bấm thử."
+            ],
+            "observation_point": "Trang đích sau \"Manage\"; sự hiện diện và trang đích của \"Back to Quotes\".",
+            "expected_result": "Theo hiện trạng staging 08/10/2026 (store Free plan), lệch = cần điều tra: đường vào trang \"Quote PDF template\" là \"Quote management\" › section \"Advanced settings\" › \"Quote PDF template\" › nút \"Manage\"; trang có nút \"Back to Quotes\" (ghi lại trang đích khi bấm).",
+            "oracle": {
+              "kb_ids": [
+                "KB-062",
+                "KB-063"
+              ],
+              "oracle_strength": "BASELINE"
+            },
+            "status": "READY",
+            "open_question_draft": null,
+            "related_kb_ids": [
+              "KB-024"
+            ],
+            "regression_watch_kb_ids": [],
+            "risk_refs": [
+              "RISK-quote-pdf-01"
+            ],
+            "priority": "P3",
+            "act_ids": [],
+            "evidence_refs": [],
+            "automation_suitability": "SUITABLE"
+          },
+          {
+            "check_id": "CHK-002",
+            "dimension": "CORE",
+            "layer": "portal",
+            "title": "Accordion và các tuỳ chọn Design của mẫu PDF",
+            "applicability": {
+              "role": "merchant",
+              "state": "store Free plan, mở trang Quote PDF template",
+              "environment": "documented",
+              "theme_or_device": null
+            },
+            "precondition": "Đăng nhập Portal (embedded app trong Shopify admin) của <store-plus-free> (store staging Plus, Free plan) bằng merchant staff. Mở DevTools tab Console/Network.",
+            "steps": [
+              "Mở trang \"Quote PDF template\", quan sát các accordion.",
+              "Mở \"Design\", quan sát các tuỳ chọn; mở danh sách Font family của \"Header settings\" và \"Content settings\".",
+              "Ghi lại số request lỗi tới Google Web Fonts API trong console (theo dõi lỗi đã biết)."
+            ],
+            "observation_point": "Danh sách accordion; tuỳ chọn trong Design; danh sách Font family; lỗi console.",
+            "expected_result": "Theo hiện trạng staging 08/10/2026 (store Free plan), lệch = cần điều tra: trang có 3 accordion \"Design\", \"Content\", \"Translations\"; \"Design\" có \"Show logo\", \"Logo size\", ba màu \"Heading color\" / \"Text color\" / \"Background color\", và \"Header settings\" / \"Content settings\" (mỗi mục chỉnh Font family và Font size). Lỗi HTTP 403 tới Google Web Fonts API (nếu còn) chỉ ghi lại để theo dõi, không tính pass/fail.",
+            "oracle": {
+              "kb_ids": [
+                "KB-064",
+                "KB-065"
+              ],
+              "oracle_strength": "BASELINE"
+            },
+            "status": "READY",
+            "open_question_draft": null,
+            "related_kb_ids": [
+              "KB-060"
+            ],
+            "regression_watch_kb_ids": [
+              "KB-071"
+            ],
+            "risk_refs": [
+              "RISK-quote-pdf-01",
+              "RISK-quote-pdf-02"
+            ],
+            "priority": "P3",
+            "act_ids": [],
+            "evidence_refs": [],
+            "automation_suitability": "SUITABLE"
+          },
+          {
+            "check_id": "CHK-003",
+            "dimension": "CORE",
+            "layer": "portal",
+            "title": "Nhóm tuỳ chọn Content của mẫu PDF",
+            "applicability": {
+              "role": "merchant",
+              "state": "store Free plan, mở trang Quote PDF template",
+              "environment": "documented",
+              "theme_or_device": null
+            },
+            "precondition": "Đăng nhập Portal (embedded app trong Shopify admin) của <store-plus-free> (store staging Plus, Free plan) bằng merchant staff.",
+            "steps": [
+              "Mở accordion \"Content\", quan sát các nhóm và tuỳ chọn."
+            ],
+            "observation_point": "Các nhóm và tuỳ chọn trong \"Content\".",
+            "expected_result": "Theo hiện trạng staging 08/10/2026 (store Free plan), lệch = cần điều tra: \"Content\" có các nhóm \"Quote info\", \"Customer info\", \"Product info\", \"Company info\"; \"Quote info\" gồm Quotation number, Created date, Valid days, Show shipping rate, Show discount; \"Product info\" gồm Show SKU, Show variant, Show quantity, Show price application, Show unit price, Show total.",
+            "oracle": {
+              "kb_ids": [
+                "KB-066"
+              ],
+              "oracle_strength": "BASELINE"
+            },
+            "status": "READY",
+            "open_question_draft": null,
+            "related_kb_ids": [],
+            "regression_watch_kb_ids": [],
+            "risk_refs": [
+              "RISK-quote-pdf-01"
+            ],
+            "priority": "P3",
+            "act_ids": [],
+            "evidence_refs": [],
+            "automation_suitability": "SUITABLE"
+          },
+          {
+            "check_id": "CHK-004",
+            "dimension": "INTEGRATION",
+            "layer": "portal",
+            "title": "Accordion Translations dẫn sang trang Translations",
+            "applicability": {
+              "role": "merchant",
+              "state": "store Free plan, mở trang Quote PDF template",
+              "environment": "documented",
+              "theme_or_device": null
+            },
+            "precondition": "Đăng nhập Portal (embedded app trong Shopify admin) của <store-plus-free> (store staging Plus, Free plan) bằng merchant staff.",
+            "steps": [
+              "Mở accordion \"Translations\", đọc hướng dẫn.",
+              "Bấm \"Go to translation\"; ghi lại trang đích."
+            ],
+            "observation_point": "Nội dung hướng dẫn, nhãn nút, trang đích.",
+            "expected_result": "Theo hiện trạng staging 08/10/2026 (store Free plan), lệch = cần điều tra: accordion \"Translations\" nằm ngay trong trang \"Quote PDF template\", hướng merchant thêm bản dịch cho quote field ở trang Translations, kèm nút \"Go to translation\" (ghi lại trang đích khi bấm).",
+            "oracle": {
+              "kb_ids": [
+                "KB-067"
+              ],
+              "oracle_strength": "BASELINE"
+            },
+            "status": "READY",
+            "open_question_draft": null,
+            "related_kb_ids": [
+              "KB-061"
+            ],
+            "regression_watch_kb_ids": [],
+            "risk_refs": [
+              "RISK-quote-pdf-01"
+            ],
+            "priority": "P3",
+            "act_ids": [],
+            "evidence_refs": [],
+            "automation_suitability": "SUITABLE"
+          },
+          {
+            "check_id": "CHK-005",
+            "dimension": "CORE",
+            "layer": "portal",
+            "title": "Preview mẫu PDF có cột PRICE APPLICATION",
+            "applicability": {
+              "role": "merchant",
+              "state": "store có 0 quote — chỉ preview mẫu",
+              "environment": "documented",
+              "theme_or_device": null
+            },
+            "precondition": "Đăng nhập Portal (embedded app trong Shopify admin) của <store-plus-free> (store staging Plus, Free plan) bằng merchant staff.",
+            "steps": [
+              "Mở trang \"Quote PDF template\", quan sát bảng sản phẩm trong preview."
+            ],
+            "observation_point": "Các cột và giá trị mẫu của bảng sản phẩm trong preview.",
+            "expected_result": "Theo hiện trạng staging 08/10/2026 (store Free plan), lệch = cần điều tra: preview có cột \"PRICE APPLICATION\" với giá trị mẫu \"One-time deal\" / \"Permanent price\" (dữ liệu mẫu, không phải PDF của quote thật).",
+            "oracle": {
+              "kb_ids": [
+                "KB-068"
+              ],
+              "oracle_strength": "BASELINE"
+            },
+            "status": "READY",
+            "open_question_draft": null,
+            "related_kb_ids": [
+              "KB-047",
+              "KB-069"
+            ],
+            "regression_watch_kb_ids": [],
+            "risk_refs": [
+              "RISK-quote-pdf-01"
+            ],
+            "priority": "P3",
+            "act_ids": [],
+            "evidence_refs": [],
+            "automation_suitability": "SUITABLE"
+          },
+          {
+            "check_id": "CHK-006",
+            "dimension": "STATE_DATA",
+            "layer": "portal",
+            "title": "Lưu cấu hình mẫu PDF và preview cập nhật",
+            "applicability": {
+              "role": "merchant",
+              "state": "trang Quote PDF template, store test được phép đổi cấu hình",
+              "environment": "documented",
+              "theme_or_device": null
+            },
+            "precondition": "Đăng nhập Portal (embedded app trong Shopify admin) của <store-plus-free> (store staging Plus, Free plan) bằng merchant staff. Ghi lại cấu hình hiện tại để khôi phục.",
+            "steps": [
+              "Đổi một số tuỳ chọn: tắt \"Show logo\", đổi \"Heading color\", tắt \"Show SKU\", đổi Valid days.",
+              "Quan sát preview; lưu; tải lại trang; quan sát lại.",
+              "Khôi phục cấu hình ban đầu."
+            ],
+            "observation_point": "Preview sau mỗi thay đổi; giá trị sau tải lại; giá trị mặc định.",
+            "expected_result": "Chưa có căn cứ: ghi lại preview, giá trị sau tải lại và mặc định của từng tuỳ chọn. Không đánh giá pass/fail cho tới khi PO/Dev trả lời.",
+            "oracle": {
+              "kb_ids": [],
+              "oracle_strength": "NONE"
+            },
+            "status": "NEEDS_CONFIRMATION",
+            "open_question_draft": "Mỗi tuỳ chọn Design / Content của trang \"Quote PDF template\" tác động thế nào lên preview và PDF của quote, giá trị mặc định là gì (kể cả Valid days — preview chỉ hiện giá trị mẫu \"Valid for 30 days\"), và cấu hình được lưu thế nào?",
+            "related_kb_ids": [
+              "KB-060",
+              "KB-064",
+              "KB-065",
+              "KB-066",
+              "KB-069"
+            ],
+            "regression_watch_kb_ids": [],
+            "risk_refs": [
+              "RISK-quote-pdf-01"
+            ],
+            "priority": "P2",
+            "act_ids": [],
+            "evidence_refs": [],
+            "automation_suitability": "SUITABLE"
+          },
+          {
+            "check_id": "CHK-007",
+            "dimension": "CORE",
+            "layer": "portal",
+            "title": "Xuất PDF của quote thật từ Portal",
+            "applicability": {
+              "role": "merchant",
+              "state": "quote có nhiều line",
+              "environment": "documented",
+              "theme_or_device": null
+            },
+            "precondition": "Đăng nhập Portal (embedded app trong Shopify admin) của <store-plus-free> (store staging Plus, Free plan) bằng merchant staff. Có <quote-long> đủ nhiều line để PDF dài hơn một trang; store có logo; quote dùng tiền tệ khác USD nếu có.",
+            "steps": [
+              "Mở quote detail, xuất PDF.",
+              "Mở file: quan sát số trang, logo, bảng sản phẩm, tiền tệ, hạn, payment information."
+            ],
+            "observation_point": "File tải về và nội dung.",
+            "expected_result": "Chưa có căn cứ: ghi lại nội dung PDF và so với quote detail. Không đánh giá pass/fail cho tới khi PO/Dev trả lời.",
+            "oracle": {
+              "kb_ids": [],
+              "oracle_strength": "NONE"
+            },
+            "status": "NEEDS_CONFIRMATION",
+            "open_question_draft": "Theo Jira DUOS-211 / DUOS-217 (chưa xác nhận) quote export được PDF từ Portal. PDF của quote thật gồm những mục nào luôn có, và quote nhiều trang, logo, định dạng tiền tệ hiển thị ra sao?",
+            "related_kb_ids": [
+              "KB-058",
+              "KB-P-039"
+            ],
+            "regression_watch_kb_ids": [],
+            "risk_refs": [
+              "RISK-quote-pdf-03"
+            ],
+            "priority": "P2",
+            "act_ids": [],
+            "evidence_refs": [],
+            "automation_suitability": "HYBRID"
+          },
+          {
+            "check_id": "CHK-008",
+            "dimension": "CORE",
+            "layer": "storefront",
+            "title": "Xuất PDF của quote từ Customer Account",
+            "applicability": {
+              "role": "buyer B2B (Customer Account › My Quotes)",
+              "state": "quote đã có báo giá",
+              "environment": "documented",
+              "theme_or_device": null
+            },
+            "precondition": "<store-quote-on>; <buyer-b2b> có quote đã được báo giá; extension My Quotes kích hoạt.",
+            "steps": [
+              "Mở quote trong Customer Account, xuất PDF.",
+              "So nội dung với PDF xuất từ Portal cho cùng quote."
+            ],
+            "observation_point": "File tải về; khác biệt với PDF từ Portal.",
+            "expected_result": "Chưa có căn cứ: ghi lại nội dung và khác biệt. Không đánh giá pass/fail cho tới khi PO/Dev trả lời.",
+            "oracle": {
+              "kb_ids": [],
+              "oracle_strength": "NONE"
+            },
+            "status": "NEEDS_CONFIRMATION",
+            "open_question_draft": "Theo Jira DUOS-211 / DUOS-217 (chưa xác nhận) quote export được PDF từ Customer Account. PDF ở Customer Account có giống PDF ở Portal không, và buyer xuất được ở trạng thái quote nào?",
+            "related_kb_ids": [
+              "KB-059",
+              "KB-P-008"
+            ],
+            "regression_watch_kb_ids": [],
+            "risk_refs": [
+              "RISK-quote-pdf-03"
+            ],
+            "priority": "P2",
+            "act_ids": [],
+            "evidence_refs": [],
+            "automation_suitability": "HYBRID"
+          },
+          {
+            "check_id": "CHK-009",
+            "dimension": "INTEGRATION",
+            "layer": "portal",
+            "title": "Cấu hình mẫu PDF áp lên PDF của quote thật",
+            "applicability": {
+              "role": "merchant",
+              "state": "đã đổi cấu hình mẫu PDF",
+              "environment": "documented",
+              "theme_or_device": null
+            },
+            "precondition": "Đăng nhập Portal (embedded app trong Shopify admin) của <store-plus-free> (store staging Plus, Free plan) bằng merchant staff. Có một quote thật.",
+            "steps": [
+              "Tắt \"Show SKU\" và \"Show price application\", đổi màu heading, lưu mẫu.",
+              "Xuất PDF quote; quan sát.",
+              "Khôi phục cấu hình."
+            ],
+            "observation_point": "PDF có phản ánh cấu hình mẫu không.",
+            "expected_result": "Chưa có căn cứ: ghi lại PDF có phản ánh từng thay đổi không. Không đánh giá pass/fail cho tới khi PO/Dev trả lời.",
+            "oracle": {
+              "kb_ids": [],
+              "oracle_strength": "NONE"
+            },
+            "status": "NEEDS_CONFIRMATION",
+            "open_question_draft": "Cấu hình trên trang \"Quote PDF template\" có áp lên PDF xuất từ cả Portal và Customer Account không, và áp ngay cho quote đã tạo trước đó?",
+            "related_kb_ids": [
+              "KB-066",
+              "KB-065",
+              "KB-058"
+            ],
+            "regression_watch_kb_ids": [],
+            "risk_refs": [
+              "RISK-quote-pdf-03"
+            ],
+            "priority": "P2",
+            "act_ids": [],
+            "evidence_refs": [],
+            "automation_suitability": "HYBRID"
+          },
+          {
+            "check_id": "CHK-010",
+            "dimension": "INTEGRATION",
+            "layer": "portal",
+            "title": "Bản dịch của quote PDF theo ngôn ngữ",
+            "applicability": {
+              "role": "merchant; buyer B2B",
+              "state": "store có ≥2 ngôn ngữ, đã nhập bản dịch quote field",
+              "environment": "documented",
+              "theme_or_device": null
+            },
+            "precondition": "Đăng nhập Portal (embedded app trong Shopify admin) của <store-plus-free> (store staging Plus, Free plan) bằng merchant staff. Store bật thêm một ngôn ngữ (vd JP) và đã dịch vài quote field ở trang Translations.",
+            "steps": [
+              "Xuất PDF quote khi buyer dùng ngôn ngữ thứ hai và khi dùng ngôn ngữ mặc định.",
+              "Quan sát nhãn trên PDF."
+            ],
+            "observation_point": "Ngôn ngữ của nhãn trên PDF ở từng trường hợp.",
+            "expected_result": "Chưa có căn cứ: ghi lại ngôn ngữ hiển thị. Không đánh giá pass/fail cho tới khi PO/Dev trả lời.",
+            "oracle": {
+              "kb_ids": [],
+              "oracle_strength": "NONE"
+            },
+            "status": "NEEDS_CONFIRMATION",
+            "open_question_draft": "Theo Jira DUOS-223 / DUOS-224 (chưa xác nhận) bản dịch của quote PDF quản lý ở trang Translations. Field nào của PDF dịch được, và PDF chọn ngôn ngữ theo gì (ngôn ngữ của buyer hay của store)?",
+            "related_kb_ids": [
+              "KB-061",
+              "KB-067"
+            ],
+            "regression_watch_kb_ids": [],
+            "risk_refs": [
+              "RISK-quote-pdf-03"
+            ],
+            "priority": "P3",
+            "act_ids": [],
+            "evidence_refs": [],
+            "automation_suitability": "HYBRID"
+          },
+          {
+            "check_id": "CHK-011",
+            "dimension": "CORE",
+            "layer": "portal",
+            "title": "History log của quote trên Portal",
+            "applicability": {
+              "role": "merchant",
+              "state": "quote đã qua nhiều bước",
+              "environment": "documented",
+              "theme_or_device": null
+            },
+            "precondition": "Đăng nhập Portal (embedded app trong Shopify admin) của <store-plus-free> (store staging Plus, Free plan) bằng merchant staff. Có quote đã qua submit, báo giá, counter offer, reject có lý do.",
+            "steps": [
+              "Mở history log của quote trên Portal.",
+              "Quan sát các dòng: sự kiện, người thực hiện, thời gian, nội dung."
+            ],
+            "observation_point": "Danh sách sự kiện và thông tin mỗi dòng.",
+            "expected_result": "Chưa có căn cứ: ghi lại các sự kiện được ghi và format. Không đánh giá pass/fail cho tới khi PO/Dev trả lời.",
+            "oracle": {
+              "kb_ids": [],
+              "oracle_strength": "NONE"
+            },
+            "status": "NEEDS_CONFIRMATION",
+            "open_question_draft": "History log của quote ghi những sự kiện nào (submit, báo giá, counter offer, accept, reject kèm lý do, reassign…) và mỗi dòng gồm những thông tin gì?",
+            "related_kb_ids": [
+              "KB-056",
+              "KB-033",
+              "KB-042"
+            ],
+            "regression_watch_kb_ids": [],
+            "risk_refs": [
+              "RISK-quote-pdf-04"
+            ],
+            "priority": "P2",
+            "act_ids": [],
+            "evidence_refs": [],
+            "automation_suitability": "SUITABLE"
+          },
+          {
+            "check_id": "CHK-012",
+            "dimension": "PERMISSION",
+            "layer": "api",
+            "title": "API history log của quote: contract và phân quyền",
+            "applicability": {
+              "role": "merchant của store khác; người không đăng nhập",
+              "state": "quote có history",
+              "environment": "documented",
+              "theme_or_device": null
+            },
+            "precondition": "Có công cụ gọi HTTP; có id <quote-id-A> thuộc store A; có phiên Portal của store A và của store B.",
+            "steps": [
+              "Gọi `/api/quotations/<quote-id-A>/logs` bằng phiên store A; ghi method, status, response.",
+              "Gọi lại bằng phiên store B và không kèm phiên."
+            ],
+            "observation_point": "Mã HTTP và dữ liệu trả về theo từng phiên.",
+            "expected_result": "Chưa có căn cứ: ghi lại method, mã HTTP và dữ liệu trả về ở từng phiên. Không đánh giá pass/fail cho tới khi PO/Dev trả lời.",
+            "oracle": {
+              "kb_ids": [],
+              "oracle_strength": "NONE"
+            },
+            "status": "NEEDS_CONFIRMATION",
+            "open_question_draft": "API `/api/quotations/{id}/logs` dùng method gì, trả response gì, và phiên của store khác hoặc không đăng nhập gọi tới thì trả mã gì?",
+            "related_kb_ids": [
+              "KB-056"
+            ],
+            "regression_watch_kb_ids": [],
+            "risk_refs": [
+              "RISK-quote-pdf-04"
+            ],
+            "priority": "P1",
+            "act_ids": [],
+            "evidence_refs": [],
+            "automation_suitability": "SUITABLE"
+          },
+          {
+            "check_id": "CHK-013",
+            "dimension": "INTEGRATION",
+            "layer": "storefront",
+            "title": "History log trên Customer Account cùng format với Portal",
+            "applicability": {
+              "role": "buyer B2B (Customer Account › My Quotes)",
+              "state": "quote có history",
+              "environment": "documented",
+              "theme_or_device": null
+            },
+            "precondition": "<store-quote-on>; <buyer-b2b> có quote đã qua nhiều bước.",
+            "steps": [
+              "Mở history log của quote trên Customer Account và trên Portal.",
+              "So từng dòng."
+            ],
+            "observation_point": "Khác biệt giữa hai history log.",
+            "expected_result": "Chưa có căn cứ: ghi lại khác biệt. Không đánh giá pass/fail cho tới khi PO/Dev trả lời.",
+            "oracle": {
+              "kb_ids": [],
+              "oracle_strength": "NONE"
+            },
+            "status": "NEEDS_CONFIRMATION",
+            "open_question_draft": "Theo Jira DUOS-192 / DUOS-194 (chưa xác nhận) history log trên Customer Account có cùng format với Portal. Buyer có thấy toàn bộ sự kiện (kể cả ghi chú nội bộ của merchant) không?",
+            "related_kb_ids": [
+              "KB-057"
+            ],
+            "regression_watch_kb_ids": [],
+            "risk_refs": [
+              "RISK-quote-pdf-04"
+            ],
+            "priority": "P3",
+            "act_ids": [],
+            "evidence_refs": [],
+            "automation_suitability": "HYBRID"
+          },
+          {
+            "check_id": "CHK-014",
+            "dimension": "CORE",
+            "layer": "portal",
+            "title": "Payment information của quote",
+            "applicability": {
+              "role": "merchant; buyer B2B",
+              "state": "quote có line, discount, shipping",
+              "environment": "documented",
+              "theme_or_device": null
+            },
+            "precondition": "Đăng nhập Portal (embedded app trong Shopify admin) của <store-plus-free> (store staging Plus, Free plan) bằng merchant staff. Quote có ≥2 line, custom discount và custom shipping fee.",
+            "steps": [
+              "Quan sát payment information trên quote detail Portal, Customer Account và PDF.",
+              "Tự tính lại từ line, discount, shipping."
+            ],
+            "observation_point": "Subtotal, Shipping, Estimated tax, Total ở từng nơi và so với tính tay.",
+            "expected_result": "Chưa có căn cứ: ghi lại các con số và khác biệt giữa các surface. Không đánh giá pass/fail cho tới khi PO/Dev trả lời.",
+            "oracle": {
+              "kb_ids": [],
+              "oracle_strength": "NONE"
+            },
+            "status": "NEEDS_CONFIRMATION",
+            "open_question_draft": "Theo Jira DUOS-222 (chưa xác nhận) payment information của quote gồm Subtotal, Shipping, Estimated tax và Total. Nó hiển thị ở đâu (Portal, Customer Account, PDF) và Estimated tax được tính thế nào?",
+            "related_kb_ids": [
+              "KB-070"
+            ],
+            "regression_watch_kb_ids": [],
+            "risk_refs": [
+              "RISK-quote-pdf-05"
+            ],
+            "priority": "P2",
+            "act_ids": [],
+            "evidence_refs": [],
+            "automation_suitability": "HYBRID"
+          },
+          {
+            "check_id": "CHK-015",
+            "dimension": "PERMISSION",
+            "layer": "portal",
+            "title": "Quyền sửa mẫu PDF, xuất PDF và xem history",
+            "applicability": {
+              "role": "merchant staff có quyền hạn chế; buyer-junior, buyer-custom-role",
+              "state": "quote có history",
+              "environment": "documented",
+              "theme_or_device": null
+            },
+            "precondition": "<store-quote-on>; staff Shopify có quyền giới hạn với app; buyer ở từng role.",
+            "steps": [
+              "Mỗi người thử mở trang \"Quote PDF template\", xuất PDF và xem history của quote."
+            ],
+            "observation_point": "Thao tác được phép / bị chặn.",
+            "expected_result": "Chưa có căn cứ: ghi lại ma trận quan sát được. Không đánh giá pass/fail cho tới khi PO/Dev trả lời.",
+            "oracle": {
+              "kb_ids": [],
+              "oracle_strength": "NONE"
+            },
+            "status": "NEEDS_CONFIRMATION",
+            "open_question_draft": "Role nào được sửa mẫu PDF, xuất PDF và xem history log của quote trên Portal và Customer Account?",
+            "related_kb_ids": [
+              "KB-056",
+              "KB-058",
+              "KB-059"
+            ],
+            "regression_watch_kb_ids": [],
+            "risk_refs": [
+              "RISK-quote-pdf-06"
+            ],
+            "priority": "P2",
+            "act_ids": [],
+            "evidence_refs": [],
+            "automation_suitability": "HYBRID"
+          }
+        ]
+      }
+    ],
+    "coverage_by_feature_and_risk": [
+      {
+        "feature_id": "quote-pdf-and-history",
+        "risk_ref": "RISK-quote-pdf-01",
+        "risk_description": "Trang Quote PDF template (đường vào, Design, Content, Translations, preview) hiển thị sai hoặc không lưu cấu hình",
+        "covered_by_checks": [
+          "CHK-001",
+          "CHK-002",
+          "CHK-003",
+          "CHK-004",
+          "CHK-005",
+          "CHK-006"
+        ],
+        "kb_ids": [
+          "KB-024",
+          "KB-047",
+          "KB-060",
+          "KB-061",
+          "KB-062",
+          "KB-063",
+          "KB-064",
+          "KB-065",
+          "KB-066",
+          "KB-067",
+          "KB-068",
+          "KB-069",
+          "KB-071"
+        ],
+        "coverage_status": "PARTIAL"
+      },
+      {
+        "feature_id": "quote-pdf-and-history",
+        "risk_ref": "RISK-quote-pdf-02",
+        "risk_description": "Font family không tải đủ do lỗi gọi Google Web Fonts (nghi lỗi chờ Dev)",
+        "covered_by_checks": [
+          "CHK-002"
+        ],
+        "kb_ids": [
+          "KB-060",
+          "KB-064",
+          "KB-065",
+          "KB-071"
+        ],
+        "coverage_status": "COVERED"
+      },
+      {
+        "feature_id": "quote-pdf-and-history",
+        "risk_ref": "RISK-quote-pdf-03",
+        "risk_description": "Xuất PDF của quote thật trên Portal / Customer Account lỗi (nhiều trang, logo, tiền tệ, cấu hình mẫu, bản dịch)",
+        "covered_by_checks": [
+          "CHK-007",
+          "CHK-008",
+          "CHK-009",
+          "CHK-010"
+        ],
+        "kb_ids": [
+          "KB-058",
+          "KB-059",
+          "KB-061",
+          "KB-065",
+          "KB-066",
+          "KB-067",
+          "KB-P-008",
+          "KB-P-039"
+        ],
+        "coverage_status": "FLAGGED_NEEDS_CONFIRMATION"
+      },
+      {
+        "feature_id": "quote-pdf-and-history",
+        "risk_ref": "RISK-quote-pdf-04",
+        "risk_description": "History log thiếu sự kiện / khác format giữa Portal và Customer Account; API logs lộ dữ liệu",
+        "covered_by_checks": [
+          "CHK-011",
+          "CHK-012",
+          "CHK-013"
+        ],
+        "kb_ids": [
+          "KB-033",
+          "KB-042",
+          "KB-056",
+          "KB-057"
+        ],
+        "coverage_status": "FLAGGED_NEEDS_CONFIRMATION"
+      },
+      {
+        "feature_id": "quote-pdf-and-history",
+        "risk_ref": "RISK-quote-pdf-05",
+        "risk_description": "Payment information (Subtotal, Shipping, Estimated tax, Total) sai",
+        "covered_by_checks": [
+          "CHK-014"
+        ],
+        "kb_ids": [
+          "KB-070"
+        ],
+        "coverage_status": "FLAGGED_NEEDS_CONFIRMATION"
+      },
+      {
+        "feature_id": "quote-pdf-and-history",
+        "risk_ref": "RISK-quote-pdf-06",
+        "risk_description": "Role không đủ quyền sửa mẫu PDF, xuất PDF, xem history",
+        "covered_by_checks": [
+          "CHK-015"
+        ],
+        "kb_ids": [
+          "KB-056",
+          "KB-058",
+          "KB-059"
+        ],
+        "coverage_status": "FLAGGED_NEEDS_CONFIRMATION"
+      }
+    ],
+    "kb_items_without_dedicated_check": [],
+    "checks_needing_confirmation": [
+      {
+        "check_id": "CHK-006",
+        "open_question_draft": "Mỗi tuỳ chọn Design / Content của trang \"Quote PDF template\" tác động thế nào lên preview và PDF của quote, giá trị mặc định là gì (kể cả Valid days — preview chỉ hiện giá trị mẫu \"Valid for 30 days\"), và cấu hình được lưu thế nào?",
+        "reason": "Trang mẫu PDF chưa có business rule; chỉ có hiện trạng UI."
+      },
+      {
+        "check_id": "CHK-007",
+        "open_question_draft": "Theo Jira DUOS-211 / DUOS-217 (chưa xác nhận) quote export được PDF từ Portal. PDF của quote thật gồm những mục nào luôn có, và quote nhiều trang, logo, định dạng tiền tệ hiển thị ra sao?",
+        "reason": "Chỉ có ticket; store khảo sát có 0 quote nên chưa thấy PDF thật."
+      },
+      {
+        "check_id": "CHK-008",
+        "open_question_draft": "Theo Jira DUOS-211 / DUOS-217 (chưa xác nhận) quote export được PDF từ Customer Account. PDF ở Customer Account có giống PDF ở Portal không, và buyer xuất được ở trạng thái quote nào?",
+        "reason": "Chỉ có ticket; Customer Account chưa quan sát."
+      },
+      {
+        "check_id": "CHK-009",
+        "open_question_draft": "Cấu hình trên trang \"Quote PDF template\" có áp lên PDF xuất từ cả Portal và Customer Account không, và áp ngay cho quote đã tạo trước đó?",
+        "reason": "Chưa có rule nối cấu hình mẫu với PDF thật."
+      },
+      {
+        "check_id": "CHK-010",
+        "open_question_draft": "Theo Jira DUOS-223 / DUOS-224 (chưa xác nhận) bản dịch của quote PDF quản lý ở trang Translations. Field nào của PDF dịch được, và PDF chọn ngôn ngữ theo gì (ngôn ngữ của buyer hay của store)?",
+        "reason": "Chỉ có ticket; chưa quan sát."
+      },
+      {
+        "check_id": "CHK-011",
+        "open_question_draft": "History log của quote ghi những sự kiện nào (submit, báo giá, counter offer, accept, reject kèm lý do, reassign…) và mỗi dòng gồm những thông tin gì?",
+        "reason": "Ticket chỉ nhắc lý do reject và reassign; không đủ để viết expected."
+      },
+      {
+        "check_id": "CHK-012",
+        "open_question_draft": "API `/api/quotations/{id}/logs` dùng method gì, trả response gì, và phiên của store khác hoặc không đăng nhập gọi tới thì trả mã gì?",
+        "reason": "Ticket chỉ nêu endpoint; không có contract hay phân quyền."
+      },
+      {
+        "check_id": "CHK-013",
+        "open_question_draft": "Theo Jira DUOS-192 / DUOS-194 (chưa xác nhận) history log trên Customer Account có cùng format với Portal. Buyer có thấy toàn bộ sự kiện (kể cả ghi chú nội bộ của merchant) không?",
+        "reason": "Chỉ có ticket; Customer Account chưa quan sát."
+      },
+      {
+        "check_id": "CHK-014",
+        "open_question_draft": "Theo Jira DUOS-222 (chưa xác nhận) payment information của quote gồm Subtotal, Shipping, Estimated tax và Total. Nó hiển thị ở đâu (Portal, Customer Account, PDF) và Estimated tax được tính thế nào?",
+        "reason": "Chỉ có ticket; không có công thức."
+      },
+      {
+        "check_id": "CHK-015",
+        "open_question_draft": "Role nào được sửa mẫu PDF, xuất PDF và xem history log của quote trên Portal và Customer Account?",
+        "reason": "Chưa có rule phân quyền cho các thao tác này."
+      }
+    ],
+    "duplicates_removed": [],
+    "excluded_dimensions": [
+      {
+        "dimension": "REGRESSION",
+        "reason": "Bản bootstrap đầu tiên của bộ check; chưa có thay đổi hành vi từ phân tích diff để kiểm hồi quy."
+      },
+      {
+        "dimension": "NEGATIVE",
+        "reason": "KB không mô tả input sai hay thao tác sai thứ tự nào cho mẫu PDF, xuất PDF hay history; các trường hợp không được phép nằm ở check PERMISSION."
+      },
+      {
+        "dimension": "BOUNDARY",
+        "reason": "KB không có giới hạn kích thước / số lượng / độ dài cho mẫu PDF hay history; trường hợp quote nhiều trang được quan sát trong check xuất PDF từ Portal."
+      }
+    ]
+  },
+  "gate": {
+    "decision": "PASS",
+    "blocking_findings": [],
+    "conditions": [
+      "10 check NEEDS_CONFIRMATION mang open_question_draft; không check nào có expected khẳng định trên oracle NONE."
+    ],
+    "allowed_next_steps": [
+      "knowledge-diff-analyzer",
+      "context-quality-reviewer"
+    ]
+  },
+  "last_updated": {
+    "date": "2026-10-09",
+    "ccr_ref": "bootstrap"
+  }
+}

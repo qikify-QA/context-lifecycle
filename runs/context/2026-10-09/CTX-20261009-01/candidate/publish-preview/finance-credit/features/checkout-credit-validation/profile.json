@@ -1,0 +1,579 @@
+{
+  "feature_id": "checkout-credit-validation",
+  "feature_key": "checkout-credit-validation",
+  "name": "Chặn mua vượt credit: validate credit ở Cart, Checkout và draft order bằng Shopify Function",
+  "user_goal": "Không để buyer B2B (ở Cart / Checkout) hay CS/sales (khi tạo draft order trong Shopify admin) đặt order vượt hạn mức credit của company location có credit limit active và dùng payment term Net, bằng cách validate credit qua Shopify Function.",
+  "user_goal_kb_refs": [
+    "KB-033",
+    "KB-035",
+    "KB-038",
+    "KB-002",
+    "KB-001",
+    "KB-051"
+  ],
+  "stable_since_version": "v1",
+  "actors": [
+    {
+      "role": "buyer (Cart / Checkout)",
+      "permission_observed": "Bị validate credit khi location có credit limit active; thông báo buyer thấy khi vượt credit chưa được xác nhận. Checkout chưa được quan sát (không có tài khoản buyer). Validate áp cho mọi buyer của location hay tuỳ role chưa có nguồn.",
+      "kb_refs": [
+        "KB-033",
+        "KB-038",
+        "KB-040"
+      ]
+    },
+    {
+      "role": "merchant CS/sales (Shopify admin, draft order)",
+      "permission_observed": "Draft order tạo trong Shopify admin cũng bị validate credit; banner khi vượt chỉ có theo ticket.",
+      "kb_refs": [
+        "KB-035",
+        "KB-039"
+      ]
+    },
+    {
+      "role": "merchant (Portal)",
+      "permission_observed": "Cần approve thêm scope ở Portal để dùng validate bằng Shopify Function; edit credit limit lần đầu làm Function được thêm vào store.",
+      "kb_refs": [
+        "KB-036",
+        "KB-037"
+      ]
+    },
+    {
+      "role": "system (Shopify Function, Validation API)",
+      "permission_observed": "Chạy ở Cart, Checkout và CreateDraftOrder, thay cho validate ở block Checkout extension cũ.",
+      "kb_refs": [
+        "KB-033",
+        "KB-034"
+      ]
+    }
+  ],
+  "entry_points": [
+    {
+      "path": "Storefront › Cart / Checkout",
+      "precondition": "Buyer thuộc location có credit limit active, order dùng payment term Net, store Shopify Plus, Shopify Function đã được thêm vào store.",
+      "kb_refs": [
+        "KB-033",
+        "KB-038",
+        "KB-002",
+        "KB-036"
+      ]
+    },
+    {
+      "path": "Shopify admin › tạo draft order (CreateDraftOrder)",
+      "precondition": "Draft order cho location có credit limit active.",
+      "kb_refs": [
+        "KB-033",
+        "KB-035"
+      ]
+    },
+    {
+      "path": "Portal › approve thêm scope cho Shopify Function",
+      "precondition": "Store dùng validate credit bằng Shopify Function.",
+      "kb_refs": [
+        "KB-037"
+      ]
+    }
+  ],
+  "capabilities": [
+    {
+      "name": "Validate credit khi buyer mua ở Cart / Checkout",
+      "description": "Shopify Function (Validation API) validate credit limit ở Cart và Checkout, chỉ cho location có credit limit active và order dùng payment term Net. Validate ở block Checkout extension cũ đã bị bỏ. Ngưỡng biên (bằng đúng available credit) và thông báo buyer thấy chưa được xác nhận.",
+      "kb_refs": [
+        "KB-033",
+        "KB-034",
+        "KB-038",
+        "KB-002",
+        "KB-040"
+      ]
+    },
+    {
+      "name": "Validate credit khi CS/sales tạo draft order",
+      "description": "Cùng Shopify Function chạy ở CreateDraftOrder nên draft order do CS/sales tạo trong Shopify admin cũng bị chặn; banner theo ticket: \"This order has exceeded this location available credit. Available credit: [X] / Credit limit: [Y]\" (chưa xác nhận).",
+      "kb_refs": [
+        "KB-033",
+        "KB-035",
+        "KB-039"
+      ]
+    },
+    {
+      "name": "Kích hoạt validate credit cho store",
+      "description": "Shopify Function được thêm vào store khi merchant edit credit limit lần đầu; merchant cần approve thêm scope ở Portal. Hành vi khi merchant chưa approve chưa có nguồn.",
+      "kb_refs": [
+        "KB-036",
+        "KB-037"
+      ]
+    }
+  ],
+  "state_transitions": [
+    {
+      "from": "store chưa có Shopify Function validate credit",
+      "to": "Function được thêm vào store",
+      "trigger": "Merchant edit credit limit lần đầu",
+      "condition": "—",
+      "kb_refs": [
+        "KB-036"
+      ]
+    },
+    {
+      "from": "Function chưa đủ scope",
+      "to": "validate credit dùng được",
+      "trigger": "Merchant approve thêm scope ở Portal",
+      "condition": "Hành vi trước khi approve chưa có nguồn",
+      "kb_refs": [
+        "KB-037"
+      ]
+    },
+    {
+      "from": "Cart / Checkout của buyer",
+      "to": "bị chặn bởi validate credit",
+      "trigger": "Buyer tiến hành mua ở Cart / Checkout",
+      "condition": "Location có credit limit active, order dùng payment term Net và validate credit không đạt; ngưỡng biên và thông báo chưa xác nhận",
+      "kb_refs": [
+        "KB-033",
+        "KB-038",
+        "KB-002",
+        "KB-040"
+      ]
+    },
+    {
+      "from": "draft order trong Shopify admin",
+      "to": "bị chặn bởi validate credit",
+      "trigger": "CS/sales tạo draft order",
+      "condition": "Location có credit limit active; banner theo ticket chưa xác nhận",
+      "kb_refs": [
+        "KB-035",
+        "KB-039"
+      ]
+    },
+    {
+      "from": "Cart / Checkout / draft order của location không có credit limit active hoặc order không dùng Net term",
+      "to": "không áp validate credit",
+      "trigger": "Mua / tạo draft order",
+      "condition": "Giới hạn có chủ đích (không phải lỗi)",
+      "kb_refs": [
+        "KB-038",
+        "KB-002"
+      ]
+    }
+  ],
+  "confirmed_rules": [
+    {
+      "statement": "Theo Dev 20/05/2026 (Jira DUOS-397 comment, story Done 21/06/2026), ghi trong QA business rule Duos và Decision log Duos, validate credit limit chạy bằng Shopify Function (Validation API) ở Cart, Checkout và CreateDraftOrder.",
+      "knowledge_kind": "CONFIRMED_EXPECTED",
+      "confidence": "MEDIUM",
+      "kb_refs": [
+        "KB-033"
+      ]
+    },
+    {
+      "statement": "Theo Dev 20/05/2026 (Jira DUOS-397 comment), ghi trong QA business rule Duos và Decision log Duos, việc validate credit ở block Checkout extension cũ (Jira DUOS-206) đã bị bỏ; Shopify Function thay thế logic chặn đó.",
+      "knowledge_kind": "CONFIRMED_EXPECTED",
+      "confidence": "MEDIUM",
+      "kb_refs": [
+        "KB-034"
+      ]
+    },
+    {
+      "statement": "Theo Dev 20/05/2026 (Jira DUOS-397 comment), ghi trong QA business rule Duos và Decision log Duos, validate credit chặn cả draft order do CS/sales tạo trong Shopify admin.",
+      "knowledge_kind": "CONFIRMED_EXPECTED",
+      "confidence": "MEDIUM",
+      "kb_refs": [
+        "KB-035"
+      ]
+    },
+    {
+      "statement": "Theo Dev 20/05/2026 (Jira DUOS-397 comment), ghi trong QA business rule Duos, Shopify Function validate credit được thêm vào store khi merchant edit credit limit lần đầu.",
+      "knowledge_kind": "CONFIRMED_EXPECTED",
+      "confidence": "MEDIUM",
+      "kb_refs": [
+        "KB-036"
+      ]
+    },
+    {
+      "statement": "Theo Dev 20/05/2026 (Jira DUOS-397 comment), ghi trong QA business rule Duos, để dùng validate credit bằng Shopify Function merchant cần approve thêm scope ở Portal; tài liệu không nêu hành vi khi merchant chưa approve.",
+      "knowledge_kind": "CONFIRMED_EXPECTED",
+      "confidence": "MEDIUM",
+      "kb_refs": [
+        "KB-037"
+      ]
+    },
+    {
+      "statement": "Theo Dev 20/05/2026 (Jira DUOS-397 comment), ghi trong QA business rule Duos, validate credit bằng Shopify Function chỉ áp cho location có credit limit active.",
+      "knowledge_kind": "CONFIRMED_EXPECTED",
+      "confidence": "MEDIUM",
+      "kb_refs": [
+        "KB-038"
+      ]
+    },
+    {
+      "statement": "Theo Dev BE 23/09/2025 (Jira DUOS-201), ghi trong QA business rule Duos, Decision log Duos và Known issues Duos, việc theo dõi và validate credit chỉ áp cho order có payment term Net 7/15/30/45/60/90; order dùng Due on fulfillment, Due on receipt hoặc Due on fixed date không được áp credit. Đây là giới hạn có chủ đích: với các term này kết quả mong đợi là \"không áp dụng\", không phải lỗi.",
+      "knowledge_kind": "CONFIRMED_EXPECTED",
+      "confidence": "MEDIUM",
+      "kb_refs": [
+        "KB-002"
+      ],
+      "note": "Rule do credit-limit-management sở hữu, áp trực tiếp lên phạm vi validate."
+    }
+  ],
+  "observed_behavior": [],
+  "observed_validations": [],
+  "permissions": [
+    {
+      "statement": "Merchant phải approve thêm scope ở Portal để dùng validate credit bằng Shopify Function (Dev 20/05/2026, Jira DUOS-397).",
+      "kb_refs": [
+        "KB-037"
+      ]
+    },
+    {
+      "statement": "Chặn checkout theo credit áp cho mọi buyer của location hay tuỳ role chưa có nguồn; chặn checkout theo permission là hành vi riêng do object roles-permissions sở hữu.",
+      "kb_refs": [
+        "KB-033",
+        "KB-038",
+        "KB-P-009"
+      ]
+    }
+  ],
+  "surface_mapping": {
+    "portal": [
+      {
+        "item": "Approve thêm scope cho Shopify Function",
+        "kb_refs": [
+          "KB-037"
+        ]
+      },
+      {
+        "item": "Shopify admin — draft order bị validate credit; banner theo ticket \"This order has exceeded this location available credit. Available credit: [X] / Credit limit: [Y]\"",
+        "kb_refs": [
+          "KB-035",
+          "KB-039"
+        ]
+      }
+    ],
+    "storefront": [
+      {
+        "item": "Cart và Checkout bị validate credit; thông báo cho buyer khi vượt chưa xác nhận (banner \"Order value has exceed your company available credit.\" của checkout extension cũ không còn hiện hành)",
+        "kb_refs": [
+          "KB-033",
+          "KB-040",
+          "KB-034"
+        ]
+      }
+    ],
+    "api": [
+      {
+        "item": "Shopify Function (Validation API) chạy ở Cart, Checkout, CreateDraftOrder",
+        "kb_refs": [
+          "KB-033"
+        ]
+      }
+    ],
+    "data": [
+      {
+        "item": "Điều kiện áp: location có credit limit active, order payment term Net; so với Available credit = Credit limit − Outstanding balance",
+        "kb_refs": [
+          "KB-038",
+          "KB-002",
+          "KB-001"
+        ]
+      }
+    ],
+    "code": [
+      {
+        "item": "Shopify Function được thêm vào store khi edit credit limit lần đầu; block Checkout extension cũ không còn validate credit",
+        "kb_refs": [
+          "KB-036",
+          "KB-034"
+        ]
+      }
+    ]
+  },
+  "dependencies": [
+    {
+      "target": "finance-credit / credit-limit-management",
+      "relation": "depends_on",
+      "note": "Cần location có credit limit active; Function được thêm khi edit credit limit lần đầu.",
+      "kb_refs": [
+        "KB-036",
+        "KB-038",
+        "KB-001"
+      ]
+    },
+    {
+      "target": "finance-credit / credit-ledger-and-transactions",
+      "relation": "depends_on",
+      "note": "Available credit dùng để so phụ thuộc Outstanding balance do transaction credit cập nhật.",
+      "kb_refs": [
+        "KB-001",
+        "KB-020"
+      ]
+    },
+    {
+      "target": "pricing-subscription / module-entitlement-gating",
+      "relation": "constraint",
+      "note": "Validate credit được mô tả cho store Shopify Plus; giới hạn theo Shopify plan và trạng thái tuỳ chọn trên store không phải Plus do object pricing-subscription sở hữu.",
+      "kb_refs": [
+        "KB-033",
+        "KB-014",
+        "KB-P-002"
+      ]
+    },
+    {
+      "target": "roles-permissions / checkout-blocking-by-permission",
+      "relation": "sibling_behavior",
+      "note": "Chặn checkout theo permission là hành vi riêng; không gộp với chặn theo credit.",
+      "kb_refs": [
+        "KB-P-009"
+      ]
+    },
+    {
+      "target": "quote-request / quote-price-application",
+      "relation": "see_also",
+      "note": "Draft order tạo từ quote cũng đi qua CreateDraftOrder nên cũng bị validate credit; hành vi quote do object quote-request sở hữu.",
+      "kb_refs": [
+        "KB-033",
+        "KB-035"
+      ]
+    }
+  ],
+  "risks": [
+    {
+      "statement": "Theo QA KB Duos \"B2B Finance & Credit\" v1, text buyer thấy ở checkout storefront khi cart vượt available credit sau khi chuyển sang Shopify Function (Jira DUOS-397) chưa được xác nhận; banner \"Order value has exceed your company available credit.\" của checkout extension cũ (Jira DUOS-206) không còn là hành vi hiện hành.",
+      "knowledge_kind": "INFERRED",
+      "confidence": "LOW",
+      "kb_refs": [
+        "KB-040",
+        "KB-034"
+      ],
+      "note": "Không có thông báo xác nhận cho buyer; check thông báo ở Cart / Checkout không có oracle."
+    },
+    {
+      "statement": "Theo Jira DUOS-397 (Done 21/06/2026), câu được QA business rule Duos ghi rõ \"theo ticket\" (không kèm PO/Dev), draft order vượt credit hiển thị banner \"This order has exceeded this location available credit. Available credit: [X] / Credit limit: [Y]\".",
+      "knowledge_kind": "INFERRED",
+      "confidence": "MEDIUM",
+      "kb_refs": [
+        "KB-039",
+        "KB-035"
+      ],
+      "note": "Rule draft chỉ theo ticket; chưa dùng làm kết quả mong đợi."
+    },
+    {
+      "statement": "Theo QA KB Duos \"Environments\" v1 (tóm tắt tài liệu sản phẩm Duos, không kèm Jira/PO/Dev) và Inventory staging Duos (08/10/2026, chỉ liệt kê), app có Checkout extension gồm chặn checkout theo permission và chặn checkout theo credit; extension này cần buyer và giỏ hàng để quan sát và chưa được quan sát trên staging.",
+      "knowledge_kind": "INFERRED",
+      "confidence": "MEDIUM",
+      "kb_refs": [
+        "KB-P-009",
+        "KB-034"
+      ],
+      "note": "Mô tả cấp sản phẩm vẫn gọi chặn theo credit là phần của Checkout extension, trong khi Dev 20/05/2026 đã chuyển validate sang Shopify Function và bỏ validate ở checkout extension cũ; dễ kiểm nhầm bề mặt."
+    },
+    {
+      "statement": "Theo QA KB Duos tổng quan sản phẩm v1 (câu tổng quan, không ghi nguồn riêng), module B2B Finance & Credit gồm quản lý credit limit, ledger ghi nhận credit và chặn mua vượt hạn mức credit.",
+      "knowledge_kind": "INFERRED",
+      "confidence": "MEDIUM",
+      "kb_refs": [
+        "KB-051"
+      ],
+      "note": "Câu tổng quan phạm vi module, không có nguồn riêng."
+    }
+  ],
+  "unknown_areas": [
+    {
+      "question": "Sau khi validate credit chuyển sang Shopify Function (Jira DUOS-397), buyer thấy thông báo gì ở Cart và ở Checkout khi giá trị order vượt available credit của location?",
+      "why_it_matters": "Banner của checkout extension cũ không còn hiện hành và text hiện tại chưa xác nhận.",
+      "kb_refs": [
+        "KB-040",
+        "KB-033",
+        "KB-034"
+      ],
+      "oq_id": "OQ-finance-credit-009"
+    },
+    {
+      "question": "Khi giá trị cart / draft order đúng bằng available credit của location thì bị chặn hay được đặt?",
+      "why_it_matters": "Không viết được kết quả mong đợi cho case biên của validate credit.",
+      "kb_refs": [
+        "KB-033",
+        "KB-038"
+      ],
+      "oq_id": "OQ-finance-credit-010"
+    },
+    {
+      "question": "Merchant chưa approve scope mới cho Shopify Function thì validate credit có chạy không, và Portal / checkout báo gì?",
+      "why_it_matters": "Rule chỉ nêu cần approve, không nêu hệ quả.",
+      "kb_refs": [
+        "KB-037",
+        "KB-036"
+      ],
+      "oq_id": "OQ-finance-credit-010"
+    },
+    {
+      "question": "Banner draft order vượt credit \"This order has exceeded this location available credit. Available credit: [X] / Credit limit: [Y]\" (theo Jira DUOS-397) có đúng là hành vi hiện hành không?",
+      "why_it_matters": "Câu chỉ dựa trên ticket, chưa có PO/Dev xác nhận.",
+      "kb_refs": [
+        "KB-039",
+        "KB-035"
+      ],
+      "oq_id": "OQ-finance-credit-009"
+    },
+    {
+      "question": "Chặn checkout theo credit áp cho mọi buyer của location hay tuỳ role (Admin, Senior buyer, Junior buyer, custom role)?",
+      "why_it_matters": "Ma trận quyền của Finance & Credit chưa được tài liệu nêu; coverage theo role ở checkout trống.",
+      "kb_refs": [
+        "KB-033",
+        "KB-038"
+      ],
+      "oq_id": "OQ-finance-credit-004"
+    },
+    {
+      "question": "Validate credit ở Cart / Checkout / draft order có thực sự chặn trên một store Shopify Plus có buyer thật không? Staging chưa quan sát được (store Free plan, không có tài khoản buyer, chưa duyệt thao tác checkout).",
+      "why_it_matters": "Mọi mô tả chặn checkout đang chỉ dựa trên Dev/Jira.",
+      "kb_refs": [
+        "KB-033",
+        "KB-035",
+        "KB-037",
+        "KB-038",
+        "KB-039",
+        "KB-040"
+      ],
+      "oq_id": "OQ-finance-credit-010"
+    }
+  ],
+  "freshness": {
+    "observed_at": "2026-10-08",
+    "earliest_source_date": "2025-09-23",
+    "basis": "Ngày nguồn mới nhất / cũ nhất trong các KB item được tham chiếu (ngày quyết định PO/Dev, ngày đọc Jira, khảo sát staging 08/10/2026); không có quan sát runtime trong lần chạy này."
+  },
+  "last_updated": {
+    "date": "2026-10-09",
+    "ccr_ref": "bootstrap"
+  },
+  "coverage_matrix": [
+    {
+      "feature_id": "checkout-credit-validation",
+      "layer": "checkout",
+      "role": "buyer",
+      "state": "location có credit limit active, Net term, vượt credit",
+      "environment": "documented",
+      "covered": true,
+      "note": "Rule Dev 20/05/2026; thông báo chưa xác nhận; chưa quan sát"
+    },
+    {
+      "feature_id": "checkout-credit-validation",
+      "layer": "checkout",
+      "role": "buyer",
+      "state": "giá trị bằng đúng available credit",
+      "environment": "documented",
+      "covered": false,
+      "note": "Không có nguồn"
+    },
+    {
+      "feature_id": "checkout-credit-validation",
+      "layer": "checkout",
+      "role": "buyer",
+      "state": "location không có credit limit active / order không Net term",
+      "environment": "documented",
+      "covered": true,
+      "note": "Rule Dev 20/05/2026 + Dev BE 23/09/2025"
+    },
+    {
+      "feature_id": "checkout-credit-validation",
+      "layer": "checkout",
+      "role": "buyer (theo role)",
+      "state": "mọi trạng thái",
+      "environment": "documented",
+      "covered": false,
+      "note": "Ma trận quyền chưa có"
+    },
+    {
+      "feature_id": "checkout-credit-validation",
+      "layer": "backend",
+      "role": "merchant",
+      "state": "draft order trong Shopify admin vượt credit",
+      "environment": "documented",
+      "covered": true,
+      "note": "Rule Dev 20/05/2026; banner theo ticket"
+    },
+    {
+      "feature_id": "checkout-credit-validation",
+      "layer": "portal",
+      "role": "merchant",
+      "state": "edit credit limit lần đầu (Function được thêm)",
+      "environment": "documented",
+      "covered": true,
+      "note": "Rule Dev 20/05/2026"
+    },
+    {
+      "feature_id": "checkout-credit-validation",
+      "layer": "portal",
+      "role": "merchant",
+      "state": "chưa approve scope cho Function",
+      "environment": "documented",
+      "covered": false,
+      "note": "Hệ quả chưa có nguồn"
+    },
+    {
+      "feature_id": "checkout-credit-validation",
+      "layer": "checkout",
+      "role": "buyer",
+      "state": "store không phải Shopify Plus",
+      "environment": "documented",
+      "covered": false,
+      "note": "Thuộc pricing-subscription"
+    },
+    {
+      "feature_id": "checkout-credit-validation",
+      "layer": "api",
+      "role": "unspecified",
+      "state": "mọi trạng thái",
+      "environment": "documented",
+      "covered": false,
+      "note": "Bộ tài liệu QA không có đặc tả API/data model cho feature này"
+    },
+    {
+      "feature_id": "checkout-credit-validation",
+      "layer": "db",
+      "role": "unspecified",
+      "state": "mọi trạng thái",
+      "environment": "documented",
+      "covered": false,
+      "note": "Bộ tài liệu QA không có đặc tả API/data model cho feature này"
+    }
+  ],
+  "profile_conflicts": [],
+  "profile_relationships": [
+    {
+      "from": "checkout-credit-validation",
+      "to": "credit-limit-management",
+      "relation": "DEPENDS_ON",
+      "kb_refs": [
+        "KB-036",
+        "KB-038"
+      ]
+    },
+    {
+      "from": "checkout-credit-validation",
+      "to": "credit-ledger-and-transactions",
+      "relation": "DEPENDS_ON",
+      "kb_refs": [
+        "KB-001",
+        "KB-020"
+      ]
+    },
+    {
+      "from": "checkout-credit-validation",
+      "to": "roles-permissions/checkout-blocking-by-permission",
+      "relation": "SIBLING_OF",
+      "kb_refs": [
+        "KB-P-009"
+      ]
+    },
+    {
+      "from": "checkout-credit-validation",
+      "to": "pricing-subscription/module-entitlement-gating",
+      "relation": "CONSTRAINED_BY",
+      "kb_refs": [
+        "KB-033",
+        "KB-P-002"
+      ]
+    }
+  ]
+}

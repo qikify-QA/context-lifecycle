@@ -1,0 +1,1032 @@
+{
+  "feature_id": "automation-builder",
+  "feature_key": "automation-builder",
+  "name": "Builder automation: dựng, lưu, kích hoạt và sửa flow trên canvas",
+  "user_goal": "Người dùng dựng flow trigger → step → action trên canvas, chỉ lưu và kích hoạt được khi flow đã đủ cấu hình, và biết điều gì xảy ra khi sửa một flow đang chạy.",
+  "stable_since_version": "v1",
+  "actors": [
+    {
+      "role": "unspecified (người dựng flow)",
+      "permission_observed": "Tài liệu không gán role cho thao tác trong builder; ma trận quyền automation chưa chốt.",
+      "kb_refs": [
+        "KB-026",
+        "KB-P-051"
+      ]
+    }
+  ],
+  "entry_points": [
+    {
+      "path": "`/automations/new` (từ nút New automation)",
+      "precondition": "Chưa có bản ghi; header chỉ có Save và Activate, không có rail Flow / Reports.",
+      "kb_refs": [
+        "KB-044",
+        "KB-003"
+      ]
+    },
+    {
+      "path": "`/automations/:id` (click dòng hoặc Edit ở danh sách)",
+      "precondition": "Automation đã lưu ít nhất một lần.",
+      "kb_refs": [
+        "KB-046",
+        "KB-009"
+      ]
+    },
+    {
+      "path": "`/automations/<id không tồn tại>`",
+      "precondition": "Id sai hoặc đã xoá — hiện trạng là lỗi đã biết (dựng khung builder kèm alert Not Found.).",
+      "kb_refs": [
+        "KB-056"
+      ]
+    }
+  ],
+  "capabilities": [
+    {
+      "name": "Dựng flow bằng cách chèn step / action",
+      "description": "Flow là trigger → Wait / Conditional split → Send email / Update contact field → kết thúc. Mọi connector có nút \"+\" mở menu 2 nhóm Steps (Wait / delay, Conditional split) và Actions (Send email, Update contact field), cả 4 đều chọn được; node được chèn đúng tại connector vừa bấm. Node vừa chèn ở trạng thái `Not configured yet` và panel vẫn giữ `Steps & actions` (QA lead chốt).",
+      "kb_refs": [
+        "KB-027",
+        "KB-029",
+        "KB-030",
+        "KB-031",
+        "KB-032",
+        "KB-033",
+        "KB-054"
+      ]
+    },
+    {
+      "name": "Chọn node để cấu hình",
+      "description": "Click node → panel phải chuyển sang form cấu hình của node; click canvas trống → panel về danh sách `Steps & actions`.",
+      "kb_refs": [
+        "KB-028"
+      ]
+    },
+    {
+      "name": "Kéo thả để sắp lại flow",
+      "description": "Chỉ Wait, Send email, Update contact field kéo được; thả lên connector hợp lệ thì nối lại hàng xóm, thả vào connector downstream của chính nó bị chặn.",
+      "kb_refs": [
+        "KB-035",
+        "KB-036"
+      ]
+    },
+    {
+      "name": "Nhân bản và xoá node",
+      "description": "Kebab `Actions for {name}` (Duplicate, Delete) có ở Wait, Conditional split, Send email, Update contact field, không có ở Trigger và Exit. Xoá split có step ở cả 2 nhánh hỏi xác nhận và giữ nhánh False (quan sát một lần).",
+      "kb_refs": [
+        "KB-037",
+        "KB-215",
+        "KB-038",
+        "KB-063"
+      ]
+    },
+    {
+      "name": "Đặt tên và mô tả",
+      "description": "Dialog `Edit automation` sửa tên (≤ 255 ký tự, chặn rỗng / toàn khoảng trắng) và Description (QA lead chốt).",
+      "kb_refs": [
+        "KB-042",
+        "KB-043",
+        "KB-062"
+      ]
+    },
+    {
+      "name": "Lưu flow qua cửa chặn Save",
+      "description": "Save và Activate bị disabled khi thiếu trigger, thiếu step hoặc còn step chưa cấu hình; hint header theo nấc, không nêu tên node. Save lần đầu tạo bản ghi (POST 201), đổi URL sang id và mới mở Test, View runs, badge Draft, rail Flow / Reports. Rời builder khi chưa lưu có dialog `Leave without saving?`.",
+      "kb_refs": [
+        "KB-039",
+        "KB-040",
+        "KB-041",
+        "KB-045",
+        "KB-046",
+        "KB-050"
+      ]
+    },
+    {
+      "name": "Kích hoạt / tạm dừng từ builder",
+      "description": "Header của flow đã lưu có Pause / Activate; Activate trong builder hiện không hỏi xác nhận (lỗi đã biết BUG-53).",
+      "kb_refs": [
+        "KB-046",
+        "KB-057"
+      ]
+    },
+    {
+      "name": "Sửa flow đang Active",
+      "description": "Save flow Active ghi đè ngay (PUT 200), không cảnh báo, không có draft / version, badge vẫn Active (QA lead chốt). Việc thay đổi có áp cho contact đang Waiting hay không đang mâu thuẫn.",
+      "kb_refs": [
+        "KB-047",
+        "KB-048",
+        "KB-049"
+      ]
+    }
+  ],
+  "state_transitions": [
+    {
+      "from": "builder mới, chưa lưu",
+      "to": "draft (đã lưu)",
+      "trigger": "Save lần đầu",
+      "condition": "Flow đủ trigger + step + mọi step Configured; POST …/automations trả 201, URL đổi sang id",
+      "kb_refs": [
+        "KB-045",
+        "KB-039"
+      ]
+    },
+    {
+      "from": "flow chưa đủ cấu hình",
+      "to": "flow lưu được",
+      "trigger": "Hoàn tất trigger và mọi step",
+      "condition": "Hint header giảm dần theo nấc tới khi hết; Save / Activate enable",
+      "kb_refs": [
+        "KB-039",
+        "KB-040"
+      ]
+    },
+    {
+      "from": "draft / paused",
+      "to": "active",
+      "trigger": "Activate trong builder",
+      "condition": "Không có dialog xác nhận (lỗi đã biết BUG-53), khác danh sách",
+      "kb_refs": [
+        "KB-057",
+        "KB-046"
+      ]
+    },
+    {
+      "from": "active (bản cũ)",
+      "to": "active (bản đã sửa)",
+      "trigger": "Sửa node rồi Save",
+      "condition": "Ghi đè ngay, không draft / version; ảnh hưởng tới contact đang Waiting chưa phân xử",
+      "kb_refs": [
+        "KB-047",
+        "KB-048",
+        "KB-049"
+      ]
+    },
+    {
+      "from": "đã lưu, hợp lệ",
+      "to": "đã lưu nhưng thiếu template",
+      "trigger": "Template của step Send email bị xoá ở Email library",
+      "condition": "Builder không báo và Activate vẫn bấm được (lỗi quan sát)",
+      "kb_refs": [
+        "KB-041",
+        "KB-058"
+      ]
+    },
+    {
+      "from": "có thay đổi chưa lưu",
+      "to": "rời builder",
+      "trigger": "Điều hướng ra ngoài",
+      "condition": "Dialog `Leave without saving?` với Stay / Leave",
+      "kb_refs": [
+        "KB-050"
+      ]
+    }
+  ],
+  "confirmed_rules": [
+    {
+      "statement": "Theo mục đích do PO nêu 03/07/2026 (Epic Jira MTRO-13), ghi trong QA KB Mailtro \"Automations — list & builder\" v1, một automation là flow theo sự kiện contact: trigger → các bước Wait / Conditional split → hành động Send email / Update contact field → kết thúc.",
+      "knowledge_kind": "CONFIRMED_EXPECTED",
+      "confidence": "MEDIUM",
+      "tags": [],
+      "kb_refs": [
+        "KB-027"
+      ]
+    },
+    {
+      "statement": "Theo Jira MTRO-33 AC §1 (tóm tắt trong QA business rule Mailtro, cập nhật 11/09/2026), trong builder click một node thì panel bên phải chuyển sang form cấu hình của node đó; click vùng canvas trống thì panel trở về danh sách tham chiếu `Steps & actions` với hướng dẫn \"Click the + on any connector to add one to the flow.\"",
+      "knowledge_kind": "CONFIRMED_EXPECTED",
+      "confidence": "MEDIUM",
+      "tags": [],
+      "kb_refs": [
+        "KB-028"
+      ]
+    },
+    {
+      "statement": "Theo Jira MTRO-33 AC §2 (tóm tắt trong QA business rule Mailtro, cập nhật 07/10/2026), mọi connector trong builder đều có nút \"+\" (`Add step or action`).",
+      "knowledge_kind": "CONFIRMED_EXPECTED",
+      "confidence": "MEDIUM",
+      "tags": [],
+      "kb_refs": [
+        "KB-029"
+      ]
+    },
+    {
+      "statement": "Theo Jira MTRO-85 (bước Wait / delay; tóm tắt trong QA business rule Mailtro, cập nhật 07/10/2026), cả 4 loại step / action trong menu chèn đều chọn được — Wait / delay đã được enable, không còn nhãn \"Coming soon\".",
+      "knowledge_kind": "CONFIRMED_EXPECTED",
+      "confidence": "MEDIUM",
+      "tags": [],
+      "kb_refs": [
+        "KB-031"
+      ]
+    },
+    {
+      "statement": "Theo Jira MTRO-33 AC §2 (tóm tắt trong QA business rule Mailtro, cập nhật 07/10/2026), chọn loại step nào thì node được chèn đúng tại connector vừa bấm và chuỗi node hiện có được nối lại quanh node mới.",
+      "knowledge_kind": "CONFIRMED_EXPECTED",
+      "confidence": "MEDIUM",
+      "tags": [],
+      "kb_refs": [
+        "KB-032"
+      ]
+    },
+    {
+      "statement": "Theo Jira MTRO-33 AC §3 (tóm tắt trong QA business rule Mailtro, cập nhật 07/10/2026; staging 27/09 khớp), chỉ node Wait, Send email và Update contact field kéo thả được; Trigger, Conditional split và Exit không kéo được.",
+      "knowledge_kind": "CONFIRMED_EXPECTED",
+      "confidence": "MEDIUM",
+      "tags": [],
+      "kb_refs": [
+        "KB-035"
+      ]
+    },
+    {
+      "statement": "Theo Jira MTRO-33 AC §3 (tóm tắt trong QA business rule Mailtro, cập nhật 07/10/2026; staging 27/09 khớp), thả node lên một connector hợp lệ thì hàng xóm cũ được nối lại và node được chèn vào vị trí mới; thả node vào connector nằm phía dưới (downstream) của chính nó bị chặn.",
+      "knowledge_kind": "CONFIRMED_EXPECTED",
+      "confidence": "MEDIUM",
+      "tags": [],
+      "kb_refs": [
+        "KB-036"
+      ]
+    },
+    {
+      "statement": "Theo Jira MTRO-33 AC §4 (tóm tắt trong QA business rule Mailtro, cập nhật 07/10/2026), node Wait, Conditional split, Send email và Update contact field có kebab `Actions for {name}` với 2 mục `Duplicate` và `Delete`; node Trigger và Exit không có kebab.",
+      "knowledge_kind": "CONFIRMED_EXPECTED",
+      "confidence": "MEDIUM",
+      "tags": [
+        "data-deletion"
+      ],
+      "kb_refs": [
+        "KB-037"
+      ]
+    }
+  ],
+  "observed_behavior": [
+    {
+      "statement": "Trên staging (khảo sát 01/10/2026; khớp nhóm rule builder QA lead chốt 18/09), menu của nút `Add step or action` có 2 nhóm — Steps: `Wait / delay` · `Conditional split`; Actions: `Send email` · `Update contact field` — và palette `Steps & actions` mô tả 4 loại này (\"Pause before the next step\", \"Branch contacts on a condition\", \"Send a template to the contact\", \"Set a contact field\").",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "confidence": "MEDIUM",
+      "status": "CURRENT_STATE",
+      "tags": [],
+      "kb_refs": [
+        "KB-030"
+      ]
+    },
+    {
+      "statement": "QA lead chốt 18/09/2026 theo bản dựng staging, chưa có xác nhận PO/Dev (staging 01/10 vẫn khớp): node vừa chèn hiện `Not configured yet` và panel phải vẫn giữ `Steps & actions`, không tự chọn node mới.",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "confidence": "MEDIUM",
+      "status": "CURRENT_STATE",
+      "tags": [],
+      "kb_refs": [
+        "KB-033"
+      ]
+    },
+    {
+      "statement": "Trên staging (test-run 27/09/2026, sau khi BUG-50 được sửa), xoá một Conditional split có step ở cả 2 nhánh thì hiện dialog `Delete this condition?` (\"The {branch} branch and every step inside it are deleted with it. This can't be undone.\") và nhánh False được giữ lại; xoá split có 1 nhánh rỗng thì không hiện dialog.",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "confidence": "LOW",
+      "status": "CURRENT_STATE",
+      "tags": [],
+      "kb_refs": [
+        "KB-038"
+      ]
+    },
+    {
+      "statement": "QA lead chốt 18/09/2026 theo bản dựng staging, chưa có xác nhận PO/Dev (staging 01/10 khớp): `Save` là cửa chặn duy nhất của builder — `Save` và `Activate` bị disabled khi flow thiếu trigger, thiếu step hoặc còn bất kỳ step nào `Not configured`, kể cả ngay sau khi chèn node mới.",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "confidence": "MEDIUM",
+      "status": "CURRENT_STATE",
+      "tags": [],
+      "kb_refs": [
+        "KB-039"
+      ]
+    },
+    {
+      "statement": "QA lead chốt 18/09/2026 theo bản dựng staging, chưa có xác nhận PO/Dev (staging 01/10 khớp): hint ở header builder đi theo các nấc `Choose a trigger · Add at least one step` → `Add at least one step` → `Some steps are missing their settings` (khi thêm Wait chưa cấu hình mà chưa có trigger thì hiện `Choose a trigger · Some steps are missing their settings`), và không nêu tên node còn thiếu.",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "confidence": "MEDIUM",
+      "status": "CURRENT_STATE",
+      "tags": [],
+      "kb_refs": [
+        "KB-040"
+      ]
+    },
+    {
+      "statement": "QA lead chốt 18/09/2026 theo bản dựng staging, chưa có xác nhận PO/Dev: hệ quả của cửa chặn Save là không tồn tại flow đã lưu mà chưa đủ điều kiện Activate; ngoại lệ đã quan sát là khi template của step Send email bị xoá sau đó.",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "confidence": "MEDIUM",
+      "status": "CURRENT_STATE",
+      "tags": [],
+      "kb_refs": [
+        "KB-041"
+      ]
+    },
+    {
+      "statement": "QA lead chốt 18/09/2026 theo bản dựng staging, chưa có xác nhận PO/Dev (staging 01/10 khớp; giới hạn 255 cũng có trong bundle): dialog `Edit automation` (\"Update the name and description shown at the top of this automation.\") cho sửa `Automation name` tối đa 255 ký tự và `Description`.",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "confidence": "MEDIUM",
+      "status": "CURRENT_STATE",
+      "tags": [],
+      "kb_refs": [
+        "KB-042"
+      ]
+    },
+    {
+      "statement": "QA lead chốt 18/09/2026 theo bản dựng staging, chưa có xác nhận PO/Dev: dialog `Edit automation` chặn tên rỗng hoặc toàn khoảng trắng — `Save` disabled và không gửi request.",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "confidence": "MEDIUM",
+      "status": "CURRENT_STATE",
+      "tags": [],
+      "kb_refs": [
+        "KB-043"
+      ]
+    },
+    {
+      "statement": "QA lead chốt 18/09/2026 theo bản dựng staging (quan sát 12/09), chưa có xác nhận PO/Dev; staging 01/10 khớp: ở `/automations/new` header chỉ có `Back to automations`, tiêu đề `Untitled automation`, `Edit automation`, dòng hint, `Save` và `Activate`; automation chưa lưu không có rail `Flow` / `Reports`.",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "confidence": "MEDIUM",
+      "status": "CURRENT_STATE",
+      "tags": [],
+      "kb_refs": [
+        "KB-044"
+      ]
+    },
+    {
+      "statement": "QA lead chốt 18/09/2026 theo bản dựng staging (quan sát 12/09), chưa có xác nhận PO/Dev: lần Save đầu của automation mới gửi `POST …/automations` trả 201 và URL đổi sang id của automation; chỉ sau đó builder mới có `View runs`, `Test`, badge `Draft` và rail `Flow` / `Reports` — nên không dry-run được flow chưa lưu.",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "confidence": "MEDIUM",
+      "status": "CURRENT_STATE",
+      "tags": [],
+      "kb_refs": [
+        "KB-045"
+      ]
+    },
+    {
+      "statement": "Trên staging (khảo sát 01/10/2026), builder của automation đã lưu có header gồm `Back to automations`, tên, dòng mô tả (nếu có description), badge `Active` / `Paused`, `Edit automation`, `View runs`, `Test`, `Save` (disabled tới khi có thay đổi — đổi một ô bất kỳ thì enable) và `Pause` / `Activate`.",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "confidence": "LOW",
+      "status": "CURRENT_STATE",
+      "tags": [],
+      "kb_refs": [
+        "KB-046"
+      ]
+    },
+    {
+      "statement": "QA lead chốt 18/09/2026 theo bản dựng staging (TC-MTRO-801), chưa có xác nhận PO/Dev: sửa node của flow đang `Active` rồi `Save` thì `PUT …/automations/{id}` trả 200 ngay và ghi đè thẳng lên flow — không cảnh báo, không tạo bản draft hay version, badge vẫn `Active`; Mailtro không có mô hình draft / publish cho automation.",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "confidence": "MEDIUM",
+      "status": "CURRENT_STATE",
+      "tags": [],
+      "kb_refs": [
+        "KB-047"
+      ]
+    },
+    {
+      "statement": "Trên staging (khảo sát 01/10/2026; dirty-check theo nội dung từ test-run 03/09), rời builder khi còn thay đổi chưa lưu thì hiện dialog `Leave without saving?` / \"You have unsaved changes. They'll be lost if you leave.\" với nút `Stay` / `Leave`.",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "confidence": "MEDIUM",
+      "status": "CURRENT_STATE",
+      "tags": [],
+      "kb_refs": [
+        "KB-050"
+      ]
+    },
+    {
+      "statement": "Trên staging (khảo sát 01/10/2026), canvas builder gồm node `Trigger`, các node step, node `Exit`, nút `Add step or action` trên mỗi connector, nhãn `True` / `False` dưới split và 3 nút zoom.",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "confidence": "LOW",
+      "status": "CURRENT_STATE",
+      "tags": [],
+      "kb_refs": [
+        "KB-054"
+      ]
+    },
+    {
+      "statement": "Lỗi đã biết BUG-56 (còn mở trên staging 01/10/2026): mở `/automations/<id không tồn tại>` vẫn dựng khung builder (tiêu đề rỗng, `Edit automation` bấm được, hint đầy đủ) kèm alert `Not Found.` thay vì trang lỗi.",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "confidence": "MEDIUM",
+      "status": "KNOWN_DEFECT",
+      "tags": [],
+      "kb_refs": [
+        "KB-056"
+      ]
+    },
+    {
+      "statement": "Lỗi đã biết BUG-53 (mở từ 27/09/2026): bấm `Activate` trong builder không hỏi xác nhận nên bật flow gửi mail thật chỉ bằng 1 click, trong khi Activate ở danh sách có dialog xác nhận.",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "confidence": "MEDIUM",
+      "status": "KNOWN_DEFECT",
+      "tags": [],
+      "kb_refs": [
+        "KB-057"
+      ]
+    },
+    {
+      "statement": "Lỗi quan sát trên staging (01/10/2026, GAP-09 mức Major): khi template của step Send email bị xoá ở Email library, builder không báo gì — node hiện id template thô thay cho tên, panel quay về nút `Choose an email` nhưng badge vẫn `Configured`, header không có hint và `Activate` vẫn bấm được (flow đã lưu trở thành chưa hợp lệ mà không bị chặn).",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "confidence": "MEDIUM",
+      "status": "KNOWN_DEFECT",
+      "tags": [],
+      "kb_refs": [
+        "KB-058"
+      ]
+    },
+    {
+      "statement": "Lỗi quan sát trên staging (01/10/2026, còn mở): ở viewport 1280×800 panel phải của builder (~450px) che node và kebab trên canvas.",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "confidence": "MEDIUM",
+      "status": "KNOWN_DEFECT",
+      "tags": [],
+      "kb_refs": [
+        "KB-059"
+      ]
+    },
+    {
+      "statement": "Lỗi đã biết BUG-55 (còn mở): builder ở viewport 375px không thao tác được.",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "confidence": "MEDIUM",
+      "status": "KNOWN_DEFECT",
+      "tags": [],
+      "kb_refs": [
+        "KB-060"
+      ]
+    },
+    {
+      "statement": "Lỗi đã biết BUG-57 (còn mở): 3 nút zoom của builder thiếu accessible name.",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "confidence": "MEDIUM",
+      "status": "KNOWN_DEFECT",
+      "tags": [],
+      "kb_refs": [
+        "KB-061"
+      ]
+    },
+    {
+      "statement": "Lỗi quan sát trên staging (test-run 27/09/2026, TC-MTRO-1012, còn mở): dialog `Edit automation` với description khoảng 5.000 ký tự không cuộn được và description dài đẩy nút của dialog ra ngoài.",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "confidence": "MEDIUM",
+      "status": "KNOWN_DEFECT",
+      "tags": [],
+      "kb_refs": [
+        "KB-062"
+      ]
+    },
+    {
+      "statement": "Lỗi quan sát trên staging (test-run 27/09 / khảo sát 01/10/2026, còn mở): Duplicate một node không chuyển panel sang node mới.",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "confidence": "LOW",
+      "status": "KNOWN_DEFECT",
+      "tags": [],
+      "kb_refs": [
+        "KB-063"
+      ]
+    },
+    {
+      "statement": "Trên staging (khảo sát 01/10/2026), node step có menu `Actions for {name}` gồm `Duplicate` · `Delete` (quan sát trên node Conditional split), còn node Trigger và Exit không có menu này.",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "confidence": "LOW",
+      "status": "CURRENT_STATE",
+      "tags": [
+        "data-deletion"
+      ],
+      "kb_refs": [
+        "KB-215"
+      ]
+    }
+  ],
+  "observed_validations": [],
+  "permissions": [
+    {
+      "statement": "Không có quy tắc role cho builder; xem phần phân quyền automation chưa chốt.",
+      "kb_refs": [
+        "KB-026",
+        "KB-P-051",
+        "KB-P-052"
+      ]
+    }
+  ],
+  "surface_mapping": {
+    "portal": [
+      {
+        "item": "Header builder: Back to automations, tên, mô tả, badge trạng thái, Edit automation, View runs, Test, Save, Pause / Activate; hint header",
+        "kb_refs": [
+          "KB-044",
+          "KB-046",
+          "KB-040"
+        ]
+      },
+      {
+        "item": "Canvas: node Trigger, node step, node Exit, nút \"+\" trên connector, nhãn True / False, 3 nút zoom",
+        "kb_refs": [
+          "KB-054",
+          "KB-029"
+        ]
+      },
+      {
+        "item": "Panel phải: form cấu hình node hoặc `Steps & actions`",
+        "kb_refs": [
+          "KB-028",
+          "KB-030"
+        ]
+      },
+      {
+        "item": "Dialog Edit automation, Delete this condition?, Leave without saving?",
+        "kb_refs": [
+          "KB-042",
+          "KB-038",
+          "KB-050"
+        ]
+      },
+      {
+        "item": "Hint cấu trúc khác chỉ thấy trong bundle (tên rỗng, nhánh quá sâu, trùng id, cấu trúc lỗi, flow dựng ngoài builder; giới hạn 20 step / 10 email)",
+        "kb_refs": [
+          "KB-051",
+          "KB-052",
+          "KB-053"
+        ]
+      }
+    ],
+    "storefront": [],
+    "api": [
+      {
+        "item": "`POST …/automations` (201) khi Save lần đầu; `PUT …/automations/{id}` (200) khi lưu flow đã có",
+        "kb_refs": [
+          "KB-045",
+          "KB-047"
+        ]
+      },
+      {
+        "item": "`GET automations/{id}` khi mở builder (từ bundle)",
+        "kb_refs": [
+          "KB-022"
+        ]
+      }
+    ],
+    "data": [
+      {
+        "item": "Flow gồm trigger, các node step (id node riêng), Exit; tên ≤ 255 ký tự, description",
+        "kb_refs": [
+          "KB-027",
+          "KB-042",
+          "KB-054"
+        ]
+      }
+    ],
+    "code": []
+  },
+  "dependencies": [
+    {
+      "target": "automations / automation-triggers-and-entry",
+      "relation": "composes",
+      "note": "Node Trigger và panel Trigger thuộc feature trigger; cửa chặn Save tính cả trigger.",
+      "kb_refs": [
+        "KB-039",
+        "KB-075"
+      ]
+    },
+    {
+      "target": "automations / automation-steps",
+      "relation": "composes",
+      "note": "Tiêu chí Configured của từng step quyết định Save / Activate.",
+      "kb_refs": [
+        "KB-039",
+        "KB-088",
+        "KB-129"
+      ]
+    },
+    {
+      "target": "automations / automation-test-run",
+      "relation": "enables",
+      "note": "Test chỉ có sau lần Save đầu.",
+      "kb_refs": [
+        "KB-045",
+        "KB-146"
+      ]
+    },
+    {
+      "target": "automations / automation-reports",
+      "relation": "enables",
+      "note": "Rail Reports chỉ có sau lần Save đầu và disabled khi còn thay đổi chưa lưu.",
+      "kb_refs": [
+        "KB-045",
+        "KB-190",
+        "KB-191"
+      ]
+    },
+    {
+      "target": "email-content / email-library",
+      "relation": "data_source",
+      "note": "Xoá template đang được step Send email dùng không bị chặn ở Email library; builder không báo.",
+      "kb_refs": [
+        "KB-058"
+      ]
+    },
+    {
+      "target": "abuse-guard / sending-suspension-and-staff-review",
+      "relation": "constraint",
+      "note": "Theo tham chiếu chéo của KB (Jira MTRO-92), workspace bị dừng gửi bị chặn bật automation; chưa kiểm trên staging.",
+      "kb_refs": [
+        "KB-057"
+      ]
+    }
+  ],
+  "risks": [
+    {
+      "statement": "Mâu thuẫn chưa phân xử: lưu flow Active có áp thay đổi cho contact đang Waiting (QA lead 18/09) hay không (staging 27/09, TC-MTRO-1125). Không dùng phía nào làm oracle.",
+      "knowledge_kind": "INFERRED",
+      "confidence": "LOW",
+      "conflict_group": "CONF-MTRO-automations-01",
+      "kb_refs": [
+        "KB-048",
+        "KB-049"
+      ]
+    },
+    {
+      "statement": "Lỗi đang mở trong builder (Activate không hỏi xác nhận, id không tồn tại vẫn dựng builder, im lặng khi template bị xoá, panel che node ở 1280×800, không dùng được ở 375px, nút zoom thiếu accessible name, dialog Edit tràn với description dài, Duplicate node không chuyển panel) là regression watch, không phải expected result.",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "confidence": "MEDIUM",
+      "status": "KNOWN_DEFECT",
+      "kb_refs": [
+        "KB-056",
+        "KB-057",
+        "KB-058",
+        "KB-059",
+        "KB-060",
+        "KB-061",
+        "KB-062",
+        "KB-063"
+      ]
+    },
+    {
+      "statement": "Nhóm rule builder do QA lead chốt 18/09/2026 (cửa chặn Save, hint theo nấc, node vừa chèn chưa cấu hình, Edit automation, header /automations/new, Save lần đầu, lưu flow Active ghi đè) chưa có xác nhận PO/Dev — là baseline hiện trạng, không phải rule.",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "confidence": "MEDIUM",
+      "kb_refs": [
+        "KB-033",
+        "KB-039",
+        "KB-040",
+        "KB-041",
+        "KB-042",
+        "KB-043",
+        "KB-044",
+        "KB-045",
+        "KB-047"
+      ]
+    },
+    {
+      "statement": "Theo Jira MTRO-112 (trạng thái To Do khi QA đọc 07/10/2026), dự kiến đổi sang tự chuyển panel sang node vừa chèn; thay đổi này chưa triển khai nên hành vi hiện tại vẫn là panel giữ `Steps & actions`.",
+      "knowledge_kind": "INFERRED",
+      "confidence": "LOW",
+      "conflict_group": null,
+      "tags": [],
+      "kb_refs": [
+        "KB-034"
+      ]
+    },
+    {
+      "statement": "Một phía của mâu thuẫn chưa phân xử: QA lead chốt 18/09/2026 theo bản dựng staging (chưa có xác nhận PO/Dev) rằng thay đổi khi lưu flow đang Active được áp dụng luôn cho contact đang chạy trong flow.",
+      "knowledge_kind": "INFERRED",
+      "confidence": "LOW",
+      "conflict_group": "CONF-MTRO-automations-01",
+      "tags": [],
+      "kb_refs": [
+        "KB-048"
+      ]
+    },
+    {
+      "statement": "Phía còn lại của mâu thuẫn chưa phân xử: trên staging (test-run 27/09/2026, TC-MTRO-1125), sửa flow Active không áp cho contact đang Waiting — contact chạy theo cấu hình lúc vào flow; tài liệu ghi cần PO xác nhận.",
+      "knowledge_kind": "INFERRED",
+      "confidence": "LOW",
+      "conflict_group": "CONF-MTRO-automations-01",
+      "tags": [],
+      "kb_refs": [
+        "KB-049"
+      ]
+    },
+    {
+      "statement": "Theo chuỗi i18n / bundle (thấy 27/09 và 01/10/2026, chưa xác nhận đã chạm giới hạn trên UI), một flow chứa tối đa 20 step (\"A flow can hold at most 20 steps\") và gửi tối đa 10 email (\"A flow can send at most 10 emails\").",
+      "knowledge_kind": "INFERRED",
+      "confidence": "LOW",
+      "conflict_group": null,
+      "tags": [],
+      "kb_refs": [
+        "KB-051"
+      ]
+    },
+    {
+      "statement": "Theo bundle / i18n (khảo sát 27/09 và 01/10/2026, chưa đối chiếu UI), header builder còn có các hint: \"Give this automation a name\" (tên rỗng), \"The flow branches too deeply\" (khoá `tooDeep`, giá trị độ sâu tối đa không được nêu), \"Two steps share an id\" và \"Something is wrong with this flow's structure — reload the page\".",
+      "knowledge_kind": "INFERRED",
+      "confidence": "LOW",
+      "conflict_group": null,
+      "tags": [],
+      "kb_refs": [
+        "KB-052"
+      ]
+    },
+    {
+      "statement": "Theo bundle (khảo sát 01/10/2026, chưa đối chiếu UI), automation được dựng ngoài visual builder sẽ báo \"This automation was built outside the visual builder and can't be edited here without changing it.\"",
+      "knowledge_kind": "INFERRED",
+      "confidence": "LOW",
+      "conflict_group": null,
+      "tags": [],
+      "kb_refs": [
+        "KB-053"
+      ]
+    },
+    {
+      "statement": "Theo ví dụ trong Inventory staging Mailtro \"Automations\" (01/10/2026), node Conditional split đã lưu hiện tóm tắt điều kiện (vd \"Email address includes <owner>\") và node Update contact field hiện `<field> = <giá trị>` (vd \"app = tepo\"); đây là dữ liệu mẫu, không phải quy tắc hiển thị.",
+      "knowledge_kind": "INFERRED",
+      "confidence": "LOW",
+      "conflict_group": null,
+      "tags": [
+        "merge-tag-syntax"
+      ],
+      "kb_refs": [
+        "KB-055"
+      ]
+    }
+  ],
+  "freshness": {
+    "observed_at": "2026-10-07",
+    "basis": "Epic PO 03/07/2026, Jira AC tóm tắt trong QA business rule Mailtro (cập nhật 11/09 và 07/10/2026), QA lead chốt 18/09/2026, test-run 27/09 và khảo sát staging 01/10/2026"
+  },
+  "unknown_areas": [
+    {
+      "question": "Sửa một flow đang Active rồi Save có áp dụng thay đổi cho contact đang Waiting trong flow không, hay contact chạy theo cấu hình lúc vào flow?",
+      "why_it_matters": "Hai nguồn trái nhau (QA lead 18/09 và staging 27/09), chưa có quyết định PO/Dev; ảnh hưởng tới mail thật đang chờ gửi.",
+      "kb_refs": [
+        "KB-048",
+        "KB-049",
+        "KB-047"
+      ],
+      "oq_id": "OQ-automations-004"
+    },
+    {
+      "question": "PO/Dev có xác nhận nhóm hành vi builder QA lead chốt 18/09/2026 là hành vi mong đợi không (Save là cửa chặn duy nhất, hint 3 nấc không nêu tên node, node vừa chèn giữ panel Steps & actions, tên ≤ 255 và chặn rỗng, phải Save lần đầu mới có Test / View runs, lưu flow Active ghi đè không version)?",
+      "why_it_matters": "Hiện chỉ là hiện trạng staging; checklist chỉ dùng được làm baseline.",
+      "kb_refs": [
+        "KB-033",
+        "KB-039",
+        "KB-040",
+        "KB-041",
+        "KB-042",
+        "KB-043",
+        "KB-044",
+        "KB-045",
+        "KB-047"
+      ],
+      "oq_id": "OQ-automations-005"
+    },
+    {
+      "question": "Giới hạn chính thức của builder là bao nhiêu (số step tối đa, số Send email tối đa, độ sâu nhánh split tối đa) và khi vượt thì thông báo gì?",
+      "why_it_matters": "20 step / 10 email chỉ thấy qua chuỗi i18n; độ sâu nhánh (tooDeep) không có giá trị; danh sách cấu hình giới hạn không có trong bộ nguồn.",
+      "kb_refs": [
+        "KB-051",
+        "KB-052"
+      ],
+      "oq_id": "OQ-automations-008"
+    },
+    {
+      "question": "Khi Jira MTRO-112 được deploy (panel tự chuyển sang node vừa chèn), case chèn node phải dùng expected result nào và khi nào thay đổi lên staging?",
+      "why_it_matters": "Hành vi hiện tại và hướng thay đổi trái nhau; expected result sẽ đổi.",
+      "kb_refs": [
+        "KB-034",
+        "KB-033"
+      ],
+      "oq_id": "OQ-automations-006"
+    },
+    {
+      "question": "Activate trong builder có phải hỏi xác nhận giống Activate ở danh sách không?",
+      "why_it_matters": "Hiện builder bật flow gửi mail thật bằng 1 click (BUG-53) trong khi danh sách có dialog; chưa có rule nói rõ cho builder.",
+      "kb_refs": [
+        "KB-057",
+        "KB-016"
+      ],
+      "oq_id": "OQ-automations-007"
+    },
+    {
+      "question": "Mở `/automations/<id không tồn tại>` phải hiện gì (trang lỗi, redirect về danh sách)?",
+      "why_it_matters": "Hiện dựng khung builder kèm alert Not Found. (BUG-56); không có expected.",
+      "kb_refs": [
+        "KB-056",
+        "KB-P-049"
+      ],
+      "oq_id": "OQ-automations-007"
+    },
+    {
+      "question": "Kéo thả node có còn đúng như Jira AC §3 trên bản dựng sau 01/10/2026 không (node nào kéo được, thả vào đâu)?",
+      "why_it_matters": "Lần khảo sát 01/10 không kiểm lại kéo thả; căn cứ chỉ là AC và test-run 27/09.",
+      "kb_refs": [
+        "KB-035",
+        "KB-036"
+      ],
+      "oq_id": "OQ-automations-038"
+    },
+    {
+      "question": "Automation được dựng ngoài visual builder (ví dụ qua API / MCP) thì mở trong builder ra sao, và thao tác automation qua MCP (Jira MTRO-98) có những hành vi gì?",
+      "why_it_matters": "Chỉ có chuỗi bundle cho flow dựng ngoài builder; mô tả MCP cho automation trống.",
+      "kb_refs": [
+        "KB-053"
+      ],
+      "oq_id": "OQ-automations-039"
+    },
+    {
+      "question": "Role nào được dựng, lưu, Activate, Pause flow trong builder?",
+      "why_it_matters": "Ma trận quyền automation chưa chốt.",
+      "kb_refs": [
+        "KB-026",
+        "KB-P-051"
+      ],
+      "oq_id": "OQ-automations-002"
+    }
+  ],
+  "last_updated": {
+    "date": "2026-10-08",
+    "ccr_ref": "bootstrap"
+  },
+  "coverage_matrix": [
+    {
+      "feature_id": "automation-builder",
+      "layer": "portal",
+      "role": "unspecified",
+      "state": "chèn node / panel theo lựa chọn",
+      "environment": "documented",
+      "covered": true,
+      "note": "Jira AC §1–§2 đã xác nhận + QA lead chốt"
+    },
+    {
+      "feature_id": "automation-builder",
+      "layer": "portal",
+      "role": "unspecified",
+      "state": "kéo thả node",
+      "environment": "documented",
+      "covered": true,
+      "note": "Jira AC §3; chưa kiểm lại 01/10"
+    },
+    {
+      "feature_id": "automation-builder",
+      "layer": "portal",
+      "role": "unspecified",
+      "state": "duplicate / delete node",
+      "environment": "documented",
+      "covered": true,
+      "note": "Jira AC §4; xoá split chỉ một quan sát"
+    },
+    {
+      "feature_id": "automation-builder",
+      "layer": "portal",
+      "role": "unspecified",
+      "state": "flow chưa đủ cấu hình (cửa chặn Save, hint)",
+      "environment": "documented",
+      "covered": true,
+      "note": "QA lead chốt, chưa PO/Dev"
+    },
+    {
+      "feature_id": "automation-builder",
+      "layer": "portal",
+      "role": "unspecified",
+      "state": "Save lần đầu automation mới",
+      "environment": "documented",
+      "covered": true,
+      "note": "QA lead chốt, chưa PO/Dev"
+    },
+    {
+      "feature_id": "automation-builder",
+      "layer": "portal",
+      "role": "unspecified",
+      "state": "sửa flow Active",
+      "environment": "documented",
+      "covered": true,
+      "note": "Ghi đè ngay là QA lead chốt; ảnh hưởng tới contact Waiting đang mâu thuẫn"
+    },
+    {
+      "feature_id": "automation-builder",
+      "layer": "backend",
+      "role": "system (runtime engine)",
+      "state": "flow Active được sửa khi có contact Waiting",
+      "environment": "documented",
+      "covered": false,
+      "note": "CONF-MTRO-automations-01 chưa phân xử"
+    },
+    {
+      "feature_id": "automation-builder",
+      "layer": "portal",
+      "role": "unspecified",
+      "state": "giới hạn builder (số step, email, độ sâu)",
+      "environment": "documented",
+      "covered": false,
+      "note": "Chỉ chuỗi i18n"
+    },
+    {
+      "feature_id": "automation-builder",
+      "layer": "portal",
+      "role": "unspecified",
+      "state": "id automation không tồn tại",
+      "environment": "documented",
+      "covered": false,
+      "note": "Chỉ có lỗi đã biết"
+    },
+    {
+      "feature_id": "automation-builder",
+      "layer": "portal",
+      "role": "unspecified",
+      "state": "viewport 1280×800 / 375px",
+      "environment": "documented",
+      "covered": false,
+      "note": "Chỉ có lỗi đã biết"
+    },
+    {
+      "feature_id": "automation-builder",
+      "layer": "portal",
+      "role": "Member / Admin / custom role",
+      "state": "mọi thao tác builder",
+      "environment": "documented",
+      "covered": false,
+      "note": "Ma trận quyền chưa chốt"
+    },
+    {
+      "feature_id": "automation-builder",
+      "layer": "mcp",
+      "role": "unspecified",
+      "state": "thao tác automation qua MCP",
+      "environment": "documented",
+      "covered": false,
+      "note": "Mô tả Jira MTRO-98 trống"
+    },
+    {
+      "feature_id": "automation-builder",
+      "layer": "code",
+      "role": "unspecified",
+      "state": "any",
+      "environment": "documented",
+      "covered": false,
+      "note": "Không có nguồn mã"
+    }
+  ],
+  "profile_conflicts": [
+    {
+      "conflict_group": "CONF-MTRO-automations-01",
+      "topic": "edit-active-flow-effect-on-waiting-contacts",
+      "resolution": "UNRESOLVED",
+      "question": "Sửa một flow đang Active rồi Save có áp dụng thay đổi cho contact đang Waiting trong flow không? Hai nguồn trái nhau và chưa có quyết định PO/Dev; cần PO xác nhận hành vi mong đợi trước khi dùng làm oracle.",
+      "sides": [
+        {
+          "statement": "Một phía của mâu thuẫn chưa phân xử: QA lead chốt 18/09/2026 theo bản dựng staging (chưa có xác nhận PO/Dev) rằng thay đổi khi lưu flow đang Active được áp dụng luôn cho contact đang chạy trong flow.",
+          "kb_refs": [
+            "KB-048"
+          ]
+        },
+        {
+          "statement": "Phía còn lại của mâu thuẫn chưa phân xử: trên staging (test-run 27/09/2026, TC-MTRO-1125), sửa flow Active không áp cho contact đang Waiting — contact chạy theo cấu hình lúc vào flow; tài liệu ghi cần PO xác nhận.",
+          "kb_refs": [
+            "KB-049"
+          ]
+        }
+      ],
+      "kb_refs": [
+        "KB-048",
+        "KB-049"
+      ]
+    }
+  ],
+  "profile_relationships": [
+    {
+      "from": "automation-builder",
+      "to": "automation-triggers-and-entry",
+      "relation": "COMPOSES",
+      "kb_refs": [
+        "KB-075",
+        "KB-039"
+      ]
+    },
+    {
+      "from": "automation-builder",
+      "to": "automation-steps",
+      "relation": "COMPOSES",
+      "kb_refs": [
+        "KB-030",
+        "KB-039"
+      ]
+    },
+    {
+      "from": "automation-builder",
+      "to": "automation-test-run",
+      "relation": "ENABLES",
+      "kb_refs": [
+        "KB-045"
+      ]
+    },
+    {
+      "from": "automation-builder",
+      "to": "automation-reports",
+      "relation": "ENABLES",
+      "kb_refs": [
+        "KB-190"
+      ]
+    },
+    {
+      "from": "automation-builder",
+      "to": "automation-list",
+      "relation": "RETURNS_TO",
+      "kb_refs": [
+        "KB-044",
+        "KB-046"
+      ]
+    }
+  ]
+}

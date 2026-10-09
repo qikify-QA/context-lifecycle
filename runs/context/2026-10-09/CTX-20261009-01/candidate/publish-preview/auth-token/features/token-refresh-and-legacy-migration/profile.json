@@ -1,0 +1,646 @@
+{
+  "feature_id": "token-refresh-and-legacy-migration",
+  "feature_key": "token-refresh-and-legacy-migration",
+  "name": "Refresh token expiring và migrate shop legacy",
+  "user_goal": "Giữ token Shopify của mỗi shop luôn dùng được mà merchant không phải thao tác: hệ thống refresh định kỳ token expiring và chuyển shop còn dùng token legacy sang token expiring trước 01/01/2027, bằng job migrate hoặc qua re-login khi merchant mở app.",
+  "user_goal_kb_refs": [
+    "KB-017",
+    "KB-018",
+    "KB-019",
+    "KB-023",
+    "KB-024"
+  ],
+  "stable_since_version": "v1",
+  "actors": [
+    {
+      "role": "system (job nền trên queue worker)",
+      "permission_observed": "Theo rule Jira DUOS-399: job `tokens:refresh-expiring --days=10` chạy hằng ngày, job `tokens:migrate-legacy` chạy hằng tuần; cả hai bỏ qua shop đã uninstall, xử lý tuần tự từng shop và cần Horizon queue worker đang chạy.",
+      "kb_refs": [
+        "KB-023",
+        "KB-024",
+        "KB-025",
+        "KB-026",
+        "KB-027"
+      ]
+    },
+    {
+      "role": "merchant",
+      "permission_observed": "Shop legacy được migrate khi merchant tự mở app và đi qua re-login; token legacy cũ không bị huỷ lúc đó.",
+      "kb_refs": [
+        "KB-017",
+        "KB-020",
+        "KB-032"
+      ]
+    },
+    {
+      "role": "người triển khai (vai trò chưa nêu)",
+      "permission_observed": "Chạy tay `tokens:migrate-legacy` một lần ngay sau deploy và phải chạy xong trước khi ship thay đổi re-login-khi-mở-app; tài liệu không nêu ai làm.",
+      "kb_refs": [
+        "KB-021",
+        "KB-024"
+      ]
+    }
+  ],
+  "entry_points": [
+    {
+      "path": "Job `tokens:refresh-expiring --days=10` (hằng ngày)",
+      "precondition": "Shop dùng token expiring, chưa uninstall; queue worker đang chạy.",
+      "kb_refs": [
+        "KB-023",
+        "KB-025",
+        "KB-027"
+      ]
+    },
+    {
+      "path": "Job `tokens:migrate-legacy` (hằng tuần + chạy tay một lần ngay sau deploy)",
+      "precondition": "Shop dùng token legacy, chưa uninstall; trước 01/01/2027.",
+      "kb_refs": [
+        "KB-018",
+        "KB-019",
+        "KB-024",
+        "KB-025"
+      ]
+    },
+    {
+      "path": "Merchant mở app khi shop đang dùng token legacy → re-login",
+      "precondition": "Shop dùng token legacy.",
+      "kb_refs": [
+        "KB-017",
+        "KB-020",
+        "KB-032"
+      ]
+    },
+    {
+      "path": "Luồng gọi Shopify khi token sắp hết hạn (auto refresh)",
+      "precondition": "Chỉ theo tóm tắt QA: còn trong buffer 10 phút trước hạn.",
+      "kb_refs": [
+        "KB-028",
+        "KB-029"
+      ]
+    }
+  ],
+  "capabilities": [
+    {
+      "name": "Refresh định kỳ token expiring",
+      "description": "Job `tokens:refresh-expiring --days=10` chạy hằng ngày, bỏ qua shop đã uninstall, tuần tự từng shop, cần Horizon queue worker. Ý nghĩa và biên của `--days=10` chưa được định nghĩa.",
+      "kb_refs": [
+        "KB-023",
+        "KB-025",
+        "KB-026",
+        "KB-027",
+        "KB-055"
+      ]
+    },
+    {
+      "name": "Migrate silent shop legacy bằng job",
+      "description": "`tokens:migrate-legacy` chuyển shop sang token expiring mà merchant không phải thao tác, huỷ token legacy cũ ngay; chạy hằng tuần + một lần tay sau deploy; phải xong trước 01/01/2027; bỏ qua shop đã uninstall.",
+      "kb_refs": [
+        "KB-017",
+        "KB-018",
+        "KB-019",
+        "KB-024",
+        "KB-025",
+        "KB-026",
+        "KB-027"
+      ]
+    },
+    {
+      "name": "Migrate qua re-login khi merchant mở app",
+      "description": "Shop legacy được chuyển sang token expiring khi merchant mở app và re-login; token legacy cũ không bị huỷ lúc migrate. Theo tóm tắt QA (chưa xác nhận), sau 01/01/2027 đây là đường duy nhất.",
+      "kb_refs": [
+        "KB-017",
+        "KB-020",
+        "KB-032",
+        "KB-022"
+      ]
+    },
+    {
+      "name": "Thứ tự triển khai migrate trước re-login",
+      "description": "`tokens:migrate-legacy` phải chạy xong hoàn toàn trước khi ship thay đổi re-login-khi-mở-app để hai luồng không chạy đồng thời trên cùng shop.",
+      "kb_refs": [
+        "KB-021"
+      ]
+    },
+    {
+      "name": "Tự refresh trong luồng gọi Shopify và luồng nền",
+      "description": "Theo tóm tắt QA (chưa xác nhận): refresh khi còn trong buffer 10 phút trước hạn, mỗi lần refresh đẩy cả 2 mốc ngày hết hạn và rotate refresh token; webhook và job nền tự refresh, không bị chặn bởi hạn khoảng 60 phút của access token.",
+      "kb_refs": [
+        "KB-028",
+        "KB-029",
+        "KB-055"
+      ]
+    }
+  ],
+  "state_transitions": [
+    {
+      "from": "shop dùng token legacy",
+      "to": "shop dùng token expiring, token legacy cũ bị huỷ ngay",
+      "trigger": "Job `tokens:migrate-legacy`",
+      "condition": "Trước 01/01/2027; shop chưa uninstall; merchant không phải thao tác",
+      "kb_refs": [
+        "KB-018",
+        "KB-019",
+        "KB-025"
+      ]
+    },
+    {
+      "from": "shop dùng token legacy",
+      "to": "shop dùng token expiring, token legacy cũ chưa bị huỷ lúc migrate",
+      "trigger": "Merchant mở app và re-login",
+      "condition": "—",
+      "kb_refs": [
+        "KB-020",
+        "KB-032"
+      ]
+    },
+    {
+      "from": "token expiring gần hạn",
+      "to": "token expiring đã refresh",
+      "trigger": "Job `tokens:refresh-expiring --days=10` hằng ngày",
+      "condition": "Shop chưa uninstall; mốc và biên của `--days=10` chưa rõ",
+      "kb_refs": [
+        "KB-023",
+        "KB-025"
+      ]
+    },
+    {
+      "from": "token expiring trong buffer 10 phút trước hạn",
+      "to": "token đã refresh, 2 mốc ngày đẩy lên, refresh token được rotate",
+      "trigger": "Luồng gọi Shopify",
+      "condition": "Chỉ theo tóm tắt QA, chưa xác nhận",
+      "kb_refs": [
+        "KB-028"
+      ]
+    }
+  ],
+  "confirmed_rules": [
+    {
+      "statement": "Theo Jira DUOS-399 (description/AC, cập nhật 07/07/2026; tóm tắt trong QA business rule Duos và QA KB Duos \"Auth & Token lifecycle\" v1), shop dùng token legacy được chuyển sang token expiring qua 2 đường: (1) lệnh `tokens:migrate-legacy`, hoặc (2) re-login khi merchant tự mở app.",
+      "knowledge_kind": "CONFIRMED_EXPECTED",
+      "confidence": "MEDIUM",
+      "kb_refs": [
+        "KB-017"
+      ]
+    },
+    {
+      "statement": "Theo Jira DUOS-399 (description/AC, cập nhật 07/07/2026; tóm tắt trong QA business rule Duos và QA KB Duos \"Auth & Token lifecycle\" v1), lệnh `tokens:migrate-legacy` chuyển shop sang token expiring một cách silent (merchant không phải thao tác) và huỷ token legacy cũ ngay lập tức.",
+      "knowledge_kind": "CONFIRMED_EXPECTED",
+      "confidence": "MEDIUM",
+      "kb_refs": [
+        "KB-018"
+      ]
+    },
+    {
+      "statement": "Theo Jira DUOS-399 (description/AC, cập nhật 07/07/2026; tóm tắt trong QA business rule Duos và QA KB Duos \"Auth & Token lifecycle\" v1), lệnh `tokens:migrate-legacy` phải chạy xong trước 01/01/2027.",
+      "knowledge_kind": "CONFIRMED_EXPECTED",
+      "confidence": "MEDIUM",
+      "kb_refs": [
+        "KB-019"
+      ]
+    },
+    {
+      "statement": "Theo Jira DUOS-399 (description/AC, cập nhật 07/07/2026; tóm tắt trong QA business rule Duos và QA KB Duos \"Auth & Token lifecycle\" v1), khi shop legacy được migrate qua re-login lúc merchant mở app thì token legacy cũ không bị huỷ tại thời điểm migrate.",
+      "knowledge_kind": "CONFIRMED_EXPECTED",
+      "confidence": "MEDIUM",
+      "kb_refs": [
+        "KB-020"
+      ]
+    },
+    {
+      "statement": "Theo Jira DUOS-399 (description/AC, cập nhật 07/07/2026; tóm tắt trong QA business rule Duos và QA KB Duos \"Auth & Token lifecycle\" v1), `tokens:migrate-legacy` phải chạy xong hoàn toàn trước khi ship thay đổi re-login-khi-mở-app, để hai luồng không chạy đồng thời trên cùng một shop.",
+      "knowledge_kind": "CONFIRMED_EXPECTED",
+      "confidence": "MEDIUM",
+      "kb_refs": [
+        "KB-021"
+      ]
+    },
+    {
+      "statement": "Theo Jira DUOS-399 (description/AC, cập nhật 07/07/2026; tóm tắt trong QA business rule Duos và QA KB Duos \"Auth & Token lifecycle\" v1), job `tokens:refresh-expiring --days=10` chạy hằng ngày.",
+      "knowledge_kind": "CONFIRMED_EXPECTED",
+      "confidence": "MEDIUM",
+      "kb_refs": [
+        "KB-023"
+      ]
+    },
+    {
+      "statement": "Theo Jira DUOS-399 (description/AC, cập nhật 07/07/2026; tóm tắt trong QA business rule Duos và QA KB Duos \"Auth & Token lifecycle\" v1), job `tokens:migrate-legacy` chạy hằng tuần, cộng thêm 1 lần chạy tay ngay sau deploy để dọn backlog.",
+      "knowledge_kind": "CONFIRMED_EXPECTED",
+      "confidence": "MEDIUM",
+      "kb_refs": [
+        "KB-024"
+      ]
+    },
+    {
+      "statement": "Theo Jira DUOS-399 (description/AC, cập nhật 07/07/2026; tóm tắt trong QA business rule Duos và QA KB Duos \"Auth & Token lifecycle\" v1), cả hai job `tokens:refresh-expiring` và `tokens:migrate-legacy` đều bỏ qua shop đã uninstall.",
+      "knowledge_kind": "CONFIRMED_EXPECTED",
+      "confidence": "MEDIUM",
+      "kb_refs": [
+        "KB-025"
+      ]
+    },
+    {
+      "statement": "Theo Jira DUOS-399 (description/AC, cập nhật 07/07/2026; tóm tắt trong QA business rule Duos và QA KB Duos \"Auth & Token lifecycle\" v1), hai job token xử lý tuần tự từng shop (mỗi background task một shop).",
+      "knowledge_kind": "CONFIRMED_EXPECTED",
+      "confidence": "MEDIUM",
+      "kb_refs": [
+        "KB-026"
+      ]
+    },
+    {
+      "statement": "Theo Jira DUOS-399 (description/AC, cập nhật 07/07/2026; tóm tắt trong QA business rule Duos và QA KB Duos \"Auth & Token lifecycle\" v1), hai job token cần Horizon queue worker đang chạy.",
+      "knowledge_kind": "CONFIRMED_EXPECTED",
+      "confidence": "MEDIUM",
+      "kb_refs": [
+        "KB-027"
+      ]
+    }
+  ],
+  "observed_behavior": [],
+  "observed_validations": [],
+  "permissions": [
+    {
+      "statement": "Rule không nêu ai chạy tay `tokens:migrate-legacy` sau deploy hay ai quyết định thời điểm ship thay đổi re-login; ma trận actor của token lifecycle đang chờ PO/Dev xác nhận.",
+      "kb_refs": [
+        "KB-021",
+        "KB-024"
+      ]
+    }
+  ],
+  "surface_mapping": {
+    "portal": [
+      {
+        "item": "Re-login khi merchant mở app với shop legacy (đường migrate thứ hai)",
+        "kb_refs": [
+          "KB-017",
+          "KB-032"
+        ]
+      }
+    ],
+    "storefront": [],
+    "api": [
+      {
+        "item": "Gọi Shopify để refresh / migrate token (endpoint chưa nêu)",
+        "kb_refs": [
+          "KB-018",
+          "KB-023"
+        ]
+      }
+    ],
+    "data": [
+      {
+        "item": "`Access Token Expires At`, `Refresh Token`, `Refresh Token Expires At` thay đổi khi refresh (chi tiết rotate chỉ theo tóm tắt QA)",
+        "kb_refs": [
+          "KB-028"
+        ]
+      }
+    ],
+    "code": [],
+    "backend": [
+      {
+        "item": "Job `tokens:refresh-expiring --days=10` (hằng ngày)",
+        "kb_refs": [
+          "KB-023"
+        ]
+      },
+      {
+        "item": "Job `tokens:migrate-legacy` (hằng tuần + chạy tay sau deploy)",
+        "kb_refs": [
+          "KB-024"
+        ]
+      },
+      {
+        "item": "Horizon queue worker, xử lý tuần tự từng shop",
+        "kb_refs": [
+          "KB-026",
+          "KB-027",
+          "KB-P-036"
+        ]
+      }
+    ]
+  },
+  "dependencies": [
+    {
+      "target": "auth-token / app-open-reauth",
+      "relation": "shares_flow",
+      "note": "Re-login khi mở app với shop legacy là đường migrate thứ hai; phải ship sau khi migrate-legacy chạy xong.",
+      "kb_refs": [
+        "KB-032",
+        "KB-020",
+        "KB-021"
+      ]
+    },
+    {
+      "target": "auth-token / dead-token-detection-and-reconnect",
+      "relation": "prevents",
+      "note": "Refresh/migrate không thành thì token rơi vào điều kiện chết (expiring: hết `Refresh Token Expires At`; legacy: từ 01/01/2027).",
+      "kb_refs": [
+        "KB-001",
+        "KB-002"
+      ]
+    },
+    {
+      "target": "auth-token / uninstall-reinstall-token-cleanup",
+      "relation": "constrained_by",
+      "note": "Hai job token bỏ qua shop đã uninstall; shop uninstall khi đang chờ reconnect không còn được refresh.",
+      "kb_refs": [
+        "KB-025",
+        "KB-044"
+      ]
+    },
+    {
+      "target": "auth-token / admin-token-and-scopes",
+      "relation": "related",
+      "note": "Admin panel có nút force refresh thủ công cho shop token expiring.",
+      "kb_refs": [
+        "KB-050"
+      ]
+    },
+    {
+      "target": "Hạ tầng queue của backend Duos",
+      "relation": "runtime_dependency",
+      "note": "Job token cần Horizon queue worker đang chạy.",
+      "kb_refs": [
+        "KB-027",
+        "KB-P-036"
+      ]
+    }
+  ],
+  "risks": [
+    {
+      "statement": "Theo phân tích edge case của QA (chưa xác nhận), khi 2 tiến trình cùng refresh 1 shop, việc rotate refresh token chồng nhau có thể làm vô hiệu token của tiến trình chậm hơn; tài liệu chưa nói có lock.",
+      "knowledge_kind": "INFERRED",
+      "confidence": "LOW",
+      "kb_refs": [
+        "KB-030"
+      ]
+    },
+    {
+      "statement": "Theo phân tích edge case của QA (chưa xác nhận), nếu migrate thành công phía Shopify nhưng app không nhận response thì shop mất token và chỉ phục hồi khi merchant mở app; tài liệu chưa nói có job đối soát.",
+      "knowledge_kind": "INFERRED",
+      "confidence": "LOW",
+      "kb_refs": [
+        "KB-031"
+      ]
+    },
+    {
+      "statement": "Nếu thay đổi re-login-khi-mở-app được ship trước khi `tokens:migrate-legacy` chạy xong, hai luồng migrate có thể chạy đồng thời trên cùng shop, trái rule thứ tự triển khai.",
+      "knowledge_kind": "CONFIRMED_EXPECTED",
+      "confidence": "MEDIUM",
+      "kb_refs": [
+        "KB-021"
+      ]
+    },
+    {
+      "statement": "Job token phụ thuộc Horizon queue worker; worker không chạy thì không shop nào được refresh/migrate.",
+      "knowledge_kind": "CONFIRMED_EXPECTED",
+      "confidence": "MEDIUM",
+      "kb_refs": [
+        "KB-027",
+        "KB-P-036"
+      ]
+    },
+    {
+      "statement": "Known issues Duos ghi BUG-36 (trạng thái \"open?\") gắn với TC-DUOS-001 của nhóm Auth & Token lifecycle nhưng nội dung lỗi chưa đọc được; chưa biết lỗi chạm hành vi nào của token lifecycle, nên theo dõi như regression watch và không dùng TC-DUOS-001 làm bằng chứng PASS.",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "confidence": "LOW",
+      "kb_refs": [
+        "KB-057"
+      ],
+      "status": "KNOWN_DEFECT"
+    }
+  ],
+  "unknown_areas": [
+    {
+      "question": "Tham số `--days=10` của `tokens:refresh-expiring` tính theo mốc hạn nào (refresh token hay access token), và token còn đúng 10 ngày có được refresh không (≤ hay <)?",
+      "why_it_matters": "Không viết được check biên cho job refresh.",
+      "kb_refs": [
+        "KB-023",
+        "KB-055"
+      ],
+      "oq_id": "OQ-auth-token-008"
+    },
+    {
+      "question": "Thời hạn chính xác của access token và refresh token expiring là bao lâu (tài liệu chỉ ghi khoảng 60 phút / 90 ngày)?",
+      "why_it_matters": "Các mốc hạn quyết định khi nào refresh và khi nào token chết.",
+      "kb_refs": [
+        "KB-055"
+      ],
+      "oq_id": "OQ-auth-token-008"
+    },
+    {
+      "question": "Khi 2 tiến trình cùng refresh token của 1 shop (vd job refresh và luồng gọi Shopify), app có cơ chế lock không, và token của tiến trình chậm hơn có bị vô hiệu không?",
+      "why_it_matters": "Rủi ro mất token do rotate chồng, chưa có oracle.",
+      "kb_refs": [
+        "KB-030"
+      ],
+      "oq_id": "OQ-auth-token-006"
+    },
+    {
+      "question": "Nếu migrate legacy thành công phía Shopify nhưng app không nhận response, shop có mất token tới khi merchant mở app không, và có job đối soát nào phục hồi không?",
+      "why_it_matters": "Rủi ro shop mất kết nối không tự phục hồi.",
+      "kb_refs": [
+        "KB-031"
+      ],
+      "oq_id": "OQ-auth-token-007"
+    },
+    {
+      "question": "Trong luồng gọi Shopify, app có tự refresh khi token còn trong buffer 10 phút trước hạn, mỗi lần đẩy cả 2 mốc ngày và rotate refresh token không?",
+      "why_it_matters": "Hành vi refresh inline chỉ có trong tóm tắt QA theo ticket.",
+      "kb_refs": [
+        "KB-028"
+      ],
+      "oq_id": "OQ-auth-token-002"
+    },
+    {
+      "question": "Webhook và job nền có tự refresh token và không bị chặn bởi hạn khoảng 60 phút của access token không?",
+      "why_it_matters": "Chỉ có trong tóm tắt QA theo ticket.",
+      "kb_refs": [
+        "KB-029"
+      ],
+      "oq_id": "OQ-auth-token-002"
+    },
+    {
+      "question": "Sau 01/01/2027, migrate silent có thật không còn dùng được và re-login khi mở app là đường duy nhất để chuyển shop legacy sang expiring?",
+      "why_it_matters": "Ảnh hưởng cách xử lý shop legacy còn sót sau mốc Shopify.",
+      "kb_refs": [
+        "KB-022",
+        "KB-056"
+      ],
+      "oq_id": "OQ-auth-token-002"
+    },
+    {
+      "question": "Ai (vai trò nào) chạy tay `tokens:migrate-legacy` sau deploy và xác nhận nó đã xong trước khi ship re-login-khi-mở-app?",
+      "why_it_matters": "Rule thứ tự triển khai không nêu người chịu trách nhiệm.",
+      "kb_refs": [
+        "KB-021",
+        "KB-024"
+      ],
+      "oq_id": "OQ-auth-token-001"
+    },
+    {
+      "question": "BUG-36 (gắn TC-DUOS-001, trạng thái \"open?\") là lỗi gì, thuộc hành vi token nào (phát hiện token chết, refresh/migrate, re-auth khi mở app, uninstall/reinstall hay admin panel), còn mở hay đã fix?",
+      "why_it_matters": "Nếu lỗi chạm hành vi của tính năng này thì check theo rule tương ứng cần theo dõi regression; test case liên quan đang passed nên không phải bằng chứng PASS.",
+      "kb_refs": [
+        "KB-057"
+      ],
+      "oq_id": "OQ-auth-token-003"
+    }
+  ],
+  "freshness": {
+    "observed_at": "2026-10-08",
+    "earliest_source_date": "2026-07-07",
+    "basis": "Ngày nguồn mới nhất trong các KB item được tham chiếu (ngày cập nhật Jira trong rule, ngày phân tích QA, ngày cập nhật danh sách lỗi); không có quan sát runtime trong lần chạy này."
+  },
+  "last_updated": {
+    "date": "2026-10-09",
+    "ccr_ref": "bootstrap"
+  },
+  "coverage_matrix": [
+    {
+      "feature_id": "token-refresh-and-legacy-migration",
+      "layer": "backend",
+      "role": "system",
+      "state": "shop expiring trong cửa sổ `--days=10`",
+      "environment": "documented",
+      "covered": true,
+      "note": "Rule Jira DUOS-399; biên chưa rõ"
+    },
+    {
+      "feature_id": "token-refresh-and-legacy-migration",
+      "layer": "backend",
+      "role": "system",
+      "state": "shop legacy trước 01/01/2027 (job migrate)",
+      "environment": "documented",
+      "covered": true,
+      "note": "Rule Jira DUOS-399"
+    },
+    {
+      "feature_id": "token-refresh-and-legacy-migration",
+      "layer": "backend",
+      "role": "system",
+      "state": "shop đã uninstall",
+      "environment": "documented",
+      "covered": true,
+      "note": "Rule Jira DUOS-399"
+    },
+    {
+      "feature_id": "token-refresh-and-legacy-migration",
+      "layer": "backend",
+      "role": "system",
+      "state": "queue worker / xử lý tuần tự",
+      "environment": "documented",
+      "covered": true,
+      "note": "Rule Jira DUOS-399"
+    },
+    {
+      "feature_id": "token-refresh-and-legacy-migration",
+      "layer": "portal",
+      "role": "merchant",
+      "state": "shop legacy mở app → re-login migrate",
+      "environment": "documented",
+      "covered": true,
+      "note": "Rule Jira DUOS-399"
+    },
+    {
+      "feature_id": "token-refresh-and-legacy-migration",
+      "layer": "backend",
+      "role": "unspecified",
+      "state": "thứ tự triển khai migrate trước re-login",
+      "environment": "documented",
+      "covered": true,
+      "note": "Rule Jira DUOS-399"
+    },
+    {
+      "feature_id": "token-refresh-and-legacy-migration",
+      "layer": "backend",
+      "role": "system",
+      "state": "biên `--days=10`",
+      "environment": "documented",
+      "covered": false,
+      "note": "Chưa định nghĩa"
+    },
+    {
+      "feature_id": "token-refresh-and-legacy-migration",
+      "layer": "api",
+      "role": "system",
+      "state": "auto refresh inline trong buffer 10 phút",
+      "environment": "documented",
+      "covered": false,
+      "note": "Chỉ tóm tắt QA"
+    },
+    {
+      "feature_id": "token-refresh-and-legacy-migration",
+      "layer": "backend",
+      "role": "system",
+      "state": "refresh đồng thời / migrate mất response",
+      "environment": "documented",
+      "covered": false,
+      "note": "Edge case QA, chưa xác nhận"
+    },
+    {
+      "feature_id": "token-refresh-and-legacy-migration",
+      "layer": "backend",
+      "role": "system",
+      "state": "shop legacy sau 01/01/2027",
+      "environment": "documented",
+      "covered": false,
+      "note": "Chỉ tóm tắt QA"
+    },
+    {
+      "feature_id": "token-refresh-and-legacy-migration",
+      "layer": "code",
+      "role": "unspecified",
+      "state": "any",
+      "environment": "documented",
+      "covered": false,
+      "note": "Không có nguồn mã"
+    },
+    {
+      "feature_id": "token-refresh-and-legacy-migration",
+      "layer": "api",
+      "role": "unspecified",
+      "state": "đặc tả API (endpoint, request/response, mã lỗi)",
+      "environment": "documented",
+      "covered": false,
+      "note": "Bộ tài liệu QA không có đặc tả API/data model cho feature này"
+    },
+    {
+      "feature_id": "token-refresh-and-legacy-migration",
+      "layer": "db",
+      "role": "unspecified",
+      "state": "đặc tả data model (bảng/cột, kiểu dữ liệu)",
+      "environment": "documented",
+      "covered": false,
+      "note": "Bộ tài liệu QA không có đặc tả API/data model cho feature này"
+    }
+  ],
+  "profile_conflicts": [],
+  "profile_relationships": [
+    {
+      "from": "token-refresh-and-legacy-migration",
+      "to": "app-open-reauth",
+      "relation": "SHARES_FLOW",
+      "kb_refs": [
+        "KB-032",
+        "KB-020"
+      ]
+    },
+    {
+      "from": "token-refresh-and-legacy-migration",
+      "to": "dead-token-detection-and-reconnect",
+      "relation": "PREVENTS",
+      "kb_refs": [
+        "KB-001",
+        "KB-002"
+      ]
+    },
+    {
+      "from": "token-refresh-and-legacy-migration",
+      "to": "uninstall-reinstall-token-cleanup",
+      "relation": "CONSTRAINED_BY",
+      "kb_refs": [
+        "KB-025"
+      ]
+    }
+  ]
+}

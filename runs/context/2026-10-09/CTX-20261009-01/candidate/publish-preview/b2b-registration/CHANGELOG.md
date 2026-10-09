@@ -1,0 +1,3 @@
+# CHANGELOG — b2b-registration
+
+- 2026-10-09 (`bootstrap`, DOC_BOOTSTRAP) — Bootstrap đầu tiên từ bộ tài liệu QA-authored Duos B2B trên Testlane (24 tài liệu, snapshot v1 2026-10-09). 4 feature, 78 KB item, 0 nhóm conflict mở, 26 open question.

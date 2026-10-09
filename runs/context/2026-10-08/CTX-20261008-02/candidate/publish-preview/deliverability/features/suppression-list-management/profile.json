@@ -1,0 +1,907 @@
+{
+  "feature_id": "suppression-list-management",
+  "feature_key": "suppression-list-management",
+  "name": "Xem và gỡ suppression / unsubscribe (trang Suppressions và Portal API)",
+  "user_goal": "Người dùng workspace xem được những địa chỉ workspace không được gửi tới (bounce / complaint) và những người đã tự opt-out, kèm lý do và nguồn; người có quyền gỡ một suppression hoặc resubscribe một entry opt-out — hiện chỉ qua Portal API.",
+  "stable_since_version": "v1",
+  "actors": [
+    {
+      "role": "Owner",
+      "permission_observed": "Trên staging (khảo sát 01/10/2026, chỉ bằng tài khoản Owner) mở được trang Suppressions ở cả hai tab, nhưng trang chỉ để xem: không có nút gỡ suppression hay resubscribe.",
+      "kb_refs": [
+        "KB-001",
+        "KB-012"
+      ]
+    },
+    {
+      "role": "Admin / Member",
+      "permission_observed": "Chưa được quan sát. Phân quyền mặc định tạm cho 2 Portal API (xem = mọi member, gỡ = Admin / Owner, chặn ở tầng API) chưa được PO chốt; tên role thứ 3 còn đang tranh chấp ở cấp workspace.",
+      "kb_refs": [
+        "KB-026",
+        "KB-027",
+        "KB-P-051"
+      ]
+    },
+    {
+      "role": "api-caller (marketer gọi Portal API)",
+      "permission_observed": "Gọi Portal API của sổ consent (`GET teams/{team}/unsubscribes`) và của sổ deliverability (route đang tranh chấp); resubscribe qua `DELETE teams/{team}/unsubscribes/{id}` đang tranh chấp về việc marketer có được làm hay không, và nếu làm thì bắt buộc ghi actor.",
+      "kb_refs": [
+        "KB-023",
+        "KB-020",
+        "KB-021",
+        "KB-024",
+        "KB-025",
+        "KB-P-006"
+      ]
+    }
+  ],
+  "entry_points": [
+    {
+      "path": "Sidebar Contacts › `Suppressions`, route `/contacts/suppressions` (tab mặc định `Bounce & complaint`)",
+      "precondition": "Đã đăng nhập workspace (quan sát bằng Owner).",
+      "kb_refs": [
+        "KB-001",
+        "KB-003",
+        "KB-P-037"
+      ]
+    },
+    {
+      "path": "Tab `Unsubscribe` của trang Suppressions, URL `?tab=unsubscribe`",
+      "precondition": "Đang ở trang Suppressions.",
+      "kb_refs": [
+        "KB-007"
+      ]
+    },
+    {
+      "path": "Portal API sổ consent `GET teams/{team}/unsubscribes` và `DELETE teams/{team}/unsubscribes/{id}`",
+      "precondition": "Gọi bằng phiên Portal; ma trận quyền chưa chốt.",
+      "kb_refs": [
+        "KB-023",
+        "KB-024",
+        "KB-026"
+      ]
+    },
+    {
+      "path": "Portal API sổ deliverability: `teams/{team}/suppressions` theo AC hoặc `teams/{team}/deliverability-suppressions` theo staging — route chính thức chưa chốt",
+      "precondition": "Gọi bằng phiên Portal; ma trận quyền chưa chốt.",
+      "kb_refs": [
+        "KB-020",
+        "KB-021"
+      ]
+    }
+  ],
+  "capabilities": [
+    {
+      "name": "Xem các địa chỉ bị chặn gửi (tab Bounce & complaint)",
+      "description": "Hiện trạng staging 01/10/2026: bảng gồm `Email` (có nút copy), `Reason` (`Bounced` hoặc `Spam complaint`) và `Blocked since`, có `Rows per page` (10/20/25/50/100, mặc định 25); subtitle nói mọi lần gửi tự bỏ qua các địa chỉ này. Nhãn cho suppression do soft bounce chưa được mô tả.",
+      "kb_refs": [
+        "KB-002",
+        "KB-003",
+        "KB-004",
+        "KB-005",
+        "KB-006",
+        "KB-011"
+      ]
+    },
+    {
+      "name": "Xem người đã tự opt-out (tab Unsubscribe)",
+      "description": "Tab hiển thị sổ consent, độc lập với sổ suppression: cột `Email`, `Opt-out from`, `Unsubscribed on`; nguồn quan sát được là `Footer link` và `Other` (contact đánh unsubscribed qua import CSV hiện `Other`); `One-click header` và `Added by staff` mới chỉ thấy trong chuỗi i18n.",
+      "kb_refs": [
+        "KB-007",
+        "KB-008",
+        "KB-009",
+        "KB-010",
+        "KB-089"
+      ]
+    },
+    {
+      "name": "Xem sổ suppression / unsubscribe qua Portal API",
+      "description": "`GET teams/{team}/unsubscribes` trả sổ consent, gồm cả entry không khớp contact nào (rule đã chốt). Route xem sổ deliverability đang tranh chấp giữa AC và staging. Staging chỉ nhận GET / HEAD (và DELETE trên từng item); `POST …/unsubscribes` trả 405.",
+      "kb_refs": [
+        "KB-023",
+        "KB-020",
+        "KB-021",
+        "KB-022"
+      ]
+    },
+    {
+      "name": "Gỡ một suppression",
+      "description": "Rule đã chốt: gỡ = soft-delete row trong DB (row giữ lại làm audit) cộng job nền xoá địa chỉ khỏi SES ở mọi region active (tối đa 10 lời gọi, idempotent, `NotFound` là no-op, có retry, thất bại cuối gửi `AdminNotification`); bỏ bước quét SES sẽ gây ghost loop. Việc chỉ gỡ được qua Portal API (không có thao tác UI) chưa được PO xác nhận là chủ ý. Gỡ một suppression đã gỡ trả 404 trên staging.",
+      "kb_refs": [
+        "KB-013",
+        "KB-015",
+        "KB-016",
+        "KB-017",
+        "KB-018",
+        "KB-019",
+        "KB-038",
+        "KB-012"
+      ]
+    },
+    {
+      "name": "Resubscribe một entry opt-out qua Portal API",
+      "description": "`DELETE teams/{team}/unsubscribes/{id}` được mô tả là resubscribe do marketer khởi xướng — đang tranh chấp với quy tắc người nhận chỉ resubscribe qua trang của chính mình. Nếu thao tác tồn tại, mỗi lần gọi bắt buộc ghi actor để audit (rule đã chốt; nơi lưu actor chưa mô tả). Resubscribe không gỡ suppression do bounce / complaint.",
+      "kb_refs": [
+        "KB-024",
+        "KB-025",
+        "KB-014"
+      ]
+    }
+  ],
+  "state_transitions": [
+    {
+      "from": "suppression active",
+      "to": "suppression đã gỡ (soft-deleted, giữ audit)",
+      "trigger": "Gọi Portal API DELETE trên một suppression",
+      "condition": "Kèm job quét SES ở mọi region active; route API chính thức chưa chốt",
+      "kb_refs": [
+        "KB-015",
+        "KB-038",
+        "KB-020",
+        "KB-021"
+      ]
+    },
+    {
+      "from": "suppression đã gỡ, nhưng SES chưa được quét",
+      "to": "suppression active (row bị tạo lại — ghost loop)",
+      "trigger": "Lần gửi tiếp theo bị SES chặn ở cổng, sinh event `bounceSubType = Suppressed`",
+      "condition": "Chỉ xảy ra nếu bỏ bước quét SES; rule yêu cầu bước quét là bắt buộc",
+      "kb_refs": [
+        "KB-018"
+      ]
+    },
+    {
+      "from": "job quét SES đang chạy",
+      "to": "job thất bại sau retry, gửi `AdminNotification`",
+      "trigger": "Lần thử cuối vẫn lỗi",
+      "condition": "Tài liệu không nêu số lần retry",
+      "kb_refs": [
+        "KB-017"
+      ]
+    },
+    {
+      "from": "suppression đã gỡ",
+      "to": "suppression đã gỡ (không đổi), API trả 404",
+      "trigger": "Gọi gỡ lần nữa",
+      "condition": "Quan sát staging 08–09/09/2026, một lượt",
+      "kb_refs": [
+        "KB-019"
+      ]
+    },
+    {
+      "from": "entry opt-out (Unsubscribed)",
+      "to": "đã resubscribe",
+      "trigger": "Gọi `DELETE teams/{team}/unsubscribes/{id}`",
+      "condition": "Đang tranh chấp marketer có được làm không; bắt buộc ghi actor",
+      "kb_refs": [
+        "KB-024",
+        "KB-025"
+      ]
+    },
+    {
+      "from": "contact bị suppress, đã resubscribe",
+      "to": "vẫn bị suppress, vẫn bị chặn gửi",
+      "trigger": "Contact resubscribe",
+      "condition": "Suppression không tự gỡ; chỉ gỡ thủ công",
+      "kb_refs": [
+        "KB-014"
+      ]
+    }
+  ],
+  "confirmed_rules": [
+    {
+      "statement": "Theo Jira MTRO-64 (use case B4) và MTRO-78 (rule 07/09/2026 trong QA business rule Mailtro), Mailtro có hai sổ riêng: sổ consent `unsubscribes` và sổ deliverability `suppressions`; trước khi gửi, `SuppressionChecker` tra cả hai sổ.",
+      "knowledge_kind": "CONFIRMED_EXPECTED",
+      "confidence": "MEDIUM",
+      "kb_refs": [
+        "KB-089"
+      ]
+    },
+    {
+      "statement": "Theo Jira MTRO-64 (use case B1, B3) và MTRO-76 (rule 07/09/2026 trong QA business rule Mailtro, cùng quyết định 07/09/2026 trong Decision log Mailtro), suppression do hard bounce hay complaint không tự gỡ: contact bị suppress vẫn bị chặn gửi kể cả khi contact đó resubscribe.",
+      "knowledge_kind": "CONFIRMED_EXPECTED",
+      "confidence": "MEDIUM",
+      "kb_refs": [
+        "KB-014"
+      ]
+    },
+    {
+      "statement": "Theo Jira MTRO-80 (rule 07/09/2026 trong QA business rule Mailtro), gỡ một suppression gồm soft-delete row trong DB cộng với job nền gọi `DeleteSuppressedDestination(email)` cho mọi row `sending_account_regions` đang active — quét toàn bộ region thay vì nhớ nơi phát sinh suppression.",
+      "knowledge_kind": "CONFIRMED_EXPECTED",
+      "confidence": "MEDIUM",
+      "kb_refs": [
+        "KB-015"
+      ]
+    },
+    {
+      "statement": "Theo Jira MTRO-80 (rule 07/09/2026 trong QA business rule Mailtro), job xoá địa chỉ khỏi SES khi gỡ suppression gồm tối đa 10 lời gọi, idempotent, và kết quả `NotFound` từ SES được coi là no-op.",
+      "knowledge_kind": "CONFIRMED_EXPECTED",
+      "confidence": "MEDIUM",
+      "kb_refs": [
+        "KB-016"
+      ]
+    },
+    {
+      "statement": "Theo Jira MTRO-80 (rule 07/09/2026 trong QA business rule Mailtro), job xoá địa chỉ khỏi SES có retry; nếu lần thử cuối vẫn thất bại thì hệ thống gửi `AdminNotification`.",
+      "knowledge_kind": "CONFIRMED_EXPECTED",
+      "confidence": "MEDIUM",
+      "kb_refs": [
+        "KB-017"
+      ]
+    },
+    {
+      "statement": "Theo Jira MTRO-80 (rule 07/09/2026 trong QA business rule Mailtro), bước quét SES là bắt buộc khi gỡ suppression: nếu chỉ xoá row DB mà bỏ bước này thì lần gửi sau bị SES chặn ở cổng, sinh event `bounceSubType = Suppressed` và row vừa gỡ bị tạo lại (ghost loop).",
+      "knowledge_kind": "CONFIRMED_EXPECTED",
+      "confidence": "MEDIUM",
+      "kb_refs": [
+        "KB-018"
+      ]
+    },
+    {
+      "statement": "Theo Jira MTRO-76 (rule 07/09/2026 trong QA business rule Mailtro), row suppression đã gỡ (soft-delete) được giữ lại làm audit trail, không bị xoá hẳn.",
+      "knowledge_kind": "CONFIRMED_EXPECTED",
+      "confidence": "MEDIUM",
+      "kb_refs": [
+        "KB-038"
+      ]
+    },
+    {
+      "statement": "Theo Jira MTRO-81 (rule trong QA business rule Mailtro, cập nhật 07/10/2026), Portal API `GET teams/{team}/unsubscribes` trả sổ consent độc lập với sổ suppression, gồm cả những entry không có contact nào khớp.",
+      "knowledge_kind": "CONFIRMED_EXPECTED",
+      "confidence": "MEDIUM",
+      "kb_refs": [
+        "KB-023"
+      ]
+    },
+    {
+      "statement": "Theo Jira MTRO-81 (rule trong QA business rule Mailtro, cập nhật 07/10/2026), mỗi lần resubscribe qua Portal API `DELETE teams/{team}/unsubscribes/{id}` bắt buộc ghi lại actor để audit, vì đây là hành động nhạy cảm pháp lý; tài liệu không nêu actor được lưu ở đâu. Rule này chỉ áp nếu marketer được resubscribe qua API — điểm đó đang tranh chấp (CONF-MTRO-deliverability-02).",
+      "knowledge_kind": "CONFIRMED_EXPECTED",
+      "confidence": "MEDIUM",
+      "kb_refs": [
+        "KB-025"
+      ],
+      "depends_on_conflict_group": "CONF-MTRO-deliverability-02",
+      "note": "Rule ghi actor không bị tranh chấp, nhưng chỉ áp nếu marketer được resubscribe qua API — điểm đó thuộc CONF-MTRO-deliverability-02; không dùng làm oracle độc lập cho tới khi tranh chấp được chốt."
+    }
+  ],
+  "observed_behavior": [
+    {
+      "statement": "Trên staging (khảo sát 29/09 và 01/10/2026, tài khoản Owner), trang Suppressions nằm ở route `/contacts/suppressions` và được mở từ mục con Contacts › `Suppressions` trên sidebar.",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "confidence": "MEDIUM",
+      "status": "CURRENT_STATE",
+      "kb_refs": [
+        "KB-001"
+      ]
+    },
+    {
+      "statement": "Trên staging (khảo sát 01/10/2026), trang Suppressions hiển thị subtitle \"Addresses this workspace can't email — and why. Every send skips them automatically.\"",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "confidence": "MEDIUM",
+      "status": "CURRENT_STATE",
+      "kb_refs": [
+        "KB-002"
+      ]
+    },
+    {
+      "statement": "Trên staging (khảo sát 01/10/2026), trang Suppressions có tab `Bounce & complaint` với mô tả \"These addresses are skipped by every campaign and automation.\"; bảng của tab gồm cột `Email` (kèm nút `Copy {email}` để chép địa chỉ), `Reason` và `Blocked since`.",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "confidence": "MEDIUM",
+      "status": "CURRENT_STATE",
+      "kb_refs": [
+        "KB-003"
+      ]
+    },
+    {
+      "statement": "Trên staging (khảo sát 01/10/2026), cột `Reason` của tab `Bounce & complaint` hiển thị một trong hai nhãn `Bounced` hoặc `Spam complaint`; tài liệu không mô tả nhãn nào ứng với suppression do soft bounce.",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "confidence": "MEDIUM",
+      "status": "CURRENT_STATE",
+      "kb_refs": [
+        "KB-004"
+      ]
+    },
+    {
+      "statement": "Trên staging (khảo sát 01/10/2026), bảng tab `Bounce & complaint` của trang Suppressions có select `Rows per page` với các giá trị 10, 20, 25, 50, 100, mặc định 25; tài liệu không mô tả `Rows per page` của tab `Unsubscribe`.",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "confidence": "MEDIUM",
+      "status": "CURRENT_STATE",
+      "kb_refs": [
+        "KB-005"
+      ]
+    },
+    {
+      "statement": "Trên staging (khảo sát 01/10/2026), số đếm trên các tab của trang Suppressions hiện `0` hoặc để trống trong lúc trang đang tải; nguồn không gọi đây là lỗi.",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "confidence": "LOW",
+      "status": "CURRENT_STATE",
+      "kb_refs": [
+        "KB-006"
+      ]
+    },
+    {
+      "statement": "Trên staging (khảo sát 01/10/2026), tab `Unsubscribe` của trang Suppressions có URL `?tab=unsubscribe`, mô tả \"These people opted out themselves — their choice stands until they resubscribe.\" và bảng gồm cột `Email` (kèm `Copy`), `Opt-out from`, `Unsubscribed on`; tab này hiển thị sổ consent (người nhận tự opt-out), không phải sổ suppression.",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "confidence": "MEDIUM",
+      "status": "CURRENT_STATE",
+      "kb_refs": [
+        "KB-007"
+      ]
+    },
+    {
+      "statement": "Trên staging (khảo sát 01/10/2026), cột `Opt-out from` của tab `Unsubscribe` hiện các nguồn `Footer link` và `Other` với dữ liệu workspace lúc khảo sát.",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "confidence": "LOW",
+      "status": "CURRENT_STATE",
+      "kb_refs": [
+        "KB-008"
+      ]
+    },
+    {
+      "statement": "Trên staging (khảo sát 01/10/2026), contact được đánh unsubscribed qua import CSV xuất hiện ở tab `Unsubscribe` với nguồn `Opt-out from` là `Other`.",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "confidence": "LOW",
+      "status": "CURRENT_STATE",
+      "kb_refs": [
+        "KB-010"
+      ]
+    },
+    {
+      "statement": "Trên staging (khảo sát 01/10/2026, tài khoản Owner), cả hai tab của trang Suppressions chỉ để xem: không có nút gỡ suppression hay resubscribe; hệ quả QA ghi nhận là marketer không tự gỡ được địa chỉ bị chặn nhầm và contact Unsubscribed không resubscribe được từ trang chi tiết. Đây có phải giới hạn có chủ ý hay không đang chờ PO xác nhận (GAP-14).",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "confidence": "MEDIUM",
+      "status": "CURRENT_STATE",
+      "kb_refs": [
+        "KB-012"
+      ]
+    },
+    {
+      "statement": "Trên staging (lượt chạy 08–09/09/2026), gọi API gỡ một suppression đã được gỡ trước đó trả 404.",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "confidence": "LOW",
+      "status": "CURRENT_STATE",
+      "kb_refs": [
+        "KB-019"
+      ]
+    },
+    {
+      "statement": "Trên staging (lượt chạy 08/09/2026), Portal API sổ suppression/unsubscribe chỉ nhận GET / HEAD (cộng DELETE trên từng item); gọi `POST …/unsubscribes` trả 405.",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "confidence": "LOW",
+      "status": "CURRENT_STATE",
+      "kb_refs": [
+        "KB-022"
+      ]
+    }
+  ],
+  "observed_validations": [],
+  "permissions": [
+    {
+      "statement": "Phân quyền tạm cho 2 Portal API suppression và unsubscribe: xem = mọi member, gỡ = Admin / Owner; chưa được PO chốt, không dùng làm expected.",
+      "knowledge_kind": "INFERRED",
+      "kb_refs": [
+        "KB-026"
+      ]
+    },
+    {
+      "statement": "Việc chặn quyền xem / gỡ của 2 API này được mô tả là phải nằm ở tầng API (cùng mục với phân quyền tạm, chưa chốt); router frontend không khai báo phân quyền theo role.",
+      "knowledge_kind": "INFERRED",
+      "kb_refs": [
+        "KB-027",
+        "KB-P-052"
+      ]
+    },
+    {
+      "statement": "Mailtro có 3 role chuẩn Owner, Admin và một role thứ 3 (UI staging gọi là Member, tên chính thức đang tranh chấp).",
+      "knowledge_kind": "CONFIRMED_EXPECTED",
+      "kb_refs": [
+        "KB-P-051"
+      ]
+    },
+    {
+      "statement": "Trang Suppressions mới chỉ được khảo sát bằng tài khoản Owner (staging 29/09 và 01/10/2026).",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "kb_refs": [
+        "KB-001"
+      ]
+    }
+  ],
+  "surface_mapping": {
+    "portal": [
+      {
+        "item": "Trang Suppressions `/contacts/suppressions` (sidebar Contacts › Suppressions), subtitle, số đếm trên tab",
+        "kb_refs": [
+          "KB-001",
+          "KB-002",
+          "KB-006",
+          "KB-P-037"
+        ]
+      },
+      {
+        "item": "Tab `Bounce & complaint`: cột Email / Reason / Blocked since, Rows per page",
+        "kb_refs": [
+          "KB-003",
+          "KB-004",
+          "KB-005"
+        ]
+      },
+      {
+        "item": "Tab `Unsubscribe` (`?tab=unsubscribe`): cột Email / Opt-out from / Unsubscribed on",
+        "kb_refs": [
+          "KB-007",
+          "KB-008",
+          "KB-009"
+        ]
+      },
+      {
+        "item": "Trạng thái rỗng `Nothing is blocked` / `Nobody has opted out` (chỉ thấy trong i18n)",
+        "kb_refs": [
+          "KB-011"
+        ]
+      },
+      {
+        "item": "Không có nút gỡ suppression / resubscribe trên UI (hiện trạng)",
+        "kb_refs": [
+          "KB-012"
+        ]
+      }
+    ],
+    "storefront": [],
+    "api": [
+      {
+        "item": "`GET teams/{team}/unsubscribes`, `DELETE teams/{team}/unsubscribes/{id}`",
+        "kb_refs": [
+          "KB-023",
+          "KB-024",
+          "KB-025"
+        ]
+      },
+      {
+        "item": "`GET` / `DELETE` sổ deliverability — `teams/{team}/suppressions` (AC) vs `teams/{team}/deliverability-suppressions` (staging), chưa chốt",
+        "kb_refs": [
+          "KB-020",
+          "KB-021"
+        ]
+      },
+      {
+        "item": "Method cho phép trên staging: GET / HEAD, DELETE từng item; POST trả 405",
+        "kb_refs": [
+          "KB-022"
+        ]
+      }
+    ],
+    "data": [
+      {
+        "item": "Bảng `unsubscribes` (sổ consent) và `suppressions` (sổ deliverability), độc lập nhau",
+        "kb_refs": [
+          "KB-089"
+        ]
+      },
+      {
+        "item": "Gỡ suppression = soft-delete, row giữ làm audit",
+        "kb_refs": [
+          "KB-015",
+          "KB-038"
+        ]
+      },
+      {
+        "item": "`sending_account_regions` active là danh sách region được quét khi gỡ",
+        "kb_refs": [
+          "KB-015"
+        ]
+      }
+    ],
+    "code": [
+      {
+        "item": "Job nền gọi `DeleteSuppressedDestination(email)` cho mọi region active, tối đa 10 lời gọi, retry, `AdminNotification` khi thất bại (theo tài liệu, không có mã nguồn)",
+        "kb_refs": [
+          "KB-015",
+          "KB-016",
+          "KB-017"
+        ]
+      }
+    ]
+  },
+  "dependencies": [
+    {
+      "target": "deliverability / bounce-complaint-suppression",
+      "relation": "data_source",
+      "note": "Row trong tab Bounce & complaint do luồng tự suppress khi bounce / complaint tạo ra.",
+      "kb_refs": [
+        "KB-004",
+        "KB-029",
+        "KB-030"
+      ]
+    },
+    {
+      "target": "deliverability / unsubscribe-handling",
+      "relation": "data_source",
+      "note": "Entry trong tab Unsubscribe do người nhận tự opt-out (footer link, one-click header).",
+      "kb_refs": [
+        "KB-007",
+        "KB-073"
+      ]
+    },
+    {
+      "target": "deliverability / send-time-suppression-check",
+      "relation": "consumer",
+      "note": "Mọi lần gửi tra cả hai sổ được hiển thị ở trang này.",
+      "kb_refs": [
+        "KB-045",
+        "KB-002"
+      ]
+    },
+    {
+      "target": "contacts / contact-import",
+      "relation": "data_source",
+      "note": "Import CSV đánh contact unsubscribed tạo entry với nguồn `Other`.",
+      "kb_refs": [
+        "KB-010"
+      ]
+    },
+    {
+      "target": "abuse-guard / transactional-mail-safeguards",
+      "relation": "conflict_side",
+      "note": "Phía còn lại của CONF-MTRO-deliverability-02 (người nhận chỉ resubscribe qua trang của chính mình) là item của object abuse-guard, mang cùng conflict_group; deliverability sở hữu group và câu hỏi CONFLICT.",
+      "kb_refs": [
+        "KB-024",
+        "KB-025"
+      ]
+    },
+    {
+      "target": "workspace-settings / roles-and-permissions",
+      "relation": "permission_source",
+      "note": "Tên role thứ 3 và ma trận quyền chung chưa chốt.",
+      "kb_refs": [
+        "KB-026",
+        "KB-027",
+        "KB-P-051"
+      ]
+    }
+  ],
+  "risks": [
+    {
+      "statement": "Route Portal API sổ deliverability đang tranh chấp: AC ghi `teams/{team}/suppressions`, staging chạy `teams/{team}/deliverability-suppressions` và route AC trả 404 (BUG-SUPP-02). Không viết expected cho route cho tới khi PO/Dev chốt.",
+      "knowledge_kind": "INFERRED",
+      "confidence": "LOW",
+      "status": "UNRESOLVED",
+      "conflict_group": "CONF-MTRO-deliverability-01",
+      "kb_refs": [
+        "KB-020",
+        "KB-021"
+      ]
+    },
+    {
+      "statement": "Resubscribe do marketer qua `DELETE teams/{team}/unsubscribes/{id}` mâu thuẫn với quy tắc người nhận chỉ resubscribe qua trang của chính mình (Jira MTRO-92 mục 11, phía này nằm ở object abuse-guard, feature transactional-mail-safeguards, cùng conflict_group) — GAP-06; thuộc topic unsubscribe-consent, không được tự chọn bên. Rule bắt buộc ghi actor khi resubscribe qua API phụ thuộc tranh chấp này.",
+      "knowledge_kind": "INFERRED",
+      "confidence": "LOW",
+      "status": "UNRESOLVED",
+      "conflict_group": "CONF-MTRO-deliverability-02",
+      "kb_refs": [
+        "KB-024",
+        "KB-025"
+      ]
+    },
+    {
+      "statement": "Gỡ suppression chỉ qua Portal API, UI chỉ để xem: marketer không tự gỡ được địa chỉ bị chặn nhầm; chưa biết là giới hạn có chủ ý (GAP-14).",
+      "knowledge_kind": "INFERRED",
+      "confidence": "LOW",
+      "status": null,
+      "conflict_group": null,
+      "kb_refs": [
+        "KB-013",
+        "KB-012"
+      ]
+    },
+    {
+      "statement": "Khi một team gỡ suppression, địa chỉ cũng rời danh sách suppression account-global của SES nên team khác trên cùng AWS account mất lớp bảo vệ; PO/Dev chưa chốt.",
+      "knowledge_kind": "INFERRED",
+      "confidence": "LOW",
+      "status": null,
+      "conflict_group": null,
+      "kb_refs": [
+        "KB-028",
+        "KB-015",
+        "KB-041"
+      ]
+    },
+    {
+      "statement": "Phân quyền 2 API chỉ là mặc định tạm; kiểm thử phân quyền chưa có oracle.",
+      "knowledge_kind": "INFERRED",
+      "confidence": "LOW",
+      "status": null,
+      "conflict_group": null,
+      "kb_refs": [
+        "KB-026",
+        "KB-027"
+      ]
+    },
+    {
+      "statement": "Nhãn nguồn `One-click header` / `Added by staff` và trạng thái rỗng chỉ thấy trong chuỗi i18n, chưa đối chiếu UI.",
+      "knowledge_kind": "INFERRED",
+      "confidence": "LOW",
+      "status": null,
+      "conflict_group": null,
+      "kb_refs": [
+        "KB-009",
+        "KB-011"
+      ]
+    }
+  ],
+  "freshness": {
+    "observed_at": "2026-10-07",
+    "basis": "Rule Jira cập nhật đến 07/10/2026; khảo sát staging 08–09/09, 29/09 và 01/10/2026 (bằng Owner, không ghi build)"
+  },
+  "unknown_areas": [
+    {
+      "question": "Route chính thức của Portal API sổ deliverability là `teams/{team}/suppressions` (AC Jira MTRO-81) hay `teams/{team}/deliverability-suppressions` (staging, BUG-SUPP-02)?",
+      "why_it_matters": "Case API xem / gỡ suppression không có expected cho tới khi PO/Dev chốt đổi AC hay đổi route.",
+      "kb_refs": [
+        "KB-020",
+        "KB-021"
+      ],
+      "oq_id": "OQ-deliverability-003"
+    },
+    {
+      "question": "Marketer có được resubscribe hộ người nhận qua `DELETE teams/{team}/unsubscribes/{id}` không, khi Jira MTRO-92 mục 11 ghi người nhận chỉ resubscribe qua trang huỷ đăng ký của chính mình (GAP-06)?",
+      "why_it_matters": "Quyết định có hay không một thao tác thay đổi consent — topic unsubscribe-consent. Object deliverability sở hữu tranh chấp này; phía người nhận nằm ở object abuse-guard (transactional-mail-safeguards). Rule ghi actor chỉ có nghĩa nếu câu trả lời là có.",
+      "kb_refs": [
+        "KB-024",
+        "KB-025"
+      ],
+      "oq_id": "OQ-deliverability-004"
+    },
+    {
+      "question": "Trang Suppressions chỉ để xem (không có nút gỡ / resubscribe) là giới hạn có chủ ý hay UI cần có thao tác này (GAP-14)?",
+      "why_it_matters": "Quyết định có cần check UI cho gỡ / resubscribe hay không.",
+      "kb_refs": [
+        "KB-012",
+        "KB-013"
+      ],
+      "oq_id": "OQ-deliverability-005"
+    },
+    {
+      "question": "Ma trận quyền xem / gỡ / resubscribe cho Owner, Admin, Member (hoặc tên role thứ 3) trên trang Suppressions và 2 Portal API là gì?",
+      "why_it_matters": "Mặc định tạm chưa chốt; Admin và Member chưa từng được quan sát trên trang này.",
+      "kb_refs": [
+        "KB-026",
+        "KB-027",
+        "KB-001",
+        "KB-012"
+      ],
+      "oq_id": "OQ-deliverability-001"
+    },
+    {
+      "question": "Gỡ suppression ở một team làm địa chỉ rời danh sách SES account-global, team khác cùng AWS account mất bảo vệ — PO/Dev chấp nhận hay cần xử lý khác?",
+      "why_it_matters": "Ảnh hưởng chéo workspace của thao tác gỡ (data-deletion / suppression).",
+      "kb_refs": [
+        "KB-028",
+        "KB-015",
+        "KB-041"
+      ],
+      "oq_id": "OQ-deliverability-006"
+    },
+    {
+      "question": "Import CSV lại một contact đang bị suppress có báo cho người dùng không (GAP-10)?",
+      "why_it_matters": "Chưa có expected cho tương tác import với sổ suppression.",
+      "kb_refs": [
+        "KB-010"
+      ],
+      "oq_id": "OQ-deliverability-007"
+    },
+    {
+      "question": "Suppression do soft bounce hiện nhãn `Reason` gì trên UI (chỉ thấy `Bounced` / `Spam complaint`); tab Unsubscribe có `Rows per page` và mặc định nào; trang có ô tìm kiếm / lọc không?",
+      "why_it_matters": "Thiếu chi tiết để kiểm hiển thị của trang.",
+      "kb_refs": [
+        "KB-004",
+        "KB-005",
+        "KB-007"
+      ],
+      "oq_id": "OQ-deliverability-008"
+    },
+    {
+      "question": "Actor của mỗi lần resubscribe qua API được lưu ở đâu và xem lại bằng cách nào?",
+      "why_it_matters": "Rule bắt buộc ghi actor nhưng không có cách kiểm.",
+      "kb_refs": [
+        "KB-025"
+      ],
+      "oq_id": "OQ-deliverability-008"
+    },
+    {
+      "question": "Các quan sát staging của trang này thuộc bản dựng nào (build không được ghi)?",
+      "why_it_matters": "Không gắn được hiện trạng với phiên bản khi so sánh về sau.",
+      "kb_refs": [
+        "KB-001",
+        "KB-019",
+        "KB-022"
+      ],
+      "oq_id": "OQ-deliverability-002"
+    },
+    {
+      "question": "Mục câu hỏi mở về Bounce / Complaint & Suppression và phân quyền 2 API (tài liệu câu hỏi mở Mailtro, không có trong bộ nguồn) đã có câu trả lời nào chưa?",
+      "why_it_matters": "Nhiều mục đang chờ xác nhận ở feature này có thể đã được trả lời ở tài liệu chưa nhận được.",
+      "kb_refs": [
+        "KB-026",
+        "KB-028"
+      ],
+      "oq_id": "OQ-deliverability-001"
+    }
+  ],
+  "last_updated": {
+    "date": "2026-10-08",
+    "ccr_ref": "bootstrap"
+  },
+  "coverage_matrix": [
+    {
+      "feature_id": "suppression-list-management",
+      "layer": "portal",
+      "role": "Owner",
+      "state": "tab Bounce & complaint có dữ liệu",
+      "environment": "documented",
+      "covered": true,
+      "note": "Hiện trạng staging 01/10/2026"
+    },
+    {
+      "feature_id": "suppression-list-management",
+      "layer": "portal",
+      "role": "Owner",
+      "state": "tab Unsubscribe có dữ liệu",
+      "environment": "documented",
+      "covered": true,
+      "note": "Hiện trạng staging 01/10/2026"
+    },
+    {
+      "feature_id": "suppression-list-management",
+      "layer": "portal",
+      "role": "Owner",
+      "state": "tab rỗng",
+      "environment": "documented",
+      "covered": false,
+      "note": "Chỉ có chuỗi i18n"
+    },
+    {
+      "feature_id": "suppression-list-management",
+      "layer": "portal",
+      "role": "Admin / Member",
+      "state": "mở trang Suppressions",
+      "environment": "documented",
+      "covered": false,
+      "note": "Chưa khảo sát; ma trận quyền chưa chốt"
+    },
+    {
+      "feature_id": "suppression-list-management",
+      "layer": "portal",
+      "role": "Owner",
+      "state": "gỡ / resubscribe trên UI",
+      "environment": "documented",
+      "covered": true,
+      "note": "Hiện trạng: không có nút; chờ PO xác nhận chủ ý"
+    },
+    {
+      "feature_id": "suppression-list-management",
+      "layer": "api",
+      "role": "api-caller",
+      "state": "xem sổ deliverability",
+      "environment": "documented",
+      "covered": true,
+      "note": "Route đang tranh chấp — không có oracle"
+    },
+    {
+      "feature_id": "suppression-list-management",
+      "layer": "api",
+      "role": "api-caller",
+      "state": "gỡ suppression active",
+      "environment": "documented",
+      "covered": true,
+      "note": "Hành vi backend đã chốt; route tranh chấp"
+    },
+    {
+      "feature_id": "suppression-list-management",
+      "layer": "api",
+      "role": "api-caller",
+      "state": "gỡ suppression đã gỡ",
+      "environment": "documented",
+      "covered": true,
+      "note": "Staging trả 404, một lượt"
+    },
+    {
+      "feature_id": "suppression-list-management",
+      "layer": "api",
+      "role": "api-caller",
+      "state": "xem sổ consent",
+      "environment": "documented",
+      "covered": true,
+      "note": "Rule đã chốt"
+    },
+    {
+      "feature_id": "suppression-list-management",
+      "layer": "api",
+      "role": "api-caller (marketer)",
+      "state": "resubscribe entry opt-out",
+      "environment": "documented",
+      "covered": true,
+      "note": "Tranh chấp; ghi actor đã chốt"
+    },
+    {
+      "feature_id": "suppression-list-management",
+      "layer": "api",
+      "role": "Member",
+      "state": "gọi API xem / gỡ",
+      "environment": "documented",
+      "covered": false,
+      "note": "Phân quyền tạm, chưa kiểm"
+    },
+    {
+      "feature_id": "suppression-list-management",
+      "layer": "data",
+      "role": "system",
+      "state": "soft-delete + quét SES",
+      "environment": "documented",
+      "covered": true,
+      "note": "Rule đã chốt, không có schema dump"
+    },
+    {
+      "feature_id": "suppression-list-management",
+      "layer": "code",
+      "role": "unspecified",
+      "state": "any",
+      "environment": "documented",
+      "covered": false,
+      "note": "Không có nguồn mã"
+    }
+  ],
+  "profile_conflicts": [
+    {
+      "conflict_group": "CONF-MTRO-deliverability-01",
+      "topic": "suppression-api-route",
+      "resolution": "UNRESOLVED",
+      "kb_refs": [
+        "KB-020",
+        "KB-021"
+      ],
+      "note": "AC Jira MTRO-81 vs staging (BUG-SUPP-02); cả hai phía trong object này."
+    },
+    {
+      "conflict_group": "CONF-MTRO-deliverability-02",
+      "topic": "resubscribe-actor",
+      "resolution": "UNRESOLVED",
+      "owner_object": "deliverability",
+      "kb_refs": [
+        "KB-024",
+        "KB-025"
+      ],
+      "also_affects": "abuse-guard / transactional-mail-safeguards (phía người nhận chỉ resubscribe qua trang của chính mình)",
+      "note": "Rule ghi actor phụ thuộc tranh chấp này."
+    }
+  ],
+  "profile_relationships": [
+    {
+      "from": "suppression-list-management",
+      "to": "bounce-complaint-suppression",
+      "relation": "DISPLAYS_OUTPUT_OF",
+      "kb_refs": [
+        "KB-004",
+        "KB-029",
+        "KB-030"
+      ]
+    },
+    {
+      "from": "suppression-list-management",
+      "to": "unsubscribe-handling",
+      "relation": "DISPLAYS_OUTPUT_OF",
+      "kb_refs": [
+        "KB-007",
+        "KB-073"
+      ]
+    },
+    {
+      "from": "suppression-list-management",
+      "to": "send-time-suppression-check",
+      "relation": "FEEDS",
+      "kb_refs": [
+        "KB-045",
+        "KB-089"
+      ]
+    }
+  ]
+}

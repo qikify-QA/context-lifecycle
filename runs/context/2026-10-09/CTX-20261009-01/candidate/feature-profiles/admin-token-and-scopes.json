@@ -1,0 +1,519 @@
+{
+  "schema_version": "1.0",
+  "artifact_type": "FeatureProfileCandidate",
+  "artifact_id": "ART-FEATURE-PROFILE-admin-token-and-scopes-CTX-20261009-01",
+  "workflow_id": "CTX-20261009-01",
+  "producer": "feature-profile-builder",
+  "source_refs": [
+    "candidate/product-kb/admin-token-and-scopes.json",
+    "candidate/product-kb/_object-level.auth-token.json",
+    "candidate/product-kb/_product-level.json",
+    "input/scope-plan.json",
+    "input/orchestrator-directives.json",
+    "input/profile-checklist-brief.md"
+  ],
+  "upstream_artifact_ids": [
+    "PKBC-CTX-20261009-01-auth-token-admin-token-and-scopes",
+    "PKBC-CTX-20261009-01-auth-token-object-level",
+    "PKBC-CTX-20261009-01-_product-level",
+    "SCOPE-PLAN-CTX-20261009-01"
+  ],
+  "status": "PARTIAL",
+  "confidence": "MEDIUM",
+  "observations": [
+    "Profile dựng từ tài liệu; không có quan sát runtime nên act_ids, observed_behavior và observed_validations rỗng.",
+    "6 quy tắc đã xác nhận đều đến từ Jira DUOS-399 (description/AC, cập nhật 07/07/2026), tóm tắt trong QA business rule Duos; mọi phát biểu chỉ có trong tóm tắt QA nằm ở risks / unknown_areas.",
+    "Object auth-token không có tranh chấp (conflict_group) nào; BUG-36 (nội dung chưa đọc được) được theo dõi như regression watch."
+  ],
+  "assumptions": [
+    "feature_id dùng chính feature_key (ổn định qua các version); FEATURE-ID dạng FEAT-nn do orchestrator mint lúc publish.",
+    "surface_mapping thêm khoá `backend` / `admin_panel` cho job, webhook, email và admin panel nội bộ — các surface không thuộc portal/storefront/api/data/code.",
+    "coverage_matrix: covered=true khi có rule CONFIRMED_EXPECTED cho ô đó (environment luôn documented); covered=false khi chỉ có tóm tắt QA chưa xác nhận hoặc tài liệu không nêu."
+  ],
+  "unknowns": [
+    "Trên staging, mục \"Token and scopes\", nút \"Refresh access token\" và nhãn các field có đúng tên và vị trí như ticket mô tả không?",
+    "Bấm \"Refresh access token\" thì hiện thông báo gì khi thành công / thất bại, và field nào thay đổi?",
+    "Role nào trong admin panel được gán mặc định permission \"Refresh access token\", và permission có được chặn ở API (không chỉ ẩn nút) không?",
+    "Mục \"Token and scopes\" có hiển thị thêm Access Token và Offline Token Type (Legacy / Expiring) không?",
+    "Field ngày token rỗng có đúng nghĩa là token không có hạn (không phải thiếu dữ liệu)?",
+    "Permission của nút có thật được đăng ký bằng `php artisan shield:generate --all --ignore-existing-policies` trước `php artisan migrate` khi deploy?",
+    "BUG-36 (gắn TC-DUOS-001, trạng thái \"open?\") là lỗi gì, thuộc hành vi token nào (phát hiện token chết, refresh/migrate, re-auth khi mở app, uninstall/reinstall hay admin panel), còn mở hay đã fix?"
+  ],
+  "conflicts": [],
+  "blocking_issues": [],
+  "payload": {
+    "feature_profiles": [
+      {
+        "feature_id": "admin-token-and-scopes",
+        "feature_key": "admin-token-and-scopes",
+        "name": "Xem token và force refresh trong admin panel nội bộ",
+        "user_goal": "Team nội bộ mở một shop trong admin panel để xem trạng thái token và các mốc hạn của shop, và force refresh access token thủ công cho shop dùng token expiring khi cần hỗ trợ.",
+        "user_goal_kb_refs": [
+          "KB-045",
+          "KB-046",
+          "KB-049",
+          "KB-050"
+        ],
+        "stable_since_version": "v1",
+        "actors": [
+          {
+            "role": "internal-ops (team nội bộ dùng admin panel)",
+            "permission_observed": "Theo rule Jira DUOS-399: xem mục \"Token and scopes\" và dùng nút \"Refresh access token\". Bên trong admin panel chưa được khảo sát (staging chỉ tới trang login); role nào được gán permission của nút chưa nêu.",
+            "kb_refs": [
+              "KB-045",
+              "KB-046",
+              "KB-050",
+              "KB-053",
+              "KB-P-010"
+            ]
+          }
+        ],
+        "entry_points": [
+          {
+            "path": "Admin panel nội bộ › Shops › mở một shop › mục \"Token and scopes\"",
+            "precondition": "Đã đăng nhập admin panel nội bộ (phần đăng nhập thuộc admin panel chung).",
+            "kb_refs": [
+              "KB-045",
+              "KB-P-010",
+              "KB-P-041"
+            ]
+          },
+          {
+            "path": "Nút \"Refresh access token\" trong mục \"Token and scopes\"",
+            "precondition": "Shop dùng token expiring; người dùng có permission của nút (chỉ theo tóm tắt QA).",
+            "kb_refs": [
+              "KB-045",
+              "KB-049",
+              "KB-053"
+            ]
+          }
+        ],
+        "capabilities": [
+          {
+            "name": "Xem trạng thái và mốc hạn token của shop",
+            "description": "Hiển thị `Access Token Expires At`, `Refresh Token` (lưu mã hoá, không hiện raw), `Refresh Token Expires At`, `Re-auth Required At`; shop chưa migrate có cả 3 field ngày rỗng. Theo tóm tắt QA (chưa xác nhận) còn có Access Token, Offline Token Type (Legacy / Expiring), và field ngày rỗng nghĩa là không có hạn.",
+            "kb_refs": [
+              "KB-046",
+              "KB-047",
+              "KB-048",
+              "KB-051",
+              "KB-052"
+            ],
+            "act_ids": []
+          },
+          {
+            "name": "Force refresh access token thủ công",
+            "description": "Nút \"Refresh access token\" chỉ hiển thị cho shop dùng token expiring, dùng để force refresh access token; kết quả/thông báo và field thay đổi chưa nêu.",
+            "kb_refs": [
+              "KB-049",
+              "KB-050"
+            ],
+            "act_ids": []
+          },
+          {
+            "name": "Phân quyền cho nút force refresh",
+            "description": "Theo tóm tắt QA (chưa xác nhận): nút gắn permission mới đăng ký bằng `php artisan shield:generate --all --ignore-existing-policies` trước `php artisan migrate`; giả định bảo mật (chưa xác nhận) là permission phải được chặn ở API chứ không chỉ ẩn nút.",
+            "kb_refs": [
+              "KB-053",
+              "KB-054"
+            ],
+            "act_ids": []
+          }
+        ],
+        "state_transitions": [
+          {
+            "from": "shop expiring, access token hiện tại",
+            "to": "access token được refresh (field thay đổi chưa nêu)",
+            "trigger": "Bấm \"Refresh access token\"",
+            "condition": "Shop dùng token expiring; người dùng có quyền (chưa nêu role)",
+            "kb_refs": [
+              "KB-049",
+              "KB-050"
+            ]
+          }
+        ],
+        "confirmed_rules": [
+          {
+            "statement": "Theo Jira DUOS-399 (description/AC, cập nhật 07/07/2026; tóm tắt trong QA business rule Duos và QA KB Duos \"Auth & Token lifecycle\" v1), trong admin panel nội bộ, mục \"Token and scopes\" nằm ở Shops → mở 1 shop (trang chi tiết shop), và nút \"Refresh access token\" nằm trong mục này.",
+            "knowledge_kind": "CONFIRMED_EXPECTED",
+            "confidence": "MEDIUM",
+            "kb_refs": [
+              "KB-045"
+            ]
+          },
+          {
+            "statement": "Theo Jira DUOS-399 (description/AC, cập nhật 07/07/2026; tóm tắt trong QA business rule Duos và QA KB Duos \"Auth & Token lifecycle\" v1), mục \"Token and scopes\" của admin panel hiển thị `Access Token Expires At`, `Refresh Token`, `Refresh Token Expires At` và `Re-auth Required At` của shop.",
+            "knowledge_kind": "CONFIRMED_EXPECTED",
+            "confidence": "MEDIUM",
+            "kb_refs": [
+              "KB-046"
+            ]
+          },
+          {
+            "statement": "Theo Jira DUOS-399 (description/AC, cập nhật 07/07/2026; tóm tắt trong QA business rule Duos và QA KB Duos \"Auth & Token lifecycle\" v1), `Refresh Token` được lưu mã hoá và không hiển thị giá trị raw.",
+            "knowledge_kind": "CONFIRMED_EXPECTED",
+            "confidence": "MEDIUM",
+            "kb_refs": [
+              "KB-047"
+            ]
+          },
+          {
+            "statement": "Theo Jira DUOS-399 (description/AC, cập nhật 07/07/2026; tóm tắt trong QA business rule Duos và QA KB Duos \"Auth & Token lifecycle\" v1), với shop chưa migrate sang token expiring, cả 3 field ngày (`Access Token Expires At`, `Refresh Token Expires At`, `Re-auth Required At`) trong mục \"Token and scopes\" đều rỗng.",
+            "knowledge_kind": "CONFIRMED_EXPECTED",
+            "confidence": "MEDIUM",
+            "kb_refs": [
+              "KB-048"
+            ]
+          },
+          {
+            "statement": "Theo Jira DUOS-399 (description/AC, cập nhật 07/07/2026; tóm tắt trong QA business rule Duos và QA KB Duos \"Auth & Token lifecycle\" v1), nút \"Refresh access token\" chỉ hiển thị cho shop dùng token dạng expiring.",
+            "knowledge_kind": "CONFIRMED_EXPECTED",
+            "confidence": "MEDIUM",
+            "kb_refs": [
+              "KB-049"
+            ]
+          },
+          {
+            "statement": "Theo Jira DUOS-399 (description/AC, cập nhật 07/07/2026; tóm tắt trong QA business rule Duos và QA KB Duos \"Auth & Token lifecycle\" v1), nút \"Refresh access token\" dùng để force refresh access token của shop thủ công.",
+            "knowledge_kind": "CONFIRMED_EXPECTED",
+            "confidence": "MEDIUM",
+            "kb_refs": [
+              "KB-050"
+            ]
+          }
+        ],
+        "observed_behavior": [],
+        "observed_validations": [],
+        "permissions": [
+          {
+            "statement": "Theo tóm tắt QA (chưa xác nhận), nút \"Refresh access token\" gắn với một permission mới của admin panel; role nào được gán mặc định chưa nêu.",
+            "kb_refs": [
+              "KB-053"
+            ]
+          },
+          {
+            "statement": "Theo giả định bảo mật của QA (chưa xác nhận), permission \"Refresh access token\" phải được chặn ở API chứ không chỉ ẩn nút.",
+            "kb_refs": [
+              "KB-054"
+            ]
+          }
+        ],
+        "surface_mapping": {
+          "portal": [],
+          "storefront": [],
+          "api": [
+            {
+              "item": "Hành động force refresh phía server khi bấm nút (endpoint chưa nêu; chặn quyền ở API là giả định chưa xác nhận)",
+              "kb_refs": [
+                "KB-050",
+                "KB-054"
+              ]
+            }
+          ],
+          "data": [
+            {
+              "item": "`Access Token Expires At`, `Refresh Token` (mã hoá), `Refresh Token Expires At`, `Re-auth Required At`",
+              "kb_refs": [
+                "KB-046",
+                "KB-047"
+              ]
+            },
+            {
+              "item": "Access Token, Offline Token Type (Legacy / Expiring) — chỉ theo tóm tắt QA",
+              "kb_refs": [
+                "KB-051"
+              ]
+            }
+          ],
+          "code": [],
+          "admin_panel": [
+            {
+              "item": "Shops › trang chi tiết shop › mục \"Token and scopes\"",
+              "kb_refs": [
+                "KB-045"
+              ]
+            },
+            {
+              "item": "Nút \"Refresh access token\" (chỉ với shop token expiring)",
+              "kb_refs": [
+                "KB-049",
+                "KB-050"
+              ]
+            },
+            {
+              "item": "Admin panel nội bộ (Filament) là surface khác Portal; staging chạy ở staging-admin.getduos.io, route /admin/login",
+              "kb_refs": [
+                "KB-P-010",
+                "KB-P-041"
+              ]
+            }
+          ]
+        },
+        "dependencies": [
+          {
+            "target": "portal-shell / internal-admin-panel",
+            "relation": "hosted_in",
+            "note": "Đăng nhập, danh sách Shops và phần chung admin panel thuộc portal-shell; mục \"Token and scopes\" thuộc tính năng này.",
+            "kb_refs": [
+              "KB-045",
+              "KB-P-010"
+            ]
+          },
+          {
+            "target": "auth-token / token-refresh-and-legacy-migration",
+            "relation": "related",
+            "note": "Force refresh thủ công bổ sung cho job refresh định kỳ; shop chưa migrate có field ngày rỗng.",
+            "kb_refs": [
+              "KB-050",
+              "KB-048"
+            ]
+          },
+          {
+            "target": "auth-token / dead-token-detection-and-reconnect",
+            "relation": "reads",
+            "note": "Hiển thị `Re-auth Required At` của shop.",
+            "kb_refs": [
+              "KB-046"
+            ]
+          },
+          {
+            "target": "auth-token / uninstall-reinstall-token-cleanup",
+            "relation": "reads",
+            "note": "Các field hiển thị bị clear khi uninstall.",
+            "kb_refs": [
+              "KB-037"
+            ]
+          }
+        ],
+        "risks": [
+          {
+            "statement": "Theo giả định bảo mật của QA (chưa xác nhận), nếu permission \"Refresh access token\" chỉ ẩn nút mà không chặn ở API thì người dùng admin panel không có quyền vẫn có thể force refresh token của shop.",
+            "knowledge_kind": "INFERRED",
+            "confidence": "LOW",
+            "kb_refs": [
+              "KB-054",
+              "KB-053"
+            ]
+          },
+          {
+            "statement": "Rule yêu cầu `Refresh Token` lưu mã hoá và không hiển thị raw; lộ giá trị raw trong admin panel là rủi ro bảo mật cần theo dõi.",
+            "knowledge_kind": "CONFIRMED_EXPECTED",
+            "confidence": "MEDIUM",
+            "kb_refs": [
+              "KB-047"
+            ]
+          },
+          {
+            "statement": "Bên trong admin panel chưa được khảo sát (staging chỉ tới trang login); tên UI \"Token and scopes\", \"Refresh access token\" và nhãn field mới lấy từ ticket, chưa kiểm trên staging.",
+            "knowledge_kind": "CONFIRMED_EXPECTED",
+            "confidence": "MEDIUM",
+            "kb_refs": [
+              "KB-045",
+              "KB-046",
+              "KB-P-041"
+            ]
+          },
+          {
+            "statement": "Known issues Duos ghi BUG-36 (trạng thái \"open?\") gắn với TC-DUOS-001 của nhóm Auth & Token lifecycle nhưng nội dung lỗi chưa đọc được; chưa biết lỗi chạm hành vi nào của token lifecycle, nên theo dõi như regression watch và không dùng TC-DUOS-001 làm bằng chứng PASS.",
+            "knowledge_kind": "OBSERVED_CURRENT",
+            "confidence": "LOW",
+            "kb_refs": [
+              "KB-057"
+            ],
+            "status": "KNOWN_DEFECT"
+          }
+        ],
+        "unknown_areas": [
+          {
+            "question": "Trên staging, mục \"Token and scopes\", nút \"Refresh access token\" và nhãn các field có đúng tên và vị trí như ticket mô tả không?",
+            "why_it_matters": "Admin panel chỉ khảo sát tới trang login; chưa có baseline.",
+            "kb_refs": [
+              "KB-045",
+              "KB-046"
+            ]
+          },
+          {
+            "question": "Bấm \"Refresh access token\" thì hiện thông báo gì khi thành công / thất bại, và field nào thay đổi?",
+            "why_it_matters": "Rule chỉ nêu mục đích force refresh; không có oracle kết quả.",
+            "kb_refs": [
+              "KB-050"
+            ]
+          },
+          {
+            "question": "Role nào trong admin panel được gán mặc định permission \"Refresh access token\", và permission có được chặn ở API (không chỉ ẩn nút) không?",
+            "why_it_matters": "Thiếu ma trận quyền cho hành động nhạy cảm; chặn ở API mới là giả định.",
+            "kb_refs": [
+              "KB-053",
+              "KB-054"
+            ]
+          },
+          {
+            "question": "Mục \"Token and scopes\" có hiển thị thêm Access Token và Offline Token Type (Legacy / Expiring) không?",
+            "why_it_matters": "Hai field này chỉ có trong tóm tắt QA, không có trong rule đã lưu.",
+            "kb_refs": [
+              "KB-051"
+            ]
+          },
+          {
+            "question": "Field ngày token rỗng có đúng nghĩa là token không có hạn (không phải thiếu dữ liệu)?",
+            "why_it_matters": "Ảnh hưởng cách đọc trạng thái shop legacy trong admin panel.",
+            "kb_refs": [
+              "KB-052",
+              "KB-048"
+            ]
+          },
+          {
+            "question": "Permission của nút có thật được đăng ký bằng `php artisan shield:generate --all --ignore-existing-policies` trước `php artisan migrate` khi deploy?",
+            "why_it_matters": "Thiếu bước này nút có thể không xuất hiện cho ai; chỉ có trong tóm tắt QA.",
+            "kb_refs": [
+              "KB-053"
+            ]
+          },
+          {
+            "question": "BUG-36 (gắn TC-DUOS-001, trạng thái \"open?\") là lỗi gì, thuộc hành vi token nào (phát hiện token chết, refresh/migrate, re-auth khi mở app, uninstall/reinstall hay admin panel), còn mở hay đã fix?",
+            "why_it_matters": "Nếu lỗi chạm hành vi của tính năng này thì check theo rule tương ứng cần theo dõi regression; test case liên quan đang passed nên không phải bằng chứng PASS.",
+            "kb_refs": [
+              "KB-057"
+            ]
+          }
+        ],
+        "freshness": {
+          "observed_at": "2026-10-08",
+          "run_id": "CTX-20261009-01",
+          "earliest_source_date": "2026-07-07",
+          "basis": "Ngày nguồn mới nhất trong các KB item được tham chiếu (ngày cập nhật Jira trong rule, ngày phân tích QA, ngày cập nhật danh sách lỗi); không có quan sát runtime trong lần chạy này."
+        }
+      }
+    ],
+    "profile_relationships": [
+      {
+        "from": "admin-token-and-scopes",
+        "to": "dead-token-detection-and-reconnect",
+        "relation": "READS",
+        "kb_refs": [
+          "KB-046"
+        ]
+      },
+      {
+        "from": "admin-token-and-scopes",
+        "to": "token-refresh-and-legacy-migration",
+        "relation": "RELATED_TO",
+        "kb_refs": [
+          "KB-050"
+        ]
+      }
+    ],
+    "coverage_matrix": [
+      {
+        "feature_id": "admin-token-and-scopes",
+        "layer": "admin_panel",
+        "role": "internal-ops",
+        "state": "shop dùng token expiring",
+        "environment": "documented",
+        "covered": true,
+        "note": "Rule Jira DUOS-399; Không có quan sát runtime; chỉ theo tài liệu."
+      },
+      {
+        "feature_id": "admin-token-and-scopes",
+        "layer": "admin_panel",
+        "role": "internal-ops",
+        "state": "shop chưa migrate (legacy)",
+        "environment": "documented",
+        "covered": true,
+        "note": "Rule Jira DUOS-399; Không có quan sát runtime; chỉ theo tài liệu."
+      },
+      {
+        "feature_id": "admin-token-and-scopes",
+        "layer": "data",
+        "role": "internal-ops",
+        "state": "Refresh Token mã hoá, không hiện raw",
+        "environment": "documented",
+        "covered": true,
+        "note": "Rule Jira DUOS-399"
+      },
+      {
+        "feature_id": "admin-token-and-scopes",
+        "layer": "admin_panel",
+        "role": "internal-ops",
+        "state": "kết quả force refresh",
+        "environment": "documented",
+        "covered": false,
+        "note": "Tài liệu không nêu"
+      },
+      {
+        "feature_id": "admin-token-and-scopes",
+        "layer": "admin_panel",
+        "role": "internal-ops (không có permission)",
+        "state": "nút Refresh access token",
+        "environment": "documented",
+        "covered": false,
+        "note": "Chỉ giả định QA"
+      },
+      {
+        "feature_id": "admin-token-and-scopes",
+        "layer": "api",
+        "role": "internal-ops (không có permission)",
+        "state": "gọi force refresh trực tiếp",
+        "environment": "documented",
+        "covered": false,
+        "note": "Chỉ giả định QA"
+      },
+      {
+        "feature_id": "admin-token-and-scopes",
+        "layer": "admin_panel",
+        "role": "internal-ops",
+        "state": "giao diện bên trong admin panel",
+        "environment": "documented",
+        "covered": false,
+        "note": "Staging chỉ tới trang login"
+      },
+      {
+        "feature_id": "admin-token-and-scopes",
+        "layer": "code",
+        "role": "unspecified",
+        "state": "any",
+        "environment": "documented",
+        "covered": false,
+        "note": "Không có nguồn mã"
+      },
+      {
+        "feature_id": "admin-token-and-scopes",
+        "layer": "api",
+        "role": "unspecified",
+        "state": "đặc tả API (endpoint, request/response, mã lỗi)",
+        "environment": "documented",
+        "covered": false,
+        "note": "Bộ tài liệu QA không có đặc tả API/data model cho feature này"
+      },
+      {
+        "feature_id": "admin-token-and-scopes",
+        "layer": "db",
+        "role": "unspecified",
+        "state": "đặc tả data model (bảng/cột, kiểu dữ liệu)",
+        "environment": "documented",
+        "covered": false,
+        "note": "Bộ tài liệu QA không có đặc tả API/data model cho feature này"
+      }
+    ],
+    "unassigned_kb_items": [],
+    "profile_conflicts": [],
+    "profile_change_summary": [
+      "Profile mới dựng từ KB tài liệu của object auth-token; chưa có bản publish trước để so.",
+      "coverage_matrix ghi rõ phần đặc tả API và data model chưa có trong bộ tài liệu QA."
+    ],
+    "kb_trace_complete": true
+  },
+  "gate": {
+    "decision": "CONDITIONAL_PASS",
+    "blocking_findings": [],
+    "conditions": [
+      "Identity ổn định, user goal, capability theo mục tiêu và mapping KB đầy đủ (mọi item của shard được tham chiếu, mọi kb_refs tồn tại).",
+      "Oracle mạnh có cho 6 rule Jira DUOS-399; chưa có baseline staging nào cho tính năng này.",
+      "Các phát biểu chỉ có trong tóm tắt QA và các khoảng trống (xem unknown_areas) không có oracle — check tương ứng phải NEEDS_CONFIRMATION."
+    ],
+    "allowed_next_steps": [
+      "qa-checklist-builder",
+      "knowledge-diff-analyzer"
+    ]
+  }
+}

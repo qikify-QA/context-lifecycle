@@ -1,0 +1,669 @@
+{
+  "feature_id": "shopping-list-approval",
+  "feature_key": "shopping-list-approval",
+  "name": "Gửi duyệt và duyệt shopping list theo role",
+  "user_goal": "Junior Buyer gửi shopping list cho Senior Buyer hoặc Admin duyệt trước khi đặt hàng; nút submit / approve và quyền sửa list phụ thuộc role của người xem và status của list.",
+  "user_goal_kb_refs": [
+    "KB-011",
+    "KB-001",
+    "KB-002",
+    "KB-004"
+  ],
+  "stable_since_version": "v1",
+  "actors": [
+    {
+      "role": "Junior Buyer",
+      "permission_observed": "Theo PO 09/05/2025: không thấy nút approve. Theo tóm tắt QA dựa trên Jira: bấm \"Submit for Approval\" để gửi list đi duyệt. Theo Jira DUOS-395 (chưa xác nhận): bị khoá xoá / sửa số lượng / sửa tên / thêm dòng / upload CSV khi list ở trạng thái chờ duyệt hoặc Approved. Customer Account chưa quan sát.",
+      "kb_refs": [
+        "KB-002",
+        "KB-011",
+        "KB-004"
+      ]
+    },
+    {
+      "role": "Admin hoặc member có quyền approve + create order from shopping list",
+      "permission_observed": "Theo PO 09/05/2025: không hiện nút submit trên list Draft. Theo tóm tắt QA: duyệt list rồi tạo order.",
+      "kb_refs": [
+        "KB-001",
+        "KB-011"
+      ]
+    },
+    {
+      "role": "Senior Buyer",
+      "permission_observed": "Theo tóm tắt QA (không phải phát biểu PO/Dev): là người duyệt list của Junior Buyer cùng Admin. Quy tắc role mặc định do phần roles & permissions sở hữu.",
+      "kb_refs": [
+        "KB-011"
+      ]
+    },
+    {
+      "role": "buyer (chung)",
+      "permission_observed": "Theo Jira DUOS-86 (description chưa hoàn tất): list Draft sửa được tới khi submit; list chờ duyệt hoặc Approved buyer không sửa được — ticket không giới hạn Junior Buyer.",
+      "kb_refs": [
+        "KB-006"
+      ]
+    },
+    {
+      "role": "system",
+      "permission_observed": "Theo Jira (chưa xác nhận): lưu approver dạng `{ customerId, name }`; dữ liệu list lưu dạng Shopify metaobjects.",
+      "kb_refs": [
+        "KB-012",
+        "KB-038"
+      ]
+    }
+  ],
+  "entry_points": [
+    {
+      "path": "Customer Account › trang Shopping List (extension Shopping list của Duos)",
+      "precondition": "Tài khoản buyer B2B của company; store đã bật module Shopping list. Chưa quan sát trên staging.",
+      "kb_refs": [
+        "KB-P-008",
+        "KB-039"
+      ]
+    },
+    {
+      "path": "Portal › Shopping list settings › nhóm \"Customer account settings\": \"Add \"Shopping List\" page\" / \"Add \"Shopping List\" to main menu\"",
+      "precondition": "Merchant đăng nhập Portal; hiệu ứng trong Customer Account chưa quan sát.",
+      "kb_refs": [
+        "KB-039"
+      ]
+    },
+    {
+      "path": "Nút \"Submit for Approval\" trên list Draft",
+      "precondition": "Người xem là Junior Buyer (Admin / member có quyền approve + create order from shopping list không thấy nút submit trên Draft).",
+      "kb_refs": [
+        "KB-011",
+        "KB-001"
+      ]
+    },
+    {
+      "path": "Nút approve trên list chờ duyệt",
+      "precondition": "Người xem không phải Junior Buyer; ma trận nút theo custom role chưa có.",
+      "kb_refs": [
+        "KB-002",
+        "KB-011"
+      ]
+    },
+    {
+      "path": "Trang danh sách shopping list phía buyer (cột \"created by\")",
+      "precondition": "Có ít nhất một list; role áp dụng chưa nêu.",
+      "kb_refs": [
+        "KB-003"
+      ]
+    }
+  ],
+  "capabilities": [
+    {
+      "name": "Gửi list đi duyệt",
+      "description": "Junior Buyer soạn list ở Draft rồi bấm \"Submit for Approval\" để chuyển sang status chờ duyệt (tên status đang tranh chấp). Người có quyền approve + create order from shopping list không có nút submit trên Draft.",
+      "kb_refs": [
+        "KB-011",
+        "KB-001",
+        "KB-005",
+        "KB-006"
+      ]
+    },
+    {
+      "name": "Duyệt list và đặt hàng từ list Approved",
+      "description": "Senior Buyer hoặc Admin duyệt list (Junior Buyer không thấy nút approve); list Approved tạo order trực tiếp được (theo ticket); approver được lưu `{ customerId, name }` (theo ticket).",
+      "kb_refs": [
+        "KB-002",
+        "KB-011",
+        "KB-007",
+        "KB-012"
+      ]
+    },
+    {
+      "name": "Khoá sửa list theo role và status",
+      "description": "Theo Jira DUOS-395 (chưa xác nhận) Junior Buyer bị khoá các thao tác sửa khi list ở chờ duyệt / Approved; theo Jira DUOS-86 (chưa hoàn tất) buyer nói chung không sửa list chờ duyệt / Approved. Draft / Rejected chưa có quy tắc cho Junior Buyer.",
+      "kb_refs": [
+        "KB-004",
+        "KB-006"
+      ]
+    },
+    {
+      "name": "Xử lý list bị từ chối",
+      "description": "Theo Jira DUOS-86 (chưa hoàn tất): list Rejected không update, không re-submit; muốn làm lại thì duplicate thành draft mới. Lý do accept / reject chưa có đặc tả.",
+      "kb_refs": [
+        "KB-008",
+        "KB-005"
+      ]
+    },
+    {
+      "name": "Theo dõi list theo người tạo",
+      "description": "Trang danh sách shopping list thay cột \"location\" bằng cột \"created by\" (PO 09/05/2025); role áp dụng chưa nêu.",
+      "kb_refs": [
+        "KB-003"
+      ]
+    }
+  ],
+  "state_transitions": [
+    {
+      "from": "Draft",
+      "to": "status chờ duyệt (\"Waiting for Approval\" hay \"Pending\" — đang tranh chấp)",
+      "trigger": "Junior Buyer bấm \"Submit for Approval\"",
+      "condition": "Theo tóm tắt QA và Jira DUOS-86; chưa có PO/Dev xác nhận chuyển trạng thái",
+      "kb_refs": [
+        "KB-011",
+        "KB-005",
+        "KB-009",
+        "KB-010"
+      ]
+    },
+    {
+      "from": "status chờ duyệt",
+      "to": "Approved",
+      "trigger": "Senior Buyer hoặc Admin approve",
+      "condition": "Người duyệt không phải Junior Buyer",
+      "kb_refs": [
+        "KB-011",
+        "KB-002",
+        "KB-005",
+        "KB-012"
+      ]
+    },
+    {
+      "from": "status chờ duyệt",
+      "to": "Rejected",
+      "trigger": "Người duyệt reject",
+      "condition": "Theo Jira DUOS-86 (chưa hoàn tất); lý do reject chưa rõ có bắt buộc không",
+      "kb_refs": [
+        "KB-005",
+        "KB-008"
+      ]
+    },
+    {
+      "from": "Approved",
+      "to": "order được tạo từ list",
+      "trigger": "Tạo order từ list Approved",
+      "condition": "Theo ticket; nếu merchant bật re-approval thì list tự về trạng thái chờ duyệt khi order được submit (feature re-approval-after-order)",
+      "kb_refs": [
+        "KB-007",
+        "KB-013"
+      ]
+    },
+    {
+      "from": "Rejected",
+      "to": "Draft mới (bản duplicate)",
+      "trigger": "Duplicate list bị từ chối",
+      "condition": "List Rejected không update / re-submit được (theo ticket)",
+      "kb_refs": [
+        "KB-008"
+      ]
+    }
+  ],
+  "confirmed_rules": [
+    {
+      "statement": "Theo quyết định PO 09/05/2025 (Jira DUOS-86 comment), ghi trong QA business rule Duos và QA KB Duos \"B2B Shopping List\" v1: với Admin hoặc member có quyền approve và create order from shopping list, list ở status Draft không hiện nút submit.",
+      "knowledge_kind": "CONFIRMED_EXPECTED",
+      "confidence": "MEDIUM",
+      "kb_refs": [
+        "KB-001"
+      ]
+    },
+    {
+      "statement": "Theo quyết định PO 09/05/2025 (Jira DUOS-86 comment), ghi trong QA business rule Duos và QA KB Duos \"B2B Shopping List\" v1: Junior Buyer không thấy nút approve shopping list.",
+      "knowledge_kind": "CONFIRMED_EXPECTED",
+      "confidence": "MEDIUM",
+      "kb_refs": [
+        "KB-002"
+      ]
+    },
+    {
+      "statement": "Theo quyết định PO 09/05/2025 (Jira DUOS-86 comment), ghi trong QA business rule Duos: trang danh sách shopping list thay cột \"location\" bằng cột \"created by\". Nguồn không nói rõ thay đổi này áp cho role nào.",
+      "knowledge_kind": "CONFIRMED_EXPECTED",
+      "confidence": "MEDIUM",
+      "kb_refs": [
+        "KB-003"
+      ]
+    }
+  ],
+  "observed_behavior": [
+    {
+      "statement": "Trên staging (khảo sát 08/10/2026, store staging Plus (Free plan)), trang Shopping list settings có nhóm \"Customer account settings\" với 2 option \"Add \"Shopping List\" page\" và \"Add \"Shopping List\" to main menu\". Chưa có business rule; hiệu ứng trong Customer Account chưa quan sát.",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "confidence": "MEDIUM",
+      "kb_refs": [
+        "KB-039"
+      ],
+      "status": "CURRENT_STATE"
+    }
+  ],
+  "observed_validations": [],
+  "permissions": [
+    {
+      "statement": "Admin hoặc member có quyền approve + create order from shopping list không thấy nút submit trên list Draft; Junior Buyer không thấy nút approve (PO 09/05/2025).",
+      "kb_refs": [
+        "KB-001",
+        "KB-002"
+      ]
+    },
+    {
+      "statement": "Quyền sửa list theo status: Jira DUOS-395 khoá Junior Buyer ở chờ duyệt / Approved, Jira DUOS-86 nói buyer chung không sửa list chờ duyệt / Approved — cả hai chưa có PO/Dev xác nhận và lệch phạm vi role.",
+      "kb_refs": [
+        "KB-004",
+        "KB-006"
+      ]
+    },
+    {
+      "statement": "Quy tắc role mặc định (Junior Buyer cần duyệt, Senior Buyer duyệt list người khác) và các quyền nhóm \"Shopping list\" do roles & permissions sở hữu; feature này chỉ dùng kết quả.",
+      "kb_refs": [
+        "KB-011"
+      ]
+    }
+  ],
+  "surface_mapping": {
+    "portal": [
+      {
+        "item": "Shopping list settings › \"Customer account settings\": \"Add \"Shopping List\" page\", \"Add \"Shopping List\" to main menu\"",
+        "kb_refs": [
+          "KB-039"
+        ]
+      }
+    ],
+    "storefront": [
+      {
+        "item": "Customer Account extension Shopping list (bề mặt buyer B2B, chưa quan sát): nút \"Submit for Approval\", nút approve, các thao tác sửa bị disable theo role / status",
+        "kb_refs": [
+          "KB-P-008",
+          "KB-001",
+          "KB-002",
+          "KB-004",
+          "KB-011"
+        ]
+      },
+      {
+        "item": "Customer Account: trang danh sách shopping list có cột \"created by\"",
+        "kb_refs": [
+          "KB-003"
+        ]
+      }
+    ],
+    "api": [],
+    "data": [
+      {
+        "item": "Status list: Draft / chờ duyệt (giá trị `pending` theo một phía tranh chấp) / Approved / Rejected",
+        "kb_refs": [
+          "KB-005",
+          "KB-010"
+        ]
+      },
+      {
+        "item": "Approver lưu `{ customerId, name }`",
+        "kb_refs": [
+          "KB-012"
+        ]
+      },
+      {
+        "item": "Shopping list lưu dạng Shopify metaobjects",
+        "kb_refs": [
+          "KB-038"
+        ]
+      }
+    ],
+    "code": []
+  },
+  "dependencies": [
+    {
+      "target": "roles-permissions / default-and-custom-roles",
+      "relation": "permission_source",
+      "note": "Quy tắc Junior Buyer cần Senior / Admin duyệt và các quyền nhóm \"Shopping list\" (Approve draft status list, Submit shopping list for approval, Create order from approved shopping list) do object roles & permissions sở hữu.",
+      "kb_refs": [
+        "KB-011",
+        "KB-001",
+        "KB-002"
+      ]
+    },
+    {
+      "target": "roles-permissions / default-and-custom-roles (tranh chấp)",
+      "relation": "see_also",
+      "note": "Tranh chấp Junior Buyer có được tạo Shopping List / order từ CSV & Bulk SKU hay không thuộc roles & permissions; không mở tranh chấp ở đây.",
+      "kb_refs": [
+        "KB-011"
+      ]
+    },
+    {
+      "target": "roles-permissions / checkout-blocking-by-permission",
+      "relation": "see_also",
+      "note": "Chặn checkout theo permission (Junior / View Only) do roles & permissions sở hữu; luồng duyệt list là đường đặt hàng có duyệt.",
+      "kb_refs": [
+        "KB-011"
+      ]
+    },
+    {
+      "target": "notifications / notification-settings-and-templates, flow-email-triggers",
+      "relation": "emits",
+      "note": "Email \"Shopping list pending approval\" / \"Shopping list approved\", biến `{shopping_list_approver}` và Shopify Flow trigger tương ứng do object notifications sở hữu.",
+      "kb_refs": [
+        "KB-011",
+        "KB-012"
+      ]
+    },
+    {
+      "target": "shopping-list / re-approval-after-order",
+      "relation": "extends",
+      "note": "Khi merchant bật re-approval, list Approved quay về trạng thái chờ duyệt sau mỗi order.",
+      "kb_refs": [
+        "KB-007",
+        "KB-013"
+      ]
+    }
+  ],
+  "risks": [
+    {
+      "statement": "Theo Jira DUOS-86 và tài liệu sản phẩm Duos (tóm tắt trong QA KB Duos \"B2B Shopping List\" v1, đọc 07/10/2026), status chờ duyệt của shopping list tên là \"Waiting for Approval\". Đây là một phía của tranh chấp tên status: Jira DUOS-382 (Done 18/05/2026), DUOS-395 (Done 20/05/2026) và DUOS-308 gọi là \"Pending\"; tên thật trên UI chưa chốt và staging chưa có list nào để quan sát. Chưa dùng làm kết quả mong đợi.",
+      "knowledge_kind": "INFERRED",
+      "confidence": "LOW",
+      "status": "UNRESOLVED",
+      "conflict_group": "CONF-DUOS-shopping-list-01",
+      "kb_refs": [
+        "KB-009"
+      ],
+      "note": "Một phía của tranh chấp tên status; không làm oracle."
+    },
+    {
+      "statement": "Theo Jira DUOS-382 (Done 18/05/2026), DUOS-395 (Done 20/05/2026) và DUOS-308 (tóm tắt trong QA KB Duos \"B2B Shopping List\" v1, đọc 07/10/2026), status chờ duyệt của shopping list tên là \"Pending\" (giá trị `pending`). Đây là một phía của tranh chấp tên status: Jira DUOS-86 và tài liệu sản phẩm Duos gọi là \"Waiting for Approval\"; tên thật trên UI chưa chốt. Chưa dùng làm kết quả mong đợi.",
+      "knowledge_kind": "INFERRED",
+      "confidence": "LOW",
+      "status": "UNRESOLVED",
+      "conflict_group": "CONF-DUOS-shopping-list-01",
+      "kb_refs": [
+        "KB-010"
+      ],
+      "note": "Một phía của tranh chấp tên status; không làm oracle."
+    },
+    {
+      "statement": "Theo Jira DUOS-395 (description, Done 20/05/2026; rule còn ở dạng nháp với mức tin \"chỉ theo ticket\" trong QA business rule Duos): với Junior Buyer, khi shopping list ở Pending hoặc Approved thì Delete, tăng/giảm số lượng, \"Edit Shopping list name\", search product, \"Add more line\" và \"Upload CSV/Load Catalog\" bị disable. Nguồn không nêu hành vi ở Draft / Rejected; chưa có PO/Dev xác nhận.",
+      "knowledge_kind": "INFERRED",
+      "confidence": "MEDIUM",
+      "kb_refs": [
+        "KB-004"
+      ]
+    },
+    {
+      "statement": "Theo Jira DUOS-86 (description chưa hoàn tất; \"theo ticket\" trong QA KB Duos \"B2B Shopping List\" v1, đọc 07/10/2026): list ở Draft sửa được cho tới khi submit; list ở status chờ duyệt hoặc Approved thì buyer không sửa được. Ticket nói \"buyer\" chung, không giới hạn Junior Buyer như Jira DUOS-395.",
+      "knowledge_kind": "INFERRED",
+      "confidence": "MEDIUM",
+      "kb_refs": [
+        "KB-006"
+      ]
+    },
+    {
+      "statement": "Theo Jira DUOS-86 (description còn ghi đang cập nhật, chưa hoàn tất; tóm tắt \"theo ticket\" trong QA KB Duos \"B2B Shopping List\" v1, đọc 07/10/2026): shopping list có 4 status — Draft, status chờ duyệt, Approved, Rejected. Tên hiển thị của status chờ duyệt đang tranh chấp (\"Waiting for Approval\" hay \"Pending\").",
+      "knowledge_kind": "INFERRED",
+      "confidence": "MEDIUM",
+      "kb_refs": [
+        "KB-005"
+      ]
+    },
+    {
+      "statement": "Theo Jira DUOS-86 (description chưa hoàn tất; \"theo ticket\" trong QA KB Duos \"B2B Shopping List\" v1, đọc 07/10/2026): list ở status Approved tạo order trực tiếp được.",
+      "knowledge_kind": "INFERRED",
+      "confidence": "MEDIUM",
+      "kb_refs": [
+        "KB-007"
+      ]
+    },
+    {
+      "statement": "Theo Jira DUOS-86 (description chưa hoàn tất; \"theo ticket\" trong QA KB Duos \"B2B Shopping List\" v1, đọc 07/10/2026): list ở status Rejected không update và không re-submit được; muốn làm lại thì duplicate thành một draft mới.",
+      "knowledge_kind": "INFERRED",
+      "confidence": "MEDIUM",
+      "kb_refs": [
+        "KB-008"
+      ]
+    },
+    {
+      "statement": "Theo phần tóm tắt của QA (QA KB Duos \"B2B Shopping List\" v1 mục mục đích, \"Feature Map\" v1 và tổng quan sản phẩm v1, dựa trên Jira đọc 07/10/2026): luồng duyệt shopping list là Junior Buyer bấm \"Submit for Approval\", Senior Buyer hoặc Admin duyệt, rồi mới tạo order. Đây là tóm tắt, không phải phát biểu của PO/Dev; quy tắc Junior Buyer cần duyệt do phần role mặc định sở hữu.",
+      "knowledge_kind": "INFERRED",
+      "confidence": "MEDIUM",
+      "kb_refs": [
+        "KB-011"
+      ]
+    },
+    {
+      "statement": "Theo Jira DUOS-368 (description, tóm tắt trong QA KB Duos \"B2B Shopping List\" v1, đọc 07/10/2026; không có rule active hay PO/Dev xác nhận): approver của shopping list được lưu dạng `{ customerId, name }`.",
+      "knowledge_kind": "INFERRED",
+      "confidence": "MEDIUM",
+      "kb_refs": [
+        "KB-012"
+      ]
+    },
+    {
+      "statement": "Theo Jira DUOS-290 (tóm tắt trong QA KB Duos \"B2B Shopping List\" v1, đọc 07/10/2026; không có rule active hay PO/Dev xác nhận): dữ liệu shopping list được lưu dạng Shopify metaobjects.",
+      "knowledge_kind": "INFERRED",
+      "confidence": "MEDIUM",
+      "kb_refs": [
+        "KB-038"
+      ]
+    }
+  ],
+  "unknown_areas": [
+    {
+      "question": "Status chờ duyệt của shopping list hiển thị trên UI tên là \"Waiting for Approval\" hay \"Pending\", và giá trị lưu là gì?",
+      "why_it_matters": "Hai nhóm ticket gọi khác nhau; check về status chờ duyệt không có oracle tên hiển thị cho tới khi PO chốt.",
+      "kb_refs": [
+        "KB-009",
+        "KB-010",
+        "KB-P-024"
+      ],
+      "oq_id": "OQ-shopping-list-001"
+    },
+    {
+      "question": "Ma trận role × status × nút của shopping list là gì: Junior Buyer ở list Draft và Rejected được dùng những nút nào; quy tắc \"không sửa list chờ duyệt / Approved\" áp cho mọi buyer hay chỉ Junior Buyer; custom role có hoặc không có quyền \"Approve draft status list\" thấy nút submit / approve thế nào?",
+      "why_it_matters": "Chỉ có hai quy tắc PO về nút submit / approve; phần còn lại chỉ theo ticket và lệch phạm vi role.",
+      "kb_refs": [
+        "KB-001",
+        "KB-002",
+        "KB-004",
+        "KB-006",
+        "KB-011"
+      ],
+      "oq_id": "OQ-shopping-list-001"
+    },
+    {
+      "question": "Cột \"created by\" thay cột \"location\" ở trang danh sách shopping list áp cho role nào?",
+      "why_it_matters": "Quyết định PO không nêu role nên chưa viết được precondition.",
+      "kb_refs": [
+        "KB-003"
+      ],
+      "oq_id": "OQ-shopping-list-001"
+    },
+    {
+      "question": "Khi duyệt hoặc từ chối shopping list, lý do accept / reject có bắt buộc không và field tên là gì (Jira DUOS-218 để trống)?",
+      "why_it_matters": "Không viết được check validation cho approve / reject.",
+      "kb_refs": [
+        "KB-008",
+        "KB-005"
+      ],
+      "oq_id": "OQ-shopping-list-003"
+    },
+    {
+      "question": "Bốn status và các chuyển trạng thái của Jira DUOS-86 (Draft sửa tới khi submit, Approved tạo order trực tiếp, Rejected chỉ duplicate thành draft mới) còn đúng không khi description ticket được hoàn tất, và approver có đúng được lưu `{ customerId, name }` không?",
+      "why_it_matters": "Các quy tắc này chỉ dựa trên ticket chưa hoàn tất, không có rule active hay PO/Dev xác nhận.",
+      "kb_refs": [
+        "KB-005",
+        "KB-006",
+        "KB-007",
+        "KB-008",
+        "KB-012",
+        "KB-004"
+      ],
+      "oq_id": "OQ-shopping-list-001"
+    },
+    {
+      "question": "Trong Customer Account, trang Shopping List, nút submit / approve và các nút bị disable hiển thị thế nào với từng role mặc định, và hai option \"Add \"Shopping List\" page\" / \"Add \"Shopping List\" to main menu\" có hiệu ứng gì?",
+      "why_it_matters": "Customer Account chưa được quan sát (không có tài khoản buyer); mọi quy tắc phía buyer chỉ có từ Jira / PO.",
+      "kb_refs": [
+        "KB-001",
+        "KB-002",
+        "KB-003",
+        "KB-004",
+        "KB-039",
+        "KB-P-008"
+      ],
+      "oq_id": "OQ-shopping-list-002"
+    }
+  ],
+  "freshness": {
+    "observed_at": "2026-10-08",
+    "earliest_source_date": "2025-05-09",
+    "basis": "Ngày nguồn mới nhất trong các KB item được tham chiếu (ngày quyết định PO/Dev, ngày đọc Jira, khảo sát staging 08/10/2026); không có quan sát runtime trong lần chạy này."
+  },
+  "last_updated": {
+    "date": "2026-10-09",
+    "ccr_ref": "bootstrap"
+  },
+  "coverage_matrix": [
+    {
+      "feature_id": "shopping-list-approval",
+      "layer": "storefront",
+      "role": "buyer-junior",
+      "state": "list Draft",
+      "environment": "documented",
+      "covered": true,
+      "note": "Customer Account; PO 09/05/2025 cho nút approve; nút còn lại chưa có quy tắc"
+    },
+    {
+      "feature_id": "shopping-list-approval",
+      "layer": "storefront",
+      "role": "buyer-junior",
+      "state": "list chờ duyệt / Approved",
+      "environment": "documented",
+      "covered": true,
+      "note": "Khoá sửa chỉ theo Jira DUOS-395 (chưa xác nhận)"
+    },
+    {
+      "feature_id": "shopping-list-approval",
+      "layer": "storefront",
+      "role": "buyer-junior",
+      "state": "list Rejected",
+      "environment": "documented",
+      "covered": false,
+      "note": "Không có quy tắc cho Junior Buyer"
+    },
+    {
+      "feature_id": "shopping-list-approval",
+      "layer": "storefront",
+      "role": "buyer-admin",
+      "state": "list Draft",
+      "environment": "documented",
+      "covered": true,
+      "note": "PO 09/05/2025: không có nút submit"
+    },
+    {
+      "feature_id": "shopping-list-approval",
+      "layer": "storefront",
+      "role": "buyer-admin / buyer-senior",
+      "state": "list chờ duyệt → Approved / Rejected",
+      "environment": "documented",
+      "covered": true,
+      "note": "Chỉ tóm tắt QA và ticket; tên status tranh chấp"
+    },
+    {
+      "feature_id": "shopping-list-approval",
+      "layer": "storefront",
+      "role": "buyer-custom-role",
+      "state": "mọi status",
+      "environment": "documented",
+      "covered": false,
+      "note": "Ma trận custom role chưa có"
+    },
+    {
+      "feature_id": "shopping-list-approval",
+      "layer": "storefront",
+      "role": "unspecified",
+      "state": "trang danh sách list (cột created by)",
+      "environment": "documented",
+      "covered": true,
+      "note": "PO 09/05/2025; role chưa nêu"
+    },
+    {
+      "feature_id": "shopping-list-approval",
+      "layer": "portal",
+      "role": "merchant",
+      "state": "Shopping list settings › Customer account settings",
+      "environment": "documented",
+      "covered": true,
+      "note": "Hiện trạng staging; hiệu ứng chưa quan sát"
+    },
+    {
+      "feature_id": "shopping-list-approval",
+      "layer": "data",
+      "role": "system",
+      "state": "approver / status / metaobjects",
+      "environment": "documented",
+      "covered": true,
+      "note": "Chỉ theo ticket"
+    },
+    {
+      "feature_id": "shopping-list-approval",
+      "layer": "api",
+      "role": "unspecified",
+      "state": "any",
+      "environment": "documented",
+      "covered": false,
+      "note": "Bộ tài liệu QA không có đặc tả API/data model cho feature này"
+    },
+    {
+      "feature_id": "shopping-list-approval",
+      "layer": "code",
+      "role": "unspecified",
+      "state": "any",
+      "environment": "documented",
+      "covered": false,
+      "note": "Không có nguồn mã"
+    }
+  ],
+  "profile_conflicts": [
+    {
+      "conflict_group": "CONF-DUOS-shopping-list-01",
+      "owner_feature": "shopping-list/shopping-list-approval",
+      "topic": "Tên status chờ duyệt của shopping list: \"Waiting for Approval\" hay \"Pending\"",
+      "side_a": "Theo Jira DUOS-86 và tài liệu sản phẩm Duos (QA tóm tắt, đọc 07/10/2026), status chờ duyệt tên là \"Waiting for Approval\".",
+      "side_b": "Theo Jira DUOS-382 (Done 18/05/2026), DUOS-395 (Done 20/05/2026) và DUOS-308 (QA tóm tắt, đọc 07/10/2026), status chờ duyệt tên là \"Pending\" (giá trị `pending`).",
+      "resolution": "UNRESOLVED",
+      "impact": "Check về tên status chờ duyệt không có oracle; hành vi chuyển trạng thái vẫn mô tả được bằng \"status chờ duyệt\".",
+      "kb_refs": [
+        "KB-009",
+        "KB-010"
+      ]
+    }
+  ],
+  "profile_relationships": [
+    {
+      "from": "shopping-list-approval",
+      "to": "roles-permissions/default-and-custom-roles",
+      "relation": "GOVERNED_BY",
+      "kb_refs": [
+        "KB-011",
+        "KB-001",
+        "KB-002"
+      ]
+    },
+    {
+      "from": "shopping-list-approval",
+      "to": "shopping-list/re-approval-after-order",
+      "relation": "EXTENDED_BY",
+      "kb_refs": [
+        "KB-013",
+        "KB-007"
+      ]
+    },
+    {
+      "from": "shopping-list-approval",
+      "to": "notifications/notification-settings-and-templates",
+      "relation": "TRIGGERS",
+      "kb_refs": [
+        "KB-011"
+      ]
+    },
+    {
+      "from": "shopping-list-approval",
+      "to": "shopping-list/save-and-add-to-cart",
+      "relation": "RELATED",
+      "kb_refs": [
+        "KB-022",
+        "KB-011"
+      ]
+    }
+  ]
+}

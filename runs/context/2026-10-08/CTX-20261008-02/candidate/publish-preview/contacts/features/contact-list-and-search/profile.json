@@ -1,0 +1,713 @@
+{
+  "feature_id": "contact-list-and-search",
+  "feature_key": "contact-list-and-search",
+  "name": "Danh sách và tìm kiếm contact",
+  "user_goal": "Người dùng workspace xem danh bạ contact của workspace, tìm nhanh một contact theo email hoặc tên, biết trạng thái consent của từng người, rồi mở chi tiết hoặc xoá contact, và đi tới New contact / Import / Export từ cùng một trang.",
+  "stable_since_version": "v1",
+  "actors": [
+    {
+      "role": "Owner",
+      "permission_observed": "Mọi quan sát trên staging (29/09 và 01/10/2026) ở trang Contacts đều bằng tài khoản Owner: xem danh sách, tìm kiếm, mở menu dòng Edit / Delete, mở hộp xác nhận xoá (chưa xoá thật).",
+      "kb_refs": [
+        "KB-001",
+        "KB-011",
+        "KB-016",
+        "KB-017",
+        "KB-160"
+      ]
+    },
+    {
+      "role": "Admin / role thứ ba (tên đang tranh chấp: Member hoặc Marketer/Editor)",
+      "permission_observed": "Chưa quan sát. Sản phẩm có 3 role chuẩn nhưng ma trận quyền của Contacts chưa được chốt; router frontend không phân quyền theo role nên mọi chặn quyền (nếu có) phải nằm ở API.",
+      "kb_refs": [
+        "KB-P-051",
+        "KB-P-052"
+      ]
+    }
+  ],
+  "entry_points": [
+    {
+      "path": "Sidebar mục `Contacts` → route `/contacts` của app workspace",
+      "precondition": "Đã đăng nhập và đang ở trong một workspace.",
+      "kb_refs": [
+        "KB-001",
+        "KB-160",
+        "KB-P-037"
+      ]
+    }
+  ],
+  "capabilities": [
+    {
+      "name": "Xem danh bạ contact của workspace",
+      "description": "Bảng Contacts với các cột Email, First name, Last name, Consent, Created at, Updated at, Actions; mặc định sắp theo Created at giảm dần, 25 dòng mỗi trang; subtitle hiện số contact theo kết quả search hiện tại. Không có checkbox chọn dòng hay bulk action.",
+      "kb_refs": [
+        "KB-002",
+        "KB-011",
+        "KB-012",
+        "KB-013",
+        "KB-015",
+        "KB-161"
+      ]
+    },
+    {
+      "name": "Tìm contact theo email hoặc tên",
+      "description": "Ô `Search contacts...` tìm theo email (đủ hoặc một phần) và tên; không có kết quả thì hiện thông báo rỗng. Theo quyết định PO/BA + Dev 02/10/2026, kết quả phải gồm cả contact Unsubscribed; staging hiện không trả về contact Unsubscribed (lỗi đã xác nhận, REOPENED 06/10/2026).",
+      "kb_refs": [
+        "KB-006",
+        "KB-007",
+        "KB-008",
+        "KB-009",
+        "KB-010"
+      ]
+    },
+    {
+      "name": "Biết contact nào đã unsubscribe",
+      "description": "Cột `Consent` (`Subscribed` / `Unsubscribed`) đọc cùng nguồn global với khối Email status ở trang chi tiết; khi lệch nhau thì Email status là giá trị đúng (PO/BA + Dev 02/10/2026).",
+      "kb_refs": [
+        "KB-011",
+        "KB-019",
+        "KB-020"
+      ]
+    },
+    {
+      "name": "Mở chi tiết một contact",
+      "description": "Click một dòng trong bảng mở trang chi tiết contact.",
+      "kb_refs": [
+        "KB-014"
+      ]
+    },
+    {
+      "name": "Xoá một contact",
+      "description": "Menu dòng `Actions for {email}` › `Delete` mở hộp xác nhận xoá vĩnh viễn; trên staging mới chỉ mở rồi Cancel, toast kết quả chỉ thấy trong bundle FE.",
+      "kb_refs": [
+        "KB-016",
+        "KB-017",
+        "KB-018"
+      ]
+    },
+    {
+      "name": "Đi tới tạo / sửa / import / export contact",
+      "description": "Trang có nút `New contact`, `Import` (tới `/contacts/import`), `Export` (mở dialog Export contacts); menu dòng có `Edit` mở dialog Edit contact.",
+      "kb_refs": [
+        "KB-005",
+        "KB-016"
+      ]
+    }
+  ],
+  "state_transitions": [
+    {
+      "from": "đang gõ từ khoá search",
+      "to": "bảng và subtitle hiện kết quả mới",
+      "trigger": "Gõ vào ô Search contacts (mỗi lần gọi API search)",
+      "condition": "Trên staging kết quả về chậm 3–8 giây và trong lúc chờ vẫn hiện kết quả lần gõ trước (nghi lỗi nhỏ)",
+      "kb_refs": [
+        "KB-006",
+        "KB-010"
+      ]
+    },
+    {
+      "from": "có kết quả search",
+      "to": "trạng thái rỗng `No contacts match your search`",
+      "trigger": "Từ khoá không khớp contact nào",
+      "condition": "—",
+      "kb_refs": [
+        "KB-007"
+      ]
+    },
+    {
+      "from": "contact tồn tại trong danh sách",
+      "to": "contact bị xoá vĩnh viễn (không hoàn tác)",
+      "trigger": "`Delete` ở menu dòng rồi xác nhận `Delete` trong hộp `Delete {email}?`",
+      "condition": "Chưa quan sát xoá thật; hậu quả với suppression, segment, automation đang chạy và lịch sử gửi chưa được mô tả",
+      "kb_refs": [
+        "KB-017",
+        "KB-018"
+      ]
+    }
+  ],
+  "confirmed_rules": [
+    {
+      "statement": "Theo quyết định PO/BA + Dev 02/10/2026 (task Testlane MTRO-010 BR-13), search Contacts phải trả về cả contact có Consent `Unsubscribed`; hành vi ẩn contact Unsubscribed khỏi kết quả search được xác định là lỗi.",
+      "knowledge_kind": "CONFIRMED_EXPECTED",
+      "confidence": "MEDIUM",
+      "kb_refs": [
+        "KB-008"
+      ]
+    },
+    {
+      "statement": "Theo quyết định PO/BA + Dev 02/10/2026 (task Testlane MTRO-010 BR-14), cột `Consent` ở danh sách Contacts và khối `Email status` ở trang chi tiết cùng đọc từ bảng `unsubscribes` (global); khi hai chỗ lệch nhau thì `Email status` là giá trị đúng.",
+      "knowledge_kind": "CONFIRMED_EXPECTED",
+      "confidence": "MEDIUM",
+      "kb_refs": [
+        "KB-019"
+      ]
+    }
+  ],
+  "observed_behavior": [
+    {
+      "statement": "Trên staging (khảo sát 29/09 và 01/10/2026), trang danh sách contact nằm ở route `/contacts` và được mở từ mục `Contacts` trên sidebar.",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "confidence": "MEDIUM",
+      "status": "CURRENT_STATE",
+      "kb_refs": [
+        "KB-001"
+      ]
+    },
+    {
+      "statement": "Trên staging (khảo sát 01/10/2026, role Owner), module Contacts gồm danh sách, tìm kiếm, trang chi tiết, dialog New / Edit, xác nhận Delete, trang Import contacts 3 bước (`/contacts/import`) và Export contacts (dialog + `Export history`); module dùng các route `/contacts`, `/contacts/import` và `/contacts/:id`.",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "confidence": "MEDIUM",
+      "status": "CURRENT_STATE",
+      "kb_refs": [
+        "KB-160"
+      ]
+    },
+    {
+      "statement": "Trên staging (khảo sát 01/10/2026), trang `/contacts` có h1 `Contacts` và subtitle `{count} contacts`; số đếm theo kết quả search hiện tại.",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "confidence": "MEDIUM",
+      "status": "CURRENT_STATE",
+      "kb_refs": [
+        "KB-002"
+      ]
+    },
+    {
+      "statement": "Trên staging (khảo sát 01/10/2026), trang Contacts có nút `Export` (mở dialog Export contacts), `Import` (tới `/contacts/import`) và `New contact` (mở dialog tạo contact).",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "confidence": "MEDIUM",
+      "status": "CURRENT_STATE",
+      "kb_refs": [
+        "KB-005"
+      ]
+    },
+    {
+      "statement": "Trên staging (khảo sát 01/10/2026), ô `Search contacts...` tìm theo email (đủ hoặc một phần) và theo tên contact, mỗi lần tìm gọi `POST /api/teams/{slug}/contacts/search?page=1`.",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "confidence": "MEDIUM",
+      "status": "CURRENT_STATE",
+      "kb_refs": [
+        "KB-006"
+      ]
+    },
+    {
+      "statement": "Trên staging (khảo sát 01/10/2026), search contact không khớp kết quả nào hiện `No contacts match your search` / `Try a different email or name.`",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "confidence": "MEDIUM",
+      "status": "CURRENT_STATE",
+      "kb_refs": [
+        "KB-007"
+      ]
+    },
+    {
+      "statement": "Trên staging (khảo sát 01/10/2026), bảng Contacts có các cột `Email`, `First name`, `Last name`, `Consent` (`Subscribed` / `Unsubscribed`), `Created at` (sắp xếp được), `Updated at` (sắp xếp được) và `Actions`.",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "confidence": "MEDIUM",
+      "status": "CURRENT_STATE",
+      "kb_refs": [
+        "KB-011"
+      ]
+    },
+    {
+      "statement": "Trên staging (khảo sát 01/10/2026), bảng Contacts mặc định sắp xếp theo `Created at` giảm dần.",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "confidence": "MEDIUM",
+      "status": "CURRENT_STATE",
+      "kb_refs": [
+        "KB-012"
+      ]
+    },
+    {
+      "statement": "Trên staging (khảo sát 01/10/2026), bảng Contacts không có cột checkbox chọn dòng và không có bulk action nào (kể cả xoá hàng loạt); rule cũ 15/09/2026 theo Jira MTRO-23 (bảng có checkbox, chọn tất cả / từng dòng) đã được QA đính chính theo bản dựng.",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "confidence": "MEDIUM",
+      "status": "CURRENT_STATE",
+      "kb_refs": [
+        "KB-013"
+      ]
+    },
+    {
+      "statement": "Trên staging (khảo sát 01/10/2026), click một dòng trong bảng Contacts mở trang chi tiết của contact đó.",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "confidence": "MEDIUM",
+      "status": "CURRENT_STATE",
+      "kb_refs": [
+        "KB-014"
+      ]
+    },
+    {
+      "statement": "Trên staging (khảo sát 01/10/2026), danh sách Contacts phân trang 25 dòng mỗi trang (`per_page=25`).",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "confidence": "MEDIUM",
+      "status": "CURRENT_STATE",
+      "kb_refs": [
+        "KB-015"
+      ]
+    },
+    {
+      "statement": "Trên staging (khảo sát 01/10/2026), menu dòng `Actions for {email}` trong bảng Contacts có hai mục `Edit` (mở dialog Edit contact) và `Delete`.",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "confidence": "MEDIUM",
+      "status": "CURRENT_STATE",
+      "kb_refs": [
+        "KB-016"
+      ]
+    },
+    {
+      "statement": "Trên staging (khảo sát 01/10/2026), xoá contact phải qua hộp xác nhận `Delete {email}?` với nội dung \"This will permanently remove the contact. This can't be undone.\" và hai nút `Cancel` / `Delete` (khảo sát chỉ mở rồi Cancel, chưa xoá thật).",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "confidence": "MEDIUM",
+      "status": "CURRENT_STATE",
+      "kb_refs": [
+        "KB-017"
+      ]
+    },
+    {
+      "statement": "Theo QA KB Mailtro \"Contacts\" v1 (staging 01/10/2026), xoá contact hiện toast `Contact deleted` khi thành công và `Couldn't delete contact` khi thất bại; inventory staging chỉ thấy hai chuỗi này trong bundle FE vì chưa xoá thật.",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "confidence": "LOW",
+      "status": "CURRENT_STATE",
+      "kb_refs": [
+        "KB-018"
+      ]
+    },
+    {
+      "statement": "Trên staging (khảo sát 01/10/2026, retest 06/10/2026 vẫn REOPENED), search Contacts không trả về contact Unsubscribed kể cả khi gõ đủ email (contact Subscribed cùng dạng email thì tìm ra); PO/BA + Dev 02/10/2026 xác nhận đây là lỗi. Theo giải thích của Dev BE 02/10/2026 (BR-08), search đi qua `ContactsResource::baseQuery` vốn loại contact unsubscribe global và bounce/complaint, nên khi sửa có thể ảnh hưởng số đếm segment.",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "confidence": "LOW",
+      "status": "KNOWN_DEFECT",
+      "kb_refs": [
+        "KB-009",
+        "KB-008"
+      ]
+    },
+    {
+      "statement": "Trên staging (khảo sát 01/10/2026), subtitle trang Contacts hiện \"0 contacts\" thoáng qua trong lúc trang đang tải; inventory staging ghi là nghi lỗi nhỏ, chưa kiểm lại và chưa có PO/Dev xác nhận.",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "confidence": "LOW",
+      "status": "KNOWN_DEFECT",
+      "kb_refs": [
+        "KB-003"
+      ]
+    },
+    {
+      "statement": "Trên staging (khảo sát 01/10/2026), kết quả search Contacts về chậm khoảng 3–8 giây và trong lúc chờ bảng cùng subtitle vẫn hiện kết quả của lần gõ trước (có lần phải Enter mới cập nhật); inventory staging ghi là nghi lỗi nhỏ, chưa đo lại bằng tay, ngưỡng thời gian chấp nhận được chưa chốt (GAP-17).",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "confidence": "LOW",
+      "status": "KNOWN_DEFECT",
+      "kb_refs": [
+        "KB-010"
+      ]
+    },
+    {
+      "statement": "Trên staging (khảo sát 01/10/2026), một số contact có trong tab Unsubscribe của Suppressions nhưng cột `Consent` ở danh sách Contacts vẫn ghi `Subscribed`, và trạng thái của cùng contact còn đổi giữa hai lần xem; retest staging 06/10/2026 xác nhận Consent ở danh sách đã khớp trang chi tiết (VERIFIED). Giữ làm regression watch.",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "confidence": "LOW",
+      "status": "KNOWN_DEFECT",
+      "kb_refs": [
+        "KB-020",
+        "KB-019"
+      ]
+    },
+    {
+      "statement": "Theo QA KB Mailtro \"Contacts\" v1 §Purpose (tóm tắt của QA, không gắn nguồn PO/Dev), Contacts quản lý danh bạ người nhận của workspace (xem, tìm, tạo, sửa, xoá contact), và contact là dữ liệu đầu vào của Segments, từ đó tới Campaigns / Automations.",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "confidence": "LOW",
+      "status": "CURRENT_STATE",
+      "kb_refs": [
+        "KB-161"
+      ]
+    }
+  ],
+  "observed_validations": [],
+  "permissions": [
+    {
+      "statement": "Sản phẩm có 3 role chuẩn (Owner, Admin, role thứ ba đang tranh chấp tên) cộng custom role; ma trận quyền của Contacts (xem, tìm, xoá contact) chưa được chốt nên profile không gán quyền cho từng thao tác.",
+      "kb_refs": [
+        "KB-P-051"
+      ]
+    },
+    {
+      "statement": "Router frontend không có meta phân quyền theo role (suy ra từ bundle), nên kiểm thử phân quyền Contacts phải kiểm ở API chứ không chỉ ở việc ẩn / hiện trên UI.",
+      "kb_refs": [
+        "KB-P-052"
+      ]
+    }
+  ],
+  "surface_mapping": {
+    "portal": [
+      {
+        "item": "Trang `/contacts`: h1 `Contacts`, subtitle `{count} contacts`, nút `Export` / `Import` / `New contact`, ô `Search contacts...`",
+        "kb_refs": [
+          "KB-001",
+          "KB-002",
+          "KB-005",
+          "KB-006"
+        ]
+      },
+      {
+        "item": "Bảng Contacts: cột Email, First name, Last name, Consent, Created at, Updated at, Actions; phân trang 25 dòng; không có checkbox / bulk action",
+        "kb_refs": [
+          "KB-011",
+          "KB-012",
+          "KB-013",
+          "KB-015"
+        ]
+      },
+      {
+        "item": "Menu dòng `Actions for {email}` (Edit, Delete) và hộp xác nhận `Delete {email}?`",
+        "kb_refs": [
+          "KB-016",
+          "KB-017"
+        ]
+      }
+    ],
+    "storefront": [],
+    "api": [
+      {
+        "item": "`POST /api/teams/{slug}/contacts/search?page=1` cho mỗi lần tìm",
+        "kb_refs": [
+          "KB-006"
+        ]
+      },
+      {
+        "item": "Đường dẫn API dùng `teams/{team}` cho workspace",
+        "kb_refs": [
+          "KB-P-006"
+        ]
+      }
+    ],
+    "data": [
+      {
+        "item": "Consent ở danh sách đọc từ bảng `unsubscribes` (global), cùng nguồn với Email status ở trang chi tiết",
+        "kb_refs": [
+          "KB-019"
+        ]
+      }
+    ],
+    "code": [
+      {
+        "item": "Search đi qua `ContactsResource::baseQuery`, vốn loại contact unsubscribe global và bounce / complaint (giải thích của Dev BE 02/10/2026)",
+        "kb_refs": [
+          "KB-009"
+        ]
+      }
+    ]
+  },
+  "dependencies": [
+    {
+      "target": "contacts / contact-detail",
+      "relation": "navigates_to",
+      "note": "Click dòng mở trang chi tiết; Consent ở danh sách phải khớp Email status ở trang chi tiết.",
+      "kb_refs": [
+        "KB-014",
+        "KB-019"
+      ]
+    },
+    {
+      "target": "contacts / contact-create-and-edit",
+      "relation": "entry_point_for",
+      "note": "Nút New contact và mục Edit ở menu dòng.",
+      "kb_refs": [
+        "KB-005",
+        "KB-016"
+      ]
+    },
+    {
+      "target": "contacts / contact-import, contacts / contact-export",
+      "relation": "entry_point_for",
+      "note": "Nút Import và Export trên trang danh sách.",
+      "kb_refs": [
+        "KB-005"
+      ]
+    },
+    {
+      "target": "segments / segment-audience-evaluation",
+      "relation": "shared_query",
+      "note": "Search và số đếm segment cùng đi qua query nền loại contact bị suppress / Unsubscribed; sửa lỗi search có thể làm đổi số đếm segment.",
+      "kb_refs": [
+        "KB-009"
+      ]
+    },
+    {
+      "target": "deliverability / suppression-list-management",
+      "relation": "consent_source",
+      "note": "Cột Consent được đối chiếu với tab Unsubscribe của Suppressions.",
+      "kb_refs": [
+        "KB-019",
+        "KB-020"
+      ]
+    }
+  ],
+  "risks": [
+    {
+      "statement": "Lỗi search không trả về contact Unsubscribed (PO/BA + Dev xác nhận là lỗi 02/10/2026, retest 06/10/2026 vẫn REOPENED). Khi sửa query nền của search, số đếm segment và các số đếm khác dùng chung query có thể đổi theo — cần chạy kèm regression số đếm.",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "confidence": "LOW",
+      "kb_refs": [
+        "KB-009",
+        "KB-008"
+      ]
+    },
+    {
+      "statement": "Cột Consent ở danh sách từng lệch tab Unsubscribe và trang chi tiết, trạng thái còn đổi giữa hai lần xem (01/10/2026); retest 06/10/2026 đã khớp. Đây là điểm regression watch, chưa có thông tin lỗi được đóng chính thức.",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "confidence": "LOW",
+      "kb_refs": [
+        "KB-020",
+        "KB-019"
+      ]
+    },
+    {
+      "statement": "Subtitle hiện \"1 contacts\" khi có đúng 1 kết quả (theo QA KB Contacts, staging 01/10/2026); đúng hay sai chưa được chốt (GAP-16), không dùng làm expected.",
+      "knowledge_kind": "INFERRED",
+      "confidence": "LOW",
+      "kb_refs": [
+        "KB-004"
+      ]
+    },
+    {
+      "statement": "Hai nghi lỗi nhỏ chưa kiểm lại: subtitle \"0 contacts\" thoáng qua lúc tải, và search chậm 3–8 giây hiện kết quả cũ; ngưỡng thời gian chấp nhận được chưa chốt (GAP-17).",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "confidence": "LOW",
+      "kb_refs": [
+        "KB-003",
+        "KB-010"
+      ]
+    },
+    {
+      "statement": "Xoá contact là thao tác vĩnh viễn nhưng chưa có lần xoá thật nào được ghi lại; hậu quả xoá lên suppression, segment, automation đang chạy và lịch sử gửi không có tài liệu.",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "confidence": "LOW",
+      "kb_refs": [
+        "KB-017",
+        "KB-018"
+      ]
+    }
+  ],
+  "freshness": {
+    "observed_at": "2026-10-06",
+    "basis": "Khảo sát staging 29/09 và 01/10/2026, retest 06/10/2026; quyết định PO/BA + Dev 02/10/2026. Build staging không được ghi."
+  },
+  "unknown_areas": [
+    {
+      "question": "Lỗi search Contacts không trả về contact Unsubscribed đã được sửa chưa, ở bản build nào, và sau khi sửa thì số đếm segment (dùng chung query nền) có thay đổi không?",
+      "why_it_matters": "Có rule PO/BA + Dev rõ ràng nhưng staging vẫn lệch; không biết khi nào hiện trạng khớp rule và phạm vi regression khi sửa.",
+      "kb_refs": [
+        "KB-008",
+        "KB-009"
+      ],
+      "oq_id": "OQ-contacts-005"
+    },
+    {
+      "question": "Subtitle khi có đúng 1 kết quả phải là \"1 contact\" hay chấp nhận \"1 contacts\" (GAP-16)?",
+      "why_it_matters": "Không có rule để viết expected cho chuỗi đếm số ít.",
+      "kb_refs": [
+        "KB-004"
+      ],
+      "oq_id": "OQ-contacts-007"
+    },
+    {
+      "question": "Thời gian phản hồi search tối đa chấp nhận được là bao nhiêu giây, và có yêu cầu bỏ kết quả cũ khỏi bảng trong lúc chờ không (GAP-17)?",
+      "why_it_matters": "Không có ngưỡng thì không phân biệt được chậm là lỗi hay bình thường.",
+      "kb_refs": [
+        "KB-010"
+      ],
+      "oq_id": "OQ-contacts-007"
+    },
+    {
+      "question": "Search có số ký tự tối thiểu hoặc debounce không, và kết quả search có phân trang 25 dòng như danh sách không?",
+      "why_it_matters": "Chỉ có quan sát mỗi lần gõ gọi API với page=1; không viết được case biên cho search.",
+      "kb_refs": [
+        "KB-006",
+        "KB-015"
+      ],
+      "oq_id": "OQ-contacts-006"
+    },
+    {
+      "question": "Xoá một contact thì bản ghi unsubscribe / suppression, thành viên segment, run automation đang chạy và lịch sử gửi của contact đó bị xử lý thế nào; toast thành công / thất bại thật hiện gì?",
+      "why_it_matters": "Xoá là vĩnh viễn và đụng topic data-deletion; chưa có lần xoá thật và chưa có rule.",
+      "kb_refs": [
+        "KB-017",
+        "KB-018"
+      ],
+      "oq_id": "OQ-contacts-027"
+    },
+    {
+      "question": "Owner, Admin và role thứ ba được xem, tìm và xoá contact tới đâu, và API có chặn tương ứng không?",
+      "why_it_matters": "Ma trận quyền Contacts chưa chốt, mọi quan sát chỉ bằng Owner.",
+      "kb_refs": [
+        "KB-P-051",
+        "KB-P-052"
+      ],
+      "oq_id": "OQ-contacts-001"
+    },
+    {
+      "question": "Lỗi lệch cột Consent (retest 06/10/2026 đã khớp) và hai nghi lỗi \"0 contacts\" thoáng qua / search chậm đã có ticket theo dõi và đã được đóng chính thức chưa?",
+      "why_it_matters": "Cần biết mục nào còn là defect để giữ ở regression watch.",
+      "kb_refs": [
+        "KB-003",
+        "KB-010",
+        "KB-020"
+      ],
+      "oq_id": "OQ-contacts-006"
+    },
+    {
+      "question": "Contact của workspace A có bị lộ ở workspace B khi tìm kiếm hoặc gọi thẳng id qua URL / API không?",
+      "why_it_matters": "Sản phẩm multi-tenant theo workspace nhưng không có mô tả hành vi cô lập dữ liệu cụ thể cho Contacts.",
+      "kb_refs": [
+        "KB-P-001",
+        "KB-P-005"
+      ],
+      "oq_id": "OQ-contacts-031"
+    }
+  ],
+  "last_updated": {
+    "date": "2026-10-08",
+    "ccr_ref": "bootstrap"
+  },
+  "coverage_matrix": [
+    {
+      "feature_id": "contact-list-and-search",
+      "layer": "portal",
+      "role": "Owner",
+      "state": "danh sách có contact (cột, sắp xếp, phân trang)",
+      "environment": "documented",
+      "covered": true,
+      "note": "Hiện trạng staging 01/10/2026, không có rule PO/Dev"
+    },
+    {
+      "feature_id": "contact-list-and-search",
+      "layer": "portal",
+      "role": "Owner",
+      "state": "search theo email / tên, có và không có kết quả",
+      "environment": "documented",
+      "covered": true,
+      "note": "Hiện trạng staging; có lỗi chậm nghi vấn"
+    },
+    {
+      "feature_id": "contact-list-and-search",
+      "layer": "portal",
+      "role": "unspecified",
+      "state": "search khi workspace có contact Unsubscribed",
+      "environment": "documented",
+      "covered": true,
+      "note": "Rule PO/BA + Dev 02/10/2026; staging đang lệch (lỗi REOPENED)"
+    },
+    {
+      "feature_id": "contact-list-and-search",
+      "layer": "portal",
+      "role": "unspecified",
+      "state": "Consent ở danh sách so với trang chi tiết",
+      "environment": "documented",
+      "covered": true,
+      "note": "Rule PO/BA + Dev 02/10/2026; regression watch"
+    },
+    {
+      "feature_id": "contact-list-and-search",
+      "layer": "portal",
+      "role": "Owner",
+      "state": "xoá contact (xác nhận thật)",
+      "environment": "documented",
+      "covered": false,
+      "note": "Chỉ mới mở hộp xác nhận rồi Cancel"
+    },
+    {
+      "feature_id": "contact-list-and-search",
+      "layer": "portal",
+      "role": "Admin",
+      "state": "mọi thao tác ở danh sách",
+      "environment": "documented",
+      "covered": false,
+      "note": "Chưa khảo sát; ma trận quyền chưa chốt"
+    },
+    {
+      "feature_id": "contact-list-and-search",
+      "layer": "portal",
+      "role": "Member",
+      "state": "mọi thao tác ở danh sách",
+      "environment": "documented",
+      "covered": false,
+      "note": "Chưa khảo sát; tên role và ma trận quyền chưa chốt"
+    },
+    {
+      "feature_id": "contact-list-and-search",
+      "layer": "api",
+      "role": "unspecified",
+      "state": "search contact qua API portal",
+      "environment": "documented",
+      "covered": true,
+      "note": "Chỉ biết endpoint search; không có hợp đồng request / response"
+    },
+    {
+      "feature_id": "contact-list-and-search",
+      "layer": "api",
+      "role": "unspecified",
+      "state": "truy cập contact của workspace khác",
+      "environment": "documented",
+      "covered": false,
+      "note": "Không có mô tả cô lập dữ liệu cụ thể"
+    },
+    {
+      "feature_id": "contact-list-and-search",
+      "layer": "portal",
+      "role": "Owner",
+      "state": "workspace chưa có contact (empty state danh sách)",
+      "environment": "documented",
+      "covered": false,
+      "note": "Tài liệu chỉ có empty state của search"
+    }
+  ],
+  "profile_conflicts": [],
+  "profile_relationships": [
+    {
+      "from": "contact-list-and-search",
+      "to": "contact-detail",
+      "relation": "NAVIGATES_TO",
+      "kb_refs": [
+        "KB-014"
+      ]
+    },
+    {
+      "from": "contact-list-and-search",
+      "to": "contact-create-and-edit",
+      "relation": "ENTRY_POINT_FOR",
+      "kb_refs": [
+        "KB-005",
+        "KB-016"
+      ]
+    },
+    {
+      "from": "contact-list-and-search",
+      "to": "contact-import",
+      "relation": "ENTRY_POINT_FOR",
+      "kb_refs": [
+        "KB-005"
+      ]
+    },
+    {
+      "from": "contact-list-and-search",
+      "to": "contact-export",
+      "relation": "ENTRY_POINT_FOR",
+      "kb_refs": [
+        "KB-005"
+      ]
+    },
+    {
+      "from": "contact-list-and-search",
+      "to": "segments/segment-audience-evaluation",
+      "relation": "SHARES_QUERY_WITH",
+      "kb_refs": [
+        "KB-009"
+      ]
+    },
+    {
+      "from": "contact-list-and-search",
+      "to": "deliverability/suppression-list-management",
+      "relation": "READS_CONSENT_FROM",
+      "kb_refs": [
+        "KB-019",
+        "KB-020"
+      ]
+    }
+  ]
+}

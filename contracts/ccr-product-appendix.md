@@ -14,6 +14,9 @@ Tập product repo này chịu trách nhiệm = các file `config/products/*.jso
 |---|---|---|---|
 | `teeinblue` | Teeinblue | `TIB` | explore portal/API/DB/storefront |
 | `qikfiliate` | Qikfiliate | `QAF` (project `qik-affiliate`) | tài liệu dev (doc-first) — **đang onboarding** |
+| `imagenhub` | ImagenHub | `IGH` (project `imagenHub`) | KB do QA biên soạn trên Testlane project context (doc-first) |
+| `mailtro` | Mailtro | `MTRO` (project `mailtro`) | inventory staging (project context) + business rule & KB MTRO (knowledge) do QA biên soạn trên Testlane (doc-first) |
+| `duos` | Duos B2B | `DUOS` (project `duos b2b`) | inventory staging (project context) + business rule & KB DUOS (knowledge) do QA biên soạn trên Testlane (doc-first) |
 
 `object_key` hợp lệ tra ở `knowledge/products/<product_key>/_registry.json`. Không khớp cái nào → mô tả bằng lời, **đừng bịa**.
 
@@ -27,6 +30,9 @@ Tập product repo này chịu trách nhiệm = các file `config/products/*.jso
 |---|---|
 | `teeinblue` | **Cố định `staging`**. Trỏ production là stop condition. |
 | `qikfiliate` | **`documented`** — không có môi trường runtime nào; toàn bộ knowledge đến từ tài liệu. |
+| `imagenhub` | **`documented`** — toàn bộ knowledge đến từ project context trên Testlane. |
+| `mailtro` | **`documented`** — toàn bộ knowledge đến từ project context + knowledge trên Testlane. |
+| `duos` | **`documented`** — toàn bộ knowledge đến từ project context + knowledge trên Testlane. |
 
 Vì vậy mục **"Phần 2 — Environment"** trong CCR chỉ là **dữ kiện** về nơi *bạn* quan sát. Ghi `production` hoặc `không rõ` đều hợp lệ và **không bao giờ** là lý do bị trả `NEEDS_INFO`.
 

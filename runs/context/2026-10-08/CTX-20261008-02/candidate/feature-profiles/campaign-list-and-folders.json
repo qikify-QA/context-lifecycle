@@ -1,0 +1,1094 @@
+{
+  "schema_version": "1.0",
+  "artifact_type": "FeatureProfileCandidate",
+  "artifact_id": "ART-FEATURE-PROFILE-campaign-list-and-folders-CTX-20261008-02",
+  "workflow_id": "CTX-20261008-02",
+  "producer": "feature-profile-builder",
+  "source_refs": [
+    "candidate/product-kb/campaign-list-and-folders.json",
+    "candidate/product-kb/_product-level.json",
+    "input/scope-plan.json",
+    "input/orchestrator-directives.json",
+    "input/profile-checklist-brief.md"
+  ],
+  "upstream_artifact_ids": [
+    "PKBC-CTX-20261008-02-campaigns-campaign-list-and-folders",
+    "PKBC-CTX-20261008-02-_product-level"
+  ],
+  "status": "PARTIAL",
+  "confidence": "MEDIUM",
+  "observations": [
+    "Profile dựng hoàn toàn từ bộ tài liệu (bootstrap lần đầu), không có quan sát runtime trong lần chạy này; act_ids rỗng ở mọi nơi và observed_validations rỗng.",
+    "Shard feature có 41 item: CONFIRMED_EXPECTED=13, OBSERVED_CURRENT=17, OBSERVED_CURRENT/KNOWN_DEFECT=4, INFERRED=7. CE nằm ở confirmed_rules, OBSERVED ở observed_behavior (KNOWN_DEFECT gắn status riêng), INFERRED ở risks; không trộn.",
+    "Object campaigns không có shard object-level riêng; kb_refs chỉ trỏ tới item của object campaigns (KB-xxx) hoặc product-level (KB-P-xxx).",
+    "feature_id dùng giá trị feature_key như toàn bộ KB của feature; chưa có mã FEAT dạng số được cấp."
+  ],
+  "assumptions": [],
+  "unknowns": [
+    "Ba status `Partly sent`, `Cancelled`, `Failed` trên filter của staging nghĩa là gì, campaign chuyển sang chúng trong điều kiện nào, và AC có được bổ sung để coi bộ 8 status là hành vi đúng không?",
+    "Việc staging không còn mục Edit trong menu dòng (khác quyết định PO 11/08/2026) có chủ ý không? Click dòng campaign Scheduled đi đâu, và menu dòng Scheduled (Reschedule / Unschedule / Delete) hoạt động thế nào trên UI thật?",
+    "Bulk Delete khi tập chọn có campaign Sent hoặc Running có được phép xoá các dòng đó không, hay phải chặn / bỏ qua chúng?",
+    "Thiếu UI xoá/đổi tên folder campaign là lỗi hay chủ ý? Nếu có xoá folder, campaign bên trong được chuyển về Ungrouped, chặn xoá, hay xoá theo?",
+    "Trên build hiện tại, xoá campaign và tạo folder đã hiện toast như AC chưa (staging 27/08/2026 không hiện, bundle 01/10/2026 đã có chuỗi toast)?",
+    "PO có muốn thống nhất kiểu đặt tên bản sao giữa Campaign (`<tên> (copy)`) và Email library (`Copy of {name}`) không?",
+    "Tài liệu câu hỏi mở của QA cho Campaigns (được trỏ tới cho bulk Delete có campaign Sent và xoá folder đang chứa campaign) có nội dung gì?",
+    "Role nào (Owner, Admin, role thứ 3 đang tranh chấp tên Member hay Marketer/Editor, custom role) được tạo, Save, Send, Schedule, xoá campaign và xem report; quyền có được chặn ở API không?"
+  ],
+  "conflicts": [],
+  "blocking_issues": [],
+  "payload": {
+    "feature_profiles": [
+      {
+        "feature_id": "campaign-list-and-folders",
+        "feature_key": "campaign-list-and-folders",
+        "name": "Danh sách campaign: tìm, lọc, folder, nhân bản và xoá",
+        "user_goal": "Người dùng workspace tìm và tổ chức campaign theo trạng thái và folder, mở đúng màn theo trạng thái của campaign (wizard cho bản nháp, report cho campaign đã gửi), nhân bản hoặc xoá campaign.",
+        "stable_since_version": "v1",
+        "actors": [
+          {
+            "role": "unspecified (người dùng workspace thao tác trên Campaigns)",
+            "permission_observed": "Tài liệu Campaigns không gán role cho bất kỳ thao tác nào. Mô hình role chung có Owner, Admin, một role thứ 3 (UI staging gọi là Member, tên chính thức đang tranh chấp) và custom role; ma trận quyền chi tiết chưa chốt. Router của app không khai báo phân quyền theo role nên mọi chặn quyền phải nằm ở API (suy luận từ bundle). Hiện trạng staging chỉ được khảo sát bằng Owner.",
+            "kb_refs": [
+              "KB-P-051",
+              "KB-P-052",
+              "KB-P-036"
+            ]
+          }
+        ],
+        "entry_points": [
+          {
+            "path": "Sidebar `Campaigns` → route `/campaigns` (header \"Campaigns\"); màn con nằm dưới `/campaigns/:id/*`",
+            "precondition": "Đã đăng nhập app workspace.",
+            "kb_refs": [
+              "KB-001",
+              "KB-191",
+              "KB-P-037"
+            ]
+          }
+        ],
+        "capabilities": [
+          {
+            "name": "Xem, tìm và lọc danh sách campaign",
+            "description": "Bảng campaign có search theo tên, filter Status và Folder ghép AND, phân trang, các cột số liệu và empty state riêng cho workspace chưa có campaign và cho filter không có kết quả. Bộ status theo AC là Draft/Scheduled/Sent/Running; filter trên staging có thêm Partly sent/Cancelled/Failed chưa có định nghĩa.",
+            "kb_refs": [
+              "KB-001",
+              "KB-191",
+              "KB-003",
+              "KB-192",
+              "KB-004",
+              "KB-005",
+              "KB-006",
+              "KB-007",
+              "KB-008",
+              "KB-009",
+              "KB-193",
+              "KB-010",
+              "KB-012",
+              "KB-013",
+              "KB-014",
+              "KB-015",
+              "KB-034",
+              "KB-036"
+            ],
+            "act_ids": []
+          },
+          {
+            "name": "Mở campaign theo trạng thái",
+            "description": "Click dòng Draft/Scheduled mở wizard (đích của Scheduled chưa quan sát), click dòng Sent/Running mở report. Menu dòng theo status trên staging khác với quyết định PO cũ (không còn mục Edit); menu của Scheduled chỉ biết qua bundle.",
+            "kb_refs": [
+              "KB-016",
+              "KB-017",
+              "KB-018",
+              "KB-019"
+            ],
+            "act_ids": []
+          },
+          {
+            "name": "Tổ chức campaign bằng folder",
+            "description": "Tạo folder từ nút `Create folder` hoặc trong dialog Add to folder; gán campaign vào folder hoặc Ungrouped từ bulk bar hay menu dòng. Hiện chưa có UI xoá/đổi tên folder (ghi là lỗi) và hành vi xoá folder đang chứa campaign chưa chốt.",
+            "kb_refs": [
+              "KB-002",
+              "KB-011",
+              "KB-194",
+              "KB-029",
+              "KB-030",
+              "KB-031",
+              "KB-032",
+              "KB-033",
+              "KB-035"
+            ],
+            "act_ids": []
+          },
+          {
+            "name": "Nhân bản campaign",
+            "description": "Duplicate tạo campaign Draft mới, copy subject/sender/segment và để trống content (quyết định PO 11/08/2026); trên staging bản sao có `mail_template: null`, `is_complete: false`, được đưa thẳng tới bước `/content` và đặt tên `<tên> (copy)`.",
+            "kb_refs": [
+              "KB-020",
+              "KB-195",
+              "KB-021",
+              "KB-022"
+            ],
+            "act_ids": []
+          },
+          {
+            "name": "Xoá campaign (một hoặc nhiều)",
+            "description": "Xoá qua dialog xác nhận theo AC; menu dòng Sent không có Delete nhưng bulk bar vẫn bật Delete khi tập chọn có Sent/Running (chưa chốt). Lựa chọn cũ không bị xoá khi đổi filter là lỗi đã biết.",
+            "kb_refs": [
+              "KB-011",
+              "KB-194",
+              "KB-018",
+              "KB-023",
+              "KB-024",
+              "KB-025",
+              "KB-026",
+              "KB-027",
+              "KB-028"
+            ],
+            "act_ids": []
+          }
+        ],
+        "state_transitions": [
+          {
+            "from": "campaign Draft trong danh sách",
+            "to": "wizard `/campaigns/:id/details` với bản nháp đã lưu",
+            "trigger": "Click dòng campaign",
+            "condition": "Status Draft (quyết định PO 11/08/2026; staging 01/10 khớp)",
+            "knowledge_kind": "CONFIRMED_EXPECTED",
+            "kb_refs": [
+              "KB-016"
+            ]
+          },
+          {
+            "from": "campaign Scheduled trong danh sách",
+            "to": "campaign builder",
+            "trigger": "Click dòng campaign",
+            "condition": "Theo quyết định PO 11/08/2026; đích thực tế chưa quan sát được trên staging",
+            "knowledge_kind": "CONFIRMED_EXPECTED",
+            "kb_refs": [
+              "KB-016"
+            ]
+          },
+          {
+            "from": "campaign Sent / Running trong danh sách",
+            "to": "report `/campaigns/:id/report`",
+            "trigger": "Click dòng campaign",
+            "condition": "Edit bị ẩn với hai status này",
+            "knowledge_kind": "CONFIRMED_EXPECTED",
+            "kb_refs": [
+              "KB-017"
+            ]
+          },
+          {
+            "from": "một campaign bất kỳ",
+            "to": "campaign Draft mới, content trống",
+            "trigger": "Duplicate",
+            "condition": "Copy subject, sender, segment (quyết định PO 11/08/2026)",
+            "knowledge_kind": "CONFIRMED_EXPECTED",
+            "kb_refs": [
+              "KB-020"
+            ]
+          },
+          {
+            "from": "bản Duplicate vừa tạo",
+            "to": "bước `/content` của bản sao, tên `<tên> (copy)`",
+            "trigger": "Duplicate (tự chuyển màn)",
+            "condition": "Hiện trạng staging 27/08 và 01/10/2026: `mail_template: null`, `is_complete: false`",
+            "knowledge_kind": "OBSERVED_CURRENT",
+            "kb_refs": [
+              "KB-195",
+              "KB-021"
+            ]
+          },
+          {
+            "from": "campaign đang tồn tại",
+            "to": "campaign đã bị xoá",
+            "trigger": "Delete rồi xác nhận trong dialog",
+            "condition": "Menu dòng chỉ có Delete ở Draft (staging 01/10); bulk Delete với tập chọn có Sent/Running chưa chốt",
+            "knowledge_kind": "CONFIRMED_EXPECTED",
+            "kb_refs": [
+              "KB-023",
+              "KB-018",
+              "KB-027"
+            ]
+          },
+          {
+            "from": "campaign Scheduled",
+            "to": "campaign bị xoá, lượt gửi đã đặt bị huỷ",
+            "trigger": "Delete campaign Scheduled",
+            "condition": "Chỉ từ chuỗi cảnh báo trong bundle, chưa đối chiếu UI",
+            "knowledge_kind": "INFERRED",
+            "kb_refs": [
+              "KB-026"
+            ]
+          },
+          {
+            "from": "campaign Ungrouped hoặc trong folder khác",
+            "to": "campaign thuộc folder đã chọn (hoặc Ungrouped)",
+            "trigger": "Add to folder từ bulk bar hoặc menu dòng",
+            "condition": "Folder chỉ gán ở danh sách, không có field Folder trong wizard",
+            "knowledge_kind": "OBSERVED_CURRENT",
+            "kb_refs": [
+              "KB-030",
+              "KB-011",
+              "KB-053"
+            ]
+          }
+        ],
+        "confirmed_rules": [
+          {
+            "statement": "Theo Jira MTRO-28 AC §Layout (tóm tắt trong QA business rule Mailtro, cập nhật 07/10/2026), danh sách campaign ở route `/campaigns`, header \"Campaigns\" với mô tả \"Create, schedule, and track email campaigns sent to your contacts.\"; staging 01/10/2026 hiển thị khớp.",
+            "knowledge_kind": "CONFIRMED_EXPECTED",
+            "confidence": "MEDIUM",
+            "kb_refs": [
+              "KB-001"
+            ]
+          },
+          {
+            "statement": "Theo Jira MTRO-28 AC §Layout (tóm tắt trong QA business rule Mailtro, cập nhật 07/10/2026), danh sách campaign có 2 action: `Create folder` (secondary, mở dialog tạo folder) và `New campaign` (primary, mở Campaign Builder); đích `/campaigns/new/details` của `New campaign` được quy định ở Jira MTRO-29 AC §Entry points.",
+            "knowledge_kind": "CONFIRMED_EXPECTED",
+            "confidence": "MEDIUM",
+            "kb_refs": [
+              "KB-002"
+            ]
+          },
+          {
+            "statement": "Theo Jira MTRO-28 AC §Layout (tóm tắt trong QA business rule Mailtro, cập nhật 07/10/2026), toolbar danh sách có ô search theo tên campaign, và search cùng 2 filter (Status, Folder) được ghép theo điều kiện AND; staging 27/08/2026 xác nhận ghép AND khớp.",
+            "knowledge_kind": "CONFIRMED_EXPECTED",
+            "confidence": "MEDIUM",
+            "kb_refs": [
+              "KB-003"
+            ]
+          },
+          {
+            "statement": "Theo Jira MTRO-28 AC §Layout (tóm tắt trong QA business rule Mailtro, cập nhật 07/10/2026), filter Folder của danh sách campaign gồm `All folders`, `Ungrouped` và từng folder của workspace; staging 01/10/2026 khớp.",
+            "knowledge_kind": "CONFIRMED_EXPECTED",
+            "confidence": "MEDIUM",
+            "kb_refs": [
+              "KB-004"
+            ]
+          },
+          {
+            "statement": "Theo Jira MTRO-28 AC (mục cập nhật 11/08/2026, tóm tắt trong QA business rule Mailtro), status của campaign gồm Draft, Scheduled, Sent và Running (Running được bổ sung 11/08/2026, hiển thị badge chấm xanh); AC không định nghĩa thêm status nào khác.",
+            "knowledge_kind": "CONFIRMED_EXPECTED",
+            "confidence": "MEDIUM",
+            "kb_refs": [
+              "KB-006"
+            ]
+          },
+          {
+            "statement": "Theo Jira MTRO-28 AC §Body table (tóm tắt trong QA business rule Mailtro, cập nhật 15/09/2026), bảng campaign có cột checkbox, Campaign (tên), Recipients (hiện \"-\" khi chưa có), Delivered, Opened, Status (badge), Sent (ngày gửi hoặc \"-\") và row actions `...`.",
+            "knowledge_kind": "CONFIRMED_EXPECTED",
+            "confidence": "MEDIUM",
+            "kb_refs": [
+              "KB-009"
+            ]
+          },
+          {
+            "statement": "Theo Jira MTRO-28 AC §Body table (tóm tắt trong QA business rule Mailtro, cập nhật 15/09/2026), chọn tất cả hoặc từng dòng campaign thì hiện bulk action bar gồm Delete và Add to folder.",
+            "knowledge_kind": "CONFIRMED_EXPECTED",
+            "confidence": "MEDIUM",
+            "kb_refs": [
+              "KB-011"
+            ],
+            "tags": [
+              "data-deletion"
+            ]
+          },
+          {
+            "statement": "Theo Jira MTRO-28 AC §Body table (tóm tắt trong QA business rule Mailtro, cập nhật 15/09/2026), khi search/filter không có kết quả, danh sách hiện \"No campaigns match your filters\" kèm \"Try a different search, status, or folder.\"; staging 01/10/2026 và chuỗi i18n khớp.",
+            "knowledge_kind": "CONFIRMED_EXPECTED",
+            "confidence": "MEDIUM",
+            "kb_refs": [
+              "KB-012"
+            ]
+          },
+          {
+            "statement": "Theo Jira MTRO-28 AC §Body table (tóm tắt trong QA business rule Mailtro, cập nhật 15/09/2026), danh sách campaign phân trang ở cuối với rows per page 10/20/50/100, nhảy tới trang và prev/next; staging 01/10/2026 khớp.",
+            "knowledge_kind": "CONFIRMED_EXPECTED",
+            "confidence": "MEDIUM",
+            "kb_refs": [
+              "KB-014"
+            ]
+          },
+          {
+            "statement": "Theo quyết định PO 11/08/2026 (cập nhật description Jira MTRO-28), click dòng campaign ở status draft hoặc scheduled mở campaign builder; Jira MTRO-29 AC §Entry points ghi campaign Draft mở `/campaigns/:id/details` và load bản nháp đã lưu. Staging 01/10/2026 khớp với dòng Draft; đích của dòng Scheduled chưa quan sát được.",
+            "knowledge_kind": "CONFIRMED_EXPECTED",
+            "confidence": "MEDIUM",
+            "kb_refs": [
+              "KB-016"
+            ]
+          },
+          {
+            "statement": "Theo quyết định PO 11/08/2026 (cập nhật description Jira MTRO-28), click dòng campaign ở status sent hoặc running mở report (`/campaigns/:id/report`) và thao tác Edit bị ẩn với hai status này; Jira MTRO-31 cũng ghi report mở bằng click dòng Sent, staging 01/10/2026 khớp.",
+            "knowledge_kind": "CONFIRMED_EXPECTED",
+            "confidence": "MEDIUM",
+            "kb_refs": [
+              "KB-017"
+            ]
+          },
+          {
+            "statement": "Theo quyết định PO 11/08/2026 (cập nhật description Jira MTRO-28), Duplicate tạo một campaign mới ở status draft, copy subject, sender và segment nhưng để trống content.",
+            "knowledge_kind": "CONFIRMED_EXPECTED",
+            "confidence": "MEDIUM",
+            "kb_refs": [
+              "KB-020"
+            ]
+          },
+          {
+            "statement": "Theo Jira MTRO-28 AC §Delete confirmation (tóm tắt trong QA business rule Mailtro, cập nhật 15/09/2026), xoá campaign phải qua dialog xác nhận: xoá 1 campaign có tiêu đề `Delete \"{campaign name}\"?`, xoá nhiều có tiêu đề `Delete N campaigns?`, nội dung \"This can't be undone.\", nút Cancel / Delete, xoá xong có toast xác nhận.",
+            "knowledge_kind": "CONFIRMED_EXPECTED",
+            "confidence": "MEDIUM",
+            "kb_refs": [
+              "KB-023"
+            ],
+            "tags": [
+              "data-deletion"
+            ]
+          }
+        ],
+        "observed_behavior": [
+          {
+            "statement": "Trên staging (khảo sát 01/10/2026), chọn lọc folder `Ungrouped` ở danh sách campaign gửi tham số `folder=ungrouped` lên API.",
+            "knowledge_kind": "OBSERVED_CURRENT",
+            "confidence": "LOW",
+            "kb_refs": [
+              "KB-005"
+            ],
+            "status": "CURRENT_STATE"
+          },
+          {
+            "statement": "Trên staging (khảo sát 29/09 và 01/10/2026), combobox `Filter by status` của danh sách campaign có 8 mục: `All statuses`, `Draft`, `Scheduled`, `Running`, `Sent`, `Partly sent`, `Cancelled`, `Failed`; ba mục `Partly sent`, `Cancelled`, `Failed` chưa có AC.",
+            "knowledge_kind": "OBSERVED_CURRENT",
+            "confidence": "MEDIUM",
+            "kb_refs": [
+              "KB-007"
+            ],
+            "status": "CURRENT_STATE"
+          },
+          {
+            "statement": "Trên staging (khảo sát 01/10/2026), cột `Delivered` / `Opened` của danh sách campaign hiện phần trăm cho campaign gửi từ 28/09/2026 trở đi, hiện `—` cho campaign gửi từ 09/09/2026 trở về trước (trước khi có pipeline số liệu SES); dòng campaign Draft hiện `—` ở mọi cột số và cột Sent.",
+            "knowledge_kind": "OBSERVED_CURRENT",
+            "confidence": "MEDIUM",
+            "kb_refs": [
+              "KB-010"
+            ],
+            "status": "CURRENT_STATE"
+          },
+          {
+            "statement": "Trên staging (khảo sát 01/10/2026, kèm chuỗi i18n), khi workspace chưa có campaign nào, trang `/campaigns` hiện `No campaigns yet` với mô tả \"A campaign is one email sent to one segment of your contacts.\"",
+            "knowledge_kind": "OBSERVED_CURRENT",
+            "confidence": "MEDIUM",
+            "kb_refs": [
+              "KB-013"
+            ],
+            "status": "CURRENT_STATE"
+          },
+          {
+            "statement": "Trên staging (khảo sát 01/10/2026), `Rows per page` của danh sách campaign mặc định là 20.",
+            "knowledge_kind": "OBSERVED_CURRENT",
+            "confidence": "MEDIUM",
+            "kb_refs": [
+              "KB-015"
+            ],
+            "status": "CURRENT_STATE"
+          },
+          {
+            "statement": "Trên staging (khảo sát 01/10/2026), menu `...` của dòng campaign Draft gồm `Duplicate`, `Add to folder`, `Delete`; của dòng campaign Sent chỉ gồm `Duplicate`, `Add to folder` (không có Delete); không status nào có mục `Edit` hay `Preview/Test`.",
+            "knowledge_kind": "OBSERVED_CURRENT",
+            "confidence": "MEDIUM",
+            "kb_refs": [
+              "KB-018"
+            ],
+            "tags": [
+              "data-deletion"
+            ],
+            "status": "CURRENT_STATE"
+          },
+          {
+            "statement": "Trên staging (khảo sát 01/10/2026), bản Duplicate của campaign được đặt tên `<tên> (copy)`, duplicate tiếp thành `<tên> (copy) (copy)`, và hiện toast `Duplicated as \"{name}\"`; QA business rule Mailtro (cập nhật 07/10/2026) đã ghi lại theo staging, thay tên bản sao cũ \"Copy of {name}\".",
+            "knowledge_kind": "OBSERVED_CURRENT",
+            "confidence": "MEDIUM",
+            "kb_refs": [
+              "KB-021"
+            ],
+            "status": "CURRENT_STATE"
+          },
+          {
+            "statement": "Trên staging (quan sát 27/08/2026), xoá campaign và tạo folder đều không hiện toast, lệch với Jira MTRO-28 AC (rule 15/09 có toast); chưa chạy lại sau khi bundle 01/10/2026 đã có chuỗi toast.",
+            "knowledge_kind": "OBSERVED_CURRENT",
+            "confidence": "LOW",
+            "kb_refs": [
+              "KB-024"
+            ],
+            "tags": [
+              "data-deletion"
+            ],
+            "status": "CURRENT_STATE"
+          },
+          {
+            "statement": "Lỗi đã biết BUG-CL-01 (P1, mở 27/08/2026): trên staging, đổi filter ở danh sách campaign không xoá lựa chọn cũ, bulk bar vẫn hiện `1 selected` và Delete vẫn bật cho dòng đã khuất khỏi danh sách; QA ghi rủi ro mất dữ liệu nếu kết hợp với bulk Delete campaign Sent (chưa xác minh). Đây là hành vi sai đang tồn tại, không phải hành vi đúng.",
+            "knowledge_kind": "OBSERVED_CURRENT",
+            "confidence": "LOW",
+            "kb_refs": [
+              "KB-028"
+            ],
+            "tags": [
+              "data-deletion"
+            ],
+            "status": "KNOWN_DEFECT"
+          },
+          {
+            "statement": "Trên staging (khảo sát 29/09 và 01/10/2026), nút `Create folder` mở dialog Create folder với mô tả \"Organize campaigns into a folder.\", ô `Folder name` và nút `Create` bị disabled khi tên rỗng.",
+            "knowledge_kind": "OBSERVED_CURRENT",
+            "confidence": "MEDIUM",
+            "kb_refs": [
+              "KB-029"
+            ],
+            "status": "CURRENT_STATE"
+          },
+          {
+            "statement": "Trên staging (khảo sát 29/09 và 01/10/2026), dialog Add to folder hiện \"{n} campaign(s) selected.\", một nút cho từng folder cộng nút `Ungrouped`, và ô `New folder name` (maxlength 255) kèm nút `Create`.",
+            "knowledge_kind": "OBSERVED_CURRENT",
+            "confidence": "MEDIUM",
+            "kb_refs": [
+              "KB-030"
+            ],
+            "status": "CURRENT_STATE"
+          },
+          {
+            "statement": "Trên staging (quan sát 27/08/2026), tạo folder campaign trùng tên bị từ chối với lỗi 422 `The name has already been taken.`",
+            "knowledge_kind": "OBSERVED_CURRENT",
+            "confidence": "LOW",
+            "kb_refs": [
+              "KB-031"
+            ],
+            "status": "CURRENT_STATE"
+          },
+          {
+            "statement": "Lỗi đã biết BUG-CL-02 (mở 27/08/2026): trên staging, FE không có UI để xoá hoặc đổi tên folder campaign trong khi BE có endpoint `DELETE /api/teams/{slug}/folders/{id}` trả 200; QA KB Mailtro \"Campaigns\" v1 ghi việc thiếu UI là lỗi hay chủ ý vẫn cần PO xác nhận. Đây là hành vi đang tồn tại được ghi là lỗi, không phải hành vi đúng.",
+            "knowledge_kind": "OBSERVED_CURRENT",
+            "confidence": "LOW",
+            "kb_refs": [
+              "KB-032"
+            ],
+            "tags": [
+              "data-deletion"
+            ],
+            "status": "KNOWN_DEFECT"
+          },
+          {
+            "statement": "Lỗi đã biết BUG-CL-03 (mở 27/08/2026): trên staging, trang danh sách campaign bị tràn ngang 36px ở chiều rộng 375px. Đây là hành vi sai đang tồn tại, không phải hành vi đúng.",
+            "knowledge_kind": "OBSERVED_CURRENT",
+            "confidence": "LOW",
+            "kb_refs": [
+              "KB-034"
+            ],
+            "status": "KNOWN_DEFECT"
+          },
+          {
+            "statement": "Lỗi câu chữ đã biết (mở, ghi trong bug log danh sách campaign 27/08/2026): trên staging, copy số ít bị sai ngữ pháp, hiện `1 campaign(s) selected.` và `1 estimated recipients`. Đây là vấn đề đang tồn tại, không phải hành vi đúng.",
+            "knowledge_kind": "OBSERVED_CURRENT",
+            "confidence": "LOW",
+            "kb_refs": [
+              "KB-035"
+            ],
+            "status": "KNOWN_DEFECT"
+          },
+          {
+            "statement": "Trên staging (quan sát 25/08/2026), tên campaign được phép trùng nhau.",
+            "knowledge_kind": "OBSERVED_CURRENT",
+            "confidence": "LOW",
+            "kb_refs": [
+              "KB-036"
+            ],
+            "status": "CURRENT_STATE"
+          },
+          {
+            "statement": "Trên staging (khảo sát 29/09 và 01/10/2026), mục sidebar `Campaigns` dẫn tới `/campaigns`, các màn con của campaign nằm dưới `/campaigns/:id/*`.",
+            "knowledge_kind": "OBSERVED_CURRENT",
+            "confidence": "MEDIUM",
+            "kb_refs": [
+              "KB-191"
+            ],
+            "status": "CURRENT_STATE"
+          },
+          {
+            "statement": "Trên staging (khảo sát 01/10/2026), ô tìm kiếm của danh sách campaign có nhãn `Search campaigns` với placeholder `Search campaigns…` và tìm theo tên.",
+            "knowledge_kind": "OBSERVED_CURRENT",
+            "confidence": "MEDIUM",
+            "kb_refs": [
+              "KB-192"
+            ],
+            "status": "CURRENT_STATE"
+          },
+          {
+            "statement": "Trên staging (khảo sát 01/10/2026), bảng campaign hiện các cột `Select all campaigns` · `Campaign` · `Recipients` · `Delivered` · `Opened` · `Status` (badge; `Running` có chấm xanh) · `Sent` · `Actions`.",
+            "knowledge_kind": "OBSERVED_CURRENT",
+            "confidence": "MEDIUM",
+            "kb_refs": [
+              "KB-193"
+            ],
+            "status": "CURRENT_STATE"
+          },
+          {
+            "statement": "Trên staging (khảo sát 29/09 và 01/10/2026), bulk bar của danh sách campaign hiện số dòng đã chọn (vd `1 selected`) kèm `Delete` và `Add to folder`.",
+            "knowledge_kind": "OBSERVED_CURRENT",
+            "confidence": "MEDIUM",
+            "kb_refs": [
+              "KB-194"
+            ],
+            "tags": [
+              "data-deletion"
+            ],
+            "status": "CURRENT_STATE"
+          },
+          {
+            "statement": "Trên staging (quan sát 27/08/2026), campaign tạo bằng Duplicate có `mail_template: null`, `is_complete: false` và người dùng được đưa thẳng tới bước `/content`.",
+            "knowledge_kind": "OBSERVED_CURRENT",
+            "confidence": "MEDIUM",
+            "kb_refs": [
+              "KB-195"
+            ],
+            "status": "CURRENT_STATE"
+          }
+        ],
+        "observed_validations": [],
+        "permissions": [
+          {
+            "statement": "Mailtro có 3 role chuẩn (Owner, Admin, role thứ 3 đang tranh chấp tên) cộng custom role; ma trận quyền chi tiết cho Campaigns chưa được chốt nên profile này không gán quyền theo role cho thao tác nào.",
+            "knowledge_kind": "CONFIRMED_EXPECTED",
+            "kb_refs": [
+              "KB-P-051"
+            ]
+          },
+          {
+            "statement": "Router front-end không có meta phân quyền theo role; việc chặn quyền (nếu có) phải nằm ở API. Đây là suy luận từ bundle, chưa kiểm trên staging.",
+            "knowledge_kind": "INFERRED",
+            "kb_refs": [
+              "KB-P-052"
+            ]
+          }
+        ],
+        "surface_mapping": {
+          "portal": [
+            {
+              "item": "Trang `/campaigns`: header, action `Create folder` / `New campaign`, toolbar search + filter Status/Folder, bảng campaign, bulk bar, phân trang",
+              "kb_refs": [
+                "KB-001",
+                "KB-002",
+                "KB-003",
+                "KB-004",
+                "KB-007",
+                "KB-009",
+                "KB-011",
+                "KB-014"
+              ]
+            },
+            {
+              "item": "Nhãn trên staging: ô `Search campaigns…`, cột `Select all campaigns` … `Actions`, bộ đếm `1 selected`",
+              "kb_refs": [
+                "KB-192",
+                "KB-193",
+                "KB-194"
+              ]
+            },
+            {
+              "item": "Menu dòng `...` (Duplicate / Add to folder / Delete theo status)",
+              "kb_refs": [
+                "KB-018",
+                "KB-019"
+              ]
+            },
+            {
+              "item": "Dialog Create folder, dialog Add to folder, dialog xác nhận Delete",
+              "kb_refs": [
+                "KB-029",
+                "KB-030",
+                "KB-023",
+                "KB-026"
+              ]
+            },
+            {
+              "item": "Empty state danh sách và empty state filter",
+              "kb_refs": [
+                "KB-012",
+                "KB-013"
+              ]
+            }
+          ],
+          "storefront": [],
+          "api": [
+            {
+              "item": "Lọc folder Ungrouped gửi tham số `folder=ungrouped`",
+              "kb_refs": [
+                "KB-005"
+              ]
+            },
+            {
+              "item": "Tạo folder trùng tên trả 422 `The name has already been taken.`",
+              "kb_refs": [
+                "KB-031"
+              ]
+            },
+            {
+              "item": "`DELETE /api/teams/{slug}/folders/{id}` tồn tại ở BE (trả 200) nhưng FE không có UI",
+              "kb_refs": [
+                "KB-032",
+                "KB-P-006"
+              ]
+            }
+          ],
+          "data": [
+            {
+              "item": "Status campaign: Draft, Scheduled, Sent, Running (AC) + Partly sent, Cancelled, Failed (staging, chưa định nghĩa)",
+              "kb_refs": [
+                "KB-006",
+                "KB-007",
+                "KB-008"
+              ]
+            },
+            {
+              "item": "Bản Duplicate: `mail_template: null`, `is_complete: false` (staging); tên campaign không unique",
+              "kb_refs": [
+                "KB-195",
+                "KB-036"
+              ]
+            },
+            {
+              "item": "Cột Delivered/Opened có số cho campaign gửi từ 28/09/2026, `—` cho campaign gửi từ 09/09/2026 trở về trước",
+              "kb_refs": [
+                "KB-010"
+              ]
+            }
+          ],
+          "code": []
+        },
+        "dependencies": [
+          {
+            "target": "campaigns / campaign-wizard",
+            "relation": "navigates_to",
+            "note": "`New campaign` và click dòng Draft mở wizard.",
+            "kb_refs": [
+              "KB-002",
+              "KB-016",
+              "KB-040"
+            ]
+          },
+          {
+            "target": "campaigns / campaign-report",
+            "relation": "navigates_to",
+            "note": "Click dòng Sent/Running mở report; cột Delivered/Opened dùng cùng nguồn số liệu với report.",
+            "kb_refs": [
+              "KB-017",
+              "KB-010",
+              "KB-164"
+            ]
+          },
+          {
+            "target": "email-content / email-library",
+            "relation": "naming_consistency",
+            "note": "Kiểu tên bản sao của campaign khác Email library; chưa rõ PO có muốn thống nhất.",
+            "kb_refs": [
+              "KB-022"
+            ]
+          },
+          {
+            "target": "Khung app workspace",
+            "relation": "entry_point",
+            "note": "Mục `Campaigns` trên sidebar.",
+            "kb_refs": [
+              "KB-P-037"
+            ]
+          }
+        ],
+        "risks": [
+          {
+            "statement": "Theo Glossary và Inventory staging Mailtro \"Campaigns\" (01/10/2026), QA business rule Mailtro mới ghi 4 status (Draft, Scheduled, Sent, Running) trong khi staging có thêm `Partly sent`, `Cancelled`, `Failed`; nghĩa và điều kiện chuyển sang ba status này chưa được định nghĩa và đang chờ PO khi có AC.",
+            "knowledge_kind": "INFERRED",
+            "confidence": "LOW",
+            "kb_refs": [
+              "KB-008"
+            ],
+            "risk_type": "undecided_or_bundle_only"
+          },
+          {
+            "statement": "Theo bundle front-end 01/10/2026 (chưa đối chiếu UI vì staging không có campaign Scheduled), menu dòng campaign Scheduled có thêm `Reschedule` và `Unschedule`.",
+            "knowledge_kind": "INFERRED",
+            "confidence": "LOW",
+            "kb_refs": [
+              "KB-019"
+            ],
+            "risk_type": "undecided_or_bundle_only"
+          },
+          {
+            "statement": "Theo Inventory staging Mailtro \"Campaigns\" (01/10/2026), chưa rõ PO có muốn thống nhất kiểu đặt tên bản sao giữa Campaign (`<tên> (copy)`) và Email library (`Copy of {name}`) hay không; cần hỏi PO.",
+            "knowledge_kind": "INFERRED",
+            "confidence": "LOW",
+            "kb_refs": [
+              "KB-022"
+            ],
+            "risk_type": "undecided_or_bundle_only"
+          },
+          {
+            "statement": "Theo chuỗi i18n trong bundle front-end 01/10/2026 (chưa đối chiếu UI), danh sách campaign có các toast `Deleted \"{name}\"`, `{count} campaign(s) deleted`, `{count} campaign(s) moved`, `\"{name}\" rescheduled`, `\"{name}\" is a draft again` và `Folder \"{name}\" created`.",
+            "knowledge_kind": "INFERRED",
+            "confidence": "LOW",
+            "kb_refs": [
+              "KB-025"
+            ],
+            "risk_type": "undecided_or_bundle_only"
+          },
+          {
+            "statement": "Theo bundle front-end 01/10/2026 (chưa đối chiếu UI), dialog xoá campaign Scheduled cảnh báo \"This campaign is booked to go out. Deleting it cancels that send, so nobody will receive it. This can't be undone.\"",
+            "knowledge_kind": "INFERRED",
+            "confidence": "LOW",
+            "kb_refs": [
+              "KB-026"
+            ],
+            "tags": [
+              "data-deletion"
+            ],
+            "risk_type": "undecided_or_bundle_only"
+          },
+          {
+            "statement": "Theo QA business rule Mailtro và QA KB Mailtro \"Campaigns\" v1, hành vi bulk Delete khi tập chọn có campaign Sent / Running chưa chốt: menu dòng Sent không có Delete nhưng bulk bar vẫn bật Delete; chưa xác minh có xoá được thật hay không (nếu xoá được là mất dữ liệu, mức P0); cần PO xác nhận.",
+            "knowledge_kind": "INFERRED",
+            "confidence": "LOW",
+            "kb_refs": [
+              "KB-027"
+            ],
+            "tags": [
+              "data-deletion"
+            ],
+            "risk_type": "undecided_or_bundle_only"
+          },
+          {
+            "statement": "Theo QA business rule Mailtro, hành vi xoá một folder đang chứa campaign chưa được chốt; cần PO xác nhận.",
+            "knowledge_kind": "INFERRED",
+            "confidence": "LOW",
+            "kb_refs": [
+              "KB-033"
+            ],
+            "tags": [
+              "data-deletion"
+            ],
+            "risk_type": "undecided_or_bundle_only"
+          },
+          {
+            "statement": "Theo dõi hồi quy các lỗi đã biết của danh sách campaign (không dùng làm expected result): BUG-CL-01 đổi filter không xoá lựa chọn và Delete vẫn bật cho dòng đã khuất; BUG-CL-02 không có UI xoá/đổi tên folder; BUG-CL-03 tràn ngang 36px ở 375px; copy số ít sai ngữ pháp.",
+            "knowledge_kind": "OBSERVED_CURRENT",
+            "status": "KNOWN_DEFECT",
+            "risk_type": "known_defect_regression_watch",
+            "kb_refs": [
+              "KB-028",
+              "KB-032",
+              "KB-034",
+              "KB-035"
+            ]
+          },
+          {
+            "statement": "Rủi ro mất dữ liệu (data-deletion): kết hợp lỗi giữ lựa chọn khi đổi filter với bulk Delete đang bật khi tập chọn có campaign Sent/Running có thể xoá campaign đã gửi; chưa xác minh có xoá được thật hay không.",
+            "knowledge_kind": "INFERRED",
+            "risk_type": "data_deletion",
+            "tags": [
+              "data-deletion"
+            ],
+            "kb_refs": [
+              "KB-027",
+              "KB-028",
+              "KB-011"
+            ]
+          }
+        ],
+        "freshness": {
+          "observed_at": "2026-10-07",
+          "run_id": "CTX-20261008-02",
+          "basis": "AC Jira MTRO-28 tóm tắt trong QA business rule Mailtro (cập nhật 07/10/2026); quyết định PO 11/08/2026; khảo sát staging 25/08, 27/08, 29/09 và 01/10/2026."
+        },
+        "unknown_areas": [
+          {
+            "question": "Ba status `Partly sent`, `Cancelled`, `Failed` trên filter của staging nghĩa là gì, campaign chuyển sang chúng trong điều kiện nào, và AC có được bổ sung để coi bộ 8 status là hành vi đúng không?",
+            "why_it_matters": "AC chỉ định nghĩa 4 status; không viết được case chuyển trạng thái sau Send và không có oracle cho filter.",
+            "kb_refs": [
+              "KB-006",
+              "KB-007",
+              "KB-008"
+            ]
+          },
+          {
+            "question": "Việc staging không còn mục Edit trong menu dòng (khác quyết định PO 11/08/2026) có chủ ý không? Click dòng campaign Scheduled đi đâu, và menu dòng Scheduled (Reschedule / Unschedule / Delete) hoạt động thế nào trên UI thật?",
+            "why_it_matters": "Staging không có campaign Scheduled; menu chỉ biết qua bundle.",
+            "kb_refs": [
+              "KB-016",
+              "KB-018",
+              "KB-019"
+            ]
+          },
+          {
+            "question": "Bulk Delete khi tập chọn có campaign Sent hoặc Running có được phép xoá các dòng đó không, hay phải chặn / bỏ qua chúng?",
+            "why_it_matters": "Nếu xoá được là mất dữ liệu đã gửi (data-deletion, mức P0); menu dòng Sent không có Delete nhưng bulk bar vẫn bật.",
+            "kb_refs": [
+              "KB-027",
+              "KB-028",
+              "KB-011"
+            ]
+          },
+          {
+            "question": "Thiếu UI xoá/đổi tên folder campaign là lỗi hay chủ ý? Nếu có xoá folder, campaign bên trong được chuyển về Ungrouped, chặn xoá, hay xoá theo?",
+            "why_it_matters": "BE đã có endpoint DELETE folder trả 200; hành vi với campaign bên trong chưa chốt (data-deletion).",
+            "kb_refs": [
+              "KB-032",
+              "KB-033"
+            ]
+          },
+          {
+            "question": "Trên build hiện tại, xoá campaign và tạo folder đã hiện toast như AC chưa (staging 27/08/2026 không hiện, bundle 01/10/2026 đã có chuỗi toast)?",
+            "why_it_matters": "Luồng Delete chưa được bấm thử trong lượt khảo sát 01/10/2026.",
+            "kb_refs": [
+              "KB-023",
+              "KB-024",
+              "KB-025"
+            ]
+          },
+          {
+            "question": "PO có muốn thống nhất kiểu đặt tên bản sao giữa Campaign (`<tên> (copy)`) và Email library (`Copy of {name}`) không?",
+            "why_it_matters": "Hai module đang dùng hai kiểu tên bản sao khác nhau.",
+            "kb_refs": [
+              "KB-021",
+              "KB-022"
+            ]
+          },
+          {
+            "question": "Tài liệu câu hỏi mở của QA cho Campaigns (được trỏ tới cho bulk Delete có campaign Sent và xoá folder đang chứa campaign) có nội dung gì?",
+            "why_it_matters": "Tài liệu này không có trong bộ nguồn; không suy diễn nội dung.",
+            "kb_refs": [
+              "KB-027",
+              "KB-033"
+            ]
+          },
+          {
+            "question": "Role nào (Owner, Admin, role thứ 3 đang tranh chấp tên Member hay Marketer/Editor, custom role) được tạo, Save, Send, Schedule, xoá campaign và xem report; quyền có được chặn ở API không?",
+            "why_it_matters": "Toàn bộ tài liệu Campaigns không ghi role, staging chỉ khảo sát bằng Owner, Admin chưa từng được quan sát; không viết được expected result cho kiểm thử phân quyền.",
+            "kb_refs": [
+              "KB-102",
+              "KB-104",
+              "KB-107",
+              "KB-023",
+              "KB-186",
+              "KB-P-051"
+            ]
+          }
+        ]
+      }
+    ],
+    "profile_relationships": [
+      {
+        "from": "campaign-list-and-folders",
+        "to": "campaign-wizard",
+        "relation": "NAVIGATES_TO",
+        "kb_refs": [
+          "KB-002",
+          "KB-016"
+        ]
+      },
+      {
+        "from": "campaign-list-and-folders",
+        "to": "campaign-report",
+        "relation": "NAVIGATES_TO",
+        "kb_refs": [
+          "KB-017"
+        ]
+      }
+    ],
+    "coverage_matrix": [
+      {
+        "layer": "portal",
+        "role": "unspecified",
+        "state": "danh sách có campaign: search, filter, phân trang, cột",
+        "covered": true,
+        "note": "AC Jira MTRO-28 + staging 01/10",
+        "kb_refs": [
+          "KB-003",
+          "KB-009",
+          "KB-014"
+        ],
+        "feature_id": "campaign-list-and-folders",
+        "environment": "documented"
+      },
+      {
+        "layer": "portal",
+        "role": "unspecified",
+        "state": "workspace chưa có campaign / filter rỗng",
+        "covered": true,
+        "note": "AC (filter rỗng) + staging (empty state)",
+        "kb_refs": [
+          "KB-012",
+          "KB-013"
+        ],
+        "feature_id": "campaign-list-and-folders",
+        "environment": "documented"
+      },
+      {
+        "layer": "portal",
+        "role": "unspecified",
+        "state": "campaign Draft / Sent: click dòng, menu dòng",
+        "covered": true,
+        "note": "Quyết định PO 11/08 + staging",
+        "kb_refs": [
+          "KB-016",
+          "KB-017",
+          "KB-018"
+        ],
+        "feature_id": "campaign-list-and-folders",
+        "environment": "documented"
+      },
+      {
+        "layer": "portal",
+        "role": "unspecified",
+        "state": "campaign Scheduled / Running / Partly sent / Cancelled / Failed",
+        "covered": false,
+        "note": "Staging không có data; chỉ bundle",
+        "kb_refs": [
+          "KB-008",
+          "KB-019"
+        ],
+        "feature_id": "campaign-list-and-folders",
+        "environment": "documented"
+      },
+      {
+        "layer": "portal",
+        "role": "unspecified",
+        "state": "xoá campaign đơn / bulk",
+        "covered": true,
+        "note": "AC dialog xác nhận; bulk có Sent/Running chưa chốt",
+        "kb_refs": [
+          "KB-023",
+          "KB-027"
+        ],
+        "feature_id": "campaign-list-and-folders",
+        "environment": "documented"
+      },
+      {
+        "layer": "portal",
+        "role": "unspecified",
+        "state": "folder: tạo / gán / xoá / đổi tên",
+        "covered": true,
+        "note": "Tạo và gán: staging; xoá/đổi tên: không có UI (lỗi đã biết)",
+        "kb_refs": [
+          "KB-029",
+          "KB-030",
+          "KB-032"
+        ],
+        "feature_id": "campaign-list-and-folders",
+        "environment": "documented"
+      },
+      {
+        "layer": "portal",
+        "role": "unspecified",
+        "state": "Duplicate",
+        "covered": true,
+        "note": "Quyết định PO 11/08 + staging",
+        "kb_refs": [
+          "KB-020",
+          "KB-195",
+          "KB-021"
+        ],
+        "feature_id": "campaign-list-and-folders",
+        "environment": "documented"
+      },
+      {
+        "layer": "portal",
+        "role": "Owner",
+        "state": "any",
+        "covered": true,
+        "note": "Hiện trạng staging khảo sát bằng Owner",
+        "kb_refs": [
+          "KB-P-036"
+        ],
+        "feature_id": "campaign-list-and-folders",
+        "environment": "documented"
+      },
+      {
+        "layer": "portal",
+        "role": "Member",
+        "state": "any",
+        "covered": false,
+        "note": "Chưa khảo sát cho Campaigns",
+        "kb_refs": [
+          "KB-P-051"
+        ],
+        "feature_id": "campaign-list-and-folders",
+        "environment": "documented"
+      },
+      {
+        "layer": "portal",
+        "role": "Admin",
+        "state": "any",
+        "covered": false,
+        "note": "Chưa từng quan sát",
+        "kb_refs": [
+          "KB-P-051"
+        ],
+        "feature_id": "campaign-list-and-folders",
+        "environment": "documented"
+      },
+      {
+        "layer": "api",
+        "role": "unspecified",
+        "state": "folder (lọc, tạo trùng, xoá)",
+        "covered": true,
+        "note": "Chỉ mảnh rời từ quan sát; chưa có hợp đồng API campaign",
+        "kb_refs": [
+          "KB-005",
+          "KB-031",
+          "KB-032"
+        ],
+        "feature_id": "campaign-list-and-folders",
+        "environment": "documented"
+      },
+      {
+        "layer": "data",
+        "role": "unspecified",
+        "state": "status, bản Duplicate",
+        "covered": true,
+        "kb_refs": [
+          "KB-006",
+          "KB-020",
+          "KB-195"
+        ],
+        "feature_id": "campaign-list-and-folders",
+        "environment": "documented"
+      },
+      {
+        "layer": "code",
+        "role": "unspecified",
+        "state": "any",
+        "covered": false,
+        "note": "Không có nguồn mã",
+        "kb_refs": [],
+        "feature_id": "campaign-list-and-folders",
+        "environment": "documented"
+      }
+    ],
+    "unassigned_kb_items": [],
+    "profile_conflicts": [],
+    "profile_change_summary": [
+      "Rework r1: dựng lại từ shard đã sửa; bỏ ba item trùng với object email-content (nội dung merge tag một ngoặc không được migrate, không có copy-on-write giữa các Draft dùng chung email, nội dung campaign Sent được đóng băng) vì campaigns không giữ bản sao; statement CE được rút phần chi tiết staging theo shard hiện tại.",
+      "Thêm các item hiện trạng staging tách từ CE: lối vào sidebar và route con, nhãn ô search, nhãn cột bảng, bộ đếm bulk bar, bản Duplicate trống content và chuyển thẳng tới bước Contents; transition Duplicate tách phần quyết định PO và phần hiện trạng staging."
+    ],
+    "kb_trace_complete": true
+  },
+  "gate": {
+    "decision": "CONDITIONAL_PASS",
+    "blocking_findings": [],
+    "conditions": [
+      "Đủ cho regression discovery của danh sách, folder, Duplicate và Delete đơn theo AC; oracle cho các status ngoài AC, bulk Delete có campaign Sent/Running và xoá folder còn là câu hỏi mở.",
+      "Role cho từng thao tác chưa xác định; không viết expected result phân quyền.",
+      "Mục ở risks và observed_behavior không dùng làm expected result; observed_behavior là hiện trạng tại thời điểm khảo sát, KNOWN_DEFECT chỉ dùng để theo dõi hồi quy."
+    ],
+    "allowed_next_steps": [
+      "qa-checklist-builder",
+      "knowledge-diff-analyzer"
+    ]
+  }
+}

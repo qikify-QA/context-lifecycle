@@ -1,0 +1,504 @@
+{
+  "feature_id": "customer-matching",
+  "feature_key": "customer-matching",
+  "name": "Dùng lại customer Shopify có sẵn khi tạo company từ submission",
+  "user_goal": "Khi company được tạo từ một submission, hệ thống link customer Shopify có sẵn (ưu tiên email, phone chỉ khi submission không có email) thay vì tạo customer trùng, và không tạo company khi customer đó đã là contact của company khác.",
+  "user_goal_kb_refs": [
+    "KB-035",
+    "KB-037",
+    "KB-042"
+  ],
+  "stable_since_version": "v1",
+  "actors": [
+    {
+      "role": "system",
+      "permission_observed": "Chạy matching lúc merchant Approve (luồng cũ) hoặc trong queued job lúc buyer submit (store bật cờ).",
+      "kb_refs": [
+        "KB-035",
+        "KB-036"
+      ]
+    },
+    {
+      "role": "merchant (Portal)",
+      "permission_observed": "Gián tiếp kích hoạt matching khi Approve submission chưa có `company_id`.",
+      "kb_refs": [
+        "KB-036",
+        "KB-018"
+      ]
+    },
+    {
+      "role": "người gửi form công khai",
+      "permission_observed": "Trên store bật cờ, submit bằng email của customer có sẵn làm customer đó thành Main contact (Location admin) của company mới mà không qua review của merchant (chờ PO quyết).",
+      "kb_refs": [
+        "KB-046"
+      ]
+    }
+  ],
+  "entry_points": [
+    {
+      "path": "Approve submission chưa có `company_id` (luồng cũ)",
+      "precondition": "Submission không có `company_id`.",
+      "kb_refs": [
+        "KB-036",
+        "KB-018"
+      ]
+    },
+    {
+      "path": "Queued job tạo company lúc buyer submit form",
+      "precondition": "Store bật cờ `enable_company_creation_on_submit`.",
+      "kb_refs": [
+        "KB-036",
+        "KB-049"
+      ]
+    }
+  ],
+  "capabilities": [
+    {
+      "name": "Link customer có sẵn thay vì tạo trùng",
+      "description": "Tìm customer Shopify bằng email/phone đã submit và link vào company mới; thời điểm matching tuỳ nhánh (Approve luồng cũ hay job lúc submit), cùng thứ tự ưu tiên. Không khớp ai thì tạo customer mới (theo ticket).",
+      "kb_refs": [
+        "KB-035",
+        "KB-036",
+        "KB-045"
+      ]
+    },
+    {
+      "name": "Ưu tiên email, phone chỉ là phương án dự phòng",
+      "description": "Thử email trước (email đã chuẩn hoá rồi email gốc); phone chỉ dùng khi submission không có email; email và phone khớp 2 customer khác nhau thì lấy theo email; email mới + phone trùng không match theo phone (staging thấy customer mới được tạo không có phone).",
+      "kb_refs": [
+        "KB-037",
+        "KB-038",
+        "KB-039",
+        "KB-040",
+        "KB-041"
+      ]
+    },
+    {
+      "name": "Từ chối khi customer đã thuộc company khác",
+      "description": "Customer khớp đã là contact của company khác → lỗi `customer_in_other_company`, không tạo company (áp cả luồng Approve cũ). Bug mở: luồng cũ vẫn tạo company không có contact; ở nhánh job lỗi này không còn tái hiện.",
+      "kb_refs": [
+        "KB-042",
+        "KB-043",
+        "KB-044"
+      ]
+    }
+  ],
+  "state_transitions": [
+    {
+      "from": "submission cần tạo company",
+      "to": "customer có sẵn được link vào company mới",
+      "trigger": "Approve luồng cũ / job lúc submit",
+      "condition": "Có customer khớp theo email (hoặc theo phone khi submission không có email) và customer chưa thuộc company khác.",
+      "kb_refs": [
+        "KB-035",
+        "KB-037",
+        "KB-039"
+      ]
+    },
+    {
+      "from": "submission cần tạo company",
+      "to": "customer mới được tạo",
+      "trigger": "Approve luồng cũ / job lúc submit",
+      "condition": "Không khớp customer nào (theo ticket, chưa có rule đang hiệu lực).",
+      "kb_refs": [
+        "KB-045"
+      ]
+    },
+    {
+      "from": "submission cần tạo company",
+      "to": "không tạo company, lỗi `customer_in_other_company`",
+      "trigger": "Approve luồng cũ / job lúc submit",
+      "condition": "Customer khớp đã là contact của company khác; ở job lúc submit submission chuyển `failed`.",
+      "kb_refs": [
+        "KB-042",
+        "KB-053"
+      ]
+    }
+  ],
+  "confirmed_rules": [
+    {
+      "statement": "Theo Dev BE 23/09/2026 và Dev FE 30/09/2026 (task Testlane DUOS-004 BR-24; Jira DUOS-411, DUOS-425), khi tạo company từ một submission, app tìm customer Shopify có sẵn bằng email/phone đã submit và link customer đó vào company mới tạo, thay vì luôn tạo customer mới.",
+      "knowledge_kind": "CONFIRMED_EXPECTED",
+      "confidence": "MEDIUM",
+      "kb_refs": [
+        "KB-035"
+      ]
+    },
+    {
+      "statement": "Theo Dev BE 23/09/2026 và Dev FE 30/09/2026 (task Testlane DUOS-004 BR-24), thời điểm matching customer phụ thuộc submission đã có `company_id` chưa: luồng cũ (chưa có `company_id`) matching chạy lúc merchant bấm Approve và Portal tự tạo company; store bật `enable_company_creation_on_submit` thì matching chạy trong queued job lúc buyer submit. Hai nhánh dùng cùng thứ tự ưu tiên email → phone.",
+      "knowledge_kind": "CONFIRMED_EXPECTED",
+      "confidence": "MEDIUM",
+      "kb_refs": [
+        "KB-036"
+      ]
+    },
+    {
+      "statement": "Theo Jira DUOS-411 (cập nhật 04/09/2026, tóm tắt trong QA business rule Duos), matching customer thử theo email trước; chỉ khi submission không có email thì mới fallback sang match theo phone.",
+      "knowledge_kind": "CONFIRMED_EXPECTED",
+      "confidence": "MEDIUM",
+      "kb_refs": [
+        "KB-037"
+      ]
+    },
+    {
+      "statement": "Theo Jira DUOS-411 (cập nhật 04/09/2026, tóm tắt trong QA business rule Duos), khi submission có cả email lẫn phone nhưng mỗi field khớp một customer khác nhau, app lấy customer khớp theo email.",
+      "knowledge_kind": "CONFIRMED_EXPECTED",
+      "confidence": "MEDIUM",
+      "kb_refs": [
+        "KB-038"
+      ]
+    },
+    {
+      "statement": "Theo Dev BE 30/09/2026 (task Testlane DUOS-004 BR-30), khi match theo email, app tìm customer theo email đã chuẩn hoá trước, không thấy thì tìm theo email gốc đã submit.",
+      "knowledge_kind": "CONFIRMED_EXPECTED",
+      "confidence": "MEDIUM",
+      "kb_refs": [
+        "KB-039"
+      ]
+    },
+    {
+      "statement": "Theo Dev BE 30/09/2026 (task Testlane DUOS-004 BR-30), submission có email mới nhưng phone trùng một customer cũ sẽ không được match theo phone (phone chỉ dùng khi submission không có email).",
+      "knowledge_kind": "CONFIRMED_EXPECTED",
+      "confidence": "MEDIUM",
+      "kb_refs": [
+        "KB-040"
+      ]
+    },
+    {
+      "statement": "Theo Dev FE 30/09/2026 (task Testlane DUOS-004 BR-28), khi customer tìm được đã là contact của một company khác, hệ thống báo lỗi `customer_in_other_company` và không tạo company; Known issues Duos ghi đây là kết quả mong đợi mới cho cả luồng Approve cũ.",
+      "knowledge_kind": "CONFIRMED_EXPECTED",
+      "confidence": "MEDIUM",
+      "kb_refs": [
+        "KB-042"
+      ]
+    }
+  ],
+  "observed_behavior": [
+    {
+      "statement": "Trên staging (quan sát qua TC-DUOS-201, ngày không ghi), với submission có email mới nhưng phone trùng customer cũ, job tạo customer mới không có phone (nguồn nêu lý do: Shopify từ chối phone trùng). PO chưa xác nhận có chấp nhận kết quả này hay không.",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "confidence": "LOW",
+      "kb_refs": [
+        "KB-041"
+      ],
+      "status": "CURRENT_STATE"
+    },
+    {
+      "statement": "Theo Known issues Duos (quan sát TC-DUOS-158, 30/09/2026), ở nhánh job tạo company lúc submit, lỗi tạo company không có contact khi customer đã thuộc company khác không còn tái hiện.",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "confidence": "LOW",
+      "kb_refs": [
+        "KB-044"
+      ],
+      "status": "CURRENT_STATE"
+    },
+    {
+      "statement": "Theo Known issues Duos (quan sát TC-DUOS-221, 30/09/2026; open — chờ PO quyết, task Testlane SEC-04), trên store bật cờ `enable_company_creation_on_submit`, người lạ submit form công khai bằng email của một customer có sẵn thì job tự gán customer đó làm Main contact với role Location admin của company mới mà không qua review của merchant, và email của submission bị khoá sửa trong Portal; ở store không bật cờ, luồng có bước review của merchant (quan sát TC-DUOS-071).",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "confidence": "LOW",
+      "kb_refs": [
+        "KB-046"
+      ],
+      "status": "CURRENT_STATE"
+    }
+  ],
+  "observed_validations": [],
+  "permissions": [
+    {
+      "statement": "Trên store bật cờ, customer có sẵn có thể bị gán làm Main contact với role Location admin của company mới chỉ bằng việc người lạ submit form công khai bằng email của họ, không qua review của merchant (chờ PO quyết, task Testlane SEC-04).",
+      "kb_refs": [
+        "KB-046"
+      ]
+    }
+  ],
+  "surface_mapping": {
+    "portal": [
+      {
+        "item": "Approve submission chưa có `company_id` kích hoạt matching",
+        "kb_refs": [
+          "KB-036"
+        ]
+      }
+    ],
+    "storefront": [
+      {
+        "item": "Submit registration form trên store bật cờ kích hoạt matching trong job",
+        "kb_refs": [
+          "KB-036",
+          "KB-046"
+        ]
+      }
+    ],
+    "api": [],
+    "data": [
+      {
+        "item": "Email đã chuẩn hoá / email gốc, phone của submission dùng làm khoá matching",
+        "kb_refs": [
+          "KB-037",
+          "KB-039",
+          "KB-040"
+        ]
+      },
+      {
+        "item": "Lỗi `customer_in_other_company`",
+        "kb_refs": [
+          "KB-042"
+        ]
+      },
+      {
+        "item": "Shopify customer (contact) được link vào company",
+        "kb_refs": [
+          "KB-035",
+          "KB-P-013"
+        ]
+      }
+    ],
+    "code": []
+  },
+  "dependencies": [
+    {
+      "target": "company-submissions / approve-company-creation",
+      "relation": "used_by",
+      "note": "Luồng Approve cũ gọi matching lúc Approve.",
+      "kb_refs": [
+        "KB-036",
+        "KB-018"
+      ]
+    },
+    {
+      "target": "company-submissions / auto-company-creation-on-submit",
+      "relation": "used_by",
+      "note": "Job lúc submit gọi matching; lỗi trước `companyCreate` làm submission `failed`.",
+      "kb_refs": [
+        "KB-036",
+        "KB-053"
+      ]
+    }
+  ],
+  "risks": [
+    {
+      "statement": "Theo Known issues Duos (open; Dev FE 30/09/2026 xác nhận là bug; actual result TC-DUOS-057, TC-DUOS-060 trên build cũ, cần chạy lại), ở luồng Approve cũ, khi email submission trùng customer đã là contact của company khác (kể cả email chỉ khác hoa/thường và khoảng trắng), hệ thống vẫn tạo company mới trên Shopify nhưng không có contact, nên buyer không dùng được company đó.",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "confidence": "LOW",
+      "status": "KNOWN_DEFECT",
+      "kb_refs": [
+        "KB-043"
+      ],
+      "note": "Bug đang mở — regression watch, không làm oracle; check theo rule `customer_in_other_company`."
+    },
+    {
+      "statement": "Theo QA KB Duos \"Company submissions\" v1 (mục Jira DUOS-411; TC-DUOS-053 passed, ngày chạy không ghi), khi không khớp customer có sẵn nào thì hệ thống tạo customer mới như trước.",
+      "knowledge_kind": "INFERRED",
+      "confidence": "MEDIUM",
+      "kb_refs": [
+        "KB-045"
+      ],
+      "note": "Chỉ ticket + test case không ghi ngày chạy."
+    },
+    {
+      "statement": "Form công khai trên store bật cờ cho phép gán customer có sẵn làm Main contact (Location admin) mà không qua review của merchant — rủi ro chiếm quyền company (task Testlane SEC-04, chờ PO quyết).",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "confidence": "LOW",
+      "kb_refs": [
+        "KB-046"
+      ]
+    },
+    {
+      "statement": "Submission email mới + phone trùng customer cũ sinh customer mới không có phone; PO chưa xác nhận chấp nhận.",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "confidence": "LOW",
+      "kb_refs": [
+        "KB-041",
+        "KB-040"
+      ]
+    }
+  ],
+  "unknown_areas": [
+    {
+      "question": "Ở luồng Approve cũ, email submission trùng customer đã thuộc company khác (kể cả khác hoa/thường, khoảng trắng) có còn tạo company không contact trên build hiện tại không (TC-DUOS-057, TC-DUOS-060 cần chạy lại)?",
+      "why_it_matters": "Bug Dev FE xác nhận đang mở; rule mong đợi là báo `customer_in_other_company`.",
+      "kb_refs": [
+        "KB-043",
+        "KB-042",
+        "KB-044"
+      ],
+      "oq_id": "OQ-company-submissions-016"
+    },
+    {
+      "question": "PO chấp nhận việc người lạ submit form công khai bằng email customer có sẵn và được gán thẳng làm Main contact (store bật cờ), hay cần chặn / thêm bước review (task Testlane SEC-04)?",
+      "why_it_matters": "Rủi ro bảo mật; không có expected cho case này.",
+      "kb_refs": [
+        "KB-046",
+        "KB-035",
+        "KB-049"
+      ],
+      "oq_id": "OQ-company-submissions-017"
+    },
+    {
+      "question": "PO có chấp nhận kết quả customer mới không có phone khi submission dùng email mới nhưng phone trùng customer cũ không?",
+      "why_it_matters": "Chỉ có hiện trạng staging; rule chỉ nói không match theo phone.",
+      "kb_refs": [
+        "KB-041",
+        "KB-040"
+      ],
+      "oq_id": "OQ-company-submissions-018"
+    },
+    {
+      "question": "Matching xử lý thế nào khi submission không có cả email lẫn phone, khi email là alias, và phone được chuẩn hoá ra sao (ví dụ 0912 vs +84)?",
+      "why_it_matters": "Tài liệu ghi quy tắc chưa chốt; thiếu oracle cho case biên.",
+      "kb_refs": [
+        "KB-037",
+        "KB-039",
+        "KB-040"
+      ],
+      "oq_id": "OQ-company-submissions-019"
+    },
+    {
+      "question": "Không khớp customer nào thì hệ thống có luôn tạo customer mới (Jira DUOS-411) trên build hiện tại không?",
+      "why_it_matters": "Chỉ ticket + test case không ghi ngày chạy; không có rule đang hiệu lực.",
+      "kb_refs": [
+        "KB-045"
+      ],
+      "oq_id": "OQ-company-submissions-005"
+    }
+  ],
+  "freshness": {
+    "observed_at": "2026-10-08",
+    "earliest_source_date": "2026-09-04",
+    "basis": "Ngày nguồn mới nhất / sớm nhất trong các KB item được tham chiếu (ngày quyết định PO/Dev, ngày cập nhật Jira, ngày quan sát staging); không có quan sát runtime trong lần chạy này."
+  },
+  "last_updated": {
+    "date": "2026-10-09",
+    "ccr_ref": "bootstrap"
+  },
+  "coverage_matrix": [
+    {
+      "feature_id": "customer-matching",
+      "layer": "backend",
+      "role": "system",
+      "state": "khớp theo email (chuẩn hoá → gốc)",
+      "environment": "documented",
+      "covered": true,
+      "note": "Jira DUOS-411 + Dev BE 30/09/2026"
+    },
+    {
+      "feature_id": "customer-matching",
+      "layer": "backend",
+      "role": "system",
+      "state": "không có email → match theo phone",
+      "environment": "documented",
+      "covered": true,
+      "note": "Jira DUOS-411"
+    },
+    {
+      "feature_id": "customer-matching",
+      "layer": "backend",
+      "role": "system",
+      "state": "email và phone khớp 2 customer khác nhau",
+      "environment": "documented",
+      "covered": true,
+      "note": "Jira DUOS-411"
+    },
+    {
+      "feature_id": "customer-matching",
+      "layer": "backend",
+      "role": "system",
+      "state": "email mới + phone trùng",
+      "environment": "documented",
+      "covered": true,
+      "note": "Dev BE; kết quả customer thiếu phone chưa chốt"
+    },
+    {
+      "feature_id": "customer-matching",
+      "layer": "backend",
+      "role": "system",
+      "state": "customer đã thuộc company khác (job lúc submit)",
+      "environment": "documented",
+      "covered": true,
+      "note": "Dev FE 30/09/2026"
+    },
+    {
+      "feature_id": "customer-matching",
+      "layer": "portal",
+      "role": "merchant",
+      "state": "customer đã thuộc company khác (Approve luồng cũ)",
+      "environment": "documented",
+      "covered": true,
+      "note": "Rule Dev FE + bug mở"
+    },
+    {
+      "feature_id": "customer-matching",
+      "layer": "backend",
+      "role": "system",
+      "state": "không khớp customer nào",
+      "environment": "documented",
+      "covered": false,
+      "note": "Chỉ ticket"
+    },
+    {
+      "feature_id": "customer-matching",
+      "layer": "backend",
+      "role": "system",
+      "state": "không email và không phone / email alias / chuẩn hoá phone",
+      "environment": "documented",
+      "covered": false,
+      "note": "Chưa chốt"
+    },
+    {
+      "feature_id": "customer-matching",
+      "layer": "storefront",
+      "role": "người gửi form công khai",
+      "state": "email trùng customer có sẵn, store bật cờ",
+      "environment": "documented",
+      "covered": false,
+      "note": "Chờ PO (task Testlane SEC-04)"
+    },
+    {
+      "feature_id": "customer-matching",
+      "layer": "api",
+      "role": "unspecified",
+      "state": "any",
+      "environment": "documented",
+      "covered": false,
+      "note": "Bộ tài liệu QA không có đặc tả API/data model cho feature này"
+    },
+    {
+      "feature_id": "customer-matching",
+      "layer": "db",
+      "role": "unspecified",
+      "state": "any",
+      "environment": "documented",
+      "covered": false,
+      "note": "Bộ tài liệu QA không có đặc tả API/data model cho feature này"
+    },
+    {
+      "feature_id": "customer-matching",
+      "layer": "code",
+      "role": "unspecified",
+      "state": "any",
+      "environment": "documented",
+      "covered": false,
+      "note": "Không có nguồn mã"
+    }
+  ],
+  "profile_conflicts": [],
+  "profile_relationships": [
+    {
+      "from": "customer-matching",
+      "to": "approve-company-creation",
+      "relation": "USED_BY",
+      "kb_refs": [
+        "KB-036"
+      ]
+    },
+    {
+      "from": "customer-matching",
+      "to": "auto-company-creation-on-submit",
+      "relation": "USED_BY",
+      "kb_refs": [
+        "KB-036",
+        "KB-053"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,872 @@
+{
+  "schema_version": "1.0",
+  "artifact_type": "FeatureProfileCandidate",
+  "artifact_id": "ART-FEATURE-PROFILE-account-security-settings-CTX-20261008-02",
+  "revision": "r1",
+  "workflow_id": "CTX-20261008-02",
+  "producer": "feature-profile-builder",
+  "source_refs": [
+    "candidate/product-kb/account-security-settings.json",
+    "candidate/product-kb/_object-level.auth.json",
+    "candidate/product-kb/_product-level.json",
+    "input/scope-plan.json",
+    "input/orchestrator-directives.json",
+    "intermediate/doc/DOC-27.json",
+    "input/rework-r1-builders.md",
+    "input/rework-r1.md"
+  ],
+  "upstream_artifact_ids": [
+    "PKBC-CTX-20261008-02-auth-account-security-settings",
+    "PKBC-CTX-20261008-02-auth-object-level",
+    "PKBC-CTX-20261008-02-_product-level"
+  ],
+  "status": "PARTIAL",
+  "confidence": "MEDIUM",
+  "observations": [
+    "Profile dựng hoàn toàn từ tài liệu (DOC_BOOTSTRAP), không có quan sát runtime trong lần chạy này; act_ids và observed_validations rỗng.",
+    "Statement ở confirmed_rules, observed_behavior và risks lấy nguyên văn từ KB; phần mô tả capability / transition chỉ tóm tắt các KB được trỏ.",
+    "Regression checklist QA chỉ dùng làm gợi ý phủ, không làm nguồn cho nội dung profile.",
+    "feature_id dùng feature_key như KB của feature; chưa có mã FEAT dạng số."
+  ],
+  "assumptions": [],
+  "unknowns": [
+    "Account settings và các thao tác 2FA có giống nhau với mọi role của workspace (Owner, Admin, role thứ ba) không?",
+    "Luồng bật 2FA thực tế trên UI staging có khớp 4 bước theo bundle không (thông báo khi sai Current password ở bước 1, tự submit ở chữ số thứ 6, xoá ô khi sai mã)?",
+    "Nhập sai Current password ở dialog Turn off hoặc Regenerate recovery codes thì hiện thông báo gì?",
+    "Sau khi tắt 2FA, lần đăng nhập tiếp theo chỉ cần mật khẩu hay phải nhập mã OTP gửi qua email?",
+    "Send reset link ở Account settings có dùng đúng luồng, email và thời hạn link của Forgot / reset password không?",
+    "Send reset link ở Account settings có cooldown bao nhiêu giây, và lỗi \"We can't tell which account you're signed in as…\" xuất hiện trong điều kiện nào?",
+    "Quản lý phiên / thiết bị, sign out other sessions, lịch sử đăng nhập và đổi mật khẩu tại chỗ có nằm trong roadmap không, hay được coi là ngoài phạm vi?"
+  ],
+  "conflicts": [
+    "CONF-MTRO-abuse-guard-01"
+  ],
+  "blocking_issues": [],
+  "payload": {
+    "feature_profiles": [
+      {
+        "feature_id": "account-security-settings",
+        "feature_key": "account-security-settings",
+        "name": "Account settings: thông tin tài khoản, đổi mật khẩu qua email, bật / tắt 2FA và recovery codes",
+        "user_goal": "Người dùng quản lý bảo mật của tài khoản Mailtro ID cá nhân (dùng chung mọi workspace): xem thông tin tài khoản, gửi link đổi mật khẩu, bật / tắt xác thực hai lớp và tạo lại recovery code.",
+        "stable_since_version": "v1",
+        "actors": [
+          {
+            "role": "Owner",
+            "permission_observed": "Khảo sát staging bằng tài khoản Owner đang bật 2FA: thấy Profile, Password, card Two-factor authentication với Regenerate recovery codes và Turn off.",
+            "kb_refs": [
+              "KB-102",
+              "KB-110",
+              "KB-111"
+            ]
+          },
+          {
+            "role": "Member",
+            "permission_observed": "So sánh ở workspace có role Member: trang Account settings giống nhau ở mọi workspace vì cấu hình thuộc tài khoản Mailtro ID.",
+            "kb_refs": [
+              "KB-103"
+            ]
+          },
+          {
+            "role": "Admin",
+            "permission_observed": "Chưa quan sát; admin reset 2FA của thành viên khác nằm ngoài phạm vi (Jira MTRO-88).",
+            "kb_refs": [
+              "KB-137"
+            ]
+          }
+        ],
+        "entry_points": [
+          {
+            "path": "App workspace /settings/account, mở từ Settings › Account settings hoặc user menu › Account settings",
+            "precondition": "Đã vào app workspace.",
+            "kb_refs": [
+              "KB-102",
+              "KB-P-042"
+            ]
+          }
+        ],
+        "capabilities": [
+          {
+            "name": "Xem thông tin tài khoản",
+            "description": "Khối Profile chỉ hiển thị Name và Email dạng chỉ đọc, không sửa được tại đây (khảo sát staging).",
+            "kb_refs": [
+              "KB-104"
+            ],
+            "act_ids": []
+          },
+          {
+            "name": "Đổi mật khẩu qua link email",
+            "description": "Khối Password có Send reset link (ghi chú QA cho rằng dùng chung luồng Forgot / reset password, chưa có AC); không đổi mật khẩu trực tiếp trong app.",
+            "kb_refs": [
+              "KB-105",
+              "KB-106",
+              "KB-107",
+              "KB-108",
+              "KB-109"
+            ],
+            "act_ids": []
+          },
+          {
+            "name": "Bật 2FA (TOTP)",
+            "description": "Theo Jira MTRO-92: nhập mật khẩu → quét QR → nhập mã đầu tiên → nhận 8 recovery code dùng một lần. Thoát trước bước xác nhận mã thì giữ trạng thái cũ; lần bật sau ghi đè secret treo; bật khi đã bật nơi khác thì 409. Chi tiết UI từng bước chỉ có từ bundle, chưa đối chiếu.",
+            "kb_refs": [
+              "KB-112",
+              "KB-113",
+              "KB-114",
+              "KB-115",
+              "KB-116",
+              "KB-117",
+              "KB-118",
+              "KB-119",
+              "KB-120",
+              "KB-121",
+              "KB-122",
+              "KB-133",
+              "KB-134"
+            ],
+            "act_ids": []
+          },
+          {
+            "name": "Tắt 2FA",
+            "description": "Tắt TOTP phải nhập mật khẩu (Jira MTRO-92); dialog Turn off ghi sau khi tắt chỉ cần mật khẩu và recovery code ngừng hoạt động. Chưa tắt thật trên staging.",
+            "kb_refs": [
+              "KB-123",
+              "KB-124",
+              "KB-126",
+              "KB-135",
+              "KB-139"
+            ],
+            "act_ids": []
+          },
+          {
+            "name": "Tạo lại recovery code",
+            "description": "Dialog Regenerate thay toàn bộ 8 mã, mã cũ ngừng hoạt động ngay, đòi Current password; regenerate khi 2FA đã tắt nơi khác thì 409 và card về Off (Jira MTRO-88). Chưa regenerate thật trên staging.",
+            "kb_refs": [
+              "KB-125",
+              "KB-127",
+              "KB-128",
+              "KB-136"
+            ],
+            "act_ids": []
+          }
+        ],
+        "state_transitions": [
+          {
+            "from": "2FA Off",
+            "to": "đang bật (pending)",
+            "trigger": "Set up two-factor authentication, nhập Current password đúng",
+            "condition": "Bước 1 (theo bundle, chưa đối chiếu)",
+            "kb_refs": [
+              "KB-112",
+              "KB-114",
+              "KB-133"
+            ]
+          },
+          {
+            "from": "đang bật (pending)",
+            "to": "2FA On, hiện recovery code",
+            "trigger": "Nhập đúng mã ở bước xác nhận",
+            "condition": "Theo Jira MTRO-92; 8 code dùng một lần",
+            "kb_refs": [
+              "KB-113",
+              "KB-116",
+              "KB-118",
+              "KB-134"
+            ]
+          },
+          {
+            "from": "đang bật (pending)",
+            "to": "đang bật (pending)",
+            "trigger": "Nhập sai mã ở bước xác nhận",
+            "condition": "Ô mã bị xoá (theo bundle)",
+            "kb_refs": [
+              "KB-117"
+            ]
+          },
+          {
+            "from": "đang bật (pending)",
+            "to": "giữ trạng thái cũ",
+            "trigger": "Thoát trước bước xác nhận mã",
+            "condition": "Theo Jira MTRO-88",
+            "kb_refs": [
+              "KB-120"
+            ]
+          },
+          {
+            "from": "đang bật bị bỏ dở",
+            "to": "lượt bật mới",
+            "trigger": "Bắt đầu bật lại",
+            "condition": "Secret treo của lần trước bị ghi đè",
+            "kb_refs": [
+              "KB-121"
+            ]
+          },
+          {
+            "from": "2FA Off trên màn này nhưng đã bật nơi khác",
+            "to": "card On, có dialog thông báo",
+            "trigger": "Bắt đầu bật 2FA",
+            "condition": "API trả 409",
+            "kb_refs": [
+              "KB-122"
+            ]
+          },
+          {
+            "from": "2FA On",
+            "to": "2FA Off",
+            "trigger": "Turn off, nhập Current password",
+            "condition": "Phải nhập mật khẩu (Jira MTRO-92); staging: nút Turn off disabled khi ô rỗng",
+            "kb_refs": [
+              "KB-123",
+              "KB-124",
+              "KB-135",
+              "KB-139"
+            ]
+          },
+          {
+            "from": "2FA On",
+            "to": "2FA On với bộ recovery code mới",
+            "trigger": "Regenerate, nhập Current password",
+            "condition": "Mã cũ ngừng hoạt động ngay",
+            "kb_refs": [
+              "KB-125",
+              "KB-136"
+            ]
+          },
+          {
+            "from": "2FA On trên màn này nhưng đã tắt nơi khác",
+            "to": "card Off",
+            "trigger": "Regenerate recovery codes",
+            "condition": "API trả 409",
+            "kb_refs": [
+              "KB-128"
+            ]
+          }
+        ],
+        "confirmed_rules": [
+          {
+            "statement": "Theo Jira MTRO-92 AC §1 (tóm tắt trong QA KB Mailtro \"Security & Abuse guard\" v1, đọc 07/10/2026; tài liệu ghi khớp staging), bật TOTP đi theo thứ tự nhập mật khẩu → quét QR → nhập mã đầu tiên → nhận 8 recovery code, mỗi code chỉ dùng được một lần.",
+            "knowledge_kind": "CONFIRMED_EXPECTED",
+            "confidence": "MEDIUM",
+            "kb_refs": [
+              "KB-113"
+            ]
+          },
+          {
+            "statement": "Theo Jira MTRO-88 (đọc 07/10/2026, tóm tắt trong QA KB Mailtro \"Account settings & Two-factor authentication\" v1; chưa quan sát trên staging), bắt đầu bật 2FA không đồng nghĩa với kích hoạt: thoát trước bước 3 (xác nhận mã) thì tài khoản giữ nguyên trạng thái cũ.",
+            "knowledge_kind": "CONFIRMED_EXPECTED",
+            "confidence": "MEDIUM",
+            "kb_refs": [
+              "KB-120"
+            ]
+          },
+          {
+            "statement": "Theo Jira MTRO-88 (đọc 07/10/2026, tóm tắt trong QA KB Mailtro \"Account settings & Two-factor authentication\" v1; không quan sát được trên staging), khi lượt bật 2FA trước bị bỏ dở thì lần bật sau ghi đè secret còn treo của lần trước.",
+            "knowledge_kind": "CONFIRMED_EXPECTED",
+            "confidence": "MEDIUM",
+            "kb_refs": [
+              "KB-121"
+            ]
+          },
+          {
+            "statement": "Theo Jira MTRO-88 (đọc 07/10/2026, tóm tắt trong QA KB Mailtro \"Account settings & Two-factor authentication\" v1), bắt đầu bật 2FA khi 2FA đã được bật ở tab hoặc thiết bị khác thì API trả 409, card chuyển sang On và hiện dialog thông báo.",
+            "knowledge_kind": "CONFIRMED_EXPECTED",
+            "confidence": "MEDIUM",
+            "kb_refs": [
+              "KB-122"
+            ]
+          },
+          {
+            "statement": "Theo Jira MTRO-92 AC §1 (tóm tắt trong QA KB Mailtro \"Security & Abuse guard\" v1, đọc 07/10/2026; tài liệu ghi khớp staging), tắt TOTP phải nhập mật khẩu.",
+            "knowledge_kind": "CONFIRMED_EXPECTED",
+            "confidence": "MEDIUM",
+            "kb_refs": [
+              "KB-123"
+            ]
+          },
+          {
+            "statement": "Theo Jira MTRO-88 (đọc 07/10/2026, tóm tắt trong QA KB Mailtro \"Account settings & Two-factor authentication\" v1), regenerate recovery codes khi 2FA đã bị tắt ở nơi khác thì API trả 409 và card chuyển về Off.",
+            "knowledge_kind": "CONFIRMED_EXPECTED",
+            "confidence": "MEDIUM",
+            "kb_refs": [
+              "KB-128"
+            ]
+          },
+          {
+            "statement": "Theo Jira MTRO-88 (mục out of scope, đọc 07/10/2026), bắt buộc 2FA cho toàn workspace nằm ngoài phạm vi: 2FA là tuỳ chọn của từng tài khoản.",
+            "knowledge_kind": "CONFIRMED_EXPECTED",
+            "confidence": "MEDIUM",
+            "kb_refs": [
+              "KB-129"
+            ]
+          },
+          {
+            "statement": "Theo Jira MTRO-88 (mục out of scope, đọc 07/10/2026), việc admin reset 2FA của thành viên khác nằm ngoài phạm vi.",
+            "knowledge_kind": "CONFIRMED_EXPECTED",
+            "confidence": "MEDIUM",
+            "tags": [
+              "permission"
+            ],
+            "kb_refs": [
+              "KB-137"
+            ]
+          }
+        ],
+        "observed_behavior": [
+          {
+            "statement": "Trên staging (khảo sát 29/09/2026 bằng tài khoản Owner), trang Account settings ở route /settings/account, mở từ Settings › Account settings hoặc user menu › Account settings, có header \"Manage your personal account.\".",
+            "knowledge_kind": "OBSERVED_CURRENT",
+            "confidence": "MEDIUM",
+            "status": "CURRENT_STATE",
+            "kb_refs": [
+              "KB-102"
+            ]
+          },
+          {
+            "statement": "Trên staging (so sánh 2 workspace ngày 23/09/2026, một workspace có role Member), trang Account settings giống nhau ở mọi workspace: cấu hình 2FA thuộc tài khoản Mailtro ID chứ không thuộc workspace, và Workspace settings không có toggle 2FA.",
+            "knowledge_kind": "OBSERVED_CURRENT",
+            "confidence": "MEDIUM",
+            "status": "CURRENT_STATE",
+            "kb_refs": [
+              "KB-103"
+            ]
+          },
+          {
+            "statement": "Trên staging (khảo sát 29/09/2026), khối Profile (\"The account you're signed in as.\") ở /settings/account chỉ hiển thị Name và Email dạng chỉ đọc, không sửa được tại đây.",
+            "knowledge_kind": "OBSERVED_CURRENT",
+            "confidence": "MEDIUM",
+            "status": "CURRENT_STATE",
+            "kb_refs": [
+              "KB-104"
+            ]
+          },
+          {
+            "statement": "Trên staging (khảo sát 29/09/2026, chưa bấm), khối Password (\"We'll email you a secure link to set a new password.\") ở Account settings có nút \"Send reset link\" để gửi link đặt lại mật khẩu qua email, kèm dòng \"The link expires in 60 minutes.\" (chuỗi UI, thời hạn thật chưa đo).",
+            "knowledge_kind": "OBSERVED_CURRENT",
+            "confidence": "MEDIUM",
+            "status": "CURRENT_STATE",
+            "kb_refs": [
+              "KB-105"
+            ]
+          },
+          {
+            "statement": "Trên staging (rà toàn app 29/09/2026), không đổi được mật khẩu trực tiếp trong app; Account settings chỉ có cách gửi link đặt lại qua email.",
+            "knowledge_kind": "OBSERVED_CURRENT",
+            "confidence": "MEDIUM",
+            "status": "CURRENT_STATE",
+            "kb_refs": [
+              "KB-106"
+            ]
+          },
+          {
+            "statement": "Trên staging (khảo sát 29/09/2026, tài khoản Owner đang bật 2FA), card Two-factor authentication là card thứ 3 dưới Profile và Password, có mô tả \"Ask for a code from an authenticator app on top of your password.\" và badge On / Off.",
+            "knowledge_kind": "OBSERVED_CURRENT",
+            "confidence": "MEDIUM",
+            "status": "CURRENT_STATE",
+            "kb_refs": [
+              "KB-110"
+            ]
+          },
+          {
+            "statement": "Trên staging (khảo sát 29/09/2026, tài khoản Owner đang bật 2FA), khi 2FA bật thì card hiển thị \"You'll be asked for a code the next time you sign in.\" cùng nút \"Regenerate recovery codes\" và nút \"Turn off\" (kiểu destructive).",
+            "knowledge_kind": "OBSERVED_CURRENT",
+            "confidence": "MEDIUM",
+            "status": "CURRENT_STATE",
+            "kb_refs": [
+              "KB-111"
+            ]
+          },
+          {
+            "statement": "Trên staging (khảo sát 29/09/2026, QA đã Cancel, không thực hiện), dialog \"Turn off two-factor authentication?\" ghi rằng sau khi tắt thì chỉ mật khẩu là đủ để đăng nhập lại và các recovery code ngừng hoạt động, rồi yêu cầu nhập mật khẩu hiện tại để xác nhận.",
+            "knowledge_kind": "OBSERVED_CURRENT",
+            "confidence": "MEDIUM",
+            "status": "CURRENT_STATE",
+            "kb_refs": [
+              "KB-124"
+            ]
+          },
+          {
+            "statement": "Trên staging (khảo sát 29/09/2026, QA đã Cancel), dialog \"Turn off two-factor authentication?\" có ô Current password, nút Cancel / \"Turn off\", và nút \"Turn off\" bị disabled khi ô mật khẩu còn rỗng.",
+            "knowledge_kind": "OBSERVED_CURRENT",
+            "confidence": "MEDIUM",
+            "status": "CURRENT_STATE",
+            "kb_refs": [
+              "KB-139"
+            ]
+          },
+          {
+            "statement": "Trên staging (khảo sát 29/09/2026, QA đã Cancel), dialog \"Regenerate recovery codes?\" ghi rằng thao tác thay toàn bộ 8 mã và các mã đã lưu trước đó ngừng hoạt động ngay, yêu cầu nhập Current password, nút \"Regenerate\" bị disabled khi chưa nhập; cả Regenerate recovery codes và Turn off đều đòi Current password.",
+            "knowledge_kind": "OBSERVED_CURRENT",
+            "confidence": "MEDIUM",
+            "status": "CURRENT_STATE",
+            "kb_refs": [
+              "KB-125"
+            ]
+          },
+          {
+            "statement": "Trên staging (rà toàn app 29/09/2026), trong app không có chỗ nào để quản lý phiên / thiết bị, \"sign out other sessions\" hay xem lịch sử đăng nhập; các mục này có nằm trong roadmap hay không đang chờ PO trả lời.",
+            "knowledge_kind": "OBSERVED_CURRENT",
+            "confidence": "MEDIUM",
+            "status": "CURRENT_STATE",
+            "kb_refs": [
+              "KB-131"
+            ]
+          },
+          {
+            "statement": "Trên staging (rà toàn app 29/09/2026), trong app không có chức năng khoá tài khoản.",
+            "knowledge_kind": "OBSERVED_CURRENT",
+            "confidence": "LOW",
+            "status": "CURRENT_STATE",
+            "kb_refs": [
+              "KB-132"
+            ]
+          },
+          {
+            "statement": "Trên staging (khảo sát 29/09 và 01/10/2026), chưa có chức năng quản lý phiên đăng nhập / thiết bị, kể cả thao tác \"sign out other sessions\"; route `/settings/security` và `/settings/sessions` trả trang trắng.",
+            "knowledge_kind": "OBSERVED_CURRENT",
+            "confidence": "MEDIUM",
+            "status": "CURRENT_STATE",
+            "kb_refs": [
+              "KB-P-058"
+            ]
+          },
+          {
+            "statement": "Trên staging (khảo sát 29/09/2026, theo QA KB Mailtro \"Account settings & Two-factor authentication\" v1), app không có trang lịch sử đăng nhập và không có chức năng khoá tài khoản.",
+            "knowledge_kind": "OBSERVED_CURRENT",
+            "confidence": "MEDIUM",
+            "status": "CURRENT_STATE",
+            "kb_refs": [
+              "KB-P-059"
+            ]
+          }
+        ],
+        "observed_validations": [],
+        "permissions": [
+          {
+            "statement": "Cấu hình 2FA thuộc tài khoản Mailtro ID, không thuộc workspace; Workspace settings không có toggle 2FA và bắt buộc 2FA theo workspace nằm ngoài phạm vi.",
+            "kb_refs": [
+              "KB-103",
+              "KB-129",
+              "KB-130"
+            ]
+          },
+          {
+            "statement": "Admin reset 2FA của thành viên khác nằm ngoài phạm vi.",
+            "kb_refs": [
+              "KB-137"
+            ]
+          },
+          {
+            "statement": "Ma trận quyền theo role cho Account settings chưa chốt; chỉ Owner và một lần Member được khảo sát.",
+            "kb_refs": [
+              "KB-102",
+              "KB-103",
+              "KB-P-051"
+            ]
+          }
+        ],
+        "surface_mapping": {
+          "portal": [
+            {
+              "item": "/settings/account: header Manage your personal account., khối Profile (chỉ đọc), Password (Send reset link), card Two-factor authentication (badge On / Off)",
+              "kb_refs": [
+                "KB-102",
+                "KB-104",
+                "KB-105",
+                "KB-110"
+              ]
+            },
+            {
+              "item": "Card 2FA khi On: Regenerate recovery codes, Turn off; khi Off: Set up two-factor authentication (theo bundle)",
+              "kb_refs": [
+                "KB-111",
+                "KB-112"
+              ]
+            },
+            {
+              "item": "Dialog bật 2FA 4 bước: Current password, QR + setup key, mã 6 số, recovery code (Copy all, Download, Done) (theo bundle)",
+              "kb_refs": [
+                "KB-114",
+                "KB-115",
+                "KB-116",
+                "KB-118",
+                "KB-119"
+              ]
+            },
+            {
+              "item": "Dialog Turn off two-factor authentication? và Regenerate recovery codes? đòi Current password",
+              "kb_refs": [
+                "KB-123",
+                "KB-124",
+                "KB-125",
+                "KB-139"
+              ]
+            }
+          ],
+          "storefront": [],
+          "api": [
+            {
+              "item": "POST /api/user/two-factor {password}; POST /api/user/two-factor/confirm {code}; DELETE /api/user/two-factor {password}; POST /api/user/two-factor/recovery-codes {password} (theo bundle, chưa gọi thật)",
+              "kb_refs": [
+                "KB-133",
+                "KB-134",
+                "KB-135",
+                "KB-136"
+              ]
+            },
+            {
+              "item": "409 khi trạng thái 2FA đã đổi ở tab / thiết bị khác",
+              "kb_refs": [
+                "KB-122",
+                "KB-128"
+              ]
+            }
+          ],
+          "data": [
+            {
+              "item": "8 recovery code, mỗi code dùng một lần; regenerate thay toàn bộ",
+              "kb_refs": [
+                "KB-113",
+                "KB-125"
+              ]
+            }
+          ],
+          "code": [
+            {
+              "item": "Màn chặn workspace bắt buộc 2FA (/setup-2fa) đã bị gỡ khỏi bundle 29/09/2026",
+              "kb_refs": [
+                "KB-130"
+              ]
+            }
+          ]
+        },
+        "dependencies": [
+          {
+            "target": "auth / two-factor-challenge",
+            "relation": "configures",
+            "note": "Bật 2FA ở đây làm lần đăng nhập sau có màn challenge; recovery code dùng ở chế độ recovery.",
+            "kb_refs": [
+              "KB-111",
+              "KB-113",
+              "KB-028"
+            ]
+          },
+          {
+            "target": "auth / password-reset",
+            "relation": "reuses (chưa xác nhận)",
+            "note": "Send reset link được ghi chú QA là dùng chung luồng Forgot / reset password; chưa có AC hay xác nhận PO/Dev.",
+            "kb_refs": [
+              "KB-109"
+            ]
+          },
+          {
+            "target": "workspace-settings / roles-and-permissions",
+            "relation": "permission_source",
+            "note": "Ma trận quyền và tên role thứ ba đang tranh chấp ở object workspace-settings.",
+            "kb_refs": [
+              "KB-P-051"
+            ]
+          },
+          {
+            "target": "product / khung app (user menu, Settings)",
+            "relation": "entry_from",
+            "note": "Account settings mở từ user menu hoặc nhóm Settings.",
+            "kb_refs": [
+              "KB-P-042",
+              "KB-102"
+            ]
+          }
+        ],
+        "risks": [
+          {
+            "statement": "Luồng bật 2FA từng bước (xác nhận mật khẩu, QR và setup key, tự submit mã thứ 6, xoá ô khi sai, recovery code, dialog chỉ đóng bằng Done) và trạng thái Off chỉ có từ chuỗi giao diện trong bundle và Jira MTRO-88, chưa từng thấy trên UI staging.",
+            "knowledge_kind": "INFERRED",
+            "confidence": "LOW",
+            "kb_refs": [
+              "KB-112",
+              "KB-114",
+              "KB-115",
+              "KB-116",
+              "KB-117",
+              "KB-118",
+              "KB-119"
+            ]
+          },
+          {
+            "statement": "Kết quả của Turn off và Regenerate recovery codes (toast, bộ mã mới) chỉ có từ chuỗi i18n; chưa thực hiện thật vì tài khoản dùng chung.",
+            "knowledge_kind": "INFERRED",
+            "confidence": "LOW",
+            "kb_refs": [
+              "KB-126",
+              "KB-127"
+            ]
+          },
+          {
+            "statement": "Endpoint 2FA của Account settings chỉ đọc từ bundle frontend, chưa gọi thật.",
+            "knowledge_kind": "INFERRED",
+            "confidence": "LOW",
+            "kb_refs": [
+              "KB-133",
+              "KB-134",
+              "KB-135",
+              "KB-136"
+            ]
+          },
+          {
+            "statement": "Theo ghi chú của QA trong QA KB Mailtro \"Account settings & Two-factor authentication\" v1 (dòng liệt kê Jira MTRO-52, ticket có description trống), link đặt lại mật khẩu gửi từ Account settings được cho là dùng chung luồng với tính năng Forgot / reset password; chưa có AC hay xác nhận PO/Dev cho điểm này.",
+            "knowledge_kind": "INFERRED",
+            "confidence": "LOW",
+            "kb_refs": [
+              "KB-109"
+            ]
+          },
+          {
+            "statement": "Theo chuỗi giao diện trong bundle (chưa bấm thật trên staging), sau khi bấm \"Send reset link\" ở Account settings thì nút chuyển thành đếm ngược \"Resend in {seconds}s\"; số giây không được ghi.",
+            "knowledge_kind": "INFERRED",
+            "confidence": "LOW",
+            "kb_refs": [
+              "KB-107"
+            ]
+          },
+          {
+            "statement": "Theo chuỗi giao diện trong bundle (chưa thấy trên UI), Send reset link ở Account settings có thông báo lỗi \"We can't tell which account you're signed in as. Reload the page and try again.\"; điều kiện kích hoạt không được ghi.",
+            "knowledge_kind": "INFERRED",
+            "confidence": "LOW",
+            "kb_refs": [
+              "KB-108"
+            ]
+          },
+          {
+            "statement": "Theo so sánh bundle frontend ngày 29/09/2026 với bản trước, màn chặn \"workspace bắt buộc 2FA\" (route /setup-2fa cùng chuỗi i18n tương ứng) đã bị gỡ khỏi bundle, khớp phạm vi loại trừ của Jira MTRO-88; câu hỏi gửi PO về việc tính năng này đã bỏ khỏi scope được ghi ở khảo sát 01/10/2026, và QA KB ngày 07/10/2026 ghi là đã giải theo ticket.",
+            "knowledge_kind": "INFERRED",
+            "confidence": "LOW",
+            "kb_refs": [
+              "KB-130"
+            ]
+          }
+        ],
+        "freshness": {
+          "observed_at": "2026-09-29",
+          "run_id": "CTX-20261008-02",
+          "basis": "Jira MTRO-88 / MTRO-92 / MTRO-52 đọc 07/10/2026; khảo sát staging 23/09 và 29/09/2026 (tài khoản Owner bật 2FA); bundle frontend 23/09 và 29/09/2026"
+        },
+        "unknown_areas": [
+          {
+            "question": "Account settings và các thao tác 2FA có giống nhau với mọi role của workspace (Owner, Admin, role thứ ba) không?",
+            "why_it_matters": "Ma trận quyền chưa chốt; Admin chưa bao giờ được quan sát, tên role thứ ba còn tranh chấp.",
+            "kb_refs": [
+              "KB-102",
+              "KB-103",
+              "KB-137",
+              "KB-P-051"
+            ]
+          },
+          {
+            "question": "Luồng bật 2FA thực tế trên UI staging có khớp 4 bước theo bundle không (thông báo khi sai Current password ở bước 1, tự submit ở chữ số thứ 6, xoá ô khi sai mã)?",
+            "why_it_matters": "Không có tài khoản đang tắt 2FA để khảo sát; toàn bộ luồng bật chỉ có từ bundle.",
+            "kb_refs": [
+              "KB-112",
+              "KB-114",
+              "KB-116",
+              "KB-117",
+              "KB-118"
+            ]
+          },
+          {
+            "question": "Nhập sai Current password ở dialog Turn off hoặc Regenerate recovery codes thì hiện thông báo gì?",
+            "why_it_matters": "Chưa thực hiện thật; không có expected cho nhánh lỗi.",
+            "kb_refs": [
+              "KB-123",
+              "KB-125"
+            ]
+          },
+          {
+            "question": "Sau khi tắt 2FA, lần đăng nhập tiếp theo chỉ cần mật khẩu hay phải nhập mã OTP gửi qua email?",
+            "why_it_matters": "Dialog nói chỉ cần mật khẩu, nhưng Jira MTRO-92 §1 nói tắt TOTP thì quay về đăng nhập bằng mã email (mâu thuẫn mở).",
+            "kb_refs": [
+              "KB-124",
+              "KB-031",
+              "KB-032"
+            ],
+            "conflict_group": "CONF-MTRO-abuse-guard-01"
+          },
+          {
+            "question": "Send reset link ở Account settings có dùng đúng luồng, email và thời hạn link của Forgot / reset password không?",
+            "why_it_matters": "Chỉ có ghi chú QA cạnh ticket Jira MTRO-52 (description trống), chưa có AC hay xác nhận PO/Dev.",
+            "kb_refs": [
+              "KB-105",
+              "KB-109"
+            ]
+          },
+          {
+            "question": "Send reset link ở Account settings có cooldown bao nhiêu giây, và lỗi \"We can't tell which account you're signed in as…\" xuất hiện trong điều kiện nào?",
+            "why_it_matters": "Chỉ có chuỗi trong bundle, chưa bấm thật.",
+            "kb_refs": [
+              "KB-107",
+              "KB-108"
+            ]
+          },
+          {
+            "question": "Quản lý phiên / thiết bị, sign out other sessions, lịch sử đăng nhập và đổi mật khẩu tại chỗ có nằm trong roadmap không, hay được coi là ngoài phạm vi?",
+            "why_it_matters": "Hiện chưa có trên staging; chờ PO trả lời để biết có cần check giới hạn hay không.",
+            "kb_refs": [
+              "KB-106",
+              "KB-131",
+              "KB-132",
+              "KB-P-058"
+            ]
+          }
+        ]
+      }
+    ],
+    "profile_relationships": [
+      {
+        "from": "account-security-settings",
+        "to": "two-factor-challenge",
+        "relation": "CONFIGURES",
+        "kb_refs": [
+          "KB-113",
+          "KB-111"
+        ]
+      },
+      {
+        "from": "account-security-settings",
+        "to": "password-reset",
+        "relation": "REUSES",
+        "kb_refs": [
+          "KB-109"
+        ]
+      },
+      {
+        "from": "account-security-settings",
+        "to": "workspace-settings/roles-and-permissions",
+        "relation": "PERMISSION_SOURCE",
+        "kb_refs": [
+          "KB-P-051"
+        ]
+      }
+    ],
+    "coverage_matrix": [
+      {
+        "feature_id": "account-security-settings",
+        "layer": "portal",
+        "role": "Owner",
+        "state": "xem Account settings",
+        "environment": "documented",
+        "covered": true,
+        "note": "Quan sát staging"
+      },
+      {
+        "feature_id": "account-security-settings",
+        "layer": "portal",
+        "role": "Member",
+        "state": "xem Account settings",
+        "environment": "documented",
+        "covered": true,
+        "note": "Quan sát một lần, giống Owner"
+      },
+      {
+        "feature_id": "account-security-settings",
+        "layer": "portal",
+        "role": "Admin",
+        "state": "xem Account settings",
+        "environment": "documented",
+        "covered": false,
+        "note": "Chưa quan sát"
+      },
+      {
+        "feature_id": "account-security-settings",
+        "layer": "portal",
+        "role": "Owner",
+        "state": "gửi link đổi mật khẩu",
+        "environment": "documented",
+        "covered": true,
+        "note": "Quan sát nút; dùng chung luồng chỉ là ghi chú QA; chưa bấm thật"
+      },
+      {
+        "feature_id": "account-security-settings",
+        "layer": "portal",
+        "role": "unspecified (2FA Off)",
+        "state": "bật 2FA",
+        "environment": "documented",
+        "covered": true,
+        "note": "Rule Jira MTRO-88/92; UI chỉ từ bundle"
+      },
+      {
+        "feature_id": "account-security-settings",
+        "layer": "portal",
+        "role": "Owner (2FA On)",
+        "state": "tắt 2FA",
+        "environment": "documented",
+        "covered": true,
+        "note": "Rule cần mật khẩu; kết quả chưa thực hiện"
+      },
+      {
+        "feature_id": "account-security-settings",
+        "layer": "portal",
+        "role": "Owner (2FA On)",
+        "state": "regenerate recovery code",
+        "environment": "documented",
+        "covered": true,
+        "note": "Quan sát dialog; kết quả chưa thực hiện"
+      },
+      {
+        "feature_id": "account-security-settings",
+        "layer": "portal",
+        "role": "unspecified",
+        "state": "trạng thái 2FA đổi ở tab / thiết bị khác (409)",
+        "environment": "documented",
+        "covered": true,
+        "note": "Rule Jira MTRO-88; chưa quan sát"
+      },
+      {
+        "feature_id": "account-security-settings",
+        "layer": "api",
+        "role": "unspecified",
+        "state": "endpoint /api/user/two-factor*",
+        "environment": "documented",
+        "covered": false,
+        "note": "Chỉ từ bundle"
+      },
+      {
+        "feature_id": "account-security-settings",
+        "layer": "code",
+        "role": "unspecified",
+        "state": "any",
+        "environment": "documented",
+        "covered": false,
+        "note": "Không có nguồn mã"
+      }
+    ],
+    "unassigned_kb_items": [],
+    "profile_conflicts": [
+      {
+        "conflict_group": "CONF-MTRO-abuse-guard-01",
+        "kb_refs": [
+          "KB-031",
+          "KB-032"
+        ],
+        "resolution": "UNRESOLVED",
+        "handling": "Giữ cả hai phía ở risks, câu hỏi ở unknown_areas; không chọn phía nào làm expected."
+      }
+    ],
+    "profile_change_summary": [
+      "Profile tạo mới lần đầu từ bộ tài liệu (DOC_BOOTSTRAP); chưa có bản publish trước để so.",
+      "Rework r1: dựng lại theo shard đã sửa (bỏ tham chiếu tới item đã bỏ, cập nhật item đổi loại, thêm item tách mới).",
+      "KB-109 hạ xuống INFERRED, chuyển sang risks; KB-123 rút về rule Jira MTRO-92; thêm KB-139 (chi tiết dialog Turn off trên staging) vào observed_behavior; thêm câu hỏi về việc dùng chung luồng reset."
+    ],
+    "kb_trace_complete": true
+  },
+  "gate": {
+    "decision": "CONDITIONAL_PASS",
+    "reason": "Profile có stable identity, user goal, mọi field trỏ về kb_id, coverage và freshness; không leak assumption. Đủ cho regression discovery nhưng oracle của nhiều mảng còn unknown.",
+    "blocking_findings": [],
+    "conditions": [
+      "Rule cho bật / tắt 2FA và recovery code có từ Jira MTRO-88/92, nhưng UI luồng bật và kết quả tắt / regenerate chưa từng được quan sát; ma trận quyền chưa chốt.",
+      "observed_behavior là hiện trạng tại thời điểm khảo sát, risks gồm suy luận / mâu thuẫn / lỗi đã biết; không mục nào trong hai nhóm này là expected result."
+    ],
+    "allowed_next_steps": [
+      "qa-checklist-builder",
+      "knowledge-diff-analyzer"
+    ]
+  }
+}

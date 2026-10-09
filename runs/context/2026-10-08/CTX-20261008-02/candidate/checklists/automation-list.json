@@ -1,0 +1,908 @@
+{
+  "schema_version": "1.0",
+  "artifact_type": "RegressionChecklistCandidate",
+  "artifact_id": "RCCAND-automation-list-CTX-20261008-02",
+  "workflow_id": "CTX-20261008-02",
+  "producer": "qa-checklist-builder",
+  "source_refs": [
+    "candidate/feature-profiles/automation-list.json",
+    "candidate/product-kb/automation-list.json",
+    "candidate/product-kb/automation-triggers-and-entry.json",
+    "candidate/product-kb/_product-level.json",
+    "input/orchestrator-directives.json",
+    "input/scope-plan.json",
+    "intermediate/doc/DOC-27.json"
+  ],
+  "upstream_artifact_ids": [
+    "ART-FEATURE-PROFILE-automation-list-CTX-20261008-02",
+    "PKBC-CTX-20261008-02-automations-automation-list",
+    "PKBC-CTX-20261008-02-automations-automation-triggers-and-entry",
+    "PKBC-CTX-20261008-02-_product-level"
+  ],
+  "status": "READY",
+  "confidence": "MEDIUM",
+  "observations": [
+    "18 check; theo oracle_strength {'STRONG': 2, 'BASELINE': 10, 'NONE': 6}; theo status {'READY': 12, 'NEEDS_CONFIRMATION': 6}; theo dimension {'CORE': 8, 'BOUNDARY': 2, 'STATE_DATA': 4, 'INTEGRATION': 1, 'NEGATIVE': 1, 'PERMISSION': 2}; theo priority {'P2': 3, 'P3': 9, 'P1': 6}.",
+    "oracle_strength tính bằng script theo luật orchestrator: STRONG khi mọi kb_id trong oracle là CONFIRMED_EXPECTED ngoài conflict_group; có OBSERVED_CURRENT (không KNOWN_DEFECT) thì BASELINE; có INFERRED / conflict_group hoặc không có kb_id thì NONE + NEEDS_CONFIRMATION. Script đã kiểm NONE ⟺ NEEDS_CONFIRMATION và mọi check BASELINE có câu 'lệch = cần điều tra'.",
+    "Item KNOWN_DEFECT không nằm trong oracle.kb_ids; được đặt ở regression_watch_kb_ids: ['KB-023', 'KB-024', 'KB-025'].",
+    "Tài liệu regression checklist QA chỉ dùng làm gợi ý risk / phủ (vd cô lập workspace, Pause không cắt contact đang ở giữa flow, import không kích hoạt automation, giới hạn builder), không dùng làm oracle.",
+    "Mọi item trong shard automation-list hoặc được trích làm oracle / regression watch, hoặc nêu lý do trong kb_items_without_dedicated_check.",
+    "Có trích kb_id cùng object automations thuộc shard khác: ['automation-triggers-and-entry'] (cùng dải kb_id của object).",
+    "Rework r1: dựng lại từ shard hiện tại sau khi normalizer tách phần quan sát staging khỏi item CONFIRMED_EXPECTED (KB-037→KB-215, KB-065→KB-219, KB-090→KB-218, KB-190→KB-216, KB-191→KB-217) và chuyển KB-144/KB-145 sang conflict_group CONF-MTRO-email-content-01. Check STRONG chỉ khẳng định nội dung của nguồn thẩm quyền; chi tiết staging tách ra nằm ở check BASELINE/NONE hoặc được nêu lý do không tạo check riêng."
+  ],
+  "assumptions": [
+    "Check viết ở mức test condition tái sử dụng: dữ liệu (tên automation, contact, template) do người chạy tự dựng trong workspace test; không giả định số liệu cụ thể ngoài con số có trong KB.",
+    "applicability.role = 'unspecified' vì tài liệu không gắn role cho hành vi; precondition dùng Owner vì đó là role đã khảo sát. Kiểm thử phân quyền nằm ở check PERMISSION (NEEDS_CONFIRMATION)."
+  ],
+  "unknowns": [
+    "Khi người dùng search automation bằng từ khoá dài hơn 255 ký tự, hệ thống phải xử lý thế nào: giới hạn độ dài ô search, tự cắt, hay hiện thông báo lỗi mà vẫn giữ bảng và ô search / filter?",
+    "Danh sách automation phải sắp xếp theo thứ tự nào mặc định (Last edited mới nhất trước, Last run, hay tên), và người dùng có đổi được thứ tự không?",
+    "Duplicate một automation có tên dài 255 ký tự thì bản sao được đặt tên thế nào (cắt tên, giữ nguyên, thêm hậu tố) và nếu không tạo được thì người dùng thấy thông báo gì?",
+    "Dòng automation ở trạng thái Draft trên danh sách có nút nhanh và menu hành động gì; có Activate và Delete trực tiếp từ danh sách được không, và Delete có cần dialog xác nhận như dòng Paused không?",
+    "Role nào (Owner, Admin, Member hoặc custom role) được xem danh sách automation, tạo, sửa, Activate, Pause, Duplicate và Delete automation; khi role không đủ quyền thì UI ẩn thao tác hay API trả lỗi gì?",
+    "Khi người dùng của workspace B mở hoặc gọi API với id automation thuộc workspace A, hệ thống phải trả kết quả gì (403, 404 hay trang lỗi), và có đảm bảo không lộ tên, flow hay run của workspace A không?"
+  ],
+  "conflicts": [],
+  "blocking_issues": [],
+  "payload": {
+    "checklists": [
+      {
+        "feature_id": "automation-list",
+        "feature_key": "automation-list",
+        "checklist_version": "v1",
+        "checks": [
+          {
+            "check_id": "CHK-001",
+            "dimension": "CORE",
+            "layer": "portal",
+            "title": "Automation chỉ đi qua đúng 3 trạng thái Draft → Active → Paused",
+            "applicability": {
+              "role": "unspecified",
+              "state": "automation mới tạo trong lần chạy này",
+              "environment": "documented",
+              "theme_or_device": null
+            },
+            "precondition": "Đăng nhập app workspace Mailtro trên staging bằng tài khoản Owner của một workspace test (tài liệu khảo sát bằng Owner; quy tắc role cho automation chưa chốt).",
+            "steps": [
+              "Ở `/automations` bấm `New automation`, dựng một flow hợp lệ (có trigger và ít nhất một step đã cấu hình), bấm `Save` (không bấm Activate).",
+              "Quay lại `/automations`, ghi trạng thái của dòng vừa tạo.",
+              "Bật automation đó (Activate) rồi ghi trạng thái.",
+              "Tạm dừng automation (Pause) rồi ghi trạng thái.",
+              "Mở combobox lọc trạng thái, ghi các giá trị có thể chọn."
+            ],
+            "observation_point": "Cột Status của dòng automation sau mỗi bước và danh sách giá trị của bộ lọc trạng thái.",
+            "expected_result": "Sau Save chưa Activate automation ở trạng thái draft; sau Activate là active; sau Pause là paused. Không xuất hiện trạng thái nào ngoài draft / active / paused.",
+            "oracle": {
+              "kb_ids": [
+                "KB-001"
+              ],
+              "oracle_strength": "STRONG"
+            },
+            "regression_watch_kb_ids": [],
+            "status": "READY",
+            "open_question_draft": null,
+            "risk_refs": [
+              "RISK-automation-list-01"
+            ],
+            "priority": "P2",
+            "act_ids": [],
+            "evidence_refs": [],
+            "automation_suitability": "SUITABLE"
+          },
+          {
+            "check_id": "CHK-002",
+            "dimension": "CORE",
+            "layer": "portal",
+            "title": "Tìm theo tên và lọc theo trạng thái trên danh sách automation",
+            "applicability": {
+              "role": "unspecified",
+              "state": "workspace có ít nhất 1 automation Active và 1 automation Paused",
+              "environment": "documented",
+              "theme_or_device": null
+            },
+            "precondition": "Đăng nhập app workspace Mailtro trên staging bằng tài khoản Owner của một workspace test (tài liệu khảo sát bằng Owner; quy tắc role cho automation chưa chốt).",
+            "steps": [
+              "Mở `/automations`.",
+              "Gõ một phần tên của một automation có sẵn vào ô `Search automations...`.",
+              "Xoá ô search, chọn lần lượt `Active`, `Paused`, `Draft`, `All statuses` ở combobox trạng thái.",
+              "Gõ một chuỗi chắc chắn không khớp tên nào.",
+              "Tải lại trang sau khi đang lọc."
+            ],
+            "observation_point": "Các dòng hiển thị, URL trình duyệt, thông báo khi không có kết quả và trạng thái bộ lọc sau tải lại.",
+            "expected_result": "Theo hiện trạng staging (khảo sát 01/10/2026): search và lọc trạng thái trả đúng các dòng khớp (lọc phía server); giá trị search / filter không được ghi lên URL; không khớp thì hiện `No automations match your filters` / \"Try a different search or status.\" Lệch = cần điều tra.",
+            "oracle": {
+              "kb_ids": [
+                "KB-004",
+                "KB-019"
+              ],
+              "oracle_strength": "BASELINE"
+            },
+            "regression_watch_kb_ids": [],
+            "status": "READY",
+            "open_question_draft": null,
+            "risk_refs": [
+              "RISK-automation-list-04"
+            ],
+            "priority": "P3",
+            "act_ids": [],
+            "evidence_refs": [],
+            "automation_suitability": "SUITABLE"
+          },
+          {
+            "check_id": "CHK-003",
+            "dimension": "BOUNDARY",
+            "layer": "portal",
+            "title": "Search automation với từ khoá dài hơn 255 ký tự",
+            "applicability": {
+              "role": "unspecified",
+              "state": "danh sách `/automations` có dữ liệu",
+              "environment": "documented",
+              "theme_or_device": null
+            },
+            "precondition": "Đăng nhập app workspace Mailtro trên staging bằng tài khoản Owner của một workspace test (tài liệu khảo sát bằng Owner; quy tắc role cho automation chưa chốt).",
+            "steps": [
+              "Mở `/automations`.",
+              "Dán một chuỗi 256 ký tự rồi một chuỗi 300 ký tự vào ô `Search automations...`."
+            ],
+            "observation_point": "Bảng danh sách, ô search / bộ lọc và thông báo hiển thị sau khi gửi từ khoá dài.",
+            "expected_result": "Chưa có căn cứ để phán pass/fail — chưa có quy tắc cho từ khoá dài hơn 255 ký tự (chặn nhập, cắt, hay báo lỗi thân thiện). Ghi nhận: mã phản hồi, bảng và ô search / filter còn hiển thị hay không. Hiện trạng staging (trả 422, bảng bị thay bằng alert thô, mất ô search / filter) đang được theo dõi như một lỗi, không dùng làm kỳ vọng.",
+            "oracle": {
+              "kb_ids": [],
+              "oracle_strength": "NONE"
+            },
+            "regression_watch_kb_ids": [
+              "KB-024"
+            ],
+            "status": "NEEDS_CONFIRMATION",
+            "open_question_draft": "Khi người dùng search automation bằng từ khoá dài hơn 255 ký tự, hệ thống phải xử lý thế nào: giới hạn độ dài ô search, tự cắt, hay hiện thông báo lỗi mà vẫn giữ bảng và ô search / filter?",
+            "risk_refs": [
+              "RISK-automation-list-04"
+            ],
+            "priority": "P3",
+            "act_ids": [],
+            "evidence_refs": [],
+            "automation_suitability": "SUITABLE"
+          },
+          {
+            "check_id": "CHK-004",
+            "dimension": "CORE",
+            "layer": "portal",
+            "title": "Cột và định dạng của bảng danh sách automation, phân trang 25 dòng, click dòng mở builder",
+            "applicability": {
+              "role": "unspecified",
+              "state": "workspace có automation đã từng chạy và automation chưa chạy; nếu có hơn 25 automation thì kiểm thêm phân trang",
+              "environment": "documented",
+              "theme_or_device": null
+            },
+            "precondition": "Đăng nhập app workspace Mailtro trên staging bằng tài khoản Owner của một workspace test (tài liệu khảo sát bằng Owner; quy tắc role cho automation chưa chốt).",
+            "steps": [
+              "Mở `/automations` từ mục `Automations` trên sidebar.",
+              "Ghi header trang và các cột của bảng.",
+              "So nội dung cột `Automation` với description đã lưu của một automation có description.",
+              "Ghi định dạng cột `Last run` và `Last edited`.",
+              "Nếu có hơn 25 automation: chuyển trang bằng `Next Page` / số trang.",
+              "Click một dòng."
+            ],
+            "observation_point": "Header, cột bảng, định dạng thời gian, số dòng mỗi trang, trang mở ra sau khi click dòng.",
+            "expected_result": "Theo hiện trạng staging (khảo sát 29/09 và 01/10/2026; phần cột Automation do QA lead chốt 18/09/2026, chưa có xác nhận PO/Dev): header \"Trigger-based flows that run automatically as contacts change.\"; cột theo thứ tự `Automation` · `Status` · `Last run` · `Last edited` · cột hành động; cột Automation chỉ hiện tên (description không hiện); `Last run` là thời gian tương đối hoặc `Not recently run`, `Last edited` là ngày giờ tuyệt đối; 25 dòng mỗi trang; click dòng mở builder `/automations/:id` của automation đó. Lệch = cần điều tra.",
+            "oracle": {
+              "kb_ids": [
+                "KB-002",
+                "KB-005",
+                "KB-006",
+                "KB-008",
+                "KB-009",
+                "KB-020"
+              ],
+              "oracle_strength": "BASELINE"
+            },
+            "regression_watch_kb_ids": [],
+            "status": "READY",
+            "open_question_draft": null,
+            "risk_refs": [
+              "RISK-automation-list-06"
+            ],
+            "priority": "P3",
+            "act_ids": [],
+            "evidence_refs": [],
+            "automation_suitability": "SUITABLE"
+          },
+          {
+            "check_id": "CHK-005",
+            "dimension": "STATE_DATA",
+            "layer": "portal",
+            "title": "Thứ tự sắp xếp của danh sách automation sau khi sửa",
+            "applicability": {
+              "role": "unspecified",
+              "state": "workspace có ít nhất 3 automation sửa ở các ngày khác nhau",
+              "environment": "documented",
+              "theme_or_device": null
+            },
+            "precondition": "Đăng nhập app workspace Mailtro trên staging bằng tài khoản Owner của một workspace test (tài liệu khảo sát bằng Owner; quy tắc role cho automation chưa chốt).",
+            "steps": [
+              "Sửa và Save một automation cũ nhất.",
+              "Quay lại `/automations`, tải lại trang.",
+              "Ghi thứ tự các dòng và giá trị `Last edited`."
+            ],
+            "observation_point": "Vị trí của automation vừa sửa trong danh sách.",
+            "expected_result": "Chưa có căn cứ để phán pass/fail — tài liệu chưa nêu thứ tự sắp xếp mong đợi. Ghi nhận thứ tự thực tế và tham số sắp xếp trong request danh sách. Hiện trạng staging (không sắp theo Last edited mới nhất, request không gửi tham số sắp xếp — BUG-52) đang được theo dõi như một lỗi.",
+            "oracle": {
+              "kb_ids": [],
+              "oracle_strength": "NONE"
+            },
+            "regression_watch_kb_ids": [
+              "KB-023"
+            ],
+            "status": "NEEDS_CONFIRMATION",
+            "open_question_draft": "Danh sách automation phải sắp xếp theo thứ tự nào mặc định (Last edited mới nhất trước, Last run, hay tên), và người dùng có đổi được thứ tự không?",
+            "risk_refs": [
+              "RISK-automation-list-06"
+            ],
+            "priority": "P3",
+            "act_ids": [],
+            "evidence_refs": [],
+            "automation_suitability": "SUITABLE"
+          },
+          {
+            "check_id": "CHK-006",
+            "dimension": "CORE",
+            "layer": "portal",
+            "title": "Activate automation Paused từ danh sách qua dialog xác nhận",
+            "applicability": {
+              "role": "unspecified",
+              "state": "automation Paused có flow hợp lệ; dùng trigger và dữ liệu test không gửi mail tới người thật",
+              "environment": "documented",
+              "theme_or_device": null
+            },
+            "precondition": "Đăng nhập app workspace Mailtro trên staging bằng tài khoản Owner của một workspace test (tài liệu khảo sát bằng Owner; quy tắc role cho automation chưa chốt).",
+            "steps": [
+              "Mở `/automations`, tìm dòng automation Paused.",
+              "Bấm nút nhanh `Activate {name}`.",
+              "Đọc dialog, bấm xác nhận.",
+              "Tải lại trang."
+            ],
+            "observation_point": "Nút nhanh trên dòng, nội dung dialog, trạng thái sau xác nhận và sau tải lại.",
+            "expected_result": "Theo hiện trạng staging (khảo sát 27/09, 29/09 và 01/10/2026): dòng Paused có nút nhanh `Activate {name}` (dòng Active có `Pause {name}`); bấm mở dialog `Activate \"{name}\"?` báo flow chạy ngay và contact khớp trigger vào flow (nhận email) trong vài giây; xác nhận thì dòng chuyển Active và giữ sau tải lại. Lệch = cần điều tra.",
+            "oracle": {
+              "kb_ids": [
+                "KB-010",
+                "KB-016"
+              ],
+              "oracle_strength": "BASELINE"
+            },
+            "regression_watch_kb_ids": [],
+            "status": "READY",
+            "open_question_draft": null,
+            "risk_refs": [
+              "RISK-automation-list-03"
+            ],
+            "priority": "P2",
+            "act_ids": [],
+            "evidence_refs": [],
+            "automation_suitability": "SUITABLE"
+          },
+          {
+            "check_id": "CHK-007",
+            "dimension": "CORE",
+            "layer": "portal",
+            "title": "Pause automation Active từ danh sách qua dialog",
+            "applicability": {
+              "role": "unspecified",
+              "state": "automation Active",
+              "environment": "documented",
+              "theme_or_device": null
+            },
+            "precondition": "Đăng nhập app workspace Mailtro trên staging bằng tài khoản Owner của một workspace test (tài liệu khảo sát bằng Owner; quy tắc role cho automation chưa chốt).",
+            "steps": [
+              "Mở `/automations`, bấm nút nhanh `Pause {name}` trên dòng Active.",
+              "Đọc dialog, xác nhận.",
+              "Tải lại trang."
+            ],
+            "observation_point": "Nội dung dialog Pause và trạng thái dòng sau xác nhận.",
+            "expected_result": "Theo hiện trạng staging (copy dialog thấy 29/09/2026): dialog `Pause \"{name}\"?` nói contact mới ngừng vào flow, contact đang ở trong flow (kể cả đang chờ ở Wait) vẫn đi hết flow, và có thể Activate lại bất cứ lúc nào; xác nhận thì dòng chuyển Paused và giữ sau tải lại. Lệch = cần điều tra.",
+            "oracle": {
+              "kb_ids": [
+                "KB-010",
+                "KB-017"
+              ],
+              "oracle_strength": "BASELINE"
+            },
+            "regression_watch_kb_ids": [],
+            "status": "READY",
+            "open_question_draft": null,
+            "risk_refs": [
+              "RISK-automation-list-03"
+            ],
+            "priority": "P2",
+            "act_ids": [],
+            "evidence_refs": [],
+            "automation_suitability": "SUITABLE"
+          },
+          {
+            "check_id": "CHK-008",
+            "dimension": "INTEGRATION",
+            "layer": "portal",
+            "title": "Pause không cắt contact đang ở giữa flow",
+            "applicability": {
+              "role": "unspecified",
+              "state": "automation Active có Wait vài phút rồi Send email / Update contact field; có contact đang Waiting",
+              "environment": "documented",
+              "theme_or_device": null
+            },
+            "precondition": "Đăng nhập app workspace Mailtro trên staging bằng tài khoản Owner của một workspace test (tài liệu khảo sát bằng Owner; quy tắc role cho automation chưa chốt).",
+            "steps": [
+              "Cho một contact test khớp trigger để vào flow và đang Waiting ở bước Wait (xem Run history).",
+              "Pause automation từ danh sách.",
+              "Tạo / sửa thêm một contact test khác khớp trigger trong lúc Paused.",
+              "Đợi qua mốc `Resumes at` của run đang Waiting, mở Run history."
+            ],
+            "observation_point": "Trạng thái run của contact đang Waiting sau mốc Resumes at, và việc contact mới có run hay không.",
+            "expected_result": "Theo hiện trạng staging (copy dialog Pause 29/09/2026 — hành vi engine sau Pause chưa được kiểm riêng): contact đang Waiting vẫn đi tiếp hết flow sau khi Pause; contact khớp trigger trong lúc Paused không có run. Lệch = cần điều tra.",
+            "oracle": {
+              "kb_ids": [
+                "KB-017",
+                "KB-065"
+              ],
+              "oracle_strength": "BASELINE"
+            },
+            "regression_watch_kb_ids": [],
+            "status": "READY",
+            "open_question_draft": null,
+            "risk_refs": [
+              "RISK-automation-list-03"
+            ],
+            "priority": "P1",
+            "act_ids": [],
+            "evidence_refs": [],
+            "automation_suitability": "HYBRID"
+          },
+          {
+            "check_id": "CHK-009",
+            "dimension": "STATE_DATA",
+            "layer": "portal",
+            "title": "Last edited đổi khi Activate / Pause dù nội dung flow không đổi",
+            "applicability": {
+              "role": "unspecified",
+              "state": "automation Active hoặc Paused",
+              "environment": "documented",
+              "theme_or_device": null
+            },
+            "precondition": "Đăng nhập app workspace Mailtro trên staging bằng tài khoản Owner của một workspace test (tài liệu khảo sát bằng Owner; quy tắc role cho automation chưa chốt).",
+            "steps": [
+              "Ghi giá trị `Last edited` của một automation.",
+              "Pause (hoặc Activate) automation đó mà không sửa flow.",
+              "Tải lại `/automations`, đọc lại `Last edited`."
+            ],
+            "observation_point": "Giá trị Last edited trước và sau thao tác.",
+            "expected_result": "Theo hiện trạng staging được QA lead chốt 18/09/2026 (chưa có xác nhận PO/Dev): `Last edited` được cập nhật thành thời điểm Activate / Pause. Lệch = cần điều tra.",
+            "oracle": {
+              "kb_ids": [
+                "KB-007"
+              ],
+              "oracle_strength": "BASELINE"
+            },
+            "regression_watch_kb_ids": [],
+            "status": "READY",
+            "open_question_draft": null,
+            "risk_refs": [
+              "RISK-automation-list-06"
+            ],
+            "priority": "P3",
+            "act_ids": [],
+            "evidence_refs": [],
+            "automation_suitability": "SUITABLE"
+          },
+          {
+            "check_id": "CHK-010",
+            "dimension": "NEGATIVE",
+            "layer": "portal",
+            "title": "Không xoá trực tiếp được automation đang Active",
+            "applicability": {
+              "role": "unspecified",
+              "state": "automation Active",
+              "environment": "documented",
+              "theme_or_device": null
+            },
+            "precondition": "Đăng nhập app workspace Mailtro trên staging bằng tài khoản Owner của một workspace test (tài liệu khảo sát bằng Owner; quy tắc role cho automation chưa chốt).",
+            "steps": [
+              "Mở menu `Actions for {name}` của dòng Active.",
+              "Thử bấm mục xoá."
+            ],
+            "observation_point": "Các mục trong menu và trạng thái mục xoá.",
+            "expected_result": "Theo hiện trạng staging (khảo sát 01/10/2026): menu gồm `Edit` · `Duplicate` · `View runs` · `Pause` · `Delete (pause first)`; mục xoá bị disabled, không xoá được khi chưa Pause. Lệch = cần điều tra.",
+            "oracle": {
+              "kb_ids": [
+                "KB-012"
+              ],
+              "oracle_strength": "BASELINE"
+            },
+            "regression_watch_kb_ids": [],
+            "status": "READY",
+            "open_question_draft": null,
+            "risk_refs": [
+              "RISK-automation-list-02"
+            ],
+            "priority": "P1",
+            "act_ids": [],
+            "evidence_refs": [],
+            "automation_suitability": "SUITABLE"
+          },
+          {
+            "check_id": "CHK-011",
+            "dimension": "CORE",
+            "layer": "portal",
+            "title": "Xoá automation luôn phải qua dialog xác nhận; huỷ thì không xoá",
+            "applicability": {
+              "role": "unspecified",
+              "state": "automation Paused tạo riêng cho lần chạy",
+              "environment": "documented",
+              "theme_or_device": null
+            },
+            "precondition": "Đăng nhập app workspace Mailtro trên staging bằng tài khoản Owner của một workspace test (tài liệu khảo sát bằng Owner; quy tắc role cho automation chưa chốt).",
+            "steps": [
+              "Mở menu `Actions for {name}` của dòng Paused, chọn `Delete`.",
+              "Ở dialog bấm huỷ / đóng.",
+              "Tải lại `/automations`."
+            ],
+            "observation_point": "Có dialog xác nhận trước khi xoá hay không; automation còn trong danh sách sau khi huỷ.",
+            "expected_result": "Chọn Delete luôn mở dialog xác nhận trước khi xoá; huỷ dialog thì không có lệnh xoá nào được gửi và automation vẫn còn trong danh sách.",
+            "oracle": {
+              "kb_ids": [
+                "KB-014"
+              ],
+              "oracle_strength": "STRONG"
+            },
+            "regression_watch_kb_ids": [],
+            "status": "READY",
+            "open_question_draft": null,
+            "risk_refs": [
+              "RISK-automation-list-02"
+            ],
+            "priority": "P1",
+            "act_ids": [],
+            "evidence_refs": [],
+            "automation_suitability": "SUITABLE"
+          },
+          {
+            "check_id": "CHK-012",
+            "dimension": "STATE_DATA",
+            "layer": "portal",
+            "title": "Xác nhận xoá automation Paused: nội dung dialog và kết quả",
+            "applicability": {
+              "role": "unspecified",
+              "state": "automation Paused tạo riêng cho lần chạy",
+              "environment": "documented",
+              "theme_or_device": null
+            },
+            "precondition": "Đăng nhập app workspace Mailtro trên staging bằng tài khoản Owner của một workspace test (tài liệu khảo sát bằng Owner; quy tắc role cho automation chưa chốt).",
+            "steps": [
+              "Mở menu `Actions for {name}` của dòng Paused, ghi các mục.",
+              "Chọn `Delete`, đọc dialog, xác nhận.",
+              "Tải lại `/automations`, mở lại URL builder cũ của automation đó."
+            ],
+            "observation_point": "Menu của dòng Paused, nội dung dialog, danh sách sau khi xoá.",
+            "expected_result": "Theo hiện trạng staging (khảo sát 29/09 và 01/10/2026): menu dòng Paused gồm `Edit` · `Duplicate` · `View runs` · `Activate` · `Delete`; dialog có tiêu đề `Delete \"{name}\"?` và \"The flow and its steps are removed. This can't be undone.\"; sau xác nhận automation không còn trong danh sách. Hành vi khi mở lại URL builder cũ chưa được mô tả — ghi nhận. Lệch = cần điều tra.",
+            "oracle": {
+              "kb_ids": [
+                "KB-013",
+                "KB-015"
+              ],
+              "oracle_strength": "BASELINE"
+            },
+            "regression_watch_kb_ids": [],
+            "status": "READY",
+            "open_question_draft": null,
+            "risk_refs": [
+              "RISK-automation-list-02"
+            ],
+            "priority": "P1",
+            "act_ids": [],
+            "evidence_refs": [],
+            "automation_suitability": "SUITABLE"
+          },
+          {
+            "check_id": "CHK-013",
+            "dimension": "CORE",
+            "layer": "portal",
+            "title": "Duplicate automation tạo bản sao đầy đủ với node mới",
+            "applicability": {
+              "role": "unspecified",
+              "state": "automation có ít nhất trigger, 1 Wait và 1 Send email đã cấu hình",
+              "environment": "documented",
+              "theme_or_device": null
+            },
+            "precondition": "Đăng nhập app workspace Mailtro trên staging bằng tài khoản Owner của một workspace test (tài liệu khảo sát bằng Owner; quy tắc role cho automation chưa chốt).",
+            "steps": [
+              "Chọn `Duplicate` trong menu `Actions for {name}`.",
+              "Mở bản sao trong builder, so từng node với bản gốc.",
+              "Sửa một node của bản sao rồi Save; mở lại bản gốc."
+            ],
+            "observation_point": "Bản sao trong danh sách, cấu trúc và cấu hình node của bản sao, bản gốc sau khi sửa bản sao.",
+            "expected_result": "Theo hiện trạng staging (test-run 03/09/2026, quan sát một lần): Duplicate tạo một bản sao sâu — cùng cấu trúc và cấu hình node nhưng node id mới, nên sửa bản sao không ảnh hưởng bản gốc. Tên và trạng thái của bản sao chưa được mô tả — ghi nhận. Lệch = cần điều tra.",
+            "oracle": {
+              "kb_ids": [
+                "KB-018"
+              ],
+              "oracle_strength": "BASELINE"
+            },
+            "regression_watch_kb_ids": [],
+            "status": "READY",
+            "open_question_draft": null,
+            "risk_refs": [
+              "RISK-automation-list-05"
+            ],
+            "priority": "P3",
+            "act_ids": [],
+            "evidence_refs": [],
+            "automation_suitability": "SUITABLE"
+          },
+          {
+            "check_id": "CHK-014",
+            "dimension": "BOUNDARY",
+            "layer": "portal",
+            "title": "Duplicate automation có tên dài 255 ký tự",
+            "applicability": {
+              "role": "unspecified",
+              "state": "automation có tên đúng 255 ký tự",
+              "environment": "documented",
+              "theme_or_device": null
+            },
+            "precondition": "Đăng nhập app workspace Mailtro trên staging bằng tài khoản Owner của một workspace test (tài liệu khảo sát bằng Owner; quy tắc role cho automation chưa chốt).",
+            "steps": [
+              "Đặt tên automation đúng 255 ký tự qua `Edit automation`, Save.",
+              "Chọn `Duplicate` trên dòng đó ở danh sách."
+            ],
+            "observation_point": "Phản hồi của thao tác duplicate, thông báo hiển thị, tên bản sao (nếu có).",
+            "expected_result": "Chưa có căn cứ để phán pass/fail — chưa có quy tắc đặt tên bản sao khi tên gốc đã ở giới hạn 255 ký tự. Ghi nhận mã phản hồi, thông báo và tên bản sao. Hiện trạng staging (duplicate trả 500) đang được theo dõi như một lỗi.",
+            "oracle": {
+              "kb_ids": [],
+              "oracle_strength": "NONE"
+            },
+            "regression_watch_kb_ids": [
+              "KB-025"
+            ],
+            "status": "NEEDS_CONFIRMATION",
+            "open_question_draft": "Duplicate một automation có tên dài 255 ký tự thì bản sao được đặt tên thế nào (cắt tên, giữ nguyên, thêm hậu tố) và nếu không tạo được thì người dùng thấy thông báo gì?",
+            "risk_refs": [
+              "RISK-automation-list-05"
+            ],
+            "priority": "P3",
+            "act_ids": [],
+            "evidence_refs": [],
+            "automation_suitability": "SUITABLE"
+          },
+          {
+            "check_id": "CHK-015",
+            "dimension": "STATE_DATA",
+            "layer": "portal",
+            "title": "New automation không tạo bản ghi cho tới khi Save",
+            "applicability": {
+              "role": "unspecified",
+              "state": "workspace có danh sách automation đã biết số lượng",
+              "environment": "documented",
+              "theme_or_device": null
+            },
+            "precondition": "Đăng nhập app workspace Mailtro trên staging bằng tài khoản Owner của một workspace test (tài liệu khảo sát bằng Owner; quy tắc role cho automation chưa chốt).",
+            "steps": [
+              "Ghi số automation trong danh sách.",
+              "Bấm `New automation`, thêm trigger nhưng không Save.",
+              "Bấm `Back to automations` (chọn `Leave` nếu được hỏi), tải lại danh sách."
+            ],
+            "observation_point": "URL sau khi bấm New automation và số automation trong danh sách sau khi rời builder.",
+            "expected_result": "Theo hiện trạng staging (khảo sát 01/10/2026): `New automation` mở `/automations/new` và không tạo bản ghi nào cho tới khi bấm Save; rời đi không Save thì danh sách không thêm dòng. Lệch = cần điều tra.",
+            "oracle": {
+              "kb_ids": [
+                "KB-003"
+              ],
+              "oracle_strength": "BASELINE"
+            },
+            "regression_watch_kb_ids": [],
+            "status": "READY",
+            "open_question_draft": null,
+            "risk_refs": [
+              "RISK-automation-list-01"
+            ],
+            "priority": "P3",
+            "act_ids": [],
+            "evidence_refs": [],
+            "automation_suitability": "SUITABLE"
+          },
+          {
+            "check_id": "CHK-016",
+            "dimension": "CORE",
+            "layer": "portal",
+            "title": "Dòng automation Draft trên danh sách: nút nhanh và menu hành động",
+            "applicability": {
+              "role": "unspecified",
+              "state": "automation đã Save nhưng chưa Activate",
+              "environment": "documented",
+              "theme_or_device": null
+            },
+            "precondition": "Đăng nhập app workspace Mailtro trên staging bằng tài khoản Owner của một workspace test (tài liệu khảo sát bằng Owner; quy tắc role cho automation chưa chốt).",
+            "steps": [
+              "Tạo và Save một automation hợp lệ, không Activate.",
+              "Mở `/automations`, xem dòng đó và mở menu hành động."
+            ],
+            "observation_point": "Nút nhanh và các mục trong menu hành động của dòng Draft.",
+            "expected_result": "Chưa có căn cứ để phán pass/fail — chưa có quan sát trực tiếp dòng Draft (lúc khảo sát workspace không có automation Draft). Ghi nhận nút nhanh, các mục menu và việc Activate / Delete trực tiếp từ dòng Draft.",
+            "oracle": {
+              "kb_ids": [
+                "KB-011"
+              ],
+              "oracle_strength": "NONE"
+            },
+            "regression_watch_kb_ids": [],
+            "status": "NEEDS_CONFIRMATION",
+            "open_question_draft": "Dòng automation ở trạng thái Draft trên danh sách có nút nhanh và menu hành động gì; có Activate và Delete trực tiếp từ danh sách được không, và Delete có cần dialog xác nhận như dòng Paused không?",
+            "risk_refs": [
+              "RISK-automation-list-01",
+              "RISK-automation-list-03"
+            ],
+            "priority": "P3",
+            "act_ids": [],
+            "evidence_refs": [],
+            "automation_suitability": "SUITABLE"
+          },
+          {
+            "check_id": "CHK-017",
+            "dimension": "PERMISSION",
+            "layer": "portal",
+            "title": "Thao tác automation theo role (Owner / Admin / Member / custom role)",
+            "applicability": {
+              "role": "Owner, Admin, Member, custom role",
+              "state": "cùng một workspace có tài khoản ở từng role",
+              "environment": "documented",
+              "theme_or_device": null
+            },
+            "precondition": "Có tài khoản test cho từng role trong cùng workspace test trên staging.",
+            "steps": [
+              "Đăng nhập lần lượt bằng từng role.",
+              "Mở `/automations`, thử xem danh sách, tạo, sửa, Activate, Pause, Duplicate và Delete automation.",
+              "Với thao tác bị chặn trên UI, gọi lại thao tác tương ứng qua API bằng phiên của role đó."
+            ],
+            "observation_point": "Nút / menu hiển thị cho từng role và phản hồi API khi role thử thao tác.",
+            "expected_result": "Chưa có căn cứ để phán pass/fail — ma trận quyền của automation chưa chốt. Ghi nhận bảng role × thao tác (UI ẩn / disabled / cho phép, mã phản hồi API).",
+            "oracle": {
+              "kb_ids": [
+                "KB-026",
+                "KB-P-051",
+                "KB-P-052"
+              ],
+              "oracle_strength": "NONE"
+            },
+            "regression_watch_kb_ids": [],
+            "status": "NEEDS_CONFIRMATION",
+            "open_question_draft": "Role nào (Owner, Admin, Member hoặc custom role) được xem danh sách automation, tạo, sửa, Activate, Pause, Duplicate và Delete automation; khi role không đủ quyền thì UI ẩn thao tác hay API trả lỗi gì?",
+            "risk_refs": [
+              "RISK-automation-list-07"
+            ],
+            "priority": "P1",
+            "act_ids": [],
+            "evidence_refs": [],
+            "automation_suitability": "HYBRID"
+          },
+          {
+            "check_id": "CHK-018",
+            "dimension": "PERMISSION",
+            "layer": "portal",
+            "title": "Cô lập automation giữa hai workspace (URL và API)",
+            "applicability": {
+              "role": "thành viên chỉ của workspace B",
+              "state": "hai workspace A và B; workspace A có automation đã biết id",
+              "environment": "documented",
+              "theme_or_device": null
+            },
+            "precondition": "Có tài khoản chỉ thuộc workspace B, và id của một automation thuộc workspace A.",
+            "steps": [
+              "Đăng nhập workspace B.",
+              "Mở `/automations/<id của workspace A>` và `/automations/<id của workspace A>/runs` trên subdomain của B.",
+              "Gọi các thao tác đọc / Activate / Pause / Delete automation với id đó qua API bằng phiên của B."
+            ],
+            "observation_point": "Nội dung trang và mã phản hồi API khi truy cập automation của workspace khác.",
+            "expected_result": "Chưa có căn cứ để phán pass/fail — tài liệu automation chưa mô tả cách cô lập giữa các workspace. Ghi nhận: dữ liệu của workspace A có lộ ra không, mã phản hồi (403 / 404 / khác). Bất kỳ dữ liệu nào của A hiện ra ở B phải báo ngay.",
+            "oracle": {
+              "kb_ids": [],
+              "oracle_strength": "NONE"
+            },
+            "regression_watch_kb_ids": [],
+            "status": "NEEDS_CONFIRMATION",
+            "open_question_draft": "Khi người dùng của workspace B mở hoặc gọi API với id automation thuộc workspace A, hệ thống phải trả kết quả gì (403, 404 hay trang lỗi), và có đảm bảo không lộ tên, flow hay run của workspace A không?",
+            "risk_refs": [
+              "RISK-automation-list-07"
+            ],
+            "priority": "P1",
+            "act_ids": [],
+            "evidence_refs": [],
+            "automation_suitability": "HYBRID"
+          }
+        ]
+      }
+    ],
+    "coverage_by_feature_and_risk": [
+      {
+        "feature_id": "automation-list",
+        "risk_ref": "RISK-automation-list-01",
+        "risk_description": "Vòng đời trạng thái automation (draft / active / paused) hiển thị sai hoặc có trạng thái ngoài 3 giá trị.",
+        "priority": "P2",
+        "covered_by_checks": [
+          "CHK-001",
+          "CHK-015",
+          "CHK-016"
+        ],
+        "kb_ids": [
+          "KB-001",
+          "KB-003",
+          "KB-011"
+        ],
+        "coverage_status": "PARTIAL"
+      },
+      {
+        "feature_id": "automation-list",
+        "risk_ref": "RISK-automation-list-02",
+        "risk_description": "Xoá automation không qua xác nhận, hoặc xoá được flow đang Active (mất flow và các step, không hoàn tác được).",
+        "priority": "P1",
+        "covered_by_checks": [
+          "CHK-010",
+          "CHK-011",
+          "CHK-012"
+        ],
+        "kb_ids": [
+          "KB-012",
+          "KB-014",
+          "KB-013",
+          "KB-015"
+        ],
+        "coverage_status": "COVERED"
+      },
+      {
+        "feature_id": "automation-list",
+        "risk_ref": "RISK-automation-list-03",
+        "risk_description": "Activate / Pause từ danh sách: bật flow gửi mail thật ngoài ý muốn, hoặc Pause cắt / không cắt contact sai kỳ vọng.",
+        "priority": "P2",
+        "covered_by_checks": [
+          "CHK-006",
+          "CHK-007",
+          "CHK-008",
+          "CHK-016"
+        ],
+        "kb_ids": [
+          "KB-010",
+          "KB-016",
+          "KB-017",
+          "KB-065",
+          "KB-011"
+        ],
+        "coverage_status": "PARTIAL"
+      },
+      {
+        "feature_id": "automation-list",
+        "risk_ref": "RISK-automation-list-04",
+        "risk_description": "Tìm kiếm / lọc trạng thái và giới hạn độ dài từ khoá (search dài làm mất bảng).",
+        "priority": "P3",
+        "covered_by_checks": [
+          "CHK-002",
+          "CHK-003"
+        ],
+        "kb_ids": [
+          "KB-004",
+          "KB-019",
+          "KB-024"
+        ],
+        "coverage_status": "PARTIAL"
+      },
+      {
+        "feature_id": "automation-list",
+        "risk_ref": "RISK-automation-list-05",
+        "risk_description": "Duplicate automation: bản sao không đầy đủ hoặc lỗi với tên dài.",
+        "priority": "P3",
+        "covered_by_checks": [
+          "CHK-013",
+          "CHK-014"
+        ],
+        "kb_ids": [
+          "KB-018",
+          "KB-025"
+        ],
+        "coverage_status": "PARTIAL"
+      },
+      {
+        "feature_id": "automation-list",
+        "risk_ref": "RISK-automation-list-06",
+        "risk_description": "Hiển thị danh sách: cột, định dạng thời gian, phân trang và thứ tự sắp xếp.",
+        "priority": "P3",
+        "covered_by_checks": [
+          "CHK-004",
+          "CHK-005",
+          "CHK-009"
+        ],
+        "kb_ids": [
+          "KB-002",
+          "KB-005",
+          "KB-006",
+          "KB-008",
+          "KB-009",
+          "KB-020",
+          "KB-023",
+          "KB-007"
+        ],
+        "coverage_status": "PARTIAL"
+      },
+      {
+        "feature_id": "automation-list",
+        "risk_ref": "RISK-automation-list-07",
+        "risk_description": "Phân quyền theo role và cô lập dữ liệu automation giữa các workspace chưa có quy tắc.",
+        "priority": "P1",
+        "covered_by_checks": [
+          "CHK-017",
+          "CHK-018"
+        ],
+        "kb_ids": [
+          "KB-026",
+          "KB-P-051",
+          "KB-P-052"
+        ],
+        "coverage_status": "FLAGGED_NEEDS_CONFIRMATION"
+      }
+    ],
+    "kb_items_without_dedicated_check": [
+      {
+        "kb_id": "KB-021",
+        "note": "Toast thành công / lỗi chỉ thấy trong bundle (INFERRED); không làm oracle. Người chạy CHK-006/007/012/013 ghi nhận toast thực tế nếu có."
+      },
+      {
+        "kb_id": "KB-022",
+        "note": "Endpoint danh sách / activate / pause / duplicate / delete chỉ đọc từ bundle (INFERRED), contract chưa có; không tạo check API riêng. CHK-017/018 ghi nhận phản hồi API thực tế."
+      }
+    ],
+    "checks_needing_confirmation": [
+      {
+        "check_id": "CHK-003",
+        "open_question_draft": "Khi người dùng search automation bằng từ khoá dài hơn 255 ký tự, hệ thống phải xử lý thế nào: giới hạn độ dài ô search, tự cắt, hay hiện thông báo lỗi mà vẫn giữ bảng và ô search / filter?",
+        "reason": "Chỉ có lỗi quan sát (422 làm mất bảng), không có quy tắc mong đợi cho từ khoá dài."
+      },
+      {
+        "check_id": "CHK-005",
+        "open_question_draft": "Danh sách automation phải sắp xếp theo thứ tự nào mặc định (Last edited mới nhất trước, Last run, hay tên), và người dùng có đổi được thứ tự không?",
+        "reason": "BUG-52 chỉ nói danh sách không sắp theo Last edited; không có quy tắc thứ tự mong đợi."
+      },
+      {
+        "check_id": "CHK-014",
+        "open_question_draft": "Duplicate một automation có tên dài 255 ký tự thì bản sao được đặt tên thế nào (cắt tên, giữ nguyên, thêm hậu tố) và nếu không tạo được thì người dùng thấy thông báo gì?",
+        "reason": "Chỉ có lỗi quan sát (500), không có quy tắc đặt tên bản sao ở giới hạn độ dài."
+      },
+      {
+        "check_id": "CHK-016",
+        "open_question_draft": "Dòng automation ở trạng thái Draft trên danh sách có nút nhanh và menu hành động gì; có Activate và Delete trực tiếp từ danh sách được không, và Delete có cần dialog xác nhận như dòng Paused không?",
+        "reason": "Ghi chú dòng Draft không có nút nhanh chưa được quan sát trực tiếp; không có quy tắc cho menu dòng Draft."
+      },
+      {
+        "check_id": "CHK-017",
+        "open_question_draft": "Role nào (Owner, Admin, Member hoặc custom role) được xem danh sách automation, tạo, sửa, Activate, Pause, Duplicate và Delete automation; khi role không đủ quyền thì UI ẩn thao tác hay API trả lỗi gì?",
+        "reason": "Quyền của Member / custom role với automation đang chờ chốt (GAP-07) và tên role thứ 3 đang tranh chấp; tài liệu chỉ khảo sát bằng Owner."
+      },
+      {
+        "check_id": "CHK-018",
+        "open_question_draft": "Khi người dùng của workspace B mở hoặc gọi API với id automation thuộc workspace A, hệ thống phải trả kết quả gì (403, 404 hay trang lỗi), và có đảm bảo không lộ tên, flow hay run của workspace A không?",
+        "reason": "Không có item KB nào của automations mô tả cô lập dữ liệu giữa workspace; chỉ có gợi ý trong regression checklist QA."
+      }
+    ],
+    "duplicates_removed": [],
+    "excluded_dimensions": [
+      {
+        "dimension": "REGRESSION",
+        "reason": "Bootstrap đầu tiên của object automations; chưa có phiên bản trước để đối chiếu thay đổi hành vi. Các lỗi đã biết được theo dõi qua regression_watch_kb_ids của từng check."
+      }
+    ]
+  },
+  "gate": {
+    "decision": "PASS",
+    "blocking_findings": [],
+    "conditions": [
+      "6 check NEEDS_CONFIRMATION (CHK-003, CHK-005, CHK-014, CHK-016, CHK-017, CHK-018) chỉ ghi nhận hành vi, không phán pass/fail cho tới khi PO/Dev trả lời; check BASELINE lệch = cần điều tra, không mặc định là bug."
+    ],
+    "allowed_next_steps": [
+      "knowledge-diff-analyzer",
+      "context-quality-reviewer"
+    ]
+  }
+}

@@ -1,0 +1,822 @@
+{
+  "schema_version": "1.0",
+  "artifact_type": "FeatureProfileCandidate",
+  "artifact_id": "ART-FEATURE-PROFILE-submission-review-and-decision-CTX-20261009-01",
+  "workflow_id": "CTX-20261009-01",
+  "producer": "feature-profile-builder",
+  "source_refs": [
+    "candidate/product-kb/submission-review-and-decision.json",
+    "candidate/product-kb/approve-company-creation.json",
+    "candidate/product-kb/customer-matching.json",
+    "candidate/product-kb/auto-company-creation-on-submit.json",
+    "candidate/product-kb/_product-level.json",
+    "input/scope-plan.json",
+    "input/orchestrator-directives.json",
+    "input/profile-checklist-brief.md"
+  ],
+  "upstream_artifact_ids": [
+    "PKBC-CTX-20261009-01-company-submissions-submission-review-and-decision",
+    "PKBC-CTX-20261009-01-company-submissions-approve-company-creation",
+    "PKBC-CTX-20261009-01-company-submissions-customer-matching",
+    "PKBC-CTX-20261009-01-company-submissions-auto-company-creation-on-submit",
+    "PKBC-CTX-20261009-01-_product-level",
+    "SCOPE-PLAN-CTX-20261009-01"
+  ],
+  "status": "PARTIAL",
+  "confidence": "MEDIUM",
+  "observations": [
+    "Profile dựng từ tài liệu; không có quan sát runtime nên act_ids và observed_validations rỗng.",
+    "Quy tắc đã xác nhận (Approve ghi `completed`, badge, tab lọc, nút Approve) đến từ Dev FE 22/09 và 30/09/2026; tập status đầy đủ thuộc tranh chấp Reject; mô tả màn là hiện trạng staging 08/10/2026 trên store chưa có submission.",
+    "Hai tranh chấp do feature này sở hữu (Reject vs Delete, điều kiện khoá sửa email/phone) nằm ở risks, unknown_areas và profile_conflicts."
+  ],
+  "assumptions": [
+    "feature_id dùng chính feature_key (ổn định qua các version).",
+    "Object company-submissions không có shard object-level; item của feature khác cùng object được tham chiếu khi chúng là trạng thái đầu vào / đầu ra của feature này.",
+    "Câu hỏi role của cả object đặt ở profile submission-review-and-decision (một câu duy nhất)."
+  ],
+  "unknowns": [
+    "Submission có thao tác Reject (kèm lý do, status Rejected) hay chỉ có bulk Delete, tức tập status lưu là `pending` / `completed` / `failed` hay có thêm `rejected`? Nếu chỉ Delete thì expected \"Rejected\" của TC-DUOS-069 xử lý thế nào?",
+    "Bulk action \"Delete selected submisisons\" xoá những gì: chỉ bản ghi submission, hay cả Company / Location / Main contact đã được job tạo lúc submit (store bật cờ)?",
+    "Merchant bị khoá sửa email/phone của submission theo cờ `enable_company_creation_on_submit` hay theo việc submission đã có `company_id`? Store bật cờ nhưng job lỗi hoặc bị `rate_limited` (không có `company_id`) thì có sửa được không (task Testlane GAP-27)?",
+    "Role nào của merchant được xem danh sách submission, sửa email/phone, Approve và xoá submission trong Company submissions?",
+    "Hành vi \"merchant sửa được email/phone của submission trước khi Approve\" (Jira DUOS-91, description trống) còn đúng trên build hiện tại không?",
+    "BUG-210 (phone submission lưu chỉ \"+84\") do nguyên nhân gì, và phone thiếu số có làm Approve luồng cũ thất bại không?",
+    "Status `failed` xuất hiện trong những trường hợp nào ở store không bật cờ, và hành vi khi cờ OFF có gì khác ở màn duyệt?",
+    "Trang chi tiết submission, nút Approve, bulk Delete, sự vắng mặt của Reject và icon sửa email/phone hiện ra sao trên build staging hiện tại?"
+  ],
+  "conflicts": [
+    "Submission có thao tác Reject (kèm lý do, status Rejected) hay chỉ có bulk Delete — UNRESOLVED (CONF-DUOS-company-submissions-01)",
+    "Điều kiện khoá sửa email/phone của submission — UNRESOLVED (CONF-DUOS-company-submissions-02)"
+  ],
+  "blocking_issues": [],
+  "payload": {
+    "feature_profiles": [
+      {
+        "feature_id": "submission-review-and-decision",
+        "feature_key": "submission-review-and-decision",
+        "name": "Duyệt submission đăng ký B2B: xem theo trạng thái, sửa email/phone, quyết định Approve hoặc loại bỏ",
+        "user_goal": "Merchant theo dõi các submission đăng ký B2B gửi từ registration form theo trạng thái (Pending / Approved / Failed), xem chi tiết, sửa email/phone khi còn được phép, rồi quyết định Approve để buyer thành company B2B hoặc loại bỏ submission không đạt (Reject hay chỉ bulk Delete đang tranh chấp).",
+        "user_goal_kb_refs": [
+          "KB-001",
+          "KB-004",
+          "KB-005",
+          "KB-008",
+          "KB-009",
+          "KB-010",
+          "KB-014",
+          "KB-P-018"
+        ],
+        "stable_since_version": "v1",
+        "actors": [
+          {
+            "role": "merchant (Portal)",
+            "permission_observed": "Khảo sát staging 08/10/2026 bằng merchant staff trên store staging Plus (Free plan) chưa có form và chưa có submission: chỉ thấy màn quản lý và bảng rỗng. Role nào của merchant được xem, sửa email/phone, Approve hay xoá submission chưa được tài liệu nêu.",
+            "kb_refs": [
+              "KB-006",
+              "KB-007",
+              "KB-005",
+              "KB-010"
+            ]
+          },
+          {
+            "role": "buyer (người gửi registration form)",
+            "permission_observed": "Tạo ra submission bằng cách gửi registration form; không thao tác trên màn duyệt submission.",
+            "kb_refs": [
+              "KB-P-018"
+            ]
+          },
+          {
+            "role": "system",
+            "permission_observed": "Lưu status submission (Approve ghi `completed`; có status `failed`; tập status đầy đủ phụ thuộc tranh chấp Reject chưa chốt) và các field `company_id`, `company_creation_error` mà Portal dựa vào để hiển thị và chọn nhánh Approve.",
+            "kb_refs": [
+              "KB-001",
+              "KB-002",
+              "KB-003",
+              "KB-018",
+              "KB-020"
+            ]
+          }
+        ],
+        "entry_points": [
+          {
+            "path": "Portal › hub B2B extensions › row \"B2B registration\" → màn \"B2B Company management\" (ticket và QA gọi là \"Company submissions\")",
+            "precondition": "Đã mở Portal (embedded app trong Shopify admin) bằng tài khoản merchant.",
+            "kb_refs": [
+              "KB-006",
+              "KB-P-011",
+              "KB-P-003"
+            ]
+          },
+          {
+            "path": "Danh sách submission với tab All / Pending / Approved / Failed, ô \"Search and filter results\", \"Sort the results\"",
+            "precondition": "Đang ở màn quản lý submission.",
+            "kb_refs": [
+              "KB-004",
+              "KB-007"
+            ]
+          },
+          {
+            "path": "Trang chi tiết submission, nút \"Approve company\"",
+            "precondition": "Submission có status khác `completed`.",
+            "kb_refs": [
+              "KB-005"
+            ]
+          },
+          {
+            "path": "Edit submission → Account → \"Your email\"",
+            "precondition": "Submission chưa bị khoá sửa (điều kiện khoá đang tranh chấp).",
+            "kb_refs": [
+              "KB-015",
+              "KB-012",
+              "KB-013"
+            ]
+          },
+          {
+            "path": "Tick checkbox ở danh sách → bulk action \"Delete selected submisisons\"",
+            "precondition": "Đã chọn ít nhất một submission.",
+            "kb_refs": [
+              "KB-010"
+            ]
+          }
+        ],
+        "capabilities": [
+          {
+            "name": "Theo dõi submission theo trạng thái",
+            "description": "`completed` hiển thị badge \"Approved\", `failed` hiển thị badge đỏ \"Failed\" ở danh sách và header chi tiết; danh sách lọc theo tab All / Pending / Approved / Failed. Việc status chỉ gồm `pending` / `completed` / `failed` (không có `rejected`) là một phía của tranh chấp Reject chưa chốt. Trên staging (08/10/2026, 0 submission) bảng có search/sort và empty state \"No company submission found\".",
+            "kb_refs": [
+              "KB-001",
+              "KB-002",
+              "KB-003",
+              "KB-004",
+              "KB-006",
+              "KB-007"
+            ],
+            "act_ids": []
+          },
+          {
+            "name": "Quyết định Approve một submission",
+            "description": "Nút \"Approve company\" hiện với mọi status trừ `completed` (kể cả `failed`); Approve ghi `completed`. Cách Approve tạo company / bắn trigger thuộc profile approve-company-creation.",
+            "kb_refs": [
+              "KB-005",
+              "KB-002",
+              "KB-018"
+            ],
+            "act_ids": []
+          },
+          {
+            "name": "Sửa email/phone của submission trước khi duyệt",
+            "description": "Theo ticket Jira DUOS-91, merchant sửa được email/phone trước khi Approve (qua Edit submission → Account → \"Your email\" trên staging). Điều kiện khoá sửa (theo cờ `enable_company_creation_on_submit` hay theo `company_id`) đang tranh chấp. Có bug mở về phone lưu thiếu số.",
+            "kb_refs": [
+              "KB-014",
+              "KB-015",
+              "KB-012",
+              "KB-013",
+              "KB-017"
+            ],
+            "act_ids": []
+          },
+          {
+            "name": "Loại bỏ submission không đạt",
+            "description": "Có thao tác Reject (kèm lý do, status Rejected) hay chỉ có bulk Delete là tranh chấp chưa chốt. Hiện trạng staging có bulk action \"Delete selected submisisons\"; phạm vi xoá (có đụng tới company đã tạo lúc submit hay không) chưa chốt; theo phía \"không có Reject\" của tranh chấp, company tạo lúc submit không dọn được từ app.",
+            "kb_refs": [
+              "KB-008",
+              "KB-009",
+              "KB-010",
+              "KB-011",
+              "KB-057"
+            ],
+            "act_ids": []
+          }
+        ],
+        "state_transitions": [
+          {
+            "from": "submission đang `pending` hoặc `failed`",
+            "to": "`completed` (badge \"Approved\")",
+            "trigger": "Merchant bấm \"Approve company\" và nhánh Approve thành công",
+            "condition": "Status khác `completed`; nhánh xử lý theo `company_id` (xem approve-company-creation).",
+            "kb_refs": [
+              "KB-002",
+              "KB-005",
+              "KB-018"
+            ]
+          },
+          {
+            "from": "`completed`",
+            "to": "`completed` (không còn nút Approve)",
+            "trigger": "Mở lại trang chi tiết",
+            "condition": "Nút \"Approve company\" ẩn khi status là `completed`.",
+            "kb_refs": [
+              "KB-005"
+            ]
+          },
+          {
+            "from": "`pending`",
+            "to": "`failed`",
+            "trigger": "Job tạo company lúc submit lỗi trước bước `companyCreate`, hoặc bắn trigger lỗi ở nhánh có `company_id`",
+            "condition": "Store bật cờ / submission có `company_id` (chi tiết ở các profile tạo company).",
+            "kb_refs": [
+              "KB-053",
+              "KB-026",
+              "KB-003"
+            ]
+          },
+          {
+            "from": "submission chưa Approve",
+            "to": "Rejected (đang tranh chấp)",
+            "trigger": "Reject kèm lý do",
+            "condition": "Chỉ một phía tranh chấp nói có; PO 30/09/2026 nói không có Reject. Không phải kết quả mong đợi.",
+            "kb_refs": [
+              "KB-008",
+              "KB-009"
+            ]
+          },
+          {
+            "from": "submission bất kỳ đã được chọn",
+            "to": "bị xoá khỏi danh sách (phạm vi xoá chưa chốt)",
+            "trigger": "Bulk action \"Delete selected submisisons\"",
+            "condition": "Hiện trạng staging; có xoá Company / Location / Main contact đã tạo lúc submit hay không chưa chốt.",
+            "kb_refs": [
+              "KB-010",
+              "KB-011"
+            ]
+          }
+        ],
+        "confirmed_rules": [
+          {
+            "statement": "Theo Dev FE 22/09 và 30/09/2026 (task Testlane DUOS-004 BR-08, BR-25, BR-47), Approve ghi status `completed` cho submission và Portal hiển thị status này bằng badge \"Approved\".",
+            "knowledge_kind": "CONFIRMED_EXPECTED",
+            "confidence": "MEDIUM",
+            "kb_refs": [
+              "KB-002"
+            ]
+          },
+          {
+            "statement": "Theo Dev FE 22/09 và 30/09/2026 (task Testlane DUOS-004 BR-08, BR-47), submission có status `failed` hiển thị badge đỏ \"Failed\" ở danh sách submission và ở header trang chi tiết.",
+            "knowledge_kind": "CONFIRMED_EXPECTED",
+            "confidence": "MEDIUM",
+            "kb_refs": [
+              "KB-003"
+            ]
+          },
+          {
+            "statement": "Theo Dev FE 22/09 và 30/09/2026 (task Testlane DUOS-004 BR-08, BR-47), danh sách submission trên Portal có các tab lọc All / Pending / Approved / Failed.",
+            "knowledge_kind": "CONFIRMED_EXPECTED",
+            "confidence": "MEDIUM",
+            "kb_refs": [
+              "KB-004"
+            ]
+          },
+          {
+            "statement": "Theo Dev FE 30/09/2026 (task Testlane DUOS-004 BR-25), nút \"Approve company\" trên trang chi tiết submission hiện với mọi status trừ `completed`, kể cả `failed`.",
+            "knowledge_kind": "CONFIRMED_EXPECTED",
+            "confidence": "MEDIUM",
+            "kb_refs": [
+              "KB-005"
+            ]
+          }
+        ],
+        "observed_behavior": [
+          {
+            "statement": "Trên staging (khảo sát 08/10/2026, store staging Plus (Free plan), tài khoản merchant staff), màn quản lý submission trên Portal mang header \"B2B Company management\" (row ở hub B2B extensions tên \"B2B registration\"; ticket và QA KB gọi màn này là \"Company submissions\"), có nút \"Spam protection settings\", \"Help center\", card \"B2B/Wholesale Company registration form\" (badge số form, nút \"Create form\" khi store chưa có form) và card \"Notifications\" với nút \"Manage\".",
+            "knowledge_kind": "OBSERVED_CURRENT",
+            "confidence": "MEDIUM",
+            "kb_refs": [
+              "KB-006"
+            ],
+            "status": "CURRENT_STATE"
+          },
+          {
+            "statement": "Trên staging (khảo sát 08/10/2026, store staging Plus (Free plan), không có submission), bảng submission có ô \"Search and filter results\", điều khiển \"Sort the results\" và khi không có submission hiển thị empty state \"No company submission found\".",
+            "knowledge_kind": "OBSERVED_CURRENT",
+            "confidence": "MEDIUM",
+            "kb_refs": [
+              "KB-007"
+            ],
+            "status": "CURRENT_STATE"
+          },
+          {
+            "statement": "Trên staging (quan sát qua TC-DUOS-198, 30/09/2026, store staging bật cờ; PO 30/09/2026 nhắc cùng nội dung ở task Testlane DUOS-004 BR-48), khi tick checkbox ở danh sách submission xuất hiện bulk action \"Delete selected submisisons\" (nguyên văn chính tả trên UI).",
+            "knowledge_kind": "OBSERVED_CURRENT",
+            "confidence": "MEDIUM",
+            "kb_refs": [
+              "KB-010"
+            ],
+            "status": "CURRENT_STATE"
+          },
+          {
+            "statement": "Trên staging (quan sát qua TC-DUOS-197, ngày không ghi), email của submission được sửa qua Edit submission → Account → \"Your email\".",
+            "knowledge_kind": "OBSERVED_CURRENT",
+            "confidence": "LOW",
+            "kb_refs": [
+              "KB-015"
+            ],
+            "status": "CURRENT_STATE"
+          }
+        ],
+        "observed_validations": [],
+        "permissions": [
+          {
+            "statement": "Role nào của merchant (chủ store, staff Shopify với quyền nào trong app) được xem danh sách submission, sửa email/phone, Approve và xoá submission chưa được tài liệu nêu; khảo sát staging dùng merchant staff.",
+            "kb_refs": [
+              "KB-001",
+              "KB-005",
+              "KB-006",
+              "KB-010",
+              "KB-014"
+            ]
+          },
+          {
+            "statement": "Quyền sửa email/phone của submission bị khoá theo một điều kiện đang tranh chấp: theo cờ `enable_company_creation_on_submit` (PO 30/09/2026) hay theo việc submission đã có `company_id` (Dev FE 30/09/2026, quan sát TC-DUOS-196).",
+            "kb_refs": [
+              "KB-012",
+              "KB-013"
+            ]
+          }
+        ],
+        "surface_mapping": {
+          "portal": [
+            {
+              "item": "Màn \"B2B Company management\": nút \"Spam protection settings\", \"Help center\", card \"B2B/Wholesale Company registration form\", card \"Notifications\" (nút \"Manage\")",
+              "kb_refs": [
+                "KB-006",
+                "KB-P-011"
+              ]
+            },
+            {
+              "item": "Bảng submission: tab All / Pending / Approved / Failed, search, sort, empty state \"No company submission found\", badge \"Approved\" / \"Failed\"",
+              "kb_refs": [
+                "KB-004",
+                "KB-007",
+                "KB-002",
+                "KB-003"
+              ]
+            },
+            {
+              "item": "Trang chi tiết submission: nút \"Approve company\", badge Failed ở header, card Submission (icon sửa), Edit submission → Account → \"Your email\"",
+              "kb_refs": [
+                "KB-005",
+                "KB-003",
+                "KB-013",
+                "KB-015"
+              ]
+            },
+            {
+              "item": "Bulk action \"Delete selected submisisons\" (nguyên văn chính tả)",
+              "kb_refs": [
+                "KB-010",
+                "KB-016"
+              ]
+            }
+          ],
+          "storefront": [
+            {
+              "item": "Registration form là nơi buyer tạo submission (hành vi form thuộc object b2b-registration)",
+              "kb_refs": [
+                "KB-P-018"
+              ]
+            }
+          ],
+          "api": [],
+          "data": [
+            {
+              "item": "Submission.status: `pending`, `completed`, `failed` (có thêm `rejected` hay không đang tranh chấp)",
+              "kb_refs": [
+                "KB-001",
+                "KB-008",
+                "KB-002",
+                "KB-003"
+              ]
+            },
+            {
+              "item": "Submission `company_id`, `company_creation_error` (quyết định khoá sửa / nhánh Approve / banner)",
+              "kb_refs": [
+                "KB-013",
+                "KB-018",
+                "KB-020"
+              ]
+            },
+            {
+              "item": "Submission email / phone (có trường hợp phone lưu chỉ \"+84\")",
+              "kb_refs": [
+                "KB-014",
+                "KB-017"
+              ]
+            }
+          ],
+          "code": []
+        },
+        "dependencies": [
+          {
+            "target": "company-submissions / approve-company-creation",
+            "relation": "hands_off_to",
+            "note": "Approve trên màn này chạy logic chọn nhánh, tạo company và bắn Flow trigger của profile approve-company-creation.",
+            "kb_refs": [
+              "KB-005",
+              "KB-018"
+            ]
+          },
+          {
+            "target": "company-submissions / auto-company-creation-on-submit",
+            "relation": "state_source",
+            "note": "`company_id` / `company_creation_error` do job lúc submit ghi quyết định khoá sửa (một phía tranh chấp); company tạo lúc submit còn lại sau khi loại bỏ submission (phụ thuộc tranh chấp Reject vs Delete).",
+            "kb_refs": [
+              "KB-013",
+              "KB-057"
+            ]
+          },
+          {
+            "target": "b2b-registration / registration-spam-protection",
+            "relation": "entry_point_to",
+            "note": "Nút \"Spam protection settings\" trên màn này mở trang cấu hình chống spam thuộc object b2b-registration.",
+            "kb_refs": [
+              "KB-006"
+            ]
+          },
+          {
+            "target": "notifications",
+            "relation": "entry_point_to",
+            "note": "Card \"Notifications\" (nút \"Manage\") trên màn này dẫn sang cấu hình thông báo thuộc object notifications.",
+            "kb_refs": [
+              "KB-006"
+            ]
+          },
+          {
+            "target": "b2b-registration / registration-form-builder",
+            "relation": "upstream",
+            "note": "Submission sinh ra từ registration form; store chưa có form thì màn hiện nút \"Create form\".",
+            "kb_refs": [
+              "KB-006",
+              "KB-P-018"
+            ]
+          }
+        ],
+        "risks": [
+          {
+            "statement": "Một phía của tranh chấp Reject/Delete chưa chốt: theo Dev FE 22/09 và 30/09/2026 (task Testlane DUOS-004 BR-08, BR-47) và Decision log Duos mục 30/09/2026 (mục quyết định Portal không có nút Reject), status lưu của một submission chỉ gồm `pending`, `completed`, `failed` — không có status `rejected`. Phía có Reject (Jira DUOS-6 2024, tài liệu sản phẩm Duos docs 09/07/2026, TC-DUOS-069 passed) mô tả trạng thái Rejected; chưa dùng tập status này làm kết quả mong đợi.",
+            "knowledge_kind": "INFERRED",
+            "confidence": "LOW",
+            "status": "UNRESOLVED",
+            "conflict_group": "CONF-DUOS-company-submissions-01",
+            "kb_refs": [
+              "KB-001"
+            ],
+            "note": "Tập status không có `rejected` thuộc phía \"không có Reject\" của tranh chấp; không làm oracle."
+          },
+          {
+            "statement": "Một phía của tranh chấp chưa chốt: theo Jira DUOS-6 (spec gốc 2024, Done) và tài liệu sản phẩm Duos (docs 09/07/2026), được tóm tắt trong QA business rule Duos, merchant có thể \"approve or reject\" submission kèm lý do; TC-DUOS-069 (task Testlane DUOS-002) đang ở trạng thái passed với expected \"Submission chuyển đúng trạng thái Rejected\". Phía này mâu thuẫn quyết định PO 30/09/2026 nên chưa dùng làm kết quả mong đợi.",
+            "knowledge_kind": "INFERRED",
+            "confidence": "LOW",
+            "status": "UNRESOLVED",
+            "conflict_group": "CONF-DUOS-company-submissions-01",
+            "kb_refs": [
+              "KB-008"
+            ],
+            "note": "Một phía tranh chấp Reject vs Delete; không làm oracle."
+          },
+          {
+            "statement": "Một phía của tranh chấp chưa chốt: theo PO 30/09/2026 (chuyển lời qua QA lead, task Testlane DUOS-004 BR-48; ghi trong QA business rule Duos, Decision log Duos mục 30/09/2026 và Known issues Duos như giới hạn có chủ đích), Portal không có nút Reject và submission không có status `rejected`; quan sát staging qua TC-DUOS-198 (store bật cờ) và TC-DUOS-203 (store không bật cờ) không thấy nút Reject. Decision log Duos ghi mục này thay mô tả \"approve or reject\" của Jira DUOS-6, nhưng QA business rule Duos vẫn để rule ở trạng thái đang tranh chấp và QA KB Duos \"Company submissions\" v1 ghi PO chưa chốt Reject hay Delete.",
+            "knowledge_kind": "INFERRED",
+            "confidence": "LOW",
+            "status": "UNRESOLVED",
+            "conflict_group": "CONF-DUOS-company-submissions-01",
+            "kb_refs": [
+              "KB-009"
+            ],
+            "note": "Phía còn lại của tranh chấp Reject vs Delete; không làm oracle."
+          },
+          {
+            "statement": "Theo Known issues Duos (30/09/2026, task Testlane DUOS-004 BR-48), PO chưa chốt bulk action \"Delete selected submisisons\" có đụng tới (xoá) Company / Location / Main contact đã được job tạo lúc submit hay không; chưa có kết quả mong đợi cho phạm vi xoá của action này.",
+            "knowledge_kind": "INFERRED",
+            "confidence": "LOW",
+            "kb_refs": [
+              "KB-011"
+            ],
+            "note": "Phạm vi xoá chạm topic data-deletion và company-creation; chưa có kết quả mong đợi."
+          },
+          {
+            "statement": "Một phía của tranh chấp chưa chốt: theo PO 30/09/2026 (chuyển lời qua QA lead, task Testlane DUOS-004 BR-50; ghi trong QA business rule Duos và Decision log Duos mục 30/09/2026), khi store bật cờ `enable_company_creation_on_submit` thì merchant không sửa được email/phone của submission trong Portal; muốn sửa phải vào Shopify admin.",
+            "knowledge_kind": "INFERRED",
+            "confidence": "LOW",
+            "status": "UNRESOLVED",
+            "conflict_group": "CONF-DUOS-company-submissions-02",
+            "kb_refs": [
+              "KB-012"
+            ],
+            "note": "Một phía tranh chấp điều kiện khoá sửa email/phone."
+          },
+          {
+            "statement": "Một phía của tranh chấp chưa chốt: theo Dev FE 30/09/2026 (task Testlane DUOS-004 BR-24, GAP-27), Portal không đọc cờ `enable_company_creation_on_submit` mà chỉ dựa vào `company_id` của submission; quan sát staging qua TC-DUOS-196 cho thấy submission đã có `company_id` thì card Submission không còn icon sửa — tức khoá sửa email/phone theo `company_id`, không theo cờ. TC-DUOS-196 không dùng làm kết quả mong đợi.",
+            "knowledge_kind": "INFERRED",
+            "confidence": "LOW",
+            "status": "UNRESOLVED",
+            "conflict_group": "CONF-DUOS-company-submissions-02",
+            "kb_refs": [
+              "KB-013"
+            ],
+            "note": "Phía còn lại của tranh chấp điều kiện khoá sửa email/phone."
+          },
+          {
+            "statement": "Theo Jira DUOS-91 (Bug, Done; description trống — QA tóm tắt theo summary của ticket), merchant sửa được email/phone của submission trước khi Approve. Điều kiện khoá sửa (theo cờ hay theo `company_id`) đang tranh chấp và chưa có kết quả mong đợi.",
+            "knowledge_kind": "INFERRED",
+            "confidence": "MEDIUM",
+            "kb_refs": [
+              "KB-014"
+            ],
+            "note": "Chỉ có ticket trần; chưa dùng làm kết quả mong đợi."
+          },
+          {
+            "statement": "Theo Known issues Duos (open — quan sát staging qua TC-DUOS-151, TC-DUOS-198, 30/09/2026, chưa log bug), Portal hiển thị sai chính tả chữ \"submission\": toast sau Approve là \"Company submisison approved\" và bulk action ở danh sách submission là \"Delete selected submisisons\".",
+            "knowledge_kind": "OBSERVED_CURRENT",
+            "confidence": "LOW",
+            "status": "KNOWN_DEFECT",
+            "kb_refs": [
+              "KB-016"
+            ],
+            "note": "Lỗi đang mở — regression watch, không làm oracle."
+          },
+          {
+            "statement": "Theo Known issues Duos (open, BUG-210 — nội dung bug chưa đọc được; actual result TC-DUOS-197, 30/09/2026), có submission được lưu với phone chỉ là \"+84\" (thiếu số). Known issues tự nêu nghi vấn chưa xác nhận rằng phone thiếu số có thể làm Approve luồng cũ thất bại.",
+            "knowledge_kind": "OBSERVED_CURRENT",
+            "confidence": "LOW",
+            "status": "KNOWN_DEFECT",
+            "kb_refs": [
+              "KB-017"
+            ],
+            "note": "Bug đang mở — regression watch, không làm oracle."
+          }
+        ],
+        "unknown_areas": [
+          {
+            "question": "Submission có thao tác Reject (kèm lý do, status Rejected) hay chỉ có bulk Delete, tức tập status lưu là `pending` / `completed` / `failed` hay có thêm `rejected`? Nếu chỉ Delete thì expected \"Rejected\" của TC-DUOS-069 xử lý thế nào?",
+            "why_it_matters": "Hai nguồn có thẩm quyền mâu thuẫn (Jira DUOS-6 + tài liệu sản phẩm 09/07/2026 vs PO 30/09/2026); không check nào về loại bỏ submission có oracle. Nguyên văn tài liệu sản phẩm và câu hỏi mở gốc không có trong bộ nguồn.",
+            "kb_refs": [
+              "KB-008",
+              "KB-009",
+              "KB-001",
+              "KB-010"
+            ]
+          },
+          {
+            "question": "Bulk action \"Delete selected submisisons\" xoá những gì: chỉ bản ghi submission, hay cả Company / Location / Main contact đã được job tạo lúc submit (store bật cờ)?",
+            "why_it_matters": "Chạm data-deletion và company-creation; PO chưa chốt.",
+            "kb_refs": [
+              "KB-010",
+              "KB-011",
+              "KB-057"
+            ]
+          },
+          {
+            "question": "Merchant bị khoá sửa email/phone của submission theo cờ `enable_company_creation_on_submit` hay theo việc submission đã có `company_id`? Store bật cờ nhưng job lỗi hoặc bị `rate_limited` (không có `company_id`) thì có sửa được không (task Testlane GAP-27)?",
+            "why_it_matters": "Tranh chấp PO vs Dev FE + staging; ô giao giữa hai phía chưa có kết quả mong đợi.",
+            "kb_refs": [
+              "KB-012",
+              "KB-013",
+              "KB-014"
+            ]
+          },
+          {
+            "question": "Role nào của merchant được xem danh sách submission, sửa email/phone, Approve và xoá submission trong Company submissions?",
+            "why_it_matters": "Không có expected result cho check phân quyền của cả object; nhiều phát biểu không ghi role.",
+            "kb_refs": [
+              "KB-001",
+              "KB-005",
+              "KB-010",
+              "KB-014",
+              "KB-018",
+              "KB-023",
+              "KB-047",
+              "KB-048"
+            ]
+          },
+          {
+            "question": "Hành vi \"merchant sửa được email/phone của submission trước khi Approve\" (Jira DUOS-91, description trống) còn đúng trên build hiện tại không?",
+            "why_it_matters": "Chỉ dựa ticket trần, không có rule đang hiệu lực hay quyết định PO/Dev có ngày.",
+            "kb_refs": [
+              "KB-014"
+            ]
+          },
+          {
+            "question": "BUG-210 (phone submission lưu chỉ \"+84\") do nguyên nhân gì, và phone thiếu số có làm Approve luồng cũ thất bại không?",
+            "why_it_matters": "Bug đang mở, nội dung chưa đọc được; nghi vấn liên quan Approve submission Failed không làm gì.",
+            "kb_refs": [
+              "KB-017",
+              "KB-029"
+            ]
+          },
+          {
+            "question": "Status `failed` xuất hiện trong những trường hợp nào ở store không bật cờ, và hành vi khi cờ OFF có gì khác ở màn duyệt?",
+            "why_it_matters": "Tài liệu chỉ mô tả `failed` cho job lúc submit và trigger lỗi ở nhánh có `company_id`.",
+            "kb_refs": [
+              "KB-001",
+              "KB-003",
+              "KB-053",
+              "KB-026"
+            ]
+          },
+          {
+            "question": "Trang chi tiết submission, nút Approve, bulk Delete, sự vắng mặt của Reject và icon sửa email/phone hiện ra sao trên build staging hiện tại?",
+            "why_it_matters": "Khảo sát 08/10/2026 không có submission; các quan sát 30/09/2026 không ghi build.",
+            "kb_refs": [
+              "KB-005",
+              "KB-009",
+              "KB-010",
+              "KB-013",
+              "KB-015"
+            ]
+          }
+        ],
+        "freshness": {
+          "observed_at": "2026-10-08",
+          "run_id": "CTX-20261009-01",
+          "earliest_source_date": "2026-09-30",
+          "basis": "Ngày nguồn mới nhất / sớm nhất trong các KB item được tham chiếu (ngày quyết định PO/Dev, ngày cập nhật Jira, ngày quan sát staging); không có quan sát runtime trong lần chạy này."
+        }
+      }
+    ],
+    "profile_relationships": [
+      {
+        "from": "submission-review-and-decision",
+        "to": "approve-company-creation",
+        "relation": "HANDS_OFF_TO",
+        "kb_refs": [
+          "KB-005",
+          "KB-018"
+        ]
+      },
+      {
+        "from": "submission-review-and-decision",
+        "to": "auto-company-creation-on-submit",
+        "relation": "STATE_DEPENDS_ON",
+        "kb_refs": [
+          "KB-013",
+          "KB-057"
+        ]
+      },
+      {
+        "from": "submission-review-and-decision",
+        "to": "b2b-registration/registration-spam-protection",
+        "relation": "LINKS_TO",
+        "kb_refs": [
+          "KB-006"
+        ]
+      }
+    ],
+    "coverage_matrix": [
+      {
+        "feature_id": "submission-review-and-decision",
+        "layer": "portal",
+        "role": "merchant",
+        "state": "danh sách submission rỗng",
+        "environment": "documented",
+        "covered": true,
+        "note": "Hiện trạng staging 08/10/2026"
+      },
+      {
+        "feature_id": "submission-review-and-decision",
+        "layer": "portal",
+        "role": "merchant",
+        "state": "lọc theo Pending / Approved / Failed",
+        "environment": "documented",
+        "covered": true,
+        "note": "Dev FE 22/09 và 30/09/2026"
+      },
+      {
+        "feature_id": "submission-review-and-decision",
+        "layer": "portal",
+        "role": "merchant",
+        "state": "chi tiết submission `failed` / `pending` (nút Approve hiện)",
+        "environment": "documented",
+        "covered": true,
+        "note": "Dev FE 30/09/2026"
+      },
+      {
+        "feature_id": "submission-review-and-decision",
+        "layer": "portal",
+        "role": "merchant",
+        "state": "chi tiết submission `completed` (nút Approve ẩn)",
+        "environment": "documented",
+        "covered": true,
+        "note": "Dev FE 30/09/2026"
+      },
+      {
+        "feature_id": "submission-review-and-decision",
+        "layer": "portal",
+        "role": "merchant",
+        "state": "sửa email/phone khi chưa có `company_id`",
+        "environment": "documented",
+        "covered": false,
+        "note": "Chỉ ticket trần + tranh chấp điều kiện khoá"
+      },
+      {
+        "feature_id": "submission-review-and-decision",
+        "layer": "portal",
+        "role": "merchant",
+        "state": "sửa email/phone khi đã có `company_id` / store bật cờ",
+        "environment": "documented",
+        "covered": false,
+        "note": "Tranh chấp PO vs Dev FE"
+      },
+      {
+        "feature_id": "submission-review-and-decision",
+        "layer": "portal",
+        "role": "merchant",
+        "state": "loại bỏ submission (Reject / bulk Delete)",
+        "environment": "documented",
+        "covered": false,
+        "note": "Tranh chấp; phạm vi xoá chưa chốt"
+      },
+      {
+        "feature_id": "submission-review-and-decision",
+        "layer": "portal",
+        "role": "merchant (role khác chủ store)",
+        "state": "any",
+        "environment": "documented",
+        "covered": false,
+        "note": "Ma trận quyền chưa có"
+      },
+      {
+        "feature_id": "submission-review-and-decision",
+        "layer": "data",
+        "role": "system",
+        "state": "tập giá trị status submission (có `rejected` hay không)",
+        "environment": "documented",
+        "covered": false,
+        "note": "Tranh chấp Reject vs Delete"
+      },
+      {
+        "feature_id": "submission-review-and-decision",
+        "layer": "api",
+        "role": "unspecified",
+        "state": "any",
+        "environment": "documented",
+        "covered": false,
+        "note": "Bộ tài liệu QA không có đặc tả API/data model cho feature này"
+      },
+      {
+        "feature_id": "submission-review-and-decision",
+        "layer": "db",
+        "role": "unspecified",
+        "state": "any",
+        "environment": "documented",
+        "covered": false,
+        "note": "Bộ tài liệu QA không có đặc tả API/data model cho feature này"
+      },
+      {
+        "feature_id": "submission-review-and-decision",
+        "layer": "code",
+        "role": "unspecified",
+        "state": "any",
+        "environment": "documented",
+        "covered": false,
+        "note": "Không có nguồn mã"
+      }
+    ],
+    "unassigned_kb_items": [],
+    "profile_conflicts": [
+      {
+        "conflict_group": "CONF-DUOS-company-submissions-01",
+        "owner_feature": "submission-review-and-decision",
+        "topic": "Submission có thao tác Reject (kèm lý do, status Rejected) hay chỉ có bulk Delete",
+        "side_a": "Jira DUOS-6 (2024, Done) + tài liệu sản phẩm Duos (docs 09/07/2026): merchant \"approve or reject\" submission kèm lý do; TC-DUOS-069 passed với expected \"Rejected\".",
+        "side_b": "PO 30/09/2026 (task Testlane DUOS-004 BR-48) + Decision log Duos 30/09/2026: không có nút Reject, không có status `rejected` — status lưu chỉ gồm `pending` / `completed` / `failed` (Dev FE 22/09 và 30/09/2026) — chỉ bulk Delete; staging TC-DUOS-198 / TC-DUOS-203 không thấy Reject.",
+        "resolution": "UNRESOLVED",
+        "impact": "Mọi check loại bỏ submission không có oracle; TC-DUOS-069 không làm oracle.",
+        "kb_refs": [
+          "KB-008",
+          "KB-009",
+          "KB-001"
+        ]
+      },
+      {
+        "conflict_group": "CONF-DUOS-company-submissions-02",
+        "owner_feature": "submission-review-and-decision",
+        "topic": "Điều kiện khoá sửa email/phone của submission",
+        "side_a": "PO 30/09/2026 (task Testlane DUOS-004 BR-50): store bật cờ `enable_company_creation_on_submit` thì không sửa được email/phone trong Portal, phải sửa ở Shopify admin.",
+        "side_b": "Dev FE 30/09/2026 (task Testlane DUOS-004 BR-24): Portal không đọc cờ, chỉ dựa `company_id`; staging TC-DUOS-196 thấy submission có `company_id` mất icon sửa.",
+        "resolution": "UNRESOLVED",
+        "impact": "Check khoá sửa email/phone không có oracle; ô giao (cờ bật, không có `company_id`) chưa rõ.",
+        "kb_refs": [
+          "KB-012",
+          "KB-013"
+        ]
+      }
+    ],
+    "profile_change_summary": [
+      "Profile v1 từ bootstrap tài liệu."
+    ],
+    "kb_trace_complete": true
+  },
+  "gate": {
+    "decision": "CONDITIONAL_PASS",
+    "blocking_findings": [],
+    "conditions": [
+      "Identity, user goal, capability theo mục tiêu duyệt submission và mapping KB đầy đủ.",
+      "Loại bỏ submission và khoá sửa email/phone là tranh chấp UNRESOLVED nên check tương ứng phải NEEDS_CONFIRMATION.",
+      "Ma trận quyền của object chưa có."
+    ],
+    "allowed_next_steps": [
+      "qa-checklist-builder",
+      "knowledge-diff-analyzer"
+    ]
+  }
+}

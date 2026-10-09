@@ -1,0 +1,354 @@
+{
+  "feature_id": "uninstall-reinstall-token-cleanup",
+  "feature_key": "uninstall-reinstall-token-cleanup",
+  "checklist_version": "v1",
+  "checks": [
+    {
+      "check_id": "CHK-001",
+      "dimension": "CORE",
+      "layer": "db",
+      "title": "Uninstall xoá session, clear 4 field token, clear cached shop và soft-delete shop",
+      "applicability": {
+        "role": "system",
+        "state": "shop đang cài app vừa uninstall",
+        "environment": "documented",
+        "theme_or_device": null
+      },
+      "precondition": "Có quyền (hoặc Dev BE hỗ trợ) đọc/ghi các field token của shop trong dữ liệu backend Duos ở môi trường test và xem log request gửi tới Shopify Admin API của shop. <shop-expiring> đang cài app, có session và đủ 4 field token có giá trị.",
+      "steps": [
+        "Ghi lại session, 4 field token và trạng thái shop trước khi uninstall.",
+        "Uninstall app Duos khỏi shop trên Shopify admin; chờ webhook uninstall được xử lý.",
+        "Kiểm lại session, 4 field token, cached shop và trạng thái shop."
+      ],
+      "observation_point": "Session; `Access Token Expires At`, `Refresh Token`, `Refresh Token Expires At`, `Re-auth Required At`; cached shop; trạng thái soft-delete.",
+      "expected_result": "Session bị xoá; 4 field `Access Token Expires At`, `Refresh Token`, `Refresh Token Expires At`, `Re-auth Required At` bị clear; cached shop bị clear; shop được đánh dấu soft-delete uninstalled.",
+      "oracle": {
+        "kb_ids": [
+          "KB-037",
+          "KB-038",
+          "KB-039"
+        ],
+        "oracle_strength": "STRONG"
+      },
+      "status": "READY",
+      "open_question_draft": null,
+      "related_kb_ids": [],
+      "regression_watch_kb_ids": [
+        "KB-057"
+      ],
+      "risk_refs": [
+        "RISK-uninstall-reinstall-01"
+      ],
+      "priority": "P1",
+      "automation_suitability": "HYBRID"
+    },
+    {
+      "check_id": "CHK-002",
+      "dimension": "STATE_DATA",
+      "layer": "db",
+      "title": "Uninstall khi đang chờ reconnect: clear cờ và ngừng email reconnect, ngừng refresh",
+      "applicability": {
+        "role": "system",
+        "state": "shop đang bị gắn `Re-auth Required At` rồi uninstall",
+        "environment": "documented",
+        "theme_or_device": null
+      },
+      "precondition": "Có quyền (hoặc Dev BE hỗ trợ) đọc/ghi các field token của shop trong dữ liệu backend Duos ở môi trường test và xem log request gửi tới Shopify Admin API của shop. <shop-expiring> đang bị gắn `Re-auth Required At`; hộp thư merchant theo dõi được.",
+      "steps": [
+        "Uninstall app khỏi shop; chờ webhook uninstall được xử lý.",
+        "Kiểm trạng thái soft-delete và `Re-auth Required At`.",
+        "Chạy `tokens:refresh-expiring` và kích hoạt các luồng có thể phát email reconnect; theo dõi hộp thư và log refresh của shop."
+      ],
+      "observation_point": "Trạng thái shop; `Re-auth Required At`; hộp thư merchant; log refresh.",
+      "expected_result": "Shop bị soft-delete và `Re-auth Required At` bị clear; sau đó app không còn gửi email reconnect và không còn refresh token cho shop đó (trừ khi shop reinstall lại).",
+      "oracle": {
+        "kb_ids": [
+          "KB-043",
+          "KB-044"
+        ],
+        "oracle_strength": "STRONG"
+      },
+      "status": "READY",
+      "open_question_draft": null,
+      "related_kb_ids": [
+        "KB-012",
+        "KB-025"
+      ],
+      "regression_watch_kb_ids": [],
+      "risk_refs": [
+        "RISK-uninstall-reinstall-02"
+      ],
+      "priority": "P1",
+      "automation_suitability": "HYBRID"
+    },
+    {
+      "check_id": "CHK-003",
+      "dimension": "CORE",
+      "layer": "portal",
+      "title": "Reinstall nhận token expiring và chạy luồng reinstall thông thường",
+      "applicability": {
+        "role": "merchant",
+        "state": "shop đã uninstall, cài lại app (kể cả shop trước đó dùng token legacy)",
+        "environment": "documented",
+        "theme_or_device": null
+      },
+      "precondition": "Có quyền (hoặc Dev BE hỗ trợ) đọc/ghi các field token của shop trong dữ liệu backend Duos ở môi trường test và xem log request gửi tới Shopify Admin API của shop. Có một shop đã uninstall app (trước đó dùng token legacy hoặc expiring); hộp thư merchant theo dõi được.",
+      "steps": [
+        "Cài lại app Duos cho shop và hoàn tất login.",
+        "Kiểm loại token và các field token của shop.",
+        "Kiểm có luồng sync dữ liệu chạy và có email reinstall trong hộp thư merchant."
+      ],
+      "observation_point": "Loại token; field token; log sync; hộp thư merchant.",
+      "expected_result": "Lần login mới khi reinstall luôn nhận token dạng expiring; reinstall kích hoạt luồng reinstall thông thường gồm sync dữ liệu và gửi email reinstall.",
+      "oracle": {
+        "kb_ids": [
+          "KB-040",
+          "KB-042"
+        ],
+        "oracle_strength": "STRONG"
+      },
+      "status": "READY",
+      "open_question_draft": null,
+      "related_kb_ids": [],
+      "regression_watch_kb_ids": [],
+      "risk_refs": [
+        "RISK-uninstall-reinstall-03"
+      ],
+      "priority": "P1",
+      "automation_suitability": "HYBRID"
+    },
+    {
+      "check_id": "CHK-004",
+      "dimension": "NEGATIVE",
+      "layer": "db",
+      "title": "Reinstall sau khi lỡ webhook uninstall: clear field token cũ còn sót trước khi ghi token mới",
+      "applicability": {
+        "role": "system",
+        "state": "shop reinstall trong khi field token cũ còn sót (webhook uninstall trước đó không được xử lý)",
+        "environment": "documented",
+        "theme_or_device": null
+      },
+      "precondition": "Có quyền (hoặc Dev BE hỗ trợ) đọc/ghi các field token của shop trong dữ liệu backend Duos ở môi trường test và xem log request gửi tới Shopify Admin API của shop. Có shop đã uninstall nhưng webhook uninstall không được xử lý (Dev BE hỗ trợ dựng), các field token cũ vẫn còn giá trị.",
+      "steps": [
+        "Ghi lại các field token cũ còn sót.",
+        "Cài lại app cho shop và hoàn tất login.",
+        "Kiểm các field token sau reinstall."
+      ],
+      "observation_point": "Field token trước và sau reinstall.",
+      "expected_result": "App clear các field token cũ còn sót trước khi ghi token mới; sau reinstall shop chỉ còn giá trị của token mới.",
+      "oracle": {
+        "kb_ids": [
+          "KB-041"
+        ],
+        "oracle_strength": "STRONG"
+      },
+      "status": "READY",
+      "open_question_draft": null,
+      "related_kb_ids": [
+        "KB-037",
+        "KB-040"
+      ],
+      "regression_watch_kb_ids": [],
+      "risk_refs": [
+        "RISK-uninstall-reinstall-04"
+      ],
+      "priority": "P1",
+      "automation_suitability": "NOT_SUITABLE"
+    },
+    {
+      "check_id": "CHK-005",
+      "dimension": "NEGATIVE",
+      "layer": "db",
+      "title": "Shop bị lỡ webhook uninstall trong khoảng trước khi reinstall",
+      "applicability": {
+        "role": "system",
+        "state": "shop đã uninstall nhưng webhook uninstall không được xử lý, chưa reinstall",
+        "environment": "documented",
+        "theme_or_device": null
+      },
+      "precondition": "Có quyền (hoặc Dev BE hỗ trợ) đọc/ghi các field token của shop trong dữ liệu backend Duos ở môi trường test và xem log request gửi tới Shopify Admin API của shop. Có shop đã uninstall nhưng webhook uninstall không được xử lý (field token còn sót).",
+      "steps": [
+        "Chạy hai job token và kích hoạt các luồng có thể gửi email reconnect cho shop.",
+        "Theo dõi log job và hộp thư merchant."
+      ],
+      "observation_point": "Log job; hộp thư merchant.",
+      "expected_result": "Chưa có căn cứ: ghi lại shop có bị job token xử lý hoặc nhận email như shop đang cài không; không đánh giá pass/fail cho tới khi PO/Dev trả lời câu hỏi mở.",
+      "oracle": {
+        "kb_ids": [],
+        "oracle_strength": "NONE"
+      },
+      "status": "NEEDS_CONFIRMATION",
+      "open_question_draft": "Khi lỡ webhook uninstall, ngoài safety net lúc reinstall có cơ chế nào khác để dọn field token cũ và ngừng job/email cho shop không? Trong khoảng trước khi reinstall, shop có bị xử lý như shop đang cài không?",
+      "related_kb_ids": [
+        "KB-041",
+        "KB-025"
+      ],
+      "regression_watch_kb_ids": [],
+      "risk_refs": [
+        "RISK-uninstall-reinstall-04"
+      ],
+      "priority": "P2",
+      "automation_suitability": "NOT_SUITABLE",
+      "oq_id": "OQ-auth-token-015"
+    },
+    {
+      "check_id": "CHK-006",
+      "dimension": "STATE_DATA",
+      "layer": "db",
+      "title": "Phạm vi dữ liệu bị soft-delete khi uninstall và trạng thái sau reinstall",
+      "applicability": {
+        "role": "system",
+        "state": "shop có dữ liệu nghiệp vụ (company, quote, ledger, cấu hình) uninstall rồi reinstall",
+        "environment": "documented",
+        "theme_or_device": null
+      },
+      "precondition": "Có quyền (hoặc Dev BE hỗ trợ) đọc/ghi các field token của shop trong dữ liệu backend Duos ở môi trường test và xem log request gửi tới Shopify Admin API của shop. Shop test có dữ liệu company, quote, ledger credit và cấu hình app.",
+      "steps": [
+        "Ghi lại dữ liệu nghiệp vụ của shop.",
+        "Uninstall app; kiểm dữ liệu nào còn, dữ liệu nào bị đánh dấu xoá.",
+        "Reinstall app; kiểm dữ liệu nào được khôi phục."
+      ],
+      "observation_point": "Dữ liệu nghiệp vụ của shop sau uninstall và sau reinstall.",
+      "expected_result": "Chưa có căn cứ: ghi lại dữ liệu nào bị xoá/giữ/khôi phục; không đánh giá pass/fail cho tới khi PO/Dev trả lời câu hỏi mở.",
+      "oracle": {
+        "kb_ids": [],
+        "oracle_strength": "NONE"
+      },
+      "status": "NEEDS_CONFIRMATION",
+      "open_question_draft": "Soft-delete khi uninstall ảnh hưởng những dữ liệu nào ngoài session, field token và cached shop (company, quote, ledger, cấu hình…), và reinstall có khôi phục chúng không?",
+      "related_kb_ids": [
+        "KB-039",
+        "KB-042"
+      ],
+      "regression_watch_kb_ids": [],
+      "risk_refs": [
+        "RISK-uninstall-reinstall-01"
+      ],
+      "priority": "P1",
+      "automation_suitability": "NOT_SUITABLE",
+      "oq_id": "OQ-auth-token-016"
+    },
+    {
+      "check_id": "CHK-007",
+      "dimension": "CORE",
+      "layer": "db",
+      "title": "Nội dung email reinstall và phạm vi sync khi reinstall",
+      "applicability": {
+        "role": "merchant",
+        "state": "shop vừa reinstall app",
+        "environment": "documented",
+        "theme_or_device": null
+      },
+      "precondition": "Có quyền (hoặc Dev BE hỗ trợ) đọc/ghi các field token của shop trong dữ liệu backend Duos ở môi trường test và xem log request gửi tới Shopify Admin API của shop. Có shop vừa reinstall (CHK-003); hộp thư merchant theo dõi được.",
+      "steps": [
+        "Ghi lại tiêu đề, nội dung, người nhận, ngôn ngữ của email reinstall.",
+        "Ghi lại các loại dữ liệu được sync sau reinstall."
+      ],
+      "observation_point": "Hộp thư merchant; log sync.",
+      "expected_result": "Chưa có căn cứ: ghi lại nội dung email reinstall và các dữ liệu được sync; không đánh giá pass/fail cho tới khi PO/Dev trả lời câu hỏi mở.",
+      "oracle": {
+        "kb_ids": [],
+        "oracle_strength": "NONE"
+      },
+      "status": "NEEDS_CONFIRMATION",
+      "open_question_draft": "Email reinstall có tiêu đề, nội dung, người nhận và ngôn ngữ nào, và luồng reinstall sync những dữ liệu gì?",
+      "related_kb_ids": [
+        "KB-042"
+      ],
+      "regression_watch_kb_ids": [],
+      "risk_refs": [
+        "RISK-uninstall-reinstall-03"
+      ],
+      "priority": "P3",
+      "automation_suitability": "HYBRID",
+      "oq_id": "OQ-auth-token-017"
+    }
+  ],
+  "coverage_by_feature_and_risk": [
+    {
+      "feature_id": "uninstall-reinstall-token-cleanup",
+      "risk_ref": "RISK-uninstall-reinstall-01",
+      "risk_description": "Uninstall không dọn sạch session/token/cached shop hoặc xoá/giữ dữ liệu nghiệp vụ ngoài ý muốn",
+      "covered_by_checks": [
+        "CHK-001",
+        "CHK-006"
+      ],
+      "kb_ids": [
+        "KB-037",
+        "KB-038",
+        "KB-039"
+      ],
+      "coverage_status": "PARTIAL"
+    },
+    {
+      "feature_id": "uninstall-reinstall-token-cleanup",
+      "risk_ref": "RISK-uninstall-reinstall-02",
+      "risk_description": "Shop đã uninstall khi đang chờ reconnect vẫn bị gửi email reconnect hoặc vẫn được refresh",
+      "covered_by_checks": [
+        "CHK-002"
+      ],
+      "kb_ids": [
+        "KB-043",
+        "KB-044"
+      ],
+      "coverage_status": "COVERED"
+    },
+    {
+      "feature_id": "uninstall-reinstall-token-cleanup",
+      "risk_ref": "RISK-uninstall-reinstall-03",
+      "risk_description": "Reinstall không nhận token expiring hoặc không chạy luồng reinstall thông thường",
+      "covered_by_checks": [
+        "CHK-003",
+        "CHK-007"
+      ],
+      "kb_ids": [
+        "KB-040",
+        "KB-042"
+      ],
+      "coverage_status": "PARTIAL"
+    },
+    {
+      "feature_id": "uninstall-reinstall-token-cleanup",
+      "risk_ref": "RISK-uninstall-reinstall-04",
+      "risk_description": "Lỡ webhook uninstall để lại field token cũ, shop vẫn bị xử lý như đang cài",
+      "covered_by_checks": [
+        "CHK-004",
+        "CHK-005"
+      ],
+      "kb_ids": [
+        "KB-041"
+      ],
+      "coverage_status": "PARTIAL"
+    },
+    {
+      "feature_id": "uninstall-reinstall-token-cleanup",
+      "risk_ref": "RISK-auth-token-bug-36",
+      "risk_description": "BUG-36 (trạng thái chưa rõ) gắn với test case của nhóm Auth & Token lifecycle, chưa biết chạm hành vi nào",
+      "covered_by_checks": [
+        "CHK-001"
+      ],
+      "kb_ids": [
+        "KB-057"
+      ],
+      "coverage_status": "REGRESSION_WATCH"
+    }
+  ],
+  "excluded_dimensions": [
+    {
+      "dimension": "PERMISSION",
+      "reason": "Uninstall/reinstall do merchant thực hiện trên Shopify admin, app chỉ xử lý webhook/login; tài liệu không nêu ràng buộc role nào cho luồng này."
+    },
+    {
+      "dimension": "BOUNDARY",
+      "reason": "Luồng uninstall/reinstall không có giới hạn kích thước/số lượng/độ dài nào được tài liệu nêu."
+    },
+    {
+      "dimension": "REGRESSION",
+      "reason": "Bản bootstrap đầu tiên; chưa có thay đổi hành vi từ phân tích diff."
+    }
+  ],
+  "last_updated": {
+    "date": "2026-10-09",
+    "ccr_ref": "bootstrap"
+  }
+}

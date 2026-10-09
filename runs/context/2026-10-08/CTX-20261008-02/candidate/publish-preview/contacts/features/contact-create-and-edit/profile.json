@@ -1,0 +1,1136 @@
+{
+  "feature_id": "contact-create-and-edit",
+  "feature_key": "contact-create-and-edit",
+  "name": "Tạo và sửa contact",
+  "user_goal": "Người dùng workspace thêm từng contact mới (email bắt buộc, thông tin cá nhân, số SMS, custom field) hoặc sửa thông tin của một contact có sẵn, để danh bạ đúng và dùng được cho segment, campaign, automation.",
+  "stable_since_version": "v1",
+  "actors": [
+    {
+      "role": "Owner",
+      "permission_observed": "Quan sát staging 01/10/2026 bằng Owner: mở dialog New contact, mở Edit từ menu dòng và từ Contact actions.",
+      "kb_refs": [
+        "KB-051"
+      ]
+    },
+    {
+      "role": "Member (tên role thứ ba đang tranh chấp)",
+      "permission_observed": "Theo quyết định PO/Dev 01/10/2026, Member được sửa custom field của contact; chưa quan sát trên staging. Quyền tạo / sửa field chuẩn của contact theo role chưa được chốt.",
+      "kb_refs": [
+        "KB-119",
+        "KB-P-051"
+      ]
+    },
+    {
+      "role": "api-caller (Public API v1)",
+      "permission_observed": "Tài liệu chỉ nêu Public API v1 giới hạn 120 request/phút/key; endpoint contact của Public API chưa có mô tả.",
+      "kb_refs": [
+        "KB-P-065"
+      ]
+    }
+  ],
+  "entry_points": [
+    {
+      "path": "Trang `/contacts` → nút `New contact` mở dialog New contact",
+      "precondition": "Đã ở trong workspace.",
+      "kb_refs": [
+        "KB-005",
+        "KB-021"
+      ]
+    },
+    {
+      "path": "Menu dòng `Actions for {email}` › `Edit` ở danh sách, hoặc `Contact actions` › `Edit` ở trang chi tiết → dialog Edit contact",
+      "precondition": "Contact đã tồn tại.",
+      "kb_refs": [
+        "KB-016",
+        "KB-051",
+        "KB-063"
+      ]
+    },
+    {
+      "path": "API portal `POST` / `PUT` contacts (sửa dùng `PUT`)",
+      "precondition": "Phiên portal hợp lệ; đường dẫn đầy đủ chưa có tài liệu.",
+      "kb_refs": [
+        "KB-034",
+        "KB-059"
+      ]
+    }
+  ],
+  "capabilities": [
+    {
+      "name": "Tạo contact mới với email làm định danh",
+      "description": "Dialog New contact gồm Email, First name, Last name, Country, Address, SMS và khối Custom fields; email bắt buộc, không trùng trong workspace, tối đa 255 ký tự; First / Last name không bắt buộc; contact mới hiện trong danh sách với Created at / Updated at.",
+      "kb_refs": [
+        "KB-021",
+        "KB-022",
+        "KB-023",
+        "KB-024",
+        "KB-027",
+        "KB-029",
+        "KB-030",
+        "KB-031"
+      ]
+    },
+    {
+      "name": "Kiểm định dạng email hai tầng",
+      "description": "Tầng 1 là HTML5 `type=email` lúc submit (không lỗi inline), tầng 2 là backend trả 422; `a@b` qua được cả hai tầng. Trên staging nút Create contact vẫn enable với email sai trước khi submit.",
+      "kb_refs": [
+        "KB-025",
+        "KB-026",
+        "KB-164"
+      ]
+    },
+    {
+      "name": "Nhập số SMS theo quốc gia",
+      "description": "Ô SMS mặc định Afghanistan +93, kiểm bằng libphonenumber ở FE và BE theo quốc gia, tối đa 32 ký tự, lưu E.164; số sai hiện `Phone is invalid` khi rời ô và khoá nút lưu; message backend giữ `Enter a valid SMS number with its country code…`.",
+      "kb_refs": [
+        "KB-035",
+        "KB-036",
+        "KB-037",
+        "KB-038",
+        "KB-039",
+        "KB-040"
+      ]
+    },
+    {
+      "name": "Gắn custom field cho contact khi tạo / sửa",
+      "description": "`Add field` sinh dòng key + Kind of value {Text, Number, Boolean, Date, Datetime} + value + Remove field; gõ key mới tự tạo field trên trang Custom fields; Boolean chỉ nhận true / false. Trên staging ô key là combobox gợi ý field có sẵn kèm kiểu.",
+      "kb_refs": [
+        "KB-044",
+        "KB-167",
+        "KB-045",
+        "KB-046",
+        "KB-047",
+        "KB-053",
+        "KB-134",
+        "KB-142"
+      ]
+    },
+    {
+      "name": "Sửa thông tin contact có sẵn",
+      "description": "Dialog Edit contact điền sẵn giá trị hiện tại; key và Kind của custom field đã lưu đang bị khoá trên staging; sửa dùng `PUT` thay toàn bộ attributes.",
+      "kb_refs": [
+        "KB-051",
+        "KB-052",
+        "KB-059",
+        "KB-060"
+      ]
+    },
+    {
+      "name": "Hiển thị số điện thoại với nhãn SMS",
+      "description": "QA lead chốt 05/10/2026 theo bản dựng (chưa có PO/Dev): nhãn `SMS` ở mọi nơi, key dữ liệu vẫn là `phone`.",
+      "kb_refs": [
+        "KB-041",
+        "KB-042",
+        "KB-043"
+      ]
+    }
+  ],
+  "state_transitions": [
+    {
+      "from": "dialog New contact, Email trống",
+      "to": "nút `Create contact` bật",
+      "trigger": "Nhập Email",
+      "condition": "Nút disabled khi Email trống (Jira MTRO-24 AC)",
+      "kb_refs": [
+        "KB-024"
+      ]
+    },
+    {
+      "from": "chưa có contact",
+      "to": "contact mới trong danh sách (có Created at / Updated at)",
+      "trigger": "Bấm `Create contact`",
+      "condition": "Email hợp lệ ở HTML5 và backend, chưa tồn tại trong workspace, ≤255 ký tự; số SMS (nếu nhập) hợp lệ",
+      "kb_refs": [
+        "KB-023",
+        "KB-025",
+        "KB-026",
+        "KB-027",
+        "KB-029",
+        "KB-031",
+        "KB-039"
+      ]
+    },
+    {
+      "from": "ô SMS có số sai định dạng",
+      "to": "hiện `Phone is invalid`, nút lưu bị khoá",
+      "trigger": "Rời ô SMS",
+      "condition": "Số không hợp lệ theo libphonenumber của quốc gia đang chọn",
+      "kb_refs": [
+        "KB-036",
+        "KB-039",
+        "KB-166"
+      ]
+    },
+    {
+      "from": "contact có sẵn",
+      "to": "contact đã cập nhật",
+      "trigger": "Bấm `Save` ở dialog Edit contact (gửi `PUT`)",
+      "condition": "Theo Dev BE 02/10/2026, Save bật khi chưa đổi gì là lỗi; staging vẫn bật và gửi PUT 200",
+      "kb_refs": [
+        "KB-051",
+        "KB-056",
+        "KB-057",
+        "KB-059"
+      ]
+    },
+    {
+      "from": "dialog contact, gõ key custom field chưa tồn tại",
+      "to": "field mới xuất hiện trên trang Custom fields",
+      "trigger": "Lưu contact",
+      "condition": "Key hợp lệ theo quy tắc key; cách xử lý key sai đang tranh chấp",
+      "kb_refs": [
+        "KB-134",
+        "KB-127"
+      ]
+    }
+  ],
+  "confirmed_rules": [
+    {
+      "statement": "Theo quyết định PO/BA 02/10/2026 (task Testlane MTRO-010 BR-09, chốt \"bản dựng staging là chuẩn\", thay AC Jira MTRO-24 cũ chỉ có 3 field), dialog `New contact` có tiêu đề `New contact`, phụ đề \"Add a contact to this workspace.\" và gồm các trường `Email`, `First name`, `Last name`, `Country`, `Address`, `SMS` cùng khối `Custom fields` › `Add field`.",
+      "knowledge_kind": "CONFIRMED_EXPECTED",
+      "confidence": "MEDIUM",
+      "kb_refs": [
+        "KB-021"
+      ]
+    },
+    {
+      "statement": "Theo bản dựng được PO/BA chốt là chuẩn 02/10/2026 (task Testlane MTRO-010 BR-09), trường `Country` của dialog New contact là combobox với placeholder `Select a country`, ô tìm `Search countries...` và khi không có kết quả hiện `No country found.`",
+      "knowledge_kind": "CONFIRMED_EXPECTED",
+      "confidence": "MEDIUM",
+      "kb_refs": [
+        "KB-022"
+      ]
+    },
+    {
+      "statement": "Theo Jira MTRO-24 AC (QA business rule Mailtro cập nhật 07/10/2026) và rule 15/09/2026 (task Testlane MTRO-010 BR-01), `email` là trường bắt buộc khi tạo contact và là định danh chính của contact.",
+      "knowledge_kind": "CONFIRMED_EXPECTED",
+      "confidence": "MEDIUM",
+      "kb_refs": [
+        "KB-023"
+      ]
+    },
+    {
+      "statement": "Theo Jira MTRO-24 AC (QA business rule Mailtro cập nhật 07/10/2026), nút `Create contact` bị disabled khi ô Email trống; trên staging (khảo sát 01/10/2026) quan sát khớp.",
+      "knowledge_kind": "CONFIRMED_EXPECTED",
+      "confidence": "MEDIUM",
+      "kb_refs": [
+        "KB-024"
+      ]
+    },
+    {
+      "statement": "Theo quyết định Dev BE 02/10/2026 (task Testlane MTRO-010 BR-17), định dạng email ở dialog New contact được chặn tầng 1 bằng HTML5 `<input type=\"email\">` lúc submit (tooltip của trình duyệt), không có lỗi inline khi rời ô. Rule cũ 15/09/2026 \"validate đúng format email trước khi submit\" đã được thay.",
+      "knowledge_kind": "CONFIRMED_EXPECTED",
+      "confidence": "MEDIUM",
+      "kb_refs": [
+        "KB-025"
+      ]
+    },
+    {
+      "statement": "Theo quyết định Dev BE 02/10/2026 (task Testlane MTRO-010 BR-17), tầng 2 là backend: email sai định dạng bị trả 422 `The email field must be a valid email address.` hiển thị ở khung đỏ đầu dialog; email dạng `a@b` qua được cả tầng HTML5 lẫn backend.",
+      "knowledge_kind": "CONFIRMED_EXPECTED",
+      "confidence": "MEDIUM",
+      "kb_refs": [
+        "KB-026"
+      ]
+    },
+    {
+      "statement": "Theo quyết định Dev BE 02/10/2026 (task Testlane MTRO-010 BR-17), tạo contact với email đã tồn tại trong workspace báo `The email has already been taken.`",
+      "knowledge_kind": "CONFIRMED_EXPECTED",
+      "confidence": "MEDIUM",
+      "kb_refs": [
+        "KB-027"
+      ]
+    },
+    {
+      "statement": "Theo quyết định Dev BE 02/10/2026 (task Testlane MTRO-010 BR-17, ghi trong QA business rule Mailtro), email contact tối đa 255 ký tự.",
+      "knowledge_kind": "CONFIRMED_EXPECTED",
+      "confidence": "MEDIUM",
+      "kb_refs": [
+        "KB-029"
+      ]
+    },
+    {
+      "statement": "Theo Jira MTRO-24 AC (QA business rule Mailtro cập nhật 07/10/2026), First name (`FIRSTNAME`) và Last name (`LASTNAME`) là trường không bắt buộc khi tạo contact.",
+      "knowledge_kind": "CONFIRMED_EXPECTED",
+      "confidence": "MEDIUM",
+      "kb_refs": [
+        "KB-030"
+      ]
+    },
+    {
+      "statement": "Theo Jira MTRO-24 AC (cập nhật 15/09/2026) và rule 15/09/2026 (task Testlane MTRO-010 BR-02), contact tạo thành công hiện trong danh sách contact, có giá trị ở hai cột `Created at` và `Updated at`.",
+      "knowledge_kind": "CONFIRMED_EXPECTED",
+      "confidence": "MEDIUM",
+      "kb_refs": [
+        "KB-031"
+      ]
+    },
+    {
+      "statement": "Theo quyết định Dev BE 02/10/2026 (task Testlane MTRO-010 BR-23), request `POST/PUT contacts` của portal không có rate limit.",
+      "knowledge_kind": "CONFIRMED_EXPECTED",
+      "confidence": "MEDIUM",
+      "kb_refs": [
+        "KB-034"
+      ]
+    },
+    {
+      "statement": "Theo quyết định PO/BA 02/10/2026 (task Testlane MTRO-010 BR-10), combobox quốc gia của ô `SMS` (field `phone`) trong dialog contact mặc định là Afghanistan +93 và đây là hành vi mong muốn; trên staging (khảo sát 01/10/2026) quan sát khớp.",
+      "knowledge_kind": "CONFIRMED_EXPECTED",
+      "confidence": "MEDIUM",
+      "kb_refs": [
+        "KB-035"
+      ]
+    },
+    {
+      "statement": "Theo quyết định Dev BE 02/10/2026 (task Testlane MTRO-010 BR-18), số ở ô `SMS` được kiểm bằng libphonenumber ở cả FE và BE, hợp lệ theo từng quốc gia (nhận cả số bàn), tối đa 32 ký tự.",
+      "knowledge_kind": "CONFIRMED_EXPECTED",
+      "confidence": "MEDIUM",
+      "kb_refs": [
+        "KB-036"
+      ]
+    },
+    {
+      "statement": "Theo quyết định Dev BE 02/10/2026 (task Testlane MTRO-010 BR-18), số nội địa nhập ở ô `SMS` lấy quốc gia từ ô cờ, còn gõ số bắt đầu bằng `+` thì cờ quốc gia tự đổi theo.",
+      "knowledge_kind": "CONFIRMED_EXPECTED",
+      "confidence": "MEDIUM",
+      "kb_refs": [
+        "KB-037"
+      ]
+    },
+    {
+      "statement": "Theo quyết định Dev BE 02/10/2026 (task Testlane MTRO-010 BR-18), số `SMS` của contact được lưu theo định dạng E.164.",
+      "knowledge_kind": "CONFIRMED_EXPECTED",
+      "confidence": "MEDIUM",
+      "kb_refs": [
+        "KB-038"
+      ]
+    },
+    {
+      "statement": "Theo quyết định Dev 06/10/2026 (task Testlane MTRO-010 BR-27, chốt qua QA lead), khi số ở ô `SMS` của dialog New / Edit contact sai định dạng thì FE hiện nguyên văn `Phone is invalid` lúc rời ô và khoá nút lưu, trong khi nhãn ô vẫn là `SMS`.",
+      "knowledge_kind": "CONFIRMED_EXPECTED",
+      "confidence": "MEDIUM",
+      "kb_refs": [
+        "KB-039"
+      ]
+    },
+    {
+      "statement": "Theo quyết định Dev 06/10/2026 (task Testlane MTRO-010 BR-27) và Dev BE 02/10/2026 (BR-18), message lỗi backend cho số SMS sai định dạng giữ nguyên `Enter a valid SMS number with its country code…`.",
+      "knowledge_kind": "CONFIRMED_EXPECTED",
+      "confidence": "MEDIUM",
+      "kb_refs": [
+        "KB-040"
+      ]
+    },
+    {
+      "statement": "Theo quyết định PO/BA 02/10/2026 (task Testlane MTRO-010 BR-09/BR-10/BR-15) và PO/Dev 01/10/2026 (task Testlane MTRO-022 BR-11/BR-12), khối `Custom fields` › `Add field` của dialog New contact sinh mỗi dòng gồm `key`, `Kind of value` {Text, Number, Boolean, Date, Datetime}, ô value và `Remove field`.",
+      "knowledge_kind": "CONFIRMED_EXPECTED",
+      "confidence": "MEDIUM",
+      "kb_refs": [
+        "KB-044"
+      ]
+    },
+    {
+      "statement": "Theo quyết định PO/BA 02/10/2026 (task Testlane MTRO-010 BR-12), khi sửa contact, custom field kiểu Boolean chỉ nhận giá trị true / false.",
+      "knowledge_kind": "CONFIRMED_EXPECTED",
+      "confidence": "MEDIUM",
+      "kb_refs": [
+        "KB-053"
+      ]
+    },
+    {
+      "statement": "Theo quyết định Dev BE 02/10/2026 (task Testlane MTRO-010 BR-19), việc nút `Save` của dialog Edit contact bật khi chưa thay đổi gì và việc phụ đề dialog Edit dùng chữ của dialog Create (\"Add a contact to this workspace.\") đều là lỗi; tài liệu không nêu chữ phụ đề đúng.",
+      "knowledge_kind": "CONFIRMED_EXPECTED",
+      "confidence": "MEDIUM",
+      "kb_refs": [
+        "KB-056"
+      ]
+    },
+    {
+      "statement": "Theo quyết định PO/Dev 01/10/2026 (task Testlane MTRO-022 BR-15, chốt qua QA lead), gõ một key mới trong dialog contact sẽ tự tạo field tương ứng trên trang Custom fields.",
+      "knowledge_kind": "CONFIRMED_EXPECTED",
+      "confidence": "MEDIUM",
+      "kb_refs": [
+        "KB-134"
+      ]
+    }
+  ],
+  "observed_behavior": [
+    {
+      "statement": "Trên staging (khảo sát 01/10/2026), dialog tạo contact có tiêu đề `New contact`, phụ đề \"Add a contact to this workspace.\" và nút `Cancel` đóng dialog.",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "confidence": "LOW",
+      "status": "CURRENT_STATE",
+      "kb_refs": [
+        "KB-163",
+        "KB-021"
+      ]
+    },
+    {
+      "statement": "Trên staging (khảo sát 01/10/2026, chưa submit), nhập email sai định dạng `not-an-email` vào dialog New contact thì nút `Create contact` vẫn enable và không có lỗi inline khi rời ô.",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "confidence": "MEDIUM",
+      "status": "CURRENT_STATE",
+      "kb_refs": [
+        "KB-164",
+        "KB-025"
+      ]
+    },
+    {
+      "statement": "Theo test-run staging 26/08/2026 (QA KB Mailtro \"Contacts\" v1, không ghi PASS theo test case), email contact dài hơn 255 ký tự bị trả 422 với thông báo rõ ràng.",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "confidence": "LOW",
+      "status": "CURRENT_STATE",
+      "kb_refs": [
+        "KB-165",
+        "KB-029"
+      ]
+    },
+    {
+      "statement": "Trên staging (khảo sát 01/10/2026), nhập giá trị không hợp lệ (ví dụ `abc`) vào ô `SMS` của dialog New contact rồi rời ô thì hiện `Phone is invalid`, ô bị đánh dấu invalid và nút `Create contact` bị disabled.",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "confidence": "MEDIUM",
+      "status": "CURRENT_STATE",
+      "kb_refs": [
+        "KB-166",
+        "KB-039"
+      ]
+    },
+    {
+      "statement": "Trên staging (khảo sát 01/10/2026), nút `Add field` trong khối Custom fields của dialog New contact sinh một dòng có combobox `key` gợi ý các custom field sẵn có kèm kiểu, combobox `Kind of value` {Text, Number, Boolean, Date, Datetime}, ô value (chọn `Boolean` thì thành combobox `True` / `False`) và nút `Remove field`.",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "confidence": "MEDIUM",
+      "status": "CURRENT_STATE",
+      "kb_refs": [
+        "KB-167",
+        "KB-044"
+      ]
+    },
+    {
+      "statement": "Theo test-run staging 26/08/2026 (QA KB Mailtro \"Contacts\" v1), double-click nút `Create contact` chỉ gửi một request tạo contact.",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "confidence": "LOW",
+      "status": "CURRENT_STATE",
+      "kb_refs": [
+        "KB-032"
+      ]
+    },
+    {
+      "statement": "Trên staging (ghi nhận 25/08/2026), contact tạo được với email alias dạng `+tag` (plus-addressing), khác với signup tài khoản không dùng được alias.",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "confidence": "LOW",
+      "status": "CURRENT_STATE",
+      "kb_refs": [
+        "KB-033"
+      ]
+    },
+    {
+      "statement": "QA lead chốt 05/10/2026 theo bản dựng staging, chưa có xác nhận PO/Dev: trường số điện thoại của contact dùng nhãn `SMS` ở mọi nơi — dialog New / Edit contact, khối `Properties` ở trang chi tiết, `Condition field` của segment builder, header cột CSV import / export, Automations (picker biến `Choose a variable`, `Contact field` của `Update contact field`, `Which fields?` của trigger `Contact field changed`) và picker merge tag khi design campaign. Quyết định này thay quyết định 02/10/2026 \"nhãn đúng là Phone\".",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "confidence": "MEDIUM",
+      "status": "CURRENT_STATE",
+      "kb_refs": [
+        "KB-041"
+      ]
+    },
+    {
+      "statement": "Trên staging (khảo sát 01/10/2026, trước quyết định nhãn 05/10/2026), số điện thoại contact hiện nhãn `SMS` ở dialog New / Edit contact, trang chi tiết, menu biến và merge tag `SMS {{contact.phone}}`, nhưng segment builder và CSV import / export vẫn gọi là `Phone`; chưa có khảo sát staging nào sau 05/10/2026 về các chỗ còn `Phone`.",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "confidence": "LOW",
+      "status": "CURRENT_STATE",
+      "kb_refs": [
+        "KB-042"
+      ]
+    },
+    {
+      "statement": "QA lead chốt 05/10/2026 theo bản dựng staging, chưa có xác nhận PO/Dev: dù nhãn hiển thị là `SMS`, key dữ liệu / payload API vẫn là `phone` và merge tag `{{contact.phone}}` giữ nguyên.",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "confidence": "MEDIUM",
+      "status": "CURRENT_STATE",
+      "kb_refs": [
+        "KB-043"
+      ]
+    },
+    {
+      "statement": "Trên staging (khảo sát 01/10/2026), dialog New contact không còn chip gợi ý custom field dưới khối `Custom fields` như bản 29/09/2026; cách chọn field đã thay bằng combobox `key` + `Kind of value`.",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "confidence": "LOW",
+      "status": "CURRENT_STATE",
+      "kb_refs": [
+        "KB-045"
+      ]
+    },
+    {
+      "statement": "Theo xác nhận 07/10/2026 qua thread Slack (tài liệu không ghi vai trò người xác nhận; xếp ngang quyết định QA lead, chưa có xác nhận PO/Dev), dialog New contact không hiện sẵn custom field nào của workspace — người dùng tự chọn từng field qua `Add field` — và dropdown `key` khi chưa gõ chỉ liệt kê tối đa 20 custom field, field ngoài 20 mục đó tìm được bằng cách gõ tên.",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "confidence": "MEDIUM",
+      "status": "CURRENT_STATE",
+      "kb_refs": [
+        "KB-046"
+      ]
+    },
+    {
+      "statement": "Theo PO/Dev 01/10/2026 (task Testlane MTRO-022 BR-12, chốt qua QA lead) và mô tả hiện trạng của Dev BE 02/10/2026 (task Testlane MTRO-010 BR-21), hai dòng custom field cùng key trong dialog contact không bị chặn: dòng sau ghi đè dòng trước và không có thông báo (BUG-CS-08 được đánh by-design 01/10/2026). QA KB Mailtro \"Contacts\" v1 ghi PO chưa xác nhận đây là chủ ý.",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "confidence": "MEDIUM",
+      "status": "CURRENT_STATE",
+      "kb_refs": [
+        "KB-047"
+      ]
+    },
+    {
+      "statement": "Trên staging (khảo sát 01/10/2026), dialog `Edit contact` mở từ menu dòng ở danh sách hoặc từ `Contact actions` ở trang chi tiết, và các trường được điền sẵn giá trị hiện tại của contact.",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "confidence": "MEDIUM",
+      "status": "CURRENT_STATE",
+      "kb_refs": [
+        "KB-051"
+      ]
+    },
+    {
+      "statement": "Trên staging (khảo sát 01/10 và 06/10/2026), trong dialog Edit contact, key của custom field đã có chỉ hiển thị dạng nhãn tĩnh (không sửa được) và combobox `Kind of value` bị disabled (không đổi được kiểu).",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "confidence": "MEDIUM",
+      "status": "CURRENT_STATE",
+      "kb_refs": [
+        "KB-052"
+      ]
+    },
+    {
+      "statement": "Trên staging (khảo sát 01/10/2026), custom field Boolean trong dialog Edit contact hiện chữ `true` trong ô text thay vì combobox `True` / `False` như lúc tạo; retest staging 06/10/2026 xác nhận ô này đã là combobox (VERIFIED).",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "confidence": "LOW",
+      "status": "CURRENT_STATE",
+      "kb_refs": [
+        "KB-054",
+        "KB-053"
+      ]
+    },
+    {
+      "statement": "Trên staging (quan sát 06/10/2026), route sửa contact dùng method `PUT`; gửi `PATCH` tới cùng route trả 405.",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "confidence": "LOW",
+      "status": "CURRENT_STATE",
+      "kb_refs": [
+        "KB-059"
+      ]
+    },
+    {
+      "statement": "Trên staging (quan sát 06/10/2026, GAP-10 task Testlane MTRO-022), mở Edit cùng một contact ở hai tab thì tab bấm Save sau ghi đè tab kia (PUT toàn bộ attributes) và không có cảnh báo; tài liệu không gọi đây là lỗi.",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "confidence": "LOW",
+      "status": "CURRENT_STATE",
+      "kb_refs": [
+        "KB-060"
+      ]
+    },
+    {
+      "statement": "Trên staging (khảo sát 01/10/2026), dialog Edit contact không có trường Consent.",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "confidence": "LOW",
+      "status": "CURRENT_STATE",
+      "kb_refs": [
+        "KB-061"
+      ]
+    },
+    {
+      "statement": "Trên staging (quan sát 06/10/2026), khi chọn một key có sẵn trong dialog contact thì ô `Kind of value` tự khoá theo Type của field, và value của field Boolean là combobox `True` / `False` / `No value`.",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "confidence": "LOW",
+      "status": "CURRENT_STATE",
+      "kb_refs": [
+        "KB-142"
+      ]
+    },
+    {
+      "statement": "Theo QA KB Mailtro \"Known issues\" v1 (BUG-CS-09, mức P2, ghi nhận 26/08/2026, trạng thái open), alert \"The email has already been taken.\" trong dialog New contact không tự mất khi người dùng sửa lại email.",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "confidence": "LOW",
+      "status": "KNOWN_DEFECT",
+      "kb_refs": [
+        "KB-028",
+        "KB-027"
+      ]
+    },
+    {
+      "statement": "Theo QA KB Mailtro \"Known issues\" v1 (BUG-CONTACT-01, mức P1, ghi nhận 26/08 và 06/10/2026, trạng thái open), ở viewport 375×667 dialog New contact không cuộn được: khi có từ 3 dòng custom field trở lên, nút `Create contact` / `Cancel` nằm ngoài màn hình và không bấm được (dialog cao 882px).",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "confidence": "LOW",
+      "status": "KNOWN_DEFECT",
+      "kb_refs": [
+        "KB-050"
+      ]
+    },
+    {
+      "statement": "Theo QA KB Mailtro \"Known issues\" v1 (trạng thái open 06/10/2026, TC-MTRO-1717), ở dialog Edit contact custom field kiểu Date / Number vẫn hiển thị là ô text; nhập `abc` vào field Number thì giá trị thành rỗng và bấm Save làm mất giá trị cũ. Dev BE 02/10/2026 (task Testlane MTRO-010 BR-24) xác nhận việc hiện ô text cho Boolean / Date / Number là lỗi.",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "confidence": "LOW",
+      "status": "KNOWN_DEFECT",
+      "kb_refs": [
+        "KB-055",
+        "KB-053"
+      ]
+    },
+    {
+      "statement": "Trên staging (khảo sát 01/10/2026, tái hiện 06/10/2026 với TC-MTRO-1720, 1721, trạng thái open), nút `Save` của dialog Edit contact bật ngay khi chưa thay đổi gì và bấm Save vẫn gửi `PUT` nhận 200.",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "confidence": "LOW",
+      "status": "KNOWN_DEFECT",
+      "kb_refs": [
+        "KB-057",
+        "KB-056"
+      ]
+    },
+    {
+      "statement": "Trên staging (khảo sát 01/10/2026, tái hiện 06/10/2026, trạng thái open), dialog sửa contact có tiêu đề `Edit contact` nhưng phụ đề vẫn là \"Add a contact to this workspace.\" (chữ của dialog Create).",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "confidence": "LOW",
+      "status": "KNOWN_DEFECT",
+      "kb_refs": [
+        "KB-058",
+        "KB-056"
+      ]
+    }
+  ],
+  "observed_validations": [],
+  "permissions": [
+    {
+      "statement": "Theo quyết định PO/Dev 01/10/2026, role Member được sửa custom field của contact; chưa có quan sát staging bằng Member.",
+      "kb_refs": [
+        "KB-119"
+      ]
+    },
+    {
+      "statement": "Quyền tạo / sửa contact theo từng role (Owner, Admin, role thứ ba) chưa được chốt; router frontend không phân quyền theo role nên chặn quyền phải kiểm ở API.",
+      "kb_refs": [
+        "KB-P-051",
+        "KB-P-052"
+      ]
+    },
+    {
+      "statement": "Request `POST/PUT contacts` của portal không có rate limit (Dev BE 02/10/2026); rate limit 120 request/phút/key chỉ áp cho Public API v1.",
+      "kb_refs": [
+        "KB-034",
+        "KB-P-065"
+      ]
+    }
+  ],
+  "surface_mapping": {
+    "portal": [
+      {
+        "item": "Dialog `New contact`: Email, First name, Last name, Country (combobox), Address, SMS (cờ quốc gia), khối `Custom fields` › `Add field`, nút `Cancel` / `Create contact`",
+        "kb_refs": [
+          "KB-021",
+          "KB-163",
+          "KB-022",
+          "KB-035",
+          "KB-044",
+          "KB-167"
+        ]
+      },
+      {
+        "item": "Dialog `Edit contact`: giá trị điền sẵn, key / Kind custom field đã lưu bị khoá, nút `Save`, không có trường Consent",
+        "kb_refs": [
+          "KB-051",
+          "KB-052",
+          "KB-061"
+        ]
+      },
+      {
+        "item": "Thông báo lỗi: tooltip HTML5 cho email, khung đỏ đầu dialog cho lỗi backend, `Phone is invalid` inline cho SMS",
+        "kb_refs": [
+          "KB-025",
+          "KB-026",
+          "KB-039"
+        ]
+      }
+    ],
+    "storefront": [],
+    "api": [
+      {
+        "item": "`POST` / `PUT` contacts của portal, không rate limit; `PATCH` cùng route trả 405",
+        "kb_refs": [
+          "KB-034",
+          "KB-059"
+        ]
+      },
+      {
+        "item": "422 `The email field must be a valid email address.`, `The email has already been taken.`, email >255 ký tự bị chặn (staging 26/08/2026 trả 422), `Enter a valid SMS number with its country code…`",
+        "kb_refs": [
+          "KB-026",
+          "KB-027",
+          "KB-029",
+          "KB-165",
+          "KB-040"
+        ]
+      }
+    ],
+    "data": [
+      {
+        "item": "Email là định danh chính của contact trong workspace",
+        "kb_refs": [
+          "KB-023"
+        ]
+      },
+      {
+        "item": "Số SMS lưu E.164 với key dữ liệu `phone`, tối đa 32 ký tự",
+        "kb_refs": [
+          "KB-036",
+          "KB-038",
+          "KB-043"
+        ]
+      },
+      {
+        "item": "Custom field của contact gửi kèm khi lưu; value trống được lưu thành null và giữ key",
+        "kb_refs": [
+          "KB-044",
+          "KB-135"
+        ]
+      }
+    ],
+    "code": [
+      {
+        "item": "HTML5 `<input type=\"email\">` (tầng 1) và validation backend (tầng 2) cho email",
+        "kb_refs": [
+          "KB-025",
+          "KB-026"
+        ]
+      },
+      {
+        "item": "libphonenumber ở cả FE và BE cho số SMS",
+        "kb_refs": [
+          "KB-036"
+        ]
+      }
+    ]
+  },
+  "dependencies": [
+    {
+      "target": "contacts / custom-fields",
+      "relation": "uses",
+      "note": "Khối Custom fields trong dialog dùng danh sách field chung; gõ key mới tự tạo field; quy tắc key và giới hạn value thuộc custom-fields.",
+      "kb_refs": [
+        "KB-044",
+        "KB-134",
+        "KB-127",
+        "KB-136"
+      ]
+    },
+    {
+      "target": "automations / automation-triggers-and-entry",
+      "relation": "trigger_source",
+      "note": "Contact tạo lẻ (dialog hoặc API) đi vào trigger automation, khác với contact từ import CSV (QA lead chốt 05/10/2026).",
+      "kb_refs": [
+        "KB-101"
+      ]
+    },
+    {
+      "target": "segments / segment-builder",
+      "relation": "label_consumer",
+      "note": "Nhãn SMS áp cho Condition field của segment builder theo quyết định QA lead 05/10/2026; staging 01/10/2026 vẫn ghi Phone.",
+      "kb_refs": [
+        "KB-041",
+        "KB-042"
+      ]
+    },
+    {
+      "target": "email-content / merge-tags",
+      "relation": "merge_tag",
+      "note": "Merge tag `{{contact.phone}}` giữ nguyên dù nhãn là SMS.",
+      "kb_refs": [
+        "KB-043"
+      ]
+    },
+    {
+      "target": "contacts / contact-list-and-search, contacts / contact-detail",
+      "relation": "entry_point_from",
+      "note": "Dialog mở từ nút New contact, menu dòng Edit và Contact actions.",
+      "kb_refs": [
+        "KB-005",
+        "KB-016",
+        "KB-063"
+      ]
+    }
+  ],
+  "risks": [
+    {
+      "statement": "Có được đổi key / Kind của custom field đã lưu khi Edit contact không đang mâu thuẫn (PO/Dev 01/10/2026 cho đổi vs PO/BA 02/10/2026 cấm đổi kiểu, nhóm CONF-MTRO-contacts-02); staging đang khoá cả hai. Không dùng hiện trạng khoá làm expected.",
+      "knowledge_kind": "INFERRED",
+      "confidence": "LOW",
+      "kb_refs": [
+        "KB-144",
+        "KB-145",
+        "KB-052"
+      ]
+    },
+    {
+      "statement": "Key custom field sai quy tắc nhập trong dialog: báo lỗi (PO/Dev 01/10/2026) hay FE tự chuẩn hoá (Dev 02/10/2026) đang mâu thuẫn (nhóm CONF-MTRO-contacts-01); staging chuẩn hoá im lặng và ghi đè giá trị vào field có sẵn (lỗi High đang mở) — nguy cơ mất / sai dữ liệu contact.",
+      "knowledge_kind": "INFERRED",
+      "confidence": "LOW",
+      "kb_refs": [
+        "KB-130",
+        "KB-131",
+        "KB-132"
+      ]
+    },
+    {
+      "statement": "Hai dòng custom field cùng key: dòng sau ghi đè dòng trước không báo; nguồn ghi PO chưa xác nhận là chủ ý.",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "confidence": "MEDIUM",
+      "kb_refs": [
+        "KB-047"
+      ]
+    },
+    {
+      "statement": "Ở dialog Edit, field Number / Date là ô text; nhập `abc` vào Number làm value thành rỗng và Save làm mất giá trị cũ (lỗi đang mở) — nguy cơ mất dữ liệu khi sửa contact.",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "confidence": "LOW",
+      "kb_refs": [
+        "KB-055",
+        "KB-053"
+      ]
+    },
+    {
+      "statement": "Hai tab cùng Edit một contact: tab lưu sau ghi đè toàn bộ attributes của tab kia, không cảnh báo; tài liệu không gọi là lỗi và không có rule.",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "confidence": "LOW",
+      "kb_refs": [
+        "KB-060"
+      ]
+    },
+    {
+      "statement": "Dropdown key khi chưa gõ: xác nhận 07/10/2026 nói tối đa 20 field, lần chạy 06/10/2026 thấy tối đa 8 field khi workspace có 16 field — giới hạn thật chưa rõ.",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "confidence": "LOW",
+      "kb_refs": [
+        "KB-046",
+        "KB-143"
+      ]
+    },
+    {
+      "statement": "Nhãn SMS ở mọi nơi chỉ do QA lead chốt 05/10/2026 theo bản dựng; staging 01/10/2026 segment builder và CSV vẫn ghi Phone, chưa có khảo sát sau 05/10.",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "confidence": "LOW",
+      "kb_refs": [
+        "KB-041",
+        "KB-042",
+        "KB-080"
+      ]
+    },
+    {
+      "statement": "Các toast `Couldn't create contact`, `Couldn't update contact` và lỗi `Email is required.` chỉ thấy trong bundle FE, chưa thấy trên UI.",
+      "knowledge_kind": "INFERRED",
+      "confidence": "LOW",
+      "kb_refs": [
+        "KB-048",
+        "KB-049"
+      ]
+    },
+    {
+      "statement": "Giả định người dùng không đổi được consent của contact trên UI chưa được xác nhận; hiện dialog Edit không có trường Consent.",
+      "knowledge_kind": "INFERRED",
+      "confidence": "LOW",
+      "kb_refs": [
+        "KB-062",
+        "KB-061"
+      ]
+    }
+  ],
+  "freshness": {
+    "observed_at": "2026-10-07",
+    "basis": "Jira MTRO-24 AC cập nhật 07/10/2026; quyết định PO/BA, Dev BE 02/10 và Dev 06/10/2026; khảo sát staging 01/10 và 06/10/2026; known issues 26/08–06/10/2026. Build staging không được ghi."
+  },
+  "unknown_areas": [
+    {
+      "question": "Khi Edit contact có được đổi key / Kind của custom field đã lưu không, và nếu được thì thay đổi áp lên field definition dùng chung hay chỉ contact đang sửa (GAP-16)?",
+      "why_it_matters": "Hai quyết định PO trái nhau (nhóm CONF-MTRO-contacts-02); không có oracle cho dialog Edit.",
+      "kb_refs": [
+        "KB-144",
+        "KB-145",
+        "KB-052"
+      ],
+      "oq_id": "OQ-contacts-021"
+    },
+    {
+      "question": "Key custom field sai quy tắc nhập trong dialog contact phải báo lỗi hay được tự chuẩn hoá, và việc chuẩn hoá ghi đè vào field có sẵn đã được sửa chưa?",
+      "why_it_matters": "Nhóm CONF-MTRO-contacts-01 chưa phân xử; hiện trạng gây ghi đè dữ liệu.",
+      "kb_refs": [
+        "KB-130",
+        "KB-131",
+        "KB-132"
+      ],
+      "oq_id": "OQ-contacts-023"
+    },
+    {
+      "question": "Phụ đề đúng của dialog Edit contact là gì, và các lỗi đang mở (Save bật khi chưa đổi gì; Number / Date là ô text làm mất giá trị; alert email trùng không tự mất; dialog không cuộn ở 375×667 khi ≥3 dòng custom field) đã sửa ở build nào?",
+      "why_it_matters": "Dev xác nhận là lỗi nhưng không nêu chữ đúng; cần biết lỗi nào còn để giữ ở regression watch.",
+      "kb_refs": [
+        "KB-056",
+        "KB-057",
+        "KB-058",
+        "KB-055",
+        "KB-028",
+        "KB-050"
+      ],
+      "oq_id": "OQ-contacts-008"
+    },
+    {
+      "question": "PO/Dev có xác nhận quyết định QA lead 05/10/2026: nhãn `SMS` ở mọi nơi, key dữ liệu và merge tag vẫn là `phone`? Segment builder và CSV đã đổi từ Phone sang SMS chưa?",
+      "why_it_matters": "Đang chỉ ở tầng QA lead, staging 01/10 còn lệch; không dùng làm oracle được.",
+      "kb_refs": [
+        "KB-041",
+        "KB-042",
+        "KB-043"
+      ],
+      "oq_id": "OQ-contacts-009"
+    },
+    {
+      "question": "Hai dòng custom field cùng key ghi đè im lặng có phải thiết kế PO chấp nhận không?",
+      "why_it_matters": "Nguồn mâu thuẫn về việc PO đã xác nhận hay chưa.",
+      "kb_refs": [
+        "KB-047"
+      ],
+      "oq_id": "OQ-contacts-011"
+    },
+    {
+      "question": "Dropdown key khi chưa gõ liệt kê tối đa bao nhiêu field (8 hay 20) và đó có phải chủ ý?",
+      "why_it_matters": "Hai con số lệch nhau, người xác nhận 07/10/2026 không rõ vai trò.",
+      "kb_refs": [
+        "KB-046",
+        "KB-143"
+      ],
+      "oq_id": "OQ-contacts-010"
+    },
+    {
+      "question": "Đường dẫn đầy đủ và request / response của API tạo, sửa contact ở portal là gì; Public API v1 có endpoint contact nào (Jira MTRO-21 trống)?",
+      "why_it_matters": "Chỉ biết method POST / PUT và PATCH trả 405; không viết được API test chính xác.",
+      "kb_refs": [
+        "KB-059",
+        "KB-034",
+        "KB-P-065"
+      ],
+      "oq_id": "OQ-contacts-012"
+    },
+    {
+      "question": "Giới hạn độ dài / định dạng của First name, Last name, Address là gì, và Country lưu dạng mã hay tên?",
+      "why_it_matters": "Chỉ Email (255) và SMS (32, E.164) có boundary.",
+      "kb_refs": [
+        "KB-021",
+        "KB-030"
+      ],
+      "oq_id": "OQ-contacts-012"
+    },
+    {
+      "question": "Hai tab cùng sửa một contact thì tab lưu sau ghi đè tab trước — có cần cảnh báo xung đột không?",
+      "why_it_matters": "Không có rule; hiện trạng có thể làm mất dữ liệu.",
+      "kb_refs": [
+        "KB-060"
+      ],
+      "oq_id": "OQ-contacts-032"
+    },
+    {
+      "question": "Người dùng có đổi được consent của contact trên UI không (giả định AS-02 chưa xác nhận)?",
+      "why_it_matters": "Liên quan topic unsubscribe-consent; dialog Edit hiện không có trường Consent.",
+      "kb_refs": [
+        "KB-061",
+        "KB-062"
+      ],
+      "oq_id": "OQ-contacts-033"
+    },
+    {
+      "question": "Owner, Admin và role thứ ba được tạo / sửa contact và field chuẩn tới đâu?",
+      "why_it_matters": "Chỉ có quyết định cho Member với custom field; ma trận quyền Contacts chưa chốt.",
+      "kb_refs": [
+        "KB-119",
+        "KB-P-051"
+      ],
+      "oq_id": "OQ-contacts-001"
+    }
+  ],
+  "last_updated": {
+    "date": "2026-10-08",
+    "ccr_ref": "bootstrap"
+  },
+  "coverage_matrix": [
+    {
+      "feature_id": "contact-create-and-edit",
+      "layer": "portal",
+      "role": "unspecified",
+      "state": "tạo contact hợp lệ",
+      "environment": "documented",
+      "covered": true,
+      "note": "Jira MTRO-24 AC + quyết định PO/BA 02/10/2026"
+    },
+    {
+      "feature_id": "contact-create-and-edit",
+      "layer": "portal",
+      "role": "unspecified",
+      "state": "email trống / sai định dạng / trùng / quá 255 ký tự",
+      "environment": "documented",
+      "covered": true,
+      "note": "Quyết định Dev BE 02/10/2026 + AC"
+    },
+    {
+      "feature_id": "contact-create-and-edit",
+      "layer": "portal",
+      "role": "unspecified",
+      "state": "số SMS hợp lệ / sai định dạng",
+      "environment": "documented",
+      "covered": true,
+      "note": "Quyết định Dev BE 02/10 và Dev 06/10/2026"
+    },
+    {
+      "feature_id": "contact-create-and-edit",
+      "layer": "portal",
+      "role": "unspecified",
+      "state": "thêm custom field khi tạo",
+      "environment": "documented",
+      "covered": true,
+      "note": "Quyết định PO/BA 02/10 + PO/Dev 01/10/2026; giới hạn dropdown chưa rõ"
+    },
+    {
+      "feature_id": "contact-create-and-edit",
+      "layer": "portal",
+      "role": "unspecified",
+      "state": "key custom field sai quy tắc",
+      "environment": "documented",
+      "covered": false,
+      "note": "Mâu thuẫn chưa phân xử"
+    },
+    {
+      "feature_id": "contact-create-and-edit",
+      "layer": "portal",
+      "role": "Owner",
+      "state": "sửa contact có sẵn",
+      "environment": "documented",
+      "covered": true,
+      "note": "Hiện trạng staging + lỗi đang mở; chỉ có rule Boolean và rule về lỗi Save / phụ đề"
+    },
+    {
+      "feature_id": "contact-create-and-edit",
+      "layer": "portal",
+      "role": "unspecified",
+      "state": "đổi key / Kind custom field khi Edit",
+      "environment": "documented",
+      "covered": false,
+      "note": "Mâu thuẫn chưa phân xử"
+    },
+    {
+      "feature_id": "contact-create-and-edit",
+      "layer": "portal",
+      "role": "unspecified",
+      "state": "viewport mobile 375×667",
+      "environment": "documented",
+      "covered": true,
+      "note": "Chỉ có lỗi đang mở, không có rule responsive"
+    },
+    {
+      "feature_id": "contact-create-and-edit",
+      "layer": "portal",
+      "role": "Member",
+      "state": "sửa custom field của contact",
+      "environment": "documented",
+      "covered": true,
+      "note": "Quyết định PO/Dev 01/10/2026, chưa quan sát"
+    },
+    {
+      "feature_id": "contact-create-and-edit",
+      "layer": "portal",
+      "role": "Admin",
+      "state": "tạo / sửa contact",
+      "environment": "documented",
+      "covered": false,
+      "note": "Chưa khảo sát; ma trận quyền chưa chốt"
+    },
+    {
+      "feature_id": "contact-create-and-edit",
+      "layer": "api",
+      "role": "unspecified",
+      "state": "POST / PUT contacts của portal",
+      "environment": "documented",
+      "covered": true,
+      "note": "Biết method, không rate limit, 422 message; thiếu đường dẫn và schema"
+    },
+    {
+      "feature_id": "contact-create-and-edit",
+      "layer": "api",
+      "role": "api-caller",
+      "state": "tạo contact qua Public API v1",
+      "environment": "documented",
+      "covered": false,
+      "note": "Chỉ có rate limit chung, không có endpoint"
+    }
+  ],
+  "profile_conflicts": [
+    {
+      "conflict_group": "CONF-MTRO-contacts-02",
+      "topic": "Đổi key / Kind custom field khi Edit contact",
+      "kb_ids": [
+        "KB-144",
+        "KB-145"
+      ],
+      "related_kb_ids": [
+        "KB-052"
+      ],
+      "status": "UNRESOLVED",
+      "owner_feature": "custom-fields"
+    },
+    {
+      "conflict_group": "CONF-MTRO-contacts-01",
+      "topic": "Xử lý key custom field sai quy tắc trong dialog contact",
+      "kb_ids": [
+        "KB-130",
+        "KB-131"
+      ],
+      "related_kb_ids": [
+        "KB-132"
+      ],
+      "status": "UNRESOLVED",
+      "owner_feature": "custom-fields"
+    }
+  ],
+  "profile_relationships": [
+    {
+      "from": "contact-create-and-edit",
+      "to": "custom-fields",
+      "relation": "USES",
+      "kb_refs": [
+        "KB-044",
+        "KB-134"
+      ]
+    },
+    {
+      "from": "contact-create-and-edit",
+      "to": "contact-list-and-search",
+      "relation": "OPENED_FROM",
+      "kb_refs": [
+        "KB-005",
+        "KB-016"
+      ]
+    },
+    {
+      "from": "contact-create-and-edit",
+      "to": "contact-detail",
+      "relation": "OPENED_FROM",
+      "kb_refs": [
+        "KB-063",
+        "KB-051"
+      ]
+    },
+    {
+      "from": "contact-create-and-edit",
+      "to": "automations/automation-triggers-and-entry",
+      "relation": "FEEDS_TRIGGER",
+      "kb_refs": [
+        "KB-101"
+      ]
+    },
+    {
+      "from": "contact-create-and-edit",
+      "to": "email-content/merge-tags",
+      "relation": "PROVIDES_DATA_FOR",
+      "kb_refs": [
+        "KB-043"
+      ]
+    }
+  ]
+}

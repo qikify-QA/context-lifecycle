@@ -1,0 +1,706 @@
+{
+  "feature_id": "credit-ledger-and-transactions",
+  "feature_key": "credit-ledger-and-transactions",
+  "name": "Credit ledger: ghi nhận giao dịch credit và financial ledger từ sự kiện order",
+  "user_goal": "Mỗi biến động credit của company location (order dùng payment term Net, trả invoice, huỷ order, edit order) được ghi thành transaction credit và vào financial ledger từ webhook order của Shopify, để Outstanding balance / Available credit luôn khớp với order thật và merchant xem được lịch sử giao dịch, tải statement theo location.",
+  "user_goal_kb_refs": [
+    "KB-020",
+    "KB-021",
+    "KB-030",
+    "KB-026",
+    "KB-028",
+    "KB-001",
+    "KB-051"
+  ],
+  "stable_since_version": "v1",
+  "actors": [
+    {
+      "role": "system (webhook / job)",
+      "permission_observed": "Nhận webhook Shopify `orders/create`, `orders/edited`, `orders/cancelled`, `refunds/create`, `orders/paid` để cập nhật financial ledger; ghi bất đồng bộ qua hàng đợi job. Chưa quan sát với dữ liệu thật.",
+      "kb_refs": [
+        "KB-030",
+        "KB-032",
+        "KB-P-036"
+      ]
+    },
+    {
+      "role": "merchant (Shopify admin, edit order)",
+      "permission_observed": "Edit order dùng payment term Net trong Shopify admin là sự kiện sinh cặp transaction Reverted / Purchased; đổi payment term của order đã đặt không được hỗ trợ.",
+      "kb_refs": [
+        "KB-021",
+        "KB-022",
+        "KB-023"
+      ]
+    },
+    {
+      "role": "merchant (Portal)",
+      "permission_observed": "Khảo sát staging 08/10/2026 bằng merchant staff (store Plus, Free plan, 0 transaction): thấy trang chi tiết location với nút \"Download statement\" và empty state \"No transactions found\". Role nào được xem lịch sử / tải statement chưa có nguồn.",
+      "kb_refs": [
+        "KB-029",
+        "KB-026",
+        "KB-028"
+      ]
+    }
+  ],
+  "entry_points": [
+    {
+      "path": "Webhook Shopify `orders/create`, `orders/edited`, `orders/cancelled`, `refunds/create`, `orders/paid`",
+      "precondition": "Order phát sinh sự kiện tạo / sửa / huỷ / refund / thanh toán; credit chỉ áp cho order dùng payment term Net.",
+      "kb_refs": [
+        "KB-030",
+        "KB-002"
+      ]
+    },
+    {
+      "path": "Shopify admin › edit order",
+      "precondition": "Order dùng payment term Net, chưa cancel / chưa paid.",
+      "kb_refs": [
+        "KB-021",
+        "KB-025"
+      ]
+    },
+    {
+      "path": "Portal › \"Credit management\" › chi tiết company › chi tiết location (bảng giao dịch, nút tải statement)",
+      "precondition": "Company có location; location chưa có giao dịch thì hiện \"No transactions found\" (staging).",
+      "kb_refs": [
+        "KB-026",
+        "KB-028",
+        "KB-029"
+      ]
+    }
+  ],
+  "capabilities": [
+    {
+      "name": "Ghi transaction credit theo loại sự kiện",
+      "description": "Ba loại transaction credit: Purchased (order net term), Reimbursed (trả invoice), Reverted (huỷ order). Nhãn hiển thị của từng loại trên mỗi bề mặt chưa chốt.",
+      "kb_refs": [
+        "KB-020",
+        "KB-002"
+      ]
+    },
+    {
+      "name": "Điều chỉnh credit khi order bị edit",
+      "description": "Edit order trong Shopify admin tạo 1 transaction Reverted theo giá cũ và 1 transaction Purchased theo giá mới, reference mang thông tin order; edit xoá hết line item mà còn khoản pending (thuế, ship) thì Outstanding balance vẫn phải cập nhật.",
+      "kb_refs": [
+        "KB-021",
+        "KB-022"
+      ]
+    },
+    {
+      "name": "Ghi financial ledger từ webhook order",
+      "description": "Ledger cập nhật từ 5 webhook order/refund của Shopify và lưu trong MongoDB; theo ghi chú test của QA, việc ghi là bất đồng bộ qua hàng đợi job nên chỉ thấy sau khi job xử lý xong. Nhãn các mục ledger chưa chốt.",
+      "kb_refs": [
+        "KB-030",
+        "KB-031",
+        "KB-032",
+        "KB-P-039"
+      ]
+    },
+    {
+      "name": "Xem lịch sử giao dịch và tải statement theo location (Portal)",
+      "description": "Theo ticket, chi tiết location có bảng giao dịch (Date, Operation, Credit change, Outstanding balance, Available credit, Credit Limit, Reference) và nút tải statement; staging 08/10/2026 thấy nút \"Download statement\" và empty state \"No transactions found\" khi chưa có giao dịch.",
+      "kb_refs": [
+        "KB-026",
+        "KB-027",
+        "KB-028",
+        "KB-029"
+      ]
+    },
+    {
+      "name": "Giới hạn có chủ đích của ghi nhận credit",
+      "description": "Không hỗ trợ đổi payment term của order đã đặt (Shopify không gửi hook), nên transaction credit có thể sai; order đã cancel hoặc đã paid không được hỗ trợ bước xử lý credit tiếp theo (bước cụ thể chưa định nghĩa).",
+      "kb_refs": [
+        "KB-023",
+        "KB-024",
+        "KB-025"
+      ]
+    }
+  ],
+  "state_transitions": [
+    {
+      "from": "order dùng payment term Net chưa có transaction",
+      "to": "transaction Purchased",
+      "trigger": "Order net term được tạo",
+      "condition": "Order dùng payment term Net",
+      "kb_refs": [
+        "KB-020",
+        "KB-002"
+      ]
+    },
+    {
+      "from": "order net term đang mở",
+      "to": "transaction Reimbursed",
+      "trigger": "Trả invoice",
+      "condition": "Order dùng payment term Net",
+      "kb_refs": [
+        "KB-020"
+      ]
+    },
+    {
+      "from": "order net term đang mở",
+      "to": "transaction Reverted",
+      "trigger": "Huỷ order",
+      "condition": "Order dùng payment term Net",
+      "kb_refs": [
+        "KB-020"
+      ]
+    },
+    {
+      "from": "order net term với giá cũ",
+      "to": "1 transaction Reverted (giá cũ) + 1 transaction Purchased (giá mới)",
+      "trigger": "Edit order trong Shopify admin",
+      "condition": "Reference của transaction mang thông tin order",
+      "kb_refs": [
+        "KB-021"
+      ]
+    },
+    {
+      "from": "order net term còn khoản pending (thuế, ship)",
+      "to": "Outstanding balance được cập nhật",
+      "trigger": "Edit order xoá hết line item",
+      "condition": "Order vẫn còn khoản payment pending",
+      "kb_refs": [
+        "KB-022"
+      ]
+    },
+    {
+      "from": "sự kiện order / refund / thanh toán phát sinh trên Shopify",
+      "to": "mục mới trong financial ledger",
+      "trigger": "Webhook `orders/create` / `orders/edited` / `orders/cancelled` / `refunds/create` / `orders/paid`",
+      "condition": "Ghi bất đồng bộ qua hàng đợi job (ghi chú test QA); ledger có loại trừ order test và bắt đầu ghi từ khi nào chưa có nguồn",
+      "kb_refs": [
+        "KB-030",
+        "KB-032"
+      ]
+    },
+    {
+      "from": "order đã đặt",
+      "to": "không có xử lý credit cho thay đổi payment term",
+      "trigger": "Đổi payment term của order đã đặt",
+      "condition": "Giới hạn có chủ đích; transaction có thể sai (giá trị cụ thể chưa nêu)",
+      "kb_refs": [
+        "KB-023",
+        "KB-024"
+      ]
+    },
+    {
+      "from": "order đã cancel hoặc đã paid",
+      "to": "không hỗ trợ bước xử lý credit tiếp theo",
+      "trigger": "Thao tác tiếp theo trên order (chưa định nghĩa)",
+      "condition": "Giới hạn đã chốt",
+      "kb_refs": [
+        "KB-025"
+      ]
+    }
+  ],
+  "confirmed_rules": [
+    {
+      "statement": "Theo Jira DUOS-201 (trường operation_type) và tài liệu sản phẩm Duos (docs 09/07/2026), tóm tắt trong QA business rule Duos (cập nhật 07/10/2026), có 3 loại transaction credit: Purchased (order net term), Reimbursed (trả invoice) và Reverted (huỷ order). Nhãn hiển thị của từng loại trên mỗi bề mặt là câu hỏi riêng, chưa chốt.",
+      "knowledge_kind": "CONFIRMED_EXPECTED",
+      "confidence": "MEDIUM",
+      "kb_refs": [
+        "KB-020"
+      ],
+      "note": "Rule chỉ chốt 3 loại transaction và ý nghĩa; nhãn hiển thị trên Portal / Customer Account / ledger chưa chốt."
+    },
+    {
+      "statement": "Theo PO 10/09/2025 và Dev BE 23–25/09/2025 (Jira DUOS-201 comment), ghi trong QA business rule Duos, khi order được edit trong Shopify admin app tạo 1 transaction Reverted theo giá cũ và 1 transaction Purchased theo giá mới; reference của transaction có thông tin order.",
+      "knowledge_kind": "CONFIRMED_EXPECTED",
+      "confidence": "MEDIUM",
+      "kb_refs": [
+        "KB-021"
+      ]
+    },
+    {
+      "statement": "Theo Dev BE 23–25/09/2025 (Jira DUOS-201 comment), ghi trong QA business rule Duos, khi edit order xoá hết line item mà order vẫn còn khoản payment pending (thuế, phí ship), Outstanding balance vẫn phải được cập nhật.",
+      "knowledge_kind": "CONFIRMED_EXPECTED",
+      "confidence": "MEDIUM",
+      "kb_refs": [
+        "KB-022"
+      ]
+    },
+    {
+      "statement": "Theo Dev BE 23–25/09/2025 (Jira DUOS-201 comment), ghi trong QA business rule Duos, Decision log Duos và Known issues Duos (giới hạn có chủ đích), app chưa hỗ trợ đổi payment term của order đã đặt vì Shopify không gửi hook cho thay đổi này.",
+      "knowledge_kind": "CONFIRMED_EXPECTED",
+      "confidence": "MEDIUM",
+      "kb_refs": [
+        "KB-023"
+      ],
+      "note": "Giới hạn có chủ đích, không phải lỗi."
+    },
+    {
+      "statement": "Theo Dev BE 23–25/09/2025 (Jira DUOS-201 comment), ghi trong QA business rule Duos, Decision log Duos và Known issues Duos (giới hạn đã chốt), order đã cancel hoặc đã paid không được hỗ trợ bước xử lý credit tiếp theo; tài liệu không định nghĩa cụ thể \"bước tiếp theo\" là thao tác nào.",
+      "knowledge_kind": "CONFIRMED_EXPECTED",
+      "confidence": "MEDIUM",
+      "kb_refs": [
+        "KB-025"
+      ],
+      "note": "Giới hạn đã chốt; 'bước tiếp theo' chưa được định nghĩa nên chỉ kiểm được khi có định nghĩa."
+    },
+    {
+      "statement": "Theo Jira DUOS-246 (description) và PO 06/11/2025 (Jira comment), ghi trong QA KB Duos \"B2B Finance & Credit\" v1, financial ledger được cập nhật từ các webhook Shopify `orders/create`, `orders/edited`, `orders/cancelled`, `refunds/create`, `orders/paid` và được lưu trong MongoDB.",
+      "knowledge_kind": "CONFIRMED_EXPECTED",
+      "confidence": "MEDIUM",
+      "kb_refs": [
+        "KB-030"
+      ]
+    }
+  ],
+  "observed_behavior": [
+    {
+      "statement": "Trên staging (khảo sát 08/10/2026, store staging Plus (Free plan), 0 transaction), trang chi tiết location trong \"Credit management\" có h1 là tên location, nút \"Download statement\" (Jira DUOS-204 ghi \"Download statements\") và empty state \"No transactions found\" khi location chưa có giao dịch.",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "confidence": "MEDIUM",
+      "status": "CURRENT_STATE",
+      "kb_refs": [
+        "KB-029"
+      ],
+      "note": "Chỉ quan sát trạng thái 0 transaction."
+    }
+  ],
+  "observed_validations": [],
+  "permissions": [
+    {
+      "statement": "Staff/role nào của merchant được xem bảng giao dịch và tải statement ở chi tiết location trong Portal chưa có nguồn; khảo sát staging làm bằng merchant staff.",
+      "kb_refs": [
+        "KB-026",
+        "KB-027",
+        "KB-028",
+        "KB-029"
+      ]
+    }
+  ],
+  "surface_mapping": {
+    "portal": [
+      {
+        "item": "Chi tiết location: bảng giao dịch (Date, Operation, Credit change, Outstanding balance, Available credit, Credit Limit, Reference — theo ticket), nút \"Download statement\", empty state \"No transactions found\"",
+        "kb_refs": [
+          "KB-026",
+          "KB-028",
+          "KB-029"
+        ]
+      },
+      {
+        "item": "Cột \"Operation\" ở Portal theo ticket: \"Purchased\" / \"Reimbursed\" / \"Reverted\" (chưa chốt)",
+        "kb_refs": [
+          "KB-027"
+        ]
+      }
+    ],
+    "storefront": [],
+    "api": [
+      {
+        "item": "Webhook Shopify `orders/create`, `orders/edited`, `orders/cancelled`, `refunds/create`, `orders/paid` cập nhật financial ledger",
+        "kb_refs": [
+          "KB-030"
+        ]
+      }
+    ],
+    "data": [
+      {
+        "item": "Transaction credit: loại Purchased / Reimbursed / Reverted (trường operation_type), reference mang thông tin order",
+        "kb_refs": [
+          "KB-020",
+          "KB-021"
+        ]
+      },
+      {
+        "item": "Financial ledger lưu trong MongoDB; mục ledger theo ticket: \"Order created\", \"Payment received\", \"Order edited\", \"Order refund\", \"Order cancelled\" (nhãn chưa chốt)",
+        "kb_refs": [
+          "KB-030",
+          "KB-031",
+          "KB-P-039"
+        ]
+      },
+      {
+        "item": "Outstanding balance / Available credit cập nhật theo transaction (Available credit = Credit limit − Outstanding balance)",
+        "kb_refs": [
+          "KB-001",
+          "KB-022"
+        ]
+      }
+    ],
+    "code": [
+      {
+        "item": "Ghi ledger bất đồng bộ qua hàng đợi job (Horizon)",
+        "kb_refs": [
+          "KB-032",
+          "KB-P-036"
+        ]
+      }
+    ]
+  },
+  "dependencies": [
+    {
+      "target": "finance-credit / credit-limit-management",
+      "relation": "feeds",
+      "note": "Outstanding balance và Available credit hiển thị ở Credit management được tính từ transaction credit.",
+      "kb_refs": [
+        "KB-001",
+        "KB-020"
+      ]
+    },
+    {
+      "target": "finance-credit / buyer-finance-overview",
+      "relation": "feeds",
+      "note": "Lịch sử giao dịch và \"Financial ledger\" hiển thị cho buyer ở Customer Account; nhãn Operation ở Customer Account khác Portal và ledger (chưa chốt).",
+      "kb_refs": [
+        "KB-042",
+        "KB-047",
+        "KB-050"
+      ]
+    },
+    {
+      "target": "Shopify order webhooks / hàng đợi job của backend",
+      "relation": "platform",
+      "note": "Ledger phụ thuộc webhook order của Shopify và job bất đồng bộ; Shopify không gửi hook khi đổi payment term.",
+      "kb_refs": [
+        "KB-030",
+        "KB-032",
+        "KB-023",
+        "KB-P-036"
+      ]
+    },
+    {
+      "target": "auth-token / dead-token-detection-and-reconnect",
+      "relation": "dependency",
+      "note": "Ghi nhận credit dựa trên giao tiếp với Shopify; trạng thái token của store do object auth-token sở hữu.",
+      "kb_refs": [
+        "KB-030"
+      ]
+    },
+    {
+      "target": "shopping-list / re-approval-after-order",
+      "relation": "see_also",
+      "note": "Order tạo từ shopping list cũng đi qua webhook order; hành vi re-approval do object shopping-list sở hữu.",
+      "kb_refs": [
+        "KB-030"
+      ]
+    }
+  ],
+  "risks": [
+    {
+      "statement": "Theo QA business rule Duos và Known issues Duos (tóm tắt Dev BE 23–25/09/2025, Jira DUOS-201), do không hỗ trợ đổi payment term sau khi đặt order nên transaction credit \"có thể sai\"; tài liệu không nêu sai ở giá trị nào hay trong kịch bản nào.",
+      "knowledge_kind": "INFERRED",
+      "confidence": "LOW",
+      "kb_refs": [
+        "KB-024",
+        "KB-023"
+      ],
+      "note": "Không có kịch bản cụ thể để viết regression watch."
+    },
+    {
+      "statement": "Theo Jira DUOS-204 (tóm tắt trong QA KB Duos \"B2B Finance & Credit\" v1, đọc Jira 07/10/2026), cột \"Operation\" ở trang chi tiết location (Portal) nhận các giá trị \"Purchased\" / \"Reimbursed\" / \"Reverted\"; tài liệu ghi tên Operation lệch giữa Portal, Customer Account và financial ledger và tên UI thật chưa chốt, nên nhãn này chưa dùng làm kết quả mong đợi.",
+      "knowledge_kind": "INFERRED",
+      "confidence": "LOW",
+      "kb_refs": [
+        "KB-027",
+        "KB-031",
+        "KB-050"
+      ],
+      "note": "Một trong ba bộ nhãn Operation lệch nhau giữa Portal / Customer Account / ledger; không làm kết quả mong đợi."
+    },
+    {
+      "statement": "Theo Jira DUOS-246 và PO 06/11/2025 (tóm tắt trong QA KB Duos \"B2B Finance & Credit\" v1), financial ledger ghi các mục \"Order created\", \"Payment received\", \"Order edited\", \"Order refund\", \"Order cancelled\"; tài liệu ghi tên Operation lệch giữa Portal, Customer Account và ledger, tên UI thật chưa chốt, nên các nhãn này chưa dùng làm kết quả mong đợi.",
+      "knowledge_kind": "INFERRED",
+      "confidence": "LOW",
+      "kb_refs": [
+        "KB-031",
+        "KB-027",
+        "KB-050"
+      ],
+      "note": "Một trong ba bộ nhãn Operation lệch nhau; không làm kết quả mong đợi."
+    },
+    {
+      "statement": "Theo Jira DUOS-204 (description), tóm tắt trong QA KB Duos \"B2B Finance & Credit\" v1 (đọc Jira 07/10/2026; ticket trần, không có rule active trong QA business rule Duos và chưa có PO/Dev xác nhận), trang chi tiết location trong \"Credit management\" có bảng giao dịch với các cột \"Date\", \"Operation\", \"Credit change\", \"Outstanding balance\", \"Available credit\", \"Credit Limit\", \"Reference\".",
+      "knowledge_kind": "INFERRED",
+      "confidence": "MEDIUM",
+      "kb_refs": [
+        "KB-026"
+      ],
+      "note": "Mô tả chỉ theo ticket; bảng có dữ liệu chưa được quan sát (staging 0 transaction)."
+    },
+    {
+      "statement": "Theo Jira DUOS-204 (description), tóm tắt trong QA KB Duos \"B2B Finance & Credit\" v1 (đọc Jira 07/10/2026; ticket trần, không có rule active trong QA business rule Duos và chưa có PO/Dev xác nhận), trang chi tiết location trong \"Credit management\" có nút tải statement giao dịch credit.",
+      "knowledge_kind": "INFERRED",
+      "confidence": "MEDIUM",
+      "kb_refs": [
+        "KB-028",
+        "KB-029"
+      ],
+      "note": "Mô tả chỉ theo ticket; staging thấy nhãn \"Download statement\"."
+    },
+    {
+      "statement": "Theo ghi chú test trong QA KB Duos \"B2B Finance & Credit\" v1 (không ghi nguồn PO/Dev riêng), việc ghi ledger từ webhook là bất đồng bộ qua hàng đợi job (Horizon), nên kết quả trên ledger chỉ thấy sau khi job xử lý xong.",
+      "knowledge_kind": "INFERRED",
+      "confidence": "MEDIUM",
+      "kb_refs": [
+        "KB-032",
+        "KB-P-036"
+      ],
+      "note": "Ghi chú test của QA, không có nguồn PO/Dev; ảnh hưởng thời điểm kiểm kết quả ledger."
+    },
+    {
+      "statement": "Theo QA KB Duos tổng quan sản phẩm v1 (câu tổng quan, không ghi nguồn riêng), module B2B Finance & Credit gồm quản lý credit limit, ledger ghi nhận credit và chặn mua vượt hạn mức credit.",
+      "knowledge_kind": "INFERRED",
+      "confidence": "MEDIUM",
+      "kb_refs": [
+        "KB-051"
+      ],
+      "note": "Câu tổng quan phạm vi module, không có nguồn riêng."
+    }
+  ],
+  "unknown_areas": [
+    {
+      "question": "Nhãn Operation hiện hành của giao dịch credit trên từng bề mặt là gì: Portal (\"Purchased\" / \"Reimbursed\" / \"Reverted\" theo ticket), Customer Account (\"Order purchased\" / \"Invoice paid\" / \"Credit allocated\" / \"Order canceled\" / \"Credit updated\") và financial ledger (\"Order created\" / \"Payment received\" / \"Order edited\" / \"Order refund\" / \"Order cancelled\")? Sự khác nhau có chủ đích không?",
+      "why_it_matters": "Không viết được kết quả mong đợi cho cột Operation trên bất kỳ bề mặt nào.",
+      "kb_refs": [
+        "KB-027",
+        "KB-031",
+        "KB-050",
+        "KB-020"
+      ],
+      "oq_id": "OQ-finance-credit-006"
+    },
+    {
+      "question": "Financial ledger có loại trừ order test không, và ledger bắt đầu ghi khi merchant bật cấu hình hay luôn ghi?",
+      "why_it_matters": "Ảnh hưởng dữ liệu ledger khi QA tạo order test và điều kiện tiên quyết của mọi check ledger.",
+      "kb_refs": [
+        "KB-030",
+        "KB-032"
+      ],
+      "oq_id": "OQ-finance-credit-008"
+    },
+    {
+      "question": "Với order đã cancel hoặc đã paid, 'bước xử lý credit tiếp theo' không được hỗ trợ là thao tác nào (edit, refund, huỷ lần nữa…)?",
+      "why_it_matters": "Giới hạn đã chốt nhưng không đủ cụ thể để viết check.",
+      "kb_refs": [
+        "KB-025"
+      ],
+      "oq_id": "OQ-finance-credit-013"
+    },
+    {
+      "question": "Đổi payment term sau khi đặt order làm transaction credit sai ở giá trị nào (Outstanding balance, Available credit, loại transaction) và trong kịch bản nào?",
+      "why_it_matters": "Tài liệu chỉ nói 'có thể sai'; không viết được regression watch.",
+      "kb_refs": [
+        "KB-024",
+        "KB-023"
+      ],
+      "oq_id": "OQ-finance-credit-008"
+    },
+    {
+      "question": "Chuỗi order net term thật (tạo → thanh toán → edit → huỷ → refund) có sinh đúng transaction và cập nhật đúng Outstanding balance / Available credit trên Portal không? Store staging hiện có 0 transaction nên chưa có quan sát nào.",
+      "why_it_matters": "Mọi mô tả ledger và transaction đang dựa trên ticket / PO / Dev, chưa được kiểm với dữ liệu thật.",
+      "kb_refs": [
+        "KB-020",
+        "KB-021",
+        "KB-022",
+        "KB-026",
+        "KB-029",
+        "KB-030"
+      ],
+      "oq_id": "OQ-finance-credit-008"
+    },
+    {
+      "question": "Ngoài nút tải statement hiện có ở chi tiết location, PO có chốt phạm vi Monthly statement (Epic Jira DUOS-423, To Do) không — mỗi location 1 statement mỗi tháng giữa 2 ngày chốt sổ, trạng thái \"Draft\" → \"Issued\" → \"Received\", Issue gửi email kèm PDF, Mark received chuyển order sang paid (đề xuất Dev 22/09/2026)?",
+      "why_it_matters": "Chưa có quyết định PO nên chưa có hành vi nào để kiểm; tránh nhầm với statement hiện có.",
+      "kb_refs": [
+        "KB-028",
+        "KB-029"
+      ],
+      "oq_id": "OQ-finance-credit-007"
+    },
+    {
+      "question": "Mô tả theo Jira DUOS-204 của bảng giao dịch ở chi tiết location (các cột Date, Operation, Credit change, Outstanding balance, Available credit, Credit Limit, Reference) và nút tải statement có còn đúng làm kết quả mong đợi không?",
+      "why_it_matters": "Chỉ dựa trên ticket, chưa có PO/Dev xác nhận.",
+      "kb_refs": [
+        "KB-026",
+        "KB-028"
+      ],
+      "oq_id": "OQ-finance-credit-008"
+    },
+    {
+      "question": "Staff/role nào của merchant được xem lịch sử giao dịch credit và tải statement ở Portal?",
+      "why_it_matters": "Ma trận quyền của Finance & Credit chưa được tài liệu nêu.",
+      "kb_refs": [
+        "KB-026",
+        "KB-027",
+        "KB-028"
+      ],
+      "oq_id": "OQ-finance-credit-006"
+    }
+  ],
+  "freshness": {
+    "observed_at": "2026-10-08",
+    "earliest_source_date": "2025-09-25",
+    "basis": "Ngày nguồn mới nhất / cũ nhất trong các KB item được tham chiếu (ngày quyết định PO/Dev, ngày đọc Jira, khảo sát staging 08/10/2026); không có quan sát runtime trong lần chạy này."
+  },
+  "last_updated": {
+    "date": "2026-10-09",
+    "ccr_ref": "bootstrap"
+  },
+  "coverage_matrix": [
+    {
+      "feature_id": "credit-ledger-and-transactions",
+      "layer": "backend",
+      "role": "system",
+      "state": "order net term được tạo / trả invoice / huỷ",
+      "environment": "documented",
+      "covered": true,
+      "note": "Rule Jira DUOS-201"
+    },
+    {
+      "feature_id": "credit-ledger-and-transactions",
+      "layer": "backend",
+      "role": "system",
+      "state": "order net term bị edit trong Shopify admin",
+      "environment": "documented",
+      "covered": true,
+      "note": "Rule PO 10/09/2025, Dev BE 23–25/09/2025"
+    },
+    {
+      "feature_id": "credit-ledger-and-transactions",
+      "layer": "backend",
+      "role": "system",
+      "state": "edit xoá hết line, còn thuế/ship pending",
+      "environment": "documented",
+      "covered": true,
+      "note": "Rule Dev BE"
+    },
+    {
+      "feature_id": "credit-ledger-and-transactions",
+      "layer": "backend",
+      "role": "system",
+      "state": "đổi payment term sau khi đặt",
+      "environment": "documented",
+      "covered": true,
+      "note": "Giới hạn có chủ đích; hệ quả cụ thể chưa nêu"
+    },
+    {
+      "feature_id": "credit-ledger-and-transactions",
+      "layer": "backend",
+      "role": "system",
+      "state": "order đã cancel / đã paid",
+      "environment": "documented",
+      "covered": true,
+      "note": "Giới hạn đã chốt; bước tiếp theo chưa định nghĩa"
+    },
+    {
+      "feature_id": "credit-ledger-and-transactions",
+      "layer": "backend",
+      "role": "system",
+      "state": "webhook order / refund → financial ledger",
+      "environment": "documented",
+      "covered": true,
+      "note": "Rule Jira DUOS-246 + PO 06/11/2025; chưa quan sát"
+    },
+    {
+      "feature_id": "credit-ledger-and-transactions",
+      "layer": "backend",
+      "role": "system",
+      "state": "order test / trước khi bật cấu hình",
+      "environment": "documented",
+      "covered": false,
+      "note": "Không có nguồn"
+    },
+    {
+      "feature_id": "credit-ledger-and-transactions",
+      "layer": "portal",
+      "role": "merchant",
+      "state": "location chưa có giao dịch",
+      "environment": "documented",
+      "covered": true,
+      "note": "Hiện trạng staging"
+    },
+    {
+      "feature_id": "credit-ledger-and-transactions",
+      "layer": "portal",
+      "role": "merchant",
+      "state": "location có giao dịch (bảng, nhãn Operation)",
+      "environment": "documented",
+      "covered": false,
+      "note": "Chỉ theo ticket; nhãn chưa chốt"
+    },
+    {
+      "feature_id": "credit-ledger-and-transactions",
+      "layer": "portal",
+      "role": "merchant",
+      "state": "tải statement",
+      "environment": "documented",
+      "covered": false,
+      "note": "Chỉ thấy nút; nội dung file chưa mô tả"
+    },
+    {
+      "feature_id": "credit-ledger-and-transactions",
+      "layer": "portal",
+      "role": "merchant (role khác)",
+      "state": "mọi trạng thái",
+      "environment": "documented",
+      "covered": false,
+      "note": "Ma trận quyền chưa có"
+    },
+    {
+      "feature_id": "credit-ledger-and-transactions",
+      "layer": "api",
+      "role": "unspecified",
+      "state": "mọi trạng thái",
+      "environment": "documented",
+      "covered": false,
+      "note": "Bộ tài liệu QA không có đặc tả API/data model cho feature này"
+    },
+    {
+      "feature_id": "credit-ledger-and-transactions",
+      "layer": "db",
+      "role": "unspecified",
+      "state": "mọi trạng thái",
+      "environment": "documented",
+      "covered": false,
+      "note": "Bộ tài liệu QA không có đặc tả API/data model cho feature này"
+    }
+  ],
+  "profile_conflicts": [
+    {
+      "conflict_id": "DIV-DUOS-finance-credit-03",
+      "owner_feature": "credit-ledger-and-transactions",
+      "topic": "Nhãn Operation giao dịch credit: Portal vs Customer Account vs financial ledger",
+      "side_a": "Portal theo Jira DUOS-204: \"Purchased\" / \"Reimbursed\" / \"Reverted\".",
+      "side_b": "Customer Account theo ticket: \"Order purchased\" / \"Invoice paid\" / \"Credit allocated\" / \"Order canceled\" / \"Credit updated\"; financial ledger theo Jira DUOS-246: \"Order created\" / \"Payment received\" / \"Order edited\" / \"Order refund\" / \"Order cancelled\".",
+      "resolution": "UNRESOLVED",
+      "impact": "Khác bề mặt, có thể khác nhãn có chủ đích; mọi check nhãn Operation không có oracle.",
+      "kb_refs": [
+        "KB-027",
+        "KB-031",
+        "KB-050"
+      ]
+    }
+  ],
+  "profile_relationships": [
+    {
+      "from": "credit-ledger-and-transactions",
+      "to": "credit-limit-management",
+      "relation": "FEEDS",
+      "kb_refs": [
+        "KB-001",
+        "KB-020"
+      ]
+    },
+    {
+      "from": "credit-ledger-and-transactions",
+      "to": "buyer-finance-overview",
+      "relation": "FEEDS",
+      "kb_refs": [
+        "KB-042",
+        "KB-047"
+      ]
+    },
+    {
+      "from": "credit-ledger-and-transactions",
+      "to": "checkout-credit-validation",
+      "relation": "SHARES_DATA_WITH",
+      "kb_refs": [
+        "KB-001",
+        "KB-033"
+      ]
+    }
+  ]
+}

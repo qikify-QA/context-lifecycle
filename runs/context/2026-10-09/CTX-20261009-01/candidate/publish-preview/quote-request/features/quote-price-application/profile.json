@@ -1,0 +1,568 @@
+{
+  "feature_id": "quote-price-application",
+  "feature_key": "quote-price-application",
+  "name": "Áp giá quote theo line item và chốt quote thành order / draft order",
+  "user_goal": "Khi quote được chấp nhận, mỗi line được áp giá theo loại đã chọn — permanent (cập nhật giá B2B catalog của company location của quote) hoặc one-time deal (xử lý qua draft order) — và quote được chuyển thành order hoặc draft order để buyer mua đúng giá đã thoả thuận.",
+  "user_goal_kb_refs": [
+    "KB-045",
+    "KB-046",
+    "KB-050",
+    "KB-051",
+    "KB-053",
+    "KB-P-021"
+  ],
+  "stable_since_version": "v1",
+  "actors": [
+    {
+      "role": "người chọn loại áp giá và chốt quote (chưa xác định)",
+      "permission_observed": "Tài liệu không ghi role cho việc chọn permanent / one-time trên line, bulk action và bấm \"Create order\" / \"Create draft order\" sau accept.",
+      "kb_refs": [
+        "KB-046",
+        "KB-048",
+        "KB-049",
+        "KB-053"
+      ]
+    },
+    {
+      "role": "merchant (Portal quote detail)",
+      "permission_observed": "Theo ticket quote detail trên Portal tôn trọng quantity rule và volume pricing; chưa quan sát (store có 0 quote).",
+      "kb_refs": [
+        "KB-054"
+      ]
+    },
+    {
+      "role": "system (backend)",
+      "permission_observed": "Theo ticket khi quote được accept: line permanent cập nhật giá catalog của company location, line one-time đi qua draft order; draft order này không áp được net-term deposit.",
+      "kb_refs": [
+        "KB-050",
+        "KB-051",
+        "KB-052"
+      ]
+    }
+  ],
+  "entry_points": [
+    {
+      "path": "Line item của quote: popover đổi loại price application, badge `EyeFirst` (one-time deal) / `ProductCost` (permanent price)",
+      "precondition": "Quote có line item (theo ticket, chưa có PO/Dev xác nhận; chưa quan sát).",
+      "kb_refs": [
+        "KB-046",
+        "KB-047",
+        "KB-048"
+      ]
+    },
+    {
+      "path": "Bulk action \"Set as permanent price\" / \"Set as one-time deal\"",
+      "precondition": "Chọn nhiều line item (theo ticket, chưa có PO/Dev xác nhận).",
+      "kb_refs": [
+        "KB-049"
+      ]
+    },
+    {
+      "path": "CTA `Create order` / `Create draft order` sau khi accept quote",
+      "precondition": "Quote vừa được accept (theo ticket, chưa có PO/Dev xác nhận).",
+      "kb_refs": [
+        "KB-053"
+      ]
+    },
+    {
+      "path": "Portal: quote detail / màn submitted quote detail",
+      "precondition": "Sản phẩm trong quote có quantity rule / volume pricing (theo ticket, chưa có PO/Dev xác nhận); surface của màn submitted quote detail không rõ.",
+      "kb_refs": [
+        "KB-054",
+        "KB-055"
+      ]
+    }
+  ],
+  "capabilities": [
+    {
+      "name": "Chọn loại áp giá cho từng line",
+      "description": "Loại áp giá (permanent / one-time deal) chọn riêng cho từng line item qua popover hoặc bulk action, hiển thị bằng badge; thay cho một checkbox cấp cả quote của Jira DUOS-182 (theo ticket, chưa có PO/Dev xác nhận, Jira DUOS-215, DUOS-216).",
+      "kb_refs": [
+        "KB-046",
+        "KB-047",
+        "KB-048",
+        "KB-049",
+        "KB-P-021"
+      ]
+    },
+    {
+      "name": "Áp giá permanent vào catalog của company location",
+      "description": "Khi quote được accept, line permanent cập nhật giá B2B catalog của đúng company location của quote, gồm cả volume pricing và quantity rule minimum (theo ticket, chưa có PO/Dev xác nhận, Jira DUOS-215, DUOS-216, DUOS-151, DUOS-174).",
+      "kb_refs": [
+        "KB-050"
+      ]
+    },
+    {
+      "name": "Xử lý one-time deal qua draft order",
+      "description": "Khi quote được accept, line one-time deal được xử lý qua draft order (theo ticket, chưa có PO/Dev xác nhận, Jira DUOS-187); draft order này không áp được net-term deposit (giới hạn do nền tảng Shopify theo Known issues Duos, chưa có quyết định PO/Dev có ngày).",
+      "kb_refs": [
+        "KB-051",
+        "KB-052"
+      ]
+    },
+    {
+      "name": "Chuyển quote đã accept thành order hoặc draft order",
+      "description": "Quote sau khi chốt được convert thành order hoặc draft order; sau accept có hai CTA `Create order` và `Create draft order` (theo ticket, chưa có PO/Dev xác nhận, Jira DUOS-183).",
+      "kb_refs": [
+        "KB-045",
+        "KB-053"
+      ]
+    },
+    {
+      "name": "Giữ quantity rule và volume pricing trong quote",
+      "description": "Quote detail trên Portal và màn submitted quote detail tôn trọng quantity rule increment / minimum / maximum và volume pricing (theo ticket, chưa có PO/Dev xác nhận, Jira DUOS-178, DUOS-179).",
+      "kb_refs": [
+        "KB-054",
+        "KB-055"
+      ]
+    }
+  ],
+  "state_transitions": [
+    {
+      "from": "line item của quote",
+      "to": "line mang permanent price hoặc one-time deal",
+      "trigger": "Đổi qua popover trên dòng hoặc bulk action \"Set as permanent price\" / \"Set as one-time deal\"",
+      "condition": "theo ticket, chưa có PO/Dev xác nhận; giá trị mặc định của line mới chưa có nguồn",
+      "kb_refs": [
+        "KB-046",
+        "KB-048",
+        "KB-049"
+      ]
+    },
+    {
+      "from": "quote được accept, có line permanent",
+      "to": "giá B2B catalog của company location được cập nhật (kể cả volume pricing, quantity rule minimum)",
+      "trigger": "Accept quote",
+      "condition": "theo ticket, chưa có PO/Dev xác nhận",
+      "kb_refs": [
+        "KB-050"
+      ]
+    },
+    {
+      "from": "quote được accept, có line one-time deal",
+      "to": "draft order (không áp net-term deposit)",
+      "trigger": "Accept quote",
+      "condition": "theo ticket, chưa có PO/Dev xác nhận",
+      "kb_refs": [
+        "KB-051",
+        "KB-052"
+      ]
+    },
+    {
+      "from": "quote vừa được accept",
+      "to": "order hoặc draft order",
+      "trigger": "Bấm `Create order` hoặc `Create draft order`",
+      "condition": "theo ticket, chưa có PO/Dev xác nhận; quote có cả line permanent và one-time chưa có nguồn",
+      "kb_refs": [
+        "KB-045",
+        "KB-053"
+      ]
+    }
+  ],
+  "confirmed_rules": [],
+  "observed_behavior": [
+    {
+      "statement": "Theo QA KB Duos \"Glossary\" v1, \"Permanent\" và \"one-time deal\" là hai cách áp giá quote theo từng line item.",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "confidence": "MEDIUM",
+      "status": "CURRENT_STATE",
+      "kb_refs": [
+        "KB-P-021"
+      ]
+    }
+  ],
+  "observed_validations": [],
+  "permissions": [
+    {
+      "statement": "Role nào được đặt loại áp giá, dùng bulk action và bấm `Create order` / `Create draft order` chưa có rule (ma trận quyền nhóm \"Quotes\" thuộc roles-permissions, chưa chốt).",
+      "kb_refs": [
+        "KB-046",
+        "KB-049",
+        "KB-053"
+      ]
+    }
+  ],
+  "surface_mapping": {
+    "portal": [
+      {
+        "item": "Quote detail: popover price application, badge `EyeFirst` / `ProductCost`, bulk action (theo ticket, surface suy từ tài liệu chưa ghi rõ)",
+        "kb_refs": [
+          "KB-047",
+          "KB-048",
+          "KB-049",
+          "KB-054"
+        ]
+      },
+      {
+        "item": "CTA `Create order` / `Create draft order` sau accept (theo ticket)",
+        "kb_refs": [
+          "KB-053"
+        ]
+      }
+    ],
+    "storefront": [],
+    "api": [],
+    "data": [
+      {
+        "item": "Loại áp giá theo line: permanent / one-time deal",
+        "kb_refs": [
+          "KB-046",
+          "KB-P-021"
+        ]
+      },
+      {
+        "item": "Giá B2B catalog của company location (kể cả volume pricing, quantity rule minimum) được cập nhật từ line permanent",
+        "kb_refs": [
+          "KB-050"
+        ]
+      },
+      {
+        "item": "Draft order từ nhánh one-time deal (không net-term deposit)",
+        "kb_refs": [
+          "KB-051",
+          "KB-052"
+        ]
+      }
+    ],
+    "code": []
+  },
+  "dependencies": [
+    {
+      "target": "quote-request / quote-negotiation-and-status",
+      "relation": "triggered_by",
+      "note": "Áp giá diễn ra khi quote được accept ở cuối vòng đàm phán.",
+      "kb_refs": [
+        "KB-045",
+        "KB-030"
+      ]
+    },
+    {
+      "target": "finance-credit / checkout-credit-validation",
+      "relation": "constraint",
+      "note": "Validate credit của finance-credit cũng chạy trên draft order; draft order từ one-time deal không áp được net-term deposit (giới hạn thuộc feature này).",
+      "kb_refs": [
+        "KB-051",
+        "KB-052"
+      ]
+    },
+    {
+      "target": "auth-token / dead-token-detection-and-reconnect",
+      "relation": "constraint",
+      "note": "Fact do object auth-token sở hữu: token của shop chết thì luồng quote → order dừng tới khi reconnect.",
+      "kb_refs": [
+        "KB-045",
+        "KB-053"
+      ]
+    },
+    {
+      "target": "quote-request / quote-request-widget",
+      "relation": "shares_rule",
+      "note": "Quantity rule và volume pricing cũng áp ở request quote form trên storefront.",
+      "kb_refs": [
+        "KB-054",
+        "KB-017"
+      ]
+    },
+    {
+      "target": "quote-request / quote-pdf-and-history",
+      "relation": "rendered_in",
+      "note": "Preview PDF có cột \"PRICE APPLICATION\" (giá trị mẫu).",
+      "kb_refs": [
+        "KB-047",
+        "KB-068"
+      ]
+    }
+  ],
+  "risks": [
+    {
+      "statement": "Toàn bộ feature chỉ dựa trên rule draft \"chỉ theo ticket\" và ticket Jira qua tài liệu tổng hợp; chưa có PO/Dev xác nhận, chưa có test case, store khảo sát có 0 quote nên chưa quan sát áp giá thật.",
+      "knowledge_kind": "INFERRED",
+      "confidence": "MEDIUM",
+      "kb_refs": [
+        "KB-045",
+        "KB-046",
+        "KB-050",
+        "KB-051",
+        "KB-053"
+      ]
+    },
+    {
+      "statement": "Line permanent ghi đè giá B2B catalog của company location (kể cả volume pricing, quantity rule minimum) — thay đổi lâu dài lên giá của location, ảnh hưởng mọi order sau đó; chưa xác nhận.",
+      "knowledge_kind": "INFERRED",
+      "confidence": "MEDIUM",
+      "kb_refs": [
+        "KB-050"
+      ]
+    },
+    {
+      "statement": "Draft order từ one-time deal không áp được net-term deposit (Known issues Duos xếp intentional limitation do nền tảng Shopify, không ghi ngày, chưa có quyết định PO/Dev); dễ bị báo nhầm là lỗi hoặc ảnh hưởng thanh toán theo payment term.",
+      "knowledge_kind": "INFERRED",
+      "confidence": "MEDIUM",
+      "kb_refs": [
+        "KB-052"
+      ],
+      "tags": [
+        "credit-limit"
+      ]
+    },
+    {
+      "statement": "Quote có đồng thời line permanent và line one-time khi accept chưa có nguồn — vùng dễ lỗi khi tạo order / draft order.",
+      "knowledge_kind": "INFERRED",
+      "confidence": "MEDIUM",
+      "kb_refs": [
+        "KB-050",
+        "KB-051",
+        "KB-053"
+      ]
+    },
+    {
+      "statement": "Bản áp giá cấp cả quote (một checkbox, Jira DUOS-182) đã được thay bằng cấp line (Jira DUOS-215, DUOS-216); giao diện / dữ liệu còn sót kiểu cũ là vùng cần để ý khi regression.",
+      "knowledge_kind": "INFERRED",
+      "confidence": "MEDIUM",
+      "kb_refs": [
+        "KB-046"
+      ]
+    },
+    {
+      "statement": "Tên badge `EyeFirst` / `ProductCost` lấy từ tài liệu tổng hợp 17/07/2026; chưa đối chiếu với UI hiện tại.",
+      "knowledge_kind": "INFERRED",
+      "confidence": "MEDIUM",
+      "kb_refs": [
+        "KB-047"
+      ]
+    },
+    {
+      "statement": "Quantity rule / volume pricing ở quote detail và submitted quote detail chỉ theo ticket; chưa rõ vi phạm thì chặn hay cảnh báo, và surface của màn submitted quote detail.",
+      "knowledge_kind": "INFERRED",
+      "confidence": "MEDIUM",
+      "kb_refs": [
+        "KB-054",
+        "KB-055"
+      ]
+    }
+  ],
+  "unknown_areas": [
+    {
+      "question": "Khi accept một quote có cả line permanent và line one-time deal thì hệ thống tạo những gì (một order, một draft order, hay cả hai) và giá catalog được cập nhật lúc nào?",
+      "why_it_matters": "Trường hợp hỗn hợp không có nguồn; là luồng rủi ro cao nhất của feature.",
+      "kb_refs": [
+        "KB-050",
+        "KB-051",
+        "KB-053"
+      ],
+      "oq_id": "OQ-quote-request-035"
+    },
+    {
+      "question": "Line permanent cập nhật giá catalog của company location cụ thể thế nào: ghi đè giá đang có, xử lý volume pricing và quantity rule minimum ra sao, có ảnh hưởng location khác của cùng company không?",
+      "why_it_matters": "Không viết được expected chi tiết cho thay đổi catalog.",
+      "kb_refs": [
+        "KB-050"
+      ],
+      "oq_id": "OQ-quote-request-031"
+    },
+    {
+      "question": "Ai (merchant hay buyer, role nào) đặt loại áp giá cho line, dùng bulk action và bấm `Create order` / `Create draft order`?",
+      "why_it_matters": "Không gán được role cho check chốt quote.",
+      "kb_refs": [
+        "KB-046",
+        "KB-049",
+        "KB-053"
+      ],
+      "oq_id": "OQ-quote-request-005"
+    },
+    {
+      "question": "Line mới trong quote mặc định là permanent hay one-time deal?",
+      "why_it_matters": "Cần cho check trạng thái ban đầu của line.",
+      "kb_refs": [
+        "KB-046",
+        "KB-048"
+      ],
+      "oq_id": "OQ-quote-request-029"
+    },
+    {
+      "question": "PO/Dev có xác nhận việc draft order từ one-time deal không áp net-term deposit là giới hạn chấp nhận được không, và merchant / buyer có được báo không?",
+      "why_it_matters": "Hiện chỉ có Known issues xếp intentional limitation, không có quyết định PO/Dev có ngày.",
+      "kb_refs": [
+        "KB-052"
+      ],
+      "oq_id": "OQ-quote-request-033"
+    },
+    {
+      "question": "Badge `EyeFirst` / `ProductCost` và nhãn bulk action \"Set as permanent price\" / \"Set as one-time deal\" có còn đúng trên UI hiện tại không?",
+      "why_it_matters": "Nhãn lấy từ tài liệu tổng hợp tháng 07/2026.",
+      "kb_refs": [
+        "KB-047",
+        "KB-049"
+      ],
+      "oq_id": "OQ-quote-request-030"
+    },
+    {
+      "question": "Khi quantity trong quote detail vi phạm quantity rule thì Portal chặn lưu hay chỉ cảnh báo, và màn submitted quote detail nằm ở surface nào?",
+      "why_it_matters": "Không có expected cho validation quantity trong quote detail.",
+      "kb_refs": [
+        "KB-054",
+        "KB-055"
+      ],
+      "oq_id": "OQ-quote-request-036"
+    },
+    {
+      "question": "Các rule áp giá theo ticket (chọn theo line, permanent cập nhật catalog location, one-time qua draft order, CTA `Create order` / `Create draft order`) có còn đúng ở bản hiện tại để dùng làm kết quả mong đợi không?",
+      "why_it_matters": "Rule đang draft \"chỉ theo ticket\"; mọi check của feature đang NEEDS_CONFIRMATION.",
+      "kb_refs": [
+        "KB-045",
+        "KB-046",
+        "KB-050",
+        "KB-051",
+        "KB-053"
+      ],
+      "oq_id": "OQ-quote-request-004"
+    }
+  ],
+  "freshness": {
+    "observed_at": "2026-10-08",
+    "earliest_source_date": "2026-07-17",
+    "basis": "Ngày nguồn mới nhất / cũ nhất trong các KB item được tham chiếu (ngày quyết định Dev, ngày tổng hợp theo ticket, ngày khảo sát staging 08/10/2026); profile dựng từ tài liệu, không có quan sát runtime."
+  },
+  "last_updated": {
+    "date": "2026-10-09",
+    "ccr_ref": "bootstrap"
+  },
+  "coverage_matrix": [
+    {
+      "feature_id": "quote-price-application",
+      "layer": "portal",
+      "role": "unspecified",
+      "state": "chọn loại áp giá theo line / bulk",
+      "environment": "documented",
+      "covered": true,
+      "note": "Chỉ theo ticket"
+    },
+    {
+      "feature_id": "quote-price-application",
+      "layer": "backend",
+      "role": "system",
+      "state": "accept, line permanent",
+      "environment": "documented",
+      "covered": true,
+      "note": "Chỉ theo ticket"
+    },
+    {
+      "feature_id": "quote-price-application",
+      "layer": "backend",
+      "role": "system",
+      "state": "accept, line one-time deal",
+      "environment": "documented",
+      "covered": true,
+      "note": "Chỉ theo ticket; net-term deposit là giới hạn chưa chốt"
+    },
+    {
+      "feature_id": "quote-price-application",
+      "layer": "backend",
+      "role": "system",
+      "state": "accept, quote hỗn hợp permanent + one-time",
+      "environment": "documented",
+      "covered": false,
+      "note": "Chưa có nguồn"
+    },
+    {
+      "feature_id": "quote-price-application",
+      "layer": "portal",
+      "role": "unspecified",
+      "state": "Create order / Create draft order",
+      "environment": "documented",
+      "covered": true,
+      "note": "Chỉ theo ticket; role chưa biết"
+    },
+    {
+      "feature_id": "quote-price-application",
+      "layer": "portal",
+      "role": "merchant",
+      "state": "quantity rule / volume pricing trong quote detail",
+      "environment": "documented",
+      "covered": true,
+      "note": "Chỉ theo ticket"
+    },
+    {
+      "feature_id": "quote-price-application",
+      "layer": "customer_account",
+      "role": "buyer B2B",
+      "state": "any",
+      "environment": "documented",
+      "covered": false,
+      "note": "Không có nguồn"
+    },
+    {
+      "feature_id": "quote-price-application",
+      "layer": "api",
+      "role": "unspecified",
+      "state": "đặc tả API",
+      "environment": "documented",
+      "covered": false,
+      "note": "Bộ tài liệu QA không có đặc tả API/data model cho feature này"
+    },
+    {
+      "feature_id": "quote-price-application",
+      "layer": "db",
+      "role": "unspecified",
+      "state": "đặc tả data model",
+      "environment": "documented",
+      "covered": false,
+      "note": "Bộ tài liệu QA không có đặc tả API/data model cho feature này"
+    },
+    {
+      "feature_id": "quote-price-application",
+      "layer": "code",
+      "role": "unspecified",
+      "state": "any",
+      "environment": "documented",
+      "covered": false,
+      "note": "Không có nguồn mã"
+    }
+  ],
+  "profile_conflicts": [],
+  "profile_relationships": [
+    {
+      "from": "quote-negotiation-and-status",
+      "to": "quote-price-application",
+      "relation": "LEADS_TO",
+      "kb_refs": [
+        "KB-045",
+        "KB-030"
+      ]
+    },
+    {
+      "from": "quote-price-application",
+      "to": "finance-credit/checkout-credit-validation",
+      "relation": "CONSTRAINED_BY",
+      "kb_refs": [
+        "KB-051",
+        "KB-052"
+      ]
+    },
+    {
+      "from": "quote-price-application",
+      "to": "auth-token/dead-token-detection-and-reconnect",
+      "relation": "CONSTRAINED_BY",
+      "kb_refs": [
+        "KB-045"
+      ]
+    },
+    {
+      "from": "quote-price-application",
+      "to": "quote-request-widget",
+      "relation": "SHARES_RULE",
+      "kb_refs": [
+        "KB-054",
+        "KB-017"
+      ]
+    },
+    {
+      "from": "quote-price-application",
+      "to": "quote-pdf-and-history",
+      "relation": "RENDERED_IN",
+      "kb_refs": [
+        "KB-068"
+      ]
+    }
+  ]
+}

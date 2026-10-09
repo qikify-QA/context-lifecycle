@@ -1,0 +1,855 @@
+{
+  "schema_version": "1.0",
+  "artifact_type": "FeatureProfileCandidate",
+  "artifact_id": "ART-FEATURE-PROFILE-email-editor-CTX-20261008-02",
+  "workflow_id": "CTX-20261008-02",
+  "producer": "feature-profile-builder",
+  "source_refs": [
+    "candidate/product-kb/email-editor.json",
+    "candidate/product-kb/email-library.json",
+    "candidate/product-kb/saved-blocks.json",
+    "candidate/product-kb/merge-tags.json",
+    "candidate/product-kb/_product-level.json",
+    "input/scope-plan.json",
+    "input/orchestrator-directives.json"
+  ],
+  "upstream_artifact_ids": [
+    "PKBC-CTX-20261008-02-_product-level",
+    "PKBC-CTX-20261008-02-email-content-email-editor",
+    "PKBC-CTX-20261008-02-email-content-email-library",
+    "PKBC-CTX-20261008-02-email-content-merge-tags",
+    "PKBC-CTX-20261008-02-email-content-saved-blocks"
+  ],
+  "status": "PARTIAL",
+  "confidence": "MEDIUM",
+  "observations": [
+    "Profile dựng hoàn toàn từ tài liệu (DOC_BOOTSTRAP), không có quan sát runtime trong lần chạy này; act_ids rỗng và observed_validations rỗng.",
+    "Hiện trạng staging nằm ở observed_behavior, quyết định có nguồn thẩm quyền nằm ở confirmed_rules, mục suy từ bundle / spec chưa triển khai / đang tranh chấp / lỗi đang mở nằm ở risks; statement giữ nguyên văn từ KB.",
+    "Object email-content không có item cấp object riêng; các câu hỏi dùng chung (role, build, mail thật) được gắn trực tiếp vào từng profile.",
+    "feature_id dùng giá trị \"email-editor\" như KB của feature; chưa có mã FEAT dạng số được cấp.",
+    "Rework r1: dựng lại confirmed_rules / observed_behavior / risks / profile_conflicts từ KB hiện tại sau khi KB được sửa."
+  ],
+  "assumptions": [],
+  "unknowns": [
+    "PO/Dev có chấp nhận hành vi editor theo bản dựng staging (save / discard / leave guard, toolbar, Settings, Preheader, dialog Edit email details) mà QA lead chốt 30/09/2026 là hành vi mong đợi không?",
+    "Tab `Issues` luôn rỗng (không cảnh báo merge tag sai) là giới hạn chủ ý hay Dev sẽ bật bộ kiểm tra?",
+    "Dark mode có được render vào mail gửi đi không, và có hiện thông báo cho người dùng khi bật `Dark Mode Preview` không?",
+    "Font brand Outfit / Nunito Sans (Jira MTRO-111), border / background / radius cho section (Jira MTRO-105) và bản nâng SDK editor đã lên staging chưa; backend đã nâng renderer cùng phiên bản chưa?",
+    "Mở `/templates/<id>` không tồn tại hoặc đã xoá thì màn not-found mong đợi là gì (hiện tại hiện `Not saved` + alert `Not Found.`)?",
+    "Độ dài tối đa của `Email name` / `Subject line` khi sửa qua dialog Edit email details là bao nhiêu, và Preheader vượt 150 ký tự bị xử lý thế nào?",
+    "Toast lưu thành công / lỗi, hộp xác nhận Reload và lỗi lưu Email details (chỉ có từ bundle) hiển thị thế nào trên UI?",
+    "Font Tahoma có cần xuất hiện trong picker font của editor để khớp với backend / Claude MCP không?",
+    "Ma trận quyền cho Email editor theo role (Owner / Admin / role thứ 3, tên đang tranh chấp) là gì: role nào được sửa và lưu email, kể cả email do người khác tạo?"
+  ],
+  "conflicts": [],
+  "blocking_issues": [],
+  "payload": {
+    "feature_profiles": [
+      {
+        "feature_id": "email-editor",
+        "feature_key": "email-editor",
+        "object_id": "email-content",
+        "name": "Email editor: soạn nội dung email bằng editor kéo-thả",
+        "user_goal": "Người soạn nội dung thiết kế email trong editor kéo-thả (block, định dạng chữ, font, cài đặt layout và preheader), xem thử theo viewport và lưu thay đổi có kiểm soát.",
+        "stable_since_version": "v1",
+        "actors": [
+          {
+            "role": "Owner",
+            "permission_observed": "Editor được khảo sát staging bằng tài khoản Owner; role khác chưa được ghi nhận.",
+            "kb_refs": [
+              "KB-051",
+              "KB-061"
+            ]
+          },
+          {
+            "role": "unspecified (Admin / role thứ 3)",
+            "permission_observed": "Ma trận quyền chưa chốt; chặn quyền (nếu có) phải nằm ở API.",
+            "kb_refs": [
+              "KB-P-051",
+              "KB-P-052"
+            ]
+          },
+          {
+            "role": "recipient",
+            "permission_observed": "Người nhận mail thấy font dự phòng `sans-serif` trên Gmail và Outlook desktop thay cho font brand (PO chấp nhận).",
+            "kb_refs": [
+              "KB-076"
+            ]
+          }
+        ],
+        "entry_points": [
+          {
+            "path": "Editor `/templates/:id`, mở từ tên email ở Email library, sau `New email` hoặc sau `Import HTML`",
+            "precondition": "Email tồn tại trong workspace.",
+            "kb_refs": [
+              "KB-001",
+              "KB-016",
+              "KB-025",
+              "KB-050"
+            ]
+          },
+          {
+            "path": "`/templates/<id>` với id không tồn tại hoặc đã xoá",
+            "precondition": "Id không còn trong workspace.",
+            "kb_refs": [
+              "KB-071"
+            ]
+          }
+        ],
+        "capabilities": [
+          {
+            "name": "Dựng nội dung bằng block",
+            "description": "Palette 12 loại block cùng `Browse saved blocks`; chọn block mở `Block properties`, toolbar block có kéo đổi thứ tự / Duplicate / Delete; upload ảnh trong block Image theo giới hạn định dạng và 5 MB.",
+            "kb_refs": [
+              "KB-058",
+              "KB-059",
+              "KB-136",
+              "KB-060",
+              "KB-061",
+              "KB-062"
+            ],
+            "act_ids": []
+          },
+          {
+            "name": "Định dạng chữ và font",
+            "description": "Toolbar chữ có font family, font size, màu, kiểu chữ, link, list, căn lề, emoji và `Insert merge tag`; font brand Outfit / Nunito Sans đã được PO quyết nhưng chưa có trên bản dựng.",
+            "kb_refs": [
+              "KB-063",
+              "KB-064",
+              "KB-075",
+              "KB-076"
+            ],
+            "act_ids": []
+          },
+          {
+            "name": "Cài đặt toàn email",
+            "description": "Tab `Settings`: độ rộng (preset / custom), màu nền / chữ / link, font, ngôn ngữ nội dung, RTL, Preheader Text tối đa 150 ký tự có hỗ trợ merge tag.",
+            "kb_refs": [
+              "KB-065",
+              "KB-066",
+              "KB-067"
+            ],
+            "act_ids": []
+          },
+          {
+            "name": "Xem thử trong editor",
+            "description": "Viewport Desktop / Mobile, `Dark Mode Preview`, `Preview Mode` ẩn palette và panel.",
+            "kb_refs": [
+              "KB-056",
+              "KB-057"
+            ],
+            "act_ids": []
+          },
+          {
+            "name": "Lưu, huỷ thay đổi và rời editor có kiểm soát",
+            "description": "Không auto-save; `Save` chỉ bật khi có thay đổi; `Discard changes` về bản lưu gần nhất; cảnh báo khi rời hoặc Reload lúc còn thay đổi chưa lưu.",
+            "kb_refs": [
+              "KB-051",
+              "KB-052",
+              "KB-053",
+              "KB-054",
+              "KB-055"
+            ],
+            "act_ids": []
+          },
+          {
+            "name": "Sửa tên và subject của email",
+            "description": "Dialog `Edit email details` mở từ bút chì ở header; Save bị disabled khi Subject trống / chỉ dấu cách hoặc Email name trống.",
+            "kb_refs": [
+              "KB-050",
+              "KB-072",
+              "KB-073",
+              "KB-074"
+            ],
+            "act_ids": []
+          }
+        ],
+        "state_transitions": [
+          {
+            "from": "đã lưu (Save disabled)",
+            "to": "có thay đổi chưa lưu (`Unsaved changes`, Save và Discard bật)",
+            "trigger": "Sửa nội dung hoặc cài đặt",
+            "condition": "Cập nhật sau khoảng 1 giây; chỉ chọn block không làm email thành có thay đổi",
+            "kb_refs": [
+              "KB-051",
+              "KB-062"
+            ]
+          },
+          {
+            "from": "có thay đổi chưa lưu",
+            "to": "đã lưu",
+            "trigger": "Bấm `Save`",
+            "condition": "Toast thành công / lỗi chỉ có từ bundle",
+            "kb_refs": [
+              "KB-051",
+              "KB-053"
+            ]
+          },
+          {
+            "from": "có thay đổi chưa lưu",
+            "to": "bản lưu gần nhất (Save disabled)",
+            "trigger": "`Discard changes` rồi xác nhận",
+            "condition": "Không có version history để khôi phục",
+            "kb_refs": [
+              "KB-052",
+              "KB-054"
+            ]
+          },
+          {
+            "from": "có thay đổi chưa lưu",
+            "to": "rời editor hoặc ở lại",
+            "trigger": "Bấm `Back to email library`",
+            "condition": "Hộp `Leave without saving?` với `Stay` / `Leave`",
+            "kb_refs": [
+              "KB-055"
+            ]
+          }
+        ],
+        "confirmed_rules": [
+          {
+            "statement": "Theo Jira MTRO-86 (Image upload in Image component), upload ảnh trong block Image chấp nhận gif, jpeg, png, webp, tối đa 5 MB.",
+            "knowledge_kind": "CONFIRMED_EXPECTED",
+            "confidence": "MEDIUM",
+            "kb_refs": [
+              "KB-059"
+            ]
+          },
+          {
+            "statement": "Theo quyết định PO ngày 02/10/2026 (Jira MTRO-111), font brand dùng trong email editor là Outfit và Nunito Sans (Google Fonts), được load trực tiếp tại chỗ chọn font; không có trang settings riêng cho font. Jira MTRO-111 đang To Do nên bản dựng staging 01/10/2026 chưa có hai font này.",
+            "knowledge_kind": "CONFIRMED_EXPECTED",
+            "confidence": "MEDIUM",
+            "kb_refs": [
+              "KB-075"
+            ]
+          },
+          {
+            "statement": "Theo quyết định PO ngày 02/10/2026 (Jira MTRO-111), chấp nhận Gmail và Outlook desktop hiển thị font dự phòng `sans-serif` thay cho font brand.",
+            "knowledge_kind": "CONFIRMED_EXPECTED",
+            "confidence": "MEDIUM",
+            "kb_refs": [
+              "KB-076"
+            ]
+          },
+          {
+            "statement": "Theo Jira MTRO-35 (Create email design from scratch), email editor của Mailtro dùng SDK Templatical (gói editor mã nguồn mở).",
+            "knowledge_kind": "CONFIRMED_EXPECTED",
+            "confidence": "MEDIUM",
+            "kb_refs": [
+              "KB-079"
+            ]
+          }
+        ],
+        "observed_behavior": [
+          {
+            "statement": "QA lead chốt 30/09/2026 nghiệm thu Email library theo bản dựng staging (task Testlane MTRO-021 BR-21), chưa có xác nhận PO/Dev. Trên staging (khảo sát 01/10/2026), header của editor `/templates/:id` gồm `Back to email library`, h1 tên email, bút chì `Edit email details` và dòng \"Subject: {subject}\"; theo bundle, email chưa có subject hiện `(no subject yet)`.",
+            "knowledge_kind": "OBSERVED_CURRENT",
+            "confidence": "MEDIUM",
+            "status": "CURRENT_STATE",
+            "kb_refs": [
+              "KB-050"
+            ]
+          },
+          {
+            "statement": "QA lead chốt 30/09/2026 nghiệm thu Email library theo bản dựng staging (task Testlane MTRO-021 BR-21), chưa có xác nhận PO/Dev. Trên staging (khảo sát 01/10/2026), `Save` của editor bị disabled khi chưa có thay đổi; editor không auto-save; khi có thay đổi (cập nhật sau khoảng 1 giây) header hiện `Unsaved changes`, nút `Discard changes` và `Save` được bật.",
+            "knowledge_kind": "OBSERVED_CURRENT",
+            "confidence": "MEDIUM",
+            "status": "CURRENT_STATE",
+            "kb_refs": [
+              "KB-051"
+            ]
+          },
+          {
+            "statement": "QA lead chốt 30/09/2026 nghiệm thu Email library theo bản dựng staging (task Testlane MTRO-021 BR-21), chưa có xác nhận PO/Dev. Trên staging (khảo sát 01/10/2026), `Discard changes` mở hộp `Discard your changes?` / \"The email goes back to how it was when you last saved. This cannot be undone.\"; xác nhận thì email quay về bản lưu gần nhất (vd độ rộng về 600) và `Save` bị disabled lại.",
+            "knowledge_kind": "OBSERVED_CURRENT",
+            "confidence": "MEDIUM",
+            "status": "CURRENT_STATE",
+            "kb_refs": [
+              "KB-052"
+            ]
+          },
+          {
+            "statement": "QA lead chốt 30/09/2026 nghiệm thu Email library theo bản dựng staging (task Testlane MTRO-021 BR-21), chưa có xác nhận PO/Dev. Trên staging (khảo sát 01/10/2026), bấm `Back to email library` khi còn thay đổi chưa lưu sẽ hiện hộp `Leave without saving?` với `Stay` / `Leave`.",
+            "knowledge_kind": "OBSERVED_CURRENT",
+            "confidence": "MEDIUM",
+            "status": "CURRENT_STATE",
+            "kb_refs": [
+              "KB-055"
+            ]
+          },
+          {
+            "statement": "QA lead chốt 30/09/2026 nghiệm thu Email library theo bản dựng staging (task Testlane MTRO-021 BR-21), chưa có xác nhận PO/Dev. Trên staging (khảo sát 01/10/2026), thanh trên canvas có radiogroup `Viewport` (`Desktop` / `Mobile`), nút `Dark Mode Preview` (bấm thì đổi nhãn thành `Light Mode Preview`) và `Preview Mode` (bấm thì ẩn palette và panel phải, nút đổi thành `Exit Preview`).",
+            "knowledge_kind": "OBSERVED_CURRENT",
+            "confidence": "MEDIUM",
+            "status": "CURRENT_STATE",
+            "kb_refs": [
+              "KB-056"
+            ]
+          },
+          {
+            "statement": "QA lead chốt 30/09/2026 nghiệm thu Email library theo bản dựng staging (task Testlane MTRO-021 BR-21), chưa có xác nhận PO/Dev. Trên staging (khảo sát 01/10/2026, không chèn thử), palette trái `Block palette` có `Browse saved blocks` và 12 loại block: Section, Title, Paragraph, Image, Button, Divider, Spacer, Social, Menu, Table, Video, HTML.",
+            "knowledge_kind": "OBSERVED_CURRENT",
+            "confidence": "MEDIUM",
+            "status": "CURRENT_STATE",
+            "kb_refs": [
+              "KB-058"
+            ]
+          },
+          {
+            "statement": "QA lead chốt 30/09/2026 nghiệm thu Email library theo bản dựng staging (task Testlane MTRO-021 BR-21), chưa có xác nhận PO/Dev. Trên staging (khảo sát 01/10/2026), canvas rỗng hiện `No blocks yet` / \"Start from scratch by dragging blocks from the sidebar\".",
+            "knowledge_kind": "OBSERVED_CURRENT",
+            "confidence": "MEDIUM",
+            "status": "CURRENT_STATE",
+            "kb_refs": [
+              "KB-060"
+            ]
+          },
+          {
+            "statement": "QA lead chốt 30/09/2026 nghiệm thu Email library theo bản dựng staging (task Testlane MTRO-021 BR-21), chưa có xác nhận PO/Dev. Trên staging (khảo sát 01/10/2026), chọn một block mở panel `Block properties` (tiêu đề loại block, `Duplicate` / `Delete`, các nhóm Spacing / Background / Display); toolbar trên block có `Drag to reorder, or press Space to move with keyboard`, `Duplicate block` và `Delete block`.",
+            "knowledge_kind": "OBSERVED_CURRENT",
+            "confidence": "MEDIUM",
+            "status": "CURRENT_STATE",
+            "kb_refs": [
+              "KB-061"
+            ]
+          },
+          {
+            "statement": "Trên staging (khảo sát 01/10/2026), chọn một block trên canvas không làm email chuyển sang trạng thái có thay đổi chưa lưu.",
+            "knowledge_kind": "OBSERVED_CURRENT",
+            "confidence": "LOW",
+            "status": "CURRENT_STATE",
+            "kb_refs": [
+              "KB-062"
+            ]
+          },
+          {
+            "statement": "QA lead chốt 30/09/2026 nghiệm thu Email library theo bản dựng staging (task Testlane MTRO-021 BR-21), chưa có xác nhận PO/Dev. Trên staging (khảo sát 01/10/2026), `Font Family` của toolbar chữ gồm Default, Arial, Courier New, Georgia, Helvetica, Times New Roman, Trebuchet MS, Verdana; custom font Outfit / Nunito Sans mà PO chốt ngày 02/10/2026 (Jira MTRO-111, To Do) chưa có trên bản dựng này.",
+            "knowledge_kind": "OBSERVED_CURRENT",
+            "confidence": "MEDIUM",
+            "status": "CURRENT_STATE",
+            "kb_refs": [
+              "KB-063"
+            ]
+          },
+          {
+            "statement": "QA lead chốt 30/09/2026 nghiệm thu Email library theo bản dựng staging (task Testlane MTRO-021 BR-21), chưa có xác nhận PO/Dev. Trên staging (khảo sát 01/10/2026), toolbar định dạng chữ có `Font Size` (Default và 10–64px), chọn màu, B / I / U / S, sub / sup, link, list, căn lề, line height, letter spacing, emoji và `Insert merge tag`.",
+            "knowledge_kind": "OBSERVED_CURRENT",
+            "confidence": "MEDIUM",
+            "status": "CURRENT_STATE",
+            "kb_refs": [
+              "KB-064"
+            ]
+          },
+          {
+            "statement": "QA lead chốt 30/09/2026 nghiệm thu Email library theo bản dựng staging (task Testlane MTRO-021 BR-21), chưa có xác nhận PO/Dev. Trên staging (khảo sát 01/10/2026), tab `Settings` có `Width Preset` 480 / 600 / 700 / 800px và `Custom Width` (ô số, đơn vị px).",
+            "knowledge_kind": "OBSERVED_CURRENT",
+            "confidence": "MEDIUM",
+            "status": "CURRENT_STATE",
+            "kb_refs": [
+              "KB-065"
+            ]
+          },
+          {
+            "statement": "QA lead chốt 30/09/2026 nghiệm thu Email library theo bản dựng staging (task Testlane MTRO-021 BR-21), chưa có xác nhận PO/Dev. Trên staging (khảo sát 01/10/2026), tab `Settings` có Background / Text / Link Color, Underline Links, `Font Family` (7 font), `Content language` theo chuẩn BCP 47 (đặt thuộc tính lang của email render) và switch `Right-to-left`.",
+            "knowledge_kind": "OBSERVED_CURRENT",
+            "confidence": "MEDIUM",
+            "status": "CURRENT_STATE",
+            "kb_refs": [
+              "KB-066"
+            ]
+          },
+          {
+            "statement": "QA lead chốt 30/09/2026 nghiệm thu Email library theo bản dựng staging (task Testlane MTRO-021 BR-21), chưa có xác nhận PO/Dev. Trên staging (khảo sát 01/10/2026), tab `Settings` có ô Preheader Text với bộ đếm `0/150` (tối đa 150 ký tự) và hỗ trợ merge tag (nút `Insert merge tag`, gợi ý \"Supports merge tags.\").",
+            "knowledge_kind": "OBSERVED_CURRENT",
+            "confidence": "MEDIUM",
+            "status": "CURRENT_STATE",
+            "kb_refs": [
+              "KB-067"
+            ]
+          },
+          {
+            "statement": "QA lead chốt 30/09/2026 nghiệm thu Email library theo bản dựng staging (task Testlane MTRO-021 BR-21), chưa có xác nhận PO/Dev. Trên staging (khảo sát 01/10/2026; BR-40), tab `Issues` của editor chỉ có tiêu đề, không có nội dung kể cả dòng báo không có lỗi; theo bundle, Mailtro khởi tạo editor không truyền cấu hình bộ kiểm tra nên tab này luôn rỗng và không bao giờ cảnh báo merge tag sai. Chưa xác nhận với Dev đây là giới hạn chủ ý hay sẽ bật bộ kiểm tra.",
+            "knowledge_kind": "OBSERVED_CURRENT",
+            "confidence": "MEDIUM",
+            "status": "CURRENT_STATE",
+            "tags": [
+              "merge-tag-syntax"
+            ],
+            "kb_refs": [
+              "KB-068"
+            ]
+          },
+          {
+            "statement": "Trên staging (khảo sát 01/10/2026), mở `/templates/<id>` với id không tồn tại hoặc đã xoá (API trả 404) thì header editor hiện nhãn trạng thái lưu thất bại `Not saved` cạnh `Save` disabled, kèm alert `Not Found.` của API và nút `Reload`, thay vì một màn not-found riêng; chuỗi `Could not load this email.` có trong i18n nhưng không được dùng. Lỗi nhỏ, trạng thái open.",
+            "knowledge_kind": "OBSERVED_CURRENT",
+            "confidence": "LOW",
+            "status": "KNOWN_DEFECT",
+            "kb_refs": [
+              "KB-071"
+            ]
+          },
+          {
+            "statement": "QA lead chốt 30/09/2026 nghiệm thu Email library theo bản dựng staging (task Testlane MTRO-021 BR-21), chưa có xác nhận PO/Dev. Trên staging (khảo sát 01/10/2026; BR-37), dialog sửa mở từ bút chì `Edit email details` có câu \"Change the name or subject line of this email.\", ô `Email name` và `Subject line *` điền sẵn, nút `Cancel` / `Save` / `Close`; `Save` được bật ngay cả khi chưa đổi gì.",
+            "knowledge_kind": "OBSERVED_CURRENT",
+            "confidence": "MEDIUM",
+            "status": "CURRENT_STATE",
+            "kb_refs": [
+              "KB-072"
+            ]
+          },
+          {
+            "statement": "QA lead chốt 30/09/2026 nghiệm thu Email library theo bản dựng staging (task Testlane MTRO-021 BR-21), chưa có xác nhận PO/Dev. Trên staging (khảo sát 01/10/2026; BR-37), ở dialog sửa Email details, nút `Save` bị disabled khi `Subject line` trống hoặc chỉ gồm dấu cách, hoặc khi `Email name` trống.",
+            "knowledge_kind": "OBSERVED_CURRENT",
+            "confidence": "MEDIUM",
+            "status": "CURRENT_STATE",
+            "kb_refs": [
+              "KB-073"
+            ]
+          }
+        ],
+        "observed_validations": [],
+        "limitations": [
+          {
+            "note": "Editor không có `Send test`, bình luận hay version history (editor khởi tạo không bật các tính năng này); gửi thử chỉ ở bước `Preview & test` của Campaign.",
+            "knowledge_kind": "OBSERVED_CURRENT",
+            "confidence": "MEDIUM",
+            "kb_refs": [
+              "KB-070"
+            ]
+          },
+          {
+            "note": "Font Tahoma có ở backend (tham số `font_family` khi tạo qua Claude MCP) nhưng không có trong picker font của editor; nguồn không ghi quan sát riêng.",
+            "knowledge_kind": "OBSERVED_CURRENT",
+            "confidence": "LOW",
+            "kb_refs": [
+              "KB-077"
+            ]
+          }
+        ],
+        "permissions": [
+          {
+            "statement": "Ma trận quyền cho editor theo role chưa chốt; tài liệu chỉ khảo sát bằng Owner. Profile không tự suy quyền theo role.",
+            "kb_refs": [
+              "KB-P-051",
+              "KB-P-052"
+            ]
+          }
+        ],
+        "surface_mapping": {
+          "portal": [
+            {
+              "item": "Header editor: `Back to email library`, tên email, `Edit email details`, Subject, trạng thái lưu, `Discard changes`, `Save`",
+              "kb_refs": [
+                "KB-050",
+                "KB-051",
+                "KB-052",
+                "KB-071"
+              ]
+            },
+            {
+              "item": "Canvas, palette block, panel `Block properties`, toolbar chữ, thanh Viewport / Dark Mode / Preview Mode",
+              "kb_refs": [
+                "KB-056",
+                "KB-058",
+                "KB-060",
+                "KB-061",
+                "KB-063",
+                "KB-064"
+              ]
+            },
+            {
+              "item": "Tab `Settings` (layout, appearance, language, preheader) và tab `Issues`",
+              "kb_refs": [
+                "KB-065",
+                "KB-066",
+                "KB-067",
+                "KB-068"
+              ]
+            }
+          ],
+          "storefront": [],
+          "api": [
+            {
+              "item": "Mở id không tồn tại: API trả 404 và alert `Not Found.`",
+              "kb_refs": [
+                "KB-071"
+              ]
+            }
+          ],
+          "data": [
+            {
+              "item": "Upload ảnh: gif, jpeg, png, webp, tối đa 5 MB (Jira MTRO-86; bundle dùng cùng giới hạn, chưa đối chiếu UI)",
+              "kb_refs": [
+                "KB-059",
+                "KB-136"
+              ]
+            },
+            {
+              "item": "Preheader tối đa 150 ký tự; `Content language` theo BCP 47 đặt thuộc tính lang của email render",
+              "kb_refs": [
+                "KB-067",
+                "KB-066"
+              ]
+            }
+          ],
+          "code": [
+            {
+              "item": "Editor dùng SDK Templatical; nâng SDK cho border / radius section phải đi cùng renderer backend",
+              "kb_refs": [
+                "KB-079",
+                "KB-078"
+              ]
+            }
+          ]
+        },
+        "dependencies": [
+          {
+            "target": "email-content / email-library",
+            "relation": "opened_from",
+            "note": "Editor là trang chi tiết của một email trong thư viện; dialog Email details lúc tạo thuộc luồng `New email`.",
+            "kb_refs": [
+              "KB-016",
+              "KB-018",
+              "KB-050"
+            ]
+          },
+          {
+            "target": "email-content / saved-blocks",
+            "relation": "uses",
+            "note": "`Browse saved blocks` trong palette và `Save as Block` trên block cấp ngoài cùng.",
+            "kb_refs": [
+              "KB-058",
+              "KB-111"
+            ]
+          },
+          {
+            "target": "email-content / merge-tags",
+            "relation": "uses",
+            "note": "`Insert merge tag` ở toolbar chữ và ô Preheader; tab `Issues` không cảnh báo merge tag sai.",
+            "kb_refs": [
+              "KB-064",
+              "KB-067",
+              "KB-068",
+              "KB-069"
+            ]
+          },
+          {
+            "target": "campaigns / campaign-preview-and-test",
+            "relation": "see_also",
+            "note": "Gửi thử chỉ có ở bước `Preview & test` của Campaign.",
+            "kb_refs": [
+              "KB-070"
+            ]
+          }
+        ],
+        "risks": [
+          {
+            "statement": "Theo bundle front-end staging 01/10/2026 (chưa đối chiếu UI), lưu email trong editor thành công hiện toast `Email saved`; lỗi hiện `Could not save this email.`",
+            "knowledge_kind": "INFERRED",
+            "confidence": "LOW",
+            "kb_refs": [
+              "KB-053"
+            ]
+          },
+          {
+            "statement": "Theo bundle front-end staging 01/10/2026 (chưa đối chiếu UI), bấm `Reload` khi còn thay đổi chưa lưu sẽ hỏi `Replace your changes with the saved version?` và cảnh báo không có version history để khôi phục.",
+            "knowledge_kind": "INFERRED",
+            "confidence": "LOW",
+            "kb_refs": [
+              "KB-054"
+            ]
+          },
+          {
+            "statement": "Theo bundle front-end staging 01/10/2026 (chưa đối chiếu UI), chuỗi i18n báo dark mode chưa được render vào email gửi đi có trong bundle nhưng không được dùng ở đâu, nên người dùng bật `Dark Mode Preview` không được báo điều này; QA đang hỏi Dev/UX có định hiện thông báo không.",
+            "knowledge_kind": "INFERRED",
+            "confidence": "LOW",
+            "kb_refs": [
+              "KB-057"
+            ]
+          },
+          {
+            "statement": "Theo bundle front-end staging 01/10/2026 (chưa đối chiếu UI), upload ảnh trong editor chỉ nhận `image/gif`, `image/jpeg`, `image/png`, `image/webp` và tối đa 5 MB — cùng danh sách và giới hạn với Jira MTRO-86.",
+            "knowledge_kind": "INFERRED",
+            "confidence": "LOW",
+            "kb_refs": [
+              "KB-136"
+            ]
+          },
+          {
+            "statement": "Theo bundle front-end staging 01/10/2026 (chưa đối chiếu UI), merge tag sai cú pháp hoặc không tồn tại không được cảnh báo khi thiết kế email; chỉ bị phát hiện lúc Send hoặc khi run automation bị Failed.",
+            "knowledge_kind": "INFERRED",
+            "confidence": "LOW",
+            "tags": [
+              "merge-tag-syntax"
+            ],
+            "kb_refs": [
+              "KB-069"
+            ]
+          },
+          {
+            "statement": "Lỗi đang mở, theo dõi như regression watch, không dùng làm expected: Trên staging (khảo sát 01/10/2026), mở `/templates/<id>` với id không tồn tại hoặc đã xoá (API trả 404) thì header editor hiện nhãn trạng thái lưu thất bại `Not saved` cạnh `Save` disabled, kèm alert `Not Found.` của API và nút `Reload`, thay vì một màn not-found riêng; chuỗi `Could not load this email.` có trong i18n nhưng không được dùng. Lỗi nhỏ, trạng thái open.",
+            "knowledge_kind": "OBSERVED_CURRENT",
+            "confidence": "LOW",
+            "status": "KNOWN_DEFECT",
+            "kb_refs": [
+              "KB-071"
+            ]
+          },
+          {
+            "statement": "Theo bundle front-end staging 01/10/2026 (chưa đối chiếu UI), lưu Email details lỗi thì hiện `Could not save the email details.`",
+            "knowledge_kind": "INFERRED",
+            "confidence": "LOW",
+            "kb_refs": [
+              "KB-074"
+            ]
+          },
+          {
+            "statement": "Theo Jira MTRO-105 (In Progress), section trong editor sẽ có border, background và border radius; backend phải nâng renderer cùng phiên bản với editor, nếu không preview có viền mà mail gửi không có. Tài liệu tra cứu Dev Mailtro (cập nhật 07/10/2026) ghi SDK editor đã được nâng lên v0.42.0 cho border / radius; chưa xác nhận bản này đã lên staging.",
+            "knowledge_kind": "INFERRED",
+            "confidence": "LOW",
+            "kb_refs": [
+              "KB-078"
+            ]
+          }
+        ],
+        "freshness": {
+          "observed_at": "2026-10-01",
+          "run_id": "CTX-20261008-02",
+          "basis": "Khảo sát staging 01/10/2026; quyết định PO 02/10/2026; Jira và tài liệu Dev đọc 07/10/2026"
+        },
+        "unknown_areas": [
+          {
+            "question": "PO/Dev có chấp nhận hành vi editor theo bản dựng staging (save / discard / leave guard, toolbar, Settings, Preheader, dialog Edit email details) mà QA lead chốt 30/09/2026 là hành vi mong đợi không?",
+            "why_it_matters": "Hầu hết hành vi editor chỉ ở tầng QA lead chốt theo staging; chưa có oracle PO/Dev.",
+            "kb_refs": [
+              "KB-050",
+              "KB-051",
+              "KB-052",
+              "KB-055",
+              "KB-065",
+              "KB-067",
+              "KB-072",
+              "KB-073"
+            ]
+          },
+          {
+            "question": "Tab `Issues` luôn rỗng (không cảnh báo merge tag sai) là giới hạn chủ ý hay Dev sẽ bật bộ kiểm tra?",
+            "why_it_matters": "Nếu là lỗi thì hành vi hiện tại không được dùng làm expected; merge tag sai chỉ lộ lúc Send hoặc khi automation Failed.",
+            "kb_refs": [
+              "KB-068",
+              "KB-069"
+            ]
+          },
+          {
+            "question": "Dark mode có được render vào mail gửi đi không, và có hiện thông báo cho người dùng khi bật `Dark Mode Preview` không?",
+            "why_it_matters": "Người dùng có thể thấy Dark Mode Preview mà mail thật không có dark mode.",
+            "kb_refs": [
+              "KB-056",
+              "KB-057"
+            ]
+          },
+          {
+            "question": "Font brand Outfit / Nunito Sans (Jira MTRO-111), border / background / radius cho section (Jira MTRO-105) và bản nâng SDK editor đã lên staging chưa; backend đã nâng renderer cùng phiên bản chưa?",
+            "why_it_matters": "Nếu renderer lệch phiên bản, preview có viền mà mail gửi không có.",
+            "kb_refs": [
+              "KB-063",
+              "KB-075",
+              "KB-078"
+            ]
+          },
+          {
+            "question": "Mở `/templates/<id>` không tồn tại hoặc đã xoá thì màn not-found mong đợi là gì (hiện tại hiện `Not saved` + alert `Not Found.`)?",
+            "why_it_matters": "Lỗi đang mở; chưa có expected cho màn not-found.",
+            "kb_refs": [
+              "KB-071"
+            ]
+          },
+          {
+            "question": "Độ dài tối đa của `Email name` / `Subject line` khi sửa qua dialog Edit email details là bao nhiêu, và Preheader vượt 150 ký tự bị xử lý thế nào?",
+            "why_it_matters": "Không có boundary để viết case validation.",
+            "kb_refs": [
+              "KB-067",
+              "KB-072",
+              "KB-073"
+            ]
+          },
+          {
+            "question": "Toast lưu thành công / lỗi, hộp xác nhận Reload và lỗi lưu Email details (chỉ có từ bundle) hiển thị thế nào trên UI?",
+            "why_it_matters": "Chuỗi chưa đối chiếu UI nên không dùng làm expected.",
+            "kb_refs": [
+              "KB-053",
+              "KB-054",
+              "KB-074"
+            ]
+          },
+          {
+            "question": "Font Tahoma có cần xuất hiện trong picker font của editor để khớp với backend / Claude MCP không?",
+            "why_it_matters": "Email tạo qua MCP có thể dùng font mà người dùng không chọn lại được trong editor.",
+            "kb_refs": [
+              "KB-077"
+            ]
+          },
+          {
+            "question": "Ma trận quyền cho Email editor theo role (Owner / Admin / role thứ 3, tên đang tranh chấp) là gì: role nào được sửa và lưu email, kể cả email do người khác tạo?",
+            "why_it_matters": "Tài liệu chỉ khảo sát bằng tài khoản Owner và gần như không gắn role cho hành vi nào; không viết được expected result phân quyền.",
+            "kb_refs": [
+              "KB-P-051",
+              "KB-P-052"
+            ]
+          }
+        ]
+      }
+    ],
+    "profile_relationships": [
+      {
+        "from": "email-editor",
+        "to": "email-library",
+        "relation": "OPENED_FROM",
+        "kb_refs": [
+          "KB-050",
+          "KB-016"
+        ]
+      },
+      {
+        "from": "email-editor",
+        "to": "saved-blocks",
+        "relation": "INSERTS_AND_CREATES",
+        "kb_refs": [
+          "KB-058",
+          "KB-111",
+          "KB-131"
+        ]
+      },
+      {
+        "from": "email-editor",
+        "to": "merge-tags",
+        "relation": "INSERTS",
+        "kb_refs": [
+          "KB-064",
+          "KB-067",
+          "KB-088"
+        ]
+      }
+    ],
+    "coverage_matrix": [
+      {
+        "feature_id": "email-editor",
+        "layer": "portal",
+        "role": "Owner",
+        "state": "soạn nội dung (palette, block properties, toolbar chữ)",
+        "environment": "documented",
+        "covered": true,
+        "note": "Khảo sát staging 01/10/2026, không chèn thử block"
+      },
+      {
+        "feature_id": "email-editor",
+        "layer": "portal",
+        "role": "Owner",
+        "state": "Settings và Preheader",
+        "environment": "documented",
+        "covered": true,
+        "note": "Khảo sát staging 01/10/2026"
+      },
+      {
+        "feature_id": "email-editor",
+        "layer": "portal",
+        "role": "Owner",
+        "state": "save / discard / leave với thay đổi chưa lưu",
+        "environment": "documented",
+        "covered": true,
+        "note": "Staging 01/10/2026; toast và Reload chỉ từ bundle"
+      },
+      {
+        "feature_id": "email-editor",
+        "layer": "portal",
+        "role": "Owner",
+        "state": "sửa Email details",
+        "environment": "documented",
+        "covered": true,
+        "note": "Staging 01/10/2026"
+      },
+      {
+        "feature_id": "email-editor",
+        "layer": "portal",
+        "role": "Owner",
+        "state": "upload ảnh",
+        "environment": "documented",
+        "covered": true,
+        "note": "Jira MTRO-86; bundle cùng giới hạn (chưa đối chiếu UI); chưa ghi quan sát upload thật"
+      },
+      {
+        "feature_id": "email-editor",
+        "layer": "portal",
+        "role": "Owner",
+        "state": "email không tồn tại / đã xoá",
+        "environment": "documented",
+        "covered": true,
+        "note": "Lỗi đang mở"
+      },
+      {
+        "feature_id": "email-editor",
+        "layer": "portal",
+        "role": "Owner",
+        "state": "font brand mới",
+        "environment": "documented",
+        "covered": false,
+        "note": "Quyết định PO 02/10/2026, chưa có trên bản dựng"
+      },
+      {
+        "feature_id": "email-editor",
+        "layer": "portal",
+        "role": "Admin",
+        "state": "any",
+        "environment": "documented",
+        "covered": false,
+        "note": "Chưa khảo sát"
+      },
+      {
+        "feature_id": "email-editor",
+        "layer": "portal",
+        "role": "Member",
+        "state": "any",
+        "environment": "documented",
+        "covered": false,
+        "note": "Chưa khảo sát"
+      },
+      {
+        "feature_id": "email-editor",
+        "layer": "backend",
+        "role": "recipient",
+        "state": "render font / dark mode / section styling trong mail gửi",
+        "environment": "documented",
+        "covered": false,
+        "note": "Chỉ có quyết định chấp nhận font dự phòng; chưa quan sát mail thật"
+      },
+      {
+        "feature_id": "email-editor",
+        "layer": "code",
+        "role": "unspecified",
+        "state": "SDK editor",
+        "environment": "documented",
+        "covered": true,
+        "note": "Jira MTRO-35; phiên bản trên staging chưa xác nhận"
+      }
+    ],
+    "unassigned_kb_items": [],
+    "profile_conflicts": [],
+    "profile_change_summary": [
+      "Profile tạo mới lần đầu từ bộ tài liệu; chưa có phiên bản publish trước để so.",
+      "Rework r1: KB-059 (CE, Jira MTRO-86) rút phần bundle khỏi statement; mệnh đề bundle tách thành KB-136 (INFERRED LOW) đặt ở risks, trỏ cùng KB-059 ở capability, surface và coverage."
+    ],
+    "kb_trace_complete": true
+  },
+  "gate": {
+    "decision": "CONDITIONAL_PASS",
+    "blocking_findings": [],
+    "conditions": [
+      "Profile có identity ổn định, user goal, mọi field trace về kb_id; đủ cho regression discovery.",
+      "Oracle còn thiếu: hành vi editor chủ yếu ở tầng QA lead chốt theo staging; tab Issues, dark mode, font brand và section styling chưa chốt / chưa deploy.",
+      "Lỗi màn not-found (`Not saved`) chỉ là regression watch, không dùng làm expected."
+    ],
+    "allowed_next_steps": [
+      "qa-checklist-builder",
+      "knowledge-diff-analyzer"
+    ]
+  }
+}

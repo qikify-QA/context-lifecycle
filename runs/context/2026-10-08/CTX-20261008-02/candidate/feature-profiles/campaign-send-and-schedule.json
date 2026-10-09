@@ -1,0 +1,826 @@
+{
+  "schema_version": "1.0",
+  "artifact_type": "FeatureProfileCandidate",
+  "artifact_id": "ART-FEATURE-PROFILE-campaign-send-and-schedule-CTX-20261008-02",
+  "workflow_id": "CTX-20261008-02",
+  "producer": "feature-profile-builder",
+  "source_refs": [
+    "candidate/product-kb/campaign-send-and-schedule.json",
+    "candidate/product-kb/_product-level.json",
+    "input/scope-plan.json",
+    "input/orchestrator-directives.json",
+    "input/profile-checklist-brief.md"
+  ],
+  "upstream_artifact_ids": [
+    "PKBC-CTX-20261008-02-campaigns-campaign-send-and-schedule",
+    "PKBC-CTX-20261008-02-_product-level"
+  ],
+  "status": "PARTIAL",
+  "confidence": "MEDIUM",
+  "observations": [
+    "Profile dựng hoàn toàn từ bộ tài liệu (bootstrap lần đầu), không có quan sát runtime trong lần chạy này; act_ids rỗng ở mọi nơi và observed_validations rỗng.",
+    "Shard feature có 19 item: CONFIRMED_EXPECTED=6, OBSERVED_CURRENT=6, OBSERVED_CURRENT/KNOWN_DEFECT=3, INFERRED=4. CE nằm ở confirmed_rules, OBSERVED ở observed_behavior (KNOWN_DEFECT gắn status riêng), INFERRED ở risks; không trộn.",
+    "Object campaigns không có shard object-level riêng; kb_refs chỉ trỏ tới item của object campaigns (KB-xxx) hoặc product-level (KB-P-xxx).",
+    "feature_id dùng giá trị feature_key như toàn bộ KB của feature; chưa có mã FEAT dạng số được cấp."
+  ],
+  "assumptions": [],
+  "unknowns": [
+    "Campaign có được gửi khi workspace chưa có sending domain verified không: chặn gửi như rule 07/08/2026, hay cho gửi qua shared sending host như staging 09/09/2026 (và như quyết định PO/BA 02/10/2026 cho automation)? Nếu cho gửi, copy \"Sending needs a verified domain\" ở bước Sender có cần sửa không?",
+    "AC của Schedule campaigns (Jira MTRO-84 trống) là gì: giới hạn thời gian đặt lịch, timezone dùng để lên lịch, hành vi Reschedule / Unschedule?",
+    "Hợp đồng API campaign core (Jira MTRO-63 trống) gồm route, payload và status code nào cho tạo, gửi, lên lịch campaign?",
+    "UI thật của campaign đang gửi / Partly sent ra sao, và campaign Scheduled tới giờ gửi khi workspace bị Sending suspended thì xử lý thế nào?",
+    "Sheet Send campaign và Schedule for later trên build hiện tại còn như quan sát 29/09/2026 không (lượt 01/10 không mở lại được vì không có draft đủ 4 bước)?",
+    "BUG-SUPP-04 (đường gửi hỏng 08/09/2026) đã được Dev xác nhận đóng chưa; BUG-SUPP-01 (Send với template rỗng trả 500) và BUG-68 (segment có query hỏng làm campaign rollback khi Send) còn tái hiện trên build hiện tại không?",
+    "Role nào (Owner, Admin, role thứ 3 đang tranh chấp tên Member hay Marketer/Editor, custom role) được tạo, Save, Send, Schedule, xoá campaign và xem report; quyền có được chặn ở API không?"
+  ],
+  "conflicts": [
+    "CONF-MTRO-campaigns-01"
+  ],
+  "blocking_issues": [],
+  "payload": {
+    "feature_profiles": [
+      {
+        "feature_id": "campaign-send-and-schedule",
+        "feature_key": "campaign-send-and-schedule",
+        "name": "Gửi ngay / lên lịch campaign và điều kiện được gửi",
+        "user_goal": "Người dùng gửi campaign tới segment ngay lập tức hoặc theo lịch, và campaign chỉ được gửi khi đủ điều kiện (đủ 4 bước, segment và email hợp lệ, workspace không bị dừng gửi).",
+        "stable_since_version": "v1",
+        "actors": [
+          {
+            "role": "unspecified (người dùng workspace thao tác trên Campaigns)",
+            "permission_observed": "Tài liệu Campaigns không gán role cho bất kỳ thao tác nào. Mô hình role chung có Owner, Admin, một role thứ 3 (UI staging gọi là Member, tên chính thức đang tranh chấp) và custom role; ma trận quyền chi tiết chưa chốt. Router của app không khai báo phân quyền theo role nên mọi chặn quyền phải nằm ở API (suy luận từ bundle). Hiện trạng staging chỉ được khảo sát bằng Owner.",
+            "kb_refs": [
+              "KB-P-051",
+              "KB-P-052",
+              "KB-P-036"
+            ]
+          }
+        ],
+        "entry_points": [
+          {
+            "path": "Nút `Send` trên header wizard campaign → sheet \"Send campaign\"",
+            "precondition": "Campaign đủ điều kiện gửi (`canSendCampaign` = true).",
+            "kb_refs": [
+              "KB-047",
+              "KB-102"
+            ]
+          },
+          {
+            "path": "Menu dòng campaign Scheduled ở danh sách (Reschedule / Unschedule) — chỉ theo bundle",
+            "precondition": "Campaign ở status Scheduled.",
+            "kb_refs": [
+              "KB-019",
+              "KB-110"
+            ]
+          }
+        ],
+        "capabilities": [
+          {
+            "name": "Gửi ngay",
+            "description": "Sheet Send campaign tóm tắt Recipients / Subject / From; chọn Send now và bấm Send thì campaign chuyển `sent`, hiện toast và chuyển sang report. `sent` nghĩa là đã submit sang provider, không phải đã giao; campaign one-shot, gửi lại bị 403.",
+            "kb_refs": [
+              "KB-102",
+              "KB-103",
+              "KB-104",
+              "KB-105",
+              "KB-106"
+            ],
+            "act_ids": []
+          },
+          {
+            "name": "Lên lịch gửi",
+            "description": "Schedule for later chọn ngày giờ theo timezone của tài khoản, chỉ mốc :00/:30, không chọn ngày quá khứ (hiện trạng staging, Jira MTRO-84 trống). Reschedule / Unschedule chỉ biết qua bundle; gửi theo timezone người nhận còn coming soon.",
+            "kb_refs": [
+              "KB-107",
+              "KB-108",
+              "KB-109",
+              "KB-110"
+            ],
+            "act_ids": []
+          },
+          {
+            "name": "Điều kiện được gửi và kiểm tra lúc gửi",
+            "description": "Cần segment có contact và ít nhất một email; lúc Send BE chạy lại query segment (lỗi thì rollback về Draft, trừ count 500 tạm thời); segment có count lỗi không bị chặn ở FE. Việc chặn gửi khi chưa có sending domain verified đang conflict. Workspace Sending suspended bị chặn gửi (theo Jira, chưa đối chiếu staging). Lỗi đã biết: template rỗng vẫn cho Send và trả 500; segment có query hỏng (BUG-68) làm campaign rollback khi Send.",
+            "kb_refs": [
+              "KB-037",
+              "KB-100",
+              "KB-101",
+              "KB-111",
+              "KB-112",
+              "KB-113",
+              "KB-116",
+              "KB-117",
+              "KB-118",
+              "KB-202"
+            ],
+            "act_ids": []
+          },
+          {
+            "name": "Hệ quả sau khi gửi",
+            "description": "Segment đang được campaign dùng vẫn xoá được và report hiện \"Segment deleted since this send\". Việc nội dung campaign đã Sent không đổi khi design dùng chung bị sửa thuộc email-content / email-library.",
+            "kb_refs": [
+              "KB-114",
+              "KB-147"
+            ],
+            "act_ids": []
+          }
+        ],
+        "state_transitions": [
+          {
+            "from": "Draft đủ điều kiện",
+            "to": "sent (đã submit sang provider) → trang report",
+            "trigger": "Send now → bấm `Send` trong sheet",
+            "condition": "Toast \"Going out to {total} recipients.\"; chưa gửi thật trong lượt 01/10",
+            "knowledge_kind": "CONFIRMED_EXPECTED",
+            "kb_refs": [
+              "KB-104",
+              "KB-105"
+            ]
+          },
+          {
+            "from": "Draft, lúc Send",
+            "to": "vẫn Draft, sheet báo `Couldn't start this send`",
+            "trigger": "BE chạy lại query segment và query lỗi",
+            "condition": "Ngoại lệ: count segment trả 500 do lỗi tạm thời thì vẫn gửi. Segment có query hỏng do lỗi BUG-68 cũng rơi vào nhánh này (hệ quả của lỗi, không phải oracle)",
+            "knowledge_kind": "CONFIRMED_EXPECTED",
+            "kb_refs": [
+              "KB-112",
+              "KB-113",
+              "KB-202"
+            ]
+          },
+          {
+            "from": "Draft đủ điều kiện",
+            "to": "Scheduled",
+            "trigger": "Schedule for later → chọn ngày giờ → `Schedule`",
+            "condition": "Hiện trạng staging 29/09/2026; Jira MTRO-84 chưa có AC",
+            "knowledge_kind": "OBSERVED_CURRENT",
+            "kb_refs": [
+              "KB-107",
+              "KB-108",
+              "KB-006"
+            ]
+          },
+          {
+            "from": "Scheduled",
+            "to": "Draft",
+            "trigger": "Unschedule",
+            "condition": "Chỉ từ bundle, chưa đối chiếu UI",
+            "knowledge_kind": "INFERRED",
+            "kb_refs": [
+              "KB-110"
+            ]
+          },
+          {
+            "from": "Scheduled",
+            "to": "Scheduled với thời điểm mới",
+            "trigger": "Reschedule",
+            "condition": "Chỉ từ bundle; gửi trong vòng 30 phút quanh thời điểm",
+            "knowledge_kind": "INFERRED",
+            "kb_refs": [
+              "KB-110"
+            ]
+          },
+          {
+            "from": "sent",
+            "to": "sent (không đổi), request bị từ chối 403",
+            "trigger": "Gửi lại campaign đã sent",
+            "condition": "Campaign là one-shot (quan sát staging 08–09/09/2026)",
+            "knowledge_kind": "OBSERVED_CURRENT",
+            "kb_refs": [
+              "KB-106"
+            ]
+          },
+          {
+            "from": "Draft, workspace chưa có sending domain verified",
+            "to": "chưa xác định (bị chặn theo rule 07/08 hay gửi qua host dùng chung theo staging 09/09)",
+            "trigger": "Send",
+            "condition": "Conflict CONF-MTRO-campaigns-01 chưa phân xử",
+            "knowledge_kind": "INFERRED",
+            "kb_refs": [
+              "KB-100",
+              "KB-101"
+            ]
+          },
+          {
+            "from": "đang gửi",
+            "to": "dừng giữa chừng, chờ Resume",
+            "trigger": "Workspace chuyển sang Sending suspended",
+            "condition": "Theo Jira MTRO-92 §6, chưa đối chiếu staging; item chính ở abuse-guard",
+            "knowledge_kind": "INFERRED",
+            "kb_refs": [
+              "KB-116"
+            ]
+          }
+        ],
+        "confirmed_rules": [
+          {
+            "statement": "Theo Jira MTRO-59 AC (tóm tắt trong QA business rule Mailtro, cập nhật 07/10/2026), nút Send mở sheet \"Send campaign\" / \"Choose when this campaign goes out.\" tóm tắt Recipients / Subject / From; staging 29/09/2026 khớp.",
+            "knowledge_kind": "CONFIRMED_EXPECTED",
+            "confidence": "MEDIUM",
+            "kb_refs": [
+              "KB-102"
+            ]
+          },
+          {
+            "statement": "Theo Jira MTRO-59 AC (tóm tắt trong QA business rule Mailtro, cập nhật 07/10/2026), chọn Send now và bấm nút submit **Send** thì status campaign chuyển sang `sent`, hiện toast \"Going out to {total} recipients.\" rồi chuyển sang trang report; chuỗi i18n 01/10/2026 khớp, chưa gửi thật trong lượt khảo sát 01/10.",
+            "knowledge_kind": "CONFIRMED_EXPECTED",
+            "confidence": "MEDIUM",
+            "kb_refs": [
+              "KB-104"
+            ]
+          },
+          {
+            "statement": "Theo quyết định Dev BE 02/10/2026 (task Testlane MTRO-011 BR-25), segment có count lỗi vẫn chọn được ở bước Recipients; FE không chặn `Send`, ô số chỉ hiện `—`.",
+            "knowledge_kind": "CONFIRMED_EXPECTED",
+            "confidence": "MEDIUM",
+            "kb_refs": [
+              "KB-111"
+            ]
+          },
+          {
+            "statement": "Theo quyết định Dev BE 02/10/2026 (task Testlane MTRO-011 BR-25), lúc Send BE chạy lại query của segment; nếu query lỗi thì rollback, campaign giữ status `Draft` và sheet báo `Couldn't start this send`.",
+            "knowledge_kind": "CONFIRMED_EXPECTED",
+            "confidence": "MEDIUM",
+            "kb_refs": [
+              "KB-112"
+            ]
+          },
+          {
+            "statement": "Theo quyết định Dev BE 02/10/2026 (task Testlane MTRO-011 BR-25), ngoại lệ: nếu count của segment trả 500 do lỗi tạm thời thì campaign vẫn gửi.",
+            "knowledge_kind": "CONFIRMED_EXPECTED",
+            "confidence": "MEDIUM",
+            "kb_refs": [
+              "KB-113"
+            ]
+          },
+          {
+            "statement": "Theo quyết định PO/BA 02/10/2026 (task Testlane MTRO-011 BR-15, ghi trong QA KB Mailtro \"Feature map\" v1), segment đang được campaign sử dụng vẫn xoá được; report của campaign đã gửi khi đó hiện \"Segment deleted since this send\".",
+            "knowledge_kind": "CONFIRMED_EXPECTED",
+            "confidence": "MEDIUM",
+            "kb_refs": [
+              "KB-114"
+            ],
+            "tags": [
+              "data-deletion"
+            ]
+          }
+        ],
+        "observed_behavior": [
+          {
+            "statement": "Trên staging (khảo sát 29/09/2026; 01/10 không mở lại được vì không có draft đủ 4 bước), sheet Send campaign có radio `Send now` / `Schedule for later` và nút `Cancel` / `Send`.",
+            "knowledge_kind": "OBSERVED_CURRENT",
+            "confidence": "MEDIUM",
+            "kb_refs": [
+              "KB-103"
+            ],
+            "status": "CURRENT_STATE"
+          },
+          {
+            "statement": "Trên build staging ngày 03/09/2026, status `sent` của campaign nghĩa là đã submit sang provider gửi mail, không có nghĩa là đã giao tới người nhận.",
+            "knowledge_kind": "OBSERVED_CURRENT",
+            "confidence": "LOW",
+            "kb_refs": [
+              "KB-105"
+            ],
+            "status": "CURRENT_STATE"
+          },
+          {
+            "statement": "Trên staging (quan sát 08–09/09/2026, task Testlane MTRO-015), campaign là one-shot: gửi lại một campaign đã `sent` bị từ chối với 403.",
+            "knowledge_kind": "OBSERVED_CURRENT",
+            "confidence": "MEDIUM",
+            "kb_refs": [
+              "KB-106"
+            ],
+            "status": "CURRENT_STATE"
+          },
+          {
+            "statement": "Trên staging (khảo sát 29/09/2026, i18n 01/10 không đổi), tuỳ chọn `Schedule for later` đã có: hỏi \"When should it go out?\", bộ chọn `Pick a date and time` gồm lịch tháng và ô `Time`, ghi \"Times are in your timezone (GMT+7).\" theo múi giờ của tài khoản khảo sát; Jira MTRO-84 (Schedule campaigns) có description trống.",
+            "knowledge_kind": "OBSERVED_CURRENT",
+            "confidence": "MEDIUM",
+            "kb_refs": [
+              "KB-107"
+            ],
+            "status": "CURRENT_STATE"
+          },
+          {
+            "statement": "Trên staging (khảo sát 29/09/2026), lịch của Schedule for later làm mờ các ngày trong quá khứ, chỉ cho chọn mốc phút :00 và :30 (\"Sends start at the time you pick, give or take a few seconds — which is why only :00 and :30 are offered.\"), và nút `Schedule` bị disabled cho tới khi chọn đủ ngày và giờ.",
+            "knowledge_kind": "OBSERVED_CURRENT",
+            "confidence": "MEDIUM",
+            "kb_refs": [
+              "KB-108"
+            ],
+            "status": "CURRENT_STATE"
+          },
+          {
+            "statement": "Trên staging (khảo sát 29/09/2026), lựa chọn \"Send at local time per recipient timezone\" vẫn ở trạng thái coming soon.",
+            "knowledge_kind": "OBSERVED_CURRENT",
+            "confidence": "LOW",
+            "kb_refs": [
+              "KB-109"
+            ],
+            "status": "CURRENT_STATE"
+          },
+          {
+            "statement": "Lỗi đã biết BUG-SUPP-01 (P0, mở 08/09/2026, tái hiện 3/3, chưa đo lại): UI biết template của campaign rỗng (`data: []`) mà vẫn cho bấm `Send`, và khi Send thì BE trả 500 `Server Error`. Đây là hành vi sai đang tồn tại, không phải hành vi đúng.",
+            "knowledge_kind": "OBSERVED_CURRENT",
+            "confidence": "LOW",
+            "kb_refs": [
+              "KB-117"
+            ],
+            "status": "KNOWN_DEFECT"
+          },
+          {
+            "statement": "Lỗi đã biết BUG-SUPP-04: ngày 08/09/2026 đường gửi campaign bị hỏng toàn bộ; ngày 09/09/2026 không tái hiện (15/15 lần gửi ở trạng thái `sent`), QA đề nghị đóng nhưng còn chờ Dev xác nhận. Đây là lỗi đã ghi nhận, cần retest trước khi đóng, không phải hành vi đúng.",
+            "knowledge_kind": "OBSERVED_CURRENT",
+            "confidence": "LOW",
+            "kb_refs": [
+              "KB-118"
+            ],
+            "status": "KNOWN_DEFECT"
+          },
+          {
+            "statement": "Lỗi đã biết BUG-68 (ghi 14/09/2026, thuộc segment có query hỏng): theo QA KB Mailtro \"Known issues\" v1, campaign trỏ tới segment đó sẽ rollback khi Send với thông báo `Couldn't start this send`. Đây là hệ quả của một lỗi đang tồn tại, không phải oracle hành vi đúng.",
+            "knowledge_kind": "OBSERVED_CURRENT",
+            "confidence": "LOW",
+            "kb_refs": [
+              "KB-202"
+            ],
+            "status": "KNOWN_DEFECT"
+          }
+        ],
+        "observed_validations": [],
+        "permissions": [
+          {
+            "statement": "Mailtro có 3 role chuẩn (Owner, Admin, role thứ 3 đang tranh chấp tên) cộng custom role; ma trận quyền chi tiết cho Campaigns chưa được chốt nên profile này không gán quyền theo role cho thao tác nào.",
+            "knowledge_kind": "CONFIRMED_EXPECTED",
+            "kb_refs": [
+              "KB-P-051"
+            ]
+          },
+          {
+            "statement": "Router front-end không có meta phân quyền theo role; việc chặn quyền (nếu có) phải nằm ở API. Đây là suy luận từ bundle, chưa kiểm trên staging.",
+            "knowledge_kind": "INFERRED",
+            "kb_refs": [
+              "KB-P-052"
+            ]
+          }
+        ],
+        "surface_mapping": {
+          "portal": [
+            {
+              "item": "Sheet \"Send campaign\": tóm tắt, radio Send now / Schedule for later, Cancel / Send",
+              "kb_refs": [
+                "KB-102",
+                "KB-103"
+              ]
+            },
+            {
+              "item": "Bộ chọn lịch `Pick a date and time` (lịch tháng, ô Time, :00/:30, timezone tài khoản), nút `Schedule`",
+              "kb_refs": [
+                "KB-107",
+                "KB-108",
+                "KB-109"
+              ]
+            },
+            {
+              "item": "Dialog Reschedule campaign, action Unschedule (bundle)",
+              "kb_refs": [
+                "KB-110"
+              ]
+            },
+            {
+              "item": "Thông báo `Couldn't start this send`, toast \"Going out to {total} recipients.\"",
+              "kb_refs": [
+                "KB-104",
+                "KB-112"
+              ]
+            }
+          ],
+          "storefront": [],
+          "api": [
+            {
+              "item": "Gửi lại campaign đã sent trả 403",
+              "kb_refs": [
+                "KB-106"
+              ]
+            },
+            {
+              "item": "Send với template rỗng (`data: []`) trả 500 (lỗi đã biết)",
+              "kb_refs": [
+                "KB-117"
+              ]
+            }
+          ],
+          "data": [
+            {
+              "item": "Dữ liệu gửi qua host dùng chung: `sender_is_borrowed: true`, `effective_from_email`",
+              "kb_refs": [
+                "KB-101"
+              ]
+            },
+            {
+              "item": "Status `sent` = đã submit sang provider",
+              "kb_refs": [
+                "KB-105"
+              ]
+            }
+          ],
+          "code": []
+        },
+        "dependencies": [
+          {
+            "target": "segments / segment-audience-evaluation",
+            "relation": "rerun_query_on_send",
+            "note": "Lúc Send BE chạy lại query segment; segment đang dùng vẫn xoá được.",
+            "kb_refs": [
+              "KB-111",
+              "KB-112",
+              "KB-113",
+              "KB-114"
+            ]
+          },
+          {
+            "target": "workspace-settings / sending-domains",
+            "relation": "sending_domain_gate",
+            "note": "Điều kiện gửi khi chưa có domain verified đang conflict cho campaign.",
+            "kb_refs": [
+              "KB-100",
+              "KB-101",
+              "KB-P-021"
+            ]
+          },
+          {
+            "target": "automations / automation-steps",
+            "relation": "scope_split",
+            "note": "Quyết định PO/BA 02/10/2026 cho automation gửi qua shared host không áp cho campaign.",
+            "kb_refs": [
+              "KB-100",
+              "KB-101"
+            ]
+          },
+          {
+            "target": "abuse-guard / sending-suspension-and-staff-review",
+            "relation": "blocked_by",
+            "note": "Workspace Sending suspended chặn gửi campaign, Test send, Resume; hạn mức gửi mỗi ngày của workspace.",
+            "kb_refs": [
+              "KB-116",
+              "KB-P-022",
+              "KB-P-072"
+            ]
+          },
+          {
+            "target": "deliverability / send-time-suppression-check",
+            "relation": "see_also",
+            "note": "Kiểm suppression lúc gửi và hạ tầng gửi SES thuộc deliverability.",
+            "kb_refs": [
+              "KB-068",
+              "KB-P-073"
+            ]
+          },
+          {
+            "target": "campaigns / campaign-report",
+            "relation": "navigates_to",
+            "note": "Send now xong chuyển sang report.",
+            "kb_refs": [
+              "KB-104"
+            ]
+          }
+        ],
+        "risks": [
+          {
+            "statement": "Theo QA business rule Mailtro (rule draft ngày 07/08/2026, Jira MTRO-6 + MTRO-11), campaign không thể gửi nếu workspace chưa có sending domain nào ở trạng thái verified; rule này đang tranh chấp với quan sát staging 09/09/2026 và chưa được PO chốt lại cho campaign (GAP-01, mức Blocker).",
+            "knowledge_kind": "INFERRED",
+            "confidence": "LOW",
+            "kb_refs": [
+              "KB-100"
+            ],
+            "tags": [
+              "sending-domain-verification"
+            ],
+            "conflict_group": "CONF-MTRO-campaigns-01",
+            "status": "UNRESOLVED",
+            "risk_type": "conflict_side"
+          },
+          {
+            "statement": "Trên staging (quan sát 09/09/2026, task Testlane MTRO-015), workspace chưa có sending domain verified vẫn gửi campaign thành công 15/15 lần qua host gửi dùng chung của Mailtro: dữ liệu gửi ghi `sender_is_borrowed: true`, `effective_from_email` là địa chỉ của Owner trên domain `mailtro.ai`; Inventory staging 01/10/2026 ghi campaign trên workspace QA vẫn gửi qua host dùng chung (From thuộc `mailtro.ai`, Reply-to là hộp thư của Owner). Quan sát này trái với rule 07/08/2026 và chưa được PO phân xử cho campaign.",
+            "knowledge_kind": "INFERRED",
+            "confidence": "LOW",
+            "kb_refs": [
+              "KB-101"
+            ],
+            "tags": [
+              "sending-domain-verification"
+            ],
+            "conflict_group": "CONF-MTRO-campaigns-01",
+            "status": "UNRESOLVED",
+            "risk_type": "conflict_side"
+          },
+          {
+            "statement": "Theo bundle front-end 01/10/2026 (chưa đối chiếu UI vì staging không có campaign Scheduled), có dialog `Reschedule campaign` (\"Pick a new time. The campaign stays frozen until it goes out.\", ghi chú gửi trong vòng 30 phút quanh thời điểm), action `Unschedule` đưa campaign về draft với toast `\"{name}\" is a draft again`, và chuỗi `Going out on {at}.` cho campaign đã lên lịch.",
+            "knowledge_kind": "INFERRED",
+            "confidence": "LOW",
+            "kb_refs": [
+              "KB-110"
+            ],
+            "risk_type": "undecided_or_bundle_only"
+          },
+          {
+            "statement": "Theo Jira MTRO-92 §6 (đọc 07/10/2026, chưa đối chiếu staging), workspace ở trạng thái Sending suspended bị chặn gửi campaign, Test send và Resume; campaign đang gửi dở khi workspace bị dừng thì phần người nhận còn lại không được gửi; sau khi workspace được reinstate người dùng phải bấm Resume để gửi tiếp. Item chính của quy tắc này thuộc module Security & Abuse guard.",
+            "knowledge_kind": "INFERRED",
+            "confidence": "LOW",
+            "kb_refs": [
+              "KB-116"
+            ],
+            "risk_type": "undecided_or_bundle_only"
+          },
+          {
+            "statement": "Theo dõi hồi quy các lỗi đã biết của luồng gửi (không dùng làm expected result): BUG-SUPP-01 (P0) campaign dùng template rỗng vẫn cho bấm Send và BE trả 500; BUG-SUPP-04 đường gửi hỏng ngày 08/09/2026, không tái hiện 09/09, chờ Dev xác nhận đóng; BUG-68 segment có query hỏng khiến campaign trỏ tới nó rollback khi Send với `Couldn't start this send`.",
+            "knowledge_kind": "OBSERVED_CURRENT",
+            "status": "KNOWN_DEFECT",
+            "risk_type": "known_defect_regression_watch",
+            "kb_refs": [
+              "KB-117",
+              "KB-118",
+              "KB-202"
+            ]
+          },
+          {
+            "statement": "Campaign không có oracle cho trường hợp workspace chưa có sending domain verified (sending-domain-verification, never_supersede): rule 07/08/2026 và quan sát staging 09/09/2026 nói ngược nhau, mức Blocker theo GAP-01.",
+            "knowledge_kind": "INFERRED",
+            "risk_type": "conflict",
+            "conflict_group": "CONF-MTRO-campaigns-01",
+            "tags": [
+              "sending-domain-verification"
+            ],
+            "kb_refs": [
+              "KB-100",
+              "KB-101",
+              "KB-059"
+            ]
+          }
+        ],
+        "freshness": {
+          "observed_at": "2026-10-07",
+          "run_id": "CTX-20261008-02",
+          "basis": "AC Jira MTRO-59 tóm tắt trong QA business rule Mailtro (cập nhật 07/10/2026); quyết định Dev BE và PO/BA 02/10/2026; rule 07/08/2026; quan sát staging 03/09, 08–09/09, 29/09/2026; Jira MTRO-92 đọc 07/10/2026."
+        },
+        "unknown_areas": [
+          {
+            "question": "Campaign có được gửi khi workspace chưa có sending domain verified không: chặn gửi như rule 07/08/2026, hay cho gửi qua shared sending host như staging 09/09/2026 (và như quyết định PO/BA 02/10/2026 cho automation)? Nếu cho gửi, copy \"Sending needs a verified domain\" ở bước Sender có cần sửa không?",
+            "why_it_matters": "Conflict CONF-MTRO-campaigns-01, never_supersede sending-domain-verification; không có expected result cho gửi campaign ở workspace mới.",
+            "kb_refs": [
+              "KB-100",
+              "KB-101",
+              "KB-059"
+            ]
+          },
+          {
+            "question": "AC của Schedule campaigns (Jira MTRO-84 trống) là gì: giới hạn thời gian đặt lịch, timezone dùng để lên lịch, hành vi Reschedule / Unschedule?",
+            "why_it_matters": "Schedule for later đã có trên staging nhưng chỉ có quan sát UI và chuỗi bundle; staging không có campaign Scheduled.",
+            "kb_refs": [
+              "KB-107",
+              "KB-108",
+              "KB-110"
+            ]
+          },
+          {
+            "question": "Hợp đồng API campaign core (Jira MTRO-63 trống) gồm route, payload và status code nào cho tạo, gửi, lên lịch campaign?",
+            "why_it_matters": "Chỉ có vài mảnh API rời rạc (PUT update, 403 gửi lại).",
+            "kb_refs": [
+              "KB-106",
+              "KB-091"
+            ]
+          },
+          {
+            "question": "UI thật của campaign đang gửi / Partly sent ra sao, và campaign Scheduled tới giờ gửi khi workspace bị Sending suspended thì xử lý thế nào?",
+            "why_it_matters": "Chỉ có từ bundle và Jira MTRO-92; staging không có data ở các trạng thái này.",
+            "kb_refs": [
+              "KB-110",
+              "KB-116"
+            ]
+          },
+          {
+            "question": "Sheet Send campaign và Schedule for later trên build hiện tại còn như quan sát 29/09/2026 không (lượt 01/10 không mở lại được vì không có draft đủ 4 bước)?",
+            "why_it_matters": "Hành vi gửi thật chưa được quan sát trong lượt 01/10/2026.",
+            "kb_refs": [
+              "KB-103",
+              "KB-107"
+            ]
+          },
+          {
+            "question": "BUG-SUPP-04 (đường gửi hỏng 08/09/2026) đã được Dev xác nhận đóng chưa; BUG-SUPP-01 (Send với template rỗng trả 500) và BUG-68 (segment có query hỏng làm campaign rollback khi Send) còn tái hiện trên build hiện tại không?",
+            "why_it_matters": "Lỗi chưa đo lại; cần cho regression watch.",
+            "kb_refs": [
+              "KB-117",
+              "KB-118",
+              "KB-202"
+            ]
+          },
+          {
+            "question": "Role nào (Owner, Admin, role thứ 3 đang tranh chấp tên Member hay Marketer/Editor, custom role) được tạo, Save, Send, Schedule, xoá campaign và xem report; quyền có được chặn ở API không?",
+            "why_it_matters": "Toàn bộ tài liệu Campaigns không ghi role, staging chỉ khảo sát bằng Owner, Admin chưa từng được quan sát; không viết được expected result cho kiểm thử phân quyền.",
+            "kb_refs": [
+              "KB-102",
+              "KB-104",
+              "KB-107",
+              "KB-023",
+              "KB-186",
+              "KB-P-051"
+            ]
+          }
+        ]
+      }
+    ],
+    "profile_relationships": [
+      {
+        "from": "campaign-send-and-schedule",
+        "to": "campaign-wizard",
+        "relation": "OPENED_FROM",
+        "kb_refs": [
+          "KB-047",
+          "KB-102"
+        ]
+      },
+      {
+        "from": "campaign-send-and-schedule",
+        "to": "campaign-report",
+        "relation": "NAVIGATES_TO",
+        "kb_refs": [
+          "KB-104"
+        ]
+      }
+    ],
+    "coverage_matrix": [
+      {
+        "layer": "portal",
+        "role": "unspecified",
+        "state": "Send now campaign đủ điều kiện",
+        "covered": true,
+        "note": "AC Jira MTRO-59; chưa gửi thật trong lượt 01/10",
+        "kb_refs": [
+          "KB-102",
+          "KB-104"
+        ],
+        "feature_id": "campaign-send-and-schedule",
+        "environment": "documented"
+      },
+      {
+        "layer": "portal",
+        "role": "unspecified",
+        "state": "Schedule for later",
+        "covered": true,
+        "note": "Chỉ hiện trạng staging 29/09; Jira MTRO-84 trống",
+        "kb_refs": [
+          "KB-107",
+          "KB-108"
+        ],
+        "feature_id": "campaign-send-and-schedule",
+        "environment": "documented"
+      },
+      {
+        "layer": "portal",
+        "role": "unspecified",
+        "state": "campaign Scheduled: Reschedule / Unschedule",
+        "covered": false,
+        "note": "Chỉ bundle",
+        "kb_refs": [
+          "KB-110"
+        ],
+        "feature_id": "campaign-send-and-schedule",
+        "environment": "documented"
+      },
+      {
+        "layer": "backend",
+        "role": "unspecified",
+        "state": "segment query lỗi / count lỗi lúc Send",
+        "covered": true,
+        "note": "Quyết định Dev BE 02/10; BUG-68 là lỗi đã biết ở nhánh này",
+        "kb_refs": [
+          "KB-111",
+          "KB-112",
+          "KB-113",
+          "KB-202"
+        ],
+        "feature_id": "campaign-send-and-schedule",
+        "environment": "documented"
+      },
+      {
+        "layer": "backend",
+        "role": "unspecified",
+        "state": "workspace chưa có sending domain verified",
+        "covered": false,
+        "note": "Conflict chưa phân xử",
+        "kb_refs": [
+          "KB-100",
+          "KB-101"
+        ],
+        "feature_id": "campaign-send-and-schedule",
+        "environment": "documented"
+      },
+      {
+        "layer": "backend",
+        "role": "unspecified",
+        "state": "workspace Sending suspended",
+        "covered": false,
+        "note": "Chỉ Jira MTRO-92, chưa đối chiếu staging",
+        "kb_refs": [
+          "KB-116"
+        ],
+        "feature_id": "campaign-send-and-schedule",
+        "environment": "documented"
+      },
+      {
+        "layer": "api",
+        "role": "unspecified",
+        "state": "gửi lại campaign đã sent",
+        "covered": true,
+        "note": "Quan sát staging 08–09/09",
+        "kb_refs": [
+          "KB-106"
+        ],
+        "feature_id": "campaign-send-and-schedule",
+        "environment": "documented"
+      },
+      {
+        "layer": "portal",
+        "role": "Owner",
+        "state": "any",
+        "covered": true,
+        "note": "Hiện trạng staging khảo sát bằng Owner",
+        "kb_refs": [
+          "KB-P-036"
+        ],
+        "feature_id": "campaign-send-and-schedule",
+        "environment": "documented"
+      },
+      {
+        "layer": "portal",
+        "role": "Member",
+        "state": "any",
+        "covered": false,
+        "note": "Chưa khảo sát cho Campaigns",
+        "kb_refs": [
+          "KB-P-051"
+        ],
+        "feature_id": "campaign-send-and-schedule",
+        "environment": "documented"
+      },
+      {
+        "layer": "portal",
+        "role": "Admin",
+        "state": "any",
+        "covered": false,
+        "note": "Chưa từng quan sát",
+        "kb_refs": [
+          "KB-P-051"
+        ],
+        "feature_id": "campaign-send-and-schedule",
+        "environment": "documented"
+      },
+      {
+        "layer": "code",
+        "role": "unspecified",
+        "state": "any",
+        "covered": false,
+        "note": "Không có nguồn mã",
+        "kb_refs": [],
+        "feature_id": "campaign-send-and-schedule",
+        "environment": "documented"
+      }
+    ],
+    "unassigned_kb_items": [],
+    "profile_conflicts": [
+      {
+        "conflict_group": "CONF-MTRO-campaigns-01",
+        "topic": "Campaign gửi được khi workspace chưa có sending domain verified?",
+        "resolution": "UNRESOLVED",
+        "side_a": "Rule 07/08/2026 (Jira MTRO-6 + MTRO-11, rule draft): campaign không thể gửi nếu workspace chưa có sending domain verified.",
+        "side_b": "Staging 09/09/2026: workspace chưa có domain verified vẫn gửi campaign 15/15 lần qua host dùng chung.",
+        "note": "Quyết định PO/BA 02/10/2026 chỉ áp cho automation. Không chọn bên.",
+        "kb_refs": [
+          "KB-100",
+          "KB-101"
+        ]
+      }
+    ],
+    "profile_change_summary": [
+      "Rework r1: dựng lại từ shard đã sửa; bỏ ba item trùng với object email-content (nội dung merge tag một ngoặc không được migrate, không có copy-on-write giữa các Draft dùng chung email, nội dung campaign Sent được đóng băng) vì campaigns không giữ bản sao; statement CE được rút phần chi tiết staging theo shard hiện tại.",
+      "Thêm lỗi đã biết BUG-68 (segment có query hỏng làm campaign rollback khi Send) vào capability điều kiện gửi, regression watch và unknown area; capability hệ quả sau gửi chỉ còn việc xoá segment đang dùng và thông báo trên report; bỏ unknown area đóng băng nội dung Sent."
+    ],
+    "kb_trace_complete": true
+  },
+  "gate": {
+    "decision": "CONDITIONAL_PASS",
+    "blocking_findings": [],
+    "conditions": [
+      "Đủ cho regression discovery của Send now và kiểm segment lúc gửi; oracle cho gửi khi chưa có sending domain verified là conflict UNRESOLVED (Blocker), Schedule / Reschedule / Unschedule chưa có AC.",
+      "Role cho từng thao tác chưa xác định; không viết expected result phân quyền.",
+      "Mục ở risks và observed_behavior không dùng làm expected result; observed_behavior là hiện trạng tại thời điểm khảo sát, KNOWN_DEFECT chỉ dùng để theo dõi hồi quy."
+    ],
+    "allowed_next_steps": [
+      "qa-checklist-builder",
+      "knowledge-diff-analyzer"
+    ]
+  }
+}

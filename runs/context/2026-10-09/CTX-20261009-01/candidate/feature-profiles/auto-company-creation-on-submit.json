@@ -1,0 +1,725 @@
+{
+  "schema_version": "1.0",
+  "artifact_type": "FeatureProfileCandidate",
+  "artifact_id": "ART-FEATURE-PROFILE-auto-company-creation-on-submit-CTX-20261009-01",
+  "workflow_id": "CTX-20261009-01",
+  "producer": "feature-profile-builder",
+  "source_refs": [
+    "candidate/product-kb/submission-review-and-decision.json",
+    "candidate/product-kb/approve-company-creation.json",
+    "candidate/product-kb/customer-matching.json",
+    "candidate/product-kb/auto-company-creation-on-submit.json",
+    "candidate/product-kb/_product-level.json",
+    "input/scope-plan.json",
+    "input/orchestrator-directives.json",
+    "input/profile-checklist-brief.md"
+  ],
+  "upstream_artifact_ids": [
+    "PKBC-CTX-20261009-01-company-submissions-submission-review-and-decision",
+    "PKBC-CTX-20261009-01-company-submissions-approve-company-creation",
+    "PKBC-CTX-20261009-01-company-submissions-customer-matching",
+    "PKBC-CTX-20261009-01-company-submissions-auto-company-creation-on-submit",
+    "PKBC-CTX-20261009-01-_product-level",
+    "SCOPE-PLAN-CTX-20261009-01"
+  ],
+  "status": "PARTIAL",
+  "confidence": "MEDIUM",
+  "observations": [
+    "Profile dựng từ tài liệu; không có quan sát runtime nên act_ids và observed_validations rỗng.",
+    "Quy tắc cờ, job, xử lý lỗi và rate limit đến từ Dev FE 22/09/2026 và Dev BE 23/09–30/09/2026 (Jira DUOS-425).",
+    "Hành vi chỉ bật khi users.config có `enable_company_creation_on_submit`; tên merchant không phải điều kiện."
+  ],
+  "assumptions": [
+    "feature_id dùng chính feature_key (ổn định qua các version).",
+    "Object company-submissions không có shard object-level; item của feature khác cùng object được tham chiếu khi chúng là trạng thái đầu vào / đầu ra của feature này.",
+    "Câu hỏi role của cả object đặt ở profile submission-review-and-decision (một câu duy nhất)."
+  ],
+  "unknowns": [
+    "Company UK do job tạo lúc submit bị gắn Market \"Vietnam\" với 0 catalog (buyer không đặt được đơn sample) là lỗi sản phẩm hay do cấu hình store test?",
+    "Khi store bật cờ, \"setting riêng ở phần Notification\" cho email kích hoạt tài khoản buyer là setting nào, và buyer đăng nhập được bằng Shopify login code trước khi Approve có phải hành vi mong đợi (task Testlane GAP-25, GAP-26)?",
+    "Nếu merchant Approve đúng lúc job chưa ghi `company_id` thì có tạo company thứ 2 không, và PO/Dev có chặn race này (task Testlane GAP-21)?",
+    "Backend có bỏ qua `company_id` gửi kèm body submit (mass assignment, TC-DUOS-220) không; rate limit theo IP của form đăng ký và rate limit tạo company theo shop áp dụng theo thứ tự nào; định dạng chính xác của `company_creation_rate_limit` và `company_creation_catalog_ids` là gì?",
+    "Company / Location / Main contact tạo lúc submit cho submission spam có được dọn khi merchant xoá hoặc loại bỏ submission không, hay chỉ gỡ được trong Shopify admin?"
+  ],
+  "conflicts": [],
+  "blocking_issues": [],
+  "payload": {
+    "feature_profiles": [
+      {
+        "feature_id": "auto-company-creation-on-submit",
+        "feature_key": "auto-company-creation-on-submit",
+        "name": "Tạo company tự động ngay khi buyer submit (cờ theo store)",
+        "user_goal": "Merchant được bật cờ `enable_company_creation_on_submit` trong users.config để buyer có company B2B trên Shopify ngay lúc submit form (đặt được đơn sample trước khi được duyệt), trong giới hạn rate limit theo shop, với job chạy một lần, không retry và không rollback.",
+        "user_goal_kb_refs": [
+          "KB-047",
+          "KB-049",
+          "KB-050",
+          "KB-052",
+          "KB-055",
+          "KB-062"
+        ],
+        "stable_since_version": "v1",
+        "actors": [
+          {
+            "role": "internal-ops (admin panel nội bộ)",
+            "permission_observed": "Bật/tắt cờ bằng JSON editor của users.config trong admin panel nội bộ; Portal không có UI cho cờ. Bên trong admin panel chưa quan sát được trên staging.",
+            "kb_refs": [
+              "KB-047",
+              "KB-P-030",
+              "KB-P-031"
+            ]
+          },
+          {
+            "role": "buyer",
+            "permission_observed": "Submit form luôn thấy success; trên staging cũ đăng nhập được bằng Shopify login code trước khi được Approve.",
+            "kb_refs": [
+              "KB-049",
+              "KB-060"
+            ]
+          },
+          {
+            "role": "system (queued job)",
+            "permission_observed": "Tạo Company + Location + Main contact (Location admin) + role Admin của app, ghi `company_id`, chịu rate limit theo shop.",
+            "kb_refs": [
+              "KB-049",
+              "KB-055"
+            ]
+          },
+          {
+            "role": "merchant (Portal)",
+            "permission_observed": "Thấy submission vẫn `pending` dù company đã live; việc không dọn được company tạo lúc submit từ app gắn với phía \"không có Reject\" của tranh chấp chưa chốt.",
+            "kb_refs": [
+              "KB-050",
+              "KB-057"
+            ]
+          }
+        ],
+        "entry_points": [
+          {
+            "path": "Admin panel nội bộ → users.config của shop → key `enable_company_creation_on_submit` (cùng `company_creation_catalog_ids`, `company_creation_rate_limit`)",
+            "precondition": "Quyền vào admin panel nội bộ.",
+            "kb_refs": [
+              "KB-047",
+              "KB-051",
+              "KB-055",
+              "KB-P-030"
+            ]
+          },
+          {
+            "path": "Buyer submit registration form trên storefront",
+            "precondition": "Store bật cờ.",
+            "kb_refs": [
+              "KB-049"
+            ]
+          },
+          {
+            "path": "Buyer đăng nhập Customer Account bằng Shopify login code",
+            "precondition": "Store bật cờ, submission còn `pending` (hiện trạng staging cũ).",
+            "kb_refs": [
+              "KB-060"
+            ]
+          }
+        ],
+        "capabilities": [
+          {
+            "name": "Bật/tắt tạo company tự động theo store",
+            "description": "Key `enable_company_creation_on_submit` ở root users.config, sửa qua admin panel nội bộ, không có UI Portal; chỉ ON khi `true` hoặc `\"true\"`, mọi giá trị khác / thiếu key là OFF.",
+            "kb_refs": [
+              "KB-047",
+              "KB-048",
+              "KB-P-029",
+              "KB-P-031"
+            ],
+            "act_ids": []
+          },
+          {
+            "name": "Có company ngay lúc submit",
+            "description": "Submission lưu, form báo success; queued job tạo Company + 1 Location (địa chỉ từ form) + Main contact (Location admin) + role Admin của app rồi ghi `company_id`; submission vẫn `pending` tới khi Approve; không lọc country, gán catalog theo `company_creation_catalog_ids` nếu có.",
+            "kb_refs": [
+              "KB-049",
+              "KB-050",
+              "KB-051",
+              "KB-058"
+            ],
+            "act_ids": []
+          },
+          {
+            "name": "Xử lý lỗi job một lần, không rollback",
+            "description": "Job chạy đúng 1 lần, không retry, bỏ qua submission đã có `company_id` hoặc không còn `pending`; lỗi trước `companyCreate` → `failed` + `company_creation_error`, không `company_id`; lỗi sau `companyCreate` → giữ `company_id` + `company_creation_error`, vẫn `pending`.",
+            "kb_refs": [
+              "KB-052",
+              "KB-053",
+              "KB-054"
+            ],
+            "act_ids": []
+          },
+          {
+            "name": "Giới hạn tạo company theo shop",
+            "description": "Mặc định 10 lần/phút và 50 lần/ngày theo shop, override bằng `company_creation_rate_limit {per_minute, per_day}`; vượt → submission vẫn `pending`, `company_creation_error = \"rate_limited\"`, không tạo company.",
+            "kb_refs": [
+              "KB-055",
+              "KB-056"
+            ],
+            "act_ids": []
+          },
+          {
+            "name": "Buyer dùng company trước khi được duyệt",
+            "description": "Mục đích (tóm tắt QA): buyer đặt được đơn sample trước khi duyệt; staging cũ thấy buyer đăng nhập được trước Approve; email kích hoạt có \"setting riêng ở phần Notification\" chưa rõ là setting nào.",
+            "kb_refs": [
+              "KB-062",
+              "KB-060",
+              "KB-059"
+            ],
+            "act_ids": []
+          }
+        ],
+        "state_transitions": [
+          {
+            "from": "cờ thiếu / giá trị khác `true` hoặc `\"true\"`",
+            "to": "OFF",
+            "trigger": "Đọc users.config",
+            "condition": "Fail-closed.",
+            "kb_refs": [
+              "KB-048"
+            ]
+          },
+          {
+            "from": "buyer submit form (cờ ON)",
+            "to": "`pending` + `company_id` (company live trên Shopify)",
+            "trigger": "Queued job thành công",
+            "condition": "Trong rate limit; submission chưa có `company_id` và còn `pending`.",
+            "kb_refs": [
+              "KB-049",
+              "KB-050",
+              "KB-052"
+            ]
+          },
+          {
+            "from": "buyer submit form (cờ ON)",
+            "to": "`failed` + `company_creation_error`, không `company_id`",
+            "trigger": "Job lỗi trước `companyCreate`",
+            "condition": "Ví dụ customer đã là contact của company khác.",
+            "kb_refs": [
+              "KB-053",
+              "KB-042"
+            ]
+          },
+          {
+            "from": "buyer submit form (cờ ON)",
+            "to": "`pending` + `company_id` + `company_creation_error` (setup_incomplete)",
+            "trigger": "Job lỗi sau `companyCreate`",
+            "condition": "Không rollback; merchant tự hoàn tất trên Shopify.",
+            "kb_refs": [
+              "KB-054",
+              "KB-020",
+              "KB-021"
+            ]
+          },
+          {
+            "from": "buyer submit form (cờ ON)",
+            "to": "`pending` + `company_creation_error = \"rate_limited\"`, không company",
+            "trigger": "Vượt rate limit theo shop",
+            "condition": "Mặc định 10/phút, 50/ngày hoặc theo override.",
+            "kb_refs": [
+              "KB-055",
+              "KB-056"
+            ]
+          },
+          {
+            "from": "`pending` + `company_id`",
+            "to": "`completed`",
+            "trigger": "Merchant Approve (chỉ bắn Flow trigger)",
+            "condition": "Xem approve-company-creation.",
+            "kb_refs": [
+              "KB-050",
+              "KB-018"
+            ]
+          }
+        ],
+        "confirmed_rules": [
+          {
+            "statement": "Theo Dev FE 22/09/2026 (task Testlane DUOS-004), tạo company tự động lúc submit được bật theo store bằng key `enable_company_creation_on_submit` ở root `users.config`, sửa qua JSON editor của admin panel nội bộ; Portal không có UI bật/tắt cờ này.",
+            "knowledge_kind": "CONFIRMED_EXPECTED",
+            "confidence": "MEDIUM",
+            "kb_refs": [
+              "KB-047"
+            ]
+          },
+          {
+            "statement": "Theo Dev FE 22/09/2026 (task Testlane DUOS-004), cờ `enable_company_creation_on_submit` chỉ ON khi giá trị là `true` (boolean) hoặc `\"true\"` (chuỗi); mọi giá trị khác hoặc thiếu key đều là OFF (fail-closed).",
+            "knowledge_kind": "CONFIRMED_EXPECTED",
+            "confidence": "MEDIUM",
+            "kb_refs": [
+              "KB-048"
+            ]
+          },
+          {
+            "statement": "Theo Dev BE 23/09/2026 (Jira DUOS-425), khi store bật cờ, submission được lưu và form storefront luôn báo success cho buyer; một queued job tạo trên Shopify Company + 1 Company Location (địa chỉ lấy từ form) + customer làm Main Contact (Shopify role Location admin) + role Admin của app, rồi ghi `data.company_id` vào submission.",
+            "knowledge_kind": "CONFIRMED_EXPECTED",
+            "confidence": "MEDIUM",
+            "kb_refs": [
+              "KB-049"
+            ]
+          },
+          {
+            "statement": "Theo Dev BE 23/09/2026 (Jira DUOS-425), sau khi job tạo company lúc submit, status submission vẫn là `pending` cho tới khi merchant Approve, nên company đã live trên Shopify trước khi Approve. QA business rule Duos ghi QA pass TC-DUOS-150 ngày 30/09/2026 cho luồng này (build không ghi).",
+            "knowledge_kind": "CONFIRMED_EXPECTED",
+            "confidence": "MEDIUM",
+            "kb_refs": [
+              "KB-050"
+            ]
+          },
+          {
+            "statement": "Theo Dev BE 23/09 và 30/09/2026 (Jira DUOS-425), job tạo company lúc submit không lọc theo country và gán các catalog liệt kê trong key `company_creation_catalog_ids` (users.config) nếu key này có cấu hình.",
+            "knowledge_kind": "CONFIRMED_EXPECTED",
+            "confidence": "MEDIUM",
+            "kb_refs": [
+              "KB-051"
+            ]
+          },
+          {
+            "statement": "Theo Dev BE 23/09 và 30/09/2026 (Jira DUOS-425), job tạo company lúc submit chạy đúng 1 lần (`$tries = 1`), không retry, và bỏ qua submission đã có `company_id` hoặc không còn `pending`.",
+            "knowledge_kind": "CONFIRMED_EXPECTED",
+            "confidence": "MEDIUM",
+            "kb_refs": [
+              "KB-052"
+            ]
+          },
+          {
+            "statement": "Theo Dev BE 23/09 và 30/09/2026 (Jira DUOS-425; Dev FE 30/09/2026 BR-28 cho trường hợp customer thuộc company khác), job lỗi trước bước `companyCreate` (ví dụ customer đã là contact của company khác) làm submission chuyển `failed`, ghi `company_creation_error` và không có `company_id`.",
+            "knowledge_kind": "CONFIRMED_EXPECTED",
+            "confidence": "MEDIUM",
+            "kb_refs": [
+              "KB-053"
+            ]
+          },
+          {
+            "statement": "Theo Dev BE 23/09 và 30/09/2026 (Jira DUOS-425), job lỗi sau bước `companyCreate` không được rollback: submission giữ `company_id`, ghi `company_creation_error` và status vẫn `pending`.",
+            "knowledge_kind": "CONFIRMED_EXPECTED",
+            "confidence": "MEDIUM",
+            "kb_refs": [
+              "KB-054"
+            ]
+          },
+          {
+            "statement": "Theo Dev BE 23/09 và 25/09/2026 (Jira DUOS-425), tạo company tự động bị giới hạn theo shop, mặc định 10 lần/phút và 50 lần/ngày; giới hạn này override được bằng key `company_creation_rate_limit {per_minute, per_day}` trong users.config.",
+            "knowledge_kind": "CONFIRMED_EXPECTED",
+            "confidence": "MEDIUM",
+            "kb_refs": [
+              "KB-055"
+            ]
+          },
+          {
+            "statement": "Theo Dev BE 23/09 và 25/09/2026 (Jira DUOS-425) và Dev FE 30/09/2026, khi vượt giới hạn tạo company tự động, submission vẫn được lưu với status `pending` (không phải Failed), chỉ thêm `company_creation_error = \"rate_limited\"`, và không có company nào được tạo.",
+            "knowledge_kind": "CONFIRMED_EXPECTED",
+            "confidence": "MEDIUM",
+            "kb_refs": [
+              "KB-056"
+            ]
+          }
+        ],
+        "observed_behavior": [
+          {
+            "statement": "Trên staging bật cờ (quan sát qua TC-DUOS-153, ngày không ghi), buyer đăng nhập được bằng Shopify login code trước khi submission được Approve.",
+            "knowledge_kind": "OBSERVED_CURRENT",
+            "confidence": "LOW",
+            "kb_refs": [
+              "KB-060"
+            ],
+            "status": "CURRENT_STATE"
+          }
+        ],
+        "observed_validations": [],
+        "permissions": [
+          {
+            "statement": "Chỉ admin panel nội bộ (JSON editor users.config) bật/tắt được cờ; merchant không có UI trong Portal.",
+            "kb_refs": [
+              "KB-047",
+              "KB-P-030",
+              "KB-P-031"
+            ]
+          },
+          {
+            "statement": "Job gán customer làm Main contact với Shopify role Location admin và role Admin của app ngay lúc submit, trước khi merchant review.",
+            "kb_refs": [
+              "KB-049",
+              "KB-046"
+            ]
+          },
+          {
+            "statement": "Trên staging bật cờ (quan sát cũ, ngày không ghi), buyer đăng nhập được Customer Account bằng Shopify login code trước khi submission được Approve; chưa chốt đây là quyền truy cập mong đợi.",
+            "kb_refs": [
+              "KB-060"
+            ]
+          }
+        ],
+        "surface_mapping": {
+          "portal": [
+            {
+              "item": "Không có UI bật/tắt cờ; submission hiển thị `pending` sau khi company đã tạo",
+              "kb_refs": [
+                "KB-047",
+                "KB-050",
+                "KB-P-031"
+              ]
+            }
+          ],
+          "storefront": [
+            {
+              "item": "Registration form luôn báo success khi store bật cờ",
+              "kb_refs": [
+                "KB-049"
+              ]
+            }
+          ],
+          "api": [],
+          "data": [
+            {
+              "item": "users.config: `enable_company_creation_on_submit`, `company_creation_catalog_ids`, `company_creation_rate_limit {per_minute, per_day}`",
+              "kb_refs": [
+                "KB-047",
+                "KB-051",
+                "KB-055"
+              ]
+            },
+            {
+              "item": "Submission `data.company_id`, `company_creation_error` (`rate_limited`, lỗi job), status",
+              "kb_refs": [
+                "KB-049",
+                "KB-053",
+                "KB-054",
+                "KB-056"
+              ]
+            },
+            {
+              "item": "Shopify Company + 1 Location + Main contact (Location admin) + role Admin của app",
+              "kb_refs": [
+                "KB-049"
+              ]
+            }
+          ],
+          "code": []
+        },
+        "dependencies": [
+          {
+            "target": "Cơ chế users.config cấp sản phẩm (sửa qua admin panel nội bộ)",
+            "relation": "configured_by",
+            "note": "Cờ và key liên quan là cấu hình per-merchant, không có UI Portal.",
+            "kb_refs": [
+              "KB-047",
+              "KB-P-029",
+              "KB-P-030"
+            ]
+          },
+          {
+            "target": "company-submissions / customer-matching",
+            "relation": "uses",
+            "note": "Job chạy matching customer lúc submit.",
+            "kb_refs": [
+              "KB-036"
+            ]
+          },
+          {
+            "target": "company-submissions / approve-company-creation",
+            "relation": "hands_off_to",
+            "note": "Submission có `company_id` được Approve theo nhánh chỉ bắn trigger; `rate_limited` đi luồng cũ.",
+            "kb_refs": [
+              "KB-018",
+              "KB-028"
+            ]
+          },
+          {
+            "target": "b2b-registration / registration-spam-protection",
+            "relation": "see_also",
+            "note": "Rate limit theo IP của form đăng ký là giới hạn khác với rate limit tạo company theo shop; quan hệ giữa hai giới hạn chưa được giải thích.",
+            "kb_refs": [
+              "KB-055"
+            ]
+          }
+        ],
+        "risks": [
+          {
+            "statement": "Theo PO (chuyển lời qua QA lead) 30/09/2026 — một phía của tranh chấp Reject/Delete chưa chốt — và phân tích tác động trong Known issues Duos (task Testlane DUOS-004 BR-48, RISK-02), khi store bật cờ, submission spam hoặc không đạt vẫn để lại Company + Location + Main contact live trên Shopify và đặt hàng được; company này chỉ gỡ được trong Shopify admin, app không có thao tác dọn. Mô tả này phụ thuộc kết quả tranh chấp và phạm vi xoá của bulk Delete chưa chốt.",
+            "knowledge_kind": "OBSERVED_CURRENT",
+            "confidence": "MEDIUM",
+            "kb_refs": [
+              "KB-057"
+            ],
+            "note": "Gắn với phía \"không có Reject\" của tranh chấp chưa chốt; không làm oracle."
+          },
+          {
+            "statement": "Theo Known issues Duos (open; quan sát TC-DUOS-153, 30/09/2026; nguồn tự ghi có thể do cấu hình store test — Need confirm), company UK do job tạo lúc submit được gắn Market \"Vietnam\" và 0 catalog: location UK không nhận Base catalog qua B2B market UK nên buyer không đặt được đơn sample.",
+            "knowledge_kind": "OBSERVED_CURRENT",
+            "confidence": "LOW",
+            "status": "KNOWN_DEFECT",
+            "kb_refs": [
+              "KB-058"
+            ],
+            "note": "Lỗi đang mở (có thể do cấu hình store test) — regression watch, không làm oracle."
+          },
+          {
+            "statement": "Theo PO 30/09/2026 (task Testlane DUOS-004 BR-49, ghi trong QA KB Duos \"Company submissions\" v1), khi store bật cờ, email kích hoạt tài khoản cho buyer có \"setting riêng ở phần Notification\"; chưa rõ là setting nào (task Testlane GAP-25, GAP-26 — Need confirm).",
+            "knowledge_kind": "INFERRED",
+            "confidence": "LOW",
+            "kb_refs": [
+              "KB-059"
+            ],
+            "note": "Chưa rõ setting (task Testlane GAP-25, GAP-26)."
+          },
+          {
+            "statement": "Theo QA KB Duos \"Company submissions\" v1 (phân tích 07/10/2026, task Testlane GAP-21 — Need confirm PO/Dev), nếu merchant Approve đúng lúc job chưa ghi `company_id` thì có thể tạo ra company thứ 2; chưa có quyết định PO/Dev.",
+            "knowledge_kind": "INFERRED",
+            "confidence": "LOW",
+            "kb_refs": [
+              "KB-061"
+            ],
+            "note": "Race chưa có quyết định (task Testlane GAP-21)."
+          },
+          {
+            "statement": "Theo phần mục đích của QA KB Duos \"Company submissions\" v1 (tóm tắt QA, không nguồn riêng; hành vi thuộc Jira DUOS-424/DUOS-425), tạo company ngay lúc submit dành cho merchant được bật cấu hình riêng, để buyer đặt được đơn sample trước khi submission được duyệt.",
+            "knowledge_kind": "INFERRED",
+            "confidence": "MEDIUM",
+            "kb_refs": [
+              "KB-062"
+            ],
+            "note": "Mục đích theo tóm tắt QA, không nguồn riêng."
+          },
+          {
+            "statement": "Body submit kèm `company_id` có bị backend bỏ qua hay không (mass assignment, TC-DUOS-220) chưa được kiểm.",
+            "knowledge_kind": "INFERRED",
+            "confidence": "LOW",
+            "kb_refs": [
+              "KB-049"
+            ]
+          }
+        ],
+        "unknown_areas": [
+          {
+            "question": "Company UK do job tạo lúc submit bị gắn Market \"Vietnam\" với 0 catalog (buyer không đặt được đơn sample) là lỗi sản phẩm hay do cấu hình store test?",
+            "why_it_matters": "Known issue đang mở; ảnh hưởng đúng mục đích đặt đơn sample.",
+            "kb_refs": [
+              "KB-058",
+              "KB-051"
+            ]
+          },
+          {
+            "question": "Khi store bật cờ, \"setting riêng ở phần Notification\" cho email kích hoạt tài khoản buyer là setting nào, và buyer đăng nhập được bằng Shopify login code trước khi Approve có phải hành vi mong đợi (task Testlane GAP-25, GAP-26)?",
+            "why_it_matters": "Không có expected cho email kích hoạt và truy cập trước duyệt.",
+            "kb_refs": [
+              "KB-059",
+              "KB-060"
+            ]
+          },
+          {
+            "question": "Nếu merchant Approve đúng lúc job chưa ghi `company_id` thì có tạo company thứ 2 không, và PO/Dev có chặn race này (task Testlane GAP-21)?",
+            "why_it_matters": "Nguy cơ trùng company; chưa có quyết định.",
+            "kb_refs": [
+              "KB-061",
+              "KB-052",
+              "KB-018"
+            ]
+          },
+          {
+            "question": "Backend có bỏ qua `company_id` gửi kèm body submit (mass assignment, TC-DUOS-220) không; rate limit theo IP của form đăng ký và rate limit tạo company theo shop áp dụng theo thứ tự nào; định dạng chính xác của `company_creation_rate_limit` và `company_creation_catalog_ids` là gì?",
+            "why_it_matters": "Rủi ro bảo mật chưa kiểm và thiếu chi tiết để viết check cấu hình override.",
+            "kb_refs": [
+              "KB-049",
+              "KB-051",
+              "KB-055"
+            ]
+          },
+          {
+            "question": "Company / Location / Main contact tạo lúc submit cho submission spam có được dọn khi merchant xoá hoặc loại bỏ submission không, hay chỉ gỡ được trong Shopify admin?",
+            "why_it_matters": "Chạm data-deletion; phụ thuộc tranh chấp Reject vs Delete và phạm vi bulk Delete chưa chốt.",
+            "kb_refs": [
+              "KB-057",
+              "KB-011",
+              "KB-008",
+              "KB-009"
+            ]
+          }
+        ],
+        "freshness": {
+          "observed_at": "2026-10-08",
+          "run_id": "CTX-20261009-01",
+          "earliest_source_date": "2026-09-22",
+          "basis": "Ngày nguồn mới nhất / sớm nhất trong các KB item được tham chiếu (ngày quyết định PO/Dev, ngày cập nhật Jira, ngày quan sát staging); không có quan sát runtime trong lần chạy này."
+        }
+      }
+    ],
+    "profile_relationships": [
+      {
+        "from": "auto-company-creation-on-submit",
+        "to": "customer-matching",
+        "relation": "USES",
+        "kb_refs": [
+          "KB-036"
+        ]
+      },
+      {
+        "from": "auto-company-creation-on-submit",
+        "to": "approve-company-creation",
+        "relation": "HANDS_OFF_TO",
+        "kb_refs": [
+          "KB-018",
+          "KB-028"
+        ]
+      },
+      {
+        "from": "auto-company-creation-on-submit",
+        "to": "submission-review-and-decision",
+        "relation": "STATE_SOURCE_FOR",
+        "kb_refs": [
+          "KB-050",
+          "KB-057"
+        ]
+      }
+    ],
+    "coverage_matrix": [
+      {
+        "feature_id": "auto-company-creation-on-submit",
+        "layer": "backend",
+        "role": "internal-ops",
+        "state": "giá trị cờ true / \"true\" / khác / thiếu",
+        "environment": "documented",
+        "covered": true,
+        "note": "Dev FE 22/09/2026"
+      },
+      {
+        "feature_id": "auto-company-creation-on-submit",
+        "layer": "backend",
+        "role": "system",
+        "state": "job thành công (cờ ON)",
+        "environment": "documented",
+        "covered": true,
+        "note": "Dev BE 23/09/2026"
+      },
+      {
+        "feature_id": "auto-company-creation-on-submit",
+        "layer": "backend",
+        "role": "system",
+        "state": "job lỗi trước `companyCreate`",
+        "environment": "documented",
+        "covered": true,
+        "note": "Dev BE"
+      },
+      {
+        "feature_id": "auto-company-creation-on-submit",
+        "layer": "backend",
+        "role": "system",
+        "state": "job lỗi sau `companyCreate`",
+        "environment": "documented",
+        "covered": true,
+        "note": "Dev BE"
+      },
+      {
+        "feature_id": "auto-company-creation-on-submit",
+        "layer": "backend",
+        "role": "system",
+        "state": "vượt rate limit mặc định / override",
+        "environment": "documented",
+        "covered": true,
+        "note": "Dev BE 25/09/2026; định dạng override chưa rõ"
+      },
+      {
+        "feature_id": "auto-company-creation-on-submit",
+        "layer": "backend",
+        "role": "system",
+        "state": "gán catalog theo `company_creation_catalog_ids`",
+        "environment": "documented",
+        "covered": true,
+        "note": "Dev BE; known issue market UK"
+      },
+      {
+        "feature_id": "auto-company-creation-on-submit",
+        "layer": "storefront",
+        "role": "buyer",
+        "state": "submit form khi cờ ON",
+        "environment": "documented",
+        "covered": true,
+        "note": "Dev BE (form luôn success)"
+      },
+      {
+        "feature_id": "auto-company-creation-on-submit",
+        "layer": "customer_account",
+        "role": "buyer",
+        "state": "đăng nhập / đặt đơn sample trước Approve",
+        "environment": "documented",
+        "covered": false,
+        "note": "Chỉ quan sát cũ; chưa chốt"
+      },
+      {
+        "feature_id": "auto-company-creation-on-submit",
+        "layer": "admin_panel",
+        "role": "internal-ops",
+        "state": "sửa users.config",
+        "environment": "documented",
+        "covered": false,
+        "note": "Bên trong admin panel chưa quan sát"
+      },
+      {
+        "feature_id": "auto-company-creation-on-submit",
+        "layer": "portal",
+        "role": "merchant",
+        "state": "Approve trong lúc job chạy",
+        "environment": "documented",
+        "covered": false,
+        "note": "Race chưa chốt"
+      },
+      {
+        "feature_id": "auto-company-creation-on-submit",
+        "layer": "api",
+        "role": "unspecified",
+        "state": "body submit kèm `company_id`",
+        "environment": "documented",
+        "covered": false,
+        "note": "Chưa kiểm"
+      },
+      {
+        "feature_id": "auto-company-creation-on-submit",
+        "layer": "api",
+        "role": "unspecified",
+        "state": "any",
+        "environment": "documented",
+        "covered": false,
+        "note": "Bộ tài liệu QA không có đặc tả API/data model cho feature này"
+      },
+      {
+        "feature_id": "auto-company-creation-on-submit",
+        "layer": "db",
+        "role": "unspecified",
+        "state": "any",
+        "environment": "documented",
+        "covered": false,
+        "note": "Bộ tài liệu QA không có đặc tả API/data model cho feature này"
+      },
+      {
+        "feature_id": "auto-company-creation-on-submit",
+        "layer": "code",
+        "role": "unspecified",
+        "state": "any",
+        "environment": "documented",
+        "covered": false,
+        "note": "Không có nguồn mã"
+      }
+    ],
+    "unassigned_kb_items": [],
+    "profile_conflicts": [],
+    "profile_change_summary": [
+      "Profile v1 từ bootstrap tài liệu."
+    ],
+    "kb_trace_complete": true
+  },
+  "gate": {
+    "decision": "CONDITIONAL_PASS",
+    "blocking_findings": [],
+    "conditions": [
+      "Đủ cho regression discovery; oracle mạnh cho cờ, job, lỗi, rate limit.",
+      "Market/catalog UK, email kích hoạt, race Approve-job, mass assignment chưa có oracle."
+    ],
+    "allowed_next_steps": [
+      "qa-checklist-builder",
+      "knowledge-diff-analyzer"
+    ]
+  }
+}

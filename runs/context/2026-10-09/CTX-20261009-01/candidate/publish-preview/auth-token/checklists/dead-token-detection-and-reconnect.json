@@ -1,0 +1,576 @@
+{
+  "feature_id": "dead-token-detection-and-reconnect",
+  "feature_key": "dead-token-detection-and-reconnect",
+  "checklist_version": "v1",
+  "checks": [
+    {
+      "check_id": "CHK-001",
+      "dimension": "CORE",
+      "layer": "db",
+      "title": "Token expiring hết `Refresh Token Expires At` bị coi là chết: chặn trước khi gọi Shopify, gắn cờ và gửi email reconnect",
+      "applicability": {
+        "role": "system",
+        "state": "shop đang cài app, dùng token expiring, `Refresh Token Expires At` < thời điểm hiện tại",
+        "environment": "documented",
+        "theme_or_device": null
+      },
+      "precondition": "Có quyền (hoặc Dev BE hỗ trợ) đọc/ghi các field token của shop trong dữ liệu backend Duos ở môi trường test và xem log request gửi tới Shopify Admin API của shop. Shop test <shop-expiring> đang cài app; hộp thư của merchant <email-merchant> theo dõi được.",
+      "steps": [
+        "Đặt `Refresh Token Expires At` của <shop-expiring> về một thời điểm trong quá khứ; ghi lại giá trị `Re-auth Required At` hiện tại (rỗng).",
+        "Kích hoạt một luồng của app cần gọi Shopify Admin API cho shop (vd một thao tác sync hoặc job nền gọi Shopify).",
+        "Kiểm log request tới Shopify của shop, field `Re-auth Required At` và hộp thư <email-merchant>."
+      ],
+      "observation_point": "Log request Shopify của shop; field `Re-auth Required At`; hộp thư merchant ngay sau khi luồng chạy.",
+      "expected_result": "App coi token là chết: chặn trước khi gọi Shopify (không có request gửi đi và không phải đợi Shopify trả 401), set `Re-auth Required At` cho shop và gửi email reconnect cho merchant ngay lập tức.",
+      "oracle": {
+        "kb_ids": [
+          "KB-001",
+          "KB-003",
+          "KB-004",
+          "KB-005"
+        ],
+        "oracle_strength": "STRONG"
+      },
+      "status": "READY",
+      "open_question_draft": null,
+      "related_kb_ids": [
+        "KB-055"
+      ],
+      "regression_watch_kb_ids": [
+        "KB-057"
+      ],
+      "risk_refs": [
+        "RISK-dead-token-01"
+      ],
+      "priority": "P1",
+      "automation_suitability": "HYBRID"
+    },
+    {
+      "check_id": "CHK-002",
+      "dimension": "CORE",
+      "layer": "db",
+      "title": "Token legacy bị coi là chết từ 01/01/2027",
+      "applicability": {
+        "role": "system",
+        "state": "shop đang cài app, dùng token legacy, thời điểm hiện tại ≥ 01/01/2027",
+        "environment": "documented",
+        "theme_or_device": null
+      },
+      "precondition": "Có quyền (hoặc Dev BE hỗ trợ) đọc/ghi các field token của shop trong dữ liệu backend Duos ở môi trường test và xem log request gửi tới Shopify Admin API của shop. Shop test <shop-legacy> đang cài app với token legacy; môi trường test cho phép giả lập thời điểm hiện tại (Dev BE hỗ trợ) về ngày 01/01/2027 hoặc sau.",
+      "steps": [
+        "Giả lập thời điểm hiện tại của backend sang 01/01/2027 hoặc muộn hơn.",
+        "Kích hoạt một luồng của app cần gọi Shopify Admin API cho <shop-legacy>.",
+        "Kiểm log request Shopify, field `Re-auth Required At` và hộp thư merchant."
+      ],
+      "observation_point": "Log request Shopify của shop; field `Re-auth Required At`; hộp thư merchant.",
+      "expected_result": "App coi token legacy là chết: chặn trước khi gọi Shopify (không đợi 401 thật), set `Re-auth Required At` và gửi email reconnect cho merchant ngay.",
+      "oracle": {
+        "kb_ids": [
+          "KB-002",
+          "KB-003",
+          "KB-004",
+          "KB-005"
+        ],
+        "oracle_strength": "STRONG"
+      },
+      "status": "READY",
+      "open_question_draft": null,
+      "related_kb_ids": [
+        "KB-056"
+      ],
+      "regression_watch_kb_ids": [],
+      "risk_refs": [
+        "RISK-dead-token-01"
+      ],
+      "priority": "P1",
+      "automation_suitability": "HYBRID"
+    },
+    {
+      "check_id": "CHK-003",
+      "dimension": "BOUNDARY",
+      "layer": "db",
+      "title": "Token chưa thoả điều kiện chết không bị gắn cờ, không phát email reconnect",
+      "applicability": {
+        "role": "system",
+        "state": "shop expiring có `Refresh Token Expires At` còn ở tương lai gần (vd vài phút); hoặc shop legacy trước 01/01/2027",
+        "environment": "documented",
+        "theme_or_device": null
+      },
+      "precondition": "Có quyền (hoặc Dev BE hỗ trợ) đọc/ghi các field token của shop trong dữ liệu backend Duos ở môi trường test và xem log request gửi tới Shopify Admin API của shop. Có <shop-expiring> và <shop-legacy> đang cài app; `Re-auth Required At` của cả hai đang rỗng.",
+      "steps": [
+        "Đặt `Refresh Token Expires At` của <shop-expiring> về thời điểm vài phút sau hiện tại (thời điểm hiện tại của backend trước 01/01/2027).",
+        "Kích hoạt luồng gọi Shopify cho từng shop.",
+        "Kiểm log request Shopify, `Re-auth Required At` và hộp thư merchant của từng shop."
+      ],
+      "observation_point": "Log request Shopify; `Re-auth Required At`; hộp thư merchant.",
+      "expected_result": "Token không thuộc điều kiện chết (expiring: `Refresh Token Expires At` chưa nhỏ hơn hiện tại; legacy: trước 01/01/2027) nên app không chặn vì lý do token chết: không set `Re-auth Required At`, không gửi email reconnect.",
+      "oracle": {
+        "kb_ids": [
+          "KB-001",
+          "KB-002"
+        ],
+        "oracle_strength": "STRONG"
+      },
+      "status": "READY",
+      "open_question_draft": null,
+      "related_kb_ids": [
+        "KB-003",
+        "KB-004",
+        "KB-005"
+      ],
+      "regression_watch_kb_ids": [],
+      "risk_refs": [
+        "RISK-dead-token-01",
+        "RISK-dead-token-02"
+      ],
+      "priority": "P1",
+      "automation_suitability": "HYBRID"
+    },
+    {
+      "check_id": "CHK-004",
+      "dimension": "NEGATIVE",
+      "layer": "db",
+      "title": "Lỗi 401 đơn thuần khi shop bị freeze/close giữa lúc job chạy (token còn hợp lệ)",
+      "applicability": {
+        "role": "system",
+        "state": "token còn hợp lệ, shop bị freeze/close trong lúc job đang chạy",
+        "environment": "documented",
+        "theme_or_device": null
+      },
+      "precondition": "Có quyền (hoặc Dev BE hỗ trợ) đọc/ghi các field token của shop trong dữ liệu backend Duos ở môi trường test và xem log request gửi tới Shopify Admin API của shop. <shop-expiring> có token còn hợp lệ; có cách đưa shop sang trạng thái frozen/closed trong lúc một job gọi Shopify đang chạy (Dev BE hỗ trợ).",
+      "steps": [
+        "Bắt đầu một job nền gọi Shopify cho shop.",
+        "Trong lúc job chạy, đưa shop sang trạng thái frozen/closed để Shopify trả 401.",
+        "Theo dõi trạng thái job (fail/retry), `Re-auth Required At` và hộp thư merchant."
+      ],
+      "observation_point": "Trạng thái và số lần retry của job; `Re-auth Required At`; hộp thư merchant.",
+      "expected_result": "Chưa có căn cứ: ghi lại job fail/retry ra sao, `Re-auth Required At` có bị set không và có email reconnect không; không đánh giá pass/fail cho tới khi PO/Dev trả lời câu hỏi mở.",
+      "oracle": {
+        "kb_ids": [],
+        "oracle_strength": "NONE"
+      },
+      "status": "NEEDS_CONFIRMATION",
+      "open_question_draft": "Khi Shopify trả 401 đơn thuần lúc shop bị freeze/close giữa lúc job chạy (token vẫn hợp lệ), job có chỉ fail và retry, không set `Re-auth Required At` và không gửi email reconnect không?",
+      "related_kb_ids": [
+        "KB-007",
+        "KB-003"
+      ],
+      "regression_watch_kb_ids": [],
+      "risk_refs": [
+        "RISK-dead-token-02"
+      ],
+      "priority": "P2",
+      "automation_suitability": "HYBRID",
+      "oq_id": "OQ-auth-token-002"
+    },
+    {
+      "check_id": "CHK-005",
+      "dimension": "NEGATIVE",
+      "layer": "db",
+      "title": "Refresh thất bại do lỗi tạm thời (mạng, Shopify 5xx)",
+      "applicability": {
+        "role": "system",
+        "state": "token expiring còn hạn, lần refresh gặp lỗi tạm thời",
+        "environment": "documented",
+        "theme_or_device": null
+      },
+      "precondition": "Có quyền (hoặc Dev BE hỗ trợ) đọc/ghi các field token của shop trong dữ liệu backend Duos ở môi trường test và xem log request gửi tới Shopify Admin API của shop. Có cách giả lập lỗi mạng hoặc Shopify 5xx cho request refresh token của <shop-expiring> (Dev BE hỗ trợ).",
+      "steps": [
+        "Giả lập lỗi tạm thời cho request refresh token của shop.",
+        "Kích hoạt luồng refresh (job refresh hoặc luồng gọi Shopify).",
+        "Theo dõi số lần retry, `Re-auth Required At` và hộp thư merchant."
+      ],
+      "observation_point": "Số lần retry; `Re-auth Required At`; hộp thư merchant.",
+      "expected_result": "Chưa có căn cứ: ghi lại số lần retry, có gắn cờ `Re-auth Required At` hay gửi email reconnect không; không đánh giá pass/fail cho tới khi PO/Dev trả lời câu hỏi mở.",
+      "oracle": {
+        "kb_ids": [],
+        "oracle_strength": "NONE"
+      },
+      "status": "NEEDS_CONFIRMATION",
+      "open_question_draft": "Khi refresh token thất bại do lỗi tạm thời (mạng, Shopify 5xx), app retry mấy lần, và có gắn cờ `Re-auth Required At` hay gửi email reconnect không?",
+      "related_kb_ids": [
+        "KB-003",
+        "KB-005"
+      ],
+      "regression_watch_kb_ids": [],
+      "risk_refs": [
+        "RISK-dead-token-02"
+      ],
+      "priority": "P2",
+      "automation_suitability": "HYBRID",
+      "oq_id": "OQ-auth-token-005"
+    },
+    {
+      "check_id": "CHK-006",
+      "dimension": "STATE_DATA",
+      "layer": "portal",
+      "title": "Reconnect thành công và trạng thái cờ `Re-auth Required At`",
+      "applicability": {
+        "role": "merchant",
+        "state": "shop đang bị gắn `Re-auth Required At`",
+        "environment": "documented",
+        "theme_or_device": null
+      },
+      "precondition": "Có quyền (hoặc Dev BE hỗ trợ) đọc/ghi các field token của shop trong dữ liệu backend Duos ở môi trường test và xem log request gửi tới Shopify Admin API của shop. <shop-expiring> đang bị gắn `Re-auth Required At` (đã qua CHK-001).",
+      "steps": [
+        "Merchant thực hiện thao tác reconnect (theo hướng dẫn trong email reconnect hoặc mở lại app).",
+        "Sau khi reconnect, kiểm `Re-auth Required At` và các field token của shop.",
+        "Kích hoạt lại một luồng gọi Shopify cho shop."
+      ],
+      "observation_point": "Field `Re-auth Required At`; field token; log request Shopify sau reconnect.",
+      "expected_result": "Chưa có căn cứ: ghi lại thao tác reconnect đã dùng, giá trị `Re-auth Required At` và field token sau reconnect, luồng gọi Shopify có chạy lại không; không đánh giá pass/fail cho tới khi PO/Dev trả lời câu hỏi mở.",
+      "oracle": {
+        "kb_ids": [],
+        "oracle_strength": "NONE"
+      },
+      "status": "NEEDS_CONFIRMATION",
+      "open_question_draft": "Merchant reconnect cụ thể bằng thao tác nào, và reconnect thành công có tự clear `Re-auth Required At` để các luồng gọi Shopify chạy lại không?",
+      "related_kb_ids": [
+        "KB-006",
+        "KB-004"
+      ],
+      "regression_watch_kb_ids": [],
+      "risk_refs": [
+        "RISK-dead-token-03"
+      ],
+      "priority": "P1",
+      "automation_suitability": "HYBRID",
+      "oq_id": "OQ-auth-token-011"
+    },
+    {
+      "check_id": "CHK-007",
+      "dimension": "INTEGRATION",
+      "layer": "api",
+      "title": "Email reopen qua webhook `shop-update` khi shop mở lại mà token đã chết, gửi đúng 1 lần",
+      "applicability": {
+        "role": "system",
+        "state": "shop (store thường hoặc development store) chuyển từ frozen/cancelled/fraudulent/paused sang active, token đã chết",
+        "environment": "documented",
+        "theme_or_device": null
+      },
+      "precondition": "Có quyền (hoặc Dev BE hỗ trợ) đọc/ghi các field token của shop trong dữ liệu backend Duos ở môi trường test và xem log request gửi tới Shopify Admin API của shop. Có <shop-closed> (store thường) và <dev-store-closed> (development store) đang ở trạng thái đóng, token đã chết, app chưa uninstall; theo dõi được webhook `shop-update` và hộp thư merchant.",
+      "steps": [
+        "Đưa shop từ trạng thái đóng sang active để Shopify gửi webhook `shop-update`.",
+        "Kiểm hộp thư merchant.",
+        "Gửi lại webhook `shop-update` (hoặc chờ thêm một lần cập nhật shop) khi shop vẫn active và token vẫn chết; kiểm lại hộp thư.",
+        "Lặp lại với development store."
+      ],
+      "observation_point": "Hộp thư merchant sau mỗi webhook `shop-update`; log xử lý webhook.",
+      "expected_result": "Email reopen được trigger qua webhook `shop-update` khi shop chuyển từ trạng thái đóng sang active và token đã chết; email reopen được gửi đúng 1 lần; luồng áp dụng cả cho development store.",
+      "oracle": {
+        "kb_ids": [
+          "KB-009",
+          "KB-010",
+          "KB-011"
+        ],
+        "oracle_strength": "STRONG"
+      },
+      "status": "READY",
+      "open_question_draft": null,
+      "related_kb_ids": [],
+      "regression_watch_kb_ids": [],
+      "risk_refs": [
+        "RISK-dead-token-04"
+      ],
+      "priority": "P2",
+      "automation_suitability": "HYBRID"
+    },
+    {
+      "check_id": "CHK-008",
+      "dimension": "NEGATIVE",
+      "layer": "api",
+      "title": "Luồng email reopen bỏ qua shop đã uninstall hoặc vẫn đang đóng",
+      "applicability": {
+        "role": "system",
+        "state": "token đã chết; shop đã uninstall, hoặc shop vẫn ở trạng thái đóng",
+        "environment": "documented",
+        "theme_or_device": null
+      },
+      "precondition": "Có quyền (hoặc Dev BE hỗ trợ) đọc/ghi các field token của shop trong dữ liệu backend Duos ở môi trường test và xem log request gửi tới Shopify Admin API của shop. Có một shop đã uninstall app và một shop vẫn ở trạng thái đóng, cả hai có token đã chết.",
+      "steps": [
+        "Gửi webhook `shop-update` cho shop đã uninstall.",
+        "Gửi webhook `shop-update` cho shop vẫn ở trạng thái đóng (không chuyển sang active).",
+        "Kiểm hộp thư merchant của từng shop."
+      ],
+      "observation_point": "Hộp thư merchant; log xử lý webhook.",
+      "expected_result": "Không có email reopen nào được gửi cho shop đã uninstall và cho shop vẫn đang đóng.",
+      "oracle": {
+        "kb_ids": [
+          "KB-012"
+        ],
+        "oracle_strength": "STRONG"
+      },
+      "status": "READY",
+      "open_question_draft": null,
+      "related_kb_ids": [
+        "KB-044"
+      ],
+      "regression_watch_kb_ids": [],
+      "risk_refs": [
+        "RISK-dead-token-04"
+      ],
+      "priority": "P2",
+      "automation_suitability": "HYBRID"
+    },
+    {
+      "check_id": "CHK-009",
+      "dimension": "STATE_DATA",
+      "layer": "db",
+      "title": "Shop đóng dưới 90 ngày rồi mở lại: token vẫn sống, app không cần làm gì",
+      "applicability": {
+        "role": "system",
+        "state": "shop đóng dưới 90 ngày rồi chuyển lại active",
+        "environment": "documented",
+        "theme_or_device": null
+      },
+      "precondition": "Có quyền (hoặc Dev BE hỗ trợ) đọc/ghi các field token của shop trong dữ liệu backend Duos ở môi trường test và xem log request gửi tới Shopify Admin API của shop. <shop-expiring> đóng chưa tới 90 ngày và token còn sống.",
+      "steps": [
+        "Đưa shop từ trạng thái đóng sang active.",
+        "Kiểm hộp thư merchant, `Re-auth Required At` và kích hoạt một luồng gọi Shopify cho shop."
+      ],
+      "observation_point": "Hộp thư merchant; `Re-auth Required At`; kết quả luồng gọi Shopify.",
+      "expected_result": "Token vẫn còn sống; app không cần thực hiện thêm hành động nào khi shop mở lại (không có email reopen).",
+      "oracle": {
+        "kb_ids": [
+          "KB-013"
+        ],
+        "oracle_strength": "STRONG"
+      },
+      "status": "READY",
+      "open_question_draft": null,
+      "related_kb_ids": [
+        "KB-055"
+      ],
+      "regression_watch_kb_ids": [],
+      "risk_refs": [
+        "RISK-dead-token-04"
+      ],
+      "priority": "P2",
+      "automation_suitability": "HYBRID"
+    },
+    {
+      "check_id": "CHK-010",
+      "dimension": "INTEGRATION",
+      "layer": "api",
+      "title": "Token chết làm dừng các luồng gọi Shopify của các tính năng khác tới khi reconnect",
+      "applicability": {
+        "role": "system",
+        "state": "token của shop đã chết, chưa reconnect",
+        "environment": "documented",
+        "theme_or_device": null
+      },
+      "precondition": "Có quyền (hoặc Dev BE hỗ trợ) đọc/ghi các field token của shop trong dữ liệu backend Duos ở môi trường test và xem log request gửi tới Shopify Admin API của shop. <shop-expiring> có token đã chết (`Re-auth Required At` đã set).",
+      "steps": [
+        "Lần lượt kích hoạt: sync catalog, sync company/member, chuyển quote thành order/draft order, thao tác credit, Flow action, thao tác bulk.",
+        "Kiểm kết quả từng luồng và log request Shopify.",
+        "Reconnect shop rồi chạy lại từng luồng."
+      ],
+      "observation_point": "Kết quả từng luồng; log request Shopify trước và sau reconnect.",
+      "expected_result": "Chưa có căn cứ: ghi lại luồng nào dừng, luồng nào vẫn gọi Shopify, thông báo hiển thị (nếu có) và hành vi sau reconnect; không đánh giá pass/fail cho tới khi PO/Dev trả lời câu hỏi mở.",
+      "oracle": {
+        "kb_ids": [],
+        "oracle_strength": "NONE"
+      },
+      "status": "NEEDS_CONFIRMATION",
+      "open_question_draft": "Mọi call Shopify Admin API của Duos (sync catalog, company, order, quote → order, credit, Flow action, bulk) có đều đi qua lớp token, và khi token chết thì tất cả đều dừng tới khi merchant reconnect không? Merchant/buyer thấy gì ở từng luồng?",
+      "related_kb_ids": [
+        "KB-014",
+        "KB-015",
+        "KB-003"
+      ],
+      "regression_watch_kb_ids": [],
+      "risk_refs": [
+        "RISK-dead-token-01"
+      ],
+      "priority": "P1",
+      "automation_suitability": "NOT_SUITABLE",
+      "oq_id": "OQ-auth-token-012"
+    },
+    {
+      "check_id": "CHK-011",
+      "dimension": "NEGATIVE",
+      "layer": "db",
+      "title": "Nội dung và tần suất email reconnect",
+      "applicability": {
+        "role": "merchant",
+        "state": "token của shop đã chết, nhiều job/call liên tiếp phát hiện token chết",
+        "environment": "documented",
+        "theme_or_device": null
+      },
+      "precondition": "Có quyền (hoặc Dev BE hỗ trợ) đọc/ghi các field token của shop trong dữ liệu backend Duos ở môi trường test và xem log request gửi tới Shopify Admin API của shop. <shop-expiring> có token đã chết; hộp thư <email-merchant> theo dõi được.",
+      "steps": [
+        "Kích hoạt nhiều luồng gọi Shopify liên tiếp cho shop sau khi token chết.",
+        "Đếm số email reconnect nhận được; ghi lại tiêu đề, nội dung, người nhận, ngôn ngữ."
+      ],
+      "observation_point": "Hộp thư merchant.",
+      "expected_result": "Chưa có căn cứ: ghi lại số email reconnect, tiêu đề, nội dung, người nhận và ngôn ngữ; không đánh giá pass/fail cho tới khi PO/Dev trả lời câu hỏi mở.",
+      "oracle": {
+        "kb_ids": [],
+        "oracle_strength": "NONE"
+      },
+      "status": "NEEDS_CONFIRMATION",
+      "open_question_draft": "Ở luồng thường (không phải shop mở lại), email reconnect gửi một lần hay lặp lại mỗi khi job/call phát hiện token chết? Template cuối của email reconnect có tiêu đề, nội dung, người nhận và ngôn ngữ nào?",
+      "related_kb_ids": [
+        "KB-005",
+        "KB-016",
+        "KB-010"
+      ],
+      "regression_watch_kb_ids": [],
+      "risk_refs": [
+        "RISK-dead-token-05"
+      ],
+      "priority": "P2",
+      "automation_suitability": "HYBRID",
+      "oq_id": "OQ-auth-token-005"
+    },
+    {
+      "check_id": "CHK-012",
+      "dimension": "STATE_DATA",
+      "layer": "api",
+      "title": "Các tình huống token legacy chết và re-authorize không huỷ token legacy cũ",
+      "applicability": {
+        "role": "system",
+        "state": "shop dùng token legacy, trước 01/01/2027",
+        "environment": "documented",
+        "theme_or_device": null
+      },
+      "precondition": "Có quyền (hoặc Dev BE hỗ trợ) đọc/ghi các field token của shop trong dữ liệu backend Duos ở môi trường test và xem log request gửi tới Shopify Admin API của shop. <shop-legacy> đang cài app với token legacy; lưu lại token legacy hiện tại để gọi thử Shopify Admin API.",
+      "steps": [
+        "Merchant re-authorize app (không qua lệnh migrate).",
+        "Gọi thử Shopify Admin API bằng token legacy cũ.",
+        "Ghi nhận token legacy cũ còn dùng được hay không."
+      ],
+      "observation_point": "Phản hồi Shopify khi dùng token legacy cũ sau re-authorize.",
+      "expected_result": "Chưa có căn cứ: ghi lại token legacy cũ còn dùng được hay không sau re-authorize; không đánh giá pass/fail cho tới khi PO/Dev trả lời câu hỏi mở.",
+      "oracle": {
+        "kb_ids": [],
+        "oracle_strength": "NONE"
+      },
+      "status": "NEEDS_CONFIRMATION",
+      "open_question_draft": "Token legacy có đúng chỉ chết ở 3 tình huống (migrate thành công, shop uninstall, từ 01/01/2027), và re-authorize có thật không huỷ token legacy cũ không?",
+      "related_kb_ids": [
+        "KB-008",
+        "KB-002",
+        "KB-056"
+      ],
+      "regression_watch_kb_ids": [],
+      "risk_refs": [
+        "RISK-dead-token-02"
+      ],
+      "priority": "P2",
+      "automation_suitability": "HYBRID",
+      "oq_id": "OQ-auth-token-002"
+    }
+  ],
+  "coverage_by_feature_and_risk": [
+    {
+      "feature_id": "dead-token-detection-and-reconnect",
+      "risk_ref": "RISK-dead-token-01",
+      "risk_description": "Token chết không bị phát hiện/chặn đúng, hoặc làm dừng các luồng gọi Shopify mà không gắn cờ và báo merchant",
+      "covered_by_checks": [
+        "CHK-001",
+        "CHK-002",
+        "CHK-003",
+        "CHK-010"
+      ],
+      "kb_ids": [
+        "KB-001",
+        "KB-002",
+        "KB-003",
+        "KB-004",
+        "KB-005",
+        "KB-014",
+        "KB-015"
+      ],
+      "coverage_status": "PARTIAL"
+    },
+    {
+      "feature_id": "dead-token-detection-and-reconnect",
+      "risk_ref": "RISK-dead-token-02",
+      "risk_description": "Shop bị gắn cờ `Re-auth Required At` / nhận email reconnect ngoài ý muốn (401 đơn thuần, lỗi tạm thời, token chưa chết)",
+      "covered_by_checks": [
+        "CHK-003",
+        "CHK-004",
+        "CHK-005",
+        "CHK-012"
+      ],
+      "kb_ids": [
+        "KB-001",
+        "KB-002",
+        "KB-007",
+        "KB-008"
+      ],
+      "coverage_status": "PARTIAL"
+    },
+    {
+      "feature_id": "dead-token-detection-and-reconnect",
+      "risk_ref": "RISK-dead-token-03",
+      "risk_description": "Không thoát được trạng thái chờ reconnect sau khi merchant reconnect",
+      "covered_by_checks": [
+        "CHK-006"
+      ],
+      "kb_ids": [
+        "KB-006",
+        "KB-004"
+      ],
+      "coverage_status": "FLAGGED_NEEDS_CONFIRMATION"
+    },
+    {
+      "feature_id": "dead-token-detection-and-reconnect",
+      "risk_ref": "RISK-dead-token-04",
+      "risk_description": "Email reopen gửi sai đối tượng hoặc gửi lặp khi shop mở lại",
+      "covered_by_checks": [
+        "CHK-007",
+        "CHK-008",
+        "CHK-009"
+      ],
+      "kb_ids": [
+        "KB-009",
+        "KB-010",
+        "KB-011",
+        "KB-012",
+        "KB-013"
+      ],
+      "coverage_status": "COVERED"
+    },
+    {
+      "feature_id": "dead-token-detection-and-reconnect",
+      "risk_ref": "RISK-dead-token-05",
+      "risk_description": "Email reconnect lặp hoặc sai nội dung/người nhận",
+      "covered_by_checks": [
+        "CHK-011"
+      ],
+      "kb_ids": [
+        "KB-005",
+        "KB-016"
+      ],
+      "coverage_status": "FLAGGED_NEEDS_CONFIRMATION"
+    },
+    {
+      "feature_id": "dead-token-detection-and-reconnect",
+      "risk_ref": "RISK-auth-token-bug-36",
+      "risk_description": "BUG-36 (trạng thái chưa rõ) gắn với test case của nhóm Auth & Token lifecycle, chưa biết chạm hành vi nào",
+      "covered_by_checks": [
+        "CHK-001"
+      ],
+      "kb_ids": [
+        "KB-057"
+      ],
+      "coverage_status": "REGRESSION_WATCH"
+    }
+  ],
+  "excluded_dimensions": [
+    {
+      "dimension": "PERMISSION",
+      "reason": "Phát hiện token chết, gắn cờ và gửi email là hành vi do hệ thống (job/luồng gọi Shopify) thực hiện, không có thao tác theo role; câu hỏi actor/role của token lifecycle đã gom ở câu hỏi mở cấp object (ma trận quyền), check quyền admin panel nằm ở tính năng Admin token and scopes."
+    },
+    {
+      "dimension": "REGRESSION",
+      "reason": "Bản bootstrap đầu tiên; chưa có thay đổi hành vi từ phân tích diff. Gợi ý regression \"sau thay đổi auth / token / thư viện HTTP\" của checklist QA đã được phủ bằng CHK-001, CHK-003, CHK-010, CHK-011."
+    }
+  ],
+  "last_updated": {
+    "date": "2026-10-09",
+    "ccr_ref": "bootstrap"
+  }
+}

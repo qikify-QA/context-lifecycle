@@ -1,0 +1,667 @@
+{
+  "schema_version": "1.0",
+  "artifact_type": "RegressionChecklistCandidate",
+  "artifact_id": "RCCAND-member-invite-and-edit-CTX-20261009-01",
+  "workflow_id": "CTX-20261009-01",
+  "producer": "qa-checklist-builder",
+  "source_refs": [
+    "candidate/feature-profiles/member-invite-and-edit.json",
+    "candidate/product-kb/member-invite-and-edit.json",
+    "candidate/product-kb/member-list-view-access.json",
+    "input/orchestrator-directives.json",
+    "input/scope-plan.json",
+    "input/profile-checklist-brief.md",
+    "intermediate/doc/DOC-21.json"
+  ],
+  "upstream_artifact_ids": [
+    "ART-FEATURE-PROFILE-member-invite-and-edit-CTX-20261009-01",
+    "PKBC-CTX-20261009-01-company-member-member-invite-and-edit",
+    "PKBC-CTX-20261009-01-company-member-member-list-view-access"
+  ],
+  "status": "PARTIAL",
+  "confidence": "MEDIUM",
+  "observations": [
+    "12 check; theo oracle_strength {'NONE': 9, 'STRONG': 3}; theo status {'NEEDS_CONFIRMATION': 9, 'READY': 3}; theo dimension {'CORE': 3, 'NEGATIVE': 5, 'BOUNDARY': 2, 'INTEGRATION': 1, 'PERMISSION': 1}.",
+    "oracle_strength tính bằng script theo luật orchestrator: STRONG khi mọi kb_id là CONFIRMED_EXPECTED ngoài conflict_group; có OBSERVED_CURRENT (không KNOWN_DEFECT) thì BASELINE; có INFERRED, item thuộc conflict_group hoặc không có kb_id thì NONE + NEEDS_CONFIRMATION. Object này không có item KNOWN_DEFECT nên regression_watch_kb_ids rỗng.",
+    "related_kb_ids là ngữ cảnh truy vết của check, KHÔNG phải oracle.",
+    "Checklist regression QA của Duos chỉ được dùng làm gợi ý risk / độ phủ, không dùng làm oracle.",
+    "Customer Account (surface phía buyer) được xếp vào layer storefront; applicability.theme_or_device ghi rõ Customer Account extension.",
+    "Chỉ chặn trùng email trong location (Dev FE 11/09/2026, Jira DUOS-414) có authority; luồng chính invite / sửa / xoá chỉ có tóm tắt mục đích của QA nên các check CORE là NEEDS_CONFIRMATION.",
+    "Email mời member là thông báo do object Notifications sở hữu; không có check gửi email ở đây."
+  ],
+  "assumptions": [
+    "Placeholder có cấu trúc (<store-default>, <store-view-only>, <buyer-admin>, <location-a>, <email-existing>…) thay cho store / tài khoản / email thật; QA chọn dữ liệu thật lúc chạy.",
+    "Route đầy đủ của invite, PUT update và DELETE member chưa có trong KB; check API dùng tên thao tác, QA lấy route thực từ request của trang Company member lúc chạy."
+  ],
+  "unknowns": [
+    "Sau khi buyer Admin invite thành công, member mới xuất hiện ở trạng thái nào trong bảng, nhận role gì (merchant có default role riêng theo Jira DUOS-374 không), contact / role assignment trên Shopify được tạo thế nào và email mời được gửi khi nào?",
+    "Khi buyer Admin sửa thông tin và đổi role member ở Customer Account, những field nào sửa được và thay đổi được đồng bộ sang contact / role Shopify thế nào? (Đường đồng bộ role dùng chung do object Roles & permissions sở hữu.)",
+    "Xoá member ở Customer Account gỡ những gì (role assignment tại location, contact khỏi company, hay xoá cả customer trên Shopify), có hộp xác nhận không và hoàn tác được không?",
+    "Kiểm tra trùng email khi invite / sửa member trong location có chuẩn hoá hoa/thường và trim khoảng trắng trước khi so không — biến thể viết hoa hoặc có khoảng trắng của email đã có trong location có bị chặn 422 không?",
+    "Chặn 14 prefix email generic khi invite member (Jira DUOS-410) có phải hành vi đã deploy và được PO/Dev xác nhận không; khớp chính xác local-part hay \"bắt đầu bằng\" prefix; có áp cho form edit, admin extension hay theo config merchant không?",
+    "Khi invite member, những field nào bắt buộc (Jira DUOS-335/343), job title có bắt buộc không, phone có bắt buộc không (Jira DUOS-432) cùng định dạng và thông báo lỗi; yêu cầu áp cho mọi shop hay chỉ shop yêu cầu, và cho form edit / admin extension không?",
+    "Khi invite member bằng email đã tồn tại trên Shopify nhưng chưa thuộc location hiện tại (ở location khác, company khác hoặc là khách DTC), hệ thống có ghi đè record customer không, và kết quả mong đợi cho từng trường hợp là gì?",
+    "Ngoài buyer Admin, role nào (member mặc định, custom role) có `write_members` để invite, sửa, xoá và đổi role member ở trang Company member, và custom role có `write_members` có làm được cả 4 thao tác không?",
+    "Ở trang Company member, xoá hoặc đổi role của Admin cuối cùng trong location có bị chặn không, và thông báo là gì? (Quy tắc \"mỗi location ≥ 1 Admin\" thuộc nhóm câu hỏi do object Roles & permissions sở hữu.)"
+  ],
+  "conflicts": [],
+  "blocking_issues": [],
+  "payload": {
+    "checklists": [
+      {
+        "feature_id": "member-invite-and-edit",
+        "feature_key": "member-invite-and-edit",
+        "checklist_version": "v1",
+        "checks": [
+          {
+            "check_id": "CHK-001",
+            "dimension": "CORE",
+            "layer": "storefront",
+            "title": "Buyer Admin invite member mới với email chưa có trên shop",
+            "applicability": {
+              "role": "buyer-admin",
+              "state": "email mời chưa tồn tại trên shop",
+              "environment": "documented",
+              "theme_or_device": "Customer Account extension, block Company member đã activate"
+            },
+            "precondition": "Shop <store-default> có extension Users & permissions Active, block Company member đã activate; <buyer-admin> là Admin của <location-a>. <email-new> chưa là customer nào của shop.",
+            "steps": [
+              "Đăng nhập Customer Account bằng <buyer-admin>, mở trang Company member.",
+              "Bấm Invite, nhập thông tin member với <email-new>, chọn role, lưu.",
+              "Tải lại trang; kiểm tra contact mới của <location-a> trên Shopify admin."
+            ],
+            "observation_point": "Bảng member sau khi lưu và sau khi tải lại; contact / role assignment trên Shopify.",
+            "expected_result": "Chưa có kết quả mong đợi đã chốt — ghi lại hành vi quan sát được và chờ PO/Dev trả lời câu hỏi mở; không kết luận pass/fail.",
+            "oracle": {
+              "kb_ids": [
+                "KB-020"
+              ],
+              "oracle_strength": "NONE"
+            },
+            "status": "NEEDS_CONFIRMATION",
+            "open_question_draft": "Sau khi buyer Admin invite thành công, member mới xuất hiện ở trạng thái nào trong bảng, nhận role gì (merchant có default role riêng theo Jira DUOS-374 không), contact / role assignment trên Shopify được tạo thế nào và email mời được gửi khi nào?",
+            "related_kb_ids": [],
+            "regression_watch_kb_ids": [],
+            "risk_refs": [
+              "RISK-mie-01"
+            ],
+            "priority": "P2",
+            "act_ids": [],
+            "evidence_refs": [],
+            "automation_suitability": "UNKNOWN"
+          },
+          {
+            "check_id": "CHK-002",
+            "dimension": "CORE",
+            "layer": "storefront",
+            "title": "Buyer Admin sửa thông tin và đổi role member",
+            "applicability": {
+              "role": "buyer-admin",
+              "state": "location có member khác Admin",
+              "environment": "documented",
+              "theme_or_device": "Customer Account extension, block Company member đã activate"
+            },
+            "precondition": "Shop <store-default> có extension Users & permissions Active, block Company member đã activate; <buyer-admin> là Admin của <location-a>. <member-target> là member của <location-a>.",
+            "steps": [
+              "Mở trang Company member bằng <buyer-admin>, chọn edit <member-target>.",
+              "Sửa một field thông tin và đổi role, lưu.",
+              "Tải lại trang; kiểm tra contact và role của <member-target> trên Shopify admin."
+            ],
+            "observation_point": "Dữ liệu <member-target> trên bảng sau tải lại và trên Shopify.",
+            "expected_result": "Chưa có kết quả mong đợi đã chốt — ghi lại hành vi quan sát được và chờ PO/Dev trả lời câu hỏi mở; không kết luận pass/fail.",
+            "oracle": {
+              "kb_ids": [
+                "KB-020"
+              ],
+              "oracle_strength": "NONE"
+            },
+            "status": "NEEDS_CONFIRMATION",
+            "open_question_draft": "Khi buyer Admin sửa thông tin và đổi role member ở Customer Account, những field nào sửa được và thay đổi được đồng bộ sang contact / role Shopify thế nào? (Đường đồng bộ role dùng chung do object Roles & permissions sở hữu.)",
+            "related_kb_ids": [],
+            "regression_watch_kb_ids": [],
+            "risk_refs": [
+              "RISK-mie-01"
+            ],
+            "priority": "P2",
+            "act_ids": [],
+            "evidence_refs": [],
+            "automation_suitability": "UNKNOWN"
+          },
+          {
+            "check_id": "CHK-003",
+            "dimension": "CORE",
+            "layer": "storefront",
+            "title": "Buyer Admin xoá member khỏi location",
+            "applicability": {
+              "role": "buyer-admin",
+              "state": "location có member khác Admin",
+              "environment": "documented",
+              "theme_or_device": "Customer Account extension, block Company member đã activate"
+            },
+            "precondition": "Shop <store-default> có extension Users & permissions Active, block Company member đã activate; <buyer-admin> là Admin của <location-a>. <member-target> là member (không phải Admin cuối cùng) của <location-a>.",
+            "steps": [
+              "Mở trang Company member bằng <buyer-admin>, chọn delete <member-target> và xác nhận.",
+              "Tải lại trang; kiểm tra contact / role assignment của <member-target> trên Shopify admin."
+            ],
+            "observation_point": "Bảng member sau tải lại; trạng thái customer / contact của <member-target> trên Shopify.",
+            "expected_result": "Chưa có kết quả mong đợi đã chốt — ghi lại hành vi quan sát được và chờ PO/Dev trả lời câu hỏi mở; không kết luận pass/fail.",
+            "oracle": {
+              "kb_ids": [
+                "KB-020"
+              ],
+              "oracle_strength": "NONE"
+            },
+            "status": "NEEDS_CONFIRMATION",
+            "open_question_draft": "Xoá member ở Customer Account gỡ những gì (role assignment tại location, contact khỏi company, hay xoá cả customer trên Shopify), có hộp xác nhận không và hoàn tác được không?",
+            "related_kb_ids": [],
+            "regression_watch_kb_ids": [],
+            "risk_refs": [
+              "RISK-mie-01"
+            ],
+            "priority": "P1",
+            "act_ids": [],
+            "evidence_refs": [],
+            "automation_suitability": "UNKNOWN"
+          },
+          {
+            "check_id": "CHK-004",
+            "dimension": "NEGATIVE",
+            "layer": "api",
+            "title": "Invite hoặc sửa member sang email đã có role assignment tại location hiện tại bị chặn với 422",
+            "applicability": {
+              "role": "buyer-admin",
+              "state": "email đã có role assignment tại location hiện tại",
+              "environment": "documented",
+              "theme_or_device": null
+            },
+            "precondition": "Shop <store-default> có extension Users & permissions Active, block Company member đã activate; <buyer-admin> là Admin của <location-a>. <email-existing> đang là email của <member-existing> tại <location-a>; <member-other> là một member khác của <location-a>.",
+            "steps": [
+              "Gọi request invite member tại <location-a> với <email-existing>.",
+              "Gọi PUT update <member-other> đổi email thành <email-existing> (gửi `shopify_contact_role_assignment_gid` của <member-other>).",
+              "Kiểm tra danh sách member của <location-a> sau 2 request."
+            ],
+            "observation_point": "HTTP status của 2 request và danh sách member sau đó.",
+            "expected_result": "Cả hai request bị chặn hẳn với HTTP 422 (không chỉ cảnh báo); không có member mới, <member-other> không đổi email.",
+            "oracle": {
+              "kb_ids": [
+                "KB-021"
+              ],
+              "oracle_strength": "STRONG"
+            },
+            "status": "READY",
+            "open_question_draft": null,
+            "related_kb_ids": [],
+            "regression_watch_kb_ids": [],
+            "risk_refs": [
+              "RISK-mie-02"
+            ],
+            "priority": "P2",
+            "act_ids": [],
+            "evidence_refs": [],
+            "automation_suitability": "SUITABLE"
+          },
+          {
+            "check_id": "CHK-005",
+            "dimension": "NEGATIVE",
+            "layer": "storefront",
+            "title": "Lỗi inline khi invite / sửa member trùng email trong location",
+            "applicability": {
+              "role": "buyer-admin",
+              "state": "email đã có trong location hiện tại",
+              "environment": "documented",
+              "theme_or_device": "Customer Account extension, block Company member đã activate"
+            },
+            "precondition": "Shop <store-default> có extension Users & permissions Active, block Company member đã activate; <buyer-admin> là Admin của <location-a>. <email-existing> đang là email của một member tại <location-a>.",
+            "steps": [
+              "Mở modal Invite, nhập <email-existing> và các field còn lại, lưu.",
+              "Mở modal edit một member khác, đổi email thành <email-existing>, lưu."
+            ],
+            "observation_point": "Thông báo dưới field Email và trạng thái modal sau khi lưu.",
+            "expected_result": "Lỗi nguyên văn \"A member with this email already exists in this location.\" hiện inline dưới field Email; modal vẫn mở; không có thay đổi nào được lưu.",
+            "oracle": {
+              "kb_ids": [
+                "KB-021",
+                "KB-022"
+              ],
+              "oracle_strength": "STRONG"
+            },
+            "status": "READY",
+            "open_question_draft": null,
+            "related_kb_ids": [],
+            "regression_watch_kb_ids": [],
+            "risk_refs": [
+              "RISK-mie-02"
+            ],
+            "priority": "P2",
+            "act_ids": [],
+            "evidence_refs": [],
+            "automation_suitability": "HYBRID"
+          },
+          {
+            "check_id": "CHK-006",
+            "dimension": "BOUNDARY",
+            "layer": "storefront",
+            "title": "Sửa chính member đang giữ email vẫn lưu được",
+            "applicability": {
+              "role": "buyer-admin",
+              "state": "sửa member mà không đổi email",
+              "environment": "documented",
+              "theme_or_device": "Customer Account extension, block Company member đã activate"
+            },
+            "precondition": "Shop <store-default> có extension Users & permissions Active, block Company member đã activate; <buyer-admin> là Admin của <location-a>. <member-existing> giữ <email-existing> tại <location-a>.",
+            "steps": [
+              "Mở modal edit <member-existing>, giữ nguyên email, sửa một field khác, lưu.",
+              "Tải lại trang."
+            ],
+            "observation_point": "Kết quả lưu và dữ liệu <member-existing> sau tải lại.",
+            "expected_result": "Lưu thành công, không có lỗi trùng email; thay đổi còn sau khi tải lại.",
+            "oracle": {
+              "kb_ids": [
+                "KB-021"
+              ],
+              "oracle_strength": "STRONG"
+            },
+            "status": "READY",
+            "open_question_draft": null,
+            "related_kb_ids": [],
+            "regression_watch_kb_ids": [],
+            "risk_refs": [
+              "RISK-mie-02"
+            ],
+            "priority": "P2",
+            "act_ids": [],
+            "evidence_refs": [],
+            "automation_suitability": "HYBRID"
+          },
+          {
+            "check_id": "CHK-007",
+            "dimension": "BOUNDARY",
+            "layer": "api",
+            "title": "Trùng email khác hoa / thường hoặc có khoảng trắng đầu cuối",
+            "applicability": {
+              "role": "buyer-admin",
+              "state": "email đã có trong location, nhập biến thể hoa/thường hoặc có khoảng trắng",
+              "environment": "documented",
+              "theme_or_device": null
+            },
+            "precondition": "Shop <store-default> có extension Users & permissions Active, block Company member đã activate; <buyer-admin> là Admin của <location-a>. <email-existing> đang là email của một member tại <location-a>.",
+            "steps": [
+              "Invite với biến thể viết hoa của <email-existing>.",
+              "Invite với <email-existing> có khoảng trắng đầu / cuối.",
+              "Kiểm tra danh sách member."
+            ],
+            "observation_point": "HTTP status / thông báo và danh sách member sau mỗi lần.",
+            "expected_result": "Chưa có kết quả mong đợi đã chốt — ghi lại hành vi quan sát được và chờ PO/Dev trả lời câu hỏi mở; không kết luận pass/fail.",
+            "oracle": {
+              "kb_ids": [],
+              "oracle_strength": "NONE"
+            },
+            "status": "NEEDS_CONFIRMATION",
+            "open_question_draft": "Kiểm tra trùng email khi invite / sửa member trong location có chuẩn hoá hoa/thường và trim khoảng trắng trước khi so không — biến thể viết hoa hoặc có khoảng trắng của email đã có trong location có bị chặn 422 không?",
+            "related_kb_ids": [
+              "KB-021",
+              "KB-022"
+            ],
+            "regression_watch_kb_ids": [],
+            "risk_refs": [
+              "RISK-mie-02"
+            ],
+            "priority": "P2",
+            "act_ids": [],
+            "evidence_refs": [],
+            "automation_suitability": "UNKNOWN"
+          },
+          {
+            "check_id": "CHK-008",
+            "dimension": "NEGATIVE",
+            "layer": "storefront",
+            "title": "Chặn email generic khi invite member",
+            "applicability": {
+              "role": "buyer-admin",
+              "state": "invite member mới",
+              "environment": "documented",
+              "theme_or_device": "Customer Account extension, block Company member đã activate"
+            },
+            "precondition": "Shop <store-default> có extension Users & permissions Active, block Company member đã activate; <buyer-admin> là Admin của <location-a>.",
+            "steps": [
+              "Mở modal Invite, lần lượt nhập email có local-part thuộc 14 prefix generic (vd `info@<domain>`, `SALES@<domain>`), lưu.",
+              "Thử biến thể bắt đầu bằng prefix (vd `infox@<domain>`).",
+              "Lặp lại với form edit member và với Admin UI extension (nếu có form tương ứng)."
+            ],
+            "observation_point": "Thông báo khi lưu và việc member có được tạo / sửa không.",
+            "expected_result": "Chưa có kết quả mong đợi đã chốt — ghi lại hành vi quan sát được và chờ PO/Dev trả lời câu hỏi mở; không kết luận pass/fail.",
+            "oracle": {
+              "kb_ids": [
+                "KB-023"
+              ],
+              "oracle_strength": "NONE"
+            },
+            "status": "NEEDS_CONFIRMATION",
+            "open_question_draft": "Chặn 14 prefix email generic khi invite member (Jira DUOS-410) có phải hành vi đã deploy và được PO/Dev xác nhận không; khớp chính xác local-part hay \"bắt đầu bằng\" prefix; có áp cho form edit, admin extension hay theo config merchant không?",
+            "related_kb_ids": [],
+            "regression_watch_kb_ids": [],
+            "risk_refs": [
+              "RISK-mie-03"
+            ],
+            "priority": "P2",
+            "act_ids": [],
+            "evidence_refs": [],
+            "automation_suitability": "UNKNOWN"
+          },
+          {
+            "check_id": "CHK-009",
+            "dimension": "NEGATIVE",
+            "layer": "storefront",
+            "title": "Bỏ trống field bắt buộc (gồm job title, phone) khi invite member",
+            "applicability": {
+              "role": "buyer-admin",
+              "state": "invite member mới",
+              "environment": "documented",
+              "theme_or_device": "Customer Account extension, block Company member đã activate"
+            },
+            "precondition": "Shop <store-default> có extension Users & permissions Active, block Company member đã activate; <buyer-admin> là Admin của <location-a>.",
+            "steps": [
+              "Mở modal Invite, lần lượt bỏ trống từng field (gồm job title và phone), lưu.",
+              "Nhập phone sai định dạng, lưu."
+            ],
+            "observation_point": "Thông báo lỗi theo field và việc member có được tạo không.",
+            "expected_result": "Chưa có kết quả mong đợi đã chốt — ghi lại hành vi quan sát được và chờ PO/Dev trả lời câu hỏi mở; không kết luận pass/fail.",
+            "oracle": {
+              "kb_ids": [
+                "KB-024",
+                "KB-025"
+              ],
+              "oracle_strength": "NONE"
+            },
+            "status": "NEEDS_CONFIRMATION",
+            "open_question_draft": "Khi invite member, những field nào bắt buộc (Jira DUOS-335/343), job title có bắt buộc không, phone có bắt buộc không (Jira DUOS-432) cùng định dạng và thông báo lỗi; yêu cầu áp cho mọi shop hay chỉ shop yêu cầu, và cho form edit / admin extension không?",
+            "related_kb_ids": [],
+            "regression_watch_kb_ids": [],
+            "risk_refs": [
+              "RISK-mie-03"
+            ],
+            "priority": "P2",
+            "act_ids": [],
+            "evidence_refs": [],
+            "automation_suitability": "UNKNOWN"
+          },
+          {
+            "check_id": "CHK-010",
+            "dimension": "INTEGRATION",
+            "layer": "api",
+            "title": "Invite email đã tồn tại trên Shopify nhưng ngoài location hiện tại",
+            "applicability": {
+              "role": "buyer-admin",
+              "state": "email thuộc location khác / company khác / khách DTC",
+              "environment": "documented",
+              "theme_or_device": null
+            },
+            "precondition": "Shop <store-default> có extension Users & permissions Active, block Company member đã activate; <buyer-admin> là Admin của <location-a>. Ba email: <email-other-location> (member của location khác cùng company), <email-other-company> (member company khác), <email-dtc> (khách DTC); ghi lại record customer của cả ba trên Shopify trước khi test.",
+            "steps": [
+              "Lần lượt invite từng email vào <location-a>.",
+              "So sánh record customer (tên, phone, company, role assignment) trên Shopify trước và sau."
+            ],
+            "observation_point": "Kết quả invite và record customer trên Shopify trước / sau.",
+            "expected_result": "Chưa có kết quả mong đợi đã chốt — ghi lại hành vi quan sát được và chờ PO/Dev trả lời câu hỏi mở; không kết luận pass/fail.",
+            "oracle": {
+              "kb_ids": [],
+              "oracle_strength": "NONE"
+            },
+            "status": "NEEDS_CONFIRMATION",
+            "open_question_draft": "Khi invite member bằng email đã tồn tại trên Shopify nhưng chưa thuộc location hiện tại (ở location khác, company khác hoặc là khách DTC), hệ thống có ghi đè record customer không, và kết quả mong đợi cho từng trường hợp là gì?",
+            "related_kb_ids": [
+              "KB-021"
+            ],
+            "regression_watch_kb_ids": [],
+            "risk_refs": [
+              "RISK-mie-04"
+            ],
+            "priority": "P1",
+            "act_ids": [],
+            "evidence_refs": [],
+            "automation_suitability": "UNKNOWN"
+          },
+          {
+            "check_id": "CHK-011",
+            "dimension": "PERMISSION",
+            "layer": "storefront",
+            "title": "Role ngoài Admin thực hiện invite / sửa / xoá / đổi role member",
+            "applicability": {
+              "role": "buyer member thường / custom role có write_members",
+              "state": "shop không bật cờ view-only",
+              "environment": "documented",
+              "theme_or_device": "Customer Account extension, block Company member đã activate"
+            },
+            "precondition": "Shop <store-default>; có tài khoản member thường và tài khoản custom role có `write_members` tại <location-a>.",
+            "steps": [
+              "Lần lượt đăng nhập bằng từng tài khoản, mở trang Company member.",
+              "Thử Invite, edit, delete và đổi role một member."
+            ],
+            "observation_point": "Thao tác hiển thị và kết quả của từng thao tác.",
+            "expected_result": "Chưa có kết quả mong đợi đã chốt — ghi lại hành vi quan sát được và chờ PO/Dev trả lời câu hỏi mở; không kết luận pass/fail.",
+            "oracle": {
+              "kb_ids": [],
+              "oracle_strength": "NONE"
+            },
+            "status": "NEEDS_CONFIRMATION",
+            "open_question_draft": "Ngoài buyer Admin, role nào (member mặc định, custom role) có `write_members` để invite, sửa, xoá và đổi role member ở trang Company member, và custom role có `write_members` có làm được cả 4 thao tác không?",
+            "related_kb_ids": [
+              "KB-020",
+              "KB-010",
+              "KB-008"
+            ],
+            "regression_watch_kb_ids": [],
+            "risk_refs": [
+              "RISK-mie-05"
+            ],
+            "priority": "P1",
+            "act_ids": [],
+            "evidence_refs": [],
+            "automation_suitability": "UNKNOWN"
+          },
+          {
+            "check_id": "CHK-012",
+            "dimension": "NEGATIVE",
+            "layer": "storefront",
+            "title": "Xoá hoặc hạ role Admin cuối cùng của location",
+            "applicability": {
+              "role": "buyer-admin",
+              "state": "location chỉ còn 1 Admin",
+              "environment": "documented",
+              "theme_or_device": "Customer Account extension, block Company member đã activate"
+            },
+            "precondition": "Shop <store-default>; <location-a> chỉ có một Admin là <buyer-admin> và một member khác có thể bị thao tác.",
+            "steps": [
+              "Đăng nhập bằng <buyer-admin>, thử đổi role của chính Admin cuối cùng sang role khác.",
+              "Thử xoá Admin cuối cùng (nếu UI cho phép thao tác trên chính mình hoặc qua Admin khác vừa bị hạ)."
+            ],
+            "observation_point": "Kết quả thao tác và số Admin còn lại của <location-a>.",
+            "expected_result": "Chưa có kết quả mong đợi đã chốt — ghi lại hành vi quan sát được và chờ PO/Dev trả lời câu hỏi mở; không kết luận pass/fail.",
+            "oracle": {
+              "kb_ids": [],
+              "oracle_strength": "NONE"
+            },
+            "status": "NEEDS_CONFIRMATION",
+            "open_question_draft": "Ở trang Company member, xoá hoặc đổi role của Admin cuối cùng trong location có bị chặn không, và thông báo là gì? (Quy tắc \"mỗi location ≥ 1 Admin\" thuộc nhóm câu hỏi do object Roles & permissions sở hữu.)",
+            "related_kb_ids": [
+              "KB-020"
+            ],
+            "regression_watch_kb_ids": [],
+            "risk_refs": [
+              "RISK-mie-05"
+            ],
+            "priority": "P1",
+            "act_ids": [],
+            "evidence_refs": [],
+            "automation_suitability": "UNKNOWN"
+          }
+        ]
+      }
+    ],
+    "coverage_by_feature_and_risk": [
+      {
+        "feature_id": "member-invite-and-edit",
+        "risk_ref": "RISK-mie-01",
+        "risk_description": "Invite / sửa / xoá member ở Customer Account không hoạt động đúng (luồng chính chưa có rule chốt)",
+        "covered_by_checks": [
+          "CHK-001",
+          "CHK-002",
+          "CHK-003"
+        ],
+        "kb_ids": [
+          "KB-020"
+        ],
+        "coverage_status": "FLAGGED_NEEDS_CONFIRMATION"
+      },
+      {
+        "feature_id": "member-invite-and-edit",
+        "risk_ref": "RISK-mie-02",
+        "risk_description": "Trùng email trong location lọt qua chặn 422, hoặc chặn nhầm khi sửa chính member giữ email",
+        "covered_by_checks": [
+          "CHK-004",
+          "CHK-005",
+          "CHK-006",
+          "CHK-007"
+        ],
+        "kb_ids": [
+          "KB-021",
+          "KB-022"
+        ],
+        "coverage_status": "PARTIAL"
+      },
+      {
+        "feature_id": "member-invite-and-edit",
+        "risk_ref": "RISK-mie-03",
+        "risk_description": "Validation khi invite (email generic, field bắt buộc, phone) chưa chốt phạm vi",
+        "covered_by_checks": [
+          "CHK-008",
+          "CHK-009"
+        ],
+        "kb_ids": [
+          "KB-023",
+          "KB-024",
+          "KB-025"
+        ],
+        "coverage_status": "FLAGGED_NEEDS_CONFIRMATION"
+      },
+      {
+        "feature_id": "member-invite-and-edit",
+        "risk_ref": "RISK-mie-04",
+        "risk_description": "Invite email đã tồn tại trên Shopify ở location / company khác hoặc khách DTC ghi đè record customer",
+        "covered_by_checks": [
+          "CHK-010"
+        ],
+        "kb_ids": [
+          "KB-021"
+        ],
+        "coverage_status": "FLAGGED_NEEDS_CONFIRMATION"
+      },
+      {
+        "feature_id": "member-invite-and-edit",
+        "risk_ref": "RISK-mie-05",
+        "risk_description": "Role ngoài Admin thao tác ghi member; xoá / hạ role Admin cuối cùng của location",
+        "covered_by_checks": [
+          "CHK-011",
+          "CHK-012"
+        ],
+        "kb_ids": [
+          "KB-008",
+          "KB-010",
+          "KB-020"
+        ],
+        "coverage_status": "FLAGGED_NEEDS_CONFIRMATION"
+      }
+    ],
+    "kb_items_without_dedicated_check": [],
+    "checks_needing_confirmation": [
+      {
+        "check_id": "CHK-001",
+        "open_question_draft": "Sau khi buyer Admin invite thành công, member mới xuất hiện ở trạng thái nào trong bảng, nhận role gì (merchant có default role riêng theo Jira DUOS-374 không), contact / role assignment trên Shopify được tạo thế nào và email mời được gửi khi nào?",
+        "reason": "Luồng invite chỉ có câu tóm tắt mục đích của QA; kết quả của luồng chính chưa được mô tả và chưa quan sát trên staging."
+      },
+      {
+        "check_id": "CHK-002",
+        "open_question_draft": "Khi buyer Admin sửa thông tin và đổi role member ở Customer Account, những field nào sửa được và thay đổi được đồng bộ sang contact / role Shopify thế nào? (Đường đồng bộ role dùng chung do object Roles & permissions sở hữu.)",
+        "reason": "Chỉ có câu tóm tắt mục đích của QA; chưa có rule PO/Dev cho kết quả sửa / đổi role ở Customer Account."
+      },
+      {
+        "check_id": "CHK-003",
+        "open_question_draft": "Xoá member ở Customer Account gỡ những gì (role assignment tại location, contact khỏi company, hay xoá cả customer trên Shopify), có hộp xác nhận không và hoàn tác được không?",
+        "reason": "Hành vi xoá chỉ có câu tóm tắt mục đích của QA; phạm vi dữ liệu bị xoá chưa được mô tả."
+      },
+      {
+        "check_id": "CHK-007",
+        "open_question_draft": "Kiểm tra trùng email khi invite / sửa member trong location có chuẩn hoá hoa/thường và trim khoảng trắng trước khi so không — biến thể viết hoa hoặc có khoảng trắng của email đã có trong location có bị chặn 422 không?",
+        "reason": "Rule chặn trùng email không nói về chuẩn hoá; đây là khoảng trống phân tích của QA chưa có PO/Dev trả lời."
+      },
+      {
+        "check_id": "CHK-008",
+        "open_question_draft": "Chặn 14 prefix email generic khi invite member (Jira DUOS-410) có phải hành vi đã deploy và được PO/Dev xác nhận không; khớp chính xác local-part hay \"bắt đầu bằng\" prefix; có áp cho form edit, admin extension hay theo config merchant không?",
+        "reason": "Rule chỉ có nguồn ticket Jira và đang draft; boundary và phạm vi áp dụng chưa chốt."
+      },
+      {
+        "check_id": "CHK-009",
+        "open_question_draft": "Khi invite member, những field nào bắt buộc (Jira DUOS-335/343), job title có bắt buộc không, phone có bắt buộc không (Jira DUOS-432) cùng định dạng và thông báo lỗi; yêu cầu áp cho mọi shop hay chỉ shop yêu cầu, và cho form edit / admin extension không?",
+        "reason": "Ticket không liệt kê field bắt buộc; sub-task phone đang To Do; chưa có PO/Dev xác nhận."
+      },
+      {
+        "check_id": "CHK-010",
+        "open_question_draft": "Khi invite member bằng email đã tồn tại trên Shopify nhưng chưa thuộc location hiện tại (ở location khác, company khác hoặc là khách DTC), hệ thống có ghi đè record customer không, và kết quả mong đợi cho từng trường hợp là gì?",
+        "reason": "Chưa có rule; tài liệu chỉ nêu khoảng trống và rủi ro ghi đè dữ liệu customer."
+      },
+      {
+        "check_id": "CHK-011",
+        "open_question_draft": "Ngoài buyer Admin, role nào (member mặc định, custom role) có `write_members` để invite, sửa, xoá và đổi role member ở trang Company member, và custom role có `write_members` có làm được cả 4 thao tác không?",
+        "reason": "Chỉ có tóm tắt QA nói buyer Admin quản lý member; chưa có ma trận role → write_members."
+      },
+      {
+        "check_id": "CHK-012",
+        "open_question_draft": "Ở trang Company member, xoá hoặc đổi role của Admin cuối cùng trong location có bị chặn không, và thông báo là gì? (Quy tắc \"mỗi location ≥ 1 Admin\" thuộc nhóm câu hỏi do object Roles & permissions sở hữu.)",
+        "reason": "Quy tắc \"mỗi location ≥ 1 Admin\" thuộc object Roles & permissions và còn câu hỏi mở; object này không có rule riêng cho thao tác ở Customer Account."
+      }
+    ],
+    "duplicates_removed": [
+      {
+        "candidate": "Member thiếu write_members gọi PUT update / DELETE member / GET customers/existed khi cờ view-only bật → 403",
+        "kept_in": "member-list-view-access CHK-006",
+        "reason": "Cùng rule quyền ghi khi bật cờ view-only; feature xem danh sách sở hữu rule này, không nhân bản."
+      },
+      {
+        "candidate": "Ẩn Invite / edit / delete cho member view-only và buyer Admin vẫn có đủ thao tác",
+        "kept_in": "member-list-view-access CHK-005, CHK-007",
+        "reason": "Điều kiện hiển thị thao tác ghi do feature xem danh sách sở hữu."
+      },
+      {
+        "candidate": "Email `+alias` / subdomain vẫn nhận được ở form invite member (gợi ý từ checklist regression QA)",
+        "kept_in": "object B2B Registration (feature registration-form-builder)",
+        "reason": "Fact về định dạng email theo Jira DUOS-429 thuộc object khác; object này không có KB item tương ứng, không tạo check trùng."
+      },
+      {
+        "candidate": "Đổi role member ở Customer Account đồng bộ contact role Shopify (member-sync path Jira DUOS-405)",
+        "kept_in": "object Roles & permissions (feature member-role-assignment-sync)",
+        "reason": "Đường đồng bộ role dùng chung do object Roles & permissions sở hữu; ở đây chỉ giữ check sửa / đổi role ở mức trang Company member (CHK-002)."
+      }
+    ],
+    "excluded_dimensions": [
+      {
+        "dimension": "REGRESSION",
+        "reason": "Bản bootstrap đầu tiên của bộ check; chưa có thay đổi hành vi từ phân tích diff để kiểm hồi quy."
+      }
+    ]
+  },
+  "gate": {
+    "decision": "PASS",
+    "blocking_findings": [],
+    "conditions": [
+      "9 check NEEDS_CONFIRMATION mang open_question_draft; không check nào có expected khẳng định trên oracle NONE; mọi check có applicability và trace về feature + kb_id hoặc được đánh dấu gap."
+    ],
+    "allowed_next_steps": [
+      "knowledge-diff-analyzer",
+      "context-quality-reviewer"
+    ]
+  },
+  "last_updated": {
+    "date": "2026-10-09",
+    "ccr_ref": "bootstrap"
+  }
+}

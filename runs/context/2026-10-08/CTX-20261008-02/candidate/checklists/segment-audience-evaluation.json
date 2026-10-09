@@ -1,0 +1,584 @@
+{
+  "schema_version": "1.0",
+  "artifact_type": "RegressionChecklistCandidate",
+  "artifact_id": "RCCAND-segment-audience-evaluation-CTX-20261008-02",
+  "workflow_id": "CTX-20261008-02",
+  "producer": "qa-checklist-builder",
+  "source_refs": [
+    "candidate/feature-profiles/segment-audience-evaluation.json",
+    "candidate/product-kb/segment-list-management.json",
+    "candidate/product-kb/segment-builder.json",
+    "candidate/product-kb/segment-audience-evaluation.json",
+    "candidate/product-kb/_product-level.json",
+    "input/orchestrator-directives.json",
+    "input/profile-checklist-brief.md",
+    "input/rework-r1-builders.md",
+    "intermediate/doc/DOC-27.json"
+  ],
+  "upstream_artifact_ids": [
+    "ART-FEATURE-PROFILE-segment-audience-evaluation-CTX-20261008-02",
+    "PKBC-CTX-20261008-02-segments-segment-audience-evaluation"
+  ],
+  "status": "PARTIAL",
+  "confidence": "MEDIUM",
+  "rework_round": "r1",
+  "observations": [
+    "8 check; theo oracle_strength {'STRONG': 3, 'BASELINE': 1, 'NONE': 4}; theo status {'READY': 4, 'NEEDS_CONFIRMATION': 4}; theo dimension {'CORE': 1, 'INTEGRATION': 4, 'STATE_DATA': 1, 'NEGATIVE': 1, 'PERMISSION': 1}; theo priority {'P1': 5, 'P2': 3}.",
+    "Dựng lại hoàn toàn ở rework r1 từ shard và profile hiện tại. oracle_strength tính bằng script: STRONG khi mọi kb_id của oracle là CONFIRMED_EXPECTED ngoài conflict_group; có OBSERVED_CURRENT (không KNOWN_DEFECT) thì BASELINE; có INFERRED / PROPOSED hoặc không có kb_id thì NONE + NEEDS_CONFIRMATION + open_question_draft. Không item KNOWN_DEFECT nào nằm trong oracle.kb_ids; chúng ở regression_watch_kb_ids.",
+    "Object segments không có shard object-level và không có kb_id bị bỏ ở r1; oracle chỉ trích kb_id của ba feature shard segments.",
+    "Checklist hồi quy do QA viết chỉ dùng làm gợi ý rủi ro / phạm vi phủ, không làm oracle."
+  ],
+  "assumptions": [
+    "risk_ref RISK-<feature-key>-NN do checklist này đặt, đánh số theo thứ tự rủi ro trong feature profile (profile không có id rủi ro); rủi ro bổ sung (phân quyền, cô lập workspace) đánh số tiếp theo.",
+    "Môi trường của mọi check là 'documented' (bootstrap từ tài liệu); khi chạy trên staging cần đối chiếu các lỗi đã biết ở regression_watch_kb_ids trước khi kết luận.",
+    "Ngoại lệ 'số đếm trả 500 do lỗi tạm thời thì campaign vẫn gửi' (Dev 02/10/2026, BR-25) không có check riêng vì không dựng được lỗi tạm thời một cách tất định; chỉ check nhánh query lỗi cố định.",
+    "Nhánh Remove field (GAP-06) không ảnh hưởng oracle `Is empty` vì rule Dev 02/10/2026 cho `Is empty` khớp cả null, chuỗi rỗng và thiếu key; check tương ứng nằm ở segment-builder.",
+    "Rework r1: check loại contact Unsubscribed / bị suppress không còn khẳng định cột Contacts ở danh sách (rule chỉ nêu số đếm, bảng kết quả, preview; việc cột danh sách có đánh giá live hay không đang chờ PO)."
+  ],
+  "unknowns": [
+    "Cột Contacts ở danh sách Segments có tự phản ánh thay đổi dữ liệu contact (contact mới thoả điều kiện, attribute đổi) không, và bộ đếm `~N contacts` trong builder có tự cập nhật khi dữ liệu contact đổi mà điều kiện không đổi không? Rule nháp Jira MTRO-27 nói đánh giá live; quyết định PO/BA 02/10/2026 (BR-27) chỉ nói bộ đếm builder không tự tính lại khi đổi điều kiện; nguồn nghi hai bên nói về hai chỗ khác nhau.",
+    "Khi custom field Number của contact chứa giá trị chữ, điều kiện `Greater than` / `Less than` / `Between` phải xử lý thế nào: contact đó coi là không khớp, bị chặn ngay khi nhập dữ liệu, hay segment báo lỗi rõ? Hiện query ép kiểu `::numeric` lỗi và số đếm trả 500 (Dev 02/10/2026, BR-25); chưa có kế hoạch sửa và hành vi mong đợi.",
+    "Campaign đang Scheduled trỏ tới segment đã bị xoá thì lúc tới giờ gửi hệ thống làm gì (huỷ, gửi lỗi, giữ Draft…) và hiện thông báo gì (GAP-20)? Quyết định PO/BA 02/10/2026 (BR-15) mới chỉ nói segment đang được dùng vẫn xoá được và report campaign đã gửi hiện \"Segment deleted since this send.\".",
+    "Tài liệu segment không nêu rule cô lập dữ liệu: PO/Dev xác nhận số đếm, bảng kết quả và tập người nhận của segment chỉ tính contact của workspace đang mở, kể cả khi cùng tài khoản thuộc nhiều workspace?",
+    "Có cam kết hiệu năng nào cho thời gian hiển thị bảng kết quả segment không (hiện chỉ có số đo mẫu 8–20 giây)?"
+  ],
+  "conflicts": [],
+  "blocking_issues": [],
+  "payload": {
+    "checklists": [
+      {
+        "feature_id": "segment-audience-evaluation",
+        "feature_key": "segment-audience-evaluation",
+        "checklist_version": "v1",
+        "checks": [
+          {
+            "check_id": "CHK-001",
+            "dimension": "CORE",
+            "layer": "portal",
+            "title": "Segment chỉ gồm contact Subscribed: loại contact Unsubscribed và contact bị suppress",
+            "applicability": {
+              "role": "unspecified",
+              "state": "có contact cùng thoả điều kiện ở ba trạng thái consent / suppression; chạy lại bắt buộc khi có thay đổi ở query nền danh sách contact hoặc search Contacts",
+              "environment": "documented",
+              "theme_or_device": null
+            },
+            "precondition": "Đã đăng nhập portal Mailtro vào workspace test bằng tài khoản được phép tạo / sửa segment (Owner theo các khảo sát hiện có). Ba contact cùng thoả điều kiện X (vd First name có giá trị riêng của bộ dữ liệu test): s1 Subscribed, s2 Unsubscribed, s3 Subscribed nhưng nằm trong danh sách suppression (bounce / complaint).",
+            "steps": [
+              "Tạo segment với điều kiện X, bấm `Run`, đợi bảng kết quả nạp xong (có thể trễ vài giây sau toast).",
+              "Đọc bộ đếm, danh sách email và cột `Consent` của bảng kết quả."
+            ],
+            "observation_point": "Bộ đếm, bảng kết quả, cột Consent.",
+            "expected_result": "Chỉ s1 thuộc segment: bộ đếm là 1, bảng kết quả chỉ có s1, không có s2 (Unsubscribed) và s3 (bị suppress); cột `Consent` của mọi dòng là `Subscribed`.",
+            "oracle": {
+              "kb_ids": [
+                "KB-070",
+                "KB-045"
+              ],
+              "oracle_strength": "STRONG"
+            },
+            "status": "READY",
+            "open_question_draft": null,
+            "regression_watch_kb_ids": [],
+            "risk_refs": [
+              "RISK-segment-audience-evaluation-01",
+              "RISK-segment-audience-evaluation-06",
+              "RISK-segment-audience-evaluation-07"
+            ],
+            "priority": "P1",
+            "act_ids": [],
+            "evidence_refs": [],
+            "automation_suitability": "SUITABLE"
+          },
+          {
+            "check_id": "CHK-002",
+            "dimension": "INTEGRATION",
+            "layer": "portal",
+            "title": "`estimated recipients` của campaign cũng loại contact bị suppress và Unsubscribed",
+            "applicability": {
+              "role": "unspecified",
+              "state": "segment chứa contact bị suppress / Unsubscribed thoả điều kiện",
+              "environment": "documented",
+              "theme_or_device": null
+            },
+            "precondition": "Cùng bộ dữ liệu s1, s2, s3 và segment ở check loại contact Unsubscribed / bị suppress; có một campaign nháp.",
+            "steps": [
+              "Mở bước Recipients của campaign nháp, chọn segment đó.",
+              "Đọc `estimated recipients`."
+            ],
+            "observation_point": "Giá trị `estimated recipients`.",
+            "expected_result": "`estimated recipients` không tính s2 (Unsubscribed) và s3 (bị suppress) — bằng 1 với bộ dữ liệu này.",
+            "oracle": {
+              "kb_ids": [
+                "KB-071",
+                "KB-070"
+              ],
+              "oracle_strength": "STRONG"
+            },
+            "status": "READY",
+            "open_question_draft": null,
+            "regression_watch_kb_ids": [],
+            "risk_refs": [
+              "RISK-segment-audience-evaluation-01"
+            ],
+            "priority": "P1",
+            "act_ids": [],
+            "evidence_refs": [],
+            "automation_suitability": "HYBRID"
+          },
+          {
+            "check_id": "CHK-003",
+            "dimension": "INTEGRATION",
+            "layer": "portal",
+            "title": "`estimated recipients` bằng cột Contacts của segment được chọn",
+            "applicability": {
+              "role": "unspecified",
+              "state": "segment có nhiều contact",
+              "environment": "documented",
+              "theme_or_device": null
+            },
+            "precondition": "Đã đăng nhập portal Mailtro vào workspace test bằng tài khoản được phép tạo / sửa segment (Owner theo các khảo sát hiện có). Có segment S khớp ≥ 3 contact; dữ liệu contact không đổi trong lúc chạy check.",
+            "steps": [
+              "Mở `/segments`, đọc cột Contacts của S.",
+              "Mở bước Recipients của một campaign nháp, chọn S, đọc `estimated recipients`."
+            ],
+            "observation_point": "Hai con số.",
+            "expected_result": "Theo hiện trạng ghi nhận 08/09/2026 (chưa có xác nhận PO/Dev), lệch = cần điều tra: `estimated recipients` bằng cột Contacts của S.",
+            "oracle": {
+              "kb_ids": [
+                "KB-074"
+              ],
+              "oracle_strength": "BASELINE"
+            },
+            "status": "READY",
+            "open_question_draft": null,
+            "regression_watch_kb_ids": [],
+            "risk_refs": [
+              "RISK-segment-audience-evaluation-04"
+            ],
+            "priority": "P2",
+            "act_ids": [],
+            "evidence_refs": [],
+            "automation_suitability": "HYBRID"
+          },
+          {
+            "check_id": "CHK-004",
+            "dimension": "STATE_DATA",
+            "layer": "portal",
+            "title": "Cột Contacts ở danh sách và bộ đếm builder khi dữ liệu contact đổi mà điều kiện không đổi",
+            "applicability": {
+              "role": "unspecified",
+              "state": "segment đã lưu; dữ liệu contact thay đổi sau khi lưu",
+              "environment": "documented",
+              "theme_or_device": null
+            },
+            "precondition": "Đã đăng nhập portal Mailtro vào workspace test bằng tài khoản được phép tạo / sửa segment (Owner theo các khảo sát hiện có). Có segment S đã lưu với điều kiện X; ghi lại cột Contacts và bộ đếm builder của S.",
+            "steps": [
+              "Tạo một contact Subscribed mới thoả X (và / hoặc sửa attribute một contact cũ để thôi thoả X).",
+              "Tải lại `/segments`, đọc cột Contacts của S.",
+              "Mở S trong builder, đọc bộ đếm trước khi bấm `Run`; sau đó bấm `Run`."
+            ],
+            "observation_point": "Cột Contacts ở danh sách và bộ đếm trong builder trước / sau Run.",
+            "expected_result": "Chưa có kết quả mong đợi được xác nhận. Ghi lại nguyên văn hành vi thực tế (phản hồi, thông báo, dữ liệu sau thao tác) và chuyển cho PO/Dev xác nhận; không kết luận pass/fail ở lần chạy này.",
+            "oracle": {
+              "kb_ids": [
+                "KB-075",
+                "KB-041"
+              ],
+              "oracle_strength": "NONE"
+            },
+            "status": "NEEDS_CONFIRMATION",
+            "open_question_draft": "Cột Contacts ở danh sách Segments có tự phản ánh thay đổi dữ liệu contact (contact mới thoả điều kiện, attribute đổi) không, và bộ đếm `~N contacts` trong builder có tự cập nhật khi dữ liệu contact đổi mà điều kiện không đổi không? Rule nháp Jira MTRO-27 nói đánh giá live; quyết định PO/BA 02/10/2026 (BR-27) chỉ nói bộ đếm builder không tự tính lại khi đổi điều kiện; nguồn nghi hai bên nói về hai chỗ khác nhau.",
+            "regression_watch_kb_ids": [],
+            "risk_refs": [
+              "RISK-segment-audience-evaluation-04"
+            ],
+            "priority": "P2",
+            "act_ids": [],
+            "evidence_refs": [],
+            "automation_suitability": "HYBRID"
+          },
+          {
+            "check_id": "CHK-005",
+            "dimension": "INTEGRATION",
+            "layer": "backend",
+            "title": "Segment có số đếm lỗi vẫn chọn được cho campaign; lúc Send query lỗi thì campaign giữ Draft",
+            "applicability": {
+              "role": "unspecified",
+              "state": "segment có query lỗi khi chạy (lỗi không phải tạm thời)",
+              "environment": "documented",
+              "theme_or_device": null
+            },
+            "precondition": "Đã đăng nhập portal Mailtro vào workspace test bằng tài khoản được phép tạo / sửa segment (Owner theo các khảo sát hiện có). Có segment S có query lỗi (vd một contact có custom field Number chứa giá trị chữ và S dùng `Greater than` trên field đó); có email trong Email library; campaign nháp C.",
+            "steps": [
+              "Ở bước Recipients của C chọn S, ghi lại cách hiển thị số người nhận.",
+              "Hoàn tất các bước còn lại và bấm Send.",
+              "Đọc sheet / thông báo hiện ra; mở danh sách campaign đọc trạng thái C; kiểm tra hộp thư test không nhận mail của C."
+            ],
+            "observation_point": "Picker / bước Recipients, sheet sau khi Send, trạng thái C.",
+            "expected_result": "S chọn được cho C (FE không chặn Send, chỉ hiện `—`); lúc Send, query của S chạy lại và lỗi nên bị rollback: C giữ trạng thái Draft, hiện sheet `Couldn't start this send`, không có mail nào được gửi.",
+            "oracle": {
+              "kb_ids": [
+                "KB-076"
+              ],
+              "oracle_strength": "STRONG"
+            },
+            "status": "READY",
+            "open_question_draft": null,
+            "regression_watch_kb_ids": [
+              "KB-077",
+              "KB-019"
+            ],
+            "risk_refs": [
+              "RISK-segment-audience-evaluation-02",
+              "RISK-segment-audience-evaluation-03",
+              "RISK-segment-audience-evaluation-07"
+            ],
+            "priority": "P1",
+            "act_ids": [],
+            "evidence_refs": [],
+            "automation_suitability": "HYBRID"
+          },
+          {
+            "check_id": "CHK-006",
+            "dimension": "NEGATIVE",
+            "layer": "backend",
+            "title": "Điều kiện so sánh số trên field Number có contact chứa giá trị chữ",
+            "applicability": {
+              "role": "unspecified",
+              "state": "custom field Number có dữ liệu bẩn",
+              "environment": "documented",
+              "theme_or_device": null
+            },
+            "precondition": "Đã đăng nhập portal Mailtro vào workspace test bằng tài khoản được phép tạo / sửa segment (Owner theo các khảo sát hiện có). Custom field Number F; contact Subscribed n1 có F = 10, n2 có F = 50, n3 có F là chuỗi chữ.",
+            "steps": [
+              "Run segment `F` `Greater than` 20.",
+              "Run `F` `Between` 0 và 100.",
+              "Run `F` `Equal to` 10."
+            ],
+            "observation_point": "Bộ đếm, bảng kết quả, thông báo lỗi.",
+            "expected_result": "Chưa có kết quả mong đợi được xác nhận. Ghi lại nguyên văn hành vi thực tế (phản hồi, thông báo, dữ liệu sau thao tác) và chuyển cho PO/Dev xác nhận; không kết luận pass/fail ở lần chạy này.",
+            "oracle": {
+              "kb_ids": [],
+              "oracle_strength": "NONE"
+            },
+            "status": "NEEDS_CONFIRMATION",
+            "open_question_draft": "Khi custom field Number của contact chứa giá trị chữ, điều kiện `Greater than` / `Less than` / `Between` phải xử lý thế nào: contact đó coi là không khớp, bị chặn ngay khi nhập dữ liệu, hay segment báo lỗi rõ? Hiện query ép kiểu `::numeric` lỗi và số đếm trả 500 (Dev 02/10/2026, BR-25); chưa có kế hoạch sửa và hành vi mong đợi.",
+            "regression_watch_kb_ids": [
+              "KB-077"
+            ],
+            "risk_refs": [
+              "RISK-segment-audience-evaluation-02"
+            ],
+            "priority": "P2",
+            "act_ids": [],
+            "evidence_refs": [],
+            "automation_suitability": "SUITABLE"
+          },
+          {
+            "check_id": "CHK-007",
+            "dimension": "INTEGRATION",
+            "layer": "backend",
+            "title": "Campaign Scheduled trỏ tới segment đã bị xoá",
+            "applicability": {
+              "role": "unspecified",
+              "state": "campaign Scheduled, segment Recipients bị xoá trước giờ gửi",
+              "environment": "documented",
+              "theme_or_device": null
+            },
+            "precondition": "Đã đăng nhập portal Mailtro vào workspace test bằng tài khoản được phép tạo / sửa segment (Owner theo các khảo sát hiện có). Campaign C Scheduled vài phút tới, Recipients là segment S.",
+            "steps": [
+              "Xoá S (xác nhận bằng tải lại danh sách).",
+              "Đợi qua giờ gửi của C.",
+              "Đọc trạng thái C, report / thông báo của C; kiểm tra hộp thư test."
+            ],
+            "observation_point": "Trạng thái và thông báo của C, mail nhận được.",
+            "expected_result": "Chưa có kết quả mong đợi được xác nhận. Ghi lại nguyên văn hành vi thực tế (phản hồi, thông báo, dữ liệu sau thao tác) và chuyển cho PO/Dev xác nhận; không kết luận pass/fail ở lần chạy này.",
+            "oracle": {
+              "kb_ids": [
+                "KB-078"
+              ],
+              "oracle_strength": "NONE"
+            },
+            "status": "NEEDS_CONFIRMATION",
+            "open_question_draft": "Campaign đang Scheduled trỏ tới segment đã bị xoá thì lúc tới giờ gửi hệ thống làm gì (huỷ, gửi lỗi, giữ Draft…) và hiện thông báo gì (GAP-20)? Quyết định PO/BA 02/10/2026 (BR-15) mới chỉ nói segment đang được dùng vẫn xoá được và report campaign đã gửi hiện \"Segment deleted since this send.\".",
+            "regression_watch_kb_ids": [
+              "KB-012"
+            ],
+            "risk_refs": [
+              "RISK-segment-audience-evaluation-05"
+            ],
+            "priority": "P1",
+            "act_ids": [],
+            "evidence_refs": [],
+            "automation_suitability": "HYBRID"
+          },
+          {
+            "check_id": "CHK-008",
+            "dimension": "PERMISSION",
+            "layer": "backend",
+            "title": "Số đếm và kết quả segment chỉ tính contact của workspace hiện tại",
+            "applicability": {
+              "role": "tài khoản thuộc hai workspace",
+              "state": "hai workspace có contact thoả cùng điều kiện",
+              "environment": "documented",
+              "theme_or_device": null
+            },
+            "precondition": "Workspace A và B đều có contact Subscribed thoả điều kiện X (giá trị riêng của bộ dữ liệu test); biết số contact thoả X ở mỗi workspace.",
+            "steps": [
+              "Trong workspace A tạo segment X, bấm `Run`.",
+              "Đọc bộ đếm và danh sách email trong bảng kết quả."
+            ],
+            "observation_point": "Bộ đếm và bảng kết quả.",
+            "expected_result": "Chưa có kết quả mong đợi được xác nhận. Ghi lại nguyên văn hành vi thực tế (phản hồi, thông báo, dữ liệu sau thao tác) và chuyển cho PO/Dev xác nhận; không kết luận pass/fail ở lần chạy này.",
+            "oracle": {
+              "kb_ids": [],
+              "oracle_strength": "NONE"
+            },
+            "status": "NEEDS_CONFIRMATION",
+            "open_question_draft": "Tài liệu segment không nêu rule cô lập dữ liệu: PO/Dev xác nhận số đếm, bảng kết quả và tập người nhận của segment chỉ tính contact của workspace đang mở, kể cả khi cùng tài khoản thuộc nhiều workspace?",
+            "regression_watch_kb_ids": [],
+            "risk_refs": [
+              "RISK-segment-audience-evaluation-08"
+            ],
+            "priority": "P1",
+            "act_ids": [],
+            "evidence_refs": [],
+            "automation_suitability": "SUITABLE"
+          }
+        ]
+      }
+    ],
+    "coverage_by_feature_and_risk": [
+      {
+        "feature_id": "segment-audience-evaluation",
+        "risk_ref": "RISK-segment-audience-evaluation-01",
+        "risk_description": "Sửa query nền danh sách contact (vd lỗi search Contacts không ra contact Unsubscribed) sai cách làm segment thôi loại contact bị suppress — regression số đếm và tập người nhận.",
+        "covered_by_checks": [
+          "CHK-001",
+          "CHK-002"
+        ],
+        "kb_ids": [
+          "KB-045",
+          "KB-070",
+          "KB-071"
+        ],
+        "coverage_status": "COVERED"
+      },
+      {
+        "feature_id": "segment-audience-evaluation",
+        "risk_ref": "RISK-segment-audience-evaluation-02",
+        "risk_description": "Dữ liệu chữ trong field Number làm hỏng segment so sánh số (500), kéo theo campaign trỏ segment đó không gửi được.",
+        "covered_by_checks": [
+          "CHK-005",
+          "CHK-006"
+        ],
+        "kb_ids": [
+          "KB-076"
+        ],
+        "coverage_status": "PARTIALLY_COVERED_NEEDS_CONFIRMATION"
+      },
+      {
+        "feature_id": "segment-audience-evaluation",
+        "risk_ref": "RISK-segment-audience-evaluation-03",
+        "risk_description": "Segment hỏng chỉ hiện `—` và vẫn chọn được cho campaign; lỗi chỉ lộ ra lúc Send.",
+        "covered_by_checks": [
+          "CHK-005"
+        ],
+        "kb_ids": [
+          "KB-076"
+        ],
+        "coverage_status": "COVERED"
+      },
+      {
+        "feature_id": "segment-audience-evaluation",
+        "risk_ref": "RISK-segment-audience-evaluation-04",
+        "risk_description": "Chưa chốt cột Contacts / membership có tự cập nhật theo dữ liệu contact hay không.",
+        "covered_by_checks": [
+          "CHK-003",
+          "CHK-004"
+        ],
+        "kb_ids": [
+          "KB-041",
+          "KB-074",
+          "KB-075"
+        ],
+        "coverage_status": "PARTIALLY_COVERED_NEEDS_CONFIRMATION"
+      },
+      {
+        "feature_id": "segment-audience-evaluation",
+        "risk_ref": "RISK-segment-audience-evaluation-05",
+        "risk_description": "Campaign Scheduled trỏ segment đã xoá: hành vi lúc tới giờ gửi chưa chốt (GAP-20).",
+        "covered_by_checks": [
+          "CHK-007"
+        ],
+        "kb_ids": [
+          "KB-078"
+        ],
+        "coverage_status": "FLAGGED_NEEDS_CONFIRMATION"
+      },
+      {
+        "feature_id": "segment-audience-evaluation",
+        "risk_ref": "RISK-segment-audience-evaluation-06",
+        "risk_description": "Bảng kết quả trễ khoảng 8–20 giây so với toast trên staging; đọc kết quả ngay sau toast dễ kết luận sai.",
+        "covered_by_checks": [
+          "CHK-001"
+        ],
+        "kb_ids": [
+          "KB-045",
+          "KB-070"
+        ],
+        "coverage_status": "COVERED"
+      },
+      {
+        "feature_id": "segment-audience-evaluation",
+        "risk_ref": "RISK-segment-audience-evaluation-07",
+        "risk_description": "Một phần câu hỏi mở của QA về Segments không có trong bộ nguồn.",
+        "covered_by_checks": [
+          "CHK-001",
+          "CHK-005"
+        ],
+        "kb_ids": [
+          "KB-045",
+          "KB-070",
+          "KB-076"
+        ],
+        "coverage_status": "COVERED"
+      },
+      {
+        "feature_id": "segment-audience-evaluation",
+        "risk_ref": "RISK-segment-audience-evaluation-08",
+        "risk_description": "Số đếm segment không có rule cô lập dữ liệu giữa workspace.",
+        "covered_by_checks": [
+          "CHK-008"
+        ],
+        "kb_ids": [],
+        "coverage_status": "FLAGGED_NEEDS_CONFIRMATION"
+      },
+      {
+        "feature_id": "segment-audience-evaluation",
+        "risk_ref": null,
+        "capability": "Chỉ gồm contact được phép nhận mail",
+        "covered_by_checks": [
+          "CHK-001",
+          "CHK-002"
+        ],
+        "kb_ids": [
+          "KB-045",
+          "KB-070"
+        ],
+        "coverage_status": "COVERED"
+      },
+      {
+        "feature_id": "segment-audience-evaluation",
+        "risk_ref": null,
+        "capability": "Loại trừ nằm ở query nền dùng chung",
+        "covered_by_checks": [
+          "CHK-002"
+        ],
+        "kb_ids": [
+          "KB-071"
+        ],
+        "coverage_status": "COVERED"
+      },
+      {
+        "feature_id": "segment-audience-evaluation",
+        "risk_ref": null,
+        "capability": "Đánh giá lại segment lúc gửi campaign",
+        "covered_by_checks": [
+          "CHK-005"
+        ],
+        "kb_ids": [
+          "KB-076"
+        ],
+        "coverage_status": "COVERED"
+      },
+      {
+        "feature_id": "segment-audience-evaluation",
+        "risk_ref": null,
+        "capability": "Segment là tập động, không có list tĩnh",
+        "covered_by_checks": [],
+        "kb_ids": [
+          "KB-073",
+          "KB-P-016",
+          "KB-P-049"
+        ],
+        "coverage_status": "NO_DEDICATED_CHECK",
+        "note": "Khái niệm được kiểm gián tiếp qua các check đánh giá audience; lý do không có check riêng ghi ở kb_items_without_dedicated_check."
+      }
+    ],
+    "kb_items_without_dedicated_check": [
+      {
+        "kb_id": "KB-072",
+        "note": "Cảnh báo regression khi sửa query nền: dùng làm điều kiện chạy lại cho check loại contact Unsubscribed / bị suppress, không phải hành vi riêng."
+      },
+      {
+        "kb_id": "KB-073",
+        "note": "Khái niệm segment là tập động, không có list tĩnh: được kiểm gián tiếp qua các check đánh giá; route `/lists` trả trang trắng thuộc hành vi product-level."
+      },
+      {
+        "kb_id": "KB-077",
+        "note": "Lỗi đã biết ép kiểu numeric: theo dõi qua check dữ liệu chữ trong field Number và check gửi campaign với segment lỗi; đồng thời dùng làm cách dựng precondition segment lỗi."
+      },
+      {
+        "kb_id": "KB-079",
+        "note": "Độ trễ bảng kết quả 8–20 giây chỉ là số đo mẫu, không phải cam kết hiệu năng; được phản ánh thành bước 'đợi bảng kết quả nạp xong' trong các check Run."
+      }
+    ],
+    "checks_needing_confirmation": [
+      {
+        "check_id": "CHK-004",
+        "open_question_draft": "Cột Contacts ở danh sách Segments có tự phản ánh thay đổi dữ liệu contact (contact mới thoả điều kiện, attribute đổi) không, và bộ đếm `~N contacts` trong builder có tự cập nhật khi dữ liệu contact đổi mà điều kiện không đổi không? Rule nháp Jira MTRO-27 nói đánh giá live; quyết định PO/BA 02/10/2026 (BR-27) chỉ nói bộ đếm builder không tự tính lại khi đổi điều kiện; nguồn nghi hai bên nói về hai chỗ khác nhau.",
+        "reason": "Phía 'đánh giá live' là rule nháp đang mâu thuẫn (INFERRED); quyết định PO/BA chỉ phủ trường hợp đổi điều kiện, không phủ đổi dữ liệu contact."
+      },
+      {
+        "check_id": "CHK-006",
+        "open_question_draft": "Khi custom field Number của contact chứa giá trị chữ, điều kiện `Greater than` / `Less than` / `Between` phải xử lý thế nào: contact đó coi là không khớp, bị chặn ngay khi nhập dữ liệu, hay segment báo lỗi rõ? Hiện query ép kiểu `::numeric` lỗi và số đếm trả 500 (Dev 02/10/2026, BR-25); chưa có kế hoạch sửa và hành vi mong đợi.",
+        "reason": "Chỉ có mô tả lỗi đã biết, không có rule cho kết quả mong đợi."
+      },
+      {
+        "check_id": "CHK-007",
+        "open_question_draft": "Campaign đang Scheduled trỏ tới segment đã bị xoá thì lúc tới giờ gửi hệ thống làm gì (huỷ, gửi lỗi, giữ Draft…) và hiện thông báo gì (GAP-20)? Quyết định PO/BA 02/10/2026 (BR-15) mới chỉ nói segment đang được dùng vẫn xoá được và report campaign đã gửi hiện \"Segment deleted since this send.\".",
+        "reason": "Câu hỏi mở GAP-20 (INFERRED), không có rule."
+      },
+      {
+        "check_id": "CHK-008",
+        "open_question_draft": "Tài liệu segment không nêu rule cô lập dữ liệu: PO/Dev xác nhận số đếm, bảng kết quả và tập người nhận của segment chỉ tính contact của workspace đang mở, kể cả khi cùng tài khoản thuộc nhiều workspace?",
+        "reason": "Không có KB nào về cô lập dữ liệu giữa workspace cho segment."
+      }
+    ],
+    "duplicates_removed": [
+      {
+        "merged_into_title": "Segment chỉ gồm contact Subscribed: loại contact Unsubscribed và contact bị suppress",
+        "removed": "Check \"Cột Consent luôn Subscribed\" ở segment-builder",
+        "reason": "Cùng hành vi: segment chỉ gồm contact Subscribed; cột Consent được quan sát trong cùng check."
+      },
+      {
+        "merged_into_title": "Cột Contacts ở danh sách và bộ đếm builder khi dữ liệu contact đổi mà điều kiện không đổi",
+        "removed": "Hai check riêng cho cột Contacts danh sách và bộ đếm builder",
+        "reason": "Cùng một câu hỏi chờ PO xác nhận; quan sát hai điểm trong một check."
+      }
+    ],
+    "excluded_dimensions": [
+      {
+        "dimension": "REGRESSION",
+        "reason": "Phiên bản đầu tiên của bộ check (bootstrap từ tài liệu); chưa có thay đổi hành vi nào từ diff analyzer. Rủi ro sửa query nền được ghi ở applicability của check loại contact Unsubscribed / bị suppress (chạy lại bắt buộc khi đụng query nền)."
+      },
+      {
+        "dimension": "BOUNDARY",
+        "reason": "Biên so khớp điều kiện (hoa thường, escape, Is empty, biên ngày UTC) đã nằm trong checklist segment-builder; feature này không có giới hạn kích thước / số lượng nào được tài liệu nêu."
+      }
+    ]
+  },
+  "gate": {
+    "decision": "PASS",
+    "blocking_findings": [],
+    "conditions": [
+      "4 check NEEDS_CONFIRMATION (oracle NONE) chờ PO/Dev trả lời trước khi dùng làm kết quả mong đợi; check BASELINE chỉ là hiện trạng, lệch = cần điều tra."
+    ],
+    "rationale": "Core capability và rủi ro P0/P1 của feature đều có check; mọi check có applicability, layer, trace về feature và kb_id (hoặc được gắn cờ gap); check STRONG chỉ khẳng định đúng nội dung authority, chi tiết staging nằm ở check BASELINE riêng; không expected khẳng định nào dựa trên oracle NONE; không item lỗi đã biết nào làm oracle; check được gom theo hành vi, không nhân bản theo KB.",
+    "allowed_next_steps": [
+      "knowledge-diff-analyzer",
+      "context-quality-reviewer"
+    ]
+  }
+}

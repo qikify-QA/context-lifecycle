@@ -1,0 +1,734 @@
+{
+  "schema_version": "1.0",
+  "artifact_type": "FeatureProfileCandidate",
+  "artifact_id": "ART-FEATURE-PROFILE-dead-token-detection-and-reconnect-CTX-20261009-01",
+  "workflow_id": "CTX-20261009-01",
+  "producer": "feature-profile-builder",
+  "source_refs": [
+    "candidate/product-kb/dead-token-detection-and-reconnect.json",
+    "candidate/product-kb/_object-level.auth-token.json",
+    "candidate/product-kb/_product-level.json",
+    "input/scope-plan.json",
+    "input/orchestrator-directives.json",
+    "input/profile-checklist-brief.md",
+    "intermediate/doc/DOC-21.json"
+  ],
+  "upstream_artifact_ids": [
+    "PKBC-CTX-20261009-01-auth-token-dead-token-detection-and-reconnect",
+    "PKBC-CTX-20261009-01-auth-token-object-level",
+    "PKBC-CTX-20261009-01-_product-level",
+    "SCOPE-PLAN-CTX-20261009-01",
+    "DEA-DOC-21-CTX-20261009-01"
+  ],
+  "status": "PARTIAL",
+  "confidence": "MEDIUM",
+  "observations": [
+    "Profile dựng từ tài liệu; không có quan sát runtime nên act_ids, observed_behavior và observed_validations rỗng.",
+    "10 quy tắc đã xác nhận đều đến từ Jira DUOS-399 (description/AC, cập nhật 07/07/2026), tóm tắt trong QA business rule Duos; mọi phát biểu chỉ có trong tóm tắt QA nằm ở risks / unknown_areas.",
+    "Object auth-token không có tranh chấp (conflict_group) nào; BUG-36 (nội dung chưa đọc được) được theo dõi như regression watch.",
+    "Danh sách regression QA chỉ dùng làm gợi ý rủi ro (thay đổi auth / token / thư viện HTTP), không làm oracle."
+  ],
+  "assumptions": [
+    "feature_id dùng chính feature_key (ổn định qua các version); FEATURE-ID dạng FEAT-nn do orchestrator mint lúc publish.",
+    "surface_mapping thêm khoá `backend` / `admin_panel` cho job, webhook, email và admin panel nội bộ — các surface không thuộc portal/storefront/api/data/code.",
+    "coverage_matrix: covered=true khi có rule CONFIRMED_EXPECTED cho ô đó (environment luôn documented); covered=false khi chỉ có tóm tắt QA chưa xác nhận hoặc tài liệu không nêu."
+  ],
+  "unknowns": [
+    "Merchant reconnect cụ thể bằng thao tác nào, và reconnect thành công có tự clear `Re-auth Required At` không?",
+    "Khi Shopify trả 401 đơn thuần lúc shop bị freeze/close giữa lúc job chạy (token vẫn hợp lệ), job có chỉ fail và retry, không set cờ và không gửi email reconnect không?",
+    "Token legacy có đúng chỉ chết ở 3 tình huống (migrate thành công, shop uninstall, từ 01/01/2027), và re-authorize có thật không huỷ token legacy cũ?",
+    "Mọi call Shopify Admin API của Duos (sync catalog, company, order, quote → order, Flow action, bulk) có đều đi qua lớp token, và khi token chết thì tất cả đều dừng tới khi reconnect?",
+    "Email reconnect và email reopen có tiêu đề, nội dung, người nhận và ngôn ngữ nào?",
+    "Ở luồng thường (không phải shop mở lại), email reconnect gửi một lần hay gửi lặp mỗi lần job/call phát hiện token chết?",
+    "Khi refresh thất bại do lỗi tạm thời (mạng, Shopify 5xx), app retry mấy lần, có gắn cờ `Re-auth Required At` hay gửi email reconnect không?",
+    "Mốc 01/01/2027 Shopify bắt buộc token expiring và từ chối token legacy (trả 401) có còn đúng không?",
+    "Tiến trình hay role nào chịu trách nhiệm xác định token chết, và có ràng buộc role nào cho các hành vi này không?",
+    "BUG-36 (gắn TC-DUOS-001, trạng thái \"open?\") là lỗi gì, thuộc hành vi token nào (phát hiện token chết, refresh/migrate, re-auth khi mở app, uninstall/reinstall hay admin panel), còn mở hay đã fix?"
+  ],
+  "conflicts": [],
+  "blocking_issues": [],
+  "payload": {
+    "feature_profiles": [
+      {
+        "feature_id": "dead-token-detection-and-reconnect",
+        "feature_key": "dead-token-detection-and-reconnect",
+        "name": "Phát hiện token chết và yêu cầu merchant reconnect",
+        "user_goal": "Khi token Shopify của một shop không còn dùng được, hệ thống nhận ra theo loại token, chặn trước khi gọi Shopify, đánh dấu shop cần re-auth và báo merchant reconnect bằng email (kể cả khi shop đóng lâu rồi mở lại), để merchant khôi phục kết nối của app.",
+        "user_goal_kb_refs": [
+          "KB-001",
+          "KB-002",
+          "KB-003",
+          "KB-004",
+          "KB-005",
+          "KB-009"
+        ],
+        "stable_since_version": "v1",
+        "actors": [
+          {
+            "role": "system (backend: lớp token trước mỗi call Shopify, webhook)",
+            "permission_observed": "Theo rule Jira DUOS-399: xác định token chết, chặn trước khi gọi Shopify, set `Re-auth Required At`, gửi email reconnect và email reopen. Chưa có quan sát runtime.",
+            "kb_refs": [
+              "KB-003",
+              "KB-004",
+              "KB-005",
+              "KB-009"
+            ]
+          },
+          {
+            "role": "merchant",
+            "permission_observed": "Nhận email reconnect / reopen và reconnect app; thao tác reconnect cụ thể và nội dung email chưa được tài liệu nêu (template còn là bản nháp).",
+            "kb_refs": [
+              "KB-005",
+              "KB-006",
+              "KB-016"
+            ]
+          }
+        ],
+        "entry_points": [
+          {
+            "path": "Lớp token trước mỗi lần app chuẩn bị gọi Shopify Admin API cho shop",
+            "precondition": "Token của shop đã chết (expiring: `Refresh Token Expires At` < hiện tại; legacy: từ 01/01/2027).",
+            "kb_refs": [
+              "KB-001",
+              "KB-002",
+              "KB-003"
+            ]
+          },
+          {
+            "path": "Webhook `shop-update` khi shop chuyển từ trạng thái đóng (frozen/cancelled/fraudulent/paused) sang active",
+            "precondition": "Token đã chết tại thời điểm shop mở lại; shop chưa uninstall.",
+            "kb_refs": [
+              "KB-009",
+              "KB-012"
+            ]
+          },
+          {
+            "path": "Email reconnect / email reopen gửi tới merchant",
+            "precondition": "Shop vừa bị xác định token chết hoặc vừa mở lại với token chết.",
+            "kb_refs": [
+              "KB-005",
+              "KB-009",
+              "KB-016"
+            ]
+          }
+        ],
+        "capabilities": [
+          {
+            "name": "Xác định token chết theo loại token",
+            "description": "Token expiring chết khi `Refresh Token Expires At` nhỏ hơn hiện tại; token legacy chết từ 01/01/2027. Các tình huống chết khác của token legacy (migrate thành công, uninstall) và mốc Shopify 01/01/2027 chỉ có trong tóm tắt QA, chưa xác nhận.",
+            "kb_refs": [
+              "KB-001",
+              "KB-002",
+              "KB-008",
+              "KB-056"
+            ],
+            "act_ids": []
+          },
+          {
+            "name": "Chặn gọi Shopify và đánh dấu shop cần re-auth",
+            "description": "Khi token chết app tự chặn trước khi gọi Shopify (không đợi 401 thật) và set `Re-auth Required At`. Phạm vi các luồng bị dừng (sync, quote, credit, Flow, bulk) chỉ có trong tóm tắt QA.",
+            "kb_refs": [
+              "KB-003",
+              "KB-004",
+              "KB-014",
+              "KB-015"
+            ],
+            "act_ids": []
+          },
+          {
+            "name": "Báo merchant reconnect ngay",
+            "description": "Gửi email reconnect cho merchant ngay khi token chết; nội dung, người nhận, ngôn ngữ và tần suất gửi lặp chưa được chốt.",
+            "kb_refs": [
+              "KB-005",
+              "KB-016"
+            ],
+            "act_ids": []
+          },
+          {
+            "name": "Email reopen khi shop đóng rồi mở lại với token chết",
+            "description": "Qua webhook `shop-update` khi shop đóng → active và token đã chết; gửi đúng 1 lần; áp cả development store; bỏ qua shop đã uninstall hoặc vẫn đóng; shop đóng dưới 90 ngày thì token còn sống, app không làm gì.",
+            "kb_refs": [
+              "KB-009",
+              "KB-010",
+              "KB-011",
+              "KB-012",
+              "KB-013"
+            ],
+            "act_ids": []
+          },
+          {
+            "name": "Phân biệt lỗi 401 đơn thuần với token chết",
+            "description": "Theo tóm tắt QA (chưa xác nhận): 401 khi shop bị freeze/close giữa lúc job chạy mà token vẫn hợp lệ chỉ làm job fail và retry, không gửi email reconnect.",
+            "kb_refs": [
+              "KB-007"
+            ],
+            "act_ids": []
+          },
+          {
+            "name": "Gỡ cờ re-auth sau khi reconnect",
+            "description": "Theo tóm tắt QA (chưa xác nhận): reconnect thành công tự clear `Re-auth Required At`.",
+            "kb_refs": [
+              "KB-006"
+            ],
+            "act_ids": []
+          }
+        ],
+        "state_transitions": [
+          {
+            "from": "token expiring còn dùng được",
+            "to": "token chết",
+            "trigger": "Thời điểm hiện tại vượt `Refresh Token Expires At`",
+            "condition": "Shop dùng token expiring",
+            "kb_refs": [
+              "KB-001"
+            ]
+          },
+          {
+            "from": "token legacy còn dùng được",
+            "to": "token chết",
+            "trigger": "Tới 01/01/2027",
+            "condition": "Shop vẫn dùng token legacy",
+            "kb_refs": [
+              "KB-002"
+            ]
+          },
+          {
+            "from": "token chết, shop chưa gắn cờ",
+            "to": "shop có `Re-auth Required At`, email reconnect đã gửi, call Shopify bị chặn",
+            "trigger": "App phát hiện token chết trước khi gọi Shopify",
+            "condition": "—",
+            "kb_refs": [
+              "KB-003",
+              "KB-004",
+              "KB-005"
+            ]
+          },
+          {
+            "from": "shop đóng (frozen/cancelled/fraudulent/paused), token đã chết",
+            "to": "shop active, email reopen đã gửi 1 lần",
+            "trigger": "Webhook `shop-update`",
+            "condition": "Shop chưa uninstall; áp cả development store",
+            "kb_refs": [
+              "KB-009",
+              "KB-010",
+              "KB-011",
+              "KB-012"
+            ]
+          },
+          {
+            "from": "shop đóng dưới 90 ngày",
+            "to": "shop active, token vẫn sống",
+            "trigger": "Shop mở lại",
+            "condition": "App không cần làm gì",
+            "kb_refs": [
+              "KB-013"
+            ]
+          },
+          {
+            "from": "shop có `Re-auth Required At`",
+            "to": "cờ được clear",
+            "trigger": "Merchant reconnect thành công",
+            "condition": "Chỉ theo tóm tắt QA, chưa xác nhận",
+            "kb_refs": [
+              "KB-006"
+            ]
+          }
+        ],
+        "confirmed_rules": [
+          {
+            "statement": "Theo Jira DUOS-399 (description/AC, cập nhật 07/07/2026; tóm tắt trong QA business rule Duos và QA KB Duos \"Auth & Token lifecycle\" v1), token loại expiring được coi là chết khi `Refresh Token Expires At` nhỏ hơn thời điểm hiện tại.",
+            "knowledge_kind": "CONFIRMED_EXPECTED",
+            "confidence": "MEDIUM",
+            "kb_refs": [
+              "KB-001"
+            ]
+          },
+          {
+            "statement": "Theo Jira DUOS-399 (description/AC, cập nhật 07/07/2026; tóm tắt trong QA business rule Duos và QA KB Duos \"Auth & Token lifecycle\" v1), token loại legacy được coi là chết khi thời điểm hiện tại từ 01/01/2027 trở đi.",
+            "knowledge_kind": "CONFIRMED_EXPECTED",
+            "confidence": "MEDIUM",
+            "kb_refs": [
+              "KB-002"
+            ]
+          },
+          {
+            "statement": "Theo Jira DUOS-399 (description/AC, cập nhật 07/07/2026; tóm tắt trong QA business rule Duos và QA KB Duos \"Auth & Token lifecycle\" v1), khi token chết app tự chặn trước khi gọi Shopify, không đợi Shopify trả lỗi 401 thật.",
+            "knowledge_kind": "CONFIRMED_EXPECTED",
+            "confidence": "MEDIUM",
+            "kb_refs": [
+              "KB-003"
+            ]
+          },
+          {
+            "statement": "Theo Jira DUOS-399 (description/AC, cập nhật 07/07/2026; tóm tắt trong QA business rule Duos và QA KB Duos \"Auth & Token lifecycle\" v1), khi token chết app set field `Re-auth Required At` cho shop.",
+            "knowledge_kind": "CONFIRMED_EXPECTED",
+            "confidence": "MEDIUM",
+            "kb_refs": [
+              "KB-004"
+            ]
+          },
+          {
+            "statement": "Theo Jira DUOS-399 (description/AC, cập nhật 07/07/2026; tóm tắt trong QA business rule Duos và QA KB Duos \"Auth & Token lifecycle\" v1), khi token chết app gửi email reconnect cho merchant ngay lập tức.",
+            "knowledge_kind": "CONFIRMED_EXPECTED",
+            "confidence": "MEDIUM",
+            "kb_refs": [
+              "KB-005"
+            ]
+          },
+          {
+            "statement": "Theo Jira DUOS-399 (description/AC, cập nhật 07/07/2026; tóm tắt trong QA business rule Duos và QA KB Duos \"Auth & Token lifecycle\" v1), email reopen được trigger qua webhook `shop-update` khi shop chuyển từ trạng thái đóng (frozen/cancelled/fraudulent/paused) sang active và token đã chết tại thời điểm đó.",
+            "knowledge_kind": "CONFIRMED_EXPECTED",
+            "confidence": "MEDIUM",
+            "kb_refs": [
+              "KB-009"
+            ]
+          },
+          {
+            "statement": "Theo Jira DUOS-399 (description/AC, cập nhật 07/07/2026; tóm tắt trong QA business rule Duos và QA KB Duos \"Auth & Token lifecycle\" v1), email reopen (khi shop mở lại mà token đã chết) được gửi đúng 1 lần.",
+            "knowledge_kind": "CONFIRMED_EXPECTED",
+            "confidence": "MEDIUM",
+            "kb_refs": [
+              "KB-010"
+            ]
+          },
+          {
+            "statement": "Theo Jira DUOS-399 (description/AC, cập nhật 07/07/2026; tóm tắt trong QA business rule Duos và QA KB Duos \"Auth & Token lifecycle\" v1), luồng email reopen áp dụng cả cho development store.",
+            "knowledge_kind": "CONFIRMED_EXPECTED",
+            "confidence": "MEDIUM",
+            "kb_refs": [
+              "KB-011"
+            ]
+          },
+          {
+            "statement": "Theo Jira DUOS-399 (description/AC, cập nhật 07/07/2026; tóm tắt trong QA business rule Duos và QA KB Duos \"Auth & Token lifecycle\" v1), luồng email reopen bỏ qua shop đã uninstall hoặc shop vẫn đang ở trạng thái đóng.",
+            "knowledge_kind": "CONFIRMED_EXPECTED",
+            "confidence": "MEDIUM",
+            "kb_refs": [
+              "KB-012"
+            ]
+          },
+          {
+            "statement": "Theo Jira DUOS-399 (description/AC, cập nhật 07/07/2026; tóm tắt trong QA business rule Duos và QA KB Duos \"Auth & Token lifecycle\" v1), nếu shop đóng dưới 90 ngày thì token vẫn còn sống và app không cần làm gì khi shop mở lại.",
+            "knowledge_kind": "CONFIRMED_EXPECTED",
+            "confidence": "MEDIUM",
+            "kb_refs": [
+              "KB-013"
+            ]
+          }
+        ],
+        "observed_behavior": [],
+        "observed_validations": [],
+        "permissions": [
+          {
+            "statement": "Rule không nêu role hay tiến trình nào thực hiện việc xác định token chết; chặn call, set cờ và gửi email là hành vi hệ thống. Ma trận actor của token lifecycle đang chờ PO/Dev xác nhận.",
+            "kb_refs": [
+              "KB-001",
+              "KB-002"
+            ]
+          }
+        ],
+        "surface_mapping": {
+          "portal": [],
+          "storefront": [],
+          "api": [
+            {
+              "item": "Shopify Admin API: app chặn trước khi gọi khi token chết",
+              "kb_refs": [
+                "KB-003"
+              ]
+            },
+            {
+              "item": "Webhook `shop-update` (shop đóng → active) kích hoạt email reopen",
+              "kb_refs": [
+                "KB-009"
+              ]
+            }
+          ],
+          "data": [
+            {
+              "item": "Field `Refresh Token Expires At` của shop (điều kiện chết của token expiring)",
+              "kb_refs": [
+                "KB-001"
+              ]
+            },
+            {
+              "item": "Field `Re-auth Required At` (cờ shop cần re-auth)",
+              "kb_refs": [
+                "KB-004",
+                "KB-006"
+              ]
+            }
+          ],
+          "code": [],
+          "backend": [
+            {
+              "item": "Email reconnect khi token chết (template bản nháp)",
+              "kb_refs": [
+                "KB-005",
+                "KB-016"
+              ]
+            },
+            {
+              "item": "Email reopen khi shop mở lại với token chết (đúng 1 lần)",
+              "kb_refs": [
+                "KB-009",
+                "KB-010"
+              ]
+            }
+          ]
+        },
+        "dependencies": [
+          {
+            "target": "auth-token / uninstall-reinstall-token-cleanup",
+            "relation": "constrained_by",
+            "note": "Shop uninstall khi đang chờ reconnect bị soft-delete, clear `Re-auth Required At` và không còn nhận email reconnect; luồng reopen bỏ qua shop đã uninstall.",
+            "kb_refs": [
+              "KB-043",
+              "KB-044",
+              "KB-012"
+            ]
+          },
+          {
+            "target": "auth-token / token-refresh-and-legacy-migration",
+            "relation": "related",
+            "note": "Refresh định kỳ và migrate legacy giữ token không rơi vào trạng thái chết; theo tóm tắt QA, migrate thành công huỷ token legacy cũ.",
+            "kb_refs": [
+              "KB-018",
+              "KB-023",
+              "KB-008"
+            ]
+          },
+          {
+            "target": "auth-token / admin-token-and-scopes",
+            "relation": "read_by",
+            "note": "Admin panel hiển thị `Re-auth Required At` của shop.",
+            "kb_refs": [
+              "KB-046"
+            ]
+          },
+          {
+            "target": "notifications / merchant-transactional-emails",
+            "relation": "referenced_by",
+            "note": "Email reconnect / reopen thuộc tính năng này; object notifications chỉ tham chiếu.",
+            "kb_refs": [
+              "KB-005",
+              "KB-016"
+            ]
+          },
+          {
+            "target": "Các tính năng gọi Shopify của object khác (sync catalog/company/order, quote → order, credit, Flow action, bulk)",
+            "relation": "impacts",
+            "note": "Theo tóm tắt QA (chưa xác nhận), mọi call Shopify Admin API đi qua lớp token và token chết làm các luồng này dừng tới khi reconnect.",
+            "kb_refs": [
+              "KB-014",
+              "KB-015"
+            ]
+          }
+        ],
+        "risks": [
+          {
+            "statement": "Theo tóm tắt QA (chưa xác nhận), token chết làm dừng toàn bộ sync / quote / credit / Flow tới khi merchant reconnect; một shop bị gắn cờ `Re-auth Required At` ngoài ý muốn (vd sau thay đổi auth, token hay thư viện HTTP) sẽ chặn mọi luồng gọi Shopify và gửi email reconnect lạ cho merchant.",
+            "knowledge_kind": "INFERRED",
+            "confidence": "MEDIUM",
+            "kb_refs": [
+              "KB-015",
+              "KB-014",
+              "KB-004",
+              "KB-005"
+            ]
+          },
+          {
+            "statement": "Theo tóm tắt QA (chưa xác nhận), lỗi 401 đơn thuần (shop freeze/close giữa lúc job chạy, token còn hợp lệ) không được coi là token chết; nếu app nhầm hai trường hợp, merchant nhận email reconnect sai và shop bị gắn cờ sai.",
+            "knowledge_kind": "INFERRED",
+            "confidence": "MEDIUM",
+            "kb_refs": [
+              "KB-007",
+              "KB-003"
+            ]
+          },
+          {
+            "statement": "Template email reconnect mới là bản nháp; nội dung, người nhận và ngôn ngữ chưa chốt nên chưa kiểm được nội dung email.",
+            "knowledge_kind": "INFERRED",
+            "confidence": "LOW",
+            "kb_refs": [
+              "KB-016",
+              "KB-005"
+            ]
+          },
+          {
+            "statement": "Known issues Duos ghi BUG-36 (trạng thái \"open?\") gắn với TC-DUOS-001 của nhóm Auth & Token lifecycle nhưng nội dung lỗi chưa đọc được; chưa biết lỗi chạm hành vi nào của token lifecycle, nên theo dõi như regression watch và không dùng TC-DUOS-001 làm bằng chứng PASS.",
+            "knowledge_kind": "OBSERVED_CURRENT",
+            "confidence": "LOW",
+            "kb_refs": [
+              "KB-057"
+            ],
+            "status": "KNOWN_DEFECT"
+          }
+        ],
+        "unknown_areas": [
+          {
+            "question": "Merchant reconnect cụ thể bằng thao tác nào, và reconnect thành công có tự clear `Re-auth Required At` không?",
+            "why_it_matters": "Không xác định được điểm kết thúc của trạng thái chờ reconnect; mệnh đề clear cờ chỉ có trong tóm tắt QA.",
+            "kb_refs": [
+              "KB-006",
+              "KB-004"
+            ]
+          },
+          {
+            "question": "Khi Shopify trả 401 đơn thuần lúc shop bị freeze/close giữa lúc job chạy (token vẫn hợp lệ), job có chỉ fail và retry, không set cờ và không gửi email reconnect không?",
+            "why_it_matters": "Phân biệt 401 thường với token chết quyết định có gửi email/gắn cờ hay không; chưa có rule active.",
+            "kb_refs": [
+              "KB-007"
+            ]
+          },
+          {
+            "question": "Token legacy có đúng chỉ chết ở 3 tình huống (migrate thành công, shop uninstall, từ 01/01/2027), và re-authorize có thật không huỷ token legacy cũ?",
+            "why_it_matters": "Quyết định điều kiện chết của token legacy ngoài mốc 2027; chỉ có trong tóm tắt QA.",
+            "kb_refs": [
+              "KB-008",
+              "KB-002"
+            ]
+          },
+          {
+            "question": "Mọi call Shopify Admin API của Duos (sync catalog, company, order, quote → order, Flow action, bulk) có đều đi qua lớp token, và khi token chết thì tất cả đều dừng tới khi reconnect?",
+            "why_it_matters": "Xác định phạm vi regression khi token chết; chỉ có trong tóm tắt QA.",
+            "kb_refs": [
+              "KB-014",
+              "KB-015"
+            ]
+          },
+          {
+            "question": "Email reconnect và email reopen có tiêu đề, nội dung, người nhận và ngôn ngữ nào?",
+            "why_it_matters": "Rule chỉ nói có gửi email; template email reconnect còn là bản nháp.",
+            "kb_refs": [
+              "KB-005",
+              "KB-009",
+              "KB-016"
+            ]
+          },
+          {
+            "question": "Ở luồng thường (không phải shop mở lại), email reconnect gửi một lần hay gửi lặp mỗi lần job/call phát hiện token chết?",
+            "why_it_matters": "Rule \"đúng 1 lần\" chỉ nói cho email reopen.",
+            "kb_refs": [
+              "KB-005",
+              "KB-010"
+            ]
+          },
+          {
+            "question": "Khi refresh thất bại do lỗi tạm thời (mạng, Shopify 5xx), app retry mấy lần, có gắn cờ `Re-auth Required At` hay gửi email reconnect không?",
+            "why_it_matters": "Không phân biệt được expected giữa lỗi tạm thời và token chết.",
+            "kb_refs": [
+              "KB-003",
+              "KB-005"
+            ]
+          },
+          {
+            "question": "Mốc 01/01/2027 Shopify bắt buộc token expiring và từ chối token legacy (trả 401) có còn đúng không?",
+            "why_it_matters": "Mốc này là điều kiện chết của token legacy; câu về phía Shopify chỉ có trong tóm tắt QA.",
+            "kb_refs": [
+              "KB-056",
+              "KB-002"
+            ]
+          },
+          {
+            "question": "Tiến trình hay role nào chịu trách nhiệm xác định token chết, và có ràng buộc role nào cho các hành vi này không?",
+            "why_it_matters": "Rule không nêu actor; cần cho ma trận role/actor của token lifecycle.",
+            "kb_refs": [
+              "KB-001",
+              "KB-002"
+            ]
+          },
+          {
+            "question": "BUG-36 (gắn TC-DUOS-001, trạng thái \"open?\") là lỗi gì, thuộc hành vi token nào (phát hiện token chết, refresh/migrate, re-auth khi mở app, uninstall/reinstall hay admin panel), còn mở hay đã fix?",
+            "why_it_matters": "Nếu lỗi chạm hành vi của tính năng này thì check theo rule tương ứng cần theo dõi regression; test case liên quan đang passed nên không phải bằng chứng PASS.",
+            "kb_refs": [
+              "KB-057"
+            ]
+          }
+        ],
+        "freshness": {
+          "observed_at": "2026-10-08",
+          "run_id": "CTX-20261009-01",
+          "earliest_source_date": "2026-07-07",
+          "basis": "Ngày nguồn mới nhất trong các KB item được tham chiếu (ngày cập nhật Jira trong rule, ngày phân tích QA, ngày cập nhật danh sách lỗi); không có quan sát runtime trong lần chạy này."
+        }
+      }
+    ],
+    "profile_relationships": [
+      {
+        "from": "dead-token-detection-and-reconnect",
+        "to": "uninstall-reinstall-token-cleanup",
+        "relation": "CONSTRAINED_BY",
+        "kb_refs": [
+          "KB-043",
+          "KB-044"
+        ]
+      },
+      {
+        "from": "dead-token-detection-and-reconnect",
+        "to": "token-refresh-and-legacy-migration",
+        "relation": "RELATED_TO",
+        "kb_refs": [
+          "KB-018",
+          "KB-023"
+        ]
+      },
+      {
+        "from": "dead-token-detection-and-reconnect",
+        "to": "admin-token-and-scopes",
+        "relation": "READ_BY",
+        "kb_refs": [
+          "KB-046"
+        ]
+      }
+    ],
+    "coverage_matrix": [
+      {
+        "feature_id": "dead-token-detection-and-reconnect",
+        "layer": "api",
+        "role": "system",
+        "state": "token expiring: `Refresh Token Expires At` < hiện tại",
+        "environment": "documented",
+        "covered": true,
+        "note": "Rule Jira DUOS-399"
+      },
+      {
+        "feature_id": "dead-token-detection-and-reconnect",
+        "layer": "api",
+        "role": "system",
+        "state": "token legacy từ 01/01/2027",
+        "environment": "documented",
+        "covered": true,
+        "note": "Rule Jira DUOS-399"
+      },
+      {
+        "feature_id": "dead-token-detection-and-reconnect",
+        "layer": "api",
+        "role": "system",
+        "state": "token chết → chặn call, set cờ, email reconnect",
+        "environment": "documented",
+        "covered": true,
+        "note": "Rule Jira DUOS-399; nội dung email chưa có"
+      },
+      {
+        "feature_id": "dead-token-detection-and-reconnect",
+        "layer": "api",
+        "role": "system",
+        "state": "shop đóng → active, token chết (kể cả development store)",
+        "environment": "documented",
+        "covered": true,
+        "note": "Rule Jira DUOS-399"
+      },
+      {
+        "feature_id": "dead-token-detection-and-reconnect",
+        "layer": "api",
+        "role": "system",
+        "state": "shop đã uninstall hoặc vẫn đóng",
+        "environment": "documented",
+        "covered": true,
+        "note": "Rule Jira DUOS-399"
+      },
+      {
+        "feature_id": "dead-token-detection-and-reconnect",
+        "layer": "api",
+        "role": "system",
+        "state": "shop đóng dưới 90 ngày rồi mở lại",
+        "environment": "documented",
+        "covered": true,
+        "note": "Rule Jira DUOS-399"
+      },
+      {
+        "feature_id": "dead-token-detection-and-reconnect",
+        "layer": "api",
+        "role": "system",
+        "state": "401 đơn thuần, token còn hợp lệ",
+        "environment": "documented",
+        "covered": false,
+        "note": "Chỉ tóm tắt QA, chưa xác nhận"
+      },
+      {
+        "feature_id": "dead-token-detection-and-reconnect",
+        "layer": "api",
+        "role": "system",
+        "state": "refresh thất bại do lỗi tạm thời",
+        "environment": "documented",
+        "covered": false,
+        "note": "Tài liệu không nêu"
+      },
+      {
+        "feature_id": "dead-token-detection-and-reconnect",
+        "layer": "data",
+        "role": "system",
+        "state": "clear cờ sau reconnect",
+        "environment": "documented",
+        "covered": false,
+        "note": "Chỉ tóm tắt QA, chưa xác nhận"
+      },
+      {
+        "feature_id": "dead-token-detection-and-reconnect",
+        "layer": "email",
+        "role": "merchant",
+        "state": "nội dung / tần suất email reconnect, reopen",
+        "environment": "documented",
+        "covered": false,
+        "note": "Template bản nháp"
+      },
+      {
+        "feature_id": "dead-token-detection-and-reconnect",
+        "layer": "portal",
+        "role": "merchant",
+        "state": "shop đang bị gắn cờ re-auth",
+        "environment": "documented",
+        "covered": false,
+        "note": "Tài liệu không nêu merchant thấy gì"
+      },
+      {
+        "feature_id": "dead-token-detection-and-reconnect",
+        "layer": "code",
+        "role": "unspecified",
+        "state": "any",
+        "environment": "documented",
+        "covered": false,
+        "note": "Không có nguồn mã"
+      },
+      {
+        "feature_id": "dead-token-detection-and-reconnect",
+        "layer": "api",
+        "role": "unspecified",
+        "state": "đặc tả API (endpoint, request/response, mã lỗi)",
+        "environment": "documented",
+        "covered": false,
+        "note": "Bộ tài liệu QA không có đặc tả API/data model cho feature này"
+      },
+      {
+        "feature_id": "dead-token-detection-and-reconnect",
+        "layer": "db",
+        "role": "unspecified",
+        "state": "đặc tả data model (bảng/cột, kiểu dữ liệu)",
+        "environment": "documented",
+        "covered": false,
+        "note": "Bộ tài liệu QA không có đặc tả API/data model cho feature này"
+      }
+    ],
+    "unassigned_kb_items": [],
+    "profile_conflicts": [],
+    "profile_change_summary": [
+      "Profile mới dựng từ KB tài liệu của object auth-token; chưa có bản publish trước để so.",
+      "coverage_matrix ghi rõ phần đặc tả API và data model chưa có trong bộ tài liệu QA."
+    ],
+    "kb_trace_complete": true
+  },
+  "gate": {
+    "decision": "CONDITIONAL_PASS",
+    "blocking_findings": [],
+    "conditions": [
+      "Identity ổn định, user goal, capability theo mục tiêu và mapping KB đầy đủ (mọi item của shard được tham chiếu, mọi kb_refs tồn tại).",
+      "Oracle mạnh có cho 10 rule Jira DUOS-399; chưa có baseline staging nào cho tính năng này.",
+      "Các phát biểu chỉ có trong tóm tắt QA và các khoảng trống (xem unknown_areas) không có oracle — check tương ứng phải NEEDS_CONFIRMATION."
+    ],
+    "allowed_next_steps": [
+      "qa-checklist-builder",
+      "knowledge-diff-analyzer"
+    ]
+  }
+}

@@ -1,0 +1,890 @@
+{
+  "schema_version": "1.0",
+  "artifact_type": "FeatureProfileCandidate",
+  "artifact_id": "ART-FEATURE-PROFILE-team-members-and-invitations-CTX-20261008-02",
+  "workflow_id": "CTX-20261008-02",
+  "producer": "feature-profile-builder",
+  "source_refs": [
+    "candidate/product-kb/team-members-and-invitations.json",
+    "candidate/product-kb/roles-and-permissions.json",
+    "candidate/product-kb/workspace-profile-settings.json",
+    "candidate/product-kb/_product-level.json",
+    "input/scope-plan.json",
+    "input/orchestrator-directives.json",
+    "input/profile-checklist-brief.md",
+    "intermediate/doc/DOC-27.json"
+  ],
+  "upstream_artifact_ids": [
+    "PKBC-CTX-20261008-02-workspace-settings-team-members-and-invitations",
+    "PKBC-CTX-20261008-02-workspace-settings-roles-and-permissions",
+    "PKBC-CTX-20261008-02-workspace-settings-workspace-profile-settings",
+    "PKBC-CTX-20261008-02-_product-level",
+    "SCOPE-PLAN-CTX-20261008-02"
+  ],
+  "status": "PARTIAL",
+  "confidence": "MEDIUM",
+  "observations": [
+    "Profile dựng hoàn toàn từ tài liệu; không có quan sát runtime trong lần chạy này nên act_ids và observed_validations rỗng.",
+    "Ba quy tắc đã xác nhận (mời nhiều email chung role, role mặc định Member, gửi theo batch) đến từ quyết định PO/Dev BE 08/07/2026; mô tả mục đích feature do QA tổng hợp nên nằm ở risks (INFERRED); còn lại là hiện trạng staging 29/09/2026 hoặc chuỗi bundle.",
+    "Quy tắc quyền đổi role / remove member sống ở feature roles-and-permissions và được tham chiếu ở đây, không nhân bản."
+  ],
+  "assumptions": [
+    "feature_id dùng chính feature_key, như toàn bộ KB của feature; chưa có mã feature dạng số.",
+    "Các mục chỉ có trong bundle (Edit member, Remove from team, chuỗi tiến độ gửi nhiều email) được giữ ở risks, không dùng làm expected behavior."
+  ],
+  "unknowns": [
+    "Lỗi bảng Team members không tự thêm dòng `Invited` sau khi gửi lời mời (phải tải lại trang) đã được Dev sửa và QA xác nhận lại chưa?",
+    "Bulk action (checkbox chọn nhiều dòng) mà Jira MTRO-49 mô tả còn thuộc phạm vi phát hành không, hay ticket sẽ được cập nhật theo bản dựng hiện tại không có bulk action?",
+    "Mời lại một email đang có lời mời `Invited` thì UI báo gì và có tạo lời mời mới không?",
+    "Người được mời đã có tài khoản Mailtro (đăng nhập với token mời hợp lệ) thì chấp nhận lời mời theo luồng nào, và sau khi chấp nhận dòng trong bảng có chuyển từ `Invited` sang `Active` với role đã chọn không?",
+    "Ô Email của dialog mời có nhận phân tách khác dấu phẩy (khoảng trắng, xuống dòng, chấm phẩy) không, và tối đa bao nhiêu email trong một lần mời?",
+    "Lời mời có hiệu lực bao lâu, `Resend invite` có gia hạn token và gửi lại mail không, và lời mời hết hạn hiển thị trạng thái gì?",
+    "Contract API mời thành viên (endpoint, payload, mã lỗi) là gì? Jira MTRO-55 và MTRO-46 đang để trống AC.",
+    "Trên UI thật, `Edit member` / đổi role / `Remove from team` hoạt động thế nào, và sau khi đổi role hoặc xoá member thì quyền truy cập của người đó thay đổi ngay hay sau phiên đăng nhập kế tiếp?",
+    "Admin có thấy và dùng được trang Team members như Owner không (mời, thu hồi, đổi role, xoá), và Member mở `/members` thì thấy gì?"
+  ],
+  "conflicts": [
+    "Tên role thứ 3 đang tranh chấp (nhóm xung đột do roles-and-permissions sở hữu) ảnh hưởng dialog mời."
+  ],
+  "blocking_issues": [],
+  "payload": {
+    "feature_profiles": [
+      {
+        "feature_id": "team-members-and-invitations",
+        "feature_key": "team-members-and-invitations",
+        "name": "Team members: mời thành viên và quản lý danh sách thành viên của workspace",
+        "user_goal": "Người quản lý workspace mời đồng đội vào workspace qua email với một role chung cho cả lần mời, theo dõi lời mời đang chờ, gửi lại hoặc thu hồi lời mời, và quản lý thành viên đang có (đổi role, xoá khỏi workspace).",
+        "user_goal_kb_refs": [
+          "KB-001",
+          "KB-002",
+          "KB-017",
+          "KB-035"
+        ],
+        "stable_since_version": "v1",
+        "actors": [
+          {
+            "role": "Owner",
+            "permission_observed": "Toàn bộ khảo sát staging 29/09/2026 của trang Team members làm bằng role Owner: mở trang, mời, xem lời mời, thu hồi lời mời. Theo Jira, Owner có quyền quản lý users; dòng Owner trong bảng không có menu thao tác.",
+            "kb_refs": [
+              "KB-005",
+              "KB-007",
+              "KB-022",
+              "KB-035"
+            ]
+          },
+          {
+            "role": "Admin",
+            "permission_observed": "Theo Jira, Admin quản lý users, được đổi role và remove member nhưng không được sửa hoặc xoá Owner. Chưa có quan sát nào bằng tài khoản Admin.",
+            "kb_refs": [
+              "KB-023",
+              "KB-035",
+              "KB-037"
+            ]
+          },
+          {
+            "role": "Member (tên role thứ 3 đang tranh chấp)",
+            "permission_observed": "Theo Jira, role thứ 3 không được truy cập quản lý users và không được tự nâng role của mình. Chưa quan sát Member trên trang Team members.",
+            "kb_refs": [
+              "KB-024",
+              "KB-036"
+            ]
+          },
+          {
+            "role": "invitee (người được mời)",
+            "permission_observed": "Nhận email mời tham gia workspace; khi lời mời bị thu hồi thì không tham gia được bằng lời mời đó. Luồng chấp nhận lời mời thuộc màn đăng ký/đăng nhập của Mailtro ID (object khác).",
+            "kb_refs": [
+              "KB-009",
+              "KB-018"
+            ]
+          }
+        ],
+        "entry_points": [
+          {
+            "path": "Workspace switcher › `Team members` → route `/members` (trang không có mục riêng trên sidebar)",
+            "precondition": "Đã đăng nhập vào workspace (khảo sát bằng Owner).",
+            "kb_refs": [
+              "KB-005",
+              "KB-P-039",
+              "KB-P-041"
+            ]
+          },
+          {
+            "path": "Nút `Invite member` trên trang Team members → dialog **Invite a member**",
+            "precondition": "Đang ở trang `/members`.",
+            "kb_refs": [
+              "KB-006"
+            ]
+          },
+          {
+            "path": "Menu `Row actions` trên dòng lời mời status `Invited`",
+            "precondition": "Workspace có lời mời chưa được chấp nhận.",
+            "kb_refs": [
+              "KB-016",
+              "KB-017"
+            ]
+          },
+          {
+            "path": "Menu của dòng member Active → `Edit member` / `Remove from team` (chỉ thấy trong chuỗi giao diện của bundle)",
+            "precondition": "Workspace có member Active ngoài Owner (chưa có trên staging khảo sát).",
+            "kb_refs": [
+              "KB-019",
+              "KB-020"
+            ]
+          }
+        ],
+        "capabilities": [
+          {
+            "name": "Mời một hoặc nhiều email trong một lần với chung một role",
+            "description": "Dialog Invite a member nhận nhiều email (chip, phân tách bằng dấu phẩy), mọi email trong cùng lần mời gán chung một role chọn ở `Invite as` (mặc định Member; staging chỉ có Admin và Member). Frontend gửi theo batch có delay. Trên staging, chip lỗi khi email sai định dạng, đã là member hoặc trùng trong lần nhập; nút `Send invite` disabled khi chưa có email hoặc còn chip lỗi; gửi thành công hiện toast `Invitation sent`.",
+            "kb_refs": [
+              "KB-002",
+              "KB-003",
+              "KB-099",
+              "KB-004",
+              "KB-009",
+              "KB-010",
+              "KB-011",
+              "KB-012",
+              "KB-013",
+              "KB-014"
+            ],
+            "act_ids": []
+          },
+          {
+            "name": "Xem danh sách thành viên và lời mời đang chờ",
+            "description": "Bảng Team members liệt kê member Active và lời mời status `Invited` (tên lấy phần trước @ của email). Trên staging không có bulk action và không có cột trạng thái 2FA. Có lỗi đang mở: sau khi mời, bảng không tự thêm dòng mới.",
+            "kb_refs": [
+              "KB-001",
+              "KB-007",
+              "KB-008",
+              "KB-015",
+              "KB-016"
+            ],
+            "act_ids": []
+          },
+          {
+            "name": "Gửi lại hoặc thu hồi lời mời",
+            "description": "Menu `Row actions` của dòng lời mời có `Resend invite` và `Revoke invitation`; thu hồi có hộp xác nhận và toast `Invitation revoked`. Tác dụng của `Resend invite` chưa được mô tả.",
+            "kb_refs": [
+              "KB-017",
+              "KB-018"
+            ],
+            "act_ids": []
+          },
+          {
+            "name": "Đổi role hoặc xoá thành viên đang Active",
+            "description": "Theo Jira, chỉ Owner/Admin được đổi role và remove member, Admin không được động vào Owner, member không tự nâng role. Giao diện (dialog `Edit member`, xác nhận đổi role, `Remove from team`) mới chỉ thấy trong chuỗi bundle, chưa quan sát trên UI.",
+            "kb_refs": [
+              "KB-019",
+              "KB-020",
+              "KB-035",
+              "KB-036",
+              "KB-037"
+            ],
+            "act_ids": []
+          }
+        ],
+        "state_transitions": [
+          {
+            "from": "chưa có lời mời cho email",
+            "to": "lời mời status `Invited` trong bảng",
+            "trigger": "Bấm `Send invite` với email hợp lệ",
+            "condition": "Không còn chip lỗi; trên staging dòng mới chỉ hiện sau khi tải lại trang (lỗi đang mở)",
+            "kb_refs": [
+              "KB-012",
+              "KB-014",
+              "KB-015",
+              "KB-016"
+            ]
+          },
+          {
+            "from": "lời mời `Invited`",
+            "to": "lời mời bị thu hồi",
+            "trigger": "`Revoke invitation` → xác nhận `Revoke`",
+            "condition": "Người được mời không còn tham gia được bằng lời mời đó",
+            "kb_refs": [
+              "KB-018"
+            ]
+          },
+          {
+            "from": "member Active với role hiện tại",
+            "to": "member Active với role mới",
+            "trigger": "`Edit member` → đổi `Role` → xác nhận đổi role (chỉ thấy trong bundle)",
+            "condition": "Người thao tác là Owner hoặc Admin; không áp cho dòng Owner khi người thao tác là Admin",
+            "kb_refs": [
+              "KB-019",
+              "KB-035",
+              "KB-037"
+            ]
+          },
+          {
+            "from": "member Active",
+            "to": "không còn là thành viên workspace",
+            "trigger": "`Remove from team` → xác nhận (chỉ thấy trong bundle)",
+            "condition": "Người thao tác là Owner hoặc Admin; theo chuỗi xác nhận, member mất quyền truy cập ngay và không hoàn tác được",
+            "kb_refs": [
+              "KB-020",
+              "KB-035"
+            ]
+          }
+        ],
+        "confirmed_rules": [
+          {
+            "statement": "Theo quyết định PO 08/07/2026 (comment Jira MTRO-43), dialog mời thành viên nhận nhiều email trong một lần mời, và mọi email trong cùng lần mời được gán chung một role.",
+            "knowledge_kind": "CONFIRMED_EXPECTED",
+            "confidence": "MEDIUM",
+            "kb_refs": [
+              "KB-002"
+            ]
+          },
+          {
+            "statement": "Theo quyết định PO 08/07/2026 (comment Jira MTRO-43), role mặc định khi mời thành viên là Member. Tên hiển thị chính thức của role thứ 3 còn đang tranh chấp (Member hay Marketer/Editor).",
+            "knowledge_kind": "CONFIRMED_EXPECTED",
+            "confidence": "MEDIUM",
+            "kb_refs": [
+              "KB-003"
+            ]
+          },
+          {
+            "statement": "Theo quyết định PO và Dev BE 08/07/2026 (comment Jira MTRO-43), khi mời nhiều email trong một lần, frontend gọi API mời theo từng batch có delay giữa các batch để tránh dồn request.",
+            "knowledge_kind": "CONFIRMED_EXPECTED",
+            "confidence": "MEDIUM",
+            "kb_refs": [
+              "KB-004"
+            ]
+          }
+        ],
+        "observed_behavior": [
+          {
+            "statement": "Trên staging (khảo sát 29/09/2026, role Owner), trang Team members ở route `/members`, không có mục riêng trên sidebar; người dùng vào trang từ workspace switcher › `Team members`.",
+            "knowledge_kind": "OBSERVED_CURRENT",
+            "confidence": "MEDIUM",
+            "status": "CURRENT_STATE",
+            "kb_refs": [
+              "KB-005"
+            ]
+          },
+          {
+            "statement": "Trên staging (khảo sát 29/09/2026), trang Team members có dòng mô tả \"Invite teammates and manage their access.\" và nút `Invite member`; bấm `Invite member` mở dialog **Invite a member**.",
+            "knowledge_kind": "OBSERVED_CURRENT",
+            "confidence": "MEDIUM",
+            "status": "CURRENT_STATE",
+            "kb_refs": [
+              "KB-006"
+            ]
+          },
+          {
+            "statement": "Trên staging (khảo sát 29/09/2026, workspace chỉ có Owner ở trạng thái Active), bảng Team members có các cột `Name` (avatar, tên, email), `Role`, `Status` (`Active` / `Invited`) và một cột menu; cột menu của dòng Owner để trống.",
+            "knowledge_kind": "OBSERVED_CURRENT",
+            "confidence": "MEDIUM",
+            "status": "CURRENT_STATE",
+            "kb_refs": [
+              "KB-007"
+            ]
+          },
+          {
+            "statement": "Trên staging (khảo sát 23/09 và 29/09/2026), bảng Team members không có checkbox hay thao tác hàng loạt (khác mô tả của Jira MTRO-49, ticket đang To Do) và không có cột cho biết trạng thái 2FA của member.",
+            "knowledge_kind": "OBSERVED_CURRENT",
+            "confidence": "MEDIUM",
+            "status": "CURRENT_STATE",
+            "kb_refs": [
+              "KB-008"
+            ]
+          },
+          {
+            "statement": "Trên staging (khảo sát 29/09/2026), dialog **Invite a member** có mô tả \"They'll receive an email invite to join this workspace.\"; ô `Email` nhập dạng chip, nhiều email phân tách bằng dấu phẩy (placeholder `teammate@company.com, another@company.com`).",
+            "knowledge_kind": "OBSERVED_CURRENT",
+            "confidence": "MEDIUM",
+            "status": "CURRENT_STATE",
+            "kb_refs": [
+              "KB-009"
+            ]
+          },
+          {
+            "statement": "Trên staging (khảo sát 29/09/2026, đối chiếu lại 01/10/2026), ô `Invite as` của dialog mời chỉ có hai lựa chọn role: Admin và Member.",
+            "knowledge_kind": "OBSERVED_CURRENT",
+            "confidence": "MEDIUM",
+            "status": "CURRENT_STATE",
+            "kb_refs": [
+              "KB-010"
+            ]
+          },
+          {
+            "statement": "Trên staging (khảo sát 29/09/2026, thử với một email sai định dạng, email của Owner và một email nhập trùng), chip email bị đánh dấu lỗi (viền đỏ + icon) khi email sai định dạng, đã là member của workspace, hoặc bị trùng trong cùng lần nhập; dialog hiện dòng lỗi \"Remove the invalid or duplicate email(s) to send invites.\"",
+            "knowledge_kind": "OBSERVED_CURRENT",
+            "confidence": "LOW",
+            "status": "CURRENT_STATE",
+            "kb_refs": [
+              "KB-011"
+            ]
+          },
+          {
+            "statement": "Trên staging (khảo sát 29/09/2026), nút `Send invite` bị disabled khi ô Email chưa có email nào hoặc khi còn chip lỗi.",
+            "knowledge_kind": "OBSERVED_CURRENT",
+            "confidence": "LOW",
+            "status": "CURRENT_STATE",
+            "kb_refs": [
+              "KB-012"
+            ]
+          },
+          {
+            "statement": "Trên staging (khảo sát 29/09/2026, gửi một lời mời mẫu với role Member), gửi lời mời thành công hiện toast `Invitation sent` / `Invited as Member.`",
+            "knowledge_kind": "OBSERVED_CURRENT",
+            "confidence": "LOW",
+            "status": "CURRENT_STATE",
+            "kb_refs": [
+              "KB-014"
+            ]
+          },
+          {
+            "statement": "Trên staging (khảo sát 29/09/2026), sau khi gửi lời mời và có toast `Invitation sent`, bảng Team members không tự thêm dòng `Invited`; phải tải lại trang mới thấy lời mời. Lỗi đang mở (QA ghi nghi bug, đề xuất frontend tải lại danh sách sau khi mời).",
+            "knowledge_kind": "OBSERVED_CURRENT",
+            "confidence": "LOW",
+            "status": "KNOWN_DEFECT",
+            "kb_refs": [
+              "KB-015"
+            ]
+          },
+          {
+            "statement": "Trên staging (khảo sát 29/09/2026), lời mời chưa chấp nhận hiện thành một dòng trong bảng Team members: tên là phần trước ký tự @ của email, role `Member`, status `Invited` (không phải `Pending`), và nút `Row actions`.",
+            "knowledge_kind": "OBSERVED_CURRENT",
+            "confidence": "MEDIUM",
+            "status": "CURRENT_STATE",
+            "kb_refs": [
+              "KB-016"
+            ]
+          },
+          {
+            "statement": "Trên staging (khảo sát 29/09/2026), menu `Row actions` của dòng lời mời có hai mục `Resend invite` và `Revoke invitation`.",
+            "knowledge_kind": "OBSERVED_CURRENT",
+            "confidence": "MEDIUM",
+            "status": "CURRENT_STATE",
+            "kb_refs": [
+              "KB-017"
+            ]
+          },
+          {
+            "statement": "Trên staging (khảo sát 29/09/2026, thu hồi một lời mời mẫu), `Revoke invitation` mở hộp xác nhận `Revoke invitation?` với nội dung \"{email} will no longer be able to join with this invite.\" (nút `Cancel` / `Revoke`); xác nhận thì hiện toast `Invitation revoked` kèm email.",
+            "knowledge_kind": "OBSERVED_CURRENT",
+            "confidence": "LOW",
+            "status": "CURRENT_STATE",
+            "kb_refs": [
+              "KB-018"
+            ]
+          },
+          {
+            "statement": "Trên staging (khảo sát 29/09/2026), ô `Invite as` của dialog mời mặc định chọn Member.",
+            "knowledge_kind": "OBSERVED_CURRENT",
+            "confidence": "LOW",
+            "status": "CURRENT_STATE",
+            "kb_refs": [
+              "KB-099"
+            ]
+          }
+        ],
+        "observed_validations": [],
+        "permissions": [
+          {
+            "statement": "Theo Jira MTRO-49 (trạng thái To Do; tóm tắt trong QA KB Mailtro \"Team members & Role / Permission\" v1, đọc 07/10/2026), chỉ Owner hoặc Admin được đổi role của member và remove member khỏi workspace.",
+            "knowledge_kind": "CONFIRMED_EXPECTED",
+            "confidence": "MEDIUM",
+            "kb_refs": [
+              "KB-035"
+            ]
+          },
+          {
+            "statement": "Theo Jira MTRO-49 (trạng thái To Do; tóm tắt trong QA KB Mailtro \"Team members & Role / Permission\" v1, đọc 07/10/2026), member không được tự nâng role của chính mình.",
+            "knowledge_kind": "CONFIRMED_EXPECTED",
+            "confidence": "MEDIUM",
+            "kb_refs": [
+              "KB-036"
+            ]
+          },
+          {
+            "statement": "Theo Jira MTRO-49 (trạng thái To Do; tóm tắt trong QA KB Mailtro \"Team members & Role / Permission\" v1, đọc 07/10/2026), Admin không được sửa hoặc xoá Owner.",
+            "knowledge_kind": "CONFIRMED_EXPECTED",
+            "confidence": "MEDIUM",
+            "kb_refs": [
+              "KB-037"
+            ]
+          },
+          {
+            "statement": "Theo Jira MTRO-20/MTRO-46 (tóm tắt trong QA business rule Mailtro, cập nhật 07/10/2026), role thứ 3 (trên UI staging gọi là Member; tên chính thức đang tranh chấp) không được truy cập quản lý users và billing.",
+            "knowledge_kind": "CONFIRMED_EXPECTED",
+            "confidence": "MEDIUM",
+            "kb_refs": [
+              "KB-024"
+            ]
+          },
+          {
+            "statement": "Ô `Invite as` trên staging chỉ cho chọn Admin hoặc Member; không có lựa chọn Owner hay custom role khi mời.",
+            "kb_refs": [
+              "KB-010",
+              "KB-027"
+            ]
+          },
+          {
+            "statement": "Quyền theo role cho từng thao tác trên trang Team members (ai mời được, ai thu hồi được) chưa có ma trận chốt; profile không tự suy role nào ngoài các quy tắc trên.",
+            "kb_refs": [
+              "KB-032"
+            ]
+          }
+        ],
+        "surface_mapping": {
+          "portal": [
+            {
+              "item": "Trang Team members `/members` (vào từ workspace switcher), dòng mô tả \"Invite teammates and manage their access.\", nút `Invite member`",
+              "kb_refs": [
+                "KB-005",
+                "KB-006",
+                "KB-P-041"
+              ]
+            },
+            {
+              "item": "Bảng Team members: cột `Name`, `Role`, `Status` (`Active` / `Invited`), cột menu",
+              "kb_refs": [
+                "KB-007",
+                "KB-016"
+              ]
+            },
+            {
+              "item": "Dialog Invite a member: ô `Email` dạng chip, ô `Invite as`, nút `Send invite`, dòng lỗi chip",
+              "kb_refs": [
+                "KB-009",
+                "KB-010",
+                "KB-011",
+                "KB-012"
+              ]
+            },
+            {
+              "item": "Menu `Row actions` của lời mời: `Resend invite`, `Revoke invitation` (hộp xác nhận `Revoke invitation?`)",
+              "kb_refs": [
+                "KB-017",
+                "KB-018"
+              ]
+            },
+            {
+              "item": "Dialog `Edit member` và xác nhận `Remove {name}?` (chuỗi bundle, chưa thấy trên UI)",
+              "kb_refs": [
+                "KB-019",
+                "KB-020"
+              ]
+            }
+          ],
+          "storefront": [],
+          "api": [
+            {
+              "item": "API mời thành viên được frontend gọi theo từng batch có delay khi mời nhiều email; endpoint và payload không có trong tài liệu",
+              "kb_refs": [
+                "KB-004"
+              ]
+            }
+          ],
+          "data": [
+            {
+              "item": "Lời mời: email, role, status `Invited`; tên hiển thị suy từ phần trước @ của email",
+              "kb_refs": [
+                "KB-016"
+              ]
+            },
+            {
+              "item": "Thành viên: tên, email, role, status `Active`",
+              "kb_refs": [
+                "KB-007"
+              ]
+            }
+          ],
+          "code": []
+        },
+        "dependencies": [
+          {
+            "target": "workspace-settings / roles-and-permissions",
+            "relation": "permission_source",
+            "note": "Role gán khi mời và quy tắc ai được đổi role / remove member thuộc mô hình role của workspace; tên role thứ 3 đang tranh chấp.",
+            "kb_refs": [
+              "KB-003",
+              "KB-010",
+              "KB-035"
+            ]
+          },
+          {
+            "target": "auth / signup-and-workspace-creation",
+            "relation": "invite_acceptance",
+            "note": "Người được mời chấp nhận lời mời qua màn signup của Mailtro ID (link mời, email prefill). Có lỗi đang mở ở phía Mailtro ID khi mở link mời có token không hợp lệ lúc đang đăng nhập. Hành vi thuộc object auth.",
+            "kb_refs": [
+              "KB-009"
+            ]
+          },
+          {
+            "target": "abuse-guard / account-and-access-abuse-limits",
+            "relation": "constraint",
+            "note": "Giới hạn mời (mời trùng khi lời mời còn hạn, số lời mời tối đa mỗi hộp thư mỗi ngày, chặn tạm khi mời dồn dập) thuộc object abuse-guard.",
+            "kb_refs": [
+              "KB-002"
+            ]
+          },
+          {
+            "target": "abuse-guard / sending-suspension-and-staff-review",
+            "relation": "constraint",
+            "note": "Workspace ở trạng thái Sending suspended không mời được thành viên; workspace Disabled thì chấp nhận lời mời bị từ chối. Hành vi thuộc object abuse-guard.",
+            "kb_refs": [
+              "KB-P-022"
+            ]
+          },
+          {
+            "target": "workspace-settings / workspace-profile-settings",
+            "relation": "enables",
+            "note": "Chuyển quyền sở hữu chỉ làm được khi workspace đã có thành viên khác.",
+            "kb_refs": [
+              "KB-076"
+            ]
+          }
+        ],
+        "risks": [
+          {
+            "statement": "Theo mục Purpose do QA tổng hợp trong QA KB Mailtro \"Team members & Role / Permission\" v1 (07/10/2026, không gắn nguồn Jira riêng tại câu), tính năng Team members dùng để mời đồng đội vào workspace qua email, gán role cho người được mời, và quản lý lời mời cùng thành viên. Riêng việc mời nhiều email cùng một role có quyết định PO 08/07/2026 ở item liên quan.",
+            "knowledge_kind": "INFERRED",
+            "confidence": "LOW",
+            "kb_refs": [
+              "KB-001"
+            ],
+            "note": "Mô tả mục đích do QA tổng hợp, không có nguồn authority riêng; dùng để định hướng, không làm oracle."
+          },
+          {
+            "statement": "Trên staging (khảo sát 29/09/2026), sau khi gửi lời mời và có toast `Invitation sent`, bảng Team members không tự thêm dòng `Invited`; phải tải lại trang mới thấy lời mời. Lỗi đang mở (QA ghi nghi bug, đề xuất frontend tải lại danh sách sau khi mời).",
+            "knowledge_kind": "OBSERVED_CURRENT",
+            "confidence": "LOW",
+            "status": "KNOWN_DEFECT",
+            "kb_refs": [
+              "KB-015"
+            ],
+            "note": "Lỗi đang mở: không dùng trạng thái bảng ngay sau khi mời làm căn cứ; theo dõi như regression watch."
+          },
+          {
+            "statement": "Theo chuỗi giao diện trong i18n của frontend (khảo sát 29/09/2026 chỉ gửi một lời mời nên chưa đối chiếu trên UI với nhiều email), khi mời nhiều email nút gửi hiện `Send {count} invites` và trong lúc gửi hiện tiến độ `Sending {done}/{total}…`.",
+            "knowledge_kind": "INFERRED",
+            "confidence": "LOW",
+            "kb_refs": [
+              "KB-013"
+            ],
+            "note": "Chuỗi i18n, chưa đối chiếu với lần mời nhiều email trên UI."
+          },
+          {
+            "statement": "Theo chuỗi giao diện trong bundle frontend (chưa đối chiếu UI vì workspace khảo sát chưa có member Active nào ngoài Owner), menu dòng member Active có `Edit member`; dialog `Edit member` (\"Update this teammate's access.\") để Name và Email chỉ đọc, cho đổi `Role` và lưu bằng `Save changes`; đổi role có bước xác nhận `Change {name}'s role to {role}?` — tức đổi role qua dialog, không sửa inline trên bảng.",
+            "knowledge_kind": "INFERRED",
+            "confidence": "LOW",
+            "kb_refs": [
+              "KB-019"
+            ],
+            "note": "Chỉ là chuỗi bundle; chưa có expected behavior cho đổi role trên UI."
+          },
+          {
+            "statement": "Theo chuỗi giao diện trong bundle frontend (chưa đối chiếu UI), member Active có thao tác `Remove from team`; hộp xác nhận `Remove {name}?` ghi \"They will immediately lose access to {team}. This can't be undone.\"",
+            "knowledge_kind": "INFERRED",
+            "confidence": "LOW",
+            "kb_refs": [
+              "KB-020"
+            ],
+            "note": "Chỉ là chuỗi bundle; hệ quả sau khi xoá member chưa được quan sát."
+          },
+          {
+            "statement": "Bảng Team members trên staging không có checkbox / bulk action, khác mô tả của Jira MTRO-49 (đang To Do); chưa rõ bulk action còn trong phạm vi phát hành hay không.",
+            "knowledge_kind": "OBSERVED_CURRENT",
+            "confidence": "MEDIUM",
+            "kb_refs": [
+              "KB-008"
+            ]
+          },
+          {
+            "statement": "Role mặc định khi mời đã được PO chốt là role thứ 3, nhưng tên hiển thị chính thức của role này còn tranh chấp (Member hay Marketer / Editor); case kiểm tên role trên dialog mời chưa có oracle.",
+            "knowledge_kind": "INFERRED",
+            "confidence": "LOW",
+            "conflict_group": "CONF-MTRO-workspace-settings-01",
+            "kb_refs": [
+              "KB-003",
+              "KB-030",
+              "KB-031"
+            ]
+          },
+          {
+            "statement": "Route `/settings/team` trên staging trả trang trắng; trang Team members thật ở `/members`. Dùng sai route khi test sẽ cho kết quả trang trắng, không phải lỗi của feature.",
+            "knowledge_kind": "OBSERVED_CURRENT",
+            "confidence": "MEDIUM",
+            "kb_refs": [
+              "KB-P-049",
+              "KB-005"
+            ]
+          }
+        ],
+        "unknown_areas": [
+          {
+            "question": "Lỗi bảng Team members không tự thêm dòng `Invited` sau khi gửi lời mời (phải tải lại trang) đã được Dev sửa và QA xác nhận lại chưa?",
+            "why_it_matters": "Đang là lỗi mở; mọi check về bảng sau khi mời phải coi đây là regression watch.",
+            "kb_refs": [
+              "KB-015"
+            ]
+          },
+          {
+            "question": "Bulk action (checkbox chọn nhiều dòng) mà Jira MTRO-49 mô tả còn thuộc phạm vi phát hành không, hay ticket sẽ được cập nhật theo bản dựng hiện tại không có bulk action?",
+            "why_it_matters": "Staging không có bulk action; không biết vắng mặt là đúng hay là thiếu.",
+            "kb_refs": [
+              "KB-008",
+              "KB-007"
+            ]
+          },
+          {
+            "question": "Mời lại một email đang có lời mời `Invited` thì UI báo gì và có tạo lời mời mới không?",
+            "why_it_matters": "Tài liệu chỉ nhắc thông báo \"already pending\" ở phía giới hạn chống lạm dụng, chưa kiểm trên UI của dialog mời.",
+            "kb_refs": [
+              "KB-011",
+              "KB-016"
+            ]
+          },
+          {
+            "question": "Người được mời đã có tài khoản Mailtro (đăng nhập với token mời hợp lệ) thì chấp nhận lời mời theo luồng nào, và sau khi chấp nhận dòng trong bảng có chuyển từ `Invited` sang `Active` với role đã chọn không?",
+            "why_it_matters": "Chuyển trạng thái Invited → Active không được mô tả trong feature này; thiếu expected result cho điểm cuối của luồng mời.",
+            "kb_refs": [
+              "KB-016",
+              "KB-009"
+            ]
+          },
+          {
+            "question": "Ô Email của dialog mời có nhận phân tách khác dấu phẩy (khoảng trắng, xuống dòng, chấm phẩy) không, và tối đa bao nhiêu email trong một lần mời?",
+            "why_it_matters": "Không có boundary để viết check nhập nhiều email.",
+            "kb_refs": [
+              "KB-009",
+              "KB-002"
+            ]
+          },
+          {
+            "question": "Lời mời có hiệu lực bao lâu, `Resend invite` có gia hạn token và gửi lại mail không, và lời mời hết hạn hiển thị trạng thái gì?",
+            "why_it_matters": "Không có expected result cho Resend invite và lời mời hết hạn.",
+            "kb_refs": [
+              "KB-017"
+            ]
+          },
+          {
+            "question": "Contract API mời thành viên (endpoint, payload, mã lỗi) là gì? Jira MTRO-55 và MTRO-46 đang để trống AC.",
+            "why_it_matters": "Không kiểm được tầng API của việc mời, kể cả việc chặn quyền ở API.",
+            "kb_refs": [
+              "KB-004",
+              "KB-028"
+            ]
+          },
+          {
+            "question": "Trên UI thật, `Edit member` / đổi role / `Remove from team` hoạt động thế nào, và sau khi đổi role hoặc xoá member thì quyền truy cập của người đó thay đổi ngay hay sau phiên đăng nhập kế tiếp?",
+            "why_it_matters": "Mới chỉ có chuỗi bundle vì staging chưa có member Active ngoài Owner.",
+            "kb_refs": [
+              "KB-019",
+              "KB-020",
+              "KB-035"
+            ]
+          },
+          {
+            "question": "Admin có thấy và dùng được trang Team members như Owner không (mời, thu hồi, đổi role, xoá), và Member mở `/members` thì thấy gì?",
+            "why_it_matters": "Chưa có quan sát bằng Admin hay Member trên trang này; ma trận quyền chưa chốt.",
+            "kb_refs": [
+              "KB-023",
+              "KB-024",
+              "KB-032"
+            ]
+          }
+        ],
+        "freshness": {
+          "observed_at": "2026-10-07",
+          "run_id": "CTX-20261008-02",
+          "earliest_source_date": "2026-07-08",
+          "basis": "Ngày nguồn mới nhất trong các KB item được tham chiếu (quyết định PO/Dev, ngày đọc Jira, ngày khảo sát staging); không có quan sát runtime trong lần chạy này."
+        }
+      }
+    ],
+    "profile_relationships": [
+      {
+        "from": "team-members-and-invitations",
+        "to": "roles-and-permissions",
+        "relation": "GOVERNED_BY",
+        "kb_refs": [
+          "KB-035",
+          "KB-003"
+        ]
+      },
+      {
+        "from": "team-members-and-invitations",
+        "to": "workspace-profile-settings",
+        "relation": "PREREQUISITE_FOR",
+        "note": "Transfer ownership cần có thành viên khác",
+        "kb_refs": [
+          "KB-076"
+        ]
+      },
+      {
+        "from": "team-members-and-invitations",
+        "to": "auth/signup-and-workspace-creation",
+        "relation": "HANDS_OFF_TO",
+        "note": "Chấp nhận lời mời",
+        "kb_refs": [
+          "KB-009"
+        ]
+      }
+    ],
+    "coverage_matrix": [
+      {
+        "feature_id": "team-members-and-invitations",
+        "layer": "portal",
+        "role": "Owner",
+        "state": "mời 1 email hợp lệ",
+        "environment": "documented",
+        "covered": true,
+        "note": "Quyết định PO + khảo sát staging 29/09/2026"
+      },
+      {
+        "feature_id": "team-members-and-invitations",
+        "layer": "portal",
+        "role": "Owner",
+        "state": "mời nhiều email cùng role",
+        "environment": "documented",
+        "covered": true,
+        "note": "Quyết định PO; chuỗi tiến độ chỉ từ i18n"
+      },
+      {
+        "feature_id": "team-members-and-invitations",
+        "layer": "portal",
+        "role": "Owner",
+        "state": "email lỗi / trùng / đã là member",
+        "environment": "documented",
+        "covered": true,
+        "note": "Chỉ hiện trạng staging, 1 lần thử"
+      },
+      {
+        "feature_id": "team-members-and-invitations",
+        "layer": "portal",
+        "role": "Owner",
+        "state": "bảng sau khi mời",
+        "environment": "documented",
+        "covered": true,
+        "note": "Có lỗi đang mở"
+      },
+      {
+        "feature_id": "team-members-and-invitations",
+        "layer": "portal",
+        "role": "Owner",
+        "state": "thu hồi lời mời",
+        "environment": "documented",
+        "covered": true,
+        "note": "Hiện trạng staging"
+      },
+      {
+        "feature_id": "team-members-and-invitations",
+        "layer": "portal",
+        "role": "Owner",
+        "state": "gửi lại lời mời",
+        "environment": "documented",
+        "covered": false,
+        "note": "Chỉ thấy mục menu, tác dụng không mô tả"
+      },
+      {
+        "feature_id": "team-members-and-invitations",
+        "layer": "portal",
+        "role": "Owner/Admin",
+        "state": "đổi role / xoá member Active",
+        "environment": "documented",
+        "covered": false,
+        "note": "Quy tắc Jira có, UI chỉ có chuỗi bundle"
+      },
+      {
+        "feature_id": "team-members-and-invitations",
+        "layer": "portal",
+        "role": "Admin",
+        "state": "any",
+        "environment": "documented",
+        "covered": false,
+        "note": "Chưa có quan sát bằng Admin"
+      },
+      {
+        "feature_id": "team-members-and-invitations",
+        "layer": "portal",
+        "role": "Member",
+        "state": "any",
+        "environment": "documented",
+        "covered": false,
+        "note": "Chỉ có quy tắc Jira không quản lý users"
+      },
+      {
+        "feature_id": "team-members-and-invitations",
+        "layer": "portal",
+        "role": "invitee",
+        "state": "lời mời đã chấp nhận → Active",
+        "environment": "documented",
+        "covered": false,
+        "note": "Không mô tả trong feature này"
+      },
+      {
+        "feature_id": "team-members-and-invitations",
+        "layer": "api",
+        "role": "unspecified",
+        "state": "mời theo batch",
+        "environment": "documented",
+        "covered": true,
+        "note": "Quyết định PO/Dev BE; không có contract"
+      },
+      {
+        "feature_id": "team-members-and-invitations",
+        "layer": "api",
+        "role": "unspecified",
+        "state": "contract / chặn quyền ở API mời",
+        "environment": "documented",
+        "covered": false,
+        "note": "AC trống"
+      },
+      {
+        "feature_id": "team-members-and-invitations",
+        "layer": "data",
+        "role": "unspecified",
+        "state": "status lời mời / member",
+        "environment": "documented",
+        "covered": true,
+        "note": "Active / Invited quan sát; hết hạn chưa rõ"
+      },
+      {
+        "feature_id": "team-members-and-invitations",
+        "layer": "code",
+        "role": "unspecified",
+        "state": "any",
+        "environment": "documented",
+        "covered": false,
+        "note": "Không có nguồn mã"
+      }
+    ],
+    "unassigned_kb_items": [],
+    "profile_conflicts": [
+      {
+        "conflict_group": "CONF-MTRO-workspace-settings-01",
+        "owner_feature": "roles-and-permissions",
+        "topic": "Tên hiển thị role thứ 3 (Member hay Marketer / Editor)",
+        "impact": "Ảnh hưởng nhãn role mặc định và ô `Invite as` của dialog mời.",
+        "resolution": "UNRESOLVED",
+        "kb_refs": [
+          "KB-030",
+          "KB-031"
+        ]
+      }
+    ],
+    "profile_change_summary": [
+      "Rework r1: mục đích feature hạ xuống INFERRED, chuyển từ confirmed_rules sang risks; thêm quan sát staging tách ra về mặc định `Invite as` = Member."
+    ],
+    "kb_trace_complete": true
+  },
+  "gate": {
+    "decision": "CONDITIONAL_PASS",
+    "blocking_findings": [],
+    "conditions": [
+      "Profile có identity ổn định, user goal, capability nhóm theo mục tiêu (mời, theo dõi, gửi lại/thu hồi, quản lý member) và mọi field trace về kb_id.",
+      "Oracle còn thiếu cho: gửi lại lời mời, đổi role / xoá member trên UI, chấp nhận lời mời, contract API mời, và quyền Admin/Member trên trang này.",
+      "Một lỗi đang mở (bảng không tự cập nhật sau khi mời) phải được theo dõi như regression watch, không dùng làm oracle."
+    ],
+    "allowed_next_steps": [
+      "qa-checklist-builder",
+      "knowledge-diff-analyzer"
+    ]
+  }
+}

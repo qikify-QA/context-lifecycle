@@ -1,0 +1,567 @@
+{
+  "schema_version": "1.0",
+  "artifact_type": "RegressionChecklistCandidate",
+  "artifact_id": "RCCAND-credit-ledger-and-transactions-CTX-20261009-01",
+  "workflow_id": "CTX-20261009-01",
+  "producer": "qa-checklist-builder",
+  "source_refs": [
+    "candidate/feature-profiles/credit-ledger-and-transactions.json",
+    "candidate/product-kb/credit-ledger-and-transactions.json",
+    "candidate/product-kb/_object-level.finance-credit.json",
+    "candidate/product-kb/_product-level.json",
+    "input/orchestrator-directives.json",
+    "input/scope-plan.json",
+    "intermediate/doc/DOC-21.json"
+  ],
+  "upstream_artifact_ids": [
+    "ART-FEATURE-PROFILE-credit-ledger-and-transactions-CTX-20261009-01",
+    "PKBC-CTX-20261009-01-finance-credit-credit-ledger-and-transactions",
+    "PKBC-CTX-20261009-01-finance-credit-_object-level",
+    "PKBC-CTX-20261009-01-_product-level"
+  ],
+  "status": "PARTIAL",
+  "confidence": "MEDIUM",
+  "observations": [
+    "10 check; theo oracle_strength {'STRONG': 5, 'NONE': 4, 'BASELINE': 1}; theo status {'READY': 6, 'NEEDS_CONFIRMATION': 4}; theo dimension {'CORE': 2, 'STATE_DATA': 4, 'BOUNDARY': 1, 'NEGATIVE': 2, 'INTEGRATION': 1}.",
+    "oracle_strength tính bằng script theo luật orchestrator: STRONG khi mọi kb_id là CONFIRMED_EXPECTED ngoài conflict_group; có OBSERVED_CURRENT (không KNOWN_DEFECT) thì BASELINE; có INFERRED, item thuộc conflict_group hoặc không có kb_id thì NONE + NEEDS_CONFIRMATION. Item KNOWN_DEFECT chỉ nằm ở regression_watch_kb_ids, không bao giờ ở oracle.kb_ids.",
+    "related_kb_ids là ngữ cảnh truy vết của check (item INFERRED, item chỉ theo ticket, item cùng độ lệch), KHÔNG phải oracle.",
+    "Checklist regression của QA Duos chỉ được dùng làm gợi ý risk/độ phủ, không dùng làm oracle.",
+    "Expected của check BASELINE ghi theo hiện trạng staging 08/10/2026 (store Free plan); lệch = cần điều tra, không phải bug.",
+    "Mọi check ghi transaction đều yêu cầu chờ hàng đợi job xử lý xong (ghi chú test, chỉ làm điều kiện quan sát, không làm oracle).",
+    "Nhãn Operation lệch giữa Portal / Customer Account / ledger là độ lệch chưa phân xử: các check STRONG chỉ khẳng định loại transaction, nhãn được kiểm ở check NEEDS_CONFIRMATION riêng.",
+    "Monthly statement (Epic Jira DUOS-423, To Do) chưa có quyết định PO nên không có check; đã có câu hỏi ở feature profile."
+  ],
+  "assumptions": [
+    "Placeholder có cấu trúc (<store-plus>, <store-plus-fresh>, <store-no-b2b>, <company-a>, <location-a1>, <buyer-a1>, <email-buyer>…) thay cho store / tài khoản thật; QA chọn dữ liệu thật lúc chạy.",
+    "Điểm quan sát (bảng giao dịch Portal, Checkout rules trong Shopify admin, mục Financial ledger ở Customer Account) là nơi thực tế để đọc kết quả; việc các bề mặt đó hiển thị đúng cột / nhãn không phải là oracle của check STRONG.",
+    "Hành vi Finance & Credit trong tài liệu không phụ thuộc cờ users.config; không check nào cần config key."
+  ],
+  "unknowns": [
+    "Với order đã cancel hoặc đã paid, \"bước xử lý credit tiếp theo\" không được hỗ trợ là những thao tác nào (edit, refund, huỷ lần nữa…), và khi merchant thực hiện các thao tác đó thì transaction / Outstanding balance được kỳ vọng ra sao?",
+    "Nhãn Operation hiện hành của giao dịch credit trên từng bề mặt là gì: Portal (\"Purchased\" / \"Reimbursed\" / \"Reverted\" theo ticket), Customer Account (\"Order purchased\" / \"Invoice paid\" / \"Credit allocated\" / \"Order canceled\" / \"Credit updated\") và financial ledger (\"Order created\" / \"Payment received\" / \"Order edited\" / \"Order refund\" / \"Order cancelled\")? Sự khác nhau có chủ đích không, và bảng giao dịch ở Portal có đúng các cột Date, Operation, Credit change, Outstanding balance, Available credit, Credit Limit, Reference không?",
+    "File statement tải từ chi tiết location ở Portal có định dạng gì, gồm những cột nào, bao phủ khoảng thời gian / giao dịch nào, và có phải khớp từng dòng với bảng giao dịch trên Portal không?",
+    "Financial ledger và giao dịch credit có loại trừ order test không, và ledger bắt đầu ghi khi merchant bật cấu hình (module / extension) hay luôn ghi cho mọi store đã cài app?"
+  ],
+  "conflicts": [],
+  "blocking_issues": [],
+  "payload": {
+    "checklists": [
+      {
+        "feature_id": "credit-ledger-and-transactions",
+        "feature_key": "credit-ledger-and-transactions",
+        "checklist_version": "v1",
+        "checks": [
+          {
+            "check_id": "CHK-001",
+            "dimension": "CORE",
+            "layer": "portal",
+            "title": "Order net term tạo / trả invoice / huỷ sinh đúng loại transaction credit",
+            "applicability": {
+              "role": "system",
+              "state": "location gán credit limit, order payment term Net",
+              "environment": "documented",
+              "theme_or_device": null
+            },
+            "precondition": "<store-plus> (store Shopify Plus đã cài Duos, dùng được module B2B Finance & Credit); <location-a1> đã gán credit limit đủ lớn và dùng payment term Net (vd Net 30); có thể đặt order cho <location-a1> (qua <buyer-a1> hoặc merchant tạo order); đăng nhập Portal bằng tài khoản merchant.",
+            "steps": [
+              "Đặt order O1 payment term Net cho <location-a1>; chờ hàng đợi job của app xử lý xong (ghi ledger là bất đồng bộ) rồi tải lại trang; ghi lại giao dịch mới và 3 số liệu ở chi tiết <location-a1>.",
+              "Trong Shopify admin đánh dấu O1 đã thanh toán (trả invoice); chờ hàng đợi job của app xử lý xong (ghi ledger là bất đồng bộ) rồi tải lại trang; ghi lại.",
+              "Đặt order O2 payment term Net cho <location-a1> rồi huỷ O2 trong Shopify admin; chờ hàng đợi job của app xử lý xong (ghi ledger là bất đồng bộ) rồi tải lại trang; ghi lại."
+            ],
+            "observation_point": "Danh sách giao dịch và Credit limit / Outstanding balance / Available credit của <location-a1> sau từng bước.",
+            "expected_result": "Tạo O1 sinh transaction loại Purchased; trả invoice O1 sinh transaction loại Reimbursed; huỷ O2 sinh transaction loại Reverted. Sau mỗi bước Available credit = Credit limit − Outstanding balance. Nhãn hiển thị của từng loại chưa chốt: ghi lại nhãn, không đánh giá nhãn.",
+            "oracle": {
+              "kb_ids": [
+                "KB-020",
+                "KB-001"
+              ],
+              "oracle_strength": "STRONG"
+            },
+            "status": "READY",
+            "open_question_draft": null,
+            "related_kb_ids": [
+              "KB-026",
+              "KB-027",
+              "KB-032"
+            ],
+            "regression_watch_kb_ids": [],
+            "risk_refs": [
+              "RISK-ledger-01"
+            ],
+            "priority": "P1",
+            "act_ids": [],
+            "evidence_refs": [],
+            "automation_suitability": "HYBRID"
+          },
+          {
+            "check_id": "CHK-002",
+            "dimension": "STATE_DATA",
+            "layer": "portal",
+            "title": "Edit order net term trong Shopify admin sinh cặp Reverted giá cũ và Purchased giá mới",
+            "applicability": {
+              "role": "system",
+              "state": "order payment term Net chưa thanh toán, chưa huỷ",
+              "environment": "documented",
+              "theme_or_device": null
+            },
+            "precondition": "<store-plus> (store Shopify Plus đã cài Duos, dùng được module B2B Finance & Credit); <location-a1> đã gán credit limit đủ lớn và dùng payment term Net (vd Net 30); có thể đặt order cho <location-a1> (qua <buyer-a1> hoặc merchant tạo order); đăng nhập Portal bằng tài khoản merchant. Có order O3 payment term Net của <location-a1>, chưa thanh toán, chưa huỷ, tổng A.",
+            "steps": [
+              "Shopify admin › Orders › O3 › Edit: đổi số lượng hoặc thêm line item để tổng thành B ≠ A; lưu.",
+              "Chờ hàng đợi job của app xử lý xong (ghi ledger là bất đồng bộ) rồi tải lại trang; mở chi tiết <location-a1> và đọc các giao dịch mới của O3 (giá trị và Reference)."
+            ],
+            "observation_point": "Giao dịch mới của O3: loại, giá trị, Reference.",
+            "expected_result": "Có 1 transaction Reverted theo giá cũ (A) và 1 transaction Purchased theo giá mới (B); Reference của các transaction có thông tin order O3.",
+            "oracle": {
+              "kb_ids": [
+                "KB-021"
+              ],
+              "oracle_strength": "STRONG"
+            },
+            "status": "READY",
+            "open_question_draft": null,
+            "related_kb_ids": [
+              "KB-026",
+              "KB-027"
+            ],
+            "regression_watch_kb_ids": [],
+            "risk_refs": [
+              "RISK-ledger-02"
+            ],
+            "priority": "P1",
+            "act_ids": [],
+            "evidence_refs": [],
+            "automation_suitability": "HYBRID"
+          },
+          {
+            "check_id": "CHK-003",
+            "dimension": "BOUNDARY",
+            "layer": "portal",
+            "title": "Edit xoá hết line item khi order còn thuế / phí ship pending vẫn cập nhật Outstanding balance",
+            "applicability": {
+              "role": "system",
+              "state": "order payment term Net có thuế và phí ship, chưa thanh toán",
+              "environment": "documented",
+              "theme_or_device": null
+            },
+            "precondition": "<store-plus> (store Shopify Plus đã cài Duos, dùng được module B2B Finance & Credit); <location-a1> đã gán credit limit đủ lớn và dùng payment term Net (vd Net 30); có thể đặt order cho <location-a1> (qua <buyer-a1> hoặc merchant tạo order); đăng nhập Portal bằng tài khoản merchant. Có order O4 payment term Net của <location-a1> có thuế và phí ship, chưa thanh toán.",
+            "steps": [
+              "Ghi lại Outstanding balance của <location-a1>.",
+              "Shopify admin › Orders › O4 › Edit: xoá hết line item, để order vẫn còn khoản thuế / phí ship pending; lưu.",
+              "Chờ hàng đợi job của app xử lý xong (ghi ledger là bất đồng bộ) rồi tải lại trang; đọc lại Outstanding balance và giao dịch mới của O4."
+            ],
+            "observation_point": "Outstanding balance của <location-a1> trước và sau edit, giao dịch của O4.",
+            "expected_result": "Outstanding balance của <location-a1> được cập nhật sau lần edit (không giữ nguyên giá trị trước edit). Giá trị cụ thể chưa có căn cứ: ghi lại để đối chiếu.",
+            "oracle": {
+              "kb_ids": [
+                "KB-022"
+              ],
+              "oracle_strength": "STRONG"
+            },
+            "status": "READY",
+            "open_question_draft": null,
+            "related_kb_ids": [
+              "KB-021"
+            ],
+            "regression_watch_kb_ids": [],
+            "risk_refs": [
+              "RISK-ledger-02"
+            ],
+            "priority": "P1",
+            "act_ids": [],
+            "evidence_refs": [],
+            "automation_suitability": "HYBRID"
+          },
+          {
+            "check_id": "CHK-004",
+            "dimension": "NEGATIVE",
+            "layer": "portal",
+            "title": "Đổi payment term của order đã đặt là giới hạn có chủ đích",
+            "applicability": {
+              "role": "system",
+              "state": "order đã đặt, đổi payment term trong Shopify admin",
+              "environment": "documented",
+              "theme_or_device": null
+            },
+            "precondition": "<store-plus> (store Shopify Plus đã cài Duos, dùng được module B2B Finance & Credit); <location-a1> đã gán credit limit đủ lớn và dùng payment term Net (vd Net 30); có thể đặt order cho <location-a1> (qua <buyer-a1> hoặc merchant tạo order); đăng nhập Portal bằng tài khoản merchant. Có order O5 payment term Net của <location-a1>, chưa thanh toán.",
+            "steps": [
+              "Ghi lại giao dịch và 3 số liệu của <location-a1>.",
+              "Trong Shopify admin đổi payment term của O5 (vd Net 30 → Due on receipt hoặc Net 30 → Net 60).",
+              "Chờ hàng đợi job của app xử lý xong (ghi ledger là bất đồng bộ) rồi tải lại trang; ghi lại giao dịch và 3 số liệu."
+            ],
+            "observation_point": "Giao dịch và số liệu credit của <location-a1> trước và sau khi đổi payment term.",
+            "expected_result": "App không hỗ trợ xử lý việc đổi payment term của order đã đặt (Shopify không gửi hook cho thay đổi này): việc credit không phản ánh thay đổi là giới hạn có chủ đích, không mở bug. Ghi lại giao dịch và số liệu để đối chiếu khi PO/Dev làm rõ phạm vi sai lệch.",
+            "oracle": {
+              "kb_ids": [
+                "KB-023"
+              ],
+              "oracle_strength": "STRONG"
+            },
+            "status": "READY",
+            "open_question_draft": null,
+            "related_kb_ids": [
+              "KB-024"
+            ],
+            "regression_watch_kb_ids": [],
+            "risk_refs": [
+              "RISK-ledger-03"
+            ],
+            "priority": "P2",
+            "act_ids": [],
+            "evidence_refs": [],
+            "automation_suitability": "NOT_SUITABLE"
+          },
+          {
+            "check_id": "CHK-005",
+            "dimension": "NEGATIVE",
+            "layer": "portal",
+            "title": "Thao tác tiếp theo trên order đã huỷ hoặc đã thanh toán",
+            "applicability": {
+              "role": "system",
+              "state": "order net term đã huỷ hoặc đã thanh toán",
+              "environment": "documented",
+              "theme_or_device": null
+            },
+            "precondition": "<store-plus> (store Shopify Plus đã cài Duos, dùng được module B2B Finance & Credit); <location-a1> đã gán credit limit đủ lớn và dùng payment term Net (vd Net 30); có thể đặt order cho <location-a1> (qua <buyer-a1> hoặc merchant tạo order); đăng nhập Portal bằng tài khoản merchant. Có order O1 đã thanh toán và O2 đã huỷ (từ CHK-001 hoặc tương đương).",
+            "steps": [
+              "Với O1 (đã paid): thử edit order và tạo refund trong Shopify admin.",
+              "Với O2 (đã huỷ): thử thao tác còn cho phép trên Shopify (vd refund, chỉnh sửa ghi chú/thanh toán).",
+              "Sau mỗi thao tác, chờ hàng đợi job của app xử lý xong (ghi ledger là bất đồng bộ) rồi tải lại trang; ghi lại giao dịch và số liệu credit của <location-a1>."
+            ],
+            "observation_point": "Giao dịch và số liệu credit sau thao tác trên order đã huỷ / đã thanh toán.",
+            "expected_result": "Chưa có căn cứ: ghi lại thao tác đã làm, giao dịch phát sinh (nếu có) và số liệu credit; không đánh giá pass/fail cho tới khi PO/Dev định nghĩa \"bước xử lý credit tiếp theo\" không được hỗ trợ là thao tác nào.",
+            "oracle": {
+              "kb_ids": [],
+              "oracle_strength": "NONE"
+            },
+            "status": "NEEDS_CONFIRMATION",
+            "open_question_draft": "Với order đã cancel hoặc đã paid, \"bước xử lý credit tiếp theo\" không được hỗ trợ là những thao tác nào (edit, refund, huỷ lần nữa…), và khi merchant thực hiện các thao tác đó thì transaction / Outstanding balance được kỳ vọng ra sao?",
+            "related_kb_ids": [
+              "KB-025"
+            ],
+            "regression_watch_kb_ids": [],
+            "risk_refs": [
+              "RISK-ledger-03"
+            ],
+            "priority": "P2",
+            "act_ids": [],
+            "evidence_refs": [],
+            "automation_suitability": "NOT_SUITABLE"
+          },
+          {
+            "check_id": "CHK-006",
+            "dimension": "INTEGRATION",
+            "layer": "db",
+            "title": "Financial ledger ghi mục cho từng webhook order / refund / thanh toán",
+            "applicability": {
+              "role": "system",
+              "state": "order net term phát sinh tạo, sửa, thanh toán, refund, huỷ",
+              "environment": "documented",
+              "theme_or_device": null
+            },
+            "precondition": "<store-plus> (store Shopify Plus đã cài Duos, dùng được module B2B Finance & Credit); <location-a1> đã gán credit limit đủ lớn và dùng payment term Net (vd Net 30); có thể đặt order cho <location-a1> (qua <buyer-a1> hoặc merchant tạo order); đăng nhập Portal bằng tài khoản merchant. Xem được financial ledger: mục \"Financial ledger\" ở Customer Account của <buyer-a1> (khi đã bật) hoặc truy vấn ledger với sự hỗ trợ của Dev.",
+            "steps": [
+              "Đặt order O6 payment term Net (orders/create); edit O6 (orders/edited); đánh dấu O6 đã thanh toán (orders/paid); tạo refund một phần O6 (refunds/create).",
+              "Đặt order O7 payment term Net rồi huỷ (orders/cancelled).",
+              "Sau mỗi sự kiện, chờ hàng đợi job của app xử lý xong (ghi ledger là bất đồng bộ) rồi tải lại trang; đọc ledger của O6, O7."
+            ],
+            "observation_point": "Các mục ledger của O6 và O7 sau mỗi sự kiện.",
+            "expected_result": "Mỗi sự kiện `orders/create`, `orders/edited`, `orders/paid`, `refunds/create`, `orders/cancelled` sinh mục tương ứng trong financial ledger của order đó. Nhãn mục ledger chưa chốt: ghi lại, không đánh giá nhãn.",
+            "oracle": {
+              "kb_ids": [
+                "KB-030"
+              ],
+              "oracle_strength": "STRONG"
+            },
+            "status": "READY",
+            "open_question_draft": null,
+            "related_kb_ids": [
+              "KB-031",
+              "KB-032",
+              "KB-P-036"
+            ],
+            "regression_watch_kb_ids": [],
+            "risk_refs": [
+              "RISK-ledger-04"
+            ],
+            "priority": "P2",
+            "act_ids": [],
+            "evidence_refs": [],
+            "automation_suitability": "HYBRID"
+          },
+          {
+            "check_id": "CHK-007",
+            "dimension": "STATE_DATA",
+            "layer": "portal",
+            "title": "Chi tiết location chưa có giao dịch (hiện trạng)",
+            "applicability": {
+              "role": "merchant",
+              "state": "location chưa có giao dịch credit",
+              "environment": "documented",
+              "theme_or_device": null
+            },
+            "precondition": "<store-plus> (store Shopify Plus đã cài Duos, dùng được module B2B Finance & Credit); <location-b1> chưa có giao dịch credit; đăng nhập Portal bằng tài khoản merchant.",
+            "steps": [
+              "Mở Portal › \"Credit management\" › company chứa <location-b1> › chi tiết <location-b1>."
+            ],
+            "observation_point": "Tiêu đề trang, nút tải statement, vùng bảng giao dịch.",
+            "expected_result": "Theo hiện trạng staging 08/10/2026 (store Free plan), lệch = cần điều tra: trang có h1 là tên location, nút \"Download statement\" và empty state \"No transactions found\".",
+            "oracle": {
+              "kb_ids": [
+                "KB-029"
+              ],
+              "oracle_strength": "BASELINE"
+            },
+            "status": "READY",
+            "open_question_draft": null,
+            "related_kb_ids": [
+              "KB-026",
+              "KB-028",
+              "KB-013"
+            ],
+            "regression_watch_kb_ids": [],
+            "risk_refs": [
+              "RISK-ledger-05"
+            ],
+            "priority": "P3",
+            "act_ids": [],
+            "evidence_refs": [],
+            "automation_suitability": "SUITABLE"
+          },
+          {
+            "check_id": "CHK-008",
+            "dimension": "CORE",
+            "layer": "portal",
+            "title": "Bảng giao dịch ở chi tiết location: cột và nhãn Operation",
+            "applicability": {
+              "role": "merchant",
+              "state": "location có giao dịch Purchased / Reimbursed / Reverted",
+              "environment": "documented",
+              "theme_or_device": null
+            },
+            "precondition": "<store-plus> (store Shopify Plus đã cài Duos, dùng được module B2B Finance & Credit); <location-a1> đã có đủ ba loại giao dịch (sau CHK-001); đăng nhập Portal bằng tài khoản merchant.",
+            "steps": [
+              "Mở chi tiết <location-a1>; ghi lại tiêu đề các cột và giá trị cột Operation của từng giao dịch.",
+              "Đối chiếu nhãn của cùng giao dịch ở lịch sử Customer Account và ở financial ledger (nếu xem được)."
+            ],
+            "observation_point": "Cột của bảng giao dịch và nhãn Operation trên Portal, Customer Account, financial ledger.",
+            "expected_result": "Chưa có căn cứ: ghi lại cột và nhãn Operation trên từng bề mặt; không đánh giá pass/fail cho tới khi PO/Dev chốt nhãn.",
+            "oracle": {
+              "kb_ids": [],
+              "oracle_strength": "NONE"
+            },
+            "status": "NEEDS_CONFIRMATION",
+            "open_question_draft": "Nhãn Operation hiện hành của giao dịch credit trên từng bề mặt là gì: Portal (\"Purchased\" / \"Reimbursed\" / \"Reverted\" theo ticket), Customer Account (\"Order purchased\" / \"Invoice paid\" / \"Credit allocated\" / \"Order canceled\" / \"Credit updated\") và financial ledger (\"Order created\" / \"Payment received\" / \"Order edited\" / \"Order refund\" / \"Order cancelled\")? Sự khác nhau có chủ đích không, và bảng giao dịch ở Portal có đúng các cột Date, Operation, Credit change, Outstanding balance, Available credit, Credit Limit, Reference không?",
+            "related_kb_ids": [
+              "KB-026",
+              "KB-027",
+              "KB-031",
+              "KB-050",
+              "KB-020"
+            ],
+            "regression_watch_kb_ids": [],
+            "risk_refs": [
+              "RISK-ledger-05"
+            ],
+            "priority": "P2",
+            "act_ids": [],
+            "evidence_refs": [],
+            "automation_suitability": "SUITABLE"
+          },
+          {
+            "check_id": "CHK-009",
+            "dimension": "STATE_DATA",
+            "layer": "portal",
+            "title": "Nội dung file statement tải từ chi tiết location",
+            "applicability": {
+              "role": "merchant",
+              "state": "location có giao dịch credit",
+              "environment": "documented",
+              "theme_or_device": null
+            },
+            "precondition": "<store-plus> (store Shopify Plus đã cài Duos, dùng được module B2B Finance & Credit); <location-a1> có giao dịch, trong đó có tên company/location hoặc sản phẩm chứa ký tự có dấu; đăng nhập Portal bằng tài khoản merchant.",
+            "steps": [
+              "Mở chi tiết <location-a1>; bấm \"Download statement\".",
+              "Mở file tải về; đối chiếu định dạng, cột, số dòng và giá trị với bảng giao dịch trên Portal; kiểm ký tự có dấu."
+            ],
+            "observation_point": "File statement: định dạng, cột, dòng, giá trị, hiển thị ký tự có dấu.",
+            "expected_result": "Chưa có căn cứ: ghi lại định dạng, cột, phạm vi giao dịch và sai khác so với bảng trên Portal; không đánh giá pass/fail cho tới khi PO/Dev trả lời.",
+            "oracle": {
+              "kb_ids": [],
+              "oracle_strength": "NONE"
+            },
+            "status": "NEEDS_CONFIRMATION",
+            "open_question_draft": "File statement tải từ chi tiết location ở Portal có định dạng gì, gồm những cột nào, bao phủ khoảng thời gian / giao dịch nào, và có phải khớp từng dòng với bảng giao dịch trên Portal không?",
+            "related_kb_ids": [
+              "KB-028",
+              "KB-029"
+            ],
+            "regression_watch_kb_ids": [],
+            "risk_refs": [
+              "RISK-ledger-05"
+            ],
+            "priority": "P2",
+            "act_ids": [],
+            "evidence_refs": [],
+            "automation_suitability": "HYBRID"
+          },
+          {
+            "check_id": "CHK-010",
+            "dimension": "STATE_DATA",
+            "layer": "db",
+            "title": "Order test và thời điểm bắt đầu ghi ledger",
+            "applicability": {
+              "role": "system",
+              "state": "store vừa bật / chưa bật cấu hình liên quan, có order test",
+              "environment": "documented",
+              "theme_or_device": null
+            },
+            "precondition": "<store-plus> (store Shopify Plus đã cài Duos, dùng được module B2B Finance & Credit); <location-a1> đã gán credit limit đủ lớn và dùng payment term Net (vd Net 30); có thể đặt order cho <location-a1> (qua <buyer-a1> hoặc merchant tạo order); đăng nhập Portal bằng tài khoản merchant. Tạo được order test (Shopify Bogus Gateway / test order) cho <location-a1>.",
+            "steps": [
+              "Đặt 1 order test payment term Net cho <location-a1>.",
+              "Chờ hàng đợi job của app xử lý xong (ghi ledger là bất đồng bộ) rồi tải lại trang; kiểm giao dịch credit ở Portal và mục ledger của order test.",
+              "Nếu có store chưa bật module / extension Finance, đặt order Net và kiểm ledger có ghi không."
+            ],
+            "observation_point": "Giao dịch credit và mục ledger của order test; ledger trên store chưa bật cấu hình.",
+            "expected_result": "Chưa có căn cứ: ghi lại order test có vào giao dịch credit / ledger không và ledger có ghi khi chưa bật cấu hình không; không đánh giá pass/fail cho tới khi PO/Dev trả lời.",
+            "oracle": {
+              "kb_ids": [],
+              "oracle_strength": "NONE"
+            },
+            "status": "NEEDS_CONFIRMATION",
+            "open_question_draft": "Financial ledger và giao dịch credit có loại trừ order test không, và ledger bắt đầu ghi khi merchant bật cấu hình (module / extension) hay luôn ghi cho mọi store đã cài app?",
+            "related_kb_ids": [
+              "KB-030",
+              "KB-032"
+            ],
+            "regression_watch_kb_ids": [],
+            "risk_refs": [
+              "RISK-ledger-04"
+            ],
+            "priority": "P3",
+            "act_ids": [],
+            "evidence_refs": [],
+            "automation_suitability": "HYBRID"
+          }
+        ]
+      }
+    ],
+    "coverage_by_feature_and_risk": [
+      {
+        "feature_id": "credit-ledger-and-transactions",
+        "risk_ref": "RISK-ledger-01",
+        "risk_description": "Transaction credit sai loại hoặc thiếu khi order net term được tạo, trả invoice, huỷ",
+        "covered_by_checks": [
+          "CHK-001"
+        ],
+        "kb_ids": [
+          "KB-001",
+          "KB-020"
+        ],
+        "coverage_status": "COVERED"
+      },
+      {
+        "feature_id": "credit-ledger-and-transactions",
+        "risk_ref": "RISK-ledger-02",
+        "risk_description": "Edit order làm lệch transaction / Outstanding balance",
+        "covered_by_checks": [
+          "CHK-002",
+          "CHK-003"
+        ],
+        "kb_ids": [
+          "KB-021",
+          "KB-022"
+        ],
+        "coverage_status": "COVERED"
+      },
+      {
+        "feature_id": "credit-ledger-and-transactions",
+        "risk_ref": "RISK-ledger-03",
+        "risk_description": "Nhầm giới hạn có chủ đích (đổi payment term, order đã huỷ / đã thanh toán) thành bug hoặc ngược lại",
+        "covered_by_checks": [
+          "CHK-004",
+          "CHK-005"
+        ],
+        "kb_ids": [
+          "KB-023"
+        ],
+        "coverage_status": "PARTIAL"
+      },
+      {
+        "feature_id": "credit-ledger-and-transactions",
+        "risk_ref": "RISK-ledger-04",
+        "risk_description": "Financial ledger thiếu mục khi webhook đến hoặc ghi cả dữ liệu không mong muốn",
+        "covered_by_checks": [
+          "CHK-006",
+          "CHK-010"
+        ],
+        "kb_ids": [
+          "KB-030"
+        ],
+        "coverage_status": "PARTIAL"
+      },
+      {
+        "feature_id": "credit-ledger-and-transactions",
+        "risk_ref": "RISK-ledger-05",
+        "risk_description": "Lịch sử giao dịch và statement hiển thị / xuất sai",
+        "covered_by_checks": [
+          "CHK-007",
+          "CHK-008",
+          "CHK-009"
+        ],
+        "kb_ids": [
+          "KB-029"
+        ],
+        "coverage_status": "PARTIAL"
+      }
+    ],
+    "kb_items_without_dedicated_check": [],
+    "checks_needing_confirmation": [
+      {
+        "check_id": "CHK-005",
+        "open_question_draft": "Với order đã cancel hoặc đã paid, \"bước xử lý credit tiếp theo\" không được hỗ trợ là những thao tác nào (edit, refund, huỷ lần nữa…), và khi merchant thực hiện các thao tác đó thì transaction / Outstanding balance được kỳ vọng ra sao?",
+        "reason": "Giới hạn đã chốt nhưng không định nghĩa thao tác cụ thể nên không viết được kết quả mong đợi."
+      },
+      {
+        "check_id": "CHK-008",
+        "open_question_draft": "Nhãn Operation hiện hành của giao dịch credit trên từng bề mặt là gì: Portal (\"Purchased\" / \"Reimbursed\" / \"Reverted\" theo ticket), Customer Account (\"Order purchased\" / \"Invoice paid\" / \"Credit allocated\" / \"Order canceled\" / \"Credit updated\") và financial ledger (\"Order created\" / \"Payment received\" / \"Order edited\" / \"Order refund\" / \"Order cancelled\")? Sự khác nhau có chủ đích không, và bảng giao dịch ở Portal có đúng các cột Date, Operation, Credit change, Outstanding balance, Available credit, Credit Limit, Reference không?",
+        "reason": "Ba bộ nhãn lệch nhau giữa ba bề mặt, tài liệu ghi tên UI thật chưa chốt; cột bảng chỉ theo ticket và staging chưa có giao dịch nào."
+      },
+      {
+        "check_id": "CHK-009",
+        "open_question_draft": "File statement tải từ chi tiết location ở Portal có định dạng gì, gồm những cột nào, bao phủ khoảng thời gian / giao dịch nào, và có phải khớp từng dòng với bảng giao dịch trên Portal không?",
+        "reason": "Nút tải statement chỉ có mô tả theo ticket và quan sát nhãn nút; nội dung file chưa được tài liệu hay quan sát nêu."
+      },
+      {
+        "check_id": "CHK-010",
+        "open_question_draft": "Financial ledger và giao dịch credit có loại trừ order test không, và ledger bắt đầu ghi khi merchant bật cấu hình (module / extension) hay luôn ghi cho mọi store đã cài app?",
+        "reason": "Tài liệu chưa nêu; ảnh hưởng dữ liệu khi QA tạo order test và điều kiện tiên quyết của các check ledger."
+      }
+    ],
+    "duplicates_removed": [],
+    "excluded_dimensions": [
+      {
+        "dimension": "PERMISSION",
+        "reason": "Quyền xem giao dịch và tải statement ở Portal nằm cùng trang Credit management và đã được gom vào check quyền staff merchant của checklist credit-limit-management (CHK-012); quyền phía buyer nằm ở checklist buyer-finance-overview. Không nhân bản."
+      },
+      {
+        "dimension": "REGRESSION",
+        "reason": "Bản bootstrap đầu tiên từ tài liệu; chưa có thay đổi hành vi từ phân tích diff để kiểm hồi quy."
+      }
+    ]
+  },
+  "gate": {
+    "decision": "PASS",
+    "blocking_findings": [],
+    "conditions": [
+      "4 check NEEDS_CONFIRMATION mang open_question_draft; không check nào có expected khẳng định trên oracle NONE; item KNOWN_DEFECT chỉ ở regression_watch_kb_ids."
+    ],
+    "allowed_next_steps": [
+      "knowledge-diff-analyzer",
+      "context-quality-reviewer"
+    ]
+  },
+  "last_updated": {
+    "date": "2026-10-09",
+    "ccr_ref": "bootstrap"
+  }
+}

@@ -1,0 +1,967 @@
+{
+  "schema_version": "1.0",
+  "artifact_type": "FeatureProfileCandidate",
+  "artifact_id": "ART-FEATURE-PROFILE-quote-negotiation-and-status-CTX-20261009-01",
+  "workflow_id": "CTX-20261009-01",
+  "producer": "feature-profile-builder",
+  "source_refs": [
+    "candidate/product-kb/quote-negotiation-and-status.json",
+    "candidate/product-kb/quote-price-application.json",
+    "candidate/product-kb/quote-pdf-and-history.json",
+    "candidate/product-kb/_product-level.json",
+    "input/scope-plan.json",
+    "input/orchestrator-directives.json",
+    "input/profile-checklist-brief.md",
+    "intermediate/doc/DOC-21.json"
+  ],
+  "upstream_artifact_ids": [
+    "PKBC-CTX-20261009-01-quote-request-quote-negotiation-and-status",
+    "PKBC-CTX-20261009-01-quote-request-quote-price-application",
+    "PKBC-CTX-20261009-01-quote-request-quote-pdf-and-history",
+    "PKBC-CTX-20261009-01-_product-level",
+    "SCOPE-PLAN-CTX-20261009-01"
+  ],
+  "status": "PARTIAL",
+  "confidence": "MEDIUM",
+  "observations": [
+    "Profile dựng từ tài liệu; không có quan sát runtime nên act_ids và observed_validations rỗng.",
+    "Quy tắc đã xác nhận chỉ gồm bước kiểm tra reassign sau 5 phút của webhook revoke role (Dev BE 14/07/2026, Jira DUOS-400); hành vi của key `quotation.skip_reassign_on_revoke` là INFERRED (cần xác nhận); đối tượng reassign là quote chỉ theo Feature Map (INFERRED); trang \"Quote management\" là hiện trạng staging 08/10/2026; phần còn lại theo ticket.",
+    "Store khảo sát có 0 quote và Customer Account chưa quan sát, nên quote detail và luồng đàm phán chưa có bằng chứng thực tế."
+  ],
+  "assumptions": [
+    "feature_id dùng chính feature_key.",
+    "Reassign quote khi revoke role / xoá customer thuộc feature này vì nó giữ quote có người phụ trách trong suốt vòng đời đàm phán; trigger đổi role thuộc roles-permissions.",
+    "Item INFERRED được đặt ở risks / unknown_areas, không làm kết quả mong đợi.",
+    "surface_mapping thêm khoá `customer_account` và `backend` (đúng enum surface của run) vì feature có thao tác trên Customer Account và webhook backend; 5 khoá chuẩn giữ nguyên."
+  ],
+  "unknowns": [
+    "Quote đã hết hạn (status `EXPIRED`) hiển thị ở tab nào trên trang \"Quote management\", và status `EXPIRED` = 6 còn đúng ở bản hiện tại không?",
+    "Danh sách đầy đủ status của quote là gì và mỗi status ánh xạ sang tab nào (All / Unread / Read / Replied / Accepted / Rejected / Deal closed)?",
+    "Hạn của quote (`expires_at`) được đặt thế nào và mặc định bao nhiêu ngày (preview PDF hiện \"Valid for 30 days\" chỉ là giá trị mẫu)?",
+    "Modal \"Are you sure to reject this quote?\" dành cho buyer, merchant hay cả hai, và xuất hiện trên Portal, Customer Account hay cả hai?",
+    "Role nào (merchant, Admin / Senior Buyer / Junior Buyer / custom role) được xem, báo giá, counter offer, accept và reject quote; quyền \"View quotations\" / \"Create and edit quotations\" có nghĩa nghiệp vụ gì?",
+    "Khi merchant bật `quotation.skip_reassign_on_revoke`, hệ thống có đúng là không reassign quote của member bị revoke role không, và khi đó quote ở lại với ai, ai còn xem / xử lý được?",
+    "Khi không bật `quotation.skip_reassign_on_revoke`, bước kiểm tra reassign sau 5 phút của webhook revoke role có reassign quote của member bị revoke cho owner của company location không (QA KB \"Feature Map\" nói có, chưa có câu Dev có ngày)?",
+    "Mốc 5 phút của webhook revoke role tính từ thời điểm nào, và giá trị mặc định của `quotation.skip_reassign_on_revoke` là gì?",
+    "Khi customer bị xoá, quote của họ được reassign cho ai và history ghi dòng gì?",
+    "Các rule đàm phán theo ticket (giá line, custom discount, custom shipping fee, counter offer, accept / revised quote, resubmit quote rejected / closed, thêm item trên Portal) có còn đúng ở bản hiện tại không?",
+    "Email requote (Jira DUOS-305) gửi khi nào, cho ai và nội dung gồm gì?",
+    "Quote trên Customer Account (\"My Quotes\") hiển thị và cho buyer thao tác những gì (approve / reject kèm reason, counter offer, resubmit), và Jira DUOS-422 \"Fix layout in customer account\" thay đổi gì?",
+    "Merchant có tạo quote trực tiếp trên Portal được không (Jira DUOS-277 \"[Portal] Create Quote\" đang To Do), hay chỉ thêm item vào quote buyer đã gửi?"
+  ],
+  "conflicts": [
+    "Quote EXPIRED vs không có tab Expired — UNRESOLVED, khác phạm vi, không conflict_group."
+  ],
+  "blocking_issues": [],
+  "payload": {
+    "feature_profiles": [
+      {
+        "feature_id": "quote-negotiation-and-status",
+        "feature_key": "quote-negotiation-and-status",
+        "name": "Quản lý, đàm phán và theo dõi trạng thái quote",
+        "user_goal": "Merchant theo dõi các yêu cầu báo giá trên Portal và cùng buyer đàm phán nhiều lượt trên một quote (báo giá theo line, discount, phí ship, counter offer, revised quote, accept / reject kèm lý do) cho tới khi quote được chốt, bị từ chối hoặc hết hạn; quote vẫn có người phụ trách khi người tạo bị revoke role hoặc bị xoá.",
+        "user_goal_kb_refs": [
+          "KB-021",
+          "KB-025",
+          "KB-026",
+          "KB-029",
+          "KB-030",
+          "KB-032",
+          "KB-037",
+          "KB-038",
+          "KB-041",
+          "KB-072"
+        ],
+        "stable_since_version": "v1",
+        "actors": [
+          {
+            "role": "merchant (Portal)",
+            "permission_observed": "Khảo sát staging 08/10/2026 bằng merchant staff: xem được trang \"Quote management\", các tab và \"Advanced settings\" (store có 0 quote nên chưa mở được quote detail). Theo ticket merchant set giá từng line, custom discount, custom shipping fee, thêm item, accept hoặc gửi revised quote, approve / reject kèm reason không bắt buộc.",
+            "kb_refs": [
+              "KB-021",
+              "KB-022",
+              "KB-024",
+              "KB-026",
+              "KB-027",
+              "KB-028",
+              "KB-030",
+              "KB-034",
+              "KB-044"
+            ]
+          },
+          {
+            "role": "buyer B2B (Customer Account \"My Quotes\")",
+            "permission_observed": "Theo ticket buyer gửi counter offer, approve / reject kèm reason không bắt buộc trên Customer Account và resubmit quote đã reject / closed. Customer Account chưa được quan sát (không có tài khoản buyer).",
+            "kb_refs": [
+              "KB-029",
+              "KB-031",
+              "KB-035",
+              "KB-P-008"
+            ]
+          },
+          {
+            "role": "người thực hiện reject qua modal (chưa xác định)",
+            "permission_observed": "Tài liệu không nêu modal \"Are you sure to reject this quote?\" dành cho buyer, merchant hay cả hai, và trên surface nào.",
+            "kb_refs": [
+              "KB-032"
+            ]
+          },
+          {
+            "role": "system (webhook / backend)",
+            "permission_observed": "Lưu hạn quote theo UTC, gắn status EXPIRED (theo ticket); webhook revoke role chờ 5 phút rồi kiểm tra có cần reassign cho owner company location (Dev BE xác nhận; việc đối tượng reassign là quote chỉ theo Feature Map); reassign quote khi customer bị xoá và ghi history (theo ticket); gửi email requote (theo ticket).",
+            "kb_refs": [
+              "KB-036",
+              "KB-037",
+              "KB-038",
+              "KB-039",
+              "KB-072",
+              "KB-041",
+              "KB-042",
+              "KB-043"
+            ]
+          }
+        ],
+        "entry_points": [
+          {
+            "path": "Portal: B2B extensions hub › row \"Quote requests\" › trang \"Quote management\"",
+            "precondition": "Merchant đã đăng nhập Portal (khảo sát bằng merchant staff, store Free plan).",
+            "kb_refs": [
+              "KB-021"
+            ]
+          },
+          {
+            "path": "Các tab \"All\" / \"Unread\" / \"Read\" / \"Replied\" / \"Accepted\" / \"Rejected\" / \"Deal closed\" của \"Quote management\"",
+            "precondition": "Store có quote (store khảo sát có 0 quote, chỉ thấy \"No quotations found\").",
+            "kb_refs": [
+              "KB-022",
+              "KB-023"
+            ]
+          },
+          {
+            "path": "Portal: quote detail (báo giá, thêm item, accept / reject)",
+            "precondition": "Có quote đã submit; chưa quan sát, chỉ theo ticket.",
+            "kb_refs": [
+              "KB-026",
+              "KB-044",
+              "KB-034"
+            ]
+          },
+          {
+            "path": "Customer Account: extension \"My Quotes\"",
+            "precondition": "Buyer B2B đăng nhập Customer Account; block chưa kích hoạt và chưa quan sát.",
+            "kb_refs": [
+              "KB-P-008",
+              "KB-035"
+            ]
+          }
+        ],
+        "capabilities": [
+          {
+            "name": "Theo dõi danh sách quote theo tab",
+            "description": "Trang \"Quote management\" liệt kê quote theo tab All / Unread / Read / Replied / Accepted / Rejected / Deal closed, có trạng thái rỗng \"No quotations found\" và lối vào \"Advanced settings\" (hiện trạng staging 08/10/2026). Ánh xạ tab ↔ status của quote chưa có nguồn; không có tab \"Expired\".",
+            "kb_refs": [
+              "KB-021",
+              "KB-022",
+              "KB-023",
+              "KB-024"
+            ],
+            "act_ids": []
+          },
+          {
+            "name": "Merchant báo giá cho quote",
+            "description": "Merchant set giá riêng cho từng line, đặt custom discount và custom shipping fee cho quote, tìm sản phẩm để thêm item trên Portal (theo ticket, chưa có PO/Dev xác nhận, Jira DUOS-274, DUOS-297, DUOS-300, DUOS-276).",
+            "kb_refs": [
+              "KB-026",
+              "KB-027",
+              "KB-028",
+              "KB-044"
+            ],
+            "act_ids": []
+          },
+          {
+            "name": "Đàm phán nhiều lượt",
+            "description": "Buyer re-quote bằng counter offer; trước counter offer merchant accept hoặc gửi revised quote; có email requote (theo ticket, chưa có PO/Dev xác nhận, Jira DUOS-184, DUOS-305). Trigger, người nhận và nội dung email requote chưa có nguồn.",
+            "kb_refs": [
+              "KB-025",
+              "KB-029",
+              "KB-030",
+              "KB-043"
+            ],
+            "act_ids": []
+          },
+          {
+            "name": "Accept / reject quote kèm lý do",
+            "description": "Approve hoặc reject trên Portal và Customer Account đều có reason không bắt buộc; modal reject \"Are you sure to reject this quote?\" có ô lý do (placeholder \"E.g. I need better offer...\") và nút \"Cancel\" / \"Confirm rejection\"; lý do được lưu vào dữ liệu quote và history (theo ticket, chưa có PO/Dev xác nhận, Jira DUOS-185, DUOS-196, DUOS-213, DUOS-214).",
+            "kb_refs": [
+              "KB-032",
+              "KB-033",
+              "KB-034",
+              "KB-035"
+            ],
+            "act_ids": []
+          },
+          {
+            "name": "Gửi lại quote đã reject / closed",
+            "description": "Buyer resubmit được quote đã bị reject hoặc đã closed (replicate quotation) (theo ticket, chưa có PO/Dev xác nhận, tài liệu tổng hợp quotation 17/07/2026).",
+            "kb_refs": [
+              "KB-031"
+            ],
+            "act_ids": []
+          },
+          {
+            "name": "Hạn quote và trạng thái hết hạn",
+            "description": "Hạn quote ở field `expires_at` lưu theo UTC; quote hết hạn có status `EXPIRED` (giá trị 6) (theo ticket, chưa có PO/Dev xác nhận, rule draft chỉ theo ticket Jira DUOS-186, DUOS-195). Trang \"Quote management\" trên staging không có tab \"Expired\".",
+            "kb_refs": [
+              "KB-036",
+              "KB-037",
+              "KB-022"
+            ],
+            "act_ids": []
+          },
+          {
+            "name": "Giữ người phụ trách quote khi người tạo mất role hoặc bị xoá",
+            "description": "Theo Dev BE 14/07/2026 (Jira DUOS-400), webhook revoke role được xử lý trễ 5 phút rồi mới kiểm tra có cần reassign cho owner của company location; cũng theo Dev BE 14/07/2026, merchant bật key users.config `quotation.skip_reassign_on_revoke` thì không reassign quote, nhưng QA KB Quote ghi điều này cần xác nhận. Việc quote của member bị revoke được reassign cho owner location chỉ theo QA KB \"Feature Map\" (chưa có câu Dev có ngày). Khi customer bị xoá, quote được reassign và ghi vào history (theo ticket Jira DUOS-176; đích reassign chưa có nguồn). Hành vi chi tiết khi bật config chưa chốt.",
+            "kb_refs": [
+              "KB-038",
+              "KB-039",
+              "KB-072",
+              "KB-040",
+              "KB-041",
+              "KB-042"
+            ],
+            "act_ids": []
+          }
+        ],
+        "state_transitions": [
+          {
+            "from": "quote đã submit",
+            "to": "quote đã được merchant báo giá",
+            "trigger": "Merchant set giá line / discount / shipping fee và gửi",
+            "condition": "theo ticket, chưa có PO/Dev xác nhận; tên status và tab tương ứng chưa có nguồn",
+            "kb_refs": [
+              "KB-026",
+              "KB-027",
+              "KB-028"
+            ]
+          },
+          {
+            "from": "quote đã được báo giá",
+            "to": "counter offer của buyer",
+            "trigger": "Buyer re-quote bằng counter offer",
+            "condition": "theo ticket, chưa có PO/Dev xác nhận",
+            "kb_refs": [
+              "KB-029"
+            ]
+          },
+          {
+            "from": "counter offer của buyer",
+            "to": "accepted hoặc revised quote",
+            "trigger": "Merchant chọn accept hoặc gửi revised quote",
+            "condition": "theo ticket, chưa có PO/Dev xác nhận",
+            "kb_refs": [
+              "KB-030",
+              "KB-043"
+            ]
+          },
+          {
+            "from": "quote đang mở",
+            "to": "rejected (lý do được lưu vào quote và history)",
+            "trigger": "\"Confirm rejection\" trong modal \"Are you sure to reject this quote?\"",
+            "condition": "Lý do không bắt buộc; người thực hiện và surface của modal chưa xác định (theo ticket, chưa có PO/Dev xác nhận)",
+            "kb_refs": [
+              "KB-032",
+              "KB-033",
+              "KB-034",
+              "KB-035"
+            ]
+          },
+          {
+            "from": "rejected hoặc closed",
+            "to": "quote mới được gửi lại (replicate)",
+            "trigger": "Buyer resubmit",
+            "condition": "theo ticket, chưa có PO/Dev xác nhận",
+            "kb_refs": [
+              "KB-031"
+            ]
+          },
+          {
+            "from": "quote còn hạn",
+            "to": "`EXPIRED` (6)",
+            "trigger": "Quá `expires_at` (UTC)",
+            "condition": "theo ticket, chưa có PO/Dev xác nhận; tab hiển thị quote hết hạn chưa biết",
+            "kb_refs": [
+              "KB-036",
+              "KB-037",
+              "KB-022"
+            ]
+          },
+          {
+            "from": "member bị revoke role",
+            "to": "hệ thống kiểm tra có cần reassign cho owner của company location",
+            "trigger": "Webhook revoke role của member",
+            "condition": "Xử lý trễ 5 phút rồi mới kiểm tra (Dev BE 14/07/2026)",
+            "kb_refs": [
+              "KB-038"
+            ]
+          },
+          {
+            "from": "quote thuộc member bị revoke role",
+            "to": "quote được reassign cho owner của company location",
+            "trigger": "Bước kiểm tra reassign sau 5 phút",
+            "condition": "Merchant không bật users.config `quotation.skip_reassign_on_revoke`; đối tượng reassign là quote chỉ theo QA KB \"Feature Map\", chưa có PO/Dev xác nhận",
+            "kb_refs": [
+              "KB-072",
+              "KB-038",
+              "KB-039"
+            ]
+          },
+          {
+            "from": "quote thuộc member",
+            "to": "không reassign",
+            "trigger": "Webhook revoke role của member",
+            "condition": "Merchant bật users.config `quotation.skip_reassign_on_revoke` (theo Dev BE 14/07/2026, chưa được xác nhận là hành vi đúng); quote ở lại với ai chưa chốt",
+            "kb_refs": [
+              "KB-039",
+              "KB-040"
+            ]
+          },
+          {
+            "from": "quote của customer",
+            "to": "quote được reassign (đích chưa có nguồn), ghi history",
+            "trigger": "Customer bị xoá",
+            "condition": "theo ticket, chưa có PO/Dev xác nhận",
+            "kb_refs": [
+              "KB-041",
+              "KB-042"
+            ]
+          }
+        ],
+        "confirmed_rules": [
+          {
+            "statement": "Theo Dev BE 14/07/2026 (Jira DUOS-400 comment, ghi trong QA business rule Duos và QA KB Duos \"Roles & permissions\" v1), webhook revoke role được xử lý trễ 5 phút, sau đó hệ thống mới kiểm tra có cần reassign cho owner của company location hay không.",
+            "knowledge_kind": "CONFIRMED_EXPECTED",
+            "confidence": "MEDIUM",
+            "confirmation_basis": "Quyết định Dev BE 14/07/2026 (Jira DUOS-400 comment), ghi trong QA business rule Duos",
+            "kb_refs": [
+              "KB-038"
+            ]
+          }
+        ],
+        "observed_behavior": [
+          {
+            "statement": "Trên staging (khảo sát 08/10/2026, store staging Plus (Free plan), merchant staff, store có 0 quote), Portal có trang \"Quote management\" (vào từ row \"Quote requests\" ở B2B extensions hub) với mô tả \"Manage your quotes including: quote display, quote submission and more.\"",
+            "knowledge_kind": "OBSERVED_CURRENT",
+            "confidence": "MEDIUM",
+            "status": "CURRENT_STATE",
+            "kb_refs": [
+              "KB-021"
+            ]
+          },
+          {
+            "statement": "Trên staging (khảo sát 08/10/2026, store staging Plus (Free plan), merchant staff, store có 0 quote), trang \"Quote management\" có các tab \"All\", \"Unread\", \"Read\", \"Replied\", \"Accepted\", \"Rejected\", \"Deal closed\"; không có tab \"Expired\". Quote hết hạn hiển thị ở tab nào chưa được quan sát (tài liệu ghi Need confirm).",
+            "knowledge_kind": "OBSERVED_CURRENT",
+            "confidence": "MEDIUM",
+            "status": "CURRENT_STATE",
+            "kb_refs": [
+              "KB-022"
+            ]
+          },
+          {
+            "statement": "Trên staging (khảo sát 08/10/2026, store staging Plus (Free plan), merchant staff, store có 0 quote), trang \"Quote management\" khi chưa có quote hiển thị \"No quotations found\".",
+            "knowledge_kind": "OBSERVED_CURRENT",
+            "confidence": "LOW",
+            "status": "CURRENT_STATE",
+            "kb_refs": [
+              "KB-023"
+            ]
+          },
+          {
+            "statement": "Trên staging (khảo sát 08/10/2026, store staging Plus (Free plan), merchant staff, store có 0 quote), trang \"Quote management\" có section \"Advanced settings\" gồm \"Quote widget settings\" và \"Quote PDF template\", mỗi mục có nút \"Manage\".",
+            "knowledge_kind": "OBSERVED_CURRENT",
+            "confidence": "MEDIUM",
+            "status": "CURRENT_STATE",
+            "kb_refs": [
+              "KB-024"
+            ]
+          }
+        ],
+        "observed_validations": [],
+        "permissions": [
+          {
+            "statement": "Revoke role của member kích hoạt bước kiểm tra reassign cho owner company location sau 5 phút (Dev BE 14/07/2026); theo Dev BE 14/07/2026, merchant bật `quotation.skip_reassign_on_revoke` thì không reassign quote (QA KB Quote ghi cần xác nhận). Mặc định quote của member được reassign cho owner location chỉ theo QA KB \"Feature Map\".",
+            "kb_refs": [
+              "KB-038",
+              "KB-039",
+              "KB-072"
+            ]
+          },
+          {
+            "statement": "Role nào (merchant, Admin / Senior Buyer / Junior Buyer / custom role) được xem, báo giá, accept, reject quote chưa có rule; người thực hiện modal reject chưa xác định.",
+            "kb_refs": [
+              "KB-025",
+              "KB-032",
+              "KB-034",
+              "KB-035",
+              "KB-P-014"
+            ]
+          }
+        ],
+        "surface_mapping": {
+          "portal": [
+            {
+              "item": "Trang \"Quote management\" (row \"Quote requests\" ở B2B extensions hub), tab, trạng thái rỗng, \"Advanced settings\"",
+              "kb_refs": [
+                "KB-021",
+                "KB-022",
+                "KB-023",
+                "KB-024"
+              ]
+            },
+            {
+              "item": "Quote detail: giá line, custom discount, custom shipping fee, thêm item, accept / revise, approve / reject kèm reason (theo ticket)",
+              "kb_refs": [
+                "KB-026",
+                "KB-027",
+                "KB-028",
+                "KB-030",
+                "KB-034",
+                "KB-044"
+              ]
+            }
+          ],
+          "storefront": [],
+          "customer_account": [
+            {
+              "item": "\"My Quotes\": counter offer, approve / reject kèm reason, resubmit (theo ticket, chưa quan sát)",
+              "kb_refs": [
+                "KB-P-008",
+                "KB-029",
+                "KB-031",
+                "KB-035"
+              ]
+            }
+          ],
+          "api": [],
+          "data": [
+            {
+              "item": "`expires_at` (UTC), status `EXPIRED` = 6 (theo ticket)",
+              "kb_refs": [
+                "KB-036",
+                "KB-037"
+              ]
+            },
+            {
+              "item": "Lý do reject lưu trong quote và history; reassign do xoá customer ghi history (theo ticket)",
+              "kb_refs": [
+                "KB-033",
+                "KB-042"
+              ]
+            },
+            {
+              "item": "users.config `quotation.skip_reassign_on_revoke` (theo merchant, không có UI Portal)",
+              "kb_refs": [
+                "KB-039",
+                "KB-P-029",
+                "KB-P-031"
+              ]
+            }
+          ],
+          "backend": [
+            {
+              "item": "Webhook revoke role: xử lý trễ 5 phút rồi kiểm tra có cần reassign cho owner company location (đối tượng quote theo Feature Map)",
+              "kb_refs": [
+                "KB-038",
+                "KB-072"
+              ]
+            },
+            {
+              "item": "Email requote (trigger / người nhận / nội dung chưa có nguồn)",
+              "kb_refs": [
+                "KB-043"
+              ]
+            }
+          ],
+          "code": []
+        },
+        "dependencies": [
+          {
+            "target": "roles-permissions / member-role-assignment-sync",
+            "relation": "triggered_by",
+            "note": "Đổi / revoke role member do roles-permissions sở hữu; hệ quả reassign quote thuộc feature này.",
+            "kb_refs": [
+              "KB-038"
+            ]
+          },
+          {
+            "target": "roles-permissions / merchant-role-customization-config",
+            "relation": "config_source",
+            "note": "Danh sách key users.config theo merchant do roles-permissions sở hữu; hành vi của `quotation.skip_reassign_on_revoke` trên quote ở đây.",
+            "kb_refs": [
+              "KB-039",
+              "KB-P-029"
+            ]
+          },
+          {
+            "target": "notifications / notification-settings-and-templates",
+            "relation": "notifies_via",
+            "note": "Nhóm thông báo \"Quotations\" thuộc notifications; ở đây chỉ biết có email requote.",
+            "kb_refs": [
+              "KB-043"
+            ]
+          },
+          {
+            "target": "portal-shell / portal-navigation",
+            "relation": "hosted_in",
+            "note": "Route và row hub \"Quote requests\" do portal-shell sở hữu.",
+            "kb_refs": [
+              "KB-021"
+            ]
+          },
+          {
+            "target": "quote-request / quote-price-application",
+            "relation": "leads_to",
+            "note": "Quote được accept chuyển sang áp giá và tạo order / draft order.",
+            "kb_refs": [
+              "KB-030",
+              "KB-045"
+            ]
+          },
+          {
+            "target": "quote-request / quote-pdf-and-history",
+            "relation": "writes_to",
+            "note": "Lý do reject và reassign được ghi vào history của quote.",
+            "kb_refs": [
+              "KB-033",
+              "KB-042",
+              "KB-056"
+            ]
+          },
+          {
+            "target": "Customer Account (\"My Quotes\")",
+            "relation": "runs_on",
+            "note": "Extension Customer Account của sản phẩm; chưa quan sát.",
+            "kb_refs": [
+              "KB-P-008"
+            ]
+          }
+        ],
+        "risks": [
+          {
+            "statement": "Luồng đàm phán (giá line, custom discount, custom shipping fee, thêm item, counter offer, accept / revised quote, resubmit) chỉ dựa trên ticket Jira qua tài liệu tổng hợp quotation (17/07/2026) không có trong bộ tài liệu; store khảo sát có 0 quote nên chưa quan sát quote detail.",
+            "knowledge_kind": "INFERRED",
+            "confidence": "MEDIUM",
+            "kb_refs": [
+              "KB-025",
+              "KB-026",
+              "KB-027",
+              "KB-028",
+              "KB-029",
+              "KB-030",
+              "KB-031",
+              "KB-044"
+            ]
+          },
+          {
+            "statement": "Accept / reject kèm reason không bắt buộc, nội dung modal reject và việc lưu lý do vào quote + history chỉ theo ticket; chưa rõ modal dành cho ai và trên surface nào.",
+            "knowledge_kind": "INFERRED",
+            "confidence": "MEDIUM",
+            "kb_refs": [
+              "KB-032",
+              "KB-033",
+              "KB-034",
+              "KB-035"
+            ]
+          },
+          {
+            "statement": "Quote hết hạn có status `EXPIRED` (6) theo rule draft chỉ theo ticket, trong khi trang \"Quote management\" trên staging 08/10/2026 không có tab \"Expired\"; quote hết hạn có thể không xuất hiện ở tab nào hoặc lẫn vào tab khác.",
+            "knowledge_kind": "INFERRED",
+            "confidence": "MEDIUM",
+            "kb_refs": [
+              "KB-036",
+              "KB-037",
+              "KB-022"
+            ],
+            "status": "UNRESOLVED"
+          },
+          {
+            "statement": "Theo QA KB Duos \"Feature Map\" v1 (Jira DUOS-400, DUOS-176, không ghi ngày), khi revoke role của member thì quote của member đó được reassign cho owner của company location (delay 5 phút); Dev BE 14/07/2026 chỉ xác nhận bước kiểm tra reassign sau 5 phút, chưa có câu Dev có ngày nói đối tượng được reassign là quote. Chưa dùng làm kết quả mong đợi.",
+            "knowledge_kind": "INFERRED",
+            "confidence": "MEDIUM",
+            "kb_refs": [
+              "KB-072",
+              "KB-038"
+            ]
+          },
+          {
+            "statement": "Theo Dev BE 14/07/2026 (Jira DUOS-400, ghi trong QA KB Duos \"Roles & permissions\" v1), với merchant được bật key users.config `quotation.skip_reassign_on_revoke`, hệ thống không reassign quote khi revoke role; QA KB Duos \"B2B Quote Request\" v1 ghi hành vi này cần xác nhận (Need confirm). Chưa dùng làm kết quả mong đợi khi chưa có PO/Dev xác nhận.",
+            "knowledge_kind": "INFERRED",
+            "confidence": "MEDIUM",
+            "kb_refs": [
+              "KB-039"
+            ]
+          },
+          {
+            "statement": "Khi merchant bật `quotation.skip_reassign_on_revoke`, quote của member bị revoke ở lại với ai và ai còn xem / xử lý được vẫn chưa chốt — có rủi ro quote không còn người phụ trách.",
+            "knowledge_kind": "INFERRED",
+            "confidence": "LOW",
+            "kb_refs": [
+              "KB-040",
+              "KB-039"
+            ]
+          },
+          {
+            "statement": "Reassign quote khi customer bị xoá và việc ghi history chỉ theo Jira DUOS-176; đích reassign chưa có nguồn.",
+            "knowledge_kind": "INFERRED",
+            "confidence": "MEDIUM",
+            "kb_refs": [
+              "KB-041",
+              "KB-042"
+            ]
+          },
+          {
+            "statement": "Email requote chỉ được biết là tồn tại (Jira DUOS-305); trigger, người nhận và nội dung chưa có nguồn.",
+            "knowledge_kind": "INFERRED",
+            "confidence": "MEDIUM",
+            "kb_refs": [
+              "KB-043"
+            ]
+          },
+          {
+            "statement": "Customer Account (\"My Quotes\") chưa được quan sát; mọi thao tác buyer trên quote chỉ theo ticket.",
+            "knowledge_kind": "INFERRED",
+            "confidence": "MEDIUM",
+            "kb_refs": [
+              "KB-P-008",
+              "KB-035"
+            ]
+          }
+        ],
+        "unknown_areas": [
+          {
+            "question": "Quote đã hết hạn (status `EXPIRED`) hiển thị ở tab nào trên trang \"Quote management\", và status `EXPIRED` = 6 còn đúng ở bản hiện tại không?",
+            "why_it_matters": "Staging không có tab \"Expired\"; không viết được expected cho hiển thị quote hết hạn.",
+            "kb_refs": [
+              "KB-022",
+              "KB-037"
+            ]
+          },
+          {
+            "question": "Danh sách đầy đủ status của quote là gì và mỗi status ánh xạ sang tab nào (All / Unread / Read / Replied / Accepted / Rejected / Deal closed)?",
+            "why_it_matters": "Check theo dõi trạng thái quote cần mô hình status; hiện chỉ có tên tab trên staging.",
+            "kb_refs": [
+              "KB-022",
+              "KB-037"
+            ]
+          },
+          {
+            "question": "Hạn của quote (`expires_at`) được đặt thế nào và mặc định bao nhiêu ngày (preview PDF hiện \"Valid for 30 days\" chỉ là giá trị mẫu)?",
+            "why_it_matters": "Không tạo được dữ liệu test cho quote hết hạn khi chưa biết cách đặt hạn.",
+            "kb_refs": [
+              "KB-036",
+              "KB-069"
+            ]
+          },
+          {
+            "question": "Modal \"Are you sure to reject this quote?\" dành cho buyer, merchant hay cả hai, và xuất hiện trên Portal, Customer Account hay cả hai?",
+            "why_it_matters": "Không gán được role / surface cho check reject.",
+            "kb_refs": [
+              "KB-032",
+              "KB-034",
+              "KB-035"
+            ]
+          },
+          {
+            "question": "Role nào (merchant, Admin / Senior Buyer / Junior Buyer / custom role) được xem, báo giá, counter offer, accept và reject quote; quyền \"View quotations\" / \"Create and edit quotations\" có nghĩa nghiệp vụ gì?",
+            "why_it_matters": "Ma trận quyền nhóm \"Quotes\" chưa có rule; check phân quyền không có oracle.",
+            "kb_refs": [
+              "KB-025",
+              "KB-032",
+              "KB-033",
+              "KB-040"
+            ]
+          },
+          {
+            "question": "Khi merchant bật `quotation.skip_reassign_on_revoke`, hệ thống có đúng là không reassign quote của member bị revoke role không, và khi đó quote ở lại với ai, ai còn xem / xử lý được?",
+            "why_it_matters": "Dev BE 14/07/2026 mô tả \"không reassign\" nhưng QA KB Quote ghi cần xác nhận; hệ quả cho người dùng chưa chốt.",
+            "kb_refs": [
+              "KB-039",
+              "KB-040"
+            ]
+          },
+          {
+            "question": "Khi không bật `quotation.skip_reassign_on_revoke`, bước kiểm tra reassign sau 5 phút của webhook revoke role có reassign quote của member bị revoke cho owner của company location không (QA KB \"Feature Map\" nói có, chưa có câu Dev có ngày)?",
+            "why_it_matters": "Check reassign quote khi revoke role chỉ có oracle cho mốc 5 phút; đối tượng được reassign chưa có authority.",
+            "kb_refs": [
+              "KB-072",
+              "KB-038"
+            ]
+          },
+          {
+            "question": "Mốc 5 phút của webhook revoke role tính từ thời điểm nào, và giá trị mặc định của `quotation.skip_reassign_on_revoke` là gì?",
+            "why_it_matters": "Cần để dựng điều kiện và thời điểm kiểm tra cho check reassign.",
+            "kb_refs": [
+              "KB-038",
+              "KB-039"
+            ]
+          },
+          {
+            "question": "Khi customer bị xoá, quote của họ được reassign cho ai và history ghi dòng gì?",
+            "why_it_matters": "Ticket chỉ nói có reassign và có ghi history.",
+            "kb_refs": [
+              "KB-041",
+              "KB-042"
+            ]
+          },
+          {
+            "question": "Các rule đàm phán theo ticket (giá line, custom discount, custom shipping fee, counter offer, accept / revised quote, resubmit quote rejected / closed, thêm item trên Portal) có còn đúng ở bản hiện tại không?",
+            "why_it_matters": "Chưa có PO/Dev xác nhận, nguồn tổng hợp không có trong bộ tài liệu; mọi check đàm phán đang NEEDS_CONFIRMATION.",
+            "kb_refs": [
+              "KB-026",
+              "KB-027",
+              "KB-028",
+              "KB-029",
+              "KB-030",
+              "KB-031",
+              "KB-044"
+            ]
+          },
+          {
+            "question": "Email requote (Jira DUOS-305) gửi khi nào, cho ai và nội dung gồm gì?",
+            "why_it_matters": "Không viết được check email requote.",
+            "kb_refs": [
+              "KB-043"
+            ]
+          },
+          {
+            "question": "Quote trên Customer Account (\"My Quotes\") hiển thị và cho buyer thao tác những gì (approve / reject kèm reason, counter offer, resubmit), và Jira DUOS-422 \"Fix layout in customer account\" thay đổi gì?",
+            "why_it_matters": "Customer Account chưa quan sát; ticket layout chưa đọc.",
+            "kb_refs": [
+              "KB-035",
+              "KB-P-008"
+            ]
+          },
+          {
+            "question": "Merchant có tạo quote trực tiếp trên Portal được không (Jira DUOS-277 \"[Portal] Create Quote\" đang To Do), hay chỉ thêm item vào quote buyer đã gửi?",
+            "why_it_matters": "Tránh viết check cho hành vi chưa phát hành.",
+            "kb_refs": [
+              "KB-044"
+            ]
+          }
+        ],
+        "freshness": {
+          "observed_at": "2026-10-08",
+          "run_id": "CTX-20261009-01",
+          "earliest_source_date": "2026-07-14",
+          "basis": "Ngày nguồn mới nhất / cũ nhất trong các KB item được tham chiếu (ngày quyết định Dev, ngày tổng hợp theo ticket, ngày khảo sát staging 08/10/2026); profile dựng từ tài liệu, không có quan sát runtime."
+        }
+      }
+    ],
+    "profile_relationships": [
+      {
+        "from": "quote-request-widget",
+        "to": "quote-negotiation-and-status",
+        "relation": "FEEDS",
+        "kb_refs": [
+          "KB-021"
+        ]
+      },
+      {
+        "from": "quote-negotiation-and-status",
+        "to": "quote-price-application",
+        "relation": "LEADS_TO",
+        "kb_refs": [
+          "KB-030",
+          "KB-045"
+        ]
+      },
+      {
+        "from": "quote-negotiation-and-status",
+        "to": "quote-pdf-and-history",
+        "relation": "WRITES_HISTORY",
+        "kb_refs": [
+          "KB-033",
+          "KB-042",
+          "KB-056"
+        ]
+      },
+      {
+        "from": "quote-negotiation-and-status",
+        "to": "roles-permissions/member-role-assignment-sync",
+        "relation": "TRIGGERED_BY",
+        "kb_refs": [
+          "KB-038",
+          "KB-072"
+        ]
+      },
+      {
+        "from": "quote-negotiation-and-status",
+        "to": "notifications/notification-settings-and-templates",
+        "relation": "NOTIFIES_VIA",
+        "kb_refs": [
+          "KB-043"
+        ]
+      }
+    ],
+    "coverage_matrix": [
+      {
+        "feature_id": "quote-negotiation-and-status",
+        "layer": "portal",
+        "role": "merchant",
+        "state": "Quote management: 0 quote",
+        "environment": "documented",
+        "covered": true,
+        "note": "Hiện trạng staging 08/10/2026"
+      },
+      {
+        "feature_id": "quote-negotiation-and-status",
+        "layer": "portal",
+        "role": "merchant",
+        "state": "Quote management: tab theo trạng thái",
+        "environment": "documented",
+        "covered": true,
+        "note": "Chỉ tên tab; ánh xạ status chưa có"
+      },
+      {
+        "feature_id": "quote-negotiation-and-status",
+        "layer": "portal",
+        "role": "merchant",
+        "state": "quote detail: báo giá line / discount / shipping / thêm item",
+        "environment": "documented",
+        "covered": true,
+        "note": "Chỉ theo ticket"
+      },
+      {
+        "feature_id": "quote-negotiation-and-status",
+        "layer": "portal",
+        "role": "merchant",
+        "state": "accept / revised quote / reject kèm reason",
+        "environment": "documented",
+        "covered": true,
+        "note": "Chỉ theo ticket"
+      },
+      {
+        "feature_id": "quote-negotiation-and-status",
+        "layer": "customer_account",
+        "role": "buyer B2B",
+        "state": "counter offer / approve / reject / resubmit",
+        "environment": "documented",
+        "covered": true,
+        "note": "Chỉ theo ticket, chưa quan sát"
+      },
+      {
+        "feature_id": "quote-negotiation-and-status",
+        "layer": "portal",
+        "role": "merchant",
+        "state": "quote EXPIRED",
+        "environment": "documented",
+        "covered": false,
+        "note": "Không có tab Expired; chờ PO/Dev"
+      },
+      {
+        "feature_id": "quote-negotiation-and-status",
+        "layer": "backend",
+        "role": "system",
+        "state": "revoke role, không bật skip_reassign_on_revoke",
+        "environment": "documented",
+        "covered": true,
+        "note": "CE: kiểm tra reassign sau 5 phút; đối tượng quote chỉ theo Feature Map"
+      },
+      {
+        "feature_id": "quote-negotiation-and-status",
+        "layer": "backend",
+        "role": "system",
+        "state": "revoke role, bật skip_reassign_on_revoke",
+        "environment": "documented",
+        "covered": true,
+        "note": "Theo Dev BE, chưa xác nhận: không reassign; chi tiết chưa chốt"
+      },
+      {
+        "feature_id": "quote-negotiation-and-status",
+        "layer": "backend",
+        "role": "system",
+        "state": "customer bị xoá",
+        "environment": "documented",
+        "covered": true,
+        "note": "Chỉ theo ticket; đích reassign chưa biết"
+      },
+      {
+        "feature_id": "quote-negotiation-and-status",
+        "layer": "backend",
+        "role": "system",
+        "state": "email requote",
+        "environment": "documented",
+        "covered": false,
+        "note": "Chỉ biết tồn tại"
+      },
+      {
+        "feature_id": "quote-negotiation-and-status",
+        "layer": "portal",
+        "role": "Admin / Senior Buyer / Junior Buyer / custom role",
+        "state": "quyền trên quote",
+        "environment": "documented",
+        "covered": false,
+        "note": "Ma trận quyền chưa chốt"
+      },
+      {
+        "feature_id": "quote-negotiation-and-status",
+        "layer": "api",
+        "role": "unspecified",
+        "state": "đặc tả API",
+        "environment": "documented",
+        "covered": false,
+        "note": "Bộ tài liệu QA không có đặc tả API/data model cho feature này"
+      },
+      {
+        "feature_id": "quote-negotiation-and-status",
+        "layer": "db",
+        "role": "unspecified",
+        "state": "đặc tả data model",
+        "environment": "documented",
+        "covered": false,
+        "note": "Bộ tài liệu QA không có đặc tả API/data model cho feature này"
+      },
+      {
+        "feature_id": "quote-negotiation-and-status",
+        "layer": "code",
+        "role": "unspecified",
+        "state": "any",
+        "environment": "documented",
+        "covered": false,
+        "note": "Không có nguồn mã"
+      }
+    ],
+    "unassigned_kb_items": [],
+    "profile_conflicts": [
+      {
+        "conflict_group": null,
+        "owner_feature": "quote-request/quote-negotiation-and-status",
+        "topic": "Quote hết hạn: status `EXPIRED` theo ticket vs trang \"Quote management\" không có tab \"Expired\"",
+        "side_a": "Jira DUOS-186, DUOS-195 (rule draft chỉ theo ticket, 07/10/2026): quote hết hạn có status `EXPIRED` = 6.",
+        "side_b": "Staging 08/10/2026 (store Free plan, 0 quote): tab All / Unread / Read / Replied / Accepted / Rejected / Deal closed, không có \"Expired\".",
+        "resolution": "UNRESOLVED",
+        "impact": "Khác phạm vi (status dữ liệu vs tab hiển thị); check hiển thị quote hết hạn không có oracle.",
+        "kb_refs": [
+          "KB-022",
+          "KB-037"
+        ]
+      }
+    ],
+    "profile_change_summary": [
+      "Tạo mới profile cho feature quản lý, đàm phán và theo dõi trạng thái quote (bootstrap từ tài liệu)."
+    ],
+    "kb_trace_complete": true
+  },
+  "gate": {
+    "decision": "CONDITIONAL_PASS",
+    "blocking_findings": [],
+    "conditions": [
+      "Identity, user goal, capability theo mục tiêu (theo dõi, báo giá, đàm phán, accept / reject, resubmit, hết hạn, giữ người phụ trách) và mapping KB đầy đủ.",
+      "Oracle mạnh chỉ có cho mốc 5 phút của bước kiểm tra reassign (việc reassign quote cho owner location và hành vi của key skip_reassign_on_revoke là NEEDS_CONFIRMATION); trang Quote management là baseline; đàm phán, reject, hết hạn theo ticket nên check tương ứng phải NEEDS_CONFIRMATION.",
+      "Cần dữ liệu quote thật trên staging, tài khoản buyer cho Customer Account và PO/Dev xác nhận mô hình status."
+    ],
+    "allowed_next_steps": [
+      "qa-checklist-builder",
+      "knowledge-diff-analyzer"
+    ]
+  }
+}

@@ -1,0 +1,708 @@
+{
+  "feature_id": "roles-and-permissions",
+  "feature_key": "roles-and-permissions",
+  "name": "Role và phân quyền trong workspace (Owner / Admin / role thứ 3)",
+  "user_goal": "Mỗi thành viên của workspace chỉ thao tác được những gì role của mình cho phép (Owner, Admin, role thứ 3 và có thể custom role), và việc chặn quyền được thực thi ở API chứ không chỉ ẩn trên giao diện.",
+  "user_goal_kb_refs": [
+    "KB-021",
+    "KB-028",
+    "KB-P-051"
+  ],
+  "stable_since_version": "v1",
+  "actors": [
+    {
+      "role": "Owner",
+      "permission_observed": "Theo Jira: truy cập billing, quản lý users và toàn bộ settings; mỗi workspace có đúng 1 Owner. Toàn bộ khảo sát staging làm bằng Owner.",
+      "kb_refs": [
+        "KB-022",
+        "KB-034"
+      ]
+    },
+    {
+      "role": "Admin",
+      "permission_observed": "Theo Jira: quản lý campaigns, contacts, templates, automations và users, không thấy và không có quyền billing, không được sửa/xoá Owner. Chưa có quan sát nào bằng Admin.",
+      "kb_refs": [
+        "KB-023",
+        "KB-037"
+      ]
+    },
+    {
+      "role": "Member (tên role thứ 3 đang tranh chấp)",
+      "permission_observed": "Theo Jira: không truy cập quản lý users và billing; được tạo và sửa campaign, template, automation. Trên staging 23/09/2026 vẫn thấy đủ 5 mục Settings kể cả `API keys` và `Workspace settings`.",
+      "kb_refs": [
+        "KB-024",
+        "KB-025",
+        "KB-033"
+      ]
+    },
+    {
+      "role": "custom role",
+      "permission_observed": "Theo Jira chỉ mang quyền theo feature được cấu hình, nhưng việc custom role có thuộc phạm vi hiện tại hay không còn chờ PO; staging chưa có giao diện tạo custom role.",
+      "kb_refs": [
+        "KB-026",
+        "KB-027"
+      ]
+    }
+  ],
+  "entry_points": [
+    {
+      "path": "Gán role khi mời: ô `Invite as` của dialog Invite a member (Admin / Member)",
+      "precondition": "Người mời là Owner (khảo sát staging).",
+      "kb_refs": [
+        "KB-010",
+        "KB-003"
+      ]
+    },
+    {
+      "path": "Đổi role: `Edit member` trên dòng member Active (chỉ thấy trong bundle)",
+      "precondition": "Người thao tác là Owner hoặc Admin.",
+      "kb_refs": [
+        "KB-019",
+        "KB-035"
+      ]
+    },
+    {
+      "path": "Workspace switcher hiển thị tên workspace kèm role của tài khoản ở workspace đó; cùng tài khoản có thể mang role khác nhau ở các workspace khác nhau",
+      "precondition": "Đã đăng nhập.",
+      "kb_refs": [
+        "KB-P-041",
+        "KB-P-031"
+      ]
+    },
+    {
+      "path": "Mọi request API thao tác dữ liệu workspace (nơi phải chặn quyền theo role)",
+      "precondition": "Request gắn với một user và role trong workspace.",
+      "kb_refs": [
+        "KB-028"
+      ]
+    }
+  ],
+  "capabilities": [
+    {
+      "name": "Mô hình 3 role chuẩn và phạm vi quyền khung",
+      "description": "Role quyết định ai thao tác billing, quản lý users và từng module nội dung: Owner có billing + users + toàn bộ settings; Admin quản lý module nội dung và users nhưng không có billing; role thứ 3 không có users và billing.",
+      "kb_refs": [
+        "KB-021",
+        "KB-022",
+        "KB-023",
+        "KB-024",
+        "KB-P-051"
+      ]
+    },
+    {
+      "name": "Quyền nội dung của role thứ 3",
+      "description": "Role thứ 3 được tạo và sửa campaign, template, automation. Quyền chi tiết theo thao tác của từng module chưa chốt; quyết định riêng lẻ về segment và custom field nằm ở feature sở hữu màn tương ứng.",
+      "kb_refs": [
+        "KB-025",
+        "KB-032"
+      ]
+    },
+    {
+      "name": "Ràng buộc quản trị role trong workspace",
+      "description": "Đúng 1 Owner mỗi workspace; chỉ Owner/Admin đổi role và remove member; member không tự nâng role; Admin không sửa/xoá Owner. Việc đổi Owner qua chuyển quyền sở hữu và owner cũ thành Admin chưa được xác nhận.",
+      "kb_refs": [
+        "KB-034",
+        "KB-035",
+        "KB-036",
+        "KB-037",
+        "KB-075"
+      ]
+    },
+    {
+      "name": "Chặn quyền ở API",
+      "description": "Theo Jira, việc chặn quyền theo role phải nằm ở API. Router frontend không khai báo meta phân quyền theo role, nên việc ẩn mục trên UI không phải bằng chứng đã chặn quyền.",
+      "kb_refs": [
+        "KB-028",
+        "KB-029",
+        "KB-P-052"
+      ]
+    },
+    {
+      "name": "Custom role (chưa chốt phạm vi)",
+      "description": "Jira nhắc custom role mang quyền theo feature được cấu hình; staging chưa có UI tạo custom role và PO chưa xác nhận custom role thuộc phạm vi hiện tại.",
+      "kb_refs": [
+        "KB-026",
+        "KB-027"
+      ]
+    }
+  ],
+  "state_transitions": [
+    {
+      "from": "member với role Member",
+      "to": "member với role Admin (hoặc ngược lại)",
+      "trigger": "Owner/Admin đổi role qua `Edit member` (chuỗi bundle)",
+      "condition": "Người thao tác không phải chính member đó nếu là nâng role; Admin không áp lên Owner",
+      "kb_refs": [
+        "KB-019",
+        "KB-035",
+        "KB-036",
+        "KB-037"
+      ]
+    },
+    {
+      "from": "Owner",
+      "to": "Admin",
+      "trigger": "Owner chuyển quyền sở hữu cho thành viên khác",
+      "condition": "Workspace có thành viên khác; sau chuyển vẫn đúng 1 Owner. Việc owner cũ thành Admin còn cần xác nhận",
+      "kb_refs": [
+        "KB-075",
+        "KB-102",
+        "KB-034"
+      ]
+    }
+  ],
+  "confirmed_rules": [
+    {
+      "statement": "Theo Jira MTRO-20/MTRO-46 (tóm tắt trong QA business rule Mailtro, cập nhật 07/10/2026), role Owner có quyền truy cập billing, quản lý users và toàn bộ settings của workspace.",
+      "knowledge_kind": "CONFIRMED_EXPECTED",
+      "confidence": "MEDIUM",
+      "kb_refs": [
+        "KB-022"
+      ]
+    },
+    {
+      "statement": "Theo Jira MTRO-20/MTRO-46 (tóm tắt trong QA business rule Mailtro, cập nhật 07/10/2026), role Admin quản lý campaigns, contacts, templates, automations và users, nhưng không thấy và không có quyền billing. Chưa có quan sát nào bằng tài khoản Admin.",
+      "knowledge_kind": "CONFIRMED_EXPECTED",
+      "confidence": "MEDIUM",
+      "kb_refs": [
+        "KB-023"
+      ]
+    },
+    {
+      "statement": "Theo Jira MTRO-20/MTRO-46 (tóm tắt trong QA business rule Mailtro, cập nhật 07/10/2026), role thứ 3 (trên UI staging gọi là Member; tên chính thức đang tranh chấp) không được truy cập quản lý users và billing.",
+      "knowledge_kind": "CONFIRMED_EXPECTED",
+      "confidence": "MEDIUM",
+      "kb_refs": [
+        "KB-024"
+      ]
+    },
+    {
+      "statement": "Theo Jira MTRO-20/MTRO-46 (tóm tắt trong QA business rule Mailtro, cập nhật 07/10/2026), role thứ 3 (Member) được tạo và sửa campaign, template và automation. Quyền với segment không thuộc danh sách này (PO 30/09/2026, Jira MTRO-100 chốt Member không tạo/sửa segment — item ở feature Segment builder); quyền chi tiết theo từng thao tác của mỗi module vẫn chưa chốt.",
+      "knowledge_kind": "CONFIRMED_EXPECTED",
+      "confidence": "MEDIUM",
+      "kb_refs": [
+        "KB-025"
+      ]
+    },
+    {
+      "statement": "Theo Jira MTRO-20/MTRO-46 (tóm tắt trong QA business rule Mailtro, cập nhật 07/10/2026), việc chặn quyền theo role phải nằm ở API, không chỉ ẩn trên UI.",
+      "knowledge_kind": "CONFIRMED_EXPECTED",
+      "confidence": "MEDIUM",
+      "kb_refs": [
+        "KB-028"
+      ]
+    },
+    {
+      "statement": "Theo Jira MTRO-49 (Team members manage page, trạng thái To Do; tóm tắt trong QA KB Mailtro \"Team members & Role / Permission\" v1, đọc 07/10/2026), mỗi workspace có đúng 1 Owner.",
+      "knowledge_kind": "CONFIRMED_EXPECTED",
+      "confidence": "MEDIUM",
+      "kb_refs": [
+        "KB-034"
+      ]
+    },
+    {
+      "statement": "Theo Jira MTRO-49 (trạng thái To Do; tóm tắt trong QA KB Mailtro \"Team members & Role / Permission\" v1, đọc 07/10/2026), chỉ Owner hoặc Admin được đổi role của member và remove member khỏi workspace.",
+      "knowledge_kind": "CONFIRMED_EXPECTED",
+      "confidence": "MEDIUM",
+      "kb_refs": [
+        "KB-035"
+      ]
+    },
+    {
+      "statement": "Theo Jira MTRO-49 (trạng thái To Do; tóm tắt trong QA KB Mailtro \"Team members & Role / Permission\" v1, đọc 07/10/2026), member không được tự nâng role của chính mình.",
+      "knowledge_kind": "CONFIRMED_EXPECTED",
+      "confidence": "MEDIUM",
+      "kb_refs": [
+        "KB-036"
+      ]
+    },
+    {
+      "statement": "Theo Jira MTRO-49 (trạng thái To Do; tóm tắt trong QA KB Mailtro \"Team members & Role / Permission\" v1, đọc 07/10/2026), Admin không được sửa hoặc xoá Owner.",
+      "knowledge_kind": "CONFIRMED_EXPECTED",
+      "confidence": "MEDIUM",
+      "kb_refs": [
+        "KB-037"
+      ]
+    },
+    {
+      "statement": "Theo Jira MTRO-20/MTRO-46 (rule 07/08/2026, tóm tắt trong QA KB Mailtro \"Tổng quan sản phẩm\" v1), Mailtro có 3 role chuẩn — Owner, Admin và một role thứ 3 (UI staging gọi là Member; tên chính thức đang tranh chấp) — cộng custom role. Ma trận quyền chi tiết chưa chốt và thuộc object workspace-settings.",
+      "knowledge_kind": "CONFIRMED_EXPECTED",
+      "confidence": "MEDIUM",
+      "kb_refs": [
+        "KB-P-051"
+      ]
+    }
+  ],
+  "observed_behavior": [
+    {
+      "statement": "Theo QA KB Mailtro \"Team members & Role / Permission\" v1 (07/10/2026), trên staging chưa thấy giao diện nào để tạo custom role; ô `Invite as` chỉ có Admin và Member.",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "confidence": "LOW",
+      "status": "CURRENT_STATE",
+      "kb_refs": [
+        "KB-027"
+      ]
+    },
+    {
+      "statement": "Trên staging (khảo sát bundle frontend 29/09/2026), router frontend không khai báo meta phân quyền theo role cho các route.",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "confidence": "MEDIUM",
+      "status": "CURRENT_STATE",
+      "kb_refs": [
+        "KB-029"
+      ]
+    },
+    {
+      "statement": "Trên staging (khảo sát 23/09/2026, tài khoản mang role Member ở workspace thứ hai), Member vẫn thấy đủ 5 mục trong nhóm Settings của sidebar, kể cả `API keys` và `Workspace settings`; chưa kiểm Member có tạo được API key hay đổi tên workspace không, và chưa có xác nhận PO đây có đúng quyền hay không.",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "confidence": "LOW",
+      "status": "CURRENT_STATE",
+      "kb_refs": [
+        "KB-033"
+      ]
+    }
+  ],
+  "observed_validations": [],
+  "permissions": [
+    {
+      "statement": "Billing: chỉ Owner có quyền; Admin không thấy và không có quyền; role thứ 3 không có quyền.",
+      "kb_refs": [
+        "KB-022",
+        "KB-023",
+        "KB-024"
+      ]
+    },
+    {
+      "statement": "Quản lý users: Owner và Admin có; role thứ 3 không có. Đổi role / remove member chỉ Owner hoặc Admin; Admin không sửa/xoá Owner; không ai tự nâng role của mình.",
+      "kb_refs": [
+        "KB-022",
+        "KB-023",
+        "KB-024",
+        "KB-035",
+        "KB-036",
+        "KB-037"
+      ]
+    },
+    {
+      "statement": "Module nội dung: Admin quản lý campaigns, contacts, templates, automations; role thứ 3 tạo và sửa campaign, template, automation. Quyền theo từng thao tác (xoá, gửi, import/export, analytics, API key, sending domain, đổi tên workspace) chưa có ma trận chốt.",
+      "kb_refs": [
+        "KB-023",
+        "KB-025",
+        "KB-032"
+      ]
+    },
+    {
+      "statement": "Nơi thực thi: chặn quyền phải ở API, không chỉ ẩn trên UI.",
+      "kb_refs": [
+        "KB-028"
+      ]
+    }
+  ],
+  "surface_mapping": {
+    "portal": [
+      {
+        "item": "Ô `Invite as` của dialog mời (Admin / Member)",
+        "kb_refs": [
+          "KB-010"
+        ]
+      },
+      {
+        "item": "Dialog `Edit member` đổi Role (chuỗi bundle)",
+        "kb_refs": [
+          "KB-019"
+        ]
+      },
+      {
+        "item": "Nhóm Settings trên sidebar (Member vẫn thấy đủ 5 mục)",
+        "kb_refs": [
+          "KB-033"
+        ]
+      },
+      {
+        "item": "Workspace switcher hiện role của tài khoản",
+        "kb_refs": [
+          "KB-P-041"
+        ]
+      }
+    ],
+    "storefront": [],
+    "api": [
+      {
+        "item": "Chặn quyền theo role ở tầng API cho mọi thao tác bị giới hạn",
+        "kb_refs": [
+          "KB-028"
+        ]
+      }
+    ],
+    "data": [
+      {
+        "item": "Role của member trong workspace: Owner (đúng 1) / Admin / role thứ 3 / custom role (chưa chốt)",
+        "kb_refs": [
+          "KB-034",
+          "KB-P-051",
+          "KB-026"
+        ]
+      }
+    ],
+    "code": [
+      {
+        "item": "Router frontend chỉ khai báo yêu cầu đăng nhập và tiêu đề, không có meta phân quyền theo role",
+        "kb_refs": [
+          "KB-029",
+          "KB-P-052"
+        ]
+      }
+    ]
+  },
+  "dependencies": [
+    {
+      "target": "workspace-settings / team-members-and-invitations",
+      "relation": "surface",
+      "note": "Role được gán khi mời và đổi / gỡ trên trang Team members.",
+      "kb_refs": [
+        "KB-010",
+        "KB-019",
+        "KB-020"
+      ]
+    },
+    {
+      "target": "workspace-settings / workspace-profile-settings",
+      "relation": "surface",
+      "note": "Đổi Owner qua chuyển quyền sở hữu; ai được đổi tên workspace chưa chốt.",
+      "kb_refs": [
+        "KB-075",
+        "KB-074"
+      ]
+    },
+    {
+      "target": "workspace-settings / api-keys-and-public-api",
+      "relation": "open_permission",
+      "note": "Member thấy mục API keys; chưa rõ được tạo / rotate / revoke key không.",
+      "kb_refs": [
+        "KB-033"
+      ]
+    },
+    {
+      "target": "segments / segment-builder",
+      "relation": "permission_decision_owner",
+      "note": "Quyết định PO 30/09/2026 (Jira MTRO-100) role thứ 3 không tạo/sửa segment sống ở feature Segment builder.",
+      "kb_refs": [
+        "KB-025",
+        "KB-032"
+      ]
+    },
+    {
+      "target": "contacts / custom-fields",
+      "relation": "permission_decision_owner",
+      "note": "Quyết định PO/Dev 01/10/2026 (task Testlane MTRO-022 BR-17) role thứ 3 được tạo/xoá custom field sống ở feature Custom fields.",
+      "kb_refs": [
+        "KB-032"
+      ]
+    },
+    {
+      "target": "deliverability / suppression-list-management",
+      "relation": "open_permission",
+      "note": "Phân quyền tạm cho API suppression/unsubscribe đang chờ PO; thuộc object deliverability.",
+      "kb_refs": [
+        "KB-032"
+      ]
+    }
+  ],
+  "risks": [
+    {
+      "statement": "Theo mục Purpose do QA tổng hợp trong QA KB Mailtro \"Team members & Role / Permission\" v1 (07/10/2026, không gắn nguồn riêng tại câu), role của thành viên quyết định ai được thao tác billing, quản lý users và từng module nội dung của workspace. Các quy tắc role có nguồn Jira nằm ở các item quyền Owner / Admin / Member liên quan.",
+      "knowledge_kind": "INFERRED",
+      "confidence": "LOW",
+      "kb_refs": [
+        "KB-021"
+      ],
+      "note": "Mô tả mục đích do QA tổng hợp; quy tắc có nguồn Jira nằm ở các item quyền Owner / Admin / Member."
+    },
+    {
+      "statement": "Theo Epic Jira MTRO-20 và file cấu hình mẫu của repo automation (ghi trong QA business rule Mailtro, cập nhật 07/10/2026), bộ role là Owner / Admin / Marketer-Editor / Custom — tức role thứ 3 tên là \"Marketer / Editor\". Đây là một phía của tranh chấp tên role thứ 3, chưa được PO/Dev chốt.",
+      "knowledge_kind": "INFERRED",
+      "confidence": "LOW",
+      "status": "UNRESOLVED",
+      "conflict_group": "CONF-MTRO-workspace-settings-01",
+      "kb_refs": [
+        "KB-030"
+      ],
+      "note": "Một phía của tranh chấp tên role thứ 3; không làm oracle."
+    },
+    {
+      "statement": "Theo Jira MTRO-43, MTRO-49 và UI staging (khảo sát 29/09/2026, ô `Invite as` {Admin, Member}), role thứ 3 tên là \"Member\"; QA business rule Mailtro cũng dùng bộ Owner / Admin / Member nhưng tự đánh dấu tên role thứ 3 đang tranh chấp. Đây là phía còn lại của tranh chấp, chưa được PO/Dev chốt.",
+      "knowledge_kind": "INFERRED",
+      "confidence": "LOW",
+      "status": "UNRESOLVED",
+      "conflict_group": "CONF-MTRO-workspace-settings-01",
+      "kb_refs": [
+        "KB-031"
+      ],
+      "note": "Phía còn lại của tranh chấp tên role thứ 3; không làm oracle."
+    },
+    {
+      "statement": "Theo QA KB Mailtro \"Team members & Role / Permission\" v1 và QA KB Mailtro \"Feature map\" v1 (07/10/2026), ma trận quyền chi tiết theo module (contact, segment, campaign, automation, email library, saved block, trang preferences, import/export, analytics, API key) cho Admin / Member / custom role chưa được PO chốt ở bất kỳ module nào; mới có hai quyết định riêng lẻ — Member không tạo/sửa segment (PO 30/09/2026, Jira MTRO-100) và Member được tạo/xoá custom field (PO/Dev 01/10/2026, task Testlane MTRO-022 BR-17) — và hai quyết định này nằm ở feature sở hữu màn hình tương ứng.",
+      "knowledge_kind": "INFERRED",
+      "confidence": "LOW",
+      "kb_refs": [
+        "KB-032"
+      ],
+      "note": "Ma trận quyền chưa chốt; không viết expected result quyền chi tiết theo module."
+    },
+    {
+      "statement": "Theo Jira MTRO-20/MTRO-46 (tóm tắt trong QA business rule Mailtro), ngoài 3 role chuẩn còn có custom role chỉ mang đúng quyền theo feature được cấu hình; tuy nhiên QA KB ghi việc custom role có thuộc phạm vi hiện tại hay không vẫn cần PO xác nhận, nên phát biểu này chưa dùng làm kết quả mong đợi.",
+      "knowledge_kind": "INFERRED",
+      "confidence": "LOW",
+      "kb_refs": [
+        "KB-026"
+      ]
+    },
+    {
+      "statement": "Trên staging, Member thấy mục `API keys` và `Workspace settings`; nếu Member thao tác được ở đó thì có thể là lỗ hổng quyền, nhưng chưa có quyết định PO nên chưa gọi là lỗi.",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "confidence": "LOW",
+      "kb_refs": [
+        "KB-033",
+        "KB-074"
+      ]
+    },
+    {
+      "statement": "Router frontend không có meta phân quyền theo role; mọi check quyền phải gọi thẳng API, không dừng ở việc mục bị ẩn hay hiện trên UI.",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "confidence": "MEDIUM",
+      "kb_refs": [
+        "KB-029",
+        "KB-028"
+      ]
+    },
+    {
+      "statement": "Billing chưa có trên staging (route `/settings/billing` trả trang trắng), nên các quy tắc quyền billing theo role chưa kiểm được.",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "confidence": "MEDIUM",
+      "kb_refs": [
+        "KB-P-057",
+        "KB-022",
+        "KB-023"
+      ]
+    },
+    {
+      "statement": "Các quy tắc đổi role / remove / Admin không động vào Owner đến từ Jira MTRO-49 đang To Do; UI tương ứng chưa quan sát.",
+      "knowledge_kind": "CONFIRMED_EXPECTED",
+      "confidence": "MEDIUM",
+      "kb_refs": [
+        "KB-035",
+        "KB-036",
+        "KB-037"
+      ]
+    }
+  ],
+  "unknown_areas": [
+    {
+      "question": "Tên hiển thị chính thức của role thứ 3 là \"Member\" (Jira MTRO-43/49, UI staging) hay \"Marketer / Editor\" (Epic MTRO-20)?",
+      "why_it_matters": "Hai nguồn nói khác nhau, chưa có PO/Dev chốt; nhãn role trong UI và test case chưa có oracle.",
+      "kb_refs": [
+        "KB-030",
+        "KB-031"
+      ],
+      "oq_id": "OQ-workspace-settings-005"
+    },
+    {
+      "question": "Ma trận quyền Owner / Admin / role thứ 3 (và custom role) theo từng thao tác của từng module — contact, segment, campaign, automation, email library, saved block, trang preferences, import/export, analytics, API key, sending domain, đổi tên workspace — là gì?",
+      "why_it_matters": "Chỉ có quy tắc khung và hai quyết định riêng lẻ; không viết được check quyền chi tiết.",
+      "kb_refs": [
+        "KB-032",
+        "KB-023",
+        "KB-025"
+      ],
+      "oq_id": "OQ-workspace-settings-024"
+    },
+    {
+      "question": "Custom role có thuộc phạm vi phát hành hiện tại không, và nếu có thì tạo / cấu hình ở đâu?",
+      "why_it_matters": "Staging chưa có UI tạo custom role; Jira nhắc tới nhưng QA ghi cần PO xác nhận.",
+      "kb_refs": [
+        "KB-026",
+        "KB-027"
+      ],
+      "oq_id": "OQ-workspace-settings-024"
+    },
+    {
+      "question": "Member có được tạo / rotate / revoke API key và đổi tên workspace không? Member vẫn thấy hai mục này trong Settings trên staging 23/09/2026 (GAP-07 của task Testlane MTRO-019).",
+      "why_it_matters": "Có thể là lỗ hổng quyền hoặc là thiết kế; chưa có quyết định.",
+      "kb_refs": [
+        "KB-033",
+        "KB-074"
+      ],
+      "oq_id": "OQ-workspace-settings-006"
+    },
+    {
+      "question": "Khi role không đủ quyền gọi một API bị giới hạn, API trả mã và thông báo gì?",
+      "why_it_matters": "Quy tắc yêu cầu chặn ở API nhưng không mô tả phản hồi, nên check tầng API chỉ có thể xác nhận 'bị chặn', chưa kiểm được nội dung phản hồi.",
+      "kb_refs": [
+        "KB-028"
+      ],
+      "oq_id": "OQ-workspace-settings-043"
+    },
+    {
+      "question": "Tài liệu câu hỏi mở của QA về Role & Permission (tên role thứ 3, ma trận quyền, phân quyền API suppression / unsubscribe) được nhắc tới nhưng không có trong bộ nguồn; nội dung các câu hỏi đó và câu trả lời (nếu đã có) là gì?",
+      "why_it_matters": "KB chỉ dùng câu hỏi ghi tại chỗ; có thể còn quyết định quyền đã có mà KB chưa biết.",
+      "kb_refs": [
+        "KB-030",
+        "KB-031",
+        "KB-032"
+      ],
+      "oq_id": "OQ-workspace-settings-024"
+    },
+    {
+      "question": "Admin và Member thật trong cùng workspace nhìn thấy và làm được gì? Chưa có quan sát bằng tài khoản Admin; Member chỉ được xem sidebar ở workspace thứ hai.",
+      "why_it_matters": "Mọi item quyền hiện chỉ có nguồn Jira, chưa có đối chiếu theo role.",
+      "kb_refs": [
+        "KB-023",
+        "KB-033"
+      ],
+      "oq_id": "OQ-workspace-settings-007"
+    }
+  ],
+  "freshness": {
+    "observed_at": "2026-10-07",
+    "earliest_source_date": "2026-07-08",
+    "basis": "Ngày nguồn mới nhất trong các KB item được tham chiếu (ngày đọc Jira, khảo sát staging); không có quan sát runtime trong lần chạy này."
+  },
+  "last_updated": {
+    "date": "2026-10-08",
+    "ccr_ref": "bootstrap"
+  },
+  "coverage_matrix": [
+    {
+      "feature_id": "roles-and-permissions",
+      "layer": "portal",
+      "role": "Owner",
+      "state": "quyền khung (billing, users, settings)",
+      "environment": "documented",
+      "covered": true,
+      "note": "Jira MTRO-20/46; billing chưa có trên staging"
+    },
+    {
+      "feature_id": "roles-and-permissions",
+      "layer": "portal",
+      "role": "Admin",
+      "state": "quyền khung",
+      "environment": "documented",
+      "covered": true,
+      "note": "Chỉ Jira, chưa quan sát"
+    },
+    {
+      "feature_id": "roles-and-permissions",
+      "layer": "portal",
+      "role": "Member",
+      "state": "quyền khung",
+      "environment": "documented",
+      "covered": true,
+      "note": "Jira + quan sát sidebar 23/09/2026"
+    },
+    {
+      "feature_id": "roles-and-permissions",
+      "layer": "portal",
+      "role": "custom role",
+      "state": "any",
+      "environment": "documented",
+      "covered": false,
+      "note": "Phạm vi chưa chốt"
+    },
+    {
+      "feature_id": "roles-and-permissions",
+      "layer": "portal",
+      "role": "Admin/Member",
+      "state": "quyền chi tiết theo module",
+      "environment": "documented",
+      "covered": false,
+      "note": "Ma trận chưa chốt"
+    },
+    {
+      "feature_id": "roles-and-permissions",
+      "layer": "portal",
+      "role": "Owner/Admin",
+      "state": "đổi role / remove member / Admin trên dòng Owner",
+      "environment": "documented",
+      "covered": true,
+      "note": "Jira MTRO-49 (To Do); UI chỉ bundle"
+    },
+    {
+      "feature_id": "roles-and-permissions",
+      "layer": "portal",
+      "role": "unspecified",
+      "state": "tên role thứ 3",
+      "environment": "documented",
+      "covered": false,
+      "note": "Tranh chấp chưa giải"
+    },
+    {
+      "feature_id": "roles-and-permissions",
+      "layer": "api",
+      "role": "Member",
+      "state": "gọi API vượt quyền",
+      "environment": "documented",
+      "covered": true,
+      "note": "Chỉ có quy tắc phải chặn; phản hồi không mô tả"
+    },
+    {
+      "feature_id": "roles-and-permissions",
+      "layer": "data",
+      "role": "Owner",
+      "state": "đúng 1 Owner / sau chuyển quyền",
+      "environment": "documented",
+      "covered": true,
+      "note": "Jira MTRO-49"
+    },
+    {
+      "feature_id": "roles-and-permissions",
+      "layer": "code",
+      "role": "unspecified",
+      "state": "route guard frontend",
+      "environment": "documented",
+      "covered": true,
+      "note": "Khảo sát bundle: không có meta role"
+    }
+  ],
+  "profile_conflicts": [
+    {
+      "conflict_group": "CONF-MTRO-workspace-settings-01",
+      "owner_feature": "roles-and-permissions",
+      "topic": "Tên hiển thị role thứ 3 (Member hay Marketer / Editor)",
+      "side_a": "Epic Jira MTRO-20 và cấu hình mẫu được ghi trong QA business rule: Owner / Admin / Marketer-Editor / Custom.",
+      "side_b": "Jira MTRO-43, MTRO-49 và UI staging 29/09/2026: role thứ 3 tên Member.",
+      "resolution": "UNRESOLVED",
+      "kb_refs": [
+        "KB-030",
+        "KB-031"
+      ]
+    }
+  ],
+  "profile_relationships": [
+    {
+      "from": "roles-and-permissions",
+      "to": "team-members-and-invitations",
+      "relation": "GOVERNS",
+      "kb_refs": [
+        "KB-035",
+        "KB-010"
+      ]
+    },
+    {
+      "from": "roles-and-permissions",
+      "to": "workspace-profile-settings",
+      "relation": "GOVERNS",
+      "kb_refs": [
+        "KB-075",
+        "KB-074"
+      ]
+    },
+    {
+      "from": "roles-and-permissions",
+      "to": "api-keys-and-public-api",
+      "relation": "GOVERNS",
+      "kb_refs": [
+        "KB-033"
+      ]
+    }
+  ]
+}

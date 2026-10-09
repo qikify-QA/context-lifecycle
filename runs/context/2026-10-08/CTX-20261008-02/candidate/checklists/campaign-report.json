@@ -1,0 +1,1713 @@
+{
+  "schema_version": "1.0",
+  "artifact_type": "RegressionChecklistCandidate",
+  "artifact_id": "RCCAND-campaign-report-CTX-20261008-02",
+  "workflow_id": "CTX-20261008-02",
+  "producer": "qa-checklist-builder",
+  "source_refs": [
+    "candidate/feature-profiles/campaign-report.json",
+    "candidate/product-kb/campaign-report.json",
+    "candidate/product-kb/campaign-list-and-folders.json",
+    "candidate/product-kb/campaign-wizard.json",
+    "candidate/product-kb/campaign-preview-and-test.json",
+    "candidate/product-kb/campaign-send-and-schedule.json",
+    "candidate/product-kb/_product-level.json",
+    "input/orchestrator-directives.json",
+    "input/scope-plan.json",
+    "input/profile-checklist-brief.md",
+    "intermediate/doc/DOC-27.json"
+  ],
+  "upstream_artifact_ids": [
+    "ART-FEATURE-PROFILE-campaign-report-CTX-20261008-02",
+    "PKBC-CTX-20261008-02-campaigns-campaign-report",
+    "PKBC-CTX-20261008-02-campaigns-campaign-list-and-folders",
+    "PKBC-CTX-20261008-02-campaigns-campaign-wizard",
+    "PKBC-CTX-20261008-02-campaigns-campaign-preview-and-test",
+    "PKBC-CTX-20261008-02-campaigns-campaign-send-and-schedule",
+    "PKBC-CTX-20261008-02-_product-level",
+    "SCOPE-PLAN-CTX-20261008-02"
+  ],
+  "status": "PARTIAL",
+  "confidence": "MEDIUM",
+  "observations": [
+    "37 check; theo oracle_strength {'BASELINE': 9, 'STRONG': 17, 'NONE': 11}; theo status {'READY': 26, 'NEEDS_CONFIRMATION': 11}; theo dimension {'CORE': 18, 'BOUNDARY': 1, 'STATE_DATA': 11, 'INTEGRATION': 3, 'NEGATIVE': 2, 'PERMISSION': 2}; theo priority {'P2': 20, 'P3': 13, 'P1': 4}.",
+    "oracle_strength tính bằng script theo luật orchestrator: STRONG khi mọi kb_id là CONFIRMED_EXPECTED ngoài conflict_group; có OBSERVED_CURRENT (không KNOWN_DEFECT) thì BASELINE; có INFERRED / thuộc conflict_group / không có kb_id thì NONE + NEEDS_CONFIRMATION. Item KNOWN_DEFECT chỉ nằm ở regression_watch_kb_ids, không bao giờ ở oracle.kb_ids (script assert).",
+    "Shard KB không có object-level cho campaigns (không tồn tại _object-level.campaigns); oracle chỉ trích kb_id của 5 shard feature thuộc object campaigns (cùng một dải kb_id của object) và kb_id product-level.",
+    "Regression checklist của QA chỉ được dùng làm gợi ý rủi ro / độ phủ, không làm oracle.",
+    "Rework r1: dựng lại từ shard đã sửa — bỏ mọi tham chiếu tới item đã gỡ do trùng rule giữa object (check phụ thuộc chuyển vào duplicates_removed 'covered in <object>/<feature>'); với item CE đã rút statement về đúng nội dung authority, check STRONG chỉ khẳng định phần authority, chi tiết staging tách ra check BASELINE theo item OBSERVED mới; item KNOWN_DEFECT mới chỉ nằm ở regression_watch_kb_ids.",
+    "Check `Segment deleted since this send` nằm ở checklist campaign-send-and-schedule; quy tắc nội dung đã gửi được đóng băng do email-content/email-library sở hữu (rework r1) — không nhân bản ở đây."
+  ],
+  "assumptions": [
+    "applicability.environment = 'documented' (DOC_BOOTSTRAP, không có quan sát runtime trong run này); act_ids và evidence_refs rỗng.",
+    "Check BASELINE mô tả hiện trạng staging theo ngày khảo sát ghi trong KB; lệch = cần điều tra, không mặc định là bug.",
+    "Dữ liệu người nhận khi chạy check gửi mail chỉ dùng địa chỉ do QA kiểm soát hoặc AWS SES mailbox simulator; mail tới simulator vẫn bị tính vào hạn mức gửi của workspace.",
+    "Check định nghĩa số liệu cần dữ liệu gửi thật tới địa chỉ do QA kiểm soát / SES mailbox simulator; tương tác open / click nên làm từ thiết bị thật để tránh bị lọc bot.",
+    "Check Analytics API giả định QA có API key test với quyền phù hợp; giá trị key được redact khỏi evidence."
+  ],
+  "unknowns": [
+    "Click link preferences có bị loại khỏi Click rate không?",
+    "Lọc bot có áp cho Total opens / Total clicks không?",
+    "Report hiện `—` hay `0` khi chưa có số liệu; broadcast của Draft trả 404 là thiết kế hay lỗi?",
+    "Campaign Draft có được phép vào trang report không; report campaign Sent bỏ tab Recipients / Content / Settings là chủ ý hay tạm ẩn?",
+    "Bấm thẻ metric thì kỳ vọng xảy ra gì?",
+    "Danh sách đầy đủ nhãn lý do bounce, giá trị hiển thị khi mẫu số bằng 0, UI có tách hard / soft bounce không?",
+    "Hợp đồng đầy đủ của Analytics API và tool MCP report?"
+  ],
+  "conflicts": [],
+  "blocking_issues": [],
+  "payload": {
+    "checklists": [
+      {
+        "feature_id": "campaign-report",
+        "feature_key": "campaign-report",
+        "checklist_version": "v1",
+        "name": "Campaign report và Analytics API",
+        "checks": [
+          {
+            "check_id": "CHK-001",
+            "dimension": "CORE",
+            "layer": "portal",
+            "title": "Report campaign Sent: route, header và 5 tab",
+            "applicability": {
+              "role": "unspecified",
+              "state": "campaign Sent",
+              "environment": "documented",
+              "theme_or_device": null
+            },
+            "precondition": "Đã đăng nhập app workspace bằng tài khoản Owner của một workspace test (Owner là role duy nhất đã được khảo sát; ma trận quyền Campaigns chưa chốt). Có campaign Sent gửi sau khi có pipeline số liệu (từ 28/09/2026) tới địa chỉ do QA kiểm soát hoặc SES mailbox simulator.",
+            "steps": [
+              "Từ danh sách, click dòng campaign Sent.",
+              "Đọc URL, header và các tab; ghi tab mặc định.",
+              "Tìm tab Recipients / Content / Settings."
+            ],
+            "observation_point": "URL; header; danh sách tab.",
+            "expected_result": "Theo hiện trạng staging 01/10/2026, lệch = cần điều tra: route `/campaigns/:id/report`; header gồm tên campaign và dòng \"Sent on <ngày giờ gửi> · as of <giờ>\", không có `Duplicate` / `Stop send`; có 5 tab `Overview`, `Deliverability`, `Opens`, `Clicks`, `Unsubscribe`, mặc định `Overview`; không có tab Recipients / Content / Settings.",
+            "oracle": {
+              "kb_ids": [
+                "KB-119",
+                "KB-141",
+                "KB-142",
+                "KB-174"
+              ],
+              "oracle_strength": "BASELINE"
+            },
+            "status": "READY",
+            "open_question_draft": null,
+            "regression_watch_kb_ids": [],
+            "risk_refs": [
+              "RISK-campaign-report-03"
+            ],
+            "priority": "P2",
+            "act_ids": [],
+            "evidence_refs": [],
+            "automation_suitability": "SUITABLE"
+          },
+          {
+            "check_id": "CHK-002",
+            "dimension": "CORE",
+            "layer": "portal",
+            "title": "Tab Overview: khối Campaign performance và thẻ metric",
+            "applicability": {
+              "role": "unspecified",
+              "state": "report campaign Sent",
+              "environment": "documented",
+              "theme_or_device": null
+            },
+            "precondition": "Đã đăng nhập app workspace bằng tài khoản Owner của một workspace test (Owner là role duy nhất đã được khảo sát; ma trận quyền Campaigns chưa chốt). Có campaign Sent gửi sau khi có pipeline số liệu (từ 28/09/2026) tới địa chỉ do QA kiểm soát hoặc SES mailbox simulator.",
+            "steps": [
+              "Mở tab Overview, đọc các thẻ trong `Campaign performance`.",
+              "Bấm lần lượt từng thẻ, ghi lại kết quả."
+            ],
+            "observation_point": "Các thẻ; phản hồi khi bấm từng thẻ.",
+            "expected_result": "Theo hiện trạng staging 01/10/2026, lệch = cần điều tra: có 4 thẻ `Delivery rate`, `Open rate`, `Click rate`, `Unsubscribe rate`; ba thẻ đầu là nút bấm được, `Unsubscribe rate` không bấm được.",
+            "oracle": {
+              "kb_ids": [
+                "KB-144",
+                "KB-145"
+              ],
+              "oracle_strength": "BASELINE"
+            },
+            "status": "READY",
+            "open_question_draft": null,
+            "regression_watch_kb_ids": [],
+            "risk_refs": [
+              "RISK-campaign-report-03"
+            ],
+            "priority": "P3",
+            "act_ids": [],
+            "evidence_refs": [],
+            "automation_suitability": "SUITABLE"
+          },
+          {
+            "check_id": "CHK-003",
+            "dimension": "CORE",
+            "layer": "portal",
+            "title": "Thẻ metric hiện tooltip khi hover hoặc focus",
+            "applicability": {
+              "role": "unspecified",
+              "state": "report campaign Sent",
+              "environment": "documented",
+              "theme_or_device": null
+            },
+            "precondition": "Đã đăng nhập app workspace bằng tài khoản Owner của một workspace test (Owner là role duy nhất đã được khảo sát; ma trận quyền Campaigns chưa chốt). Có campaign Sent gửi sau khi có pipeline số liệu (từ 28/09/2026) tới địa chỉ do QA kiểm soát hoặc SES mailbox simulator.",
+            "steps": [
+              "Hover một thẻ metric có chi tiết.",
+              "Dùng phím Tab focus vào thẻ đó."
+            ],
+            "observation_point": "Tooltip.",
+            "expected_result": "Thẻ metric có chi tiết hiện tooltip khi hover và khi focus.",
+            "oracle": {
+              "kb_ids": [
+                "KB-143"
+              ],
+              "oracle_strength": "STRONG"
+            },
+            "status": "READY",
+            "open_question_draft": null,
+            "regression_watch_kb_ids": [],
+            "risk_refs": [
+              "RISK-campaign-report-03"
+            ],
+            "priority": "P3",
+            "act_ids": [],
+            "evidence_refs": [],
+            "automation_suitability": "SUITABLE"
+          },
+          {
+            "check_id": "CHK-004",
+            "dimension": "CORE",
+            "layer": "api",
+            "title": "Rate trên report khớp công thức tính từ 6 số raw count",
+            "applicability": {
+              "role": "unspecified",
+              "state": "campaign Sent có ít nhất 1 delivered, 1 open, 1 click",
+              "environment": "documented",
+              "theme_or_device": null
+            },
+            "precondition": "Đã đăng nhập app workspace bằng tài khoản Owner của một workspace test (Owner là role duy nhất đã được khảo sát; ma trận quyền Campaigns chưa chốt). Có campaign Sent gửi sau khi có pipeline số liệu (từ 28/09/2026) tới địa chỉ do QA kiểm soát hoặc SES mailbox simulator.",
+            "steps": [
+              "Gọi `GET /campaigns/{id}/broadcast` (lấy request từ DevTools), ghi 6 số `delivered`, `bounced`, `complained`, `unsubscribed`, `opens`, `clicks` và số sent.",
+              "Mở các tab report, ghi Delivery rate, Bounce rate, Open rate, Click rate, Click-to-open, Spam complaint rate, Unsubscribe rate.",
+              "Tự tính lại từng rate theo công thức."
+            ],
+            "observation_point": "Rate hiển thị so với rate tự tính.",
+            "expected_result": "Report hiện rate do frontend tự tính từ raw count, khớp công thức: Delivery rate = delivered ÷ sent; Bounce rate = bounce ÷ sent; Open rate = người mở ÷ delivered; Click rate = người click ÷ delivered; Click-to-open = người click ÷ người mở; Spam complaint rate = complaint ÷ delivered; Unsubscribe rate = unsubscribe ÷ delivered. Có đủ raw count thì không hiện `—`.",
+            "oracle": {
+              "kb_ids": [
+                "KB-120",
+                "KB-121",
+                "KB-122",
+                "KB-135",
+                "KB-137"
+              ],
+              "oracle_strength": "STRONG"
+            },
+            "status": "READY",
+            "open_question_draft": null,
+            "regression_watch_kb_ids": [
+              "KB-166"
+            ],
+            "risk_refs": [
+              "RISK-campaign-report-01"
+            ],
+            "priority": "P2",
+            "act_ids": [],
+            "evidence_refs": [],
+            "automation_suitability": "HYBRID"
+          },
+          {
+            "check_id": "CHK-005",
+            "dimension": "BOUNDARY",
+            "layer": "portal",
+            "title": "Mẫu số bằng 0 không làm hỏng hiển thị rate",
+            "applicability": {
+              "role": "unspecified",
+              "state": "campaign Sent có delivered = 0 (ví dụ mọi địa chỉ là SES bounce simulator)",
+              "environment": "documented",
+              "theme_or_device": null
+            },
+            "precondition": "Đã đăng nhập app workspace bằng tài khoản Owner của một workspace test (Owner là role duy nhất đã được khảo sát; ma trận quyền Campaigns chưa chốt).",
+            "steps": [
+              "Mở các tab report, đọc các rate có mẫu số delivered."
+            ],
+            "observation_point": "Giá trị Open rate, Click rate, Unsubscribe rate, Spam complaint rate.",
+            "expected_result": "Frontend chặn phép chia cho 0: không hiện `NaN`, `Infinity` hay lỗi ở các rate có mẫu số bằng 0.",
+            "oracle": {
+              "kb_ids": [
+                "KB-137"
+              ],
+              "oracle_strength": "STRONG"
+            },
+            "status": "READY",
+            "open_question_draft": null,
+            "regression_watch_kb_ids": [],
+            "risk_refs": [
+              "RISK-campaign-report-01"
+            ],
+            "priority": "P2",
+            "act_ids": [],
+            "evidence_refs": [],
+            "automation_suitability": "HYBRID"
+          },
+          {
+            "check_id": "CHK-006",
+            "dimension": "CORE",
+            "layer": "portal",
+            "title": "Đếm theo người (unique contact), trừ Total opens / Total clicks",
+            "applicability": {
+              "role": "unspecified",
+              "state": "campaign Sent tới 1 địa chỉ do QA kiểm soát",
+              "environment": "documented",
+              "theme_or_device": null
+            },
+            "precondition": "Đã đăng nhập app workspace bằng tài khoản Owner của một workspace test (Owner là role duy nhất đã được khảo sát; ma trận quyền Campaigns chưa chốt). Có campaign Sent gửi sau khi có pipeline số liệu (từ 28/09/2026) tới địa chỉ do QA kiểm soát hoặc SES mailbox simulator.",
+            "steps": [
+              "Mở mail 3 lần và bấm cùng một link 2 lần (từ thiết bị thật, không qua scanner).",
+              "Mở tab Opens và Clicks."
+            ],
+            "observation_point": "Total opens, Unique opens, Total clicks, Unique clicks, Open rate, Click rate.",
+            "expected_result": "Unique opens = 1 và Total opens = 3; Unique clicks = 1 và Total clicks = 2; Open rate và Click rate tính theo người; report có cả total clicks và unique clicks.",
+            "oracle": {
+              "kb_ids": [
+                "KB-125"
+              ],
+              "oracle_strength": "STRONG"
+            },
+            "status": "READY",
+            "open_question_draft": null,
+            "regression_watch_kb_ids": [],
+            "risk_refs": [
+              "RISK-campaign-report-01"
+            ],
+            "priority": "P2",
+            "act_ids": [],
+            "evidence_refs": [],
+            "automation_suitability": "HYBRID"
+          },
+          {
+            "check_id": "CHK-007",
+            "dimension": "CORE",
+            "layer": "portal",
+            "title": "Bố cục tab Opens và Clicks",
+            "applicability": {
+              "role": "unspecified",
+              "state": "report campaign Sent",
+              "environment": "documented",
+              "theme_or_device": null
+            },
+            "precondition": "Đã đăng nhập app workspace bằng tài khoản Owner của một workspace test (Owner là role duy nhất đã được khảo sát; ma trận quyền Campaigns chưa chốt). Có campaign Sent gửi sau khi có pipeline số liệu (từ 28/09/2026) tới địa chỉ do QA kiểm soát hoặc SES mailbox simulator.",
+            "steps": [
+              "Mở tab Opens, đọc các thẻ, biểu đồ, bảng.",
+              "Mở tab Clicks, đọc các thẻ và bảng `Clicks by link`."
+            ],
+            "observation_point": "Các thẻ, mô tả, biểu đồ, cột bảng.",
+            "expected_result": "Theo hiện trạng staging 01/10/2026, lệch = cần điều tra: tab Opens có `Total opens`, `Unique opens`, `Open rate` (dạng \"3 of 3 delivered\") và \"Opens over time (first 24h)\" gồm biểu đồ cùng bảng 8 khối 3 giờ; tab Clicks có `Total clicks`, `Unique clicks`, `Click rate`, `Click-to-open` và bảng `Clicks by link` với cột Link, Unique clicks, Total clicks.",
+            "oracle": {
+              "kb_ids": [
+                "KB-159",
+                "KB-161"
+              ],
+              "oracle_strength": "BASELINE"
+            },
+            "status": "READY",
+            "open_question_draft": null,
+            "regression_watch_kb_ids": [
+              "KB-160"
+            ],
+            "risk_refs": [
+              "RISK-campaign-report-03"
+            ],
+            "priority": "P3",
+            "act_ids": [],
+            "evidence_refs": [],
+            "automation_suitability": "SUITABLE"
+          },
+          {
+            "check_id": "CHK-008",
+            "dimension": "CORE",
+            "layer": "portal",
+            "title": "Click link unsubscribe không được tính vào Click rate",
+            "applicability": {
+              "role": "unspecified",
+              "state": "campaign Sent tới 2 địa chỉ do QA kiểm soát; email có link thường và link unsubscribe",
+              "environment": "documented",
+              "theme_or_device": null
+            },
+            "precondition": "Đã đăng nhập app workspace bằng tài khoản Owner của một workspace test (Owner là role duy nhất đã được khảo sát; ma trận quyền Campaigns chưa chốt). Có campaign Sent gửi sau khi có pipeline số liệu (từ 28/09/2026) tới địa chỉ do QA kiểm soát hoặc SES mailbox simulator.",
+            "steps": [
+              "Ở địa chỉ 1 chỉ bấm link unsubscribe (dùng contact test được phép unsubscribe).",
+              "Ở địa chỉ 2 bấm link thường.",
+              "Mở tab Clicks."
+            ],
+            "observation_point": "Unique clicks, Click rate, bảng Clicks by link.",
+            "expected_result": "Click vào link unsubscribe không được tính vào Click rate (chỉ địa chỉ 2 được đếm là người click); caveat \"Bot clicks and unsubscribe links are excluded.\" hiện trên report.",
+            "oracle": {
+              "kb_ids": [
+                "KB-123"
+              ],
+              "oracle_strength": "STRONG"
+            },
+            "status": "READY",
+            "open_question_draft": null,
+            "regression_watch_kb_ids": [],
+            "risk_refs": [
+              "RISK-campaign-report-01",
+              "RISK-campaign-report-02"
+            ],
+            "priority": "P2",
+            "act_ids": [],
+            "evidence_refs": [],
+            "automation_suitability": "HYBRID"
+          },
+          {
+            "check_id": "CHK-009",
+            "dimension": "CORE",
+            "layer": "portal",
+            "title": "Click link preferences có bị loại khỏi Click rate không",
+            "applicability": {
+              "role": "unspecified",
+              "state": "campaign Sent có preferences page; email có link preferences",
+              "environment": "documented",
+              "theme_or_device": null
+            },
+            "precondition": "Đã đăng nhập app workspace bằng tài khoản Owner của một workspace test (Owner là role duy nhất đã được khảo sát; ma trận quyền Campaigns chưa chốt). Có campaign Sent gửi sau khi có pipeline số liệu (từ 28/09/2026) tới địa chỉ do QA kiểm soát hoặc SES mailbox simulator.",
+            "steps": [
+              "Từ một địa chỉ test chỉ bấm link preferences.",
+              "Mở tab Clicks."
+            ],
+            "observation_point": "Unique clicks, Click rate, bảng Clicks by link.",
+            "expected_result": "Chưa có oracle để kết luận pass/fail. Ghi lại click vào link preferences có được đếm không, đối chiếu khi PO/Dev trả lời câu hỏi kèm theo.",
+            "oracle": {
+              "kb_ids": [
+                "KB-124"
+              ],
+              "oracle_strength": "NONE"
+            },
+            "status": "NEEDS_CONFIRMATION",
+            "open_question_draft": "Epic Jira MTRO-16 ghi Click rate không tính link unsubscribe và link preference, nhưng caveat trên report chỉ nêu link unsubscribe. Click vào link {{preferences_url}} có bị loại khỏi Click rate không (GAP-23)?",
+            "regression_watch_kb_ids": [],
+            "risk_refs": [
+              "RISK-campaign-report-01"
+            ],
+            "priority": "P2",
+            "act_ids": [],
+            "evidence_refs": [],
+            "automation_suitability": "HYBRID"
+          },
+          {
+            "check_id": "CHK-010",
+            "dimension": "CORE",
+            "layer": "portal",
+            "title": "Bảng Clicks by link gộp theo tag / link gốc",
+            "applicability": {
+              "role": "unspecified",
+              "state": "campaign Sent có: 2 link cùng tag, 1 link không tag, 1 link chứa merge tag (vd `?ref={{contact_id}}`) được ≥2 contact bấm",
+              "environment": "documented",
+              "theme_or_device": null
+            },
+            "precondition": "Đã đăng nhập app workspace bằng tài khoản Owner của một workspace test (Owner là role duy nhất đã được khảo sát; ma trận quyền Campaigns chưa chốt). Có campaign Sent gửi sau khi có pipeline số liệu (từ 28/09/2026) tới địa chỉ do QA kiểm soát hoặc SES mailbox simulator.",
+            "steps": [
+              "Bấm các link từ nhiều địa chỉ test.",
+              "Mở bảng Clicks by link."
+            ],
+            "observation_point": "Số dòng và cách gộp trong bảng.",
+            "expected_result": "Mỗi tag là một dòng (các link cùng tag gộp chung); link không có tag gộp theo link gốc trong template; link có merge tag không bị tách thành nhiều dòng theo từng người nhận.",
+            "oracle": {
+              "kb_ids": [
+                "KB-126",
+                "KB-127"
+              ],
+              "oracle_strength": "STRONG"
+            },
+            "status": "READY",
+            "open_question_draft": null,
+            "regression_watch_kb_ids": [],
+            "risk_refs": [
+              "RISK-campaign-report-01"
+            ],
+            "priority": "P2",
+            "act_ids": [],
+            "evidence_refs": [],
+            "automation_suitability": "HYBRID"
+          },
+          {
+            "check_id": "CHK-011",
+            "dimension": "CORE",
+            "layer": "portal",
+            "title": "Số Unsubscribe chỉ tính unsubscribe global gắn với campaign",
+            "applicability": {
+              "role": "unspecified",
+              "state": "campaign Sent tới 2 contact test; có preferences page với ít nhất 1 topic",
+              "environment": "documented",
+              "theme_or_device": null
+            },
+            "precondition": "Đã đăng nhập app workspace bằng tài khoản Owner của một workspace test (Owner là role duy nhất đã được khảo sát; ma trận quyền Campaigns chưa chốt). Có campaign Sent gửi sau khi có pipeline số liệu (từ 28/09/2026) tới địa chỉ do QA kiểm soát hoặc SES mailbox simulator.",
+            "steps": [
+              "Contact 1 bấm link unsubscribe và unsubscribe khỏi mọi email.",
+              "Contact 2 vào preferences page, chỉ tắt một topic.",
+              "Mở tab Unsubscribe."
+            ],
+            "observation_point": "Thẻ `Unsubscribe` và `Unsubscribe rate`.",
+            "expected_result": "Chỉ contact 1 được tính là unsubscribe; opt-out một topic của contact 2 không được tính.",
+            "oracle": {
+              "kb_ids": [
+                "KB-128"
+              ],
+              "oracle_strength": "STRONG"
+            },
+            "status": "READY",
+            "open_question_draft": null,
+            "regression_watch_kb_ids": [],
+            "risk_refs": [
+              "RISK-campaign-report-02"
+            ],
+            "priority": "P1",
+            "act_ids": [],
+            "evidence_refs": [],
+            "automation_suitability": "HYBRID"
+          },
+          {
+            "check_id": "CHK-012",
+            "dimension": "CORE",
+            "layer": "portal",
+            "title": "Bố cục tab Deliverability và Unsubscribe",
+            "applicability": {
+              "role": "unspecified",
+              "state": "report campaign Sent không có bounce",
+              "environment": "documented",
+              "theme_or_device": null
+            },
+            "precondition": "Đã đăng nhập app workspace bằng tài khoản Owner của một workspace test (Owner là role duy nhất đã được khảo sát; ma trận quyền Campaigns chưa chốt). Có campaign Sent gửi sau khi có pipeline số liệu (từ 28/09/2026) tới địa chỉ do QA kiểm soát hoặc SES mailbox simulator.",
+            "steps": [
+              "Mở tab Deliverability, đọc các thẻ và bảng `Bounce reasons`.",
+              "Mở tab Unsubscribe, đọc các thẻ."
+            ],
+            "observation_point": "Thẻ, mô tả, bảng.",
+            "expected_result": "Theo hiện trạng staging 01/10/2026, lệch = cần điều tra: Deliverability có `Sent to` (\"of N recipients\"), `Delivered` (dạng \"100% of 3 sent\"), `Delivery rate`, `Bounce` (ghi \"Hard bounces leave the list automatically.\") và bảng `Bounce reasons` hiện `No bounces recorded.`; Unsubscribe có `Unsubscribe` (\"left all email\"), `Unsubscribe rate`, `Spam complaint` (\"reported as spam\"), `Spam complaint rate`.",
+            "oracle": {
+              "kb_ids": [
+                "KB-155",
+                "KB-157",
+                "KB-162"
+              ],
+              "oracle_strength": "BASELINE"
+            },
+            "status": "READY",
+            "open_question_draft": null,
+            "regression_watch_kb_ids": [],
+            "risk_refs": [
+              "RISK-campaign-report-03",
+              "RISK-campaign-report-02"
+            ],
+            "priority": "P3",
+            "act_ids": [],
+            "evidence_refs": [],
+            "automation_suitability": "SUITABLE"
+          },
+          {
+            "check_id": "CHK-013",
+            "dimension": "STATE_DATA",
+            "layer": "api",
+            "title": "Lọc bot dựa trên cờ `is_bot_event`",
+            "applicability": {
+              "role": "unspecified",
+              "state": "campaign Sent có event open / click được SES gắn cờ bot Likely",
+              "environment": "documented",
+              "theme_or_device": null
+            },
+            "precondition": "Đã đăng nhập app workspace bằng tài khoản Owner của một workspace test (Owner là role duy nhất đã được khảo sát; ma trận quyền Campaigns chưa chốt). Có campaign Sent gửi sau khi có pipeline số liệu (từ 28/09/2026) tới địa chỉ do QA kiểm soát hoặc SES mailbox simulator. Cần Dev hỗ trợ đọc event SES.",
+            "steps": [
+              "Đối chiếu event của campaign (cần Dev / DB hỗ trợ) với Unique opens / Unique clicks trên report."
+            ],
+            "observation_point": "Event có cờ bot có bị loại khỏi số người mở / click không.",
+            "expected_result": "Lượt mở / click gắn cờ `is_bot_event` (Likely) không được tính vào số người mở / người click và Open rate / Click rate.",
+            "oracle": {
+              "kb_ids": [
+                "KB-139"
+              ],
+              "oracle_strength": "STRONG"
+            },
+            "status": "READY",
+            "open_question_draft": null,
+            "regression_watch_kb_ids": [],
+            "risk_refs": [
+              "RISK-campaign-report-01"
+            ],
+            "priority": "P2",
+            "act_ids": [],
+            "evidence_refs": [],
+            "automation_suitability": "NOT_SUITABLE"
+          },
+          {
+            "check_id": "CHK-014",
+            "dimension": "STATE_DATA",
+            "layer": "api",
+            "title": "Lọc bot có áp cho Total opens / Total clicks và event trước 07/08/2026",
+            "applicability": {
+              "role": "unspecified",
+              "state": "campaign có event bot; campaign có event trước 07/08/2026",
+              "environment": "documented",
+              "theme_or_device": null
+            },
+            "precondition": "Đã đăng nhập app workspace bằng tài khoản Owner của một workspace test (Owner là role duy nhất đã được khảo sát; ma trận quyền Campaigns chưa chốt). Có campaign Sent gửi sau khi có pipeline số liệu (từ 28/09/2026) tới địa chỉ do QA kiểm soát hoặc SES mailbox simulator. Cần Dev hỗ trợ đọc event SES.",
+            "steps": [
+              "So sánh Total opens / Total clicks với số event (gồm và không gồm bot)."
+            ],
+            "observation_point": "Total opens / Total clicks.",
+            "expected_result": "Chưa có oracle để kết luận pass/fail. Ghi lại Total có loại bot không, đối chiếu khi PO trả lời câu hỏi kèm theo.",
+            "oracle": {
+              "kb_ids": [
+                "KB-140"
+              ],
+              "oracle_strength": "NONE"
+            },
+            "status": "NEEDS_CONFIRMATION",
+            "open_question_draft": "Lọc bot (is_bot_event) có áp cho Total opens / Total clicks hay chỉ cho số unique? Event trước ngày 07/08/2026 (trước khi SES gắn cờ bot) được xử lý thế nào (GAP-03)?",
+            "regression_watch_kb_ids": [],
+            "risk_refs": [
+              "RISK-campaign-report-01"
+            ],
+            "priority": "P3",
+            "act_ids": [],
+            "evidence_refs": [],
+            "automation_suitability": "NOT_SUITABLE"
+          },
+          {
+            "check_id": "CHK-015",
+            "dimension": "STATE_DATA",
+            "layer": "portal",
+            "title": "Số liệu được tính lúc đọc, không cache",
+            "applicability": {
+              "role": "unspecified",
+              "state": "campaign Sent tới địa chỉ do QA kiểm soát",
+              "environment": "documented",
+              "theme_or_device": null
+            },
+            "precondition": "Đã đăng nhập app workspace bằng tài khoản Owner của một workspace test (Owner là role duy nhất đã được khảo sát; ma trận quyền Campaigns chưa chốt). Có campaign Sent gửi sau khi có pipeline số liệu (từ 28/09/2026) tới địa chỉ do QA kiểm soát hoặc SES mailbox simulator.",
+            "steps": [
+              "Mở report, ghi Unique opens và dòng `as of`.",
+              "Mở mail từ một địa chỉ chưa mở, chờ event về.",
+              "Tải lại report."
+            ],
+            "observation_point": "Unique opens và `as of` trước / sau.",
+            "expected_result": "Số liệu được tính tại thời điểm đọc, không cache: sau khi event về, tải lại report thấy số mới và thời điểm `as of` mới.",
+            "oracle": {
+              "kb_ids": [
+                "KB-136",
+                "KB-184"
+              ],
+              "oracle_strength": "STRONG"
+            },
+            "status": "READY",
+            "open_question_draft": null,
+            "regression_watch_kb_ids": [],
+            "risk_refs": [
+              "RISK-campaign-report-01"
+            ],
+            "priority": "P2",
+            "act_ids": [],
+            "evidence_refs": [],
+            "automation_suitability": "HYBRID"
+          },
+          {
+            "check_id": "CHK-016",
+            "dimension": "STATE_DATA",
+            "layer": "api",
+            "title": "Gộp số liệu: cộng số đếm rồi mới chia; rate theo ngày gửi; rate luôn kèm số đếm",
+            "applicability": {
+              "role": "unspecified",
+              "state": "≥2 campaign Sent trong cùng khoảng thời gian",
+              "environment": "documented",
+              "theme_or_device": null
+            },
+            "precondition": "Đã đăng nhập app workspace bằng tài khoản Owner của một workspace test (Owner là role duy nhất đã được khảo sát; ma trận quyền Campaigns chưa chốt). Có campaign Sent gửi sau khi có pipeline số liệu (từ 28/09/2026) tới địa chỉ do QA kiểm soát hoặc SES mailbox simulator. Có API key của workspace test với quyền phù hợp (giá trị key không được ghi vào evidence).",
+            "steps": [
+              "Gọi API analytics cho khoảng thời gian chứa các campaign, ghi số đếm.",
+              "Tự tính rate gộp bằng cách cộng số đếm rồi chia; so với cách lấy trung bình rate.",
+              "Đọc mọi rate trên report campaign."
+            ],
+            "observation_point": "Số đếm gộp; rate hiển thị và số đếm đi kèm.",
+            "expected_result": "Rate gộp nhiều cấp được tính bằng cộng số đếm trước rồi mới chia (không lấy trung bình rate); rate được tính theo ngày gửi; mọi rate đều hiển thị kèm số đếm.",
+            "oracle": {
+              "kb_ids": [
+                "KB-129",
+                "KB-132"
+              ],
+              "oracle_strength": "STRONG"
+            },
+            "status": "READY",
+            "open_question_draft": null,
+            "regression_watch_kb_ids": [],
+            "risk_refs": [
+              "RISK-campaign-report-01"
+            ],
+            "priority": "P2",
+            "act_ids": [],
+            "evidence_refs": [],
+            "automation_suitability": "HYBRID"
+          },
+          {
+            "check_id": "CHK-017",
+            "dimension": "CORE",
+            "layer": "portal",
+            "title": "Report không có các phần ngoài phạm vi",
+            "applicability": {
+              "role": "unspecified",
+              "state": "report campaign Sent",
+              "environment": "documented",
+              "theme_or_device": null
+            },
+            "precondition": "Đã đăng nhập app workspace bằng tài khoản Owner của một workspace test (Owner là role duy nhất đã được khảo sát; ma trận quyền Campaigns chưa chốt). Có campaign Sent gửi sau khi có pipeline số liệu (từ 28/09/2026) tới địa chỉ do QA kiểm soát hoặc SES mailbox simulator.",
+            "steps": [
+              "Duyệt toàn bộ tab report."
+            ],
+            "observation_point": "Có / không có performance theo segment, inbox placement, click heatmap, opt-out theo topic.",
+            "expected_result": "Report không có performance theo segment, inbox placement, click heatmap và số opt-out theo topic.",
+            "oracle": {
+              "kb_ids": [
+                "KB-133"
+              ],
+              "oracle_strength": "STRONG"
+            },
+            "status": "READY",
+            "open_question_draft": null,
+            "regression_watch_kb_ids": [],
+            "risk_refs": [
+              "RISK-campaign-report-03"
+            ],
+            "priority": "P3",
+            "act_ids": [],
+            "evidence_refs": [],
+            "automation_suitability": "SUITABLE"
+          },
+          {
+            "check_id": "CHK-018",
+            "dimension": "STATE_DATA",
+            "layer": "portal",
+            "title": "Khối Campaign audience hiện snapshot điều kiện segment lúc gửi",
+            "applicability": {
+              "role": "unspecified",
+              "state": "campaign Sent dùng segment S (tạo riêng cho test)",
+              "environment": "documented",
+              "theme_or_device": null
+            },
+            "precondition": "Đã đăng nhập app workspace bằng tài khoản Owner của một workspace test (Owner là role duy nhất đã được khảo sát; ma trận quyền Campaigns chưa chốt). Có campaign Sent gửi sau khi có pipeline số liệu (từ 28/09/2026) tới địa chỉ do QA kiểm soát hoặc SES mailbox simulator.",
+            "steps": [
+              "Mở report, ghi điều kiện trong khối `Campaign audience`.",
+              "Sửa điều kiện của S ở trang Segments.",
+              "Tải lại report."
+            ],
+            "observation_point": "Điều kiện hiển thị trong khối audience; trạng thái read-only.",
+            "expected_result": "Theo hiện trạng staging 01/10/2026, lệch = cần điều tra: khối hiện tên segment và điều kiện read-only theo snapshot lúc bắt đầu gửi, không đổi theo segment hiện tại.",
+            "oracle": {
+              "kb_ids": [
+                "KB-146"
+              ],
+              "oracle_strength": "BASELINE"
+            },
+            "status": "READY",
+            "open_question_draft": null,
+            "regression_watch_kb_ids": [],
+            "risk_refs": [
+              "RISK-campaign-report-04"
+            ],
+            "priority": "P2",
+            "act_ids": [],
+            "evidence_refs": [],
+            "automation_suitability": "SUITABLE"
+          },
+          {
+            "check_id": "CHK-019",
+            "dimension": "STATE_DATA",
+            "layer": "portal",
+            "title": "Thông báo khi segment đã bị sửa sau lần gửi, rule quá phức tạp hoặc field đã bị xoá",
+            "applicability": {
+              "role": "unspecified",
+              "state": "campaign Sent có segment đã bị sửa; campaign Sent có segment dùng field đã bị xoá khỏi catalog",
+              "environment": "documented",
+              "theme_or_device": null
+            },
+            "precondition": "Đã đăng nhập app workspace bằng tài khoản Owner của một workspace test (Owner là role duy nhất đã được khảo sát; ma trận quyền Campaigns chưa chốt). Có campaign Sent gửi sau khi có pipeline số liệu (từ 28/09/2026) tới địa chỉ do QA kiểm soát hoặc SES mailbox simulator.",
+            "steps": [
+              "Mở report của từng campaign, đọc khối `Campaign audience`."
+            ],
+            "observation_point": "Thông báo và link trong khối audience.",
+            "expected_result": "Chưa có oracle để kết luận pass/fail. Ghi lại thông báo thực tế, đối chiếu khi PO trả lời câu hỏi kèm theo.",
+            "oracle": {
+              "kb_ids": [
+                "KB-148"
+              ],
+              "oracle_strength": "NONE"
+            },
+            "status": "NEEDS_CONFIRMATION",
+            "open_question_draft": "Khối Campaign audience phải báo gì khi segment đã bị sửa sau lần gửi (bundle: \"Segment edited since this send —\" kèm link `see it as it is now`), khi rule quá phức tạp (\"This audience uses rules too complex to show as cards.\") và khi field trong rule đã bị xoá khỏi catalog (Jira MTRO-96 ghi đang báo \"too complex\" thay vì \"field removed\")?",
+            "regression_watch_kb_ids": [
+              "KB-149"
+            ],
+            "risk_refs": [
+              "RISK-campaign-report-04"
+            ],
+            "priority": "P3",
+            "act_ids": [],
+            "evidence_refs": [],
+            "automation_suitability": "SUITABLE"
+          },
+          {
+            "check_id": "CHK-020",
+            "dimension": "CORE",
+            "layer": "portal",
+            "title": "Khối Campaign content và dialog preview nội dung đã gửi",
+            "applicability": {
+              "role": "unspecified",
+              "state": "campaign Sent có email chứa merge tag",
+              "environment": "documented",
+              "theme_or_device": null
+            },
+            "precondition": "Đã đăng nhập app workspace bằng tài khoản Owner của một workspace test (Owner là role duy nhất đã được khảo sát; ma trận quyền Campaigns chưa chốt). Có campaign Sent gửi sau khi có pipeline số liệu (từ 28/09/2026) tới địa chỉ do QA kiểm soát hoặc SES mailbox simulator.",
+            "steps": [
+              "Đọc các trường của khối `Campaign content`.",
+              "Bấm \"Click to preview\", đọc chú thích của dialog và merge tag trong nội dung."
+            ],
+            "observation_point": "Trường Subject / Preview text / From / Reply-to; chú thích và nội dung dialog.",
+            "expected_result": "Theo hiện trạng staging 01/10/2026, lệch = cần điều tra: khối có iframe `Preview the email` (\"Click to preview\"), `Subject`, `Preview text` (`Not set` khi trống), `From`, `Reply-to` (`Same as sender (…)`); dialog ghi đây là email đúng như đã submit, giữ tách khỏi design, và merge tag hiện như đã viết vì không lưu bản theo từng người nhận.",
+            "oracle": {
+              "kb_ids": [
+                "KB-150",
+                "KB-151"
+              ],
+              "oracle_strength": "BASELINE"
+            },
+            "status": "READY",
+            "open_question_draft": null,
+            "regression_watch_kb_ids": [],
+            "risk_refs": [
+              "RISK-campaign-report-04"
+            ],
+            "priority": "P2",
+            "act_ids": [],
+            "evidence_refs": [],
+            "automation_suitability": "SUITABLE"
+          },
+          {
+            "check_id": "CHK-021",
+            "dimension": "INTEGRATION",
+            "layer": "portal",
+            "title": "Người nhận campaign gửi 30/09/2026 (merge tag một ngoặc) nhận được gì",
+            "applicability": {
+              "role": "unspecified",
+              "state": "campaign Sent ngày 30/09/2026 lưu merge tag một ngoặc",
+              "environment": "documented",
+              "theme_or_device": null
+            },
+            "precondition": "Đã đăng nhập app workspace bằng tài khoản Owner của một workspace test (Owner là role duy nhất đã được khảo sát; ma trận quyền Campaigns chưa chốt).",
+            "steps": [
+              "Mở report, xem preview nội dung đã gửi.",
+              "Nếu có hộp thư người nhận test của lần gửi đó: kiểm tra tên có được thay và link Huỷ đăng ký trỏ tới đâu, bấm thử link."
+            ],
+            "observation_point": "Merge tag trong preview; nội dung mail người nhận; đích của link Huỷ đăng ký.",
+            "expected_result": "Chưa có oracle để kết luận pass/fail. Ghi lại nội dung thực tế người nhận thấy và đích của link Huỷ đăng ký, đối chiếu khi Dev trả lời câu hỏi kèm theo.",
+            "oracle": {
+              "kb_ids": [
+                "KB-154"
+              ],
+              "oracle_strength": "NONE"
+            },
+            "status": "NEEDS_CONFIRMATION",
+            "open_question_draft": "Campaign Sent ngày 30/09/2026 lưu merge tag một ngoặc ({contact.first_name}, {unsubscribe_url}, {preferences_url}). Người nhận thực nhận gì: tên có được thay không, link Huỷ đăng ký có trỏ tới trang unsubscribe thật không (GAP-22, GAP-05)? Nếu link chết đây là rủi ro tuân thủ cần Dev xử lý.",
+            "regression_watch_kb_ids": [
+              "KB-153"
+            ],
+            "risk_refs": [
+              "RISK-campaign-report-04",
+              "RISK-campaign-report-02"
+            ],
+            "priority": "P1",
+            "act_ids": [],
+            "evidence_refs": [],
+            "automation_suitability": "NOT_SUITABLE"
+          },
+          {
+            "check_id": "CHK-022",
+            "dimension": "STATE_DATA",
+            "layer": "portal",
+            "title": "Campaign gửi trước pipeline số liệu hiện `—`",
+            "applicability": {
+              "role": "unspecified",
+              "state": "campaign Sent ngày 09/09/2026 hoặc sớm hơn",
+              "environment": "documented",
+              "theme_or_device": null
+            },
+            "precondition": "Đã đăng nhập app workspace bằng tài khoản Owner của một workspace test (Owner là role duy nhất đã được khảo sát; ma trận quyền Campaigns chưa chốt).",
+            "steps": [
+              "Mở report, đọc 4 thẻ Overview."
+            ],
+            "observation_point": "Giá trị 4 thẻ.",
+            "expected_result": "Theo hiện trạng staging 01/10/2026, lệch = cần điều tra: cả 4 thẻ Overview hiện `—`.",
+            "oracle": {
+              "kb_ids": [
+                "KB-164"
+              ],
+              "oracle_strength": "BASELINE"
+            },
+            "status": "READY",
+            "open_question_draft": null,
+            "regression_watch_kb_ids": [],
+            "risk_refs": [
+              "RISK-campaign-report-05"
+            ],
+            "priority": "P3",
+            "act_ids": [],
+            "evidence_refs": [],
+            "automation_suitability": "SUITABLE"
+          },
+          {
+            "check_id": "CHK-023",
+            "dimension": "STATE_DATA",
+            "layer": "portal",
+            "title": "Khi chưa có số liệu: report hiện `—` hay `0`; broadcast của Draft",
+            "applicability": {
+              "role": "unspecified",
+              "state": "campaign Draft; campaign Sent chưa có event",
+              "environment": "documented",
+              "theme_or_device": null
+            },
+            "precondition": "Đã đăng nhập app workspace bằng tài khoản Owner của một workspace test (Owner là role duy nhất đã được khảo sát; ma trận quyền Campaigns chưa chốt).",
+            "steps": [
+              "Mở report của campaign Draft (qua URL trực tiếp), đọc các số.",
+              "Gọi `GET /campaigns/{id}/broadcast` cho campaign Draft, ghi status code.",
+              "Mở report của campaign Sent chưa có event."
+            ],
+            "observation_point": "Giá trị hiển thị; status code.",
+            "expected_result": "Chưa có oracle để kết luận pass/fail. Ghi lại giá trị và status code thực tế, đối chiếu khi PO/Dev trả lời câu hỏi kèm theo.",
+            "oracle": {
+              "kb_ids": [
+                "KB-169"
+              ],
+              "oracle_strength": "NONE"
+            },
+            "status": "NEEDS_CONFIRMATION",
+            "open_question_draft": "Khi chưa có số liệu, report phải hiện \"—\" hay \"0\"? Report campaign Draft hiện \"—\" và GET /campaigns/{id}/broadcast của Draft trả 404 thay vì 6 số 0 (BUG-SUPP-03, BUG-SUPP-05) — đó là thiết kế hay lỗi? Có kế hoạch backfill số liệu cho campaign gửi trước pipeline không?",
+            "regression_watch_kb_ids": [
+              "KB-166",
+              "KB-167",
+              "KB-168"
+            ],
+            "risk_refs": [
+              "RISK-campaign-report-05"
+            ],
+            "priority": "P2",
+            "act_ids": [],
+            "evidence_refs": [],
+            "automation_suitability": "SUITABLE"
+          },
+          {
+            "check_id": "CHK-024",
+            "dimension": "STATE_DATA",
+            "layer": "portal",
+            "title": "Mở thẳng report của campaign Draft",
+            "applicability": {
+              "role": "unspecified",
+              "state": "campaign Draft",
+              "environment": "documented",
+              "theme_or_device": null
+            },
+            "precondition": "Đã đăng nhập app workspace bằng tài khoản Owner của một workspace test (Owner là role duy nhất đã được khảo sát; ma trận quyền Campaigns chưa chốt).",
+            "steps": [
+              "Mở `/campaigns/<id draft>/report`.",
+              "Đọc header, subtitle và các tab; mở tab Overview và Settings."
+            ],
+            "observation_point": "Trang được mở; tab; nội dung Overview / Settings.",
+            "expected_result": "Theo hiện trạng staging 01/10/2026, lệch = cần điều tra: vào được trang report (không redirect về wizard), có badge `Draft`, subtitle \"Results for this campaign. Only a draft can be edited — duplicate it to change anything here.\", 4 tab `Overview`, `Recipients`, `Content`, `Settings`; Overview báo report chi tiết chỉ hiện khi đã gửi hết; Settings có Subject, Preview text, From, Reply-to, Created by, Sent at (`Not set`).",
+            "oracle": {
+              "kb_ids": [
+                "KB-170",
+                "KB-171"
+              ],
+              "oracle_strength": "BASELINE"
+            },
+            "status": "READY",
+            "open_question_draft": null,
+            "regression_watch_kb_ids": [],
+            "risk_refs": [
+              "RISK-campaign-report-05"
+            ],
+            "priority": "P3",
+            "act_ids": [],
+            "evidence_refs": [],
+            "automation_suitability": "SUITABLE"
+          },
+          {
+            "check_id": "CHK-025",
+            "dimension": "NEGATIVE",
+            "layer": "portal",
+            "title": "Report với id campaign không tồn tại",
+            "applicability": {
+              "role": "unspecified",
+              "state": "id campaign không tồn tại trong workspace",
+              "environment": "documented",
+              "theme_or_device": null
+            },
+            "precondition": "Đã đăng nhập app workspace bằng tài khoản Owner của một workspace test (Owner là role duy nhất đã được khảo sát; ma trận quyền Campaigns chưa chốt).",
+            "steps": [
+              "Mở `/campaigns/<id không tồn tại>/report`."
+            ],
+            "observation_point": "Nội dung trang.",
+            "expected_result": "Theo hiện trạng staging 01/10/2026, lệch = cần điều tra: hiện khung trống (breadcrumb `Campaign report`, h1 `Campaign`, thân trống), không có thông báo `Not Found.`",
+            "oracle": {
+              "kb_ids": [
+                "KB-176"
+              ],
+              "oracle_strength": "BASELINE"
+            },
+            "status": "READY",
+            "open_question_draft": null,
+            "regression_watch_kb_ids": [],
+            "risk_refs": [
+              "RISK-campaign-report-05"
+            ],
+            "priority": "P3",
+            "act_ids": [],
+            "evidence_refs": [],
+            "automation_suitability": "SUITABLE"
+          },
+          {
+            "check_id": "CHK-026",
+            "dimension": "STATE_DATA",
+            "layer": "portal",
+            "title": "Report của campaign Running / Partly sent / Cancelled / Failed",
+            "applicability": {
+              "role": "unspecified",
+              "state": "campaign ở một trong các status Running, Partly sent, Cancelled, Failed (cần dữ liệu dựng riêng)",
+              "environment": "documented",
+              "theme_or_device": null
+            },
+            "precondition": "Đã đăng nhập app workspace bằng tài khoản Owner của một workspace test (Owner là role duy nhất đã được khảo sát; ma trận quyền Campaigns chưa chốt).",
+            "steps": [
+              "Mở report của campaign ở từng status.",
+              "Đọc thẻ `Sent to`, khối tiến độ gửi, action Stop / Resume (nếu có)."
+            ],
+            "observation_point": "Trang mở ra; thẻ Sent to; khối tiến độ; action.",
+            "expected_result": "Chưa có oracle để kết luận pass/fail. Ghi lại report có mở được không và nội dung, đối chiếu khi PO trả lời câu hỏi kèm theo.",
+            "oracle": {
+              "kb_ids": [
+                "KB-156",
+                "KB-178",
+                "KB-179"
+              ],
+              "oracle_strength": "NONE"
+            },
+            "status": "NEEDS_CONFIRMATION",
+            "open_question_draft": "Campaign ở trạng thái Running / Partly sent / Cancelled / Failed có mở được report không, report hiển thị gì (bundle có khối `Send progress`, `Recipients of this send`, `Stop send` / `Resume send`, `This campaign never went out`), và thẻ Sent to hiện dạng \"so far, of …\" khi nào (GAP-01)?",
+            "regression_watch_kb_ids": [],
+            "risk_refs": [
+              "RISK-campaign-report-05"
+            ],
+            "priority": "P2",
+            "act_ids": [],
+            "evidence_refs": [],
+            "automation_suitability": "NOT_SUITABLE"
+          },
+          {
+            "check_id": "CHK-027",
+            "dimension": "CORE",
+            "layer": "api",
+            "title": "Endpoint report của một campaign; campaign chưa gửi trả 404",
+            "applicability": {
+              "role": "unspecified",
+              "state": "campaign Sent và campaign Draft",
+              "environment": "documented",
+              "theme_or_device": null
+            },
+            "precondition": "Đã đăng nhập app workspace bằng tài khoản Owner của một workspace test (Owner là role duy nhất đã được khảo sát; ma trận quyền Campaigns chưa chốt).",
+            "steps": [
+              "Gọi `GET /api/teams/{slug}/campaigns/{id}/report` cho campaign Sent.",
+              "Gọi cho campaign Draft."
+            ],
+            "observation_point": "Status code và body.",
+            "expected_result": "Campaign Sent trả report của campaign; campaign chưa gửi trả 404.",
+            "oracle": {
+              "kb_ids": [
+                "KB-180"
+              ],
+              "oracle_strength": "STRONG"
+            },
+            "status": "READY",
+            "open_question_draft": null,
+            "regression_watch_kb_ids": [],
+            "risk_refs": [
+              "RISK-campaign-report-06",
+              "RISK-campaign-report-05"
+            ],
+            "priority": "P2",
+            "act_ids": [],
+            "evidence_refs": [],
+            "automation_suitability": "SUITABLE"
+          },
+          {
+            "check_id": "CHK-028",
+            "dimension": "CORE",
+            "layer": "api",
+            "title": "Danh sách campaign có object `report`; endpoint broadcast trả segment, template, snapshot rules",
+            "applicability": {
+              "role": "unspecified",
+              "state": "workspace có campaign Sent",
+              "environment": "documented",
+              "theme_or_device": null
+            },
+            "precondition": "Đã đăng nhập app workspace bằng tài khoản Owner của một workspace test (Owner là role duy nhất đã được khảo sát; ma trận quyền Campaigns chưa chốt).",
+            "steps": [
+              "Gọi API danh sách campaign, đọc object `report` của campaign Sent.",
+              "Gọi `/campaigns/{id}/broadcast` cho campaign Sent."
+            ],
+            "observation_point": "Shape response.",
+            "expected_result": "Mỗi campaign trong danh sách có object `report: {sent, delivered, unique_opens}`; broadcast trả segment, template và snapshot rules của lần gửi, kèm 6 số raw count `delivered`, `bounced`, `complained`, `unsubscribed`, `opens`, `clicks`.",
+            "oracle": {
+              "kb_ids": [
+                "KB-181",
+                "KB-135"
+              ],
+              "oracle_strength": "STRONG"
+            },
+            "status": "READY",
+            "open_question_draft": null,
+            "regression_watch_kb_ids": [],
+            "risk_refs": [
+              "RISK-campaign-report-06"
+            ],
+            "priority": "P2",
+            "act_ids": [],
+            "evidence_refs": [],
+            "automation_suitability": "SUITABLE"
+          },
+          {
+            "check_id": "CHK-029",
+            "dimension": "CORE",
+            "layer": "api",
+            "title": "Analytics global: tham số `scope`, chỉ trả số đếm kèm `as_of`, không tính transactional",
+            "applicability": {
+              "role": "unspecified",
+              "state": "workspace có campaign và automation đã gửi, có mail transactional",
+              "environment": "documented",
+              "theme_or_device": null
+            },
+            "precondition": "Đã đăng nhập app workspace bằng tài khoản Owner của một workspace test (Owner là role duy nhất đã được khảo sát; ma trận quyền Campaigns chưa chốt). Có API key của workspace test với quyền phù hợp (giá trị key không được ghi vào evidence).",
+            "steps": [
+              "Gọi `GET /api/teams/{slug}/analytics` với `scope` = `all`, `campaigns`, `automations`.",
+              "Đọc response: trường rate, trường `as_of`, số đếm."
+            ],
+            "observation_point": "Response theo từng scope.",
+            "expected_result": "`scope` nhận `all`, `campaigns`, `automations`; response chỉ có số đếm (không có rate), luôn có `as_of`; email transactional không được tính.",
+            "oracle": {
+              "kb_ids": [
+                "KB-182",
+                "KB-184",
+                "KB-130"
+              ],
+              "oracle_strength": "STRONG"
+            },
+            "status": "READY",
+            "open_question_draft": null,
+            "regression_watch_kb_ids": [],
+            "risk_refs": [
+              "RISK-campaign-report-06"
+            ],
+            "priority": "P2",
+            "act_ids": [],
+            "evidence_refs": [],
+            "automation_suitability": "SUITABLE"
+          },
+          {
+            "check_id": "CHK-030",
+            "dimension": "CORE",
+            "layer": "api",
+            "title": "Analytics global: totals so với tổng sources",
+            "applicability": {
+              "role": "unspecified",
+              "state": "một contact nhận cả campaign và automation trong khoảng thời gian",
+              "environment": "documented",
+              "theme_or_device": null
+            },
+            "precondition": "Đã đăng nhập app workspace bằng tài khoản Owner của một workspace test (Owner là role duy nhất đã được khảo sát; ma trận quyền Campaigns chưa chốt). Có API key của workspace test với quyền phù hợp (giá trị key không được ghi vào evidence).",
+            "steps": [
+              "Gọi analytics `scope=all`, so `totals` với tổng các `sources`."
+            ],
+            "observation_point": "`totals` và `sources`.",
+            "expected_result": "Chưa có oracle để kết luận pass/fail. Ghi lại cách tính totals thực tế, đối chiếu khi PO/Dev trả lời câu hỏi kèm theo.",
+            "oracle": {
+              "kb_ids": [
+                "KB-185"
+              ],
+              "oracle_strength": "NONE"
+            },
+            "status": "NEEDS_CONFIRMATION",
+            "open_question_draft": "Trên analytics global, `totals` có phải luôn dedupe người nhận (một người nhận cả campaign lẫn automation chỉ tính 1, nên totals có thể nhỏ hơn tổng sources) cho mọi chỉ số không, hay chỉ cho một số chỉ số?",
+            "regression_watch_kb_ids": [],
+            "risk_refs": [
+              "RISK-campaign-report-06"
+            ],
+            "priority": "P3",
+            "act_ids": [],
+            "evidence_refs": [],
+            "automation_suitability": "SUITABLE"
+          },
+          {
+            "check_id": "CHK-031",
+            "dimension": "NEGATIVE",
+            "layer": "api",
+            "title": "Analytics API: thời gian phải là UTC+0",
+            "applicability": {
+              "role": "unspecified",
+              "state": "API analytics",
+              "environment": "documented",
+              "theme_or_device": null
+            },
+            "precondition": "Đã đăng nhập app workspace bằng tài khoản Owner của một workspace test (Owner là role duy nhất đã được khảo sát; ma trận quyền Campaigns chưa chốt). Có API key của workspace test với quyền phù hợp (giá trị key không được ghi vào evidence).",
+            "steps": [
+              "Gọi với thời gian `2026-10-01T07:00:00` và `2026-10-01T07:00:00Z`.",
+              "Gọi với `2026-10-01T07:00:00+07:00`, với chỉ ngày `2026-10-01` và với dạng tương đối (vd `-7d`)."
+            ],
+            "observation_point": "Status code.",
+            "expected_result": "Hai dạng UTC+0 (có hoặc không có `Z`) được chấp nhận; dạng có offset, chỉ có ngày hoặc tương đối bị trả 422.",
+            "oracle": {
+              "kb_ids": [
+                "KB-183"
+              ],
+              "oracle_strength": "STRONG"
+            },
+            "status": "READY",
+            "open_question_draft": null,
+            "regression_watch_kb_ids": [],
+            "risk_refs": [
+              "RISK-campaign-report-06"
+            ],
+            "priority": "P2",
+            "act_ids": [],
+            "evidence_refs": [],
+            "automation_suitability": "SUITABLE"
+          },
+          {
+            "check_id": "CHK-032",
+            "dimension": "STATE_DATA",
+            "layer": "api",
+            "title": "Analytics global đếm unsubscribe theo ngày event; resubscribe không trừ",
+            "applicability": {
+              "role": "unspecified",
+              "state": "contact test unsubscribe ở ngày D rồi resubscribe",
+              "environment": "documented",
+              "theme_or_device": null
+            },
+            "precondition": "Đã đăng nhập app workspace bằng tài khoản Owner của một workspace test (Owner là role duy nhất đã được khảo sát; ma trận quyền Campaigns chưa chốt). Có API key của workspace test với quyền phù hợp (giá trị key không được ghi vào evidence).",
+            "steps": [
+              "Gọi analytics khoảng chứa ngày D, ghi số unsubscribe.",
+              "Resubscribe contact, gọi lại cùng khoảng."
+            ],
+            "observation_point": "Số unsubscribe trước / sau resubscribe; ngày được tính.",
+            "expected_result": "Unsubscribe được đếm theo ngày xảy ra event; resubscribe không làm giảm số unsubscribe đã đếm.",
+            "oracle": {
+              "kb_ids": [
+                "KB-131"
+              ],
+              "oracle_strength": "STRONG"
+            },
+            "status": "READY",
+            "open_question_draft": null,
+            "regression_watch_kb_ids": [],
+            "risk_refs": [
+              "RISK-campaign-report-02",
+              "RISK-campaign-report-06"
+            ],
+            "priority": "P2",
+            "act_ids": [],
+            "evidence_refs": [],
+            "automation_suitability": "HYBRID"
+          },
+          {
+            "check_id": "CHK-033",
+            "dimension": "PERMISSION",
+            "layer": "api",
+            "title": "Analytics API theo quyền của API key",
+            "applicability": {
+              "role": "api-caller",
+              "state": "3 API key: chỉ `campaigns:read`, chỉ `automations:read`, có cả hai",
+              "environment": "documented",
+              "theme_or_device": null
+            },
+            "precondition": "Có 3 API key test với quyền như mô tả (giá trị key không được ghi vào evidence).",
+            "steps": [
+              "Với từng key, gọi analytics `scope` = `campaigns`, `automations`, `all`."
+            ],
+            "observation_point": "Status code từng tổ hợp.",
+            "expected_result": "`scope=campaigns` cần `campaigns:read`, `scope=automations` cần `automations:read`, `scope=all` cần cả hai; key thiếu quyền tương ứng nhận 403.",
+            "oracle": {
+              "kb_ids": [
+                "KB-186"
+              ],
+              "oracle_strength": "STRONG"
+            },
+            "status": "READY",
+            "open_question_draft": null,
+            "regression_watch_kb_ids": [],
+            "risk_refs": [
+              "RISK-campaign-report-07"
+            ],
+            "priority": "P1",
+            "act_ids": [],
+            "evidence_refs": [],
+            "automation_suitability": "SUITABLE"
+          },
+          {
+            "check_id": "CHK-034",
+            "dimension": "PERMISSION",
+            "layer": "portal",
+            "title": "Role khác Owner xem report campaign",
+            "applicability": {
+              "role": "Admin; role thứ 3 (Member / Marketer / Editor — tên đang tranh chấp)",
+              "state": "tài khoản role Admin và role thứ 3",
+              "environment": "documented",
+              "theme_or_device": null
+            },
+            "precondition": "Có tài khoản test role Admin và role thứ 3 trong workspace test; có campaign Sent.",
+            "steps": [
+              "Đăng nhập role Admin, mở report của campaign Sent.",
+              "Lặp lại với role thứ 3; nếu bị ẩn, gọi thẳng API report."
+            ],
+            "observation_point": "Trang / status code.",
+            "expected_result": "Chưa có oracle để kết luận pass/fail. Ghi lại kết quả theo role, đối chiếu khi PO trả lời câu hỏi kèm theo.",
+            "oracle": {
+              "kb_ids": [
+                "KB-P-051",
+                "KB-P-052"
+              ],
+              "oracle_strength": "NONE"
+            },
+            "status": "NEEDS_CONFIRMATION",
+            "open_question_draft": "Role nào (Owner / Admin / role thứ 3 đang tranh chấp tên / custom role) được xem report campaign trên UI? Quyền có được chặn ở API không?",
+            "regression_watch_kb_ids": [],
+            "risk_refs": [
+              "RISK-campaign-report-07"
+            ],
+            "priority": "P1",
+            "act_ids": [],
+            "evidence_refs": [],
+            "automation_suitability": "HYBRID"
+          },
+          {
+            "check_id": "CHK-035",
+            "dimension": "INTEGRATION",
+            "layer": "api",
+            "title": "Analytics phục vụ Claude MCP (report)",
+            "applicability": {
+              "role": "unspecified",
+              "state": "Claude connector đã kết nối workspace test",
+              "environment": "documented",
+              "theme_or_device": null
+            },
+            "precondition": "Đã đăng nhập app workspace bằng tài khoản Owner của một workspace test (Owner là role duy nhất đã được khảo sát; ma trận quyền Campaigns chưa chốt).",
+            "steps": [
+              "Liệt kê tool MCP liên quan tới report / analytics.",
+              "Gọi tool cho một campaign Sent, so số liệu với report trên UI."
+            ],
+            "observation_point": "Tool có sẵn; dữ liệu trả về.",
+            "expected_result": "Chưa có oracle để kết luận pass/fail. Ghi lại tool và dữ liệu, đối chiếu khi PO/Dev trả lời câu hỏi kèm theo.",
+            "oracle": {
+              "kb_ids": [
+                "KB-187"
+              ],
+              "oracle_strength": "NONE"
+            },
+            "status": "NEEDS_CONFIRMATION",
+            "open_question_draft": "Jira MTRO-60 \"MCP for report\" chưa có mô tả: MCP có tool report nào, dữ liệu trả về gồm gì và có dùng chung định nghĩa số liệu với report UI / Analytics API không?",
+            "regression_watch_kb_ids": [],
+            "risk_refs": [
+              "RISK-campaign-report-06"
+            ],
+            "priority": "P3",
+            "act_ids": [],
+            "evidence_refs": [],
+            "automation_suitability": "NOT_SUITABLE"
+          },
+          {
+            "check_id": "CHK-036",
+            "dimension": "CORE",
+            "layer": "portal",
+            "title": "Trang giao diện `/analytics`",
+            "applicability": {
+              "role": "unspecified",
+              "state": "app workspace",
+              "environment": "documented",
+              "theme_or_device": null
+            },
+            "precondition": "Đã đăng nhập app workspace bằng tài khoản Owner của một workspace test (Owner là role duy nhất đã được khảo sát; ma trận quyền Campaigns chưa chốt).",
+            "steps": [
+              "Mở `/analytics`."
+            ],
+            "observation_point": "Nội dung trang.",
+            "expected_result": "Chưa có oracle để kết luận pass/fail. Ghi lại nội dung trang, đối chiếu khi PO trả lời câu hỏi kèm theo.",
+            "oracle": {
+              "kb_ids": [
+                "KB-188",
+                "KB-189"
+              ],
+              "oracle_strength": "NONE"
+            },
+            "status": "NEEDS_CONFIRMATION",
+            "open_question_draft": "Có trang giao diện /analytics (analytics global) không (GAP-05)? Hiện route /analytics trên staging là trang trắng và analytics global mới kiểm được ở mức API.",
+            "regression_watch_kb_ids": [],
+            "risk_refs": [
+              "RISK-campaign-report-06"
+            ],
+            "priority": "P3",
+            "act_ids": [],
+            "evidence_refs": [],
+            "automation_suitability": "SUITABLE"
+          },
+          {
+            "check_id": "CHK-037",
+            "dimension": "INTEGRATION",
+            "layer": "portal",
+            "title": "Contact bị suppressed trong campaign có được đếm vào Bounce / Spam complaint / Sent",
+            "applicability": {
+              "role": "unspecified",
+              "state": "segment chứa contact đã bị suppress (bounce / complaint)",
+              "environment": "documented",
+              "theme_or_device": null
+            },
+            "precondition": "Đã đăng nhập app workspace bằng tài khoản Owner của một workspace test (Owner là role duy nhất đã được khảo sát; ma trận quyền Campaigns chưa chốt). Có campaign Sent gửi sau khi có pipeline số liệu (từ 28/09/2026) tới địa chỉ do QA kiểm soát hoặc SES mailbox simulator.",
+            "steps": [
+              "Gửi campaign tới segment đó (dữ liệu test).",
+              "Đọc Sent to, Bounce, Spam complaint trên report."
+            ],
+            "observation_point": "Số Sent / Bounce / Spam complaint.",
+            "expected_result": "Chưa có oracle để kết luận pass/fail. Ghi lại cách đếm thực tế, đối chiếu khi PO trả lời câu hỏi kèm theo.",
+            "oracle": {
+              "kb_ids": [
+                "KB-190"
+              ],
+              "oracle_strength": "NONE"
+            },
+            "status": "NEEDS_CONFIRMATION",
+            "open_question_draft": "Contact bị suppressed trong một campaign có được đếm vào Bounce / Spam complaint và vào mẫu số Sent của report campaign không (GAP-21)? Quyết định PO 02/10/2026 về việc này chỉ áp cho automation.",
+            "regression_watch_kb_ids": [],
+            "risk_refs": [
+              "RISK-campaign-report-01"
+            ],
+            "priority": "P2",
+            "act_ids": [],
+            "evidence_refs": [],
+            "automation_suitability": "HYBRID"
+          }
+        ]
+      }
+    ],
+    "coverage_by_feature_and_risk": [
+      {
+        "feature_id": "campaign-report",
+        "risk_ref": "RISK-campaign-report-01",
+        "risk_description": "Số liệu report sai định nghĩa (mẫu số, đếm theo người, lọc bot, loại link unsubscribe)",
+        "covered_by_checks": [
+          "CHK-004",
+          "CHK-005",
+          "CHK-006",
+          "CHK-008",
+          "CHK-009",
+          "CHK-010",
+          "CHK-013",
+          "CHK-014",
+          "CHK-015",
+          "CHK-016",
+          "CHK-037"
+        ],
+        "kb_ids": [
+          "KB-120",
+          "KB-121",
+          "KB-122",
+          "KB-123",
+          "KB-124",
+          "KB-125",
+          "KB-126",
+          "KB-127",
+          "KB-129",
+          "KB-132",
+          "KB-135",
+          "KB-136",
+          "KB-137",
+          "KB-139",
+          "KB-140",
+          "KB-184",
+          "KB-190"
+        ],
+        "coverage_status": "PARTIAL"
+      },
+      {
+        "feature_id": "campaign-report",
+        "risk_ref": "RISK-campaign-report-02",
+        "risk_description": "Số Unsubscribe / complaint và tuân thủ unsubscribe (unsubscribe-consent)",
+        "covered_by_checks": [
+          "CHK-008",
+          "CHK-011",
+          "CHK-012",
+          "CHK-021",
+          "CHK-032"
+        ],
+        "kb_ids": [
+          "KB-123",
+          "KB-128",
+          "KB-131",
+          "KB-154",
+          "KB-155",
+          "KB-157",
+          "KB-162"
+        ],
+        "coverage_status": "PARTIAL"
+      },
+      {
+        "feature_id": "campaign-report",
+        "risk_ref": "RISK-campaign-report-03",
+        "risk_description": "Bố cục report campaign Sent (header, tab, thẻ metric, bảng)",
+        "covered_by_checks": [
+          "CHK-001",
+          "CHK-002",
+          "CHK-003",
+          "CHK-007",
+          "CHK-012",
+          "CHK-017"
+        ],
+        "kb_ids": [
+          "KB-119",
+          "KB-133",
+          "KB-141",
+          "KB-142",
+          "KB-143",
+          "KB-144",
+          "KB-145",
+          "KB-155",
+          "KB-157",
+          "KB-159",
+          "KB-161",
+          "KB-162",
+          "KB-174"
+        ],
+        "coverage_status": "COVERED"
+      },
+      {
+        "feature_id": "campaign-report",
+        "risk_ref": "RISK-campaign-report-04",
+        "risk_description": "Audience và nội dung đã gửi hiển thị đúng snapshot lúc gửi; merge tag một ngoặc của campaign 30/09/2026",
+        "covered_by_checks": [
+          "CHK-018",
+          "CHK-019",
+          "CHK-020",
+          "CHK-021"
+        ],
+        "kb_ids": [
+          "KB-146",
+          "KB-148",
+          "KB-150",
+          "KB-151",
+          "KB-154"
+        ],
+        "coverage_status": "PARTIAL"
+      },
+      {
+        "feature_id": "campaign-report",
+        "risk_ref": "RISK-campaign-report-05",
+        "risk_description": "Report khi chưa có số liệu, campaign chưa gửi xong, id lạ",
+        "covered_by_checks": [
+          "CHK-022",
+          "CHK-023",
+          "CHK-024",
+          "CHK-025",
+          "CHK-026",
+          "CHK-027"
+        ],
+        "kb_ids": [
+          "KB-156",
+          "KB-164",
+          "KB-169",
+          "KB-170",
+          "KB-171",
+          "KB-176",
+          "KB-178",
+          "KB-179",
+          "KB-180"
+        ],
+        "coverage_status": "PARTIAL"
+      },
+      {
+        "feature_id": "campaign-report",
+        "risk_ref": "RISK-campaign-report-06",
+        "risk_description": "Hợp đồng Analytics API (endpoint, scope, định dạng thời gian, chỉ số đếm)",
+        "covered_by_checks": [
+          "CHK-027",
+          "CHK-028",
+          "CHK-029",
+          "CHK-030",
+          "CHK-031",
+          "CHK-032",
+          "CHK-035",
+          "CHK-036"
+        ],
+        "kb_ids": [
+          "KB-130",
+          "KB-131",
+          "KB-135",
+          "KB-180",
+          "KB-181",
+          "KB-182",
+          "KB-183",
+          "KB-184",
+          "KB-185",
+          "KB-187",
+          "KB-188",
+          "KB-189"
+        ],
+        "coverage_status": "PARTIAL"
+      },
+      {
+        "feature_id": "campaign-report",
+        "risk_ref": "RISK-campaign-report-07",
+        "risk_description": "Phân quyền xem report / gọi Analytics API",
+        "covered_by_checks": [
+          "CHK-033",
+          "CHK-034"
+        ],
+        "kb_ids": [
+          "KB-186",
+          "KB-P-051",
+          "KB-P-052"
+        ],
+        "coverage_status": "PARTIAL"
+      }
+    ],
+    "kb_items_without_dedicated_check": [
+      {
+        "kb_id": "KB-134",
+        "note": "Phạm vi tạm thời (chỉ có bảng Clicks by link) là thông tin phạm vi, không phải hành vi kiểm được riêng; bảng Clicks by link đã được kiểm."
+      },
+      {
+        "kb_id": "KB-138",
+        "note": "Breakdown % và màn suppressed-profiles thuộc wave sau, chưa có hành vi để kiểm."
+      },
+      {
+        "kb_id": "KB-147",
+        "note": "Đã làm oracle cho check xoá segment đang dùng ở checklist campaign-send-and-schedule."
+      },
+      {
+        "kb_id": "KB-152",
+        "note": "Câu hỏi giới hạn có chủ ý của preview merge tag thô đưa vào unknowns; hiện trạng dialog được kiểm ở check khối Campaign content."
+      },
+      {
+        "kb_id": "KB-158",
+        "note": "Nhãn lý do bounce chỉ biết qua bundle, tài liệu không liệt kê đủ; đưa vào unknowns, không tạo check."
+      },
+      {
+        "kb_id": "KB-163",
+        "note": "Caveat về bot / Gmail chỉ biết qua bundle; quan sát kèm khi chạy check bố cục tab, không làm oracle."
+      },
+      {
+        "kb_id": "KB-165",
+        "note": "Câu hỏi backfill gộp vào câu hỏi của check `—` hay `0`."
+      },
+      {
+        "kb_id": "KB-172",
+        "note": "Thông báo tab Recipients / Content của report chưa gửi chỉ biết qua bundle; quan sát kèm khi chạy check report campaign Draft."
+      },
+      {
+        "kb_id": "KB-173",
+        "note": "Câu hỏi Draft có được vào report không đưa vào unknowns; hiện trạng được kiểm ở check mở thẳng report Draft."
+      },
+      {
+        "kb_id": "KB-175",
+        "note": "Câu hỏi bỏ tab ở report Sent đưa vào unknowns; hiện trạng được kiểm ở check bố cục report Sent."
+      },
+      {
+        "kb_id": "KB-177",
+        "note": "Câu hỏi trạng thái not-found đưa vào unknowns; hiện trạng được kiểm ở check id không tồn tại."
+      }
+    ],
+    "checks_needing_confirmation": [
+      {
+        "check_id": "CHK-009",
+        "open_question_draft": "Epic Jira MTRO-16 ghi Click rate không tính link unsubscribe và link preference, nhưng caveat trên report chỉ nêu link unsubscribe. Click vào link {{preferences_url}} có bị loại khỏi Click rate không (GAP-23)?",
+        "reason": "Phạm vi loại link preferences chưa được xác nhận."
+      },
+      {
+        "check_id": "CHK-014",
+        "open_question_draft": "Lọc bot (is_bot_event) có áp cho Total opens / Total clicks hay chỉ cho số unique? Event trước ngày 07/08/2026 (trước khi SES gắn cờ bot) được xử lý thế nào (GAP-03)?",
+        "reason": "Phạm vi lọc bot chưa chốt."
+      },
+      {
+        "check_id": "CHK-019",
+        "open_question_draft": "Khối Campaign audience phải báo gì khi segment đã bị sửa sau lần gửi (bundle: \"Segment edited since this send —\" kèm link `see it as it is now`), khi rule quá phức tạp (\"This audience uses rules too complex to show as cards.\") và khi field trong rule đã bị xoá khỏi catalog (Jira MTRO-96 ghi đang báo \"too complex\" thay vì \"field removed\")?",
+        "reason": "Thông báo chỉ biết qua bundle; copy cho field đã xoá chưa chốt."
+      },
+      {
+        "check_id": "CHK-021",
+        "open_question_draft": "Campaign Sent ngày 30/09/2026 lưu merge tag một ngoặc ({contact.first_name}, {unsubscribe_url}, {preferences_url}). Người nhận thực nhận gì: tên có được thay không, link Huỷ đăng ký có trỏ tới trang unsubscribe thật không (GAP-22, GAP-05)? Nếu link chết đây là rủi ro tuân thủ cần Dev xử lý.",
+        "reason": "Trải nghiệm người nhận chưa được xác minh; dữ liệu một ngoặc không được migrate (quy tắc thuộc email-content/merge-tags) nhưng hệ quả với mail đã gửi chưa rõ."
+      },
+      {
+        "check_id": "CHK-023",
+        "open_question_draft": "Khi chưa có số liệu, report phải hiện \"—\" hay \"0\"? Report campaign Draft hiện \"—\" và GET /campaigns/{id}/broadcast của Draft trả 404 thay vì 6 số 0 (BUG-SUPP-03, BUG-SUPP-05) — đó là thiết kế hay lỗi? Có kế hoạch backfill số liệu cho campaign gửi trước pipeline không?",
+        "reason": "Chưa có rule CE cho giá trị hiển thị khi không có số liệu; các hành vi hiện tại đều đang được ghi là lỗi chờ chốt."
+      },
+      {
+        "check_id": "CHK-026",
+        "open_question_draft": "Campaign ở trạng thái Running / Partly sent / Cancelled / Failed có mở được report không, report hiển thị gì (bundle có khối `Send progress`, `Recipients of this send`, `Stop send` / `Resume send`, `This campaign never went out`), và thẻ Sent to hiện dạng \"so far, of …\" khi nào (GAP-01)?",
+        "reason": "Chỉ biết qua bundle; staging không có campaign ở các trạng thái này."
+      },
+      {
+        "check_id": "CHK-030",
+        "open_question_draft": "Trên analytics global, `totals` có phải luôn dedupe người nhận (một người nhận cả campaign lẫn automation chỉ tính 1, nên totals có thể nhỏ hơn tổng sources) cho mọi chỉ số không, hay chỉ cho một số chỉ số?",
+        "reason": "Câu trong nguồn mang tính khả năng (\"có thể nhỏ hơn\"), chưa đủ làm oracle."
+      },
+      {
+        "check_id": "CHK-034",
+        "open_question_draft": "Role nào (Owner / Admin / role thứ 3 đang tranh chấp tên / custom role) được xem report campaign trên UI? Quyền có được chặn ở API không?",
+        "reason": "Ma trận quyền Campaigns chưa chốt."
+      },
+      {
+        "check_id": "CHK-035",
+        "open_question_draft": "Jira MTRO-60 \"MCP for report\" chưa có mô tả: MCP có tool report nào, dữ liệu trả về gồm gì và có dùng chung định nghĩa số liệu với report UI / Analytics API không?",
+        "reason": "Story còn In Progress, mô tả trống."
+      },
+      {
+        "check_id": "CHK-036",
+        "open_question_draft": "Có trang giao diện /analytics (analytics global) không (GAP-05)? Hiện route /analytics trên staging là trang trắng và analytics global mới kiểm được ở mức API.",
+        "reason": "Chưa chốt có trang UI hay không."
+      },
+      {
+        "check_id": "CHK-037",
+        "open_question_draft": "Contact bị suppressed trong một campaign có được đếm vào Bounce / Spam complaint và vào mẫu số Sent của report campaign không (GAP-21)? Quyết định PO 02/10/2026 về việc này chỉ áp cho automation.",
+        "reason": "Chưa chốt cho campaign."
+      }
+    ],
+    "duplicates_removed": [
+      {
+        "merged": "Check `Segment deleted since this send`",
+        "into": "Checklist campaign-send-and-schedule",
+        "reason": "Cùng hành vi xoá segment đang dùng."
+      },
+      {
+        "merged": "Các check rate riêng lẻ (Delivery, Bounce, Open, Click, Click-to-open, Complaint, Unsubscribe)",
+        "into": "Một check rate khớp công thức từ raw count",
+        "reason": "Cùng test intent; tránh nhân bản theo từng metric."
+      }
+    ],
+    "excluded_dimensions": [
+      {
+        "dimension": "REGRESSION",
+        "reason": "Phiên bản đầu tiên (bootstrap); chưa có thay đổi hành vi từ knowledge-diff-analyzer. Lỗi / hiện tượng đã biết theo dõi qua regression_watch_kb_ids."
+      }
+    ]
+  },
+  "gate": {
+    "decision": "PASS",
+    "blocking_findings": [],
+    "conditions": [],
+    "allowed_next_steps": [
+      "knowledge-diff-analyzer",
+      "context-quality-reviewer"
+    ]
+  }
+}

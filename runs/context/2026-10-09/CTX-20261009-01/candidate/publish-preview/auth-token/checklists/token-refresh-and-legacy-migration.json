@@ -1,0 +1,559 @@
+{
+  "feature_id": "token-refresh-and-legacy-migration",
+  "feature_key": "token-refresh-and-legacy-migration",
+  "checklist_version": "v1",
+  "checks": [
+    {
+      "check_id": "CHK-001",
+      "dimension": "CORE",
+      "layer": "db",
+      "title": "`tokens:migrate-legacy` chuyển shop legacy sang expiring silent và huỷ token legacy cũ ngay",
+      "applicability": {
+        "role": "system",
+        "state": "shop đang cài app, dùng token legacy",
+        "environment": "documented",
+        "theme_or_device": null
+      },
+      "precondition": "Có quyền (hoặc Dev BE hỗ trợ) đọc/ghi các field token của shop trong dữ liệu backend Duos ở môi trường test và xem log request gửi tới Shopify Admin API của shop. <shop-legacy> đang cài app với token legacy; lưu lại token legacy hiện tại để gọi thử; queue worker đang chạy.",
+      "steps": [
+        "Chạy lệnh `tokens:migrate-legacy` (hoặc chờ lần chạy theo lịch).",
+        "Kiểm loại token và các field token của shop sau khi job xử lý xong.",
+        "Gọi thử Shopify Admin API bằng token legacy cũ đã lưu.",
+        "Xác nhận merchant không phải thao tác gì trong suốt quá trình."
+      ],
+      "observation_point": "Loại token và field token của shop; phản hồi Shopify khi dùng token legacy cũ.",
+      "expected_result": "Shop được chuyển sang token expiring một cách silent (merchant không phải thao tác) và token legacy cũ bị huỷ ngay lập tức (không còn dùng được).",
+      "oracle": {
+        "kb_ids": [
+          "KB-017",
+          "KB-018"
+        ],
+        "oracle_strength": "STRONG"
+      },
+      "status": "READY",
+      "open_question_draft": null,
+      "related_kb_ids": [
+        "KB-008",
+        "KB-031"
+      ],
+      "regression_watch_kb_ids": [
+        "KB-057"
+      ],
+      "risk_refs": [
+        "RISK-token-refresh-01"
+      ],
+      "priority": "P1",
+      "automation_suitability": "HYBRID"
+    },
+    {
+      "check_id": "CHK-002",
+      "dimension": "CORE",
+      "layer": "portal",
+      "title": "Migrate qua re-login khi merchant mở app không huỷ token legacy cũ tại thời điểm migrate",
+      "applicability": {
+        "role": "merchant",
+        "state": "shop dùng token legacy, merchant tự mở app; build đã ship thay đổi re-login-khi-mở-app",
+        "environment": "documented",
+        "theme_or_device": null
+      },
+      "precondition": "Có quyền (hoặc Dev BE hỗ trợ) đọc/ghi các field token của shop trong dữ liệu backend Duos ở môi trường test và xem log request gửi tới Shopify Admin API của shop. <shop-legacy> đang cài app với token legacy; lưu lại token legacy hiện tại.",
+      "steps": [
+        "Merchant mở app Duos trong Shopify admin và hoàn tất re-login.",
+        "Kiểm loại token của shop sau re-login.",
+        "Ngay sau đó gọi thử Shopify Admin API bằng token legacy cũ đã lưu."
+      ],
+      "observation_point": "Loại token của shop; phản hồi Shopify khi dùng token legacy cũ ngay sau migrate.",
+      "expected_result": "Shop được chuyển sang token expiring qua re-login khi merchant mở app; token legacy cũ không bị huỷ tại thời điểm migrate.",
+      "oracle": {
+        "kb_ids": [
+          "KB-017",
+          "KB-020"
+        ],
+        "oracle_strength": "STRONG"
+      },
+      "status": "READY",
+      "open_question_draft": null,
+      "related_kb_ids": [
+        "KB-032",
+        "KB-021"
+      ],
+      "regression_watch_kb_ids": [],
+      "risk_refs": [
+        "RISK-token-refresh-01"
+      ],
+      "priority": "P1",
+      "automation_suitability": "HYBRID"
+    },
+    {
+      "check_id": "CHK-003",
+      "dimension": "CORE",
+      "layer": "db",
+      "title": "Lịch chạy của hai job token",
+      "applicability": {
+        "role": "system",
+        "state": "môi trường đã deploy thay đổi token lifecycle",
+        "environment": "documented",
+        "theme_or_device": null
+      },
+      "precondition": "Có quyền (hoặc Dev BE hỗ trợ) xem cấu hình lịch chạy job và lịch sử chạy job của backend Duos.",
+      "steps": [
+        "Xem cấu hình lịch của `tokens:refresh-expiring` và `tokens:migrate-legacy`.",
+        "Đối chiếu lịch sử chạy job trong ít nhất 1 tuần, gồm lần chạy ngay sau deploy."
+      ],
+      "observation_point": "Cấu hình lịch và lịch sử chạy job.",
+      "expected_result": "`tokens:refresh-expiring --days=10` chạy hằng ngày; `tokens:migrate-legacy` chạy hằng tuần, cộng thêm 1 lần chạy tay ngay sau deploy để dọn backlog.",
+      "oracle": {
+        "kb_ids": [
+          "KB-023",
+          "KB-024"
+        ],
+        "oracle_strength": "STRONG"
+      },
+      "status": "READY",
+      "open_question_draft": null,
+      "related_kb_ids": [],
+      "regression_watch_kb_ids": [],
+      "risk_refs": [
+        "RISK-token-refresh-02"
+      ],
+      "priority": "P2",
+      "automation_suitability": "NOT_SUITABLE"
+    },
+    {
+      "check_id": "CHK-004",
+      "dimension": "NEGATIVE",
+      "layer": "db",
+      "title": "Hai job token bỏ qua shop đã uninstall",
+      "applicability": {
+        "role": "system",
+        "state": "shop đã uninstall app",
+        "environment": "documented",
+        "theme_or_device": null
+      },
+      "precondition": "Có quyền (hoặc Dev BE hỗ trợ) đọc/ghi các field token của shop trong dữ liệu backend Duos ở môi trường test và xem log request gửi tới Shopify Admin API của shop. Có một shop đã uninstall dùng token expiring sắp hết hạn và một shop đã uninstall dùng token legacy.",
+      "steps": [
+        "Chạy `tokens:refresh-expiring --days=10` và `tokens:migrate-legacy`.",
+        "Kiểm log job và field token của hai shop đã uninstall."
+      ],
+      "observation_point": "Log job; field token của shop đã uninstall.",
+      "expected_result": "Cả hai job đều bỏ qua shop đã uninstall (không refresh, không migrate shop đó).",
+      "oracle": {
+        "kb_ids": [
+          "KB-025"
+        ],
+        "oracle_strength": "STRONG"
+      },
+      "status": "READY",
+      "open_question_draft": null,
+      "related_kb_ids": [
+        "KB-044"
+      ],
+      "regression_watch_kb_ids": [],
+      "risk_refs": [
+        "RISK-token-refresh-02"
+      ],
+      "priority": "P1",
+      "automation_suitability": "HYBRID"
+    },
+    {
+      "check_id": "CHK-005",
+      "dimension": "INTEGRATION",
+      "layer": "db",
+      "title": "Job token xử lý tuần tự từng shop và phụ thuộc Horizon queue worker",
+      "applicability": {
+        "role": "system",
+        "state": "job token đang chạy với nhiều shop cần xử lý",
+        "environment": "documented",
+        "theme_or_device": null
+      },
+      "precondition": "Có quyền (hoặc Dev BE hỗ trợ) xem queue/background task của backend Duos; có ít nhất 2 shop cần refresh hoặc migrate.",
+      "steps": [
+        "Với Horizon queue worker đang chạy, chạy một job token; quan sát các background task được tạo.",
+        "Dừng Horizon queue worker, chạy lại job; quan sát trạng thái task.",
+        "Bật lại worker; quan sát task được xử lý tiếp."
+      ],
+      "observation_point": "Danh sách background task và trạng thái xử lý.",
+      "expected_result": "Mỗi background task xử lý một shop, các shop được xử lý tuần tự; job token chỉ được xử lý khi Horizon queue worker đang chạy.",
+      "oracle": {
+        "kb_ids": [
+          "KB-026",
+          "KB-027"
+        ],
+        "oracle_strength": "STRONG"
+      },
+      "status": "READY",
+      "open_question_draft": null,
+      "related_kb_ids": [
+        "KB-P-036"
+      ],
+      "regression_watch_kb_ids": [],
+      "risk_refs": [
+        "RISK-token-refresh-02"
+      ],
+      "priority": "P2",
+      "automation_suitability": "NOT_SUITABLE"
+    },
+    {
+      "check_id": "CHK-006",
+      "dimension": "INTEGRATION",
+      "layer": "db",
+      "title": "Thứ tự triển khai: `tokens:migrate-legacy` chạy xong trước 01/01/2027 và trước khi ship re-login-khi-mở-app",
+      "applicability": {
+        "role": "system",
+        "state": "đợt triển khai thay đổi token lifecycle",
+        "environment": "documented",
+        "theme_or_device": null
+      },
+      "precondition": "Có lịch sử chạy `tokens:migrate-legacy` và thời điểm release của thay đổi re-login-khi-mở-app (Dev cung cấp).",
+      "steps": [
+        "Lấy thời điểm hoàn tất của lần chạy `tokens:migrate-legacy` dọn backlog.",
+        "So với thời điểm ship thay đổi re-login-khi-mở-app và với mốc 01/01/2027.",
+        "Kiểm không có shop nào bị hai luồng migrate xử lý đồng thời."
+      ],
+      "observation_point": "Mốc thời gian chạy job và release; log migrate theo shop.",
+      "expected_result": "`tokens:migrate-legacy` chạy xong hoàn toàn trước khi ship thay đổi re-login-khi-mở-app (hai luồng không chạy đồng thời trên cùng một shop) và chạy xong trước 01/01/2027.",
+      "oracle": {
+        "kb_ids": [
+          "KB-019",
+          "KB-021"
+        ],
+        "oracle_strength": "STRONG"
+      },
+      "status": "READY",
+      "open_question_draft": null,
+      "related_kb_ids": [
+        "KB-056"
+      ],
+      "regression_watch_kb_ids": [],
+      "risk_refs": [
+        "RISK-token-refresh-03"
+      ],
+      "priority": "P1",
+      "automation_suitability": "NOT_SUITABLE"
+    },
+    {
+      "check_id": "CHK-007",
+      "dimension": "BOUNDARY",
+      "layer": "db",
+      "title": "Ngưỡng `--days=10` của job refresh-expiring",
+      "applicability": {
+        "role": "system",
+        "state": "shop expiring có hạn token còn quanh 10 ngày",
+        "environment": "documented",
+        "theme_or_device": null
+      },
+      "precondition": "Có quyền (hoặc Dev BE hỗ trợ) đọc/ghi các field token của shop trong dữ liệu backend Duos ở môi trường test và xem log request gửi tới Shopify Admin API của shop. Có các shop expiring với hạn token còn 9, 10 và 11 ngày.",
+      "steps": [
+        "Chạy `tokens:refresh-expiring --days=10`.",
+        "Kiểm shop nào được refresh và hai mốc ngày hết hạn của từng shop trước/sau."
+      ],
+      "observation_point": "Field `Access Token Expires At`, `Refresh Token Expires At` trước và sau job.",
+      "expected_result": "Chưa có căn cứ: ghi lại shop nào được refresh và mốc hạn nào được dùng để so; không đánh giá pass/fail cho tới khi PO/Dev trả lời câu hỏi mở.",
+      "oracle": {
+        "kb_ids": [],
+        "oracle_strength": "NONE"
+      },
+      "status": "NEEDS_CONFIRMATION",
+      "open_question_draft": "Tham số `--days=10` của `tokens:refresh-expiring` tính theo mốc hạn nào (refresh token hay access token), và token còn đúng 10 ngày có được refresh không (≤ hay <)?",
+      "related_kb_ids": [
+        "KB-023",
+        "KB-055"
+      ],
+      "regression_watch_kb_ids": [],
+      "risk_refs": [
+        "RISK-token-refresh-02"
+      ],
+      "priority": "P2",
+      "automation_suitability": "HYBRID",
+      "oq_id": "OQ-auth-token-008"
+    },
+    {
+      "check_id": "CHK-008",
+      "dimension": "STATE_DATA",
+      "layer": "db",
+      "title": "Tự refresh trong luồng gọi Shopify khi token còn trong buffer 10 phút trước hạn",
+      "applicability": {
+        "role": "system",
+        "state": "shop expiring, access token còn dưới 10 phút trước hạn",
+        "environment": "documented",
+        "theme_or_device": null
+      },
+      "precondition": "Có quyền (hoặc Dev BE hỗ trợ) đọc/ghi các field token của shop trong dữ liệu backend Duos ở môi trường test và xem log request gửi tới Shopify Admin API của shop. <shop-expiring> có `Access Token Expires At` còn dưới 10 phút.",
+      "steps": [
+        "Kích hoạt một luồng gọi Shopify cho shop.",
+        "So sánh `Access Token Expires At`, `Refresh Token Expires At` và `Refresh Token` trước/sau."
+      ],
+      "observation_point": "Hai mốc ngày hết hạn và refresh token trước/sau luồng gọi Shopify.",
+      "expected_result": "Chưa có căn cứ: ghi lại có refresh không, mốc ngày nào thay đổi và refresh token có được rotate không; không đánh giá pass/fail cho tới khi PO/Dev trả lời câu hỏi mở.",
+      "oracle": {
+        "kb_ids": [],
+        "oracle_strength": "NONE"
+      },
+      "status": "NEEDS_CONFIRMATION",
+      "open_question_draft": "Trong luồng gọi Shopify, app có tự refresh token khi còn trong buffer 10 phút trước hạn, mỗi lần đẩy cả 2 mốc ngày hết hạn và rotate refresh token không?",
+      "related_kb_ids": [
+        "KB-028",
+        "KB-055"
+      ],
+      "regression_watch_kb_ids": [],
+      "risk_refs": [
+        "RISK-token-refresh-04"
+      ],
+      "priority": "P1",
+      "automation_suitability": "HYBRID",
+      "oq_id": "OQ-auth-token-002"
+    },
+    {
+      "check_id": "CHK-009",
+      "dimension": "STATE_DATA",
+      "layer": "db",
+      "title": "Webhook và job nền tự refresh, không bị chặn bởi hạn access token",
+      "applicability": {
+        "role": "system",
+        "state": "shop expiring có access token đã hết hạn, refresh token còn hạn",
+        "environment": "documented",
+        "theme_or_device": null
+      },
+      "precondition": "Có quyền (hoặc Dev BE hỗ trợ) đọc/ghi các field token của shop trong dữ liệu backend Duos ở môi trường test và xem log request gửi tới Shopify Admin API của shop. <shop-expiring> có `Access Token Expires At` đã qua, `Refresh Token Expires At` còn hạn.",
+      "steps": [
+        "Gửi một webhook tới app cho shop (vd cập nhật dữ liệu trên Shopify).",
+        "Kích hoạt một queued/scheduled job gọi Shopify cho shop.",
+        "Kiểm kết quả xử lý và field token."
+      ],
+      "observation_point": "Kết quả xử lý webhook/job; field token.",
+      "expected_result": "Chưa có căn cứ: ghi lại webhook/job có tự refresh và chạy thành công không; không đánh giá pass/fail cho tới khi PO/Dev trả lời câu hỏi mở.",
+      "oracle": {
+        "kb_ids": [],
+        "oracle_strength": "NONE"
+      },
+      "status": "NEEDS_CONFIRMATION",
+      "open_question_draft": "Webhook và queued/scheduled job có tự refresh token và không bị chặn bởi hạn khoảng 60 phút của access token không?",
+      "related_kb_ids": [
+        "KB-029",
+        "KB-055"
+      ],
+      "regression_watch_kb_ids": [],
+      "risk_refs": [
+        "RISK-token-refresh-04"
+      ],
+      "priority": "P1",
+      "automation_suitability": "HYBRID",
+      "oq_id": "OQ-auth-token-002"
+    },
+    {
+      "check_id": "CHK-010",
+      "dimension": "NEGATIVE",
+      "layer": "db",
+      "title": "Hai tiến trình refresh đồng thời cùng một shop",
+      "applicability": {
+        "role": "system",
+        "state": "job refresh và luồng gọi Shopify cùng refresh một shop",
+        "environment": "documented",
+        "theme_or_device": null
+      },
+      "precondition": "Có quyền (hoặc Dev BE hỗ trợ) đọc/ghi các field token của shop trong dữ liệu backend Duos ở môi trường test và xem log request gửi tới Shopify Admin API của shop. Có cách kích hoạt đồng thời hai tiến trình refresh cho cùng <shop-expiring> (Dev BE hỗ trợ).",
+      "steps": [
+        "Kích hoạt đồng thời hai tiến trình refresh cho shop.",
+        "Sau khi cả hai xong, kiểm field token và gọi thử Shopify bằng token đang lưu."
+      ],
+      "observation_point": "Field token; phản hồi Shopify; `Re-auth Required At`.",
+      "expected_result": "Chưa có căn cứ: ghi lại token cuối cùng còn dùng được không, có tiến trình nào bị vô hiệu hoặc shop bị gắn cờ không; không đánh giá pass/fail cho tới khi PO/Dev trả lời câu hỏi mở.",
+      "oracle": {
+        "kb_ids": [],
+        "oracle_strength": "NONE"
+      },
+      "status": "NEEDS_CONFIRMATION",
+      "open_question_draft": "Khi 2 tiến trình cùng refresh token của 1 shop (vd job refresh và luồng gọi Shopify), app có cơ chế lock không, và token của tiến trình chậm hơn có bị vô hiệu không?",
+      "related_kb_ids": [
+        "KB-030"
+      ],
+      "regression_watch_kb_ids": [],
+      "risk_refs": [
+        "RISK-token-refresh-05"
+      ],
+      "priority": "P1",
+      "automation_suitability": "NOT_SUITABLE",
+      "oq_id": "OQ-auth-token-006"
+    },
+    {
+      "check_id": "CHK-011",
+      "dimension": "NEGATIVE",
+      "layer": "db",
+      "title": "Migrate thành công phía Shopify nhưng app không nhận response",
+      "applicability": {
+        "role": "system",
+        "state": "migrate legacy, response từ Shopify bị mất",
+        "environment": "documented",
+        "theme_or_device": null
+      },
+      "precondition": "Có quyền (hoặc Dev BE hỗ trợ) đọc/ghi các field token của shop trong dữ liệu backend Duos ở môi trường test và xem log request gửi tới Shopify Admin API của shop. Có cách chặn response migrate từ Shopify cho <shop-legacy> (Dev BE hỗ trợ).",
+      "steps": [
+        "Chạy `tokens:migrate-legacy` với response bị chặn.",
+        "Kiểm field token của shop và gọi thử Shopify.",
+        "Theo dõi shop có được phục hồi (job đối soát, merchant mở app) không."
+      ],
+      "observation_point": "Field token; phản hồi Shopify; trạng thái shop theo thời gian.",
+      "expected_result": "Chưa có căn cứ: ghi lại shop còn token dùng được không và được phục hồi bằng cách nào; không đánh giá pass/fail cho tới khi PO/Dev trả lời câu hỏi mở.",
+      "oracle": {
+        "kb_ids": [],
+        "oracle_strength": "NONE"
+      },
+      "status": "NEEDS_CONFIRMATION",
+      "open_question_draft": "Nếu migrate legacy thành công phía Shopify nhưng app không nhận được response, shop có mất token tới khi merchant mở app không, và có job đối soát nào phục hồi không?",
+      "related_kb_ids": [
+        "KB-031",
+        "KB-018"
+      ],
+      "regression_watch_kb_ids": [],
+      "risk_refs": [
+        "RISK-token-refresh-05"
+      ],
+      "priority": "P1",
+      "automation_suitability": "NOT_SUITABLE",
+      "oq_id": "OQ-auth-token-007"
+    },
+    {
+      "check_id": "CHK-012",
+      "dimension": "STATE_DATA",
+      "layer": "db",
+      "title": "Shop còn dùng token legacy sau 01/01/2027",
+      "applicability": {
+        "role": "system",
+        "state": "thời điểm hiện tại ≥ 01/01/2027, shop vẫn dùng token legacy",
+        "environment": "documented",
+        "theme_or_device": null
+      },
+      "precondition": "Có quyền (hoặc Dev BE hỗ trợ) đọc/ghi các field token của shop trong dữ liệu backend Duos ở môi trường test và xem log request gửi tới Shopify Admin API của shop. Môi trường test giả lập được thời điểm hiện tại sau 01/01/2027; <shop-legacy> chưa migrate.",
+      "steps": [
+        "Chạy `tokens:migrate-legacy` cho shop.",
+        "Merchant mở app và hoàn tất re-login.",
+        "Ghi lại đường nào chuyển được shop sang expiring."
+      ],
+      "observation_point": "Kết quả job migrate; loại token sau re-login.",
+      "expected_result": "Chưa có căn cứ: ghi lại kết quả migrate silent và re-login; không đánh giá pass/fail cho tới khi PO/Dev trả lời câu hỏi mở.",
+      "oracle": {
+        "kb_ids": [],
+        "oracle_strength": "NONE"
+      },
+      "status": "NEEDS_CONFIRMATION",
+      "open_question_draft": "Sau 01/01/2027, migrate silent có thật không còn dùng được và re-login khi mở app là đường duy nhất để chuyển shop legacy sang expiring không?",
+      "related_kb_ids": [
+        "KB-022",
+        "KB-056",
+        "KB-019"
+      ],
+      "regression_watch_kb_ids": [],
+      "risk_refs": [
+        "RISK-token-refresh-03"
+      ],
+      "priority": "P2",
+      "automation_suitability": "NOT_SUITABLE",
+      "oq_id": "OQ-auth-token-002"
+    }
+  ],
+  "coverage_by_feature_and_risk": [
+    {
+      "feature_id": "token-refresh-and-legacy-migration",
+      "risk_ref": "RISK-token-refresh-01",
+      "risk_description": "Migrate legacy không chuyển được shop sang expiring hoặc huỷ/không huỷ token cũ sai luồng",
+      "covered_by_checks": [
+        "CHK-001",
+        "CHK-002"
+      ],
+      "kb_ids": [
+        "KB-017",
+        "KB-018",
+        "KB-020"
+      ],
+      "coverage_status": "COVERED"
+    },
+    {
+      "feature_id": "token-refresh-and-legacy-migration",
+      "risk_ref": "RISK-token-refresh-02",
+      "risk_description": "Job token không chạy đúng lịch, xử lý cả shop đã uninstall, hoặc không chạy khi thiếu queue worker",
+      "covered_by_checks": [
+        "CHK-003",
+        "CHK-004",
+        "CHK-005",
+        "CHK-007"
+      ],
+      "kb_ids": [
+        "KB-023",
+        "KB-024",
+        "KB-025",
+        "KB-026",
+        "KB-027"
+      ],
+      "coverage_status": "PARTIAL"
+    },
+    {
+      "feature_id": "token-refresh-and-legacy-migration",
+      "risk_ref": "RISK-token-refresh-03",
+      "risk_description": "Thứ tự triển khai sai khiến hai luồng migrate chạy đồng thời; shop legacy còn sót sau 01/01/2027",
+      "covered_by_checks": [
+        "CHK-006",
+        "CHK-012"
+      ],
+      "kb_ids": [
+        "KB-019",
+        "KB-021",
+        "KB-022"
+      ],
+      "coverage_status": "PARTIAL"
+    },
+    {
+      "feature_id": "token-refresh-and-legacy-migration",
+      "risk_ref": "RISK-token-refresh-04",
+      "risk_description": "Refresh không xảy ra kịp lúc (inline/background) làm token rơi vào trạng thái chết",
+      "covered_by_checks": [
+        "CHK-008",
+        "CHK-009"
+      ],
+      "kb_ids": [
+        "KB-028",
+        "KB-029"
+      ],
+      "coverage_status": "FLAGGED_NEEDS_CONFIRMATION"
+    },
+    {
+      "feature_id": "token-refresh-and-legacy-migration",
+      "risk_ref": "RISK-token-refresh-05",
+      "risk_description": "Mất token do refresh đồng thời hoặc migrate mất response",
+      "covered_by_checks": [
+        "CHK-010",
+        "CHK-011"
+      ],
+      "kb_ids": [
+        "KB-030",
+        "KB-031"
+      ],
+      "coverage_status": "FLAGGED_NEEDS_CONFIRMATION"
+    },
+    {
+      "feature_id": "token-refresh-and-legacy-migration",
+      "risk_ref": "RISK-auth-token-bug-36",
+      "risk_description": "BUG-36 (trạng thái chưa rõ) gắn với test case của nhóm Auth & Token lifecycle, chưa biết chạm hành vi nào",
+      "covered_by_checks": [
+        "CHK-001"
+      ],
+      "kb_ids": [
+        "KB-057"
+      ],
+      "coverage_status": "REGRESSION_WATCH"
+    }
+  ],
+  "excluded_dimensions": [
+    {
+      "dimension": "PERMISSION",
+      "reason": "Refresh/migrate do job và luồng hệ thống chạy, không có thao tác theo role của merchant/buyer; quyền force refresh thủ công trong admin panel nằm ở tính năng Admin token and scopes; câu hỏi ai chạy tay `tokens:migrate-legacy` thuộc câu hỏi mở cấp object về actor."
+    },
+    {
+      "dimension": "REGRESSION",
+      "reason": "Bản bootstrap đầu tiên; chưa có thay đổi hành vi từ phân tích diff."
+    }
+  ],
+  "last_updated": {
+    "date": "2026-10-09",
+    "ccr_ref": "bootstrap"
+  }
+}

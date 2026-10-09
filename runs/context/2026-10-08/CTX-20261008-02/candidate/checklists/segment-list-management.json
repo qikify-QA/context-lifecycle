@@ -1,0 +1,961 @@
+{
+  "schema_version": "1.0",
+  "artifact_type": "RegressionChecklistCandidate",
+  "artifact_id": "RCCAND-segment-list-management-CTX-20261008-02",
+  "workflow_id": "CTX-20261008-02",
+  "producer": "qa-checklist-builder",
+  "source_refs": [
+    "candidate/feature-profiles/segment-list-management.json",
+    "candidate/product-kb/segment-list-management.json",
+    "candidate/product-kb/segment-builder.json",
+    "candidate/product-kb/segment-audience-evaluation.json",
+    "candidate/product-kb/_product-level.json",
+    "input/orchestrator-directives.json",
+    "input/profile-checklist-brief.md",
+    "input/rework-r1-builders.md",
+    "intermediate/doc/DOC-27.json"
+  ],
+  "upstream_artifact_ids": [
+    "ART-FEATURE-PROFILE-segment-list-management-CTX-20261008-02",
+    "PKBC-CTX-20261008-02-segments-segment-list-management"
+  ],
+  "status": "PARTIAL",
+  "confidence": "MEDIUM",
+  "rework_round": "r1",
+  "observations": [
+    "19 check; theo oracle_strength {'STRONG': 10, 'BASELINE': 4, 'NONE': 5}; theo status {'READY': 14, 'NEEDS_CONFIRMATION': 5}; theo dimension {'CORE': 7, 'STATE_DATA': 2, 'INTEGRATION': 5, 'NEGATIVE': 2, 'BOUNDARY': 1, 'PERMISSION': 2}; theo priority {'P2': 10, 'P3': 5, 'P1': 4}.",
+    "Dựng lại hoàn toàn ở rework r1 từ shard và profile hiện tại. oracle_strength tính bằng script: STRONG khi mọi kb_id của oracle là CONFIRMED_EXPECTED ngoài conflict_group; có OBSERVED_CURRENT (không KNOWN_DEFECT) thì BASELINE; có INFERRED / PROPOSED hoặc không có kb_id thì NONE + NEEDS_CONFIRMATION + open_question_draft. Không item KNOWN_DEFECT nào nằm trong oracle.kb_ids; chúng ở regression_watch_kb_ids.",
+    "Object segments không có shard object-level và không có kb_id bị bỏ ở r1; oracle chỉ trích kb_id của ba feature shard segments.",
+    "Checklist hồi quy do QA viết chỉ dùng làm gợi ý rủi ro / phạm vi phủ, không làm oracle."
+  ],
+  "assumptions": [
+    "risk_ref RISK-<feature-key>-NN do checklist này đặt, đánh số theo thứ tự rủi ro trong feature profile (profile không có id rủi ro); rủi ro bổ sung (phân quyền, cô lập workspace) đánh số tiếp theo.",
+    "Môi trường của mọi check là 'documented' (bootstrap từ tài liệu); khi chạy trên staging cần đối chiếu các lỗi đã biết ở regression_watch_kb_ids trước khi kết luận.",
+    "Check xoá qua API `DELETE /segments/{id}` là BASELINE, dùng để tách lỗi UI (BUG-94) khỏi lỗi API; không thay cho check xoá trên UI.",
+    "Rework r1 (F-03): rule cột bảng Segments và rule Export CSV đã được rút về đúng nội dung authority; dạng `N contacts` / `N conditions` và việc chọn sẵn đúng segment của dòng là chi tiết staging, được kiểm ở check BASELINE riêng. Check Export CSV STRONG không còn khẳng định nội dung file chỉ gồm contact của segment (không có trong authority)."
+  ],
+  "unknowns": [
+    "Khi hai segment trùng tên, picker Recipients của campaign và picker `Segment to export` phải hiện thêm thông tin gì (số contact, ngày tạo, id…) để người dùng phân biệt? Tên segment không bắt buộc unique đã được PO/BA chốt 02/10/2026, nhưng hành vi picker chưa chốt (GAP-19) và hiện hai segment trùng tên không phân biệt được (BUG-69).",
+    "Khi segment có query hỏng (số đếm trả lỗi), ô Contacts trên danh sách chỉ cần hiện `—` như Jira MTRO-27 AC cho phép, hay phải báo lỗi rõ cho người dùng? Lỗi BUG-68 coi việc không báo lỗi là lỗi nhưng chưa có hành vi mong đợi.",
+    "Tên segment dài (tới 255 ký tự) phải hiển thị thế nào trên danh sách Segments (cắt ngắn + tooltip, xuống dòng…)? Hiện tên không bị cắt làm bảng rộng 2415px và trang cuộn ngang (BUG-70), nhưng không có rule hiển thị.",
+    "Role nào (Owner, Admin, Member, custom role) được xoá, nhân bản và export segment, và role không có quyền thấy gì (mục menu ẩn, vô hiệu, hay bị từ chối khi gửi request)? Hiện mới có quyết định PO 30/09/2026 (Jira MTRO-100) rằng Member không được tạo / sửa segment; ma trận quyền còn lại chưa chốt (GAP-07).",
+    "Khi người dùng của workspace B mở hoặc gọi API với id segment thuộc workspace A, hệ thống trả gì (trang trắng, 403, 404) và có đảm bảo không đọc / sửa / xoá được segment của A không? Tài liệu segment không nêu rule cô lập dữ liệu giữa workspace.",
+    "Chưa có tài liệu API tạo / liệt kê / duplicate segment (chỉ có `PUT /segments/{id}`, `GET /segments/{id}/count`, `DELETE /segments/{id}`)."
+  ],
+  "conflicts": [],
+  "blocking_issues": [],
+  "payload": {
+    "checklists": [
+      {
+        "feature_id": "segment-list-management",
+        "feature_key": "segment-list-management",
+        "checklist_version": "v1",
+        "checks": [
+          {
+            "check_id": "CHK-001",
+            "dimension": "CORE",
+            "layer": "portal",
+            "title": "Bảng danh sách Segments có đúng các cột và giữ dạng `1 conditions` / `1 contacts`",
+            "applicability": {
+              "role": "unspecified",
+              "state": "workspace có segment 1 điều kiện khớp đúng 1 contact",
+              "environment": "documented",
+              "theme_or_device": null
+            },
+            "precondition": "Đã đăng nhập portal Mailtro bằng tài khoản role Owner của workspace test. Workspace có segment S1 gồm 1 điều kiện khớp đúng 1 contact Subscribed.",
+            "steps": [
+              "Mở trang `/segments`.",
+              "Đọc tiêu đề các cột của bảng.",
+              "Đọc ô Conditions, Contacts và Created của S1."
+            ],
+            "observation_point": "Header bảng và các ô của dòng S1.",
+            "expected_result": "Bảng có các cột Name, Conditions (số điều kiện), Contacts, Created (ngày giờ tuyệt đối, dạng \"Jul 7, 2026, 4:02 PM\") và một cột menu `...` không nhãn. Dòng S1 hiện `1 conditions` / `1 contacts`, không đổi sang dạng số ít.",
+            "oracle": {
+              "kb_ids": [
+                "KB-004",
+                "KB-003"
+              ],
+              "oracle_strength": "STRONG"
+            },
+            "status": "READY",
+            "open_question_draft": null,
+            "regression_watch_kb_ids": [],
+            "risk_refs": [],
+            "priority": "P2",
+            "act_ids": [],
+            "evidence_refs": [],
+            "automation_suitability": "SUITABLE"
+          },
+          {
+            "check_id": "CHK-002",
+            "dimension": "CORE",
+            "layer": "portal",
+            "title": "Dạng hiển thị `N conditions` / `N contacts` cho segment nhiều điều kiện / nhiều contact",
+            "applicability": {
+              "role": "unspecified",
+              "state": "workspace có segment nhiều điều kiện, nhiều contact",
+              "environment": "documented",
+              "theme_or_device": null
+            },
+            "precondition": "Đã đăng nhập portal Mailtro bằng tài khoản role Owner của workspace test. Có segment S2 gồm 2 điều kiện, khớp ≥ 2 contact Subscribed.",
+            "steps": [
+              "Mở `/segments`, đọc ô Conditions và Contacts của S2."
+            ],
+            "observation_point": "Ô Conditions và Contacts của dòng S2.",
+            "expected_result": "Theo hiện trạng staging 01/10/2026, lệch = cần điều tra: Conditions hiện dạng `2 conditions`, Contacts hiện dạng `N contacts` (ví dụ `5 contacts`).",
+            "oracle": {
+              "kb_ids": [
+                "KB-080"
+              ],
+              "oracle_strength": "BASELINE"
+            },
+            "status": "READY",
+            "open_question_draft": null,
+            "regression_watch_kb_ids": [],
+            "risk_refs": [],
+            "priority": "P3",
+            "act_ids": [],
+            "evidence_refs": [],
+            "automation_suitability": "SUITABLE"
+          },
+          {
+            "check_id": "CHK-003",
+            "dimension": "CORE",
+            "layer": "portal",
+            "title": "Nút Create segment dẫn tới builder tạo mới, trang không có search / filter",
+            "applicability": {
+              "role": "unspecified",
+              "state": "trang danh sách /segments",
+              "environment": "documented",
+              "theme_or_device": null
+            },
+            "precondition": "Đã đăng nhập portal Mailtro bằng tài khoản role Owner của workspace test.",
+            "steps": [
+              "Mở trang `/segments`.",
+              "Tìm ô search hoặc bộ lọc trên trang.",
+              "Bấm `Create segment`."
+            ],
+            "observation_point": "Thanh công cụ trang danh sách và URL sau khi bấm.",
+            "expected_result": "Trang không có ô search hay filter; bấm `Create segment` điều hướng tới `/segments/new`.",
+            "oracle": {
+              "kb_ids": [
+                "KB-001"
+              ],
+              "oracle_strength": "STRONG"
+            },
+            "status": "READY",
+            "open_question_draft": null,
+            "regression_watch_kb_ids": [],
+            "risk_refs": [],
+            "priority": "P2",
+            "act_ids": [],
+            "evidence_refs": [],
+            "automation_suitability": "SUITABLE"
+          },
+          {
+            "check_id": "CHK-004",
+            "dimension": "CORE",
+            "layer": "portal",
+            "title": "Khung trang Segments và menu dòng theo hiện trạng",
+            "applicability": {
+              "role": "Owner",
+              "state": "danh sách segment có dữ liệu",
+              "environment": "documented",
+              "theme_or_device": null
+            },
+            "precondition": "Đã đăng nhập portal Mailtro bằng tài khoản role Owner của workspace test.",
+            "steps": [
+              "Mở sidebar, tìm mục Segments.",
+              "Mở `/segments`, đọc h1, mô tả và breadcrumb.",
+              "Mở menu `...` của một dòng segment, đọc các mục.",
+              "Kiểm tra vùng phân trang cuối bảng."
+            ],
+            "observation_point": "Sidebar, header trang, menu dòng, vùng phân trang.",
+            "expected_result": "Theo hiện trạng staging 01/10/2026, lệch = cần điều tra: Segments là mục con của Contacts trên sidebar; h1 `Segments`, mô tả \"Live audiences built from contact conditions — no lists to maintain.\", breadcrumb chỉ có `Segments`; menu dòng `Actions for {name}` gồm `Edit`, `Duplicate`, `Export CSV`, `Delete`; danh sách có phân trang.",
+            "oracle": {
+              "kb_ids": [
+                "KB-002",
+                "KB-005"
+              ],
+              "oracle_strength": "BASELINE"
+            },
+            "status": "READY",
+            "open_question_draft": null,
+            "regression_watch_kb_ids": [],
+            "risk_refs": [],
+            "priority": "P3",
+            "act_ids": [],
+            "evidence_refs": [],
+            "automation_suitability": "SUITABLE"
+          },
+          {
+            "check_id": "CHK-005",
+            "dimension": "STATE_DATA",
+            "layer": "portal",
+            "title": "Empty state khi workspace chưa có segment",
+            "applicability": {
+              "role": "unspecified",
+              "state": "workspace chưa có segment nào",
+              "environment": "documented",
+              "theme_or_device": null
+            },
+            "precondition": "Đã đăng nhập portal Mailtro vào một workspace test chưa từng tạo segment (hoặc đã xoá hết segment và xác nhận bằng tải lại trang).",
+            "steps": [
+              "Mở `/segments`."
+            ],
+            "observation_point": "Nội dung trang khi danh sách rỗng.",
+            "expected_result": "Trang hiện empty state \"No segments yet\" + \"Create your first segment — membership updates automatically as contact attributes change.\" kèm nút Create segment.",
+            "oracle": {
+              "kb_ids": [
+                "KB-008"
+              ],
+              "oracle_strength": "STRONG"
+            },
+            "status": "READY",
+            "open_question_draft": null,
+            "regression_watch_kb_ids": [],
+            "risk_refs": [],
+            "priority": "P3",
+            "act_ids": [],
+            "evidence_refs": [],
+            "automation_suitability": "SUITABLE"
+          },
+          {
+            "check_id": "CHK-006",
+            "dimension": "CORE",
+            "layer": "portal",
+            "title": "Mở segment để sửa bằng click / Enter trên dòng; menu `...` không kích hoạt điều hướng",
+            "applicability": {
+              "role": "unspecified",
+              "state": "danh sách segment có dữ liệu",
+              "environment": "documented",
+              "theme_or_device": null
+            },
+            "precondition": "Đã đăng nhập portal Mailtro bằng tài khoản role Owner của workspace test. Có ít nhất một segment đã lưu.",
+            "steps": [
+              "Click vào vùng tên của một dòng segment, ghi lại URL rồi quay lại danh sách.",
+              "Dùng bàn phím focus vào một dòng segment và nhấn Enter, ghi lại URL rồi quay lại.",
+              "Click nút menu `...` của một dòng."
+            ],
+            "observation_point": "URL và màn hình sau mỗi thao tác.",
+            "expected_result": "Click dòng và Enter trên dòng đều mở builder ở chế độ edit (`/segments/:id/edit`) của đúng segment đó; click menu `...` chỉ mở menu, không điều hướng sang builder.",
+            "oracle": {
+              "kb_ids": [
+                "KB-007",
+                "KB-021"
+              ],
+              "oracle_strength": "STRONG"
+            },
+            "status": "READY",
+            "open_question_draft": null,
+            "regression_watch_kb_ids": [],
+            "risk_refs": [],
+            "priority": "P2",
+            "act_ids": [],
+            "evidence_refs": [],
+            "automation_suitability": "SUITABLE"
+          },
+          {
+            "check_id": "CHK-007",
+            "dimension": "CORE",
+            "layer": "portal",
+            "title": "Duplicate segment tạo bản sao có id mới, tên thêm hậu tố \" (copy)\"",
+            "applicability": {
+              "role": "unspecified",
+              "state": "segment nguồn có từ 2 điều kiện",
+              "environment": "documented",
+              "theme_or_device": null
+            },
+            "precondition": "Đã đăng nhập portal Mailtro bằng tài khoản role Owner của workspace test. Có segment S có ít nhất 2 điều kiện ở 2 card khác nhau.",
+            "steps": [
+              "Mở menu `...` của S, chọn `Duplicate`.",
+              "Ghi lại toast hiển thị.",
+              "Tải lại `/segments`, tìm dòng mới.",
+              "Mở dòng mới trong builder, so sánh cây điều kiện với S; so sánh id trong URL với id của S."
+            ],
+            "observation_point": "Toast, danh sách sau khi tải lại, builder của bản sao.",
+            "expected_result": "Hiện toast `Segment duplicated`; có thêm một segment tên `<tên S> (copy)` với id khác S, cây điều kiện giống hệt S.",
+            "oracle": {
+              "kb_ids": [
+                "KB-009"
+              ],
+              "oracle_strength": "STRONG"
+            },
+            "status": "READY",
+            "open_question_draft": null,
+            "regression_watch_kb_ids": [
+              "KB-010"
+            ],
+            "risk_refs": [
+              "RISK-segment-list-management-05"
+            ],
+            "priority": "P2",
+            "act_ids": [],
+            "evidence_refs": [],
+            "automation_suitability": "SUITABLE"
+          },
+          {
+            "check_id": "CHK-008",
+            "dimension": "STATE_DATA",
+            "layer": "portal",
+            "title": "Xoá segment: dialog xác nhận, Delete xoá thật và không đụng contact",
+            "applicability": {
+              "role": "unspecified",
+              "state": "segment không được campaign nào dùng",
+              "environment": "documented",
+              "theme_or_device": null
+            },
+            "precondition": "Đã đăng nhập portal Mailtro bằng tài khoản role Owner của workspace test. Có segment S (không được campaign nào dùng) khớp ít nhất 2 contact; ghi lại số contact của workspace và email các contact khớp S.",
+            "steps": [
+              "Mở menu `...` của S, chọn `Delete`; đọc tiêu đề, nội dung và các nút của dialog; bấm `Cancel`.",
+              "Mở lại `Delete` của S, bấm `Delete`; ghi lại toast.",
+              "Tải lại `/segments` và mở thẳng `/segments/<id S>/edit`.",
+              "Mở trang Contacts, kiểm tra tổng số contact và các contact từng khớp S."
+            ],
+            "observation_point": "Dialog xác nhận, danh sách sau khi tải lại, trang Contacts.",
+            "expected_result": "Dialog có tiêu đề `Delete \"<tên S>\"?`, nội dung \"This deletes the saved query only — no contacts are affected. This can't be undone.\" và hai nút `Cancel` / `Delete`. Sau khi bấm `Delete`: hiện toast `Segment deleted`, S không còn trong danh sách sau khi tải lại; tổng số contact và các contact từng khớp S không bị xoá hay thay đổi.",
+            "oracle": {
+              "kb_ids": [
+                "KB-011"
+              ],
+              "oracle_strength": "STRONG"
+            },
+            "status": "READY",
+            "open_question_draft": null,
+            "regression_watch_kb_ids": [
+              "KB-012"
+            ],
+            "risk_refs": [
+              "RISK-segment-list-management-01"
+            ],
+            "priority": "P1",
+            "act_ids": [],
+            "evidence_refs": [],
+            "automation_suitability": "SUITABLE"
+          },
+          {
+            "check_id": "CHK-009",
+            "dimension": "INTEGRATION",
+            "layer": "api",
+            "title": "Xoá segment qua API `DELETE /segments/{id}`",
+            "applicability": {
+              "role": "unspecified",
+              "state": "segment không được campaign nào dùng",
+              "environment": "documented",
+              "theme_or_device": null
+            },
+            "precondition": "Có phiên đăng nhập hợp lệ của workspace test (cookie / token của portal) và một segment S tạo riêng cho check này.",
+            "steps": [
+              "Gửi `DELETE /segments/<id S>` bằng phiên của workspace test.",
+              "Tải lại `/segments` trên portal."
+            ],
+            "observation_point": "Phản hồi của request và danh sách segment sau đó.",
+            "expected_result": "Theo hiện trạng staging 14/09/2026 (đối chiếu khi điều tra BUG-94), lệch = cần điều tra: request xoá chạy được và S không còn trong danh sách. Check này dùng để tách lỗi ở nút UI khỏi lỗi ở API khi check xoá trên UI không đạt.",
+            "oracle": {
+              "kb_ids": [
+                "KB-013"
+              ],
+              "oracle_strength": "BASELINE"
+            },
+            "status": "READY",
+            "open_question_draft": null,
+            "regression_watch_kb_ids": [
+              "KB-012"
+            ],
+            "risk_refs": [
+              "RISK-segment-list-management-01"
+            ],
+            "priority": "P2",
+            "act_ids": [],
+            "evidence_refs": [],
+            "automation_suitability": "SUITABLE"
+          },
+          {
+            "check_id": "CHK-010",
+            "dimension": "INTEGRATION",
+            "layer": "portal",
+            "title": "Export CSV từ menu dòng mở dialog Export contacts chọn sẵn `Contacts in a segment`",
+            "applicability": {
+              "role": "unspecified",
+              "state": "segment có contact khớp",
+              "environment": "documented",
+              "theme_or_device": null
+            },
+            "precondition": "Đã đăng nhập portal Mailtro bằng tài khoản role Owner của workspace test. Có segment S khớp ít nhất 1 contact.",
+            "steps": [
+              "Mở menu `...` của S, chọn `Export CSV`.",
+              "Đọc lựa chọn đang chọn trong dialog Export contacts.",
+              "Hoàn tất export, mở file.",
+              "Xuất file export contact thông thường từ trang Contacts để so sánh cấu trúc cột."
+            ],
+            "observation_point": "Dialog Export contacts và file tải về.",
+            "expected_result": "Dialog Export contacts mở với lựa chọn `Contacts in a segment` đã chọn sẵn; file xuất ra giống file export contact (cùng định dạng).",
+            "oracle": {
+              "kb_ids": [
+                "KB-006"
+              ],
+              "oracle_strength": "STRONG"
+            },
+            "status": "READY",
+            "open_question_draft": null,
+            "regression_watch_kb_ids": [],
+            "risk_refs": [],
+            "priority": "P2",
+            "act_ids": [],
+            "evidence_refs": [],
+            "automation_suitability": "HYBRID"
+          },
+          {
+            "check_id": "CHK-011",
+            "dimension": "INTEGRATION",
+            "layer": "portal",
+            "title": "Dialog Export từ menu dòng chọn sẵn đúng segment của dòng",
+            "applicability": {
+              "role": "Owner",
+              "state": "workspace có nhiều segment",
+              "environment": "documented",
+              "theme_or_device": null
+            },
+            "precondition": "Đã đăng nhập portal Mailtro bằng tài khoản role Owner của workspace test. Có segment S và ít nhất một segment khác.",
+            "steps": [
+              "Mở menu `...` của S, chọn `Export CSV`.",
+              "Đọc segment đang được chọn trong dialog."
+            ],
+            "observation_point": "Segment được chọn trong dialog Export contacts.",
+            "expected_result": "Theo hiện trạng staging 01/10/2026 (khảo sát chỉ mở dialog rồi Cancel), lệch = cần điều tra: segment được chọn sẵn chính là S (segment của dòng vừa mở menu).",
+            "oracle": {
+              "kb_ids": [
+                "KB-081"
+              ],
+              "oracle_strength": "BASELINE"
+            },
+            "status": "READY",
+            "open_question_draft": null,
+            "regression_watch_kb_ids": [],
+            "risk_refs": [],
+            "priority": "P2",
+            "act_ids": [],
+            "evidence_refs": [],
+            "automation_suitability": "SUITABLE"
+          },
+          {
+            "check_id": "CHK-012",
+            "dimension": "INTEGRATION",
+            "layer": "portal",
+            "title": "Xoá segment đang được campaign đã gửi dùng",
+            "applicability": {
+              "role": "unspecified",
+              "state": "segment là Recipients của một campaign đã gửi",
+              "environment": "documented",
+              "theme_or_device": null
+            },
+            "precondition": "Đã đăng nhập portal Mailtro bằng tài khoản role Owner của workspace test. Có campaign C đã gửi (Sent) với Recipients là segment S.",
+            "steps": [
+              "Xoá S từ danh sách Segments và xác nhận.",
+              "Tải lại `/segments`.",
+              "Mở report của C."
+            ],
+            "observation_point": "Danh sách segment và report của campaign C.",
+            "expected_result": "S xoá được (không bị chặn vì đang được campaign dùng) và không còn trong danh sách; report của C hiện \"Segment deleted since this send.\".",
+            "oracle": {
+              "kb_ids": [
+                "KB-014"
+              ],
+              "oracle_strength": "STRONG"
+            },
+            "status": "READY",
+            "open_question_draft": null,
+            "regression_watch_kb_ids": [
+              "KB-012"
+            ],
+            "risk_refs": [
+              "RISK-segment-list-management-01"
+            ],
+            "priority": "P2",
+            "act_ids": [],
+            "evidence_refs": [],
+            "automation_suitability": "HYBRID"
+          },
+          {
+            "check_id": "CHK-013",
+            "dimension": "CORE",
+            "layer": "portal",
+            "title": "Cho phép nhiều segment trùng tên trong workspace",
+            "applicability": {
+              "role": "unspecified",
+              "state": "workspace đã có segment tên X",
+              "environment": "documented",
+              "theme_or_device": null
+            },
+            "precondition": "Đã đăng nhập portal Mailtro bằng tài khoản role Owner của workspace test. Có segment tên X.",
+            "steps": [
+              "Tạo segment mới, đặt tên đúng X, thêm 1 điều kiện hợp lệ, bấm Save.",
+              "Tải lại `/segments`."
+            ],
+            "observation_point": "Kết quả lưu và danh sách sau khi tải lại.",
+            "expected_result": "Lưu thành công, không có lỗi trùng tên; danh sách có hai segment cùng tên X.",
+            "oracle": {
+              "kb_ids": [
+                "KB-015"
+              ],
+              "oracle_strength": "STRONG"
+            },
+            "status": "READY",
+            "open_question_draft": null,
+            "regression_watch_kb_ids": [],
+            "risk_refs": [
+              "RISK-segment-list-management-02"
+            ],
+            "priority": "P3",
+            "act_ids": [],
+            "evidence_refs": [],
+            "automation_suitability": "SUITABLE"
+          },
+          {
+            "check_id": "CHK-014",
+            "dimension": "INTEGRATION",
+            "layer": "portal",
+            "title": "Phân biệt segment trùng tên ở picker Recipients của campaign và picker `Segment to export`",
+            "applicability": {
+              "role": "unspecified",
+              "state": "workspace có hai segment trùng tên, khác điều kiện và số contact",
+              "environment": "documented",
+              "theme_or_device": null
+            },
+            "precondition": "Đã đăng nhập portal Mailtro bằng tài khoản role Owner của workspace test. Có hai segment cùng tên X, khác điều kiện và khác số contact.",
+            "steps": [
+              "Mở bước Recipients của một campaign nháp, mở picker segment, tìm X.",
+              "Mở dialog Export contacts, chọn `Contacts in a segment`, mở picker `Segment to export`, tìm X."
+            ],
+            "observation_point": "Các dòng hiển thị cho X trong hai picker.",
+            "expected_result": "Chưa có kết quả mong đợi được xác nhận. Ghi lại nguyên văn hành vi thực tế (phản hồi, thông báo, dữ liệu sau thao tác) và chuyển cho PO/Dev xác nhận; không kết luận pass/fail ở lần chạy này.",
+            "oracle": {
+              "kb_ids": [
+                "KB-017"
+              ],
+              "oracle_strength": "NONE"
+            },
+            "status": "NEEDS_CONFIRMATION",
+            "open_question_draft": "Khi hai segment trùng tên, picker Recipients của campaign và picker `Segment to export` phải hiện thêm thông tin gì (số contact, ngày tạo, id…) để người dùng phân biệt? Tên segment không bắt buộc unique đã được PO/BA chốt 02/10/2026, nhưng hành vi picker chưa chốt (GAP-19) và hiện hai segment trùng tên không phân biệt được (BUG-69).",
+            "regression_watch_kb_ids": [
+              "KB-016"
+            ],
+            "risk_refs": [
+              "RISK-segment-list-management-02"
+            ],
+            "priority": "P1",
+            "act_ids": [],
+            "evidence_refs": [],
+            "automation_suitability": "HYBRID"
+          },
+          {
+            "check_id": "CHK-015",
+            "dimension": "NEGATIVE",
+            "layer": "portal",
+            "title": "Ô Contacts của segment có số đếm lỗi để trống hoặc hiện `—`",
+            "applicability": {
+              "role": "unspecified",
+              "state": "segment có query lỗi khi đếm",
+              "environment": "documented",
+              "theme_or_device": null
+            },
+            "precondition": "Đã đăng nhập portal Mailtro bằng tài khoản role Owner của workspace test. Có segment S có số đếm lỗi, ví dụ: một contact có custom field Number chứa giá trị chữ và S dùng `Greater than` trên field đó.",
+            "steps": [
+              "Mở `/segments`, đọc ô Contacts của S.",
+              "Đợi các ô Contacts khác nạp xong rồi đọc lại ô của S."
+            ],
+            "observation_point": "Ô Contacts của dòng S.",
+            "expected_result": "Ô Contacts của S để trống hoặc hiện `—`, không hiện một con số.",
+            "oracle": {
+              "kb_ids": [
+                "KB-004"
+              ],
+              "oracle_strength": "STRONG"
+            },
+            "status": "READY",
+            "open_question_draft": null,
+            "regression_watch_kb_ids": [
+              "KB-019"
+            ],
+            "risk_refs": [
+              "RISK-segment-list-management-03"
+            ],
+            "priority": "P2",
+            "act_ids": [],
+            "evidence_refs": [],
+            "automation_suitability": "SUITABLE"
+          },
+          {
+            "check_id": "CHK-016",
+            "dimension": "NEGATIVE",
+            "layer": "portal",
+            "title": "Người dùng có được báo lỗi khi segment có query hỏng không",
+            "applicability": {
+              "role": "unspecified",
+              "state": "segment có query lỗi khi đếm",
+              "environment": "documented",
+              "theme_or_device": null
+            },
+            "precondition": "Như check ô Contacts của segment có số đếm lỗi (cùng segment S).",
+            "steps": [
+              "Mở `/segments`, quan sát toàn trang (toast, icon, tooltip trên ô Contacts của S).",
+              "Mở S trong builder, bấm `Run`, quan sát thông báo."
+            ],
+            "observation_point": "Mọi thông báo lỗi liên quan S trên danh sách và trong builder.",
+            "expected_result": "Chưa có kết quả mong đợi được xác nhận. Ghi lại nguyên văn hành vi thực tế (phản hồi, thông báo, dữ liệu sau thao tác) và chuyển cho PO/Dev xác nhận; không kết luận pass/fail ở lần chạy này.",
+            "oracle": {
+              "kb_ids": [],
+              "oracle_strength": "NONE"
+            },
+            "status": "NEEDS_CONFIRMATION",
+            "open_question_draft": "Khi segment có query hỏng (số đếm trả lỗi), ô Contacts trên danh sách chỉ cần hiện `—` như Jira MTRO-27 AC cho phép, hay phải báo lỗi rõ cho người dùng? Lỗi BUG-68 coi việc không báo lỗi là lỗi nhưng chưa có hành vi mong đợi.",
+            "regression_watch_kb_ids": [
+              "KB-019",
+              "KB-035"
+            ],
+            "risk_refs": [
+              "RISK-segment-list-management-03"
+            ],
+            "priority": "P2",
+            "act_ids": [],
+            "evidence_refs": [],
+            "automation_suitability": "HYBRID"
+          },
+          {
+            "check_id": "CHK-017",
+            "dimension": "BOUNDARY",
+            "layer": "portal",
+            "title": "Hiển thị tên segment dài 255 ký tự trên danh sách",
+            "applicability": {
+              "role": "unspecified",
+              "state": "segment có tên đúng 255 ký tự",
+              "environment": "documented",
+              "theme_or_device": null
+            },
+            "precondition": "Đã đăng nhập portal Mailtro bằng tài khoản role Owner của workspace test. Có segment tên dài đúng 255 ký tự (lưu được).",
+            "steps": [
+              "Mở `/segments` ở cửa sổ trình duyệt rộng 1440px.",
+              "Quan sát cột Name của dòng đó và thanh cuộn ngang của trang."
+            ],
+            "observation_point": "Cột Name và bề rộng bảng.",
+            "expected_result": "Chưa có kết quả mong đợi được xác nhận. Ghi lại nguyên văn hành vi thực tế (phản hồi, thông báo, dữ liệu sau thao tác) và chuyển cho PO/Dev xác nhận; không kết luận pass/fail ở lần chạy này.",
+            "oracle": {
+              "kb_ids": [],
+              "oracle_strength": "NONE"
+            },
+            "status": "NEEDS_CONFIRMATION",
+            "open_question_draft": "Tên segment dài (tới 255 ký tự) phải hiển thị thế nào trên danh sách Segments (cắt ngắn + tooltip, xuống dòng…)? Hiện tên không bị cắt làm bảng rộng 2415px và trang cuộn ngang (BUG-70), nhưng không có rule hiển thị.",
+            "regression_watch_kb_ids": [
+              "KB-018"
+            ],
+            "risk_refs": [
+              "RISK-segment-list-management-04"
+            ],
+            "priority": "P3",
+            "act_ids": [],
+            "evidence_refs": [],
+            "automation_suitability": "HYBRID"
+          },
+          {
+            "check_id": "CHK-018",
+            "dimension": "PERMISSION",
+            "layer": "portal",
+            "title": "Quyền xoá, nhân bản, export segment theo role",
+            "applicability": {
+              "role": "Owner | Admin | Member | custom role",
+              "state": "mỗi role một tài khoản trong cùng workspace",
+              "environment": "documented",
+              "theme_or_device": null
+            },
+            "precondition": "Có tài khoản Owner, Admin, Member (và custom role nếu có) trong cùng workspace test; có segment S.",
+            "steps": [
+              "Lần lượt đăng nhập từng role, mở `/segments`.",
+              "Mở menu `...` của S, ghi lại các mục hiển thị / bị vô hiệu.",
+              "Thử `Duplicate`, `Export CSV`, `Delete` với segment tạo riêng cho từng role; tải lại trang sau mỗi thao tác."
+            ],
+            "observation_point": "Menu dòng, toast, dữ liệu sau khi tải lại, theo từng role.",
+            "expected_result": "Chưa có kết quả mong đợi được xác nhận. Ghi lại nguyên văn hành vi thực tế (phản hồi, thông báo, dữ liệu sau thao tác) và chuyển cho PO/Dev xác nhận; không kết luận pass/fail ở lần chạy này.",
+            "oracle": {
+              "kb_ids": [
+                "KB-068"
+              ],
+              "oracle_strength": "NONE"
+            },
+            "status": "NEEDS_CONFIRMATION",
+            "open_question_draft": "Role nào (Owner, Admin, Member, custom role) được xoá, nhân bản và export segment, và role không có quyền thấy gì (mục menu ẩn, vô hiệu, hay bị từ chối khi gửi request)? Hiện mới có quyết định PO 30/09/2026 (Jira MTRO-100) rằng Member không được tạo / sửa segment; ma trận quyền còn lại chưa chốt (GAP-07).",
+            "regression_watch_kb_ids": [],
+            "risk_refs": [
+              "RISK-segment-list-management-06"
+            ],
+            "priority": "P1",
+            "act_ids": [],
+            "evidence_refs": [],
+            "automation_suitability": "HYBRID"
+          },
+          {
+            "check_id": "CHK-019",
+            "dimension": "PERMISSION",
+            "layer": "api",
+            "title": "Segment của workspace này không truy cập được từ workspace khác",
+            "applicability": {
+              "role": "tài khoản thuộc hai workspace",
+              "state": "hai workspace độc lập, mỗi bên có segment",
+              "environment": "documented",
+              "theme_or_device": null
+            },
+            "precondition": "Có workspace A và B; phiên đăng nhập của workspace B và id một segment S của workspace A (tạo riêng cho check này).",
+            "steps": [
+              "Trong phiên workspace B, mở `/segments/<id S>/edit`.",
+              "Trong phiên workspace B, gọi `GET /segments/<id S>/count`, `PUT /segments/<id S>` (không đổi dữ liệu) và `DELETE /segments/<id S>`.",
+              "Kiểm tra danh sách segment của B có S không; kiểm tra S trong workspace A còn nguyên."
+            ],
+            "observation_point": "Màn hình, mã phản hồi và dữ liệu của S sau các request.",
+            "expected_result": "Chưa có kết quả mong đợi được xác nhận. Ghi lại nguyên văn hành vi thực tế (phản hồi, thông báo, dữ liệu sau thao tác) và chuyển cho PO/Dev xác nhận; không kết luận pass/fail ở lần chạy này.",
+            "oracle": {
+              "kb_ids": [],
+              "oracle_strength": "NONE"
+            },
+            "status": "NEEDS_CONFIRMATION",
+            "open_question_draft": "Khi người dùng của workspace B mở hoặc gọi API với id segment thuộc workspace A, hệ thống trả gì (trang trắng, 403, 404) và có đảm bảo không đọc / sửa / xoá được segment của A không? Tài liệu segment không nêu rule cô lập dữ liệu giữa workspace.",
+            "regression_watch_kb_ids": [],
+            "risk_refs": [
+              "RISK-segment-list-management-06"
+            ],
+            "priority": "P1",
+            "act_ids": [],
+            "evidence_refs": [],
+            "automation_suitability": "SUITABLE"
+          }
+        ]
+      }
+    ],
+    "coverage_by_feature_and_risk": [
+      {
+        "feature_id": "segment-list-management",
+        "risk_ref": "RISK-segment-list-management-01",
+        "risk_description": "Xoá segment trên UI không có tác dụng (BUG-94, P0) trong khi API xoá được; phải xác nhận xoá bằng dữ liệu sau khi tải lại, không bằng việc dialog đóng.",
+        "covered_by_checks": [
+          "CHK-008",
+          "CHK-009",
+          "CHK-012"
+        ],
+        "kb_ids": [
+          "KB-011",
+          "KB-013",
+          "KB-014"
+        ],
+        "coverage_status": "COVERED"
+      },
+      {
+        "feature_id": "segment-list-management",
+        "risk_ref": "RISK-segment-list-management-02",
+        "risk_description": "Segment trùng tên được phép nhưng không phân biệt được ở picker (BUG-69); hành vi mong đợi của picker chưa chốt (GAP-19).",
+        "covered_by_checks": [
+          "CHK-013",
+          "CHK-014"
+        ],
+        "kb_ids": [
+          "KB-015",
+          "KB-017"
+        ],
+        "coverage_status": "PARTIALLY_COVERED_NEEDS_CONFIRMATION"
+      },
+      {
+        "feature_id": "segment-list-management",
+        "risk_ref": "RISK-segment-list-management-03",
+        "risk_description": "Segment có query hỏng chỉ hiện `—` ở cột Contacts, người dùng không biết segment hỏng (BUG-68).",
+        "covered_by_checks": [
+          "CHK-015",
+          "CHK-016"
+        ],
+        "kb_ids": [
+          "KB-004"
+        ],
+        "coverage_status": "PARTIALLY_COVERED_NEEDS_CONFIRMATION"
+      },
+      {
+        "feature_id": "segment-list-management",
+        "risk_ref": "RISK-segment-list-management-04",
+        "risk_description": "Tên segment dài làm vỡ layout bảng (BUG-70).",
+        "covered_by_checks": [
+          "CHK-017"
+        ],
+        "kb_ids": [],
+        "coverage_status": "FLAGGED_NEEDS_CONFIRMATION"
+      },
+      {
+        "feature_id": "segment-list-management",
+        "risk_ref": "RISK-segment-list-management-05",
+        "risk_description": "Duplicate từng lỗi 422 im lặng (BUG-CS-02, ghi đã sửa 14/09/2026).",
+        "covered_by_checks": [
+          "CHK-007"
+        ],
+        "kb_ids": [
+          "KB-009"
+        ],
+        "coverage_status": "COVERED"
+      },
+      {
+        "feature_id": "segment-list-management",
+        "risk_ref": "RISK-segment-list-management-06",
+        "risk_description": "Ma trận quyền xoá / nhân bản / export segment và cô lập dữ liệu giữa workspace chưa có rule.",
+        "covered_by_checks": [
+          "CHK-018",
+          "CHK-019"
+        ],
+        "kb_ids": [
+          "KB-068"
+        ],
+        "coverage_status": "FLAGGED_NEEDS_CONFIRMATION"
+      },
+      {
+        "feature_id": "segment-list-management",
+        "risk_ref": null,
+        "capability": "Xem danh sách segment đã lưu",
+        "covered_by_checks": [
+          "CHK-001",
+          "CHK-002",
+          "CHK-003",
+          "CHK-004",
+          "CHK-005",
+          "CHK-015"
+        ],
+        "kb_ids": [
+          "KB-001",
+          "KB-002",
+          "KB-003",
+          "KB-004",
+          "KB-005",
+          "KB-008",
+          "KB-080"
+        ],
+        "coverage_status": "COVERED"
+      },
+      {
+        "feature_id": "segment-list-management",
+        "risk_ref": null,
+        "capability": "Mở segment để sửa",
+        "covered_by_checks": [
+          "CHK-006"
+        ],
+        "kb_ids": [
+          "KB-007",
+          "KB-021"
+        ],
+        "coverage_status": "COVERED"
+      },
+      {
+        "feature_id": "segment-list-management",
+        "risk_ref": null,
+        "capability": "Nhân bản segment",
+        "covered_by_checks": [
+          "CHK-007"
+        ],
+        "kb_ids": [
+          "KB-009"
+        ],
+        "coverage_status": "COVERED"
+      },
+      {
+        "feature_id": "segment-list-management",
+        "risk_ref": null,
+        "capability": "Export tập contact của segment",
+        "covered_by_checks": [
+          "CHK-010",
+          "CHK-011"
+        ],
+        "kb_ids": [
+          "KB-006",
+          "KB-081"
+        ],
+        "coverage_status": "COVERED"
+      },
+      {
+        "feature_id": "segment-list-management",
+        "risk_ref": null,
+        "capability": "Xoá segment (chỉ xoá query đã lưu)",
+        "covered_by_checks": [
+          "CHK-008",
+          "CHK-012"
+        ],
+        "kb_ids": [
+          "KB-011",
+          "KB-014"
+        ],
+        "coverage_status": "COVERED"
+      }
+    ],
+    "kb_items_without_dedicated_check": [
+      {
+        "kb_id": "KB-082",
+        "note": "Quan sát dữ liệu staging (có nhiều segment cùng tên `Untitled segment`), không phải hành vi cần kiểm; quy tắc trùng tên được kiểm ở check cho phép segment trùng tên."
+      },
+      {
+        "kb_id": "KB-010",
+        "note": "Lỗi đã sửa (BUG-CS-02), chỉ theo dõi qua `regression_watch_kb_ids` của check Duplicate."
+      },
+      {
+        "kb_id": "KB-012",
+        "note": "Lỗi đã biết BUG-94, theo dõi qua check xoá segment; không làm oracle."
+      },
+      {
+        "kb_id": "KB-016",
+        "note": "Lỗi đã biết BUG-69, theo dõi qua check picker segment trùng tên."
+      },
+      {
+        "kb_id": "KB-018",
+        "note": "Lỗi đã biết BUG-70, theo dõi qua check tên dài."
+      },
+      {
+        "kb_id": "KB-019",
+        "note": "Lỗi đã biết BUG-68, theo dõi qua hai check segment có số đếm lỗi."
+      }
+    ],
+    "checks_needing_confirmation": [
+      {
+        "check_id": "CHK-014",
+        "open_question_draft": "Khi hai segment trùng tên, picker Recipients của campaign và picker `Segment to export` phải hiện thêm thông tin gì (số contact, ngày tạo, id…) để người dùng phân biệt? Tên segment không bắt buộc unique đã được PO/BA chốt 02/10/2026, nhưng hành vi picker chưa chốt (GAP-19) và hiện hai segment trùng tên không phân biệt được (BUG-69).",
+        "reason": "Chỉ có câu hỏi mở GAP-19 (INFERRED) và lỗi đã biết; không có rule cho thông tin hiển thị ở picker."
+      },
+      {
+        "check_id": "CHK-016",
+        "open_question_draft": "Khi segment có query hỏng (số đếm trả lỗi), ô Contacts trên danh sách chỉ cần hiện `—` như Jira MTRO-27 AC cho phép, hay phải báo lỗi rõ cho người dùng? Lỗi BUG-68 coi việc không báo lỗi là lỗi nhưng chưa có hành vi mong đợi.",
+        "reason": "AC chỉ nói ô có thể hiện `—` khi lỗi; không có rule về thông báo lỗi."
+      },
+      {
+        "check_id": "CHK-017",
+        "open_question_draft": "Tên segment dài (tới 255 ký tự) phải hiển thị thế nào trên danh sách Segments (cắt ngắn + tooltip, xuống dòng…)? Hiện tên không bị cắt làm bảng rộng 2415px và trang cuộn ngang (BUG-70), nhưng không có rule hiển thị.",
+        "reason": "Chỉ có lỗi đã biết BUG-70, không có rule hiển thị tên dài."
+      },
+      {
+        "check_id": "CHK-018",
+        "open_question_draft": "Role nào (Owner, Admin, Member, custom role) được xoá, nhân bản và export segment, và role không có quyền thấy gì (mục menu ẩn, vô hiệu, hay bị từ chối khi gửi request)? Hiện mới có quyết định PO 30/09/2026 (Jira MTRO-100) rằng Member không được tạo / sửa segment; ma trận quyền còn lại chưa chốt (GAP-07).",
+        "reason": "Ma trận quyền segment chưa chốt; KB duy nhất là câu hỏi mở (INFERRED)."
+      },
+      {
+        "check_id": "CHK-019",
+        "open_question_draft": "Khi người dùng của workspace B mở hoặc gọi API với id segment thuộc workspace A, hệ thống trả gì (trang trắng, 403, 404) và có đảm bảo không đọc / sửa / xoá được segment của A không? Tài liệu segment không nêu rule cô lập dữ liệu giữa workspace.",
+        "reason": "Không có KB nào mô tả cô lập dữ liệu segment giữa workspace; chỉ có rủi ro trong checklist hồi quy của QA."
+      }
+    ],
+    "duplicates_removed": [],
+    "excluded_dimensions": [
+      {
+        "dimension": "REGRESSION",
+        "reason": "Phiên bản đầu tiên của bộ check (bootstrap từ tài liệu); chưa có thay đổi hành vi nào từ diff analyzer. Lỗi đã biết được gắn ở `regression_watch_kb_ids` của từng check thay vì tạo check REGRESSION riêng."
+      }
+    ]
+  },
+  "gate": {
+    "decision": "PASS",
+    "blocking_findings": [],
+    "conditions": [
+      "5 check NEEDS_CONFIRMATION (oracle NONE) chờ PO/Dev trả lời trước khi dùng làm kết quả mong đợi; check BASELINE chỉ là hiện trạng, lệch = cần điều tra."
+    ],
+    "rationale": "Core capability và rủi ro P0/P1 của feature đều có check; mọi check có applicability, layer, trace về feature và kb_id (hoặc được gắn cờ gap); check STRONG chỉ khẳng định đúng nội dung authority, chi tiết staging nằm ở check BASELINE riêng; không expected khẳng định nào dựa trên oracle NONE; không item lỗi đã biết nào làm oracle; check được gom theo hành vi, không nhân bản theo KB.",
+    "allowed_next_steps": [
+      "knowledge-diff-analyzer",
+      "context-quality-reviewer"
+    ]
+  }
+}

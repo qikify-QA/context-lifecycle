@@ -1,0 +1,782 @@
+{
+  "schema_version": "1.0",
+  "artifact_type": "FeatureProfileCandidate",
+  "artifact_id": "ART-FEATURE-PROFILE-sending-domains-CTX-20261008-02",
+  "workflow_id": "CTX-20261008-02",
+  "producer": "feature-profile-builder",
+  "source_refs": [
+    "candidate/product-kb/sending-domains.json",
+    "candidate/product-kb/roles-and-permissions.json",
+    "candidate/product-kb/_product-level.json",
+    "input/scope-plan.json",
+    "input/orchestrator-directives.json",
+    "input/profile-checklist-brief.md",
+    "intermediate/doc/DOC-27.json"
+  ],
+  "upstream_artifact_ids": [
+    "PKBC-CTX-20261008-02-workspace-settings-sending-domains",
+    "PKBC-CTX-20261008-02-workspace-settings-roles-and-permissions",
+    "PKBC-CTX-20261008-02-_product-level",
+    "SCOPE-PLAN-CTX-20261008-02"
+  ],
+  "status": "PARTIAL",
+  "confidence": "MEDIUM",
+  "observations": [
+    "Profile dựng từ tài liệu; không có quan sát runtime nên act_ids và observed_validations rỗng.",
+    "Quy tắc đã xác nhận: khai đủ SPF / DKIM / DMARC, verify thất bại chỉ rõ record (Jira MTRO-6), và giới hạn có chủ ý 'verify chỉ dựng UI' (PO 09/07/2026). Mục đích feature / phạm vi MVP do QA tổng hợp là INFERRED, nằm ở risks. Hành vi còn lại là hiện trạng staging 29/09/2026 hoặc bundle.",
+    "Xung đột gửi khi chưa verify do campaigns sở hữu; profile này chỉ nêu hệ quả phía domain và không chọn bên.",
+    "surface_mapping thêm khoá `backend` cho cơ chế shared sending host."
+  ],
+  "assumptions": [
+    "feature_id dùng chính feature_key.",
+    "Quy tắc SPF / DKIM / DMARC giữ nguyên là CONFIRMED_EXPECTED dù chưa kiểm được trên staging; việc không kiểm được ghi ở risks thay vì hạ cấp."
+  ],
+  "unknowns": [
+    "Sau khi PO chốt cho campaign việc gửi khi workspace chưa có sending domain verified, copy trên trang domain và yêu cầu \"domain verified\" có cần đổi không, và việc gửi qua shared host `mailtro.ai` có cần báo cho người dùng không?",
+    "Verify sending domain có luôn phải đi qua support không, và khi nào merchant tự thấy bản ghi DNS để cấu hình? Quy tắc SPF / DKIM / DMARC và \"verify thất bại chỉ rõ record\" có cần sửa theo luồng qua support không?",
+    "Domain ở status `Failed`, `Temporary failure` hoặc `Inactive` có chặn gửi email (campaign và automation) không?",
+    "Xoá một sending domain đang là From của campaign Scheduled hoặc automation Active thì bị chặn xoá, hay campaign / automation ngừng gửi ngay?",
+    "Với domain đã provision: bảng bản ghi DNS thật gồm những record nào (type / name / content / priority), khi nào nút `Verify` bật, chuyển `Pending` sang `Verified` / `Failed` thế nào, và `Edit` sửa được field nào?",
+    "Contract API sending domain (route đầy đủ, payload, mã lỗi cho add / list / get / delete / verify) là gì? Jira MTRO-56 để trống mô tả.",
+    "Role nào (Owner / Admin / Member) được thêm, sửa, xoá sending domain?"
+  ],
+  "conflicts": [
+    "Gửi khi workspace chưa có domain verified (campaign) — UNRESOLVED, thuộc campaigns."
+  ],
+  "blocking_issues": [],
+  "payload": {
+    "feature_profiles": [
+      {
+        "feature_id": "sending-domains",
+        "feature_key": "sending-domains",
+        "name": "Sending domains: thêm và xác thực domain gửi email",
+        "user_goal": "Merchant khai báo domain gửi email của mình cho workspace và xác thực SPF / DKIM / DMARC để Mailtro gửi thay mặt merchant với thương hiệu riêng và deliverability tốt hơn; ở giai đoạn hiện tại merchant chỉ tự thêm domain, còn verify đi qua support.",
+        "user_goal_kb_refs": [
+          "KB-080",
+          "KB-081",
+          "KB-083",
+          "KB-084"
+        ],
+        "stable_since_version": "v1",
+        "actors": [
+          {
+            "role": "Owner",
+            "permission_observed": "Khảo sát staging 29/09/2026 bằng Owner: xem trang, thêm domain mẫu, mở Domain settings, mở hộp xác nhận Delete (đã Cancel).",
+            "kb_refs": [
+              "KB-085",
+              "KB-091",
+              "KB-094"
+            ]
+          },
+          {
+            "role": "unspecified (Admin / Member)",
+            "permission_observed": "Không có nguồn nêu role nào được thêm, sửa, xoá sending domain.",
+            "kb_refs": [
+              "KB-032"
+            ]
+          },
+          {
+            "role": "support / staff",
+            "permission_observed": "Domain chưa provision chỉ có câu \"contact support to start verification\"; verify ở giai đoạn này đi qua support (cơ chế cụ thể không mô tả).",
+            "kb_refs": [
+              "KB-084",
+              "KB-083"
+            ]
+          }
+        ],
+        "entry_points": [
+          {
+            "path": "Settings › `Sending domains` (route `/settings/domains`); mở `/settings` được redirect về đây",
+            "precondition": "Đã đăng nhập workspace.",
+            "kb_refs": [
+              "KB-085",
+              "KB-P-040"
+            ]
+          },
+          {
+            "path": "Link `Manage sending domains` ở bước Sender của wizard campaign; link `Manage domains` ở step Send email của automation",
+            "precondition": "Đang soạn campaign hoặc automation.",
+            "kb_refs": [
+              "KB-086"
+            ]
+          },
+          {
+            "path": "Nút `Add domain` (kể cả ở trạng thái rỗng) → dialog **Add sending domain**",
+            "precondition": "Đang ở trang Sending domains.",
+            "kb_refs": [
+              "KB-087",
+              "KB-088"
+            ]
+          },
+          {
+            "path": "Menu `Actions for {domain}` › `Edit` → Domain settings (`/settings/domains/:id`); › `Delete`",
+            "precondition": "Workspace có domain.",
+            "kb_refs": [
+              "KB-093",
+              "KB-084"
+            ]
+          }
+        ],
+        "capabilities": [
+          {
+            "name": "Thêm sending domain",
+            "description": "Dialog Add sending domain có một ô `Domain`; trên staging từ chối domain email công cộng, báo lỗi với chuỗi không phải domain, nút `Add domain` disabled khi trống hoặc không hợp lệ; domain hợp lệ được tạo (201), dialog đóng, bảng nạp lại, status `Pending`.",
+            "kb_refs": [
+              "KB-083",
+              "KB-087",
+              "KB-088",
+              "KB-089",
+              "KB-090",
+              "KB-091",
+              "KB-092"
+            ],
+            "act_ids": []
+          },
+          {
+            "name": "Xem danh sách domain và trạng thái",
+            "description": "Bảng có cột `Domains`, `Status` và menu `Edit` / `Delete`. Trên staging chỉ thấy `Pending`; bundle có thêm `Verified`, `Failed`, `Temporary failure`, `Inactive` (khác bộ Verified / Not verified của Jira MTRO-48).",
+            "kb_refs": [
+              "KB-092",
+              "KB-093",
+              "KB-095"
+            ],
+            "act_ids": []
+          },
+          {
+            "name": "Xem cấu hình DNS và xác thực domain",
+            "description": "Theo Jira MTRO-6 (QA business rule), domain phải khai đủ SPF, DKIM, DMARC và verify thất bại phải chỉ rõ bản ghi thiếu/sai. Theo quyết định PO 09/07/2026, giai đoạn hiện tại verify / DNS chỉ dựng UI: domain Pending không hiện bản ghi DNS, nút `Verify` disabled, chỉ có câu liên hệ support.",
+            "kb_refs": [
+              "KB-080",
+              "KB-081",
+              "KB-082",
+              "KB-083",
+              "KB-084",
+              "KB-096",
+              "KB-097"
+            ],
+            "act_ids": []
+          },
+          {
+            "name": "Xoá sending domain",
+            "description": "`Delete` mở hộp xác nhận `Remove {domain}?` (\"This domain will stop sending immediately. This can't be undone.\"); hệ quả sau khi xoá chưa được quan sát.",
+            "kb_refs": [
+              "KB-094"
+            ],
+            "act_ids": []
+          }
+        ],
+        "state_transitions": [
+          {
+            "from": "không có domain",
+            "to": "`Pending`",
+            "trigger": "Nhập domain hợp lệ → `Add domain`",
+            "condition": "Không phải domain email công cộng, đúng định dạng domain",
+            "kb_refs": [
+              "KB-089",
+              "KB-090",
+              "KB-091",
+              "KB-092"
+            ]
+          },
+          {
+            "from": "`Pending`",
+            "to": "`Verified` / `Failed` / `Temporary failure` / `Inactive`",
+            "trigger": "Verify (giai đoạn hiện tại qua support; nút `Verify` disabled)",
+            "condition": "Tập status chỉ từ bundle; điều kiện chuyển chưa mô tả",
+            "kb_refs": [
+              "KB-084",
+              "KB-095",
+              "KB-083"
+            ]
+          },
+          {
+            "from": "domain tồn tại",
+            "to": "domain bị xoá, ngừng gửi",
+            "trigger": "`Delete` → xác nhận `Remove`",
+            "condition": "Theo chữ trên hộp xác nhận; chưa quan sát",
+            "kb_refs": [
+              "KB-094"
+            ]
+          }
+        ],
+        "confirmed_rules": [
+          {
+            "statement": "Theo Jira MTRO-6 (tóm tắt trong QA business rule Mailtro, cập nhật 07/08/2026), sending domain phải khai báo đủ SPF, DKIM và DMARC. Trên staging (29/09/2026) rule này chưa kiểm được vì domain chưa provision không hiện bản ghi DNS nào (giới hạn có chủ ý theo quyết định PO 09/07/2026).",
+            "knowledge_kind": "CONFIRMED_EXPECTED",
+            "confidence": "MEDIUM",
+            "kb_refs": [
+              "KB-081"
+            ]
+          },
+          {
+            "statement": "Theo Jira MTRO-6 (tóm tắt trong QA business rule Mailtro, cập nhật 07/08/2026), khi verify sending domain thất bại, hệ thống phải chỉ rõ bản ghi nào còn thiếu hoặc sai, không báo lỗi chung chung. Rule này chưa test được trên staging vì phần verify hiện chỉ dựng UI.",
+            "knowledge_kind": "CONFIRMED_EXPECTED",
+            "confidence": "MEDIUM",
+            "kb_refs": [
+              "KB-082"
+            ]
+          },
+          {
+            "statement": "Theo quyết định PO 09/07/2026 (comment Jira MTRO-48), trong giai đoạn hiện tại Sending domain chỉ làm phần thêm domain cơ bản; phần verify / bản ghi DNS chỉ dựng UI, nội dung định nghĩa sau. Danh sách known issues QA ghi đây là giới hạn có chủ ý (hiện trạng trên staging: xem item domain Pending).",
+            "knowledge_kind": "CONFIRMED_EXPECTED",
+            "confidence": "MEDIUM",
+            "kb_refs": [
+              "KB-083"
+            ]
+          }
+        ],
+        "observed_behavior": [
+          {
+            "statement": "Trên staging (khảo sát 29/09/2026, domain mẫu vừa thêm), trang Domain settings (`/settings/domains/:id`) có breadcrumb Settings › Sending domains › Domain settings, h1 là tên domain, badge `Pending`, nút `Verify` bị disabled và nút `Back`; domain chưa provision không hiện bản ghi DNS nào và không có khối DKIM / Custom MAIL FROM / DMARC / Tracking, chỉ có câu \"To send from this domain, contact support to start verification.\" — merchant không tự xem DNS và không tự verify được.",
+            "knowledge_kind": "OBSERVED_CURRENT",
+            "confidence": "MEDIUM",
+            "status": "CURRENT_STATE",
+            "kb_refs": [
+              "KB-084"
+            ]
+          },
+          {
+            "statement": "Trên staging (khảo sát 29/09/2026), trang Sending domains ở route `/settings/domains` thuộc nhóm Settings; mở `/settings` được redirect về đây; header \"Manage sending domains and DNS configuration.\"",
+            "knowledge_kind": "OBSERVED_CURRENT",
+            "confidence": "MEDIUM",
+            "status": "CURRENT_STATE",
+            "kb_refs": [
+              "KB-085"
+            ]
+          },
+          {
+            "statement": "Trên staging (khảo sát 29/09/2026), trang Sending domains còn vào được từ link `Manage sending domains` ở bước Sender của wizard campaign và link `Manage domains` ở step Send email của automation.",
+            "knowledge_kind": "OBSERVED_CURRENT",
+            "confidence": "MEDIUM",
+            "status": "CURRENT_STATE",
+            "kb_refs": [
+              "KB-086"
+            ]
+          },
+          {
+            "statement": "Trên staging (khảo sát 29/09/2026), khi workspace chưa có sending domain, trang hiện trạng thái rỗng `Your domain, your brand` / \"Better deliverability, stronger brand recognition, and full control over your sender identity.\" cùng nút `Add domain`.",
+            "knowledge_kind": "OBSERVED_CURRENT",
+            "confidence": "MEDIUM",
+            "status": "CURRENT_STATE",
+            "kb_refs": [
+              "KB-087"
+            ]
+          },
+          {
+            "statement": "Trên staging (khảo sát 29/09/2026), dialog **Add sending domain** có mô tả \"Enter the domain you want to send email from.\" và một ô `Domain` (placeholder `mail.mydomain.com`, hint \"Example: mydomain.com\").",
+            "knowledge_kind": "OBSERVED_CURRENT",
+            "confidence": "MEDIUM",
+            "status": "CURRENT_STATE",
+            "kb_refs": [
+              "KB-088"
+            ]
+          },
+          {
+            "statement": "Trên staging (khảo sát 29/09/2026, thử với `gmail.com`), dialog Add sending domain không nhận domain email công cộng và báo \"Public email domains (gmail, yahoo, etc.) cannot be used\".",
+            "knowledge_kind": "OBSERVED_CURRENT",
+            "confidence": "LOW",
+            "status": "CURRENT_STATE",
+            "kb_refs": [
+              "KB-089"
+            ]
+          },
+          {
+            "statement": "Trên staging (khảo sát 29/09/2026, thử với chuỗi `not a domain`), dialog Add sending domain báo \"Please enter a valid domain (e.g., mydomain.com)\"; nút `Add domain` bị disabled khi ô Domain rỗng hoặc giá trị không hợp lệ.",
+            "knowledge_kind": "OBSERVED_CURRENT",
+            "confidence": "LOW",
+            "status": "CURRENT_STATE",
+            "kb_refs": [
+              "KB-090"
+            ]
+          },
+          {
+            "statement": "Trên staging (khảo sát 29/09/2026, thêm một domain mẫu), thêm domain hợp lệ gọi `POST …/domains` (tài liệu không ghi đủ tiền tố route), nhận 201, dialog đóng và bảng domain được nạp lại.",
+            "knowledge_kind": "OBSERVED_CURRENT",
+            "confidence": "LOW",
+            "status": "CURRENT_STATE",
+            "kb_refs": [
+              "KB-091"
+            ]
+          },
+          {
+            "statement": "Trên staging (khảo sát 29/09/2026), domain vừa thêm có status `Pending` (khác Jira MTRO-48 vốn mô tả status `Verified` / `Not verified`).",
+            "knowledge_kind": "OBSERVED_CURRENT",
+            "confidence": "LOW",
+            "status": "CURRENT_STATE",
+            "kb_refs": [
+              "KB-092"
+            ]
+          },
+          {
+            "statement": "Trên staging (khảo sát 29/09/2026), bảng Sending domains có cột `Domains`, `Status` và menu `Actions for {domain}` gồm `Edit` (mở Domain settings) và `Delete`.",
+            "knowledge_kind": "OBSERVED_CURRENT",
+            "confidence": "MEDIUM",
+            "status": "CURRENT_STATE",
+            "kb_refs": [
+              "KB-093"
+            ]
+          },
+          {
+            "statement": "Trên staging (khảo sát 29/09/2026), `Delete` mở hộp xác nhận `Remove {domain}?` ghi \"This domain will stop sending immediately. This can't be undone.\" (nút `Cancel` / `Remove`); khảo sát đã Cancel nên hệ quả sau khi xoá chưa được quan sát.",
+            "knowledge_kind": "OBSERVED_CURRENT",
+            "confidence": "LOW",
+            "status": "CURRENT_STATE",
+            "kb_refs": [
+              "KB-094"
+            ]
+          },
+          {
+            "statement": "Theo QA KB Mailtro \"Glossary\" v1 và danh sách known issues QA (đối chiếu staging đến 01–02/10/2026), khi From email không thuộc domain đã verify, Mailtro gửi qua domain hệ thống `mailtro.ai` (shared sending host, địa chỉ dạng `<owner>@mailtro.ai`); dữ liệu gửi có `sender_is_borrowed: true` và `effective_from_email`, còn UI không báo cho người dùng. Known issues ghi mục BUG-51 là wontfix/by design cho automation (PO/BA 02/10/2026) và chưa chốt cho campaign. Item này chỉ ghi nhận cơ chế quan sát được, không phải kết quả mong đợi cho campaign.",
+            "knowledge_kind": "OBSERVED_CURRENT",
+            "confidence": "LOW",
+            "status": "CURRENT_STATE",
+            "kb_refs": [
+              "KB-098"
+            ]
+          }
+        ],
+        "observed_validations": [],
+        "permissions": [
+          {
+            "statement": "Role nào được thêm, sửa, xoá sending domain không được tài liệu nêu; ma trận quyền chưa chốt.",
+            "kb_refs": [
+              "KB-032"
+            ]
+          },
+          {
+            "statement": "Ở giai đoạn hiện tại merchant không tự xem DNS và không tự verify; verify cần support.",
+            "kb_refs": [
+              "KB-083",
+              "KB-084"
+            ]
+          }
+        ],
+        "surface_mapping": {
+          "portal": [
+            {
+              "item": "Trang `/settings/domains`: header \"Manage sending domains and DNS configuration.\", trạng thái rỗng `Your domain, your brand`, nút `Add domain`",
+              "kb_refs": [
+                "KB-085",
+                "KB-087"
+              ]
+            },
+            {
+              "item": "Dialog Add sending domain: ô `Domain`, thông báo lỗi domain công cộng / domain không hợp lệ",
+              "kb_refs": [
+                "KB-088",
+                "KB-089",
+                "KB-090"
+              ]
+            },
+            {
+              "item": "Bảng domain: `Domains`, `Status`, menu `Edit` / `Delete`; hộp xác nhận `Remove {domain}?`",
+              "kb_refs": [
+                "KB-093",
+                "KB-094"
+              ]
+            },
+            {
+              "item": "Domain settings `/settings/domains/:id`: badge status, nút `Verify` (disabled khi Pending), câu liên hệ support; các khối DKIM / Custom MAIL FROM / DMARC / Tracking và bảng DNS chỉ có trong bundle",
+              "kb_refs": [
+                "KB-084",
+                "KB-096",
+                "KB-097"
+              ]
+            },
+            {
+              "item": "Link vào trang từ wizard campaign (Sender) và step Send email của automation",
+              "kb_refs": [
+                "KB-086"
+              ]
+            }
+          ],
+          "storefront": [],
+          "api": [
+            {
+              "item": "`POST …/domains` tạo domain, trả 201 (tiền tố route đầy đủ không ghi)",
+              "kb_refs": [
+                "KB-091"
+              ]
+            }
+          ],
+          "data": [
+            {
+              "item": "Domain: tên, status (`Pending` quan sát; `Verified` / `Failed` / `Temporary failure` / `Inactive` theo bundle)",
+              "kb_refs": [
+                "KB-092",
+                "KB-095"
+              ]
+            },
+            {
+              "item": "Bản ghi DNS SPF / DKIM / DMARC (nội dung chưa định nghĩa)",
+              "kb_refs": [
+                "KB-081",
+                "KB-096"
+              ]
+            },
+            {
+              "item": "Dữ liệu gửi khi From không thuộc domain verified: `sender_is_borrowed: true`, `effective_from_email` (gửi qua shared host `mailtro.ai`)",
+              "kb_refs": [
+                "KB-098"
+              ]
+            }
+          ],
+          "backend": [
+            {
+              "item": "Gửi qua shared sending host `mailtro.ai` khi From email không thuộc domain đã verify (UI không báo)",
+              "kb_refs": [
+                "KB-098"
+              ]
+            }
+          ],
+          "code": []
+        },
+        "dependencies": [
+          {
+            "target": "campaigns / campaign-send-and-schedule",
+            "relation": "consumer + open_conflict",
+            "note": "Campaign chọn sender ở bước Sender; việc campaign có gửi được khi workspace chưa có domain verified là xung đột chưa giải do campaigns sở hữu (rule 07/08/2026 vs staging gửi qua shared host).",
+            "kb_refs": [
+              "KB-086",
+              "KB-098"
+            ]
+          },
+          {
+            "target": "automations / automation-steps",
+            "relation": "consumer",
+            "note": "Automation có From ngoài domain verified vẫn gửi qua shared host theo quyết định PO/BA 02/10/2026; item thuộc automations.",
+            "kb_refs": [
+              "KB-086",
+              "KB-098"
+            ]
+          },
+          {
+            "target": "deliverability / unsubscribe-handling",
+            "relation": "enables",
+            "note": "Header one-click unsubscribe chỉ sinh khi sender domain đã xác thực và ký DKIM; hành vi thuộc deliverability.",
+            "kb_refs": [
+              "KB-081"
+            ]
+          },
+          {
+            "target": "abuse-guard / sending-suspension-and-staff-review",
+            "relation": "constraint",
+            "note": "Workspace Sending suspended không thêm được sending domain; hành vi thuộc abuse-guard.",
+            "kb_refs": [
+              "KB-P-022"
+            ]
+          },
+          {
+            "target": "Khái niệm sending domain cấp sản phẩm",
+            "relation": "see_also",
+            "note": "Điều kiện gửi khi domain chưa verify không được chốt ở tầng sản phẩm.",
+            "kb_refs": [
+              "KB-P-021"
+            ]
+          }
+        ],
+        "risks": [
+          {
+            "statement": "Quy tắc khai đủ SPF / DKIM / DMARC và verify thất bại phải chỉ rõ bản ghi đều chưa kiểm được trên staging vì verify chỉ dựng UI (quyết định PO 09/07/2026); check theo quy tắc này hiện không chạy được.",
+            "knowledge_kind": "CONFIRMED_EXPECTED",
+            "confidence": "MEDIUM",
+            "kb_refs": [
+              "KB-081",
+              "KB-082",
+              "KB-083"
+            ]
+          },
+          {
+            "statement": "Gửi khi workspace chưa có domain verified: staging gửi qua shared host `mailtro.ai` mà UI không báo; với campaign đây là xung đột chưa giải, với automation là thiết kế đã chốt. Không dùng hành vi shared host làm oracle cho campaign.",
+            "knowledge_kind": "OBSERVED_CURRENT",
+            "confidence": "LOW",
+            "conflict_group": "CONF-MTRO-campaigns-01",
+            "kb_refs": [
+              "KB-098",
+              "KB-081"
+            ]
+          },
+          {
+            "statement": "Status domain trên staging là `Pending`, khác bộ `Verified` / `Not verified` của Jira MTRO-48; tập status đầy đủ chỉ từ bundle.",
+            "knowledge_kind": "OBSERVED_CURRENT",
+            "confidence": "LOW",
+            "kb_refs": [
+              "KB-092",
+              "KB-095"
+            ]
+          },
+          {
+            "statement": "Theo mục Purpose do QA tổng hợp trong QA KB Mailtro \"Sending domains\" v1 (07/10/2026) và dòng tiêu đề Epic Jira MTRO-6 (Account setup, To Do), sending domain là nơi merchant khai báo domain gửi email (SPF / DKIM / DMARC) để Mailtro gửi thay mặt merchant với thương hiệu riêng và deliverability tốt hơn; phạm vi MVP của Epic gồm thiết lập domain, xác thực domain và thiết lập sender. Quy tắc có nguồn rõ nằm ở item SPF / DKIM / DMARC liên quan.",
+            "knowledge_kind": "INFERRED",
+            "confidence": "LOW",
+            "kb_refs": [
+              "KB-080"
+            ],
+            "note": "Mục đích và phạm vi MVP do QA tổng hợp từ tiêu đề Epic; dùng để định hướng, không làm oracle."
+          },
+          {
+            "statement": "Theo chuỗi giao diện trong bundle/i18n frontend (chưa thấy đủ trên UI vì domain duy nhất ở trạng thái Pending), tập status của sending domain gồm `Verified`, `Pending`, `Failed`, `Temporary failure` và `Inactive`.",
+            "knowledge_kind": "INFERRED",
+            "confidence": "LOW",
+            "kb_refs": [
+              "KB-095"
+            ],
+            "note": "Chỉ từ bundle/i18n."
+          },
+          {
+            "statement": "Theo chuỗi giao diện trong bundle/i18n frontend (chưa đối chiếu UI vì chưa có domain đã provision), trang Domain settings có các khối `DKIM`, `Custom MAIL FROM` (nhãn `Recommended`), `DMARC`, `Tracking` (nhãn `Optional`, \"Domain tracking isn't available yet.\") và bảng bản ghi DNS với các cột `Type` / `Name` / `Content` / `Priority`.",
+            "knowledge_kind": "INFERRED",
+            "confidence": "LOW",
+            "kb_refs": [
+              "KB-096"
+            ],
+            "note": "Chỉ từ bundle/i18n; chưa có domain đã provision."
+          },
+          {
+            "statement": "Theo chuỗi giao diện trong bundle frontend (chưa đối chiếu UI), trang Domain settings có thông báo `Domain not found.` cho trường hợp không tìm thấy domain.",
+            "knowledge_kind": "INFERRED",
+            "confidence": "LOW",
+            "kb_refs": [
+              "KB-097"
+            ],
+            "note": "Chỉ từ bundle."
+          },
+          {
+            "statement": "Copy hộp xác nhận xoá nói domain ngừng gửi ngay; xoá domain đang dùng cho campaign Scheduled hoặc automation Active có thể làm hỏng việc gửi, nhưng chưa có quy tắc.",
+            "knowledge_kind": "OBSERVED_CURRENT",
+            "confidence": "LOW",
+            "kb_refs": [
+              "KB-094"
+            ]
+          }
+        ],
+        "unknown_areas": [
+          {
+            "question": "Sau khi PO chốt cho campaign việc gửi khi workspace chưa có sending domain verified, copy trên trang domain và yêu cầu \"domain verified\" có cần đổi không, và việc gửi qua shared host `mailtro.ai` có cần báo cho người dùng không?",
+            "why_it_matters": "Xung đột đã biết ở campaigns; hệ quả phía Sending domains chưa có quyết định.",
+            "kb_refs": [
+              "KB-081",
+              "KB-083",
+              "KB-098"
+            ]
+          },
+          {
+            "question": "Verify sending domain có luôn phải đi qua support không, và khi nào merchant tự thấy bản ghi DNS để cấu hình? Quy tắc SPF / DKIM / DMARC và \"verify thất bại chỉ rõ record\" có cần sửa theo luồng qua support không?",
+            "why_it_matters": "Quy tắc giả định merchant tự cấu hình DNS, trong khi staging chỉ cho liên hệ support.",
+            "kb_refs": [
+              "KB-081",
+              "KB-082",
+              "KB-083",
+              "KB-084"
+            ]
+          },
+          {
+            "question": "Domain ở status `Failed`, `Temporary failure` hoặc `Inactive` có chặn gửi email (campaign và automation) không?",
+            "why_it_matters": "Không có quy tắc; status chỉ thấy trong bundle.",
+            "kb_refs": [
+              "KB-095"
+            ]
+          },
+          {
+            "question": "Xoá một sending domain đang là From của campaign Scheduled hoặc automation Active thì bị chặn xoá, hay campaign / automation ngừng gửi ngay?",
+            "why_it_matters": "Rủi ro mất gửi; chưa có quy tắc.",
+            "kb_refs": [
+              "KB-094"
+            ]
+          },
+          {
+            "question": "Với domain đã provision: bảng bản ghi DNS thật gồm những record nào (type / name / content / priority), khi nào nút `Verify` bật, chuyển `Pending` sang `Verified` / `Failed` thế nào, và `Edit` sửa được field nào?",
+            "why_it_matters": "Chưa có domain đã provision trên staging; nội dung DNS chưa được định nghĩa trong Jira MTRO-48.",
+            "kb_refs": [
+              "KB-084",
+              "KB-093",
+              "KB-095",
+              "KB-096"
+            ]
+          },
+          {
+            "question": "Contract API sending domain (route đầy đủ, payload, mã lỗi cho add / list / get / delete / verify) là gì? Jira MTRO-56 để trống mô tả.",
+            "why_it_matters": "Tầng API chỉ có một quan sát tạo domain.",
+            "kb_refs": [
+              "KB-091"
+            ]
+          },
+          {
+            "question": "Role nào (Owner / Admin / Member) được thêm, sửa, xoá sending domain?",
+            "why_it_matters": "Không có expected result cho check phân quyền.",
+            "kb_refs": [
+              "KB-032"
+            ]
+          }
+        ],
+        "freshness": {
+          "observed_at": "2026-10-07",
+          "run_id": "CTX-20261008-02",
+          "earliest_source_date": "2026-07-09",
+          "basis": "Ngày nguồn mới nhất trong các KB item được tham chiếu (ngày đọc Jira, quyết định PO 09/07/2026, khảo sát staging 29/09/2026, known issues 01–02/10/2026); không có quan sát runtime trong lần chạy này."
+        }
+      }
+    ],
+    "profile_relationships": [
+      {
+        "from": "sending-domains",
+        "to": "campaigns/campaign-send-and-schedule",
+        "relation": "SENDER_FOR",
+        "kb_refs": [
+          "KB-086",
+          "KB-098"
+        ]
+      },
+      {
+        "from": "sending-domains",
+        "to": "automations/automation-steps",
+        "relation": "SENDER_FOR",
+        "kb_refs": [
+          "KB-086"
+        ]
+      },
+      {
+        "from": "sending-domains",
+        "to": "deliverability/unsubscribe-handling",
+        "relation": "ENABLES",
+        "kb_refs": [
+          "KB-081"
+        ]
+      }
+    ],
+    "coverage_matrix": [
+      {
+        "feature_id": "sending-domains",
+        "layer": "portal",
+        "role": "Owner",
+        "state": "workspace chưa có domain",
+        "environment": "documented",
+        "covered": true,
+        "note": "Hiện trạng staging"
+      },
+      {
+        "feature_id": "sending-domains",
+        "layer": "portal",
+        "role": "Owner",
+        "state": "thêm domain hợp lệ / công cộng / không hợp lệ",
+        "environment": "documented",
+        "covered": true,
+        "note": "Hiện trạng staging, 1 lần thử mỗi loại"
+      },
+      {
+        "feature_id": "sending-domains",
+        "layer": "portal",
+        "role": "Owner",
+        "state": "domain Pending (chưa provision)",
+        "environment": "documented",
+        "covered": true,
+        "note": "Quyết định PO 09/07 + hiện trạng"
+      },
+      {
+        "feature_id": "sending-domains",
+        "layer": "portal",
+        "role": "Owner",
+        "state": "domain đã provision / verify",
+        "environment": "documented",
+        "covered": false,
+        "note": "Quy tắc Jira có nhưng chưa kiểm được; UI chỉ bundle"
+      },
+      {
+        "feature_id": "sending-domains",
+        "layer": "portal",
+        "role": "Owner",
+        "state": "verify thất bại",
+        "environment": "documented",
+        "covered": true,
+        "note": "Chỉ quy tắc Jira MTRO-6; chưa test được"
+      },
+      {
+        "feature_id": "sending-domains",
+        "layer": "portal",
+        "role": "Owner",
+        "state": "xoá domain",
+        "environment": "documented",
+        "covered": false,
+        "note": "Chỉ hộp xác nhận, đã Cancel"
+      },
+      {
+        "feature_id": "sending-domains",
+        "layer": "portal",
+        "role": "Admin/Member",
+        "state": "any",
+        "environment": "documented",
+        "covered": false,
+        "note": "Không có nguồn quyền"
+      },
+      {
+        "feature_id": "sending-domains",
+        "layer": "api",
+        "role": "Owner",
+        "state": "tạo domain",
+        "environment": "documented",
+        "covered": true,
+        "note": "Một quan sát 201"
+      },
+      {
+        "feature_id": "sending-domains",
+        "layer": "api",
+        "role": "unspecified",
+        "state": "list / get / delete / verify",
+        "environment": "documented",
+        "covered": false,
+        "note": "Contract trống"
+      },
+      {
+        "feature_id": "sending-domains",
+        "layer": "backend",
+        "role": "unspecified",
+        "state": "gửi khi chưa có domain verified",
+        "environment": "documented",
+        "covered": true,
+        "note": "Cơ chế shared host quan sát; campaign còn xung đột"
+      },
+      {
+        "feature_id": "sending-domains",
+        "layer": "code",
+        "role": "unspecified",
+        "state": "any",
+        "environment": "documented",
+        "covered": false,
+        "note": "Không có nguồn mã"
+      }
+    ],
+    "unassigned_kb_items": [],
+    "profile_conflicts": [
+      {
+        "conflict_group": "CONF-MTRO-campaigns-01",
+        "owner_feature": "campaigns/campaign-send-and-schedule",
+        "topic": "Campaign có gửi được khi workspace chưa có sending domain verified",
+        "side_a": "Rule 07/08/2026: campaign không gửi được khi chưa có domain verified.",
+        "side_b": "Staging 09/09/2026: gửi được qua shared host `mailtro.ai`; PO/BA 02/10/2026 chỉ chốt hành vi này cho automation.",
+        "resolution": "UNRESOLVED",
+        "impact": "Ảnh hưởng ý nghĩa của trạng thái verified và copy trên trang Sending domains.",
+        "kb_refs": [
+          "KB-098",
+          "KB-081"
+        ]
+      }
+    ],
+    "profile_change_summary": [
+      "Rework r1: mục đích feature / phạm vi MVP hạ xuống INFERRED, chuyển từ confirmed_rules sang risks."
+    ],
+    "kb_trace_complete": true
+  },
+  "gate": {
+    "decision": "CONDITIONAL_PASS",
+    "blocking_findings": [],
+    "conditions": [
+      "Identity, user goal, capability theo mục tiêu (thêm, theo dõi, cấu hình/verify, xoá) và mapping KB đầy đủ; tag sending-domain-verification giữ ở KB.",
+      "Phần verify / DNS có quy tắc nhưng không chạy được trên staging (giới hạn có chủ ý); check theo quy tắc này cần ghi điều kiện tiên quyết là có domain đã provision.",
+      "Xung đột gửi khi chưa verify, hệ quả xoá domain, status Failed / Inactive và quyền theo role chưa có oracle — NEEDS_CONFIRMATION."
+    ],
+    "allowed_next_steps": [
+      "qa-checklist-builder",
+      "knowledge-diff-analyzer"
+    ]
+  }
+}
