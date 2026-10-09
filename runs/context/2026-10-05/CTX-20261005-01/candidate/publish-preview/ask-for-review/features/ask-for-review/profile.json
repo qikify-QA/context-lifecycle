@@ -1,0 +1,433 @@
+{
+  "feature_key": "ask-for-review",
+  "name": "Ask for Review (post-AI-offer App Store review prompt)",
+  "user_goal": "Sau khi merchant vua co trai nghiem tao offer bang AI Offer Assistant, dan ho danh gia app tren Shopify App Store dung luc merchant con hai long, dong thoi dieu huong merchant khong hai long sang support privately thay vi de ho de lai 1-star review cong khai.",
+  "actors": [
+    {
+      "role": "merchant",
+      "permission_observed": "not_documented — tai lieu khong neu ranh gioi permission/role cu the (vd merchant owner vs staff) cho ai thay duoc overlay nay; chi noi chung 'merchant'. Khong doc duoc runtime o mode DOC_BOOTSTRAP nen khong co quan sat permission nao.",
+      "kb_refs": [
+        "KB-001",
+        "KB-002"
+      ]
+    }
+  ],
+  "entry_points": [
+    {
+      "path": "Buoc ngay sau khi luu (save) mot offer, trong offer-creation flow: hoac di thang tu AI Summary toi 'Create offer', hoac preview roi sua trong Editor truoc khi luu.",
+      "precondition": "Offer session duoc tao boi AI Offer Assistant VA co isAiGenerated cua session do = true tai thoi diem save.",
+      "kb_refs": [
+        "KB-003",
+        "KB-005",
+        "KB-006"
+      ]
+    }
+  ],
+  "capabilities": [
+    {
+      "name": "Dinh vi tinh nang: app-review prompt, khong phai product-review",
+      "description": "Ask for Review la mot prompt merchant-facing yeu cau merchant danh gia/review chinh app tren Shopify App Store (khong phai yeu cau review san pham huong toi khach hang cuoi — gia thuyet ban dau da bi bac bo trong doc). Muc dich: thu App Store review/feedback dung thoi diem va dieu huong merchant khong hai long sang support.",
+      "kb_refs": [
+        "KB-001",
+        "KB-002"
+      ]
+    },
+    {
+      "name": "Trigger gating qua co isAiGenerated",
+      "description": "Overlay rating full-screen chi hien sau khi luu offer, va chi khi offer session do duoc tao boi AI — bat ke merchant di thang toi 'Create offer' hay preview/sua truoc. isAiGenerated la sole gate (dieu kien duy nhat) quyet dinh overlay co hien hay khong. Offer tao thu cong khong bao gio thay overlay nay.",
+      "kb_refs": [
+        "KB-003",
+        "KB-004",
+        "KB-005",
+        "KB-006"
+      ]
+    },
+    {
+      "name": "Nhanh 5-star: AI-written review -> copy & share len App Store",
+      "description": "Overlay gom illustration + cau hoi 'How was your AI offer creation experience?' + 5-star selector (mac dinh 5 sao). Chon 5 sao hien ra nhanh voi tag 'Generated with AI', nut 'Rewrite' xoay vong noi dung review do AI viet, va mot textarea co the sua. Nut 'Copy & Share on App Store' copy text vao clipboard (hien 'Copied!' trong 2s) roi chuyen huong merchant toi modal review cua App Store.",
+      "kb_refs": [
+        "KB-007",
+        "KB-008",
+        "KB-009",
+        "KB-010",
+        "KB-011"
+      ]
+    },
+    {
+      "name": "Nhanh 1-4 star: dieu huong feedback rieng tu toi support",
+      "description": "Chon 1-4 sao hien ra nhanh voi textarea feedback + nut 'Send Feedback to Support'. Submit feedback o muc nay gui toi support team kem mot private note chua nguyen van AI prompt ma merchant da nhap trong session do, cho support context de phan biet ask-vs-generated.",
+      "kb_refs": [
+        "KB-009",
+        "KB-012",
+        "KB-013"
+      ]
+    },
+    {
+      "name": "Dong overlay",
+      "description": "Dong overlay (bam x, hoac sau hanh dong cua mot trong hai nhanh — Copy & Share hoac Send Feedback) dua merchant tro ve danh sach offer.",
+      "kb_refs": [
+        "KB-014"
+      ]
+    },
+    {
+      "name": "Persist ket qua review len offer record",
+      "description": "Ket qua review duoc persist voi 3 field: isAiGenerated (boolean, gan tai thoi diem tao draft truoc save, persist qua preview/edit), reviewRating (int 1-5 hoac null), reviewAction (enum 'copied'/'feedback_sent'/'dismissed' hoac null). Du lieu nay di kem voi event storage trong MongoDB collection trigger_analytics da co san qua model TriggerAnalytic, session key = offer_id + ai_offer_event_id — khong can model/migration moi.",
+      "kb_refs": [
+        "KB-015",
+        "KB-016",
+        "KB-017",
+        "KB-021"
+      ]
+    },
+    {
+      "name": "Tracking funnel event cho metrics",
+      "description": "5 ten event duoc track: ai_review_prompt_shown, ai_review_star_selected, ai_review_copy_clicked, ai_review_feedback_sent, ai_review_dismissed. Invariant: dung 1 terminal event moi session (copy_clicked feedback_sent dismissed) — day la mot FE contract ma backend khong co cach nao tu enforce. Metric tinh duoc tu du lieu nay: star distribution (rating cuoi cung cua session neu merchant doi rating), view rate, response rate, time-to-close, copy rate, feedback rate.",
+      "kb_refs": [
+        "KB-018",
+        "KB-019",
+        "KB-020",
+        "KB-022"
+      ]
+    }
+  ],
+  "state_transitions": [
+    {
+      "from": "no_overlay",
+      "to": "overlay_shown",
+      "trigger": "merchant luu (save) offer",
+      "condition": "offer session.isAiGenerated == true",
+      "kb_refs": [
+        "KB-003",
+        "KB-005",
+        "KB-006"
+      ]
+    },
+    {
+      "from": "no_overlay",
+      "to": "no_overlay (khong doi)",
+      "trigger": "merchant luu offer tao thu cong",
+      "condition": "offer session.isAiGenerated == false",
+      "kb_refs": [
+        "KB-004",
+        "KB-006"
+      ]
+    },
+    {
+      "from": "overlay_shown",
+      "to": "branch_5_star",
+      "trigger": "merchant chon 5 sao",
+      "condition": "star_selected == 5",
+      "kb_refs": [
+        "KB-009",
+        "KB-010"
+      ]
+    },
+    {
+      "from": "overlay_shown",
+      "to": "branch_1_to_4_star",
+      "trigger": "merchant chon 1-4 sao",
+      "condition": "1 <= star_selected <= 4",
+      "kb_refs": [
+        "KB-009",
+        "KB-012"
+      ]
+    },
+    {
+      "from": "branch_5_star",
+      "to": "closed_returned_to_offer_list",
+      "trigger": "merchant bam 'Copy & Share on App Store'",
+      "condition": "copy thanh cong, redirect App Store review modal",
+      "kb_refs": [
+        "KB-011",
+        "KB-014"
+      ]
+    },
+    {
+      "from": "branch_1_to_4_star",
+      "to": "closed_returned_to_offer_list",
+      "trigger": "merchant bam 'Send Feedback to Support'",
+      "condition": "feedback (kem private note AI prompt) duoc gui toi support",
+      "kb_refs": [
+        "KB-013",
+        "KB-014"
+      ]
+    },
+    {
+      "from": "overlay_shown | branch_5_star | branch_1_to_4_star",
+      "to": "closed_returned_to_offer_list",
+      "trigger": "merchant bam x (dismiss)",
+      "condition": "khong gui/copy gi ca",
+      "kb_refs": [
+        "KB-014"
+      ]
+    }
+  ],
+  "confirmed_rules": [
+    {
+      "statement": "isAiGenerated la sole gate quyet dinh overlay review co hien ra hay khong.",
+      "kb_refs": [
+        "KB-006"
+      ]
+    },
+    {
+      "statement": "Offer tao thu cong (manually-created) khong bao gio thay overlay nay; hanh vi hien co cua offer do khong thay doi.",
+      "kb_refs": [
+        "KB-004"
+      ]
+    },
+    {
+      "statement": "isAiGenerated duoc gan tai thoi diem session tao ra draft, truoc khi luu, va phai persist qua preview/edit.",
+      "kb_refs": [
+        "KB-005"
+      ]
+    },
+    {
+      "statement": "Star selector mac dinh 5 sao.",
+      "kb_refs": [
+        "KB-008"
+      ]
+    },
+    {
+      "statement": "'Copy & Share on App Store' copy text vao clipboard, hien 'Copied!' trong 2s, roi redirect merchant toi App Store review modal.",
+      "kb_refs": [
+        "KB-011"
+      ]
+    },
+    {
+      "statement": "isAiGenerated persist duoi dang boolean.",
+      "kb_refs": [
+        "KB-015"
+      ]
+    },
+    {
+      "statement": "reviewRating persist duoi dang int 1-5 hoac null.",
+      "kb_refs": [
+        "KB-016"
+      ]
+    },
+    {
+      "statement": "reviewAction persist duoi dang enum('copied','feedback_sent','dismissed') hoac null.",
+      "kb_refs": [
+        "KB-017"
+      ]
+    },
+    {
+      "statement": "Invariant: dung mot terminal event moi session (copy_clicked feedback_sent dismissed); fire nhieu hon mot se double-count session do trong backend metrics.",
+      "kb_refs": [
+        "KB-019"
+      ]
+    },
+    {
+      "statement": "Terminal-event invariant la mot FE contract — backend khong co cach nao tu enforce; mot bug FE tai diem nay am tham lam sai lech du lieu analytics, khong chi gay loi hien thi UI.",
+      "kb_refs": [
+        "KB-020"
+      ]
+    }
+  ],
+  "observed_behavior": [],
+  "observed_validations": [],
+  "permissions": [],
+  "surface_mapping": {
+    "portal": [
+      "Overlay rating full-screen (illustration, cau hoi, 5-star selector) — KB-007, KB-008",
+      "Nhanh 5-star: tag 'Generated with AI', nut Rewrite, textarea editable, nut Copy & Share on App Store — KB-010, KB-011",
+      "Nhanh 1-4 star: feedback textarea, nut Send Feedback to Support — KB-012, KB-013",
+      "Dong overlay (x hoac sau hanh dong nhanh) ve danh sach offer — KB-014",
+      "Fire 5 tracked event tu FE (ai_review_prompt_shown, ai_review_star_selected, ai_review_copy_clicked, ai_review_feedback_sent, ai_review_dismissed) — KB-018, KB-019, KB-020"
+    ],
+    "storefront": [],
+    "api": [],
+    "data": [
+      "Offer record: field isAiGenerated (boolean), reviewRating (int 1-5|null), reviewAction (enum 'copied'|'feedback_sent'|'dismissed'|null) — KB-015, KB-016, KB-017",
+      "MongoDB collection trigger_analytics qua model TriggerAnalytic, session key = offer_id + ai_offer_event_id, khong can model/migration moi — KB-021",
+      "Metric tinh tu du lieu tren: star distribution, view rate, response rate, time-to-close, copy rate, feedback rate — KB-022"
+    ],
+    "code": []
+  },
+  "dependencies": [
+    {
+      "dependency": "Feature 'ai-offer-creation' (AI Offer Assistant): trigger cua Ask for Review duoc gate hoan toan boi co isAiGenerated, va co nay do chinh ai-offer-creation gan tai thoi diem tao draft. Ask for Review khong tu sinh/tu quan ly co nay — day la mot explicit upstream dependency, khong phai hanh vi noi tai cua feature nay.",
+      "type": "upstream_feature_flag_dependency",
+      "kb_refs": [
+        "KB-001",
+        "KB-003",
+        "KB-005",
+        "KB-006"
+      ]
+    },
+    {
+      "dependency": "Shopify App Store review modal (external surface ngoai app) — nhanh 5-star redirect merchant toi do sau khi copy.",
+      "type": "external_surface_dependency",
+      "kb_refs": [
+        "KB-011"
+      ]
+    },
+    {
+      "dependency": "Support ticketing/support team (nhan private note kem AI prompt nguyen van) — nhanh 1-4 star gui feedback toi do.",
+      "type": "external_process_dependency",
+      "kb_refs": [
+        "KB-013"
+      ]
+    }
+  ],
+  "risks": [
+    {
+      "risk": "Terminal-event invariant (dung 1 event/session) la FE contract khong duoc BE enforce — mot bug FE co the am tham lam sai lech (double-count) metrics analytics ma khong gay loi UI nao de phat hien.",
+      "kb_refs": [
+        "KB-020",
+        "KB-019"
+      ]
+    },
+    {
+      "risk": "Chua ro isAiGenerated co duoc gan nguoc (retroactive) cho offer tao thu cong roi sua bang AI assistant hay khong — tai lieu tu goi day la crux cua toan bo trigger condition nhung chi la suy luan (INFERRED, confidence LOW), chua PO/Dev xac nhan. Neu suy luan sai, overlay co the fire sai (false positive/negative) cho edge case nay.",
+      "kb_refs": [
+        "KB-023"
+      ]
+    },
+    {
+      "risk": "Toan bo feature (ca 2 nhanh overlay, terminal-event exclusivity, backend storage/metrics) chua duoc live-verify qua UI thuc do mot hard gate khong lien quan (AI Offer Assistant bi disable tren Shopify development store) — moi confirmed_rule trong profile nay dang o muc BASELINE/doc-only, chua co bang chung doc lap da deploy/hoat dong dung tren production/staging thuc.",
+      "kb_refs": [
+        "KB-001",
+        "KB-002",
+        "KB-003",
+        "KB-021",
+        "KB-022"
+      ]
+    }
+  ],
+  "freshness": {
+    "observed_at": null
+  },
+  "unknown_areas": [
+    {
+      "question": "UI co thuc su cho phep merchant doi lai muc star da chon (vd chon 5 roi doi sang 2), hay chi la one-shot pick?",
+      "why_it_matters": "QVD-173 ky vong 'last star_selected wins' cho metric star distribution, nhung tai lieu khong xac nhan UI co ho tro doi lua chon hay khong — neu khong, metric do khong bao gio xay ra tren thuc te."
+    },
+    {
+      "question": "Nut 'Rewrite' o nhanh 5-star xoay vong qua mot pool noi dung co dinh, hay generate noi dung moi moi lan bam?",
+      "why_it_matters": "Anh huong chi phi van hanh (token cost) va hanh vi UI khi click lap lai nhieu lan; tai lieu tu neu day la cau hoi mo."
+    },
+    {
+      "question": "Feedback textarea o nhanh 1-4 sao co bat buoc nhap (required) hay cho phep submit rong?",
+      "why_it_matters": "Tai lieu tu danh dau 'Need confirm' — khong co validation rule nao duoc xac nhan cho field nay; khong du dieu kien de dua vao confirmed_rules."
+    },
+    {
+      "question": "Khi merchant dong overlay (x) ma khong chon star nao, he thong co ghi reviewAction='dismissed' kem reviewRating=null hay khong?",
+      "why_it_matters": "Tai lieu noi viec nay 'matches the schema' (reviewRating nullable) nhung tu nhan la 'worth an explicit test' — chua duoc xac nhan, chi suy luan tu tinh nullable cua field."
+    },
+    {
+      "question": "Khi mot AI-generated offer bi merchant discard (khong luu), co chac chan overlay khong hien ra (khong co false-positive) khong?",
+      "why_it_matters": "Tai lieu suy luan dieu nay tu viec trigger yeu cau 'after saving', nhung tu yeu cau 'confirm no false-positive' — chua co xac nhan doc lap."
+    },
+    {
+      "question": "Mot offer tao thu cong, sau do merchant sua lai bang AI assistant (neu flow do ton tai) — offer do co duoc gan nguoc isAiGenerated va trigger overlay o lan save tiep theo khong?",
+      "why_it_matters": "Tai lieu tu danh dau 'Need confirm PO/Dev' va goi day la crux cua toan bo trigger condition cua feature nay (xem KB-023, INFERRED/LOW/NEEDS_CONFIRMATION cho suy luan hien tai la khong)."
+    },
+    {
+      "question": "Backend event co thuc su ghi dung vao collection trigger_analytics voi session key chinh xac, va cac metric suy ra (star distribution, response rate, time-to-close, v.v.) co tinh dung theo logic da tai lieu hay khong?",
+      "why_it_matters": "Tai lieu tu nhan day 'not verifiable from the UI alone' — can Dev/Support access hoac mot query da document; khong co evidence nao trong doc xac nhan da chay viec nay."
+    },
+    {
+      "question": "Permission/role scope: overlay nay hien ra cho moi merchant staff co quyen tao offer, hay chi merchant owner/admin?",
+      "why_it_matters": "Tai lieu chi noi chung 'merchant', khong phan biet role/permission cu the — checklist se khong biet test voi role nao de bao phu day du."
+    },
+    {
+      "question": "Toan bo feature chua duoc live-verify: lan thu duy nhat (2026-09-14, store test-vl-1) bi chan boi AI Offer Assistant disabled tren Shopify development store, truoc khi toi overlay cua chinh feature nay.",
+      "why_it_matters": "Day la coverage limitation can dang len explicitly cho checklist/reviewer: moi oracle trong profile nay la BASELINE (tai lieu), khong phai da UI-confirmed — can mot environment co AI Offer Assistant enabled de live-verify truoc khi coi day la expected result cung cho regression."
+    }
+  ],
+  "coverage_matrix": [
+    {
+      "layer": "portal",
+      "role": "merchant",
+      "state": "trigger_gate (isAiGenerated check)",
+      "environment": "documented",
+      "covered": true
+    },
+    {
+      "layer": "portal",
+      "role": "merchant",
+      "state": "overlay_shown_5_star_branch",
+      "environment": "documented",
+      "covered": true
+    },
+    {
+      "layer": "portal",
+      "role": "merchant",
+      "state": "overlay_shown_1_to_4_star_branch",
+      "environment": "documented",
+      "covered": true
+    },
+    {
+      "layer": "portal",
+      "role": "merchant",
+      "state": "closed_returned_to_offer_list",
+      "environment": "documented",
+      "covered": true
+    },
+    {
+      "layer": "portal",
+      "role": "merchant",
+      "state": "event_tracking_fe",
+      "environment": "documented",
+      "covered": true
+    },
+    {
+      "layer": "data",
+      "role": "merchant",
+      "state": "persisted_fields_offer_record",
+      "environment": "documented",
+      "covered": true
+    },
+    {
+      "layer": "data",
+      "role": "merchant",
+      "state": "event_storage_backend_metrics",
+      "environment": "documented",
+      "covered": true
+    },
+    {
+      "layer": "api",
+      "role": "merchant",
+      "state": "all",
+      "environment": "documented",
+      "covered": false
+    },
+    {
+      "layer": "code",
+      "role": "merchant",
+      "state": "all",
+      "environment": "documented",
+      "covered": false
+    },
+    {
+      "layer": "portal",
+      "role": "support",
+      "state": "receive_private_feedback",
+      "environment": "documented",
+      "covered": false
+    },
+    {
+      "layer": "runtime_verification",
+      "role": "merchant",
+      "state": "all",
+      "environment": "staging",
+      "covered": false
+    }
+  ],
+  "profile_conflicts": [],
+  "profile_relationships": [
+    {
+      "from_feature_key": "ask-for-review",
+      "to_feature_key": "ai-offer-creation",
+      "relationship": "depends_on",
+      "description": "Trigger cua ask-for-review gate hoan toan boi co isAiGenerated, do feature ai-offer-creation (AI Offer Assistant) gan tai thoi diem tao draft offer. Day la explicit dependency, khong phai hanh vi noi tai.",
+      "kb_refs": [
+        "KB-001",
+        "KB-003",
+        "KB-005",
+        "KB-006"
+      ]
+    }
+  ]
+}

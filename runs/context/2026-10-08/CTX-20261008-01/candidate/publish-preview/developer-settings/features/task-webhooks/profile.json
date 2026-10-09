@@ -1,0 +1,619 @@
+{
+  "feature_id": "task-webhooks",
+  "feature_key": "task-webhooks",
+  "name": "Webhooks: task callback khi generation xong",
+  "user_goal": "Caller nhận callback có chữ ký khi một generation cụ thể kết thúc, xác minh được nguồn gửi và xử lý đúng khi bị gửi lại nhiều lần.",
+  "stable_since_version": "v1",
+  "actors": [
+    {
+      "role": "unspecified (người cấu hình trên portal)",
+      "permission_observed": "Ở mục Webhooks: copy signing secret và đặt default webhook URL. Tài liệu không nói role nào được làm.",
+      "kb_refs": [
+        "KB-029"
+      ]
+    },
+    {
+      "role": "api-caller (endpoint nhận callback)",
+      "permission_observed": "Gửi `webhook_url` theo từng request; nhận callback, verify chữ ký trên raw body, trả 2xx và dedupe theo `webhook-id`.",
+      "kb_refs": [
+        "KB-031",
+        "KB-080",
+        "KB-037",
+        "KB-039"
+      ]
+    }
+  ],
+  "entry_points": [
+    {
+      "path": "Portal, nhóm Dev trên sidebar, trang Webhooks (route `/webhooks`)",
+      "precondition": "Đã đăng nhập dashboard.",
+      "kb_refs": [
+        "KB-029",
+        "KB-074",
+        "KB-P-027"
+      ]
+    },
+    {
+      "path": "Field `webhook_url` trong body request generate",
+      "precondition": "Gửi request generate.",
+      "kb_refs": [
+        "KB-031",
+        "KB-030"
+      ]
+    }
+  ],
+  "capabilities": [
+    {
+      "name": "Cấu hình nơi nhận callback",
+      "description": "Ở mục Webhooks trên portal: copy signing secret và đặt default webhook URL. Task callback và account alert cấu hình ở hai chỗ khác nhau.",
+      "kb_refs": [
+        "KB-029",
+        "KB-074"
+      ]
+    },
+    {
+      "name": "Bật, tắt hoặc đổi đích callback cho từng request",
+      "description": "`webhook_url: null` trong body tắt callback cho riêng request đó kể cả khi org có default URL. Gửi `webhook_url` có giá trị trong body sẽ override default webhook URL đã cấu hình ở portal, cho riêng request đó.",
+      "kb_refs": [
+        "KB-031",
+        "KB-030"
+      ]
+    },
+    {
+      "name": "Nhận và đọc payload callback",
+      "description": "Callback báo một generation cụ thể đã xong. `occurred_at` là thời điểm task xong, không đổi qua các lần retry. Mọi key trong payload luôn có mặt, key không áp dụng mang `null`. Payload mẫu có `type` task.succeeded/task.failed và các field envelope/data, chỉ để minh hoạ. Callback dùng chung envelope và cơ chế chữ ký với account alert.",
+      "kb_refs": [
+        "KB-028",
+        "KB-034",
+        "KB-035",
+        "KB-032",
+        "KB-033",
+        "KB-075"
+      ]
+    },
+    {
+      "name": "Xác minh chữ ký callback",
+      "description": "Ba header Standard Webhooks `webhook-id`, `webhook-timestamp`, `webhook-signature` (HMAC-SHA256); `webhook-id` giữ nguyên qua các lần retry; verify trên raw body trước khi parse JSON. Khi rotate signing secret header có thể chứa nhiều chữ ký (chưa xác nhận).",
+      "kb_refs": [
+        "KB-076",
+        "KB-077",
+        "KB-078",
+        "KB-080",
+        "KB-079"
+      ]
+    },
+    {
+      "name": "Giao nhận tin cậy và retry",
+      "description": "Tối đa 6 lần gửi theo lịch ngay, +1 phút, +5 phút, +30 phút, +2 giờ, +6 giờ (khoảng 8,5 giờ). Chỉ 2xx là delivered, không follow redirect, timeout 10 giây. At-least-once nên phía nhận dedupe theo `webhook-id`; thứ tự không được đảm bảo.",
+      "kb_refs": [
+        "KB-036",
+        "KB-037",
+        "KB-038",
+        "KB-039",
+        "KB-040",
+        "KB-041"
+      ]
+    },
+    {
+      "name": "Theo dõi tình trạng giao nhận trên portal",
+      "description": "Mục Webhooks hiển thị số delivery và tỉ lệ thất bại trong 24 giờ, nhóm theo host.",
+      "kb_refs": [
+        "KB-042"
+      ]
+    }
+  ],
+  "state_transitions": [
+    {
+      "from": "task đang chạy",
+      "to": "callback được gửi lần đầu",
+      "trigger": "Generation kết thúc",
+      "condition": "Request không gửi `webhook_url: null`, và có đích callback: `webhook_url` trong body (override cho riêng request) hoặc default webhook URL của org",
+      "kb_refs": [
+        "KB-028",
+        "KB-029",
+        "KB-031",
+        "KB-036",
+        "KB-030"
+      ]
+    },
+    {
+      "from": "callback đang gửi",
+      "to": "delivered",
+      "trigger": "Endpoint nhận trả 2xx trong 10 giây",
+      "condition": "",
+      "kb_refs": [
+        "KB-037",
+        "KB-041"
+      ]
+    },
+    {
+      "from": "callback đang gửi",
+      "to": "chờ gửi lại theo lịch",
+      "trigger": "Response không phải 2xx, là redirect, hoặc quá 10 giây",
+      "condition": "Còn lượt trong lịch 6 lần; `webhook-id` và `occurred_at` giữ nguyên",
+      "kb_refs": [
+        "KB-036",
+        "KB-037",
+        "KB-038",
+        "KB-041",
+        "KB-077",
+        "KB-034"
+      ]
+    }
+  ],
+  "confirmed_rules": [
+    {
+      "statement": "Có hai loại webhook tách biệt là task callback và account alert, cấu hình ở hai mục khác nhau trên portal (Webhooks và Alerts).",
+      "knowledge_kind": "CONFIRMED_EXPECTED",
+      "confidence": "MEDIUM",
+      "kb_refs": [
+        "KB-074"
+      ]
+    },
+    {
+      "statement": "Task callback và account alert dùng chung cấu trúc envelope và cùng cơ chế chữ ký.",
+      "knowledge_kind": "CONFIRMED_EXPECTED",
+      "confidence": "MEDIUM",
+      "kb_refs": [
+        "KB-075"
+      ]
+    },
+    {
+      "statement": "Task callback báo cho caller biết một generation cụ thể đã xong, tức phản hồi cho đúng 1 request.",
+      "knowledge_kind": "CONFIRMED_EXPECTED",
+      "confidence": "MEDIUM",
+      "kb_refs": [
+        "KB-028"
+      ]
+    },
+    {
+      "statement": "Task callback được cấu hình ở mục Webhooks trên portal: copy signing secret và đặt default webhook URL.",
+      "knowledge_kind": "CONFIRMED_EXPECTED",
+      "confidence": "MEDIUM",
+      "kb_refs": [
+        "KB-029"
+      ]
+    },
+    {
+      "statement": "Gửi `webhook_url: null` trong body sẽ tắt callback cho riêng request đó, kể cả khi org đã đặt default webhook URL.",
+      "knowledge_kind": "CONFIRMED_EXPECTED",
+      "confidence": "MEDIUM",
+      "kb_refs": [
+        "KB-031"
+      ]
+    },
+    {
+      "statement": "Gửi field `webhook_url` trong body request sẽ override default webhook URL đã cấu hình ở portal, cho riêng request đó.",
+      "knowledge_kind": "CONFIRMED_EXPECTED",
+      "confidence": "MEDIUM",
+      "kb_refs": [
+        "KB-030"
+      ]
+    },
+    {
+      "statement": "`occurred_at` trong callback là thời điểm task xong, không phải thời điểm gửi từng lần.",
+      "knowledge_kind": "CONFIRMED_EXPECTED",
+      "confidence": "MEDIUM",
+      "kb_refs": [
+        "KB-034"
+      ]
+    },
+    {
+      "statement": "Mọi key trong payload callback luôn có mặt; key nào không áp dụng mang giá trị `null`.",
+      "knowledge_kind": "CONFIRMED_EXPECTED",
+      "confidence": "MEDIUM",
+      "kb_refs": [
+        "KB-035"
+      ]
+    },
+    {
+      "statement": "Webhook mang 3 header ký theo chuẩn Standard Webhooks: `webhook-id`, `webhook-timestamp`, `webhook-signature`.",
+      "knowledge_kind": "CONFIRMED_EXPECTED",
+      "confidence": "MEDIUM",
+      "kb_refs": [
+        "KB-076"
+      ]
+    },
+    {
+      "statement": "Header `webhook-id` giữ nguyên giá trị qua mọi lần retry của cùng một delivery.",
+      "knowledge_kind": "CONFIRMED_EXPECTED",
+      "confidence": "MEDIUM",
+      "kb_refs": [
+        "KB-077"
+      ]
+    },
+    {
+      "statement": "`webhook-signature` là chữ ký HMAC-SHA256.",
+      "knowledge_kind": "CONFIRMED_EXPECTED",
+      "confidence": "MEDIUM",
+      "kb_refs": [
+        "KB-078"
+      ]
+    },
+    {
+      "statement": "Chữ ký được verify (bằng thư viện `standardwebhooks`) trên raw body, trước khi parse JSON.",
+      "knowledge_kind": "CONFIRMED_EXPECTED",
+      "confidence": "MEDIUM",
+      "kb_refs": [
+        "KB-080"
+      ]
+    },
+    {
+      "statement": "Webhook được gửi tối đa 6 lần theo lịch: ngay lập tức, +1 phút, +5 phút, +30 phút, +2 giờ, +6 giờ (tổng khoảng 8,5 giờ).",
+      "knowledge_kind": "CONFIRMED_EXPECTED",
+      "confidence": "MEDIUM",
+      "kb_refs": [
+        "KB-036"
+      ]
+    },
+    {
+      "statement": "Chỉ response 2xx từ endpoint nhận mới được tính là delivered.",
+      "knowledge_kind": "CONFIRMED_EXPECTED",
+      "confidence": "MEDIUM",
+      "kb_refs": [
+        "KB-037"
+      ]
+    },
+    {
+      "statement": "Việc gửi webhook không follow redirect.",
+      "knowledge_kind": "CONFIRMED_EXPECTED",
+      "confidence": "MEDIUM",
+      "kb_refs": [
+        "KB-038"
+      ]
+    },
+    {
+      "statement": "Webhook được gửi theo cơ chế at-least-once; phía nhận phải dedupe theo `webhook-id`.",
+      "knowledge_kind": "CONFIRMED_EXPECTED",
+      "confidence": "MEDIUM",
+      "kb_refs": [
+        "KB-039"
+      ]
+    },
+    {
+      "statement": "Thứ tự gửi webhook không được đảm bảo.",
+      "knowledge_kind": "CONFIRMED_EXPECTED",
+      "confidence": "MEDIUM",
+      "kb_refs": [
+        "KB-040"
+      ]
+    },
+    {
+      "statement": "Timeout chờ response của endpoint nhận là 10 giây.",
+      "knowledge_kind": "CONFIRMED_EXPECTED",
+      "confidence": "MEDIUM",
+      "kb_refs": [
+        "KB-041"
+      ]
+    },
+    {
+      "statement": "Mục Webhooks trên portal hiển thị số lượng delivery và tỉ lệ thất bại trong 24 giờ, nhóm theo host.",
+      "knowledge_kind": "CONFIRMED_EXPECTED",
+      "confidence": "MEDIUM",
+      "kb_refs": [
+        "KB-042"
+      ]
+    }
+  ],
+  "observed_behavior": [],
+  "observed_validations": [],
+  "permissions": [
+    {
+      "statement": "Quyền theo role cho trang Webhooks không được tài liệu mô tả.",
+      "kb_refs": [
+        "KB-029"
+      ]
+    }
+  ],
+  "surface_mapping": {
+    "portal": [
+      {
+        "item": "Trang Webhooks (`/webhooks`) trong nhóm Dev: signing secret, default webhook URL",
+        "kb_refs": [
+          "KB-029",
+          "KB-074",
+          "KB-P-027"
+        ]
+      },
+      {
+        "item": "Thống kê delivery 24 giờ theo host (số lượng, tỉ lệ thất bại)",
+        "kb_refs": [
+          "KB-042"
+        ]
+      }
+    ],
+    "storefront": [],
+    "api": [
+      {
+        "item": "Field `webhook_url` trong body request generate (`null` tắt callback; có giá trị thì override default URL cho riêng request đó)",
+        "kb_refs": [
+          "KB-031",
+          "KB-030"
+        ]
+      },
+      {
+        "item": "Payload callback: envelope `id`, `type`, `occurred_at`, `data` (mẫu minh hoạ)",
+        "kb_refs": [
+          "KB-033",
+          "KB-032",
+          "KB-034",
+          "KB-035"
+        ]
+      },
+      {
+        "item": "Header `webhook-id`, `webhook-timestamp`, `webhook-signature` (HMAC-SHA256)",
+        "kb_refs": [
+          "KB-076",
+          "KB-077",
+          "KB-078",
+          "KB-080"
+        ]
+      },
+      {
+        "item": "Chính sách delivery: 6 lần, 2xx, không redirect, timeout 10 giây, at-least-once, không đảm bảo thứ tự",
+        "kb_refs": [
+          "KB-036",
+          "KB-037",
+          "KB-038",
+          "KB-039",
+          "KB-040",
+          "KB-041"
+        ]
+      }
+    ],
+    "data": [
+      {
+        "item": "Thống kê delivery 24 giờ nhóm theo host",
+        "kb_refs": [
+          "KB-042"
+        ]
+      }
+    ],
+    "code": []
+  },
+  "dependencies": [
+    {
+      "target": "developer-settings / account-alerts",
+      "relation": "shares_mechanism",
+      "note": "Dùng chung envelope và cơ chế chữ ký với account alert; `task.succeeded` chỉ đi qua task callback.",
+      "kb_refs": [
+        "KB-075",
+        "KB-053"
+      ]
+    },
+    {
+      "target": "tasks / generate-request",
+      "relation": "configured_by",
+      "note": "Field `webhook_url` của request generate quyết định đích callback cho từng request.",
+      "kb_refs": [
+        "KB-030",
+        "KB-031"
+      ]
+    },
+    {
+      "target": "tasks / task-status-and-output",
+      "relation": "see_also",
+      "note": "Trạng thái task trả qua API task là nguồn đối chiếu cho nội dung callback.",
+      "kb_refs": [
+        "KB-028"
+      ]
+    },
+    {
+      "target": "templates / fallback-template",
+      "relation": "rule_source",
+      "note": "Rule PO IGH-226: task fail kể cả khi có fallback vẫn phát `task.failed`; fallback không thêm loại cảnh báo mới.",
+      "kb_refs": [
+        "KB-032"
+      ]
+    },
+    {
+      "target": "templates / template-post-processing",
+      "relation": "see_also",
+      "note": "`task.succeeded` vẫn có thể mang `post_processing_status` báo hậu xử lý lỗi.",
+      "kb_refs": [
+        "KB-033"
+      ]
+    }
+  ],
+  "risks": [
+    {
+      "statement": "Danh sách giá trị `type` và cấu trúc payload chỉ đến từ payload mẫu; không suy ra được danh sách đầy đủ hay kiểu dữ liệu từng field.",
+      "knowledge_kind": "INFERRED",
+      "confidence": "LOW",
+      "kb_refs": [
+        "KB-032",
+        "KB-033"
+      ]
+    },
+    {
+      "statement": "Trong lúc rotate signing secret, `webhook-signature` \"có thể\" chứa nhiều chữ ký cách nhau bởi dấu cách; thao tác rotate chưa được thử trên portal.",
+      "knowledge_kind": "INFERRED",
+      "confidence": "LOW",
+      "kb_refs": [
+        "KB-079"
+      ]
+    }
+  ],
+  "freshness": {
+    "observed_at": "2026-08-27",
+    "basis": "Docs chính thức bản QA đọc 2026-08-27"
+  },
+  "unknown_areas": [
+    {
+      "question": "Trang Webhooks trên portal có những gì: form, validate default webhook URL, cách hiển thị signing secret, bảng delivery chi tiết?",
+      "why_it_matters": "Chưa có tài liệu chi tiết về giao diện trang Webhooks; chỉ có mô tả ở mức docs chính thức.",
+      "kb_refs": [
+        "KB-029",
+        "KB-042"
+      ],
+      "oq_id": "OQ-developer-settings-007"
+    },
+    {
+      "question": "Rotate signing secret trên portal làm gì, chữ ký cũ còn hợp lệ bao lâu, định dạng nhiều chữ ký ra sao?",
+      "why_it_matters": "Ảnh hưởng trực tiếp tới việc phía nhận verify chữ ký; thao tác này chưa được thử.",
+      "kb_refs": [
+        "KB-079",
+        "KB-078"
+      ],
+      "oq_id": "OQ-developer-settings-031"
+    },
+    {
+      "question": "Danh sách đầy đủ giá trị `type`, kiểu và giá trị hợp lệ của từng field trong `data` (status, post_processing_status, output, cấu trúc error)?",
+      "why_it_matters": "Payload hiện có chỉ là mẫu, không đủ làm oracle cho kiểm tra nội dung callback.",
+      "kb_refs": [
+        "KB-032",
+        "KB-033"
+      ],
+      "oq_id": "OQ-developer-settings-008"
+    },
+    {
+      "question": "Sau khi hết 6 lần gửi mà vẫn không delivered thì delivery được ghi nhận thế nào và người dùng thấy gì?",
+      "why_it_matters": "Docs mô tả lịch retry nhưng không mô tả trạng thái cuối khi thất bại hẳn.",
+      "kb_refs": [
+        "KB-036",
+        "KB-042"
+      ],
+      "oq_id": "OQ-developer-settings-021"
+    },
+    {
+      "question": "\"Channel\" có thao tác tạo/xoá trên staging thuộc trang Webhooks hay trang Alerts?",
+      "why_it_matters": "Không gán được hiện trạng đó cho đúng chức năng.",
+      "kb_refs": [
+        "KB-081"
+      ],
+      "oq_id": "OQ-developer-settings-007"
+    },
+    {
+      "question": "Role nào (Owner, Admin, Editor, Viewer) được xem, tạo, sửa, xoá ở từng trang của nhóm Dev trên portal?",
+      "why_it_matters": "Tài liệu không gán role cho các thao tác của nhóm trang này; không có expected result cho kiểm thử phân quyền.",
+      "kb_refs": [],
+      "oq_id": "OQ-developer-settings-023"
+    }
+  ],
+  "last_updated": {
+    "date": "2026-10-08",
+    "ccr_ref": "bootstrap"
+  },
+  "coverage_matrix": [
+    {
+      "feature_id": "task-webhooks",
+      "layer": "portal",
+      "role": "unspecified",
+      "state": "cấu hình signing secret và default URL",
+      "environment": "documented",
+      "covered": true,
+      "note": "Docs chính thức, mức mô tả chức năng"
+    },
+    {
+      "feature_id": "task-webhooks",
+      "layer": "portal",
+      "role": "unspecified",
+      "state": "rotate signing secret",
+      "environment": "documented",
+      "covered": false,
+      "note": "Chưa thử; docs chỉ nêu hệ quả ở header"
+    },
+    {
+      "feature_id": "task-webhooks",
+      "layer": "portal",
+      "role": "unspecified",
+      "state": "xem thống kê delivery",
+      "environment": "documented",
+      "covered": true,
+      "note": "Docs chính thức: 24 giờ theo host"
+    },
+    {
+      "feature_id": "task-webhooks",
+      "layer": "portal",
+      "role": "Owner/Admin/Editor/Viewer",
+      "state": "phân quyền theo role",
+      "environment": "documented",
+      "covered": false,
+      "note": "Không được mô tả"
+    },
+    {
+      "feature_id": "task-webhooks",
+      "layer": "api",
+      "role": "api-caller",
+      "state": "task xong, callback gửi thành công",
+      "environment": "documented",
+      "covered": true,
+      "note": "Docs chính thức"
+    },
+    {
+      "feature_id": "task-webhooks",
+      "layer": "api",
+      "role": "api-caller",
+      "state": "endpoint nhận lỗi, timeout hoặc redirect (retry)",
+      "environment": "documented",
+      "covered": true,
+      "note": "Docs chính thức: lịch 6 lần"
+    },
+    {
+      "feature_id": "task-webhooks",
+      "layer": "api",
+      "role": "api-caller",
+      "state": "hết lượt retry",
+      "environment": "documented",
+      "covered": false,
+      "note": "Không được mô tả"
+    },
+    {
+      "feature_id": "task-webhooks",
+      "layer": "api",
+      "role": "api-caller",
+      "state": "request tắt callback (`webhook_url: null`)",
+      "environment": "documented",
+      "covered": true,
+      "note": "Docs chính thức"
+    },
+    {
+      "feature_id": "task-webhooks",
+      "layer": "api",
+      "role": "api-caller",
+      "state": "request override URL",
+      "environment": "documented",
+      "covered": true,
+      "note": "Docs chính thức"
+    },
+    {
+      "feature_id": "task-webhooks",
+      "layer": "api",
+      "role": "api-caller",
+      "state": "verify chữ ký",
+      "environment": "documented",
+      "covered": true,
+      "note": "Docs chính thức"
+    },
+    {
+      "feature_id": "task-webhooks",
+      "layer": "code",
+      "role": "unspecified",
+      "state": "any",
+      "environment": "documented",
+      "covered": false,
+      "note": "Không có nguồn mã"
+    }
+  ],
+  "profile_conflicts": [],
+  "profile_relationships": [
+    {
+      "from": "task-webhooks",
+      "to": "account-alerts",
+      "relation": "SHARES_ENVELOPE_AND_SIGNATURE",
+      "kb_refs": [
+        "KB-075",
+        "KB-074"
+      ]
+    },
+    {
+      "from": "task-webhooks",
+      "to": "tasks/generate-request",
+      "relation": "CONFIGURED_PER_REQUEST_BY",
+      "kb_refs": [
+        "KB-031",
+        "KB-030"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,456 @@
+{
+  "feature_id": "task-status-and-output",
+  "feature_key": "task-status-and-output",
+  "checklist_version": "v1",
+  "checks": [
+    {
+      "check_id": "CHK-001",
+      "dimension": "CORE",
+      "layer": "api",
+      "title": "Polling GET /tasks/{id} đi đúng vòng đời tới success hoặc error",
+      "applicability": {
+        "role": "unspecified",
+        "state": "task vừa tạo",
+        "environment": "documented",
+        "theme_or_device": null
+      },
+      "precondition": "Có một API key hợp lệ của một organization test riêng còn credit; biết base URL API của môi trường đang test (docs chính thức chỉ nêu base URL production https://api.imagenhub.ai/api). Có id của một task vừa tạo bằng POST /process (hoặc Task ID copy từ trang chi tiết task trên portal).",
+      "steps": [
+        "Ngay sau khi tạo task, gọi GET /tasks/{id} mỗi 1–2 giây.",
+        "Ghi lại giá trị status ở mỗi lần gọi cho tới khi status là success hoặc error.",
+        "Lặp lại với một task được thiết kế để lỗi (ví dụ prompt bị content policy của provider chặn) nếu có thể."
+      ],
+      "observation_point": "Chuỗi giá trị status theo thời gian.",
+      "expected_result": "Theo docs chính thức: status chỉ đi theo created → processing → success hoặc created → processing → error; khi tới success hoặc error thì không đổi nữa ở các lần gọi sau.",
+      "oracle": {
+        "kb_ids": [
+          "KB-011",
+          "KB-012"
+        ],
+        "oracle_strength": "STRONG"
+      },
+      "status": "READY",
+      "open_question_draft": null,
+      "risk_refs": [
+        "CORE_CAPABILITY"
+      ],
+      "priority": "P2",
+      "automation_suitability": "SUITABLE"
+    },
+    {
+      "check_id": "CHK-002",
+      "dimension": "CORE",
+      "layer": "api",
+      "title": "SSE GET /tasks/{id}/stream gửi task object và tự đóng khi task kết thúc",
+      "applicability": {
+        "role": "unspecified",
+        "state": "task đang created hoặc processing",
+        "environment": "documented",
+        "theme_or_device": null
+      },
+      "precondition": "Có một API key hợp lệ của một organization test riêng còn credit; biết base URL API của môi trường đang test (docs chính thức chỉ nêu base URL production https://api.imagenhub.ai/api). Có id của một task vừa tạo bằng POST /process (hoặc Task ID copy từ trang chi tiết task trên portal).",
+      "steps": [
+        "Ngay sau khi tạo task, mở kết nối SSE tới GET /tasks/{id}/stream (ví dụ bằng curl -N).",
+        "Ghi lại từng event nhận được.",
+        "Quan sát kết nối khi task tới success hoặc error."
+      ],
+      "observation_point": "Nội dung từng event và thời điểm kết nối bị đóng.",
+      "expected_result": "Theo docs chính thức: mỗi event là một JSON task object; stream tự đóng khi task tới success hoặc error.",
+      "oracle": {
+        "kb_ids": [
+          "KB-013",
+          "KB-014"
+        ],
+        "oracle_strength": "STRONG"
+      },
+      "status": "READY",
+      "open_question_draft": null,
+      "risk_refs": [
+        "CORE_CAPABILITY"
+      ],
+      "priority": "P2",
+      "automation_suitability": "SUITABLE"
+    },
+    {
+      "check_id": "CHK-003",
+      "dimension": "CORE",
+      "layer": "api",
+      "title": "Task success trả output là mảng URL ảnh đã ký, mở được ngay",
+      "applicability": {
+        "role": "unspecified",
+        "state": "task success; build chưa áp thay đổi IGH-261",
+        "environment": "documented",
+        "theme_or_device": null
+      },
+      "precondition": "Có một API key hợp lệ của một organization test riêng còn credit; biết base URL API của môi trường đang test (docs chính thức chỉ nêu base URL production https://api.imagenhub.ai/api). Có id của một task vừa tạo bằng POST /process (hoặc Task ID copy từ trang chi tiết task trên portal).",
+      "steps": [
+        "Polling GET /tasks/{id} tới khi status là success.",
+        "Đọc field output; mở từng URL ngay lập tức (trong vòng vài phút)."
+      ],
+      "observation_point": "Kiểu của field output, dạng URL (có tham số chữ ký), ảnh có tải được không.",
+      "expected_result": "Theo docs chính thức: output là mảng URL ảnh đã ký và tải được ngay sau khi task success.",
+      "oracle": {
+        "kb_ids": [
+          "KB-016"
+        ],
+        "oracle_strength": "STRONG"
+      },
+      "status": "READY",
+      "open_question_draft": null,
+      "risk_refs": [
+        "CORE_CAPABILITY",
+        "RISK-signed-url"
+      ],
+      "priority": "P2",
+      "automation_suitability": "SUITABLE"
+    },
+    {
+      "check_id": "CHK-004",
+      "dimension": "BOUNDARY",
+      "layer": "api",
+      "title": "URL ảnh output hết hạn sau 1 giờ",
+      "applicability": {
+        "role": "unspecified",
+        "state": "task success; build chưa áp thay đổi IGH-261",
+        "environment": "documented",
+        "theme_or_device": null
+      },
+      "precondition": "Có một API key hợp lệ của một organization test riêng còn credit; biết base URL API của môi trường đang test (docs chính thức chỉ nêu base URL production https://api.imagenhub.ai/api). Có id của một task vừa tạo bằng POST /process (hoặc Task ID copy từ trang chi tiết task trên portal).",
+      "steps": [
+        "Lấy một URL trong field output của task success, ghi lại thời điểm task success.",
+        "Mở URL ở phút thứ ~55 sau khi success.",
+        "Mở lại đúng URL đó ở phút thứ ~65 sau khi success."
+      ],
+      "observation_point": "Kết quả tải ảnh trước và sau mốc 1 giờ.",
+      "expected_result": "Theo docs chính thức: URL output hết hạn sau 1 giờ — trước mốc vẫn tải được, sau mốc không còn tải được ảnh. Nếu sau 1 giờ vẫn tải được thì lệch so với docs.",
+      "oracle": {
+        "kb_ids": [
+          "KB-016"
+        ],
+        "oracle_strength": "STRONG"
+      },
+      "status": "READY",
+      "open_question_draft": null,
+      "risk_refs": [
+        "RISK-signed-url"
+      ],
+      "priority": "P2",
+      "automation_suitability": "HYBRID"
+    },
+    {
+      "check_id": "CHK-005",
+      "dimension": "STATE_DATA",
+      "layer": "portal",
+      "title": "Link ảnh gốc ở mục Output trang chi tiết task là URL ký 3600 giây trên DigitalOcean Spaces",
+      "applicability": {
+        "role": "unspecified",
+        "state": "task Success, trang /tasks/{id}",
+        "environment": "documented",
+        "theme_or_device": null
+      },
+      "precondition": "Đăng nhập portal bằng tài khoản thuộc một organization test riêng. Có một task Success.",
+      "steps": [
+        "Mở /tasks/{id} của task Success.",
+        "Ở mục Output, copy link mở ảnh gốc.",
+        "Đọc host, đường dẫn và các tham số của URL."
+      ],
+      "observation_point": "Host, đường dẫn và tham số X-Amz-Expires của link ảnh gốc.",
+      "expected_result": "Theo hiện trạng staging (khảo sát 2026-08-31): mục Output hiện ảnh kết quả cuối kèm link ảnh gốc; link nằm trên host sgp1.digitaloceanspaces.com, đường dẫn chứa /out/, là signed URL mang X-Amz-Expires=3600. Lệch → điều tra (đặc biệt nếu mất tham số chữ ký — có thể là thay đổi IGH-261 đã lên).",
+      "oracle": {
+        "kb_ids": [
+          "KB-020",
+          "KB-021",
+          "KB-053"
+        ],
+        "oracle_strength": "BASELINE"
+      },
+      "status": "READY",
+      "open_question_draft": null,
+      "risk_refs": [
+        "RISK-signed-url"
+      ],
+      "priority": "P2",
+      "automation_suitability": "SUITABLE"
+    },
+    {
+      "check_id": "CHK-006",
+      "dimension": "BOUNDARY",
+      "layer": "portal",
+      "title": "Link ảnh gốc ở trang chi tiết task có thực sự hết hạn sau 1 giờ trên staging",
+      "applicability": {
+        "role": "unspecified",
+        "state": "task Success, trang /tasks/{id}",
+        "environment": "documented",
+        "theme_or_device": null
+      },
+      "precondition": "Đăng nhập portal bằng tài khoản thuộc một organization test riêng. Có một task Success.",
+      "steps": [
+        "Mở /tasks/{id}, copy link ảnh gốc ở mục Output, ghi lại thời điểm tải trang.",
+        "Mở link ở phút thứ ~55 và ở phút thứ ~65 tính từ thời điểm tải trang, không reload trang."
+      ],
+      "observation_point": "Kết quả tải ảnh trước và sau mốc 1 giờ.",
+      "expected_result": "Chưa có kết quả mong đợi được xác nhận. Ghi lại nguyên văn hành vi thực tế (phản hồi, hiển thị, dữ liệu sau thao tác) và chuyển PO/Dev xác nhận; không kết luận pass/fail ở lần chạy này.",
+      "oracle": {
+        "kb_ids": [
+          "KB-021",
+          "KB-022"
+        ],
+        "oracle_strength": "NONE"
+      },
+      "status": "NEEDS_CONFIRMATION",
+      "open_question_draft": "Trên staging, link ảnh gốc ở trang chi tiết task (X-Amz-Expires=3600) có thực sự không mở được sau 1 giờ không? Hạn này có phải hành vi mong muốn cho portal giống như quy tắc 1 giờ của docs cho API không?",
+      "risk_refs": [
+        "RISK-signed-url"
+      ],
+      "priority": "P2",
+      "automation_suitability": "HYBRID",
+      "oq_id": "OQ-tasks-004"
+    },
+    {
+      "check_id": "CHK-007",
+      "dimension": "PERMISSION",
+      "layer": "api",
+      "title": "Ảnh output của task mở được khi chưa đăng nhập và sau 1 giờ (thay đổi IGH-261)",
+      "applicability": {
+        "role": "unspecified",
+        "state": "task Success; môi trường đã áp thay đổi IGH-261",
+        "environment": "documented",
+        "theme_or_device": null
+      },
+      "precondition": "Có một API key hợp lệ của một organization test riêng còn credit; biết base URL API của môi trường đang test (docs chính thức chỉ nêu base URL production https://api.imagenhub.ai/api). Có id của một task vừa tạo bằng POST /process (hoặc Task ID copy từ trang chi tiết task trên portal).",
+      "steps": [
+        "Lấy URL trong field output (API) và link ảnh gốc ở trang chi tiết task (portal).",
+        "Mở từng URL trong cửa sổ ẩn danh, không đăng nhập, không header xác thực.",
+        "Mở lại sau hơn 1 giờ."
+      ],
+      "observation_point": "Ảnh có xem được khi không đăng nhập và sau 1 giờ không; URL có tham số chữ ký không.",
+      "expected_result": "Chưa có kết quả mong đợi được xác nhận. Ghi lại nguyên văn hành vi thực tế (phản hồi, hiển thị, dữ liệu sau thao tác) và chuyển PO/Dev xác nhận; không kết luận pass/fail ở lần chạy này.",
+      "oracle": {
+        "kb_ids": [],
+        "oracle_strength": "NONE"
+      },
+      "status": "NEEDS_CONFIRMATION",
+      "open_question_draft": "IGH-261 đổi ảnh sang URL công khai cố định không hết hạn. Việc ảnh output của task xem được vĩnh viễn và không cần đăng nhập có phải thay đổi có chủ đích không? Nếu có, docs chính thức (URL ký hết hạn 1 giờ) có được cập nhật theo và field output của GET /tasks/{id} có đổi theo không?",
+      "risk_refs": [
+        "RISK-output-exposure"
+      ],
+      "priority": "P1",
+      "automation_suitability": "HYBRID",
+      "oq_id": "OQ-tasks-003"
+    },
+    {
+      "check_id": "CHK-008",
+      "dimension": "NEGATIVE",
+      "layer": "api",
+      "title": "Task kết thúc ở error: thông tin lỗi trả về qua GET /tasks/{id}",
+      "applicability": {
+        "role": "unspecified",
+        "state": "task error",
+        "environment": "documented",
+        "theme_or_device": null
+      },
+      "precondition": "Có một API key hợp lệ của một organization test riêng còn credit; biết base URL API của môi trường đang test (docs chính thức chỉ nêu base URL production https://api.imagenhub.ai/api). Có id của một task kết thúc ở error (ví dụ prompt bị content policy của provider chặn) bằng POST /process (hoặc Task ID copy từ trang chi tiết task trên portal).",
+      "steps": [
+        "Gọi GET /tasks/{id} của task error.",
+        "Ghi lại toàn bộ task object: field output, field mô tả lỗi (tên, kiểu, message)."
+      ],
+      "observation_point": "Các field mô tả lỗi trong task object khi status là error.",
+      "expected_result": "Chưa có kết quả mong đợi được xác nhận. Ghi lại nguyên văn hành vi thực tế (phản hồi, hiển thị, dữ liệu sau thao tác) và chuyển PO/Dev xác nhận; không kết luận pass/fail ở lần chạy này.",
+      "oracle": {
+        "kb_ids": [],
+        "oracle_strength": "NONE"
+      },
+      "status": "NEEDS_CONFIRMATION",
+      "open_question_draft": "Khi task ở status error, GET /tasks/{id} trả lỗi ở field nào (tên, cấu trúc, mã lỗi), output là mảng rỗng hay null?",
+      "risk_refs": [
+        "RISK-error-structure"
+      ],
+      "priority": "P2",
+      "automation_suitability": "SUITABLE",
+      "oq_id": "OQ-tasks-017"
+    },
+    {
+      "check_id": "CHK-009",
+      "dimension": "NEGATIVE",
+      "layer": "api",
+      "title": "GET /tasks/{id} với id không tồn tại trả 404 not_found",
+      "applicability": {
+        "role": "unspecified",
+        "state": "id task không tồn tại",
+        "environment": "documented",
+        "theme_or_device": null
+      },
+      "precondition": "Có một API key hợp lệ của một organization test riêng còn credit; biết base URL API của môi trường đang test (docs chính thức chỉ nêu base URL production https://api.imagenhub.ai/api).",
+      "steps": [
+        "Gọi GET /tasks/{id} với một id hợp lệ về định dạng nhưng không tồn tại.",
+        "Ghi lại status code và body."
+      ],
+      "observation_point": "Status code và field type trong body lỗi.",
+      "expected_result": "Theo docs chính thức (bảng lỗi chuẩn): trả 404 với type \"not_found\" vì resource không tồn tại.",
+      "oracle": {
+        "kb_ids": [
+          "KB-009",
+          "KB-P-022"
+        ],
+        "oracle_strength": "STRONG"
+      },
+      "status": "READY",
+      "open_question_draft": null,
+      "risk_refs": [
+        "RISK-error-structure"
+      ],
+      "priority": "P3",
+      "automation_suitability": "SUITABLE"
+    },
+    {
+      "check_id": "CHK-010",
+      "dimension": "PERMISSION",
+      "layer": "api",
+      "title": "Đọc task của organization khác qua GET /tasks/{id} và stream",
+      "applicability": {
+        "role": "unspecified",
+        "state": "id task thuộc organization khác",
+        "environment": "documented",
+        "theme_or_device": null
+      },
+      "precondition": "Có một API key hợp lệ của một organization test riêng còn credit; biết base URL API của môi trường đang test (docs chính thức chỉ nêu base URL production https://api.imagenhub.ai/api). Có id một task thuộc organization test thứ hai.",
+      "steps": [
+        "Dùng API key của org thứ nhất gọi GET /tasks/{id} với id task của org thứ hai.",
+        "Mở GET /tasks/{id}/stream với cùng id.",
+        "Ghi lại status code và body; kiểm tra body có lộ output hay input của task không."
+      ],
+      "observation_point": "Status code, type lỗi và việc có lộ dữ liệu task hay không.",
+      "expected_result": "Chưa có kết quả mong đợi được xác nhận. Ghi lại nguyên văn hành vi thực tế (phản hồi, hiển thị, dữ liệu sau thao tác) và chuyển PO/Dev xác nhận; không kết luận pass/fail ở lần chạy này.",
+      "oracle": {
+        "kb_ids": [],
+        "oracle_strength": "NONE"
+      },
+      "status": "NEEDS_CONFIRMATION",
+      "open_question_draft": "Đọc task của organization khác qua GET /tasks/{id} và /stream trả 403 hay 404, và có chắc chắn không lộ output/input không?",
+      "risk_refs": [
+        "RISK-cross-tenant"
+      ],
+      "priority": "P1",
+      "automation_suitability": "SUITABLE",
+      "oq_id": "OQ-tasks-018"
+    }
+  ],
+  "coverage_by_feature_and_risk": [
+    {
+      "feature_id": "task-status-and-output",
+      "risk_ref": "CORE_CAPABILITY",
+      "risk_description": "Theo dõi task bằng polling và SSE.",
+      "kb_refs": [
+        "KB-011",
+        "KB-012",
+        "KB-013",
+        "KB-014"
+      ],
+      "covered_by_checks": [
+        "CHK-001",
+        "CHK-002"
+      ],
+      "coverage_status": "COVERED_STRONG"
+    },
+    {
+      "feature_id": "task-status-and-output",
+      "risk_ref": "CORE_CAPABILITY",
+      "risk_description": "Lấy ảnh output khi task success.",
+      "kb_refs": [
+        "KB-016",
+        "KB-053"
+      ],
+      "covered_by_checks": [
+        "CHK-003",
+        "CHK-005"
+      ],
+      "coverage_status": "COVERED — API theo docs (STRONG), portal theo hiện trạng staging."
+    },
+    {
+      "feature_id": "task-status-and-output",
+      "risk_ref": "RISK-signed-url",
+      "risk_description": "Hạn 1 giờ của URL output: docs vs staging vs preview IGH-261.",
+      "kb_refs": [
+        "KB-016",
+        "KB-018",
+        "KB-019",
+        "KB-020",
+        "KB-021",
+        "KB-022",
+        "KB-023",
+        "KB-024"
+      ],
+      "covered_by_checks": [
+        "CHK-004",
+        "CHK-005",
+        "CHK-006"
+      ],
+      "coverage_status": "COVERED — docs STRONG, staging BASELINE, hạn thực tế trên staging chờ xác nhận; ảnh lightbox/thumbnail/preview IGH-261 ở tính năng lịch sử chạy template."
+    },
+    {
+      "feature_id": "task-status-and-output",
+      "risk_ref": "RISK-output-exposure",
+      "risk_description": "IGH-261 làm ảnh output xem được vĩnh viễn, có thể không cần đăng nhập.",
+      "kb_refs": [
+        "KB-016",
+        "KB-023"
+      ],
+      "covered_by_checks": [
+        "CHK-007"
+      ],
+      "coverage_status": "GAP — chờ PO/Dev xác nhận ý định."
+    },
+    {
+      "feature_id": "task-status-and-output",
+      "risk_ref": "RISK-error-structure",
+      "risk_description": "Cấu trúc lỗi của task và id không tồn tại.",
+      "kb_refs": [
+        "KB-011",
+        "KB-P-022"
+      ],
+      "covered_by_checks": [
+        "CHK-008",
+        "CHK-009"
+      ],
+      "coverage_status": "PARTIAL"
+    },
+    {
+      "feature_id": "task-status-and-output",
+      "risk_ref": "RISK-cross-tenant",
+      "risk_description": "Đọc task của organization khác.",
+      "kb_refs": [],
+      "covered_by_checks": [
+        "CHK-010"
+      ],
+      "coverage_status": "GAP — chờ PO/Dev."
+    },
+    {
+      "feature_id": "task-status-and-output",
+      "risk_ref": "GUIDANCE",
+      "risk_description": "Hướng dẫn cho caller: GET /tasks/{id} là nguồn sự thật cuối cùng; tải ảnh ngay sau success.",
+      "kb_refs": [
+        "KB-015",
+        "KB-017"
+      ],
+      "covered_by_checks": [
+        "CHK-001",
+        "CHK-003"
+      ],
+      "coverage_status": "NOT_A_CHECK — là khuyến nghị cho caller, không phải hành vi hệ thống kiểm được riêng; được dùng làm bối cảnh cho CHK-001 và CHK-003."
+    }
+  ],
+  "excluded_dimensions": [
+    {
+      "dimension": "INTEGRATION",
+      "reason": "Việc giao trạng thái task qua webhook thuộc tính năng webhook; tài liệu không nêu thêm ràng buộc nào giữa polling, stream và webhook ngoài việc GET /tasks/{id} là nguồn sự thật cuối cùng."
+    },
+    {
+      "dimension": "REGRESSION",
+      "reason": "Lần đầu xây checklist cho tính năng này, chưa có phiên bản trước để so sánh thay đổi hành vi. Lỗi và thay đổi đã biết được theo dõi ngay trong check của dimension tương ứng."
+    }
+  ],
+  "last_updated": {
+    "date": "2026-10-08",
+    "ccr_ref": "bootstrap"
+  }
+}

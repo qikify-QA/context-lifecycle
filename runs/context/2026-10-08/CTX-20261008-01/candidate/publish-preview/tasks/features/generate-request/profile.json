@@ -1,0 +1,516 @@
+{
+  "feature_id": "generate-request",
+  "feature_key": "generate-request",
+  "name": "Gửi yêu cầu generate qua POST /process (model_id hoặc template_id)",
+  "user_goal": "Caller dùng API gửi một yêu cầu generate ảnh bằng một model hoặc bằng một template, có thể ép provider và override webhook cho riêng request đó, rồi theo dõi task qua nhóm endpoint task.",
+  "stable_since_version": "v1",
+  "actors": [
+    {
+      "role": "caller API (role trong organization không được tài liệu nêu)",
+      "permission_observed": "Không có quan sát. Theo docs chính thức, sai xác thực trả 401, template không truy cập được trả 403; API key là cơ chế xác thực cho truy cập programmatic.",
+      "kb_refs": [
+        "KB-007",
+        "KB-010"
+      ],
+      "product_kb_refs": [
+        "KB-P-011"
+      ]
+    }
+  ],
+  "entry_points": [
+    {
+      "path": "API POST /process với model_id (cùng toàn bộ tham số)",
+      "precondition": "Xác thực hợp lệ, còn credit; không gửi kèm template_id.",
+      "kb_refs": [
+        "KB-003",
+        "KB-007",
+        "KB-009"
+      ]
+    },
+    {
+      "path": "API POST /process với template_id thay cho model_id",
+      "precondition": "Template truy cập được với caller; không gửi kèm model_id.",
+      "kb_refs": [
+        "KB-003",
+        "KB-004",
+        "KB-007"
+      ]
+    }
+  ],
+  "capabilities": [
+    {
+      "name": "Generate bằng model",
+      "description": "Theo docs chính thức, caller gửi model_id cùng tham số; hệ thống tìm provider cho model, kiểm tra BYOK key, route tới provider tốt nhất, chuyển input sang format của provider và trả kết quả theo format thống nhất. Body mẫu có field prompt dạng object nhưng đó chỉ là ví dụ.",
+      "kb_refs": [
+        "KB-001",
+        "KB-003",
+        "KB-008",
+        "KB-009"
+      ]
+    },
+    {
+      "name": "Ép dùng một provider cụ thể",
+      "description": "Theo docs chính thức, field provider trong body ép request đi tới provider chỉ định thay vì để hệ thống chọn.",
+      "kb_refs": [
+        "KB-002"
+      ]
+    },
+    {
+      "name": "Generate bằng template",
+      "description": "Theo docs chính thức, caller truyền template_id thay cho model_id; default_inputs của template được merge với request và giá trị trong request luôn thắng. Theo rule PO/Dev cho IGH-226, chạy template qua POST /process cũng áp dụng fallback template.",
+      "kb_refs": [
+        "KB-004",
+        "KB-005",
+        "KB-010"
+      ]
+    },
+    {
+      "name": "Override webhook cho riêng một request",
+      "description": "Theo docs chính thức, webhook_url trong body là tuỳ chọn và, khi có, thay webhook mặc định cho riêng request đó.",
+      "kb_refs": [
+        "KB-006"
+      ]
+    },
+    {
+      "name": "Nhận lỗi khi request không hợp lệ",
+      "description": "Theo docs chính thức, POST /process trả 401 khi sai xác thực, 402 khi hết credit, 403 khi template không truy cập được, 422 khi validation lỗi (trong đó có trường hợp gửi cả model_id và template_id) và 429 khi bị giới hạn tần suất. Kiểu lỗi và header kèm theo nằm ở bảng lỗi chuẩn mức sản phẩm.",
+      "kb_refs": [
+        "KB-003",
+        "KB-007"
+      ],
+      "product_kb_refs": [
+        "KB-P-019",
+        "KB-P-020",
+        "KB-P-021",
+        "KB-P-023",
+        "KB-P-024"
+      ]
+    }
+  ],
+  "state_transitions": [
+    {
+      "from": "Request POST /process hợp lệ",
+      "to": "Task trong vòng đời created → processing → success/error",
+      "trigger": "Gửi POST /process",
+      "condition": "Docs mô tả vòng đời task và nhóm endpoint Processing; docs không mô tả nội dung response của POST /process.",
+      "kb_refs": [
+        "KB-009",
+        "KB-011"
+      ]
+    },
+    {
+      "from": "Request gửi cả model_id và template_id",
+      "to": "Bị từ chối với 422",
+      "trigger": "Gửi POST /process",
+      "condition": "Hai field loại trừ nhau theo docs chính thức.",
+      "kb_refs": [
+        "KB-003"
+      ]
+    },
+    {
+      "from": "Request chạy template A",
+      "to": "Chạy fallback template B",
+      "trigger": "Template A fail",
+      "condition": "Theo rule PO/Dev cho IGH-226; chi tiết cơ chế fallback thuộc feature fallback-template của object templates.",
+      "kb_refs": [
+        "KB-010"
+      ]
+    }
+  ],
+  "confirmed_rules": [
+    {
+      "statement": "Theo docs chính thức ImagenHub §Models & Providers, khi gọi POST /process hệ thống định tuyến theo thứ tự: tìm provider cho model, kiểm tra có BYOK key hay không, route tới provider tốt nhất, chuyển input sang format của provider, rồi trả kết quả theo format thống nhất của ImagenHub.",
+      "knowledge_kind": "CONFIRMED_EXPECTED",
+      "confidence": "MEDIUM",
+      "authority": "spec_doc",
+      "verification_status": "Nguồn là tài liệu; KB không ghi test case PASS riêng cho hành vi này.",
+      "kb_refs": [
+        "KB-001"
+      ]
+    },
+    {
+      "statement": "Theo docs chính thức ImagenHub §Models & Providers, caller có thể ép dùng một provider cụ thể bằng field provider trong body của POST /process.",
+      "knowledge_kind": "CONFIRMED_EXPECTED",
+      "confidence": "MEDIUM",
+      "authority": "spec_doc",
+      "verification_status": "Nguồn là tài liệu; KB không ghi test case PASS riêng cho hành vi này.",
+      "kb_refs": [
+        "KB-002"
+      ]
+    },
+    {
+      "statement": "Theo docs chính thức ImagenHub §Image Generation, body của POST /process nhận model_id hoặc template_id và hai field này loại trừ nhau: gửi cả hai thì API trả 422.",
+      "knowledge_kind": "CONFIRMED_EXPECTED",
+      "confidence": "MEDIUM",
+      "authority": "spec_doc",
+      "verification_status": "Nguồn là tài liệu; KB không ghi test case PASS riêng cho hành vi này.",
+      "kb_refs": [
+        "KB-003"
+      ]
+    },
+    {
+      "statement": "Theo docs chính thức ImagenHub §Image Generation, để chạy một template qua POST /process, caller truyền template_id thay cho model_id cùng toàn bộ tham số.",
+      "knowledge_kind": "CONFIRMED_EXPECTED",
+      "confidence": "MEDIUM",
+      "authority": "spec_doc",
+      "verification_status": "Nguồn là tài liệu; KB không ghi test case PASS riêng cho hành vi này.",
+      "kb_refs": [
+        "KB-004"
+      ]
+    },
+    {
+      "statement": "Theo docs chính thức ImagenHub (§Image Generation và §Templates), khi gọi POST /process với template_id, default_inputs của template được merge với request và giá trị trong request luôn được ưu tiên hơn.",
+      "knowledge_kind": "CONFIRMED_EXPECTED",
+      "confidence": "MEDIUM",
+      "authority": "spec_doc",
+      "verification_status": "Nguồn là tài liệu; KB không ghi test case PASS riêng cho hành vi này.",
+      "kb_refs": [
+        "KB-005"
+      ]
+    },
+    {
+      "statement": "Theo docs chính thức ImagenHub §Image Generation, webhook_url trong body POST /process là tuỳ chọn và, khi có, override webhook mặc định cho riêng request đó.",
+      "knowledge_kind": "CONFIRMED_EXPECTED",
+      "confidence": "MEDIUM",
+      "authority": "spec_doc",
+      "verification_status": "Nguồn là tài liệu; KB không ghi test case PASS riêng cho hành vi này.",
+      "kb_refs": [
+        "KB-006"
+      ]
+    },
+    {
+      "statement": "Theo docs chính thức ImagenHub §Image Generation, POST /process trả lỗi 401 khi sai xác thực, 402 khi hết credit, 403 khi template không truy cập được, 422 khi validation lỗi và 429 khi bị giới hạn tần suất.",
+      "knowledge_kind": "CONFIRMED_EXPECTED",
+      "confidence": "MEDIUM",
+      "authority": "spec_doc",
+      "verification_status": "Nguồn là tài liệu; KB không ghi test case PASS riêng cho hành vi này.",
+      "kb_refs": [
+        "KB-007"
+      ]
+    },
+    {
+      "statement": "Theo docs chính thức ImagenHub §API Reference, nhóm endpoint Processing gồm POST /process, GET /tasks/{id} và GET /tasks/{id}/stream.",
+      "knowledge_kind": "CONFIRMED_EXPECTED",
+      "confidence": "MEDIUM",
+      "authority": "spec_doc",
+      "verification_status": "Nguồn là tài liệu; KB không ghi test case PASS riêng cho hành vi này.",
+      "kb_refs": [
+        "KB-009"
+      ]
+    },
+    {
+      "statement": "Theo rule PO/Dev chốt cho IGH-226 (ghi trong QA KB ImagenHub \"Templates\" v1 §Fallback template, 2026-09-17), mọi lần chạy qua template đều áp dụng fallback template, trong đó có chạy template qua API POST /process.",
+      "knowledge_kind": "CONFIRMED_EXPECTED",
+      "confidence": "MEDIUM",
+      "authority": "spec_doc",
+      "verification_status": "Nguồn là tài liệu; KB không ghi test case PASS riêng cho hành vi này.",
+      "kb_refs": [
+        "KB-010"
+      ]
+    }
+  ],
+  "observed_behavior": [],
+  "limitations": [
+    {
+      "statement": "Theo docs chính thức ImagenHub §Image Generation, ví dụ body của POST /process có field prompt dạng object {\"type\": \"string\", \"content\": \"...\"}; đây chỉ là payload mẫu, không xác lập field nào là bắt buộc hay danh sách field đầy đủ.",
+      "knowledge_kind": "INFERRED",
+      "confidence": "LOW",
+      "usable_as_expected": false,
+      "kb_refs": [
+        "KB-008"
+      ],
+      "note": "Payload mẫu; không dùng để suy ra field bắt buộc hay danh sách field đầy đủ."
+    }
+  ],
+  "documented_validations": [
+    {
+      "input": "Body POST /process có cả model_id và template_id",
+      "expected_response": "422",
+      "knowledge_kind": "CONFIRMED_EXPECTED",
+      "confidence": "MEDIUM",
+      "kb_refs": [
+        "KB-003"
+      ]
+    }
+  ],
+  "observed_validations": [],
+  "permissions": [
+    {
+      "role": "unspecified",
+      "statement": "Docs chính thức chỉ nêu 401 khi sai xác thực và 403 khi template không truy cập được; không nêu role nào trong organization được gọi POST /process.",
+      "kb_refs": [
+        "KB-007"
+      ]
+    }
+  ],
+  "surface_mapping": {
+    "portal": [],
+    "storefront": [],
+    "api": [
+      {
+        "surface": "POST /process — body model_id | template_id (loại trừ nhau), provider (tuỳ chọn), webhook_url (tuỳ chọn), prompt (ví dụ)",
+        "kb_refs": [
+          "KB-002",
+          "KB-003",
+          "KB-004",
+          "KB-006",
+          "KB-008"
+        ]
+      },
+      {
+        "surface": "Nhóm endpoint Processing: POST /process, GET /tasks/{id}, GET /tasks/{id}/stream",
+        "kb_refs": [
+          "KB-009"
+        ]
+      }
+    ],
+    "data": [
+      {
+        "surface": "default_inputs của template merge với request, request thắng",
+        "kb_refs": [
+          "KB-005"
+        ]
+      }
+    ],
+    "code": []
+  },
+  "dependencies": [
+    {
+      "target": "developer-settings/provider-keys-byok",
+      "relation": "Routing kiểm tra BYOK key trước khi chọn provider.",
+      "kb_refs": [
+        "KB-001"
+      ]
+    },
+    {
+      "target": "developer-settings/task-webhooks",
+      "relation": "webhook_url override webhook mặc định; cơ chế giao webhook thuộc feature đó.",
+      "kb_refs": [
+        "KB-006"
+      ]
+    },
+    {
+      "target": "templates/fallback-template",
+      "relation": "Chạy template qua POST /process áp dụng fallback template (IGH-226).",
+      "kb_refs": [
+        "KB-010"
+      ]
+    },
+    {
+      "target": "templates (default_inputs)",
+      "relation": "Mục Templates của docs chính thức nhắc lại cùng quy tắc merge default_inputs.",
+      "kb_refs": [
+        "KB-005"
+      ]
+    },
+    {
+      "target": "product-level api-conventions (bảng lỗi chuẩn, xác thực)",
+      "relation": "Kiểu lỗi 401/402/403/422/429 và cơ chế API key.",
+      "kb_refs": [
+        "KB-007"
+      ],
+      "product_kb_refs": [
+        "KB-P-011",
+        "KB-P-019",
+        "KB-P-020",
+        "KB-P-021",
+        "KB-P-023",
+        "KB-P-024"
+      ]
+    },
+    {
+      "target": "tasks/task-status-and-output",
+      "relation": "Task tạo ra được theo dõi qua GET /tasks/{id} và stream.",
+      "kb_refs": [
+        "KB-009",
+        "KB-011"
+      ]
+    }
+  ],
+  "risks": [
+    {
+      "statement": "Docs chỉ có payload mẫu, không có danh sách field bắt buộc; case 422 ngoài trường hợp model_id + template_id chưa có oracle.",
+      "kb_refs": [
+        "KB-008",
+        "KB-003"
+      ]
+    },
+    {
+      "statement": "Fallback template áp cho mọi lần chạy qua template, kể cả qua API; kết quả request template có thể đến từ template B thay vì A.",
+      "kb_refs": [
+        "KB-010"
+      ]
+    }
+  ],
+  "unknown_areas": [
+    {
+      "question": "Danh sách đầy đủ field body của POST /process, field nào bắt buộc?",
+      "why_it_matters": "Không viết được case validation 422 cụ thể ngoài trường hợp gửi cả model_id và template_id.",
+      "oq_id": "OQ-tasks-001"
+    },
+    {
+      "question": "Tên field / cách truyền giá trị biến template khi gọi POST /process với template_id?",
+      "why_it_matters": "Không kiểm được việc chạy template có biến qua API.",
+      "oq_id": "OQ-tasks-001"
+    },
+    {
+      "question": "Response của POST /process trả gì (task id, trạng thái ban đầu)?",
+      "why_it_matters": "Docs không mô tả; cần để nối sang bước theo dõi task.",
+      "oq_id": "OQ-tasks-016"
+    },
+    {
+      "question": "Tài liệu endpoint staging được tham chiếu nhưng không có trong bộ tài liệu; trong đó có ghi chú về hành vi billing khi gọi thẳng /api/process từ browser.",
+      "why_it_matters": "Liên quan trừ credit; không suy diễn khi thiếu tài liệu.",
+      "oq_id": "OQ-tasks-002"
+    },
+    {
+      "question": "Role nào trong organization được gọi POST /process?",
+      "why_it_matters": "Không có oracle quyền cho feature này.",
+      "oq_id": "OQ-tasks-005"
+    },
+    {
+      "question": "Hành vi khi field provider chỉ định một provider không hỗ trợ model đó?",
+      "why_it_matters": "Docs chỉ nói có thể ép provider, không nói trường hợp lỗi.",
+      "oq_id": "OQ-tasks-014"
+    }
+  ],
+  "freshness": {
+    "observed_at": "2026-09-17"
+  },
+  "last_updated": {
+    "date": "2026-10-08",
+    "ccr_ref": "bootstrap"
+  },
+  "coverage_matrix": [
+    {
+      "feature_id": "generate-request",
+      "layer": "api",
+      "role": "unspecified",
+      "state": "docs chính thức — generate bằng model_id",
+      "environment": "documented",
+      "covered": true,
+      "note": "Routing, ép provider.",
+      "kb_refs": [
+        "KB-001",
+        "KB-002"
+      ]
+    },
+    {
+      "feature_id": "generate-request",
+      "layer": "api",
+      "role": "unspecified",
+      "state": "docs chính thức — generate bằng template_id",
+      "environment": "documented",
+      "covered": true,
+      "note": "Merge default_inputs, request thắng.",
+      "kb_refs": [
+        "KB-004",
+        "KB-005"
+      ]
+    },
+    {
+      "feature_id": "generate-request",
+      "layer": "api",
+      "role": "unspecified",
+      "state": "docs chính thức — gửi cả model_id và template_id",
+      "environment": "documented",
+      "covered": true,
+      "note": "422.",
+      "kb_refs": [
+        "KB-003"
+      ]
+    },
+    {
+      "feature_id": "generate-request",
+      "layer": "api",
+      "role": "unspecified",
+      "state": "docs chính thức — lỗi 401/402/403/429",
+      "environment": "documented",
+      "covered": true,
+      "note": "Chỉ có mã lỗi, không có điều kiện chi tiết.",
+      "kb_refs": [
+        "KB-007"
+      ]
+    },
+    {
+      "feature_id": "generate-request",
+      "layer": "api",
+      "role": "api-caller",
+      "state": "template A fail → fallback B",
+      "environment": "documented",
+      "covered": true,
+      "note": "Rule PO/Dev; chi tiết ở feature fallback-template.",
+      "kb_refs": [
+        "KB-010"
+      ]
+    },
+    {
+      "feature_id": "generate-request",
+      "layer": "api",
+      "role": "unspecified",
+      "state": "body thiếu field / field sai kiểu",
+      "environment": "documented",
+      "covered": false,
+      "note": "Không có danh sách field bắt buộc.",
+      "kb_refs": [
+        "KB-008"
+      ]
+    },
+    {
+      "feature_id": "generate-request",
+      "layer": "api",
+      "role": "unspecified",
+      "state": "staging",
+      "environment": "documented",
+      "covered": false,
+      "note": "Không có quan sát staging cho POST /process.",
+      "kb_refs": [
+        "KB-007"
+      ]
+    }
+  ],
+  "profile_conflicts": [],
+  "profile_relationships": [
+    {
+      "from": "generate-request",
+      "to": "task-status-and-output",
+      "relation": "Task tạo bởi POST /process được theo dõi bằng polling/SSE và trả output.",
+      "kb_refs": [
+        "KB-009",
+        "KB-011"
+      ]
+    },
+    {
+      "from": "generate-request",
+      "to": "task-history-list",
+      "relation": "Chưa biết task tạo qua API có hiện trong Task History không.",
+      "kb_refs": [
+        "KB-045"
+      ]
+    },
+    {
+      "from": "generate-request",
+      "to": "templates/fallback-template",
+      "relation": "Fallback áp cho chạy template qua API.",
+      "kb_refs": [
+        "KB-010"
+      ]
+    },
+    {
+      "from": "generate-request",
+      "to": "developer-settings/provider-keys-byok",
+      "relation": "Routing kiểm tra BYOK key.",
+      "kb_refs": [
+        "KB-001"
+      ]
+    },
+    {
+      "from": "generate-request",
+      "to": "developer-settings/task-webhooks",
+      "relation": "Override webhook theo request.",
+      "kb_refs": [
+        "KB-006"
+      ]
+    }
+  ]
+}

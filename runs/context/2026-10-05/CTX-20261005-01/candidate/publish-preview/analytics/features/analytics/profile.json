@@ -1,0 +1,585 @@
+{
+  "feature_key": "analytics",
+  "name": "Analytics",
+  "user_goal": "Merchant theo dõi hiệu suất chiến dịch discount (views, add-to-cart, conversion, orders, revenue, top performers) và hiểu hành vi khách hàng, qua một trang Portal độc lập, toàn cục (KB-005, KB-006).",
+  "actors": [
+    {
+      "role": "merchant",
+      "permission_observed": "Tài liệu mô tả: merchant xem dashboard + áp dụng time-range filter trên trang Analytics (KB-005, KB-006, KB-007..KB-011). Không có phân tầng permission/role nào khác được tài liệu đề cập cho trang này (xem unknown_areas).",
+      "kb_refs": [
+        "KB-005",
+        "KB-006",
+        "KB-007"
+      ]
+    },
+    {
+      "role": "buyer",
+      "permission_observed": "Tài liệu mô tả: buyer (khách truy cập storefront) kích hoạt event view/add_to_cart qua SDK khi tương tác với offer widget, độc lập với bất kỳ auth Portal nào (KB-017, KB-032).",
+      "kb_refs": [
+        "KB-017",
+        "KB-032"
+      ]
+    }
+  ],
+  "entry_points": [
+    {
+      "path": "Portal left nav > Analytics",
+      "precondition": "Merchant đã đăng nhập Portal; Analytics là trang độc lập, cùng cấp Manage offers/Translations/Variant swatches trong left nav (không có precondition khác được tài liệu nêu).",
+      "kb_refs": [
+        "KB-005"
+      ]
+    },
+    {
+      "path": "Storefront: offer widget render/interaction trên product page (kích hoạt SDK, không phải UI Portal)",
+      "precondition": "Có ≥1 offer widget active trên trang (discount đang chạy, ví dụ Quantity Break hoặc Multibuy)",
+      "kb_refs": [
+        "KB-017",
+        "KB-032"
+      ]
+    }
+  ],
+  "capabilities": [
+    {
+      "name": "Xem trang Analytics tổng quan",
+      "description": "Trang Portal độc lập, toàn cục hiển thị date-range selector cộng bộ metric (views, add-to-cart, conversion, orders, revenue, top performers) để merchant theo dõi hiệu suất chiến dịch discount.",
+      "kb_refs": [
+        "KB-005",
+        "KB-006"
+      ]
+    },
+    {
+      "name": "Lọc dữ liệu theo khoảng thời gian (Time range selector)",
+      "description": "Dropdown với 5 preset (Today/Yesterday/Last 7 days [default]/Last 30 days/Last 90 days) cộng 1 option 'Custom' hiển thị nhưng disabled trong list; tuy nhiên chính dropdown đó đồng thời là 1 custom date-range picker đầy đủ (Starting/Ending text field yyyy-mm-dd + inline calendar month-grid, prefill theo preset đang chọn, ngày sau today bị disable); text 'Maximum range is 90 days' hiển thị dưới calendar (cap 90 ngày ở backend được surface lên UI); Cancel/Apply xác nhận hoặc hủy lựa chọn.",
+      "kb_refs": [
+        "KB-007",
+        "KB-008",
+        "KB-009",
+        "KB-010",
+        "KB-011"
+      ]
+    },
+    {
+      "name": "Xem các chỉ số hiệu suất (Metrics panel)",
+      "description": "4 metric hàng đầu (View/Add to cart click/Conversion rate/Order with offers — số ít, khác cách viết số nhiều của ticket QVD-81) cộng Additional revenue, Best-selling discounted items, Most popular discount tiers. Conversion rate = ATC/Views×100 (KHÔNG dùng completed order — thực chất là add-to-cart rate, không phải checkout conversion). 2 metric danh sách (Best-selling discounted items, Most popular discount tiers) hiển thị text 'No data available' khi không có dữ liệu.",
+      "kb_refs": [
+        "KB-006",
+        "KB-012",
+        "KB-015",
+        "KB-016",
+        "KB-034"
+      ]
+    },
+    {
+      "name": "Backend API cung cấp dữ liệu cho dashboard (order-analytics)",
+      "description": "GET /api/order-analytics/summary (revenue store-currency + USD-converted, quantity); GET /api/order-analytics/graph (time-series cho line chart, param 'summary'=quantity|revenue|revenue_usd, param 'type' chọn bucket granularity hourly/daily/weekly/monthly/yearly mặc định daily, backfill 0 cho ngày trống); GET /api/top-discount-tiers (sort theo quantity/total_items, default limit 10, nhưng Portal UI chỉ hiển thị top 3); GET /api/top-selling-variants (key theo shopify_product_id/shopify_variant_id). Mọi request phải gửi start/end dạng ISO 8601 kèm offset timezone riêng của merchant; response trả về cùng timezone đó. Tất cả endpoint nhận thêm param 'filter' (ví dụ test, currency — tài liệu tự nói underspecified trong ticket).",
+      "kb_refs": [
+        "KB-019",
+        "KB-020",
+        "KB-021",
+        "KB-022",
+        "KB-023",
+        "KB-024",
+        "KB-025",
+        "KB-026",
+        "KB-033"
+      ]
+    },
+    {
+      "name": "Ghi nhận event view/add_to_cart từ storefront SDK",
+      "description": "GET /api/events trả aggregate count theo field 'type' (view | add_to_cart). POST /api/events là API call tự ghi log event của SDK (theo tài liệu mô tả 1 phiên capture cụ thể qua Playwright MCP trên store test-vl-1 — đây là api_contract claim lấy từ doc_refs, KHÔNG phải quan sát runtime của run này). Views/ATC được ghi như discrete event, không suy ra sau từ dữ liệu order. Khi có ≥2 offer widget active trên 1 page load, mỗi widget bắn 1 event 'view' riêng (không gộp thành 1 event cho cả page).",
+      "kb_refs": [
+        "KB-017",
+        "KB-027",
+        "KB-028",
+        "KB-031",
+        "KB-032"
+      ]
+    }
+  ],
+  "state_transitions": [
+    {
+      "from": "Time range = preset mặc định (Last 7 days)",
+      "to": "Time range = preset khác (Today/Yesterday/Last 30 days/Last 90 days)",
+      "trigger": "Merchant chọn 1 preset khác trong dropdown",
+      "condition": "Option 'Custom' trong list preset bị disable, không chọn được qua đường này",
+      "kb_refs": [
+        "KB-007"
+      ]
+    },
+    {
+      "from": "Dropdown đóng, giữ preset hiện tại",
+      "to": "Custom range đã apply (thay preset)",
+      "trigger": "Merchant mở dropdown, nhập Starting/Ending (yyyy-mm-dd) hoặc chọn trên inline calendar, bấm Apply",
+      "condition": "Range phải <=90 ngày (giới hạn backend QVD-69, hiển thị rõ 'Maximum range is 90 days' trên UI); ngày sau today bị disable trên calendar",
+      "kb_refs": [
+        "KB-008",
+        "KB-009",
+        "KB-010",
+        "KB-011"
+      ]
+    },
+    {
+      "from": "Custom range đang chọn thủ công (draft, chưa Apply)",
+      "to": "Giữ nguyên range trước đó (không đổi)",
+      "trigger": "Merchant bấm Cancel",
+      "condition": null,
+      "kb_refs": [
+        "KB-011"
+      ]
+    },
+    {
+      "from": "Offer widget render trên storefront (chưa log event)",
+      "to": "1 event 'view' đã log cho offer_id đó qua POST /api/events",
+      "trigger": "Widget hiển thị trên page load (per-widget, không phải per-page)",
+      "condition": "Nếu có N offer widget active cùng lúc trên 1 page load → N event 'view' riêng biệt, mỗi event 1 offer_id",
+      "kb_refs": [
+        "KB-032"
+      ]
+    }
+  ],
+  "confirmed_rules": [
+    {
+      "statement": "Time range selector có đúng 5 preset chọn được (Today, Yesterday, Last 7 days [default], Last 30 days, Last 90 days); option thứ 6 'Custom' hiển thị trong list nhưng bị disable (grayed out), không được QVD-81 đề cập.",
+      "knowledge_kind": "CONFIRMED_EXPECTED",
+      "confidence": "MEDIUM",
+      "kb_refs": [
+        "KB-007"
+      ]
+    },
+    {
+      "statement": "Dropdown của Time range selector đồng thời là 1 custom date-range picker đầy đủ (không tài liệu hoá trong QVD-81): mở ra có ô text Starting/Ending (yyyy-mm-dd) cộng inline calendar.",
+      "knowledge_kind": "CONFIRMED_EXPECTED",
+      "confidence": "MEDIUM",
+      "kb_refs": [
+        "KB-008"
+      ]
+    },
+    {
+      "statement": "Calendar của custom picker có month grid + điều hướng prev/next month, pre-fill theo preset đang chọn, và ngày sau today bị disable.",
+      "knowledge_kind": "CONFIRMED_EXPECTED",
+      "confidence": "MEDIUM",
+      "kb_refs": [
+        "KB-009"
+      ]
+    },
+    {
+      "statement": "Text 'Maximum range is 90 days' hiển thị ngay dưới calendar — cap 90 ngày ở backend (QVD-69) được surface lên UI cho merchant, không chỉ enforce ngầm server-side.",
+      "knowledge_kind": "CONFIRMED_EXPECTED",
+      "confidence": "MEDIUM",
+      "kb_refs": [
+        "KB-010"
+      ]
+    },
+    {
+      "statement": "Nút Cancel/Apply xác nhận hoặc hủy một lựa chọn range ngày thủ công.",
+      "knowledge_kind": "CONFIRMED_EXPECTED",
+      "confidence": "MEDIUM",
+      "kb_refs": [
+        "KB-011"
+      ]
+    },
+    {
+      "statement": "4 nhãn metric hàng đầu (View, Add to cart click, Conversion rate, Order with offers) khớp QVD-81 về ý nghĩa, nhưng dùng số ít trong khi ticket dùng số nhiều — khác biệt nhỏ nhưng nhất quán.",
+      "knowledge_kind": "CONFIRMED_EXPECTED",
+      "confidence": "MEDIUM",
+      "kb_refs": [
+        "KB-012"
+      ]
+    },
+    {
+      "statement": "Metric 'Best-selling discounted items' hiển thị text 'No data available' khi không có dữ liệu — empty-state không được ticket đề cập.",
+      "knowledge_kind": "CONFIRMED_EXPECTED",
+      "confidence": "MEDIUM",
+      "kb_refs": [
+        "KB-015"
+      ]
+    },
+    {
+      "statement": "Metric 'Most popular discount tiers' cũng hiển thị 'No data available' khi không có dữ liệu, giống Best-selling discounted items.",
+      "knowledge_kind": "CONFIRMED_EXPECTED",
+      "confidence": "MEDIUM",
+      "kb_refs": [
+        "KB-016"
+      ]
+    },
+    {
+      "statement": "Views và Add to cart clicks được ghi như discrete event (xem backend API), không suy ra sau từ dữ liệu order — nên phản ánh tương tác khách hàng ngay cả khi không có purchase nào xảy ra.",
+      "knowledge_kind": "INFERRED",
+      "confidence": "LOW",
+      "kb_refs": [
+        "KB-017"
+      ]
+    },
+    {
+      "statement": "Frontend phải gửi start/end dạng ISO 8601 kèm offset theo timezone riêng của merchant (ví dụ 2025-09-30T00:00:00+07:00); response trả về cùng timezone đó.",
+      "knowledge_kind": "CONFIRMED_EXPECTED",
+      "confidence": "MEDIUM",
+      "kb_refs": [
+        "KB-019"
+      ]
+    },
+    {
+      "statement": "Chart endpoint backfill mỗi ngày trong range bằng 0 khi không có data, thay vì bỏ ngày trống — chart 'Last 30 days' nên luôn có đủ 30 điểm dữ liệu.",
+      "knowledge_kind": "INFERRED",
+      "confidence": "LOW",
+      "kb_refs": [
+        "KB-020"
+      ]
+    },
+    {
+      "statement": "GET /api/order-analytics/summary trả revenue (store currency + bản quy đổi USD) và quantity, phục vụ số Views/ATC/Conversion/Orders/Revenue.",
+      "knowledge_kind": "CONFIRMED_EXPECTED",
+      "confidence": "MEDIUM",
+      "kb_refs": [
+        "KB-021"
+      ]
+    },
+    {
+      "statement": "GET /api/order-analytics/graph trả time-series cho line chart; param 'summary' chọn quantity/revenue/revenue_usd.",
+      "knowledge_kind": "CONFIRMED_EXPECTED",
+      "confidence": "MEDIUM",
+      "kb_refs": [
+        "KB-022"
+      ]
+    },
+    {
+      "statement": "Param 'type' của GET /api/order-analytics/graph chọn bucket granularity hourly/daily/weekly/monthly/yearly, mặc định daily.",
+      "knowledge_kind": "CONFIRMED_EXPECTED",
+      "confidence": "MEDIUM",
+      "kb_refs": [
+        "KB-023"
+      ]
+    },
+    {
+      "statement": "GET /api/top-discount-tiers hỗ trợ sort theo quantity hoặc total_items, limit mặc định 10.",
+      "knowledge_kind": "CONFIRMED_EXPECTED",
+      "confidence": "MEDIUM",
+      "kb_refs": [
+        "KB-024"
+      ]
+    },
+    {
+      "statement": "Dù API default limit là 10, Portal UI của 'Most Popular Discount Tiers' chỉ hiển thị top 3 theo QVD-81 — chênh lệch giữa khả năng API và UI thực tế.",
+      "knowledge_kind": "CONFIRMED_EXPECTED",
+      "confidence": "MEDIUM",
+      "kb_refs": [
+        "KB-025"
+      ]
+    },
+    {
+      "statement": "GET /api/top-selling-variants cung cấp dữ liệu cho 'Best-Selling Discounted Items', key bởi shopify_product_id/shopify_variant_id.",
+      "knowledge_kind": "CONFIRMED_EXPECTED",
+      "confidence": "MEDIUM",
+      "kb_refs": [
+        "KB-026"
+      ]
+    },
+    {
+      "statement": "GET /api/events trả aggregate count theo field 'type', 2 giá trị: view hoặc add_to_cart.",
+      "knowledge_kind": "CONFIRMED_EXPECTED",
+      "confidence": "MEDIUM",
+      "kb_refs": [
+        "KB-027"
+      ]
+    },
+    {
+      "statement": "POST /api/events là API call tự ghi log event của SDK. [api_contract claim — lấy từ doc_refs mô tả 1 phiên capture cụ thể, KHÔNG phải quan sát runtime của run này.]",
+      "knowledge_kind": "CONFIRMED_EXPECTED",
+      "confidence": "MEDIUM",
+      "kb_refs": [
+        "KB-028"
+      ]
+    },
+    {
+      "statement": "Theo tài liệu, cả 4 request POST /api/events được trích dẫn (2 type=view, 2 type=add_to_cart) đều được ghi nhận trả response 200. [api_contract claim — lấy từ doc_refs mô tả capture của 1 phiên, KHÔNG phải quan sát runtime của run này; xem risks[0] về phần chưa giải quyết liên quan.]",
+      "knowledge_kind": "CONFIRMED_EXPECTED",
+      "confidence": "MEDIUM",
+      "kb_refs": [
+        "KB-031"
+      ]
+    },
+    {
+      "statement": "1 page load với 2 offer widget active (Quantity Break 815 + Multibuy 816) bắn 2 event 'view' riêng biệt (1 cho mỗi offer_id), không phải 1 — giải quyết câu hỏi 'Views tính theo page-load hay theo widget' (trả lời: theo widget).",
+      "knowledge_kind": "CONFIRMED_EXPECTED",
+      "confidence": "MEDIUM",
+      "kb_refs": [
+        "KB-032"
+      ]
+    },
+    {
+      "statement": "Tất cả endpoint (phần Analytics) chấp nhận param 'filter' với ít nhất 2 giá trị ví dụ (test, currency); tài liệu tự nói danh sách này underspecified trong ticket, không khẳng định đây là enum đầy đủ.",
+      "knowledge_kind": "INFERRED",
+      "confidence": "LOW",
+      "kb_refs": [
+        "KB-033"
+      ]
+    },
+    {
+      "statement": "Công thức Conversion rate (ATC Views × 100) dùng Add to cart, không dùng completed order thực tế — 'conversion' ở đây thực chất là 'add-to-cart rate', không phải checkout conversion.",
+      "knowledge_kind": "CONFIRMED_EXPECTED",
+      "confidence": "MEDIUM",
+      "kb_refs": [
+        "KB-034"
+      ]
+    }
+  ],
+  "observed_behavior": [
+    {
+      "statement": "Trong 1 phiên kiểm tra (doc-reported), Conversion rate hiển thị giá trị live 25.00%, khớp công thức ticket cho mẫu cụ thể này (2/8×100=25%). Đây là 1 sample của 1 phiên, không phải enum/boundary.",
+      "session_context": "doc-reported single verification session, test-vl-1, ~2026-09-14",
+      "kb_refs": [
+        "KB-013"
+      ]
+    },
+    {
+      "statement": "Trong phiên kiểm tra đó, 'Additional revenue' hiển thị một số thực (0.00 USD) — giá trị minh hoạ của phiên này (nhất quán với việc chưa có order hoàn tất trong range), không phải default/boundary.",
+      "session_context": "doc-reported single verification session, test-vl-1, ~2026-09-14",
+      "kb_refs": [
+        "KB-014"
+      ]
+    },
+    {
+      "statement": "Pattern '8 views 2 ATC 0 orders' của phiên kiểm tra này nhất quán với việc views/ATC đến từ hoạt động testing của chính phiên đó, chưa có checkout hoàn tất.",
+      "session_context": "doc-reported single verification session, test-vl-1, ~2026-09-14",
+      "kb_refs": [
+        "KB-018"
+      ]
+    },
+    {
+      "statement": "1 request body mẫu thực tế (form-encoded) gửi tới POST /api/events trên store 'Copper Light' (test-vl-1): offer_id=815, type=view. Ví dụ cụ thể của 1 phiên, không phải enum/required đầy đủ của contract.",
+      "session_context": "doc-reported single capture, test-vl-1, ~2026-09-14",
+      "kb_refs": [
+        "KB-029"
+      ]
+    },
+    {
+      "statement": "1 request body mẫu khác (offer 816, Multibuy) có thêm field variants[0][shopify_product_id]/variants[0][shopify_variant_id]/variants[0][quantity] so với request offer 815 — vẫn là ví dụ của 1 phiên, không phải required đầy đủ.",
+      "session_context": "doc-reported single capture, test-vl-1, ~2026-09-14",
+      "kb_refs": [
+        "KB-030"
+      ]
+    }
+  ],
+  "observed_validations": [],
+  "permissions": [],
+  "surface_mapping": {
+    "portal": [
+      "KB-005",
+      "KB-006",
+      "KB-007",
+      "KB-008",
+      "KB-009",
+      "KB-010",
+      "KB-011",
+      "KB-012",
+      "KB-013",
+      "KB-014",
+      "KB-015",
+      "KB-016",
+      "KB-018",
+      "KB-025",
+      "KB-034"
+    ],
+    "storefront": [
+      "KB-017",
+      "KB-029",
+      "KB-030",
+      "KB-032"
+    ],
+    "api": [
+      "KB-019",
+      "KB-020",
+      "KB-021",
+      "KB-022",
+      "KB-023",
+      "KB-024",
+      "KB-026",
+      "KB-027",
+      "KB-028",
+      "KB-031",
+      "KB-033"
+    ],
+    "data": [],
+    "code": []
+  },
+  "dependencies": [
+    {
+      "related_system": "Onboarding Dashboard (QVD-115)",
+      "relationship": "UNCLEAR — ATC count hiển thị trên Onboarding Dashboard có thể, hoặc không, cùng nguồn dữ liệu với 'Add to cart clicks' trên Analytics page này; chưa được so sánh side-by-side.",
+      "kb_refs": [
+        "KB-001"
+      ]
+    },
+    {
+      "related_system": "Ask-for-Review funnel analytics (QVD-173)",
+      "relationship": "CONFIRMED TÁCH BIỆT — xác nhận là 2 nguồn dữ liệu thật sự tách biệt, không dùng chung hạ tầng với Analytics feature này.",
+      "kb_refs": [
+        "KB-002"
+      ]
+    },
+    {
+      "related_system": "Shopify Sidekick app extension (QVD-179, qua QVD-176/QVD-177, đang In Progress)",
+      "relationship": "UNCLEAR — tài liệu suy luận (chưa xác nhận) rằng Sidekick đọc dữ liệu hiệu suất offer (views/ATC/conversion/revenue); tự đánh dấu 'Need confirm once QVD-176/177 ship'.",
+      "kb_refs": [
+        "KB-003"
+      ]
+    },
+    {
+      "related_system": "Internal trigger-analytics (QVD-164 '[BE] Trigger analytics API' QVD-160 chat-trigger scenarios), xem qua Filament admin nội bộ (Ownego)",
+      "relationship": "CONFIRMED TÁCH BIỆT — hệ thống phân tích nội bộ hoàn toàn khác, KHÔNG thuộc Analytics page merchant-facing này; nêu ra chỉ để tránh nhầm lẫn.",
+      "kb_refs": [
+        "KB-004"
+      ]
+    }
+  ],
+  "risks": [
+    {
+      "statement": "Các event view/add_to_cart gửi qua POST /api/events trả 200 OK (theo capture tài liệu hoá — KB-027/KB-028/KB-031), nhưng Portal dashboard KHÔNG cập nhật count sau khi thực hiện thêm 1 view + 1 add-to-cart thật trong phiên kiểm tra, kể cả sau Refresh/reload. Tài liệu nguồn tự đánh giá đây là 'open, unresolved finding, not a confirmed bug' — CHƯA XÁC ĐỊNH nguyên nhân là lag xử lý/aggregation, loại trừ chủ đích traffic từ route 'Preview on Online Store', hay bug dashboard thật.",
+      "severity": "HIGH — ảnh hưởng trực tiếp tới độ tin cậy số liệu merchant nhìn thấy trên dashboard",
+      "kb_refs": [
+        "KB-027",
+        "KB-028",
+        "KB-031"
+      ],
+      "note": "Phần 'dashboard không cập nhật' KHÔNG có kb_id riêng (nguồn: unmapped_evidence trong the analytics feature KB, claim chưa được quá trình chuẩn hoá mint do tài liệu tự nói chưa đủ bằng chứng kết luận). Ghi nhận nguyên trạng, KHÔNG resolve ở đây — xem unknown_areas[4]."
+    }
+  ],
+  "freshness": {
+    "observed_at": null
+  },
+  "unknown_areas": [
+    {
+      "question": "ATC count trên Onboarding Dashboard (QVD-115) và 'Add to cart clicks' trên Analytics page này có cùng nguồn dữ liệu hay không?",
+      "why_it_matters": "Nếu khác nhau, QA có thể nhầm lẫn khi dùng 1 trang để verify số liệu của trang khác."
+    },
+    {
+      "question": "Sidekick (QVD-179, qua QVD-176/177, còn In Progress) có đọc từ cùng order-analytics API (QVD-69) mà Analytics page này dùng, hay một pipeline riêng?",
+      "why_it_matters": "Nếu là pipeline riêng, một thay đổi ở API Analytics không chắc ảnh hưởng Sidekick, và ngược lại — ảnh hưởng phạm vi regression test."
+    },
+    {
+      "question": "Metric 'Order with offers' không hiện số/chart trong phiên kiểm tra live — là bug thật (thiếu xử lý 0-state) hay chỉ do dữ liệu phiên đó tình cờ không có?",
+      "why_it_matters": "Nếu là bug, cần theo dõi như regression watch; nếu không, không nên coi là defect khi viết test case."
+    },
+    {
+      "question": "1 click 'Add to cart' (Quantity Break 815) đã bắn 2 event add_to_cart khi có ≥2 offer widget active trên trang (815 + Multibuy 816 chưa từng được tương tác) — đây là over-counting xảy ra MỌI KHI có ≥2 widget active, hay chỉ riêng overlap-scenario đã quan sát?",
+      "why_it_matters": "Nếu xảy ra không điều kiện, số ATC/conversion của offer khác có thể bị inflate sai cho khách hàng chưa từng tương tác với offer đó."
+    },
+    {
+      "question": "Events trả 200 OK nhưng Portal dashboard không cập nhật count sau khi có thêm tương tác thật, kể cả sau refresh/reload — do lag xử lý/aggregation, do loại trừ traffic 'Preview on Online Store', hay là bug dashboard thật?",
+      "why_it_matters": "Nếu là bug thật, merchant có thể không tin được số liệu gần-thời-gian-thực trên dashboard; nếu là exclusion có chủ đích, cần xác nhận rõ để viết test case đúng."
+    },
+    {
+      "question": "Label 'Conversion rate' trên Portal UI có đủ rõ để merchant không nhầm với 'Order with offers' (completed-purchase thật), khi 'conversion' ở đây thực chất là add-to-cart rate?",
+      "why_it_matters": "Nhầm giữa add-to-cart rate và checkout conversion rate có thể khiến merchant hiểu sai hiệu suất offer."
+    },
+    {
+      "question": "'Additional revenue' được tính chính xác thế nào — tổng revenue từ order có chứa item được discount, hay chỉ phần delta do discount tạo ra? Ticket QVD-81 không định nghĩa chính xác công thức này.",
+      "why_it_matters": "Không rõ công thức thì không thể verify số liệu dashboard hiển thị có đúng với một test order cụ thể hay không."
+    },
+    {
+      "question": "Khi một offer bị xoá, dữ liệu Views/ATC/Orders lịch sử của offer đó còn query được không, hay mất theo?",
+      "why_it_matters": "Ảnh hưởng tới việc merchant có giữ được báo cáo hiệu suất lịch sử sau khi dọn offer cũ hay không."
+    },
+    {
+      "question": "Ngữ nghĩa chính xác của param 'filter' (test/currency/...) trên các endpoint Analytics — có loại trừ test-mode order khỏi tổng số thật của merchant không?",
+      "why_it_matters": "Nếu filter không hoạt động như kỳ vọng, QA test order có thể làm sai lệch số liệu thật của merchant."
+    },
+    {
+      "question": "\"Analytics\" chỉ trỏ (pointer-only) tới \"Known Issues\" cho known_defect tag 'analytics'; shard KB nguồn (the analytics feature KB) không tự nhân bản known_defect đó, và profile này cũng KHÔNG bao gồm known_defect nào từ \"Known Issues\".",
+      "why_it_matters": "checklist/so sánh version trước/sau cần kiểm tra riêng \"Known Issues\" để không bỏ sót known_defect đã ghi nhận cho feature 'analytics'."
+    },
+    {
+      "question": "Tài liệu không phân biệt permission/role tier cho việc xem Portal Analytics page (ví dụ cần quyền admin/owner riêng, hay mọi staff account đều thấy được).",
+      "why_it_matters": "Thiếu rõ permission tier có thể dẫn tới bỏ sót kịch bản access-control khi viết test case cho trang này."
+    }
+  ],
+  "coverage_matrix": [
+    {
+      "layer": "portal",
+      "role": "merchant",
+      "state": "default view + metric panel",
+      "environment": "documented",
+      "covered": true
+    },
+    {
+      "layer": "portal",
+      "role": "merchant",
+      "state": "time range selection (preset + custom)",
+      "environment": "documented",
+      "covered": true
+    },
+    {
+      "layer": "portal",
+      "role": "merchant",
+      "state": "empty-state metrics (no data)",
+      "environment": "documented",
+      "covered": true
+    },
+    {
+      "layer": "portal",
+      "role": "merchant",
+      "state": "dashboard cập nhật real-time sau event mới",
+      "environment": "documented",
+      "covered": false
+    },
+    {
+      "layer": "api",
+      "role": null,
+      "state": "order-analytics summary/graph/top-tiers/top-variants retrieval",
+      "environment": "documented",
+      "covered": true
+    },
+    {
+      "layer": "api",
+      "role": null,
+      "state": "event ingestion (GET/POST /api/events)",
+      "environment": "documented",
+      "covered": true
+    },
+    {
+      "layer": "storefront",
+      "role": "buyer",
+      "state": "event firing (view/add_to_cart) từ offer widget",
+      "environment": "documented",
+      "covered": true
+    },
+    {
+      "layer": "storefront",
+      "role": "buyer",
+      "state": "event firing khi ≥2 widget active đồng thời (add_to_cart case)",
+      "environment": "documented",
+      "covered": false
+    },
+    {
+      "layer": "data",
+      "role": null,
+      "state": "any",
+      "environment": "documented",
+      "covered": false
+    },
+    {
+      "layer": "code",
+      "role": null,
+      "state": "any",
+      "environment": "documented",
+      "covered": false
+    }
+  ],
+  "profile_conflicts": [],
+  "profile_relationships": [
+    {
+      "related_feature_key": "onboarding-dashboard",
+      "relationship": "UNCLEAR — có thể chia sẻ nguồn dữ liệu ATC count (QVD-115) với Analytics; chưa xác nhận.",
+      "kb_refs": [
+        "KB-001"
+      ]
+    },
+    {
+      "related_feature_key": "ask-for-review",
+      "relationship": "CONFIRMED TÁCH BIỆT — 2 nguồn dữ liệu thật sự khác nhau, không dùng chung hạ tầng (QVD-173).",
+      "kb_refs": [
+        "KB-002"
+      ]
+    }
+  ]
+}

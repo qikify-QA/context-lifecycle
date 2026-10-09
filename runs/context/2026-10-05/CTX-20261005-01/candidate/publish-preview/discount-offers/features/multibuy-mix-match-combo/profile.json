@@ -1,0 +1,989 @@
+{
+  "feature_key": "multibuy-mix-match-combo",
+  "name": "Multibuy – Mix & Match Combo",
+  "user_goal": "Merchant sets up a promotion where a customer mixes and matches across multiple different eligible products (not a repeat quantity of one product) to unlock a bundle discount — distinct from Quantity Break, which only counts quantity of the same product.",
+  "actors": [
+    {
+      "role": "merchant",
+      "permission_observed": "Full configuration access trong Portal cho mọi section của Multibuy offer (internal name/title, discount method, trigger, tier, max discount uses, remaining-qty message, how-discount-is-applied, customer selection behavior, appearance & style, discount combination, offer scheduling, compare-at-price scope) — không có boundary permission/role riêng nào được tài liệu hoá cho feature này.",
+      "kb_refs": [
+        "KB-001",
+        "KB-003",
+        "KB-004",
+        "KB-005",
+        "KB-006",
+        "KB-007",
+        "KB-009",
+        "KB-010",
+        "KB-012",
+        "KB-017",
+        "KB-028",
+        "KB-035",
+        "KB-041",
+        "KB-045",
+        "KB-052",
+        "KB-054",
+        "KB-061",
+        "KB-062",
+        "KB-065",
+        "KB-067",
+        "KB-071",
+        "KB-078"
+      ]
+    },
+    {
+      "role": "buyer",
+      "permission_observed": "Xem widget discount trên product/cart/checkout page khi trigger condition đáp ứng; chọn sản phẩm cho bundle qua popup hoặc redirect page; nhận discount tự động ở cart — không có yêu cầu login/account nào được tài liệu hoá.",
+      "kb_refs": [
+        "KB-003",
+        "KB-008",
+        "KB-029",
+        "KB-030",
+        "KB-032",
+        "KB-036",
+        "KB-049",
+        "KB-050",
+        "KB-053",
+        "KB-068",
+        "KB-072",
+        "KB-073",
+        "KB-076"
+      ]
+    }
+  ],
+  "entry_points": [
+    {
+      "path": "Portal · Discount Offers · Create/Edit offer → chọn offer type \"Multibuy – Mix & Match Combo\"",
+      "precondition": "Merchant đã authenticated vào Portal; không có permission boundary riêng nào được tài liệu hoá cho feature này.",
+      "kb_refs": [
+        "KB-001",
+        "KB-003",
+        "KB-004",
+        "KB-005"
+      ]
+    },
+    {
+      "path": "Storefront · product page cart page checkout page — Multibuy widget",
+      "precondition": "Trigger condition (All products Collection Specific products) của offer đang active được đáp ứng.",
+      "kb_refs": [
+        "KB-008",
+        "KB-009",
+        "KB-010",
+        "KB-012",
+        "KB-078"
+      ]
+    },
+    {
+      "path": "Storefront · in-page selection popup",
+      "precondition": "Merchant đã cấu hình Customer product selection behavior = \"Open selection popup\" (default theo ticket QVD-106, chưa QA re-confirm).",
+      "kb_refs": [
+        "KB-003",
+        "KB-045",
+        "KB-046"
+      ]
+    },
+    {
+      "path": "Storefront · merchant-defined redirect page",
+      "precondition": "Merchant đã chọn \"Redirect to a specific page/URL\" và điền Destination URL (ticket QVD-106, chưa QA re-confirm).",
+      "kb_refs": [
+        "KB-003",
+        "KB-045",
+        "KB-072"
+      ]
+    }
+  ],
+  "capabilities": [
+    {
+      "name": "Define trigger scope (sản phẩm nào kích hoạt bundle)",
+      "description": "Merchant chọn 1 trong 3 trigger type (All products Collection Specific products) để xác định sản phẩm nào tính vào Multibuy; không trigger type nào có exclude option, khác Quantity Break's 7-option Trigger Settings.",
+      "kb_refs": [
+        "KB-008",
+        "KB-009",
+        "KB-010",
+        "KB-011",
+        "KB-012",
+        "KB-013",
+        "KB-014",
+        "KB-015",
+        "KB-078"
+      ]
+    },
+    {
+      "name": "Configure multi-tier bundle rewards",
+      "description": "Merchant thêm/xoá/sửa tier (quantity + reward + title + badge), với guardrail (luôn ≥1 tier) và UI state (expand/collapse, real-time validation, default pre-populated tier).",
+      "kb_refs": [
+        "KB-017",
+        "KB-018",
+        "KB-019",
+        "KB-020",
+        "KB-021",
+        "KB-022",
+        "KB-023",
+        "KB-024",
+        "KB-025",
+        "KB-026",
+        "KB-027",
+        "KB-075"
+      ]
+    },
+    {
+      "name": "Chọn cách tính discount khi pooled quantity vượt nhiều tier (QVD-178)",
+      "description": "Setting \"How discount is applied\" (chỉ hiện khi discount type = Percentage) quyết định discount được tính theo set cố định (\"Apply per combo product\", default) hay theo tier cao nhất áp cho toàn bộ quantity (\"Apply highest tier to entire quantity\"); setting này tách biệt với \"Discount combination\" (capability khác).",
+      "kb_refs": [
+        "KB-035",
+        "KB-036",
+        "KB-037",
+        "KB-038",
+        "KB-039",
+        "KB-040",
+        "KB-041",
+        "KB-042",
+        "KB-043",
+        "KB-044",
+        "KB-074",
+        "KB-079"
+      ]
+    },
+    {
+      "name": "Pool quantity across different eligible products (core mix & match mechanic)",
+      "description": "Đúng điểm khác biệt chính với Quantity Break: Multibuy pool quantity của MỌI sản phẩm/variant eligible trong cart vào cùng 1 tier threshold, kể cả remainder-handling (ưu tiên fill set bằng unit giá cao nhất trước) và exact-match case (phân bổ fixed total price theo tỷ lệ giá gốc, không chia đều).",
+      "kb_refs": [
+        "KB-001",
+        "KB-002",
+        "KB-032",
+        "KB-033",
+        "KB-034",
+        "KB-080"
+      ]
+    },
+    {
+      "name": "Hướng dẫn customer chọn sản phẩm cho bundle",
+      "description": "2 selection mode: in-page popup (variant picker, cart summary, CTA Buy now) hoặc redirect page (mở tab mới, không mất selection đang có); cả 2 mode hỗ trợ optional product recommendations (≤10 sản phẩm).",
+      "kb_refs": [
+        "KB-003",
+        "KB-045",
+        "KB-046",
+        "KB-047",
+        "KB-048",
+        "KB-049",
+        "KB-050",
+        "KB-051",
+        "KB-052",
+        "KB-053",
+        "KB-072"
+      ]
+    },
+    {
+      "name": "Giới hạn/nhân discount theo order",
+      "description": "Checkbox \"Allow to apply multiplier discounts per order\" — khi enable, discount áp dụng cho MỖI pack đạt tier trong 1 order (ví dụ 6 item ở tier \"3 for $20\" → áp dụng 2 lần → $40).",
+      "kb_refs": [
+        "KB-028",
+        "KB-029"
+      ]
+    },
+    {
+      "name": "Nudge buyer hoàn thành bundle",
+      "description": "Field \"Remaining quantity message\" (merchant-editable, default \"Add {remaining_quantity} more items to get this deal\") chỉ cover progress TRƯỚC khi đạt tier đầu; không có nudge message cho 1 leftover unit SAU khi 1 set đã hoàn thành (Percentage mode).",
+      "kb_refs": [
+        "KB-030",
+        "KB-031",
+        "KB-073"
+      ]
+    },
+    {
+      "name": "Kiểm soát stacking với native Shopify discount khác",
+      "description": "Checkbox combine với Order/Product/Shipping discount (default off, ticket-only); tách biệt với \"Apply highest tier to entire quantity\" — 2 setting này không conflict theo construction (per-group/whole-quantity math vs stack-hay-không với discount khác).",
+      "kb_refs": [
+        "KB-061",
+        "KB-074"
+      ]
+    },
+    {
+      "name": "Lên lịch thời gian offer active",
+      "description": "Start date/time required (không là ngày quá khứ), end date optional qua toggle; thêm checkbox \"Enable countdown timer\" (phát hiện live, không có trong ticket); badge discount tự hide khi offer ngoài scheduled window.",
+      "kb_refs": [
+        "KB-062",
+        "KB-063",
+        "KB-064",
+        "KB-076"
+      ]
+    },
+    {
+      "name": "Branding widget và discount badge",
+      "description": "Accordion Appearance & style gồm đúng 6 section (Layout/Color/Typography/Image/Badge/Custom CSS); Custom CSS là shared setting dùng chung với Wholesale Pricing và Quantity Break, gate behind contact-support-to-enable. Badge content/position có 2 intra-doc conflict chưa resolve (xem conflicts[]).",
+      "kb_refs": [
+        "KB-054",
+        "KB-055",
+        "KB-056",
+        "KB-057",
+        "KB-058",
+        "KB-059",
+        "KB-060",
+        "KB-065",
+        "KB-066",
+        "KB-081",
+        "KB-082",
+        "KB-083",
+        "KB-084",
+        "object:KB-001",
+        "object:KB-002"
+      ]
+    },
+    {
+      "name": "Tính discount trên Compare-at-Price (giá gốc) thay vì giá đang bán",
+      "description": "Khi compare_at_price > 0, % discount tính trên compare_at_price, không phải price; fallback về price nếu không có compare_at_price. Xác nhận là global feature (không merchant-specific) dù ticket gốc mô tả như custom build riêng. Có 1 known, accepted limitation về hiển thị khi customer đổi quantity trực tiếp trong cart (xem observed_behavior).",
+      "kb_refs": [
+        "KB-067",
+        "KB-068",
+        "KB-069",
+        "KB-070",
+        "KB-077"
+      ]
+    },
+    {
+      "name": "Đặt tên nội bộ offer và tiêu đề customer-facing",
+      "description": "Internal name (merchant-only, auto-default \"Offer #N\") và Offer title (customer-facing, template {{quantity_tier}} for {{total_price}}) — cả 2 claim chỉ từ ticket QVD-103, chưa được QA xác nhận lại.",
+      "kb_refs": [
+        "KB-004",
+        "KB-005"
+      ]
+    },
+    {
+      "name": "Chọn discount method (automatic vs code)",
+      "description": "Automatic discount là default; chạm giới hạn 25 automatic discount của Shopify hoặc muốn dùng discount code thì phải liên hệ support — không self-serve trong UI. Chỉ từ ticket QVD-103, chưa QA xác nhận lại.",
+      "kb_refs": [
+        "KB-006",
+        "KB-007"
+      ]
+    },
+    {
+      "name": "Store-specific SDK config cho recommendation display (dev-set)",
+      "description": "2 flag SDK-level (showTriggerProductInRecommendation, numberOfRecommendationProductPerLine) set theo từng store bởi Dev qua object QikifyVolume — không phải Portal setting merchant-facing; QA không nên mong đợi thấy trong UI theo default.",
+      "kb_refs": [
+        "KB-071"
+      ]
+    }
+  ],
+  "state_transitions": [
+    {
+      "from": "chưa tới scheduled start",
+      "to": "offer active",
+      "trigger": "thời điểm hiện tại chạm start date/time",
+      "condition": "start date không là ngày quá khứ; end date chưa tới (nếu có bật)",
+      "kb_refs": [
+        "KB-062",
+        "KB-063"
+      ]
+    },
+    {
+      "from": "offer active",
+      "to": "offer ended",
+      "trigger": "thời điểm hiện tại chạm end date/time",
+      "condition": "toggle \"Enable end date\" đang bật",
+      "kb_refs": [
+        "KB-063"
+      ]
+    },
+    {
+      "from": "Percentage + \"Apply highest tier to entire quantity\" đã chọn",
+      "to": "Fixed total price, setting ẩn & reset về \"Apply per combo product\"",
+      "trigger": "merchant đổi Discount type và Save",
+      "condition": "",
+      "kb_refs": [
+        "KB-041",
+        "KB-042"
+      ]
+    },
+    {
+      "from": "chỉ còn 1 tier",
+      "to": "blocked (không xoá được)",
+      "trigger": "merchant bấm Delete trên tier cuối cùng",
+      "condition": "guardrail ≥1 tier phải luôn tồn tại",
+      "kb_refs": [
+        "KB-023",
+        "KB-024"
+      ]
+    },
+    {
+      "from": "tier đang collapsed",
+      "to": "tier được expand (chỉ 1 tại 1 thời điểm)",
+      "trigger": "merchant bấm Edit hoặc \"+ Add new tier\"",
+      "condition": "",
+      "kb_refs": [
+        "KB-025",
+        "KB-026"
+      ]
+    },
+    {
+      "from": "buyer chưa đạt tier đầu",
+      "to": "buyer qualify cho discount tier N",
+      "trigger": "pooled eligible quantity trong cart vượt threshold của tier N",
+      "condition": "trigger scope matched + quantity pooling rule",
+      "kb_refs": [
+        "KB-008",
+        "KB-032",
+        "KB-033"
+      ]
+    },
+    {
+      "from": "badge hiển thị",
+      "to": "badge ẩn",
+      "trigger": "offer ra ngoài scheduled active window",
+      "condition": "",
+      "kb_refs": [
+        "KB-076"
+      ]
+    },
+    {
+      "from": "popup mode, selection in-progress",
+      "to": "item được add vào real cart ngay lập tức",
+      "trigger": "buyer bấm \"+\"/Pick trên sản phẩm không-variant",
+      "condition": "",
+      "kb_refs": [
+        "KB-049",
+        "KB-050"
+      ]
+    }
+  ],
+  "confirmed_rules": [
+    {
+      "statement": "Discount chỉ được displayed trên product/cart/checkout page khi trigger condition được đáp ứng.",
+      "source_strength": "STRONG",
+      "kb_refs": [
+        "KB-008"
+      ]
+    },
+    {
+      "statement": "3 trigger type: All products (default)/Collection(1)/Specific products(product+variant) — KHÔNG trigger type nào có exclude option.",
+      "source_strength": "STRONG",
+      "kb_refs": [
+        "KB-009",
+        "KB-010",
+        "KB-011",
+        "KB-012",
+        "KB-013",
+        "KB-014",
+        "KB-015",
+        "KB-078"
+      ]
+    },
+    {
+      "statement": "Ít nhất 1 tier phải luôn tồn tại (không xoá được tier cuối); không tier nào configured → không discount nào áp dụng.",
+      "source_strength": "STRONG",
+      "kb_refs": [
+        "KB-023",
+        "KB-024"
+      ]
+    },
+    {
+      "statement": "Tier 1 expanded by default, chỉ 1 tier expand tại 1 thời điểm; \"+ Add new tier\" auto-expand tier mới + collapse tier cũ + tự gán số kế tiếp; có real-time validation + success toast khi Save.",
+      "source_strength": "STRONG",
+      "kb_refs": [
+        "KB-025",
+        "KB-026",
+        "KB-027"
+      ]
+    },
+    {
+      "statement": "Reward mỗi tier là 1 trong 2 giá trị: \"Fixed total price\" hoặc \"Percentage off\"; live default Title `{quantity} for {tier_price}` và Badge `Saved {saved_price}` dùng single braces (khác notation double-brace của ticket).",
+      "source_strength": "STRONG",
+      "kb_refs": [
+        "KB-017",
+        "KB-018",
+        "KB-019",
+        "KB-020",
+        "KB-021",
+        "KB-022"
+      ]
+    },
+    {
+      "statement": "Khi \"Allow to apply multiplier discounts per order\" enabled, discount áp dụng cho MỖI qualifying pack trong 1 order (không chỉ 1 lần).",
+      "source_strength": "STRONG",
+      "kb_refs": [
+        "KB-028",
+        "KB-029"
+      ]
+    },
+    {
+      "statement": "Field \"Remaining quantity message\" (default \"Add {remaining_quantity} more items to get this deal\") chỉ cover progress trước tier đầu, không cover leftover-unit case.",
+      "source_strength": "STRONG",
+      "kb_refs": [
+        "KB-030",
+        "KB-031"
+      ]
+    },
+    {
+      "statement": "Dưới trigger \"All products\", Multibuy pool quantity across MỌI sản phẩm/variant eligible trong cart (ngược Quantity Break — không pool cross-product).",
+      "source_strength": "STRONG",
+      "kb_refs": [
+        "KB-032"
+      ]
+    },
+    {
+      "statement": "Với tier \"Fixed total price\" có remainder, set được fill bằng unit giá cao nhất trước, để remainder là unit giá rẻ nhất ở full price. Với exact-match (không remainder), fixed total price phân bổ theo TỶ LỆ giá gốc của từng unit, không chia đều, không highest-priced-first.",
+      "source_strength": "STRONG",
+      "kb_refs": [
+        "KB-033",
+        "KB-080"
+      ]
+    },
+    {
+      "statement": "\"How discount is applied\" chỉ hiện khi discount type = Percentage, có đúng 2 giá trị: \"Apply per combo product\" (default, nhóm set cố định, remainder full price) và \"Apply highest tier to entire quantity\" (tìm tier cao nhất đủ điều kiện, áp cho toàn bộ quantity, không grouping/remainder). Ẩn hoàn toàn khi discount type = Fixed total price; chuyển về Fixed thì reset giá trị về default khi Save.",
+      "source_strength": "STRONG",
+      "kb_refs": [
+        "KB-035",
+        "KB-036",
+        "KB-037",
+        "KB-038",
+        "KB-039",
+        "KB-040",
+        "KB-041",
+        "KB-042"
+      ]
+    },
+    {
+      "statement": "Dưới lowest tier threshold → không có discount, ở cả 2 mode của \"How discount is applied\".",
+      "source_strength": "STRONG",
+      "kb_refs": [
+        "KB-040"
+      ]
+    },
+    {
+      "statement": "Với Multibuy, lựa chọn per-group vs entire-quantity là 1 toggle merchant-facing rõ ràng — khác Quantity Break, nơi cùng khái niệm tính toán là hành vi cố định không document, không phải toggle.",
+      "source_strength": "STRONG",
+      "kb_refs": [
+        "KB-044"
+      ]
+    },
+    {
+      "statement": "Appearance & style là accordion đúng 6 section: Layout, Color, Typography, Image, Badge, Custom CSS. Custom CSS (textarea) bị gate behind \"contact support to enable\".",
+      "source_strength": "STRONG",
+      "kb_refs": [
+        "KB-054",
+        "KB-060"
+      ]
+    },
+    {
+      "statement": "Compare-at-Price discount logic: khi compare_at_price > 0, % discount tính trên compare_at_price (giá gốc), không phải price; fallback về price nếu không có compare_at_price. Xác nhận là global feature, không merchant-specific.",
+      "source_strength": "STRONG",
+      "kb_refs": [
+        "KB-067",
+        "KB-068",
+        "KB-077"
+      ]
+    },
+    {
+      "statement": "\"Apply highest tier to entire quantity\" (per-group/whole-quantity math của riêng offer) và \"Discount combination\" (stack với discount khác hay không) là 2 setting không conflict theo construction.",
+      "source_strength": "STRONG",
+      "kb_refs": [
+        "KB-074"
+      ]
+    },
+    {
+      "statement": "Switching discount type (Fixed↔Percentage) nhiều lần KHÔNG làm mất/corrupt tier values; chỉ \"Apply highest tier\" tự reset.",
+      "source_strength": "STRONG",
+      "kb_refs": [
+        "KB-075"
+      ]
+    },
+    {
+      "statement": "Multibuy discount badge tự hide khi offer ngoài scheduled window, chỉ show khi offer active.",
+      "source_strength": "STRONG",
+      "kb_refs": [
+        "KB-076"
+      ]
+    },
+    {
+      "statement": "Redirect-to-URL mode mở ở tab mới — selection đang in-progress ở trang gốc không bị mất.",
+      "source_strength": "STRONG",
+      "kb_refs": [
+        "KB-072"
+      ]
+    },
+    {
+      "statement": "Trong Percentage mode + Apply per combo product, leftover item không có nudge message nào — chỉ itemized price breakdown.",
+      "source_strength": "STRONG",
+      "kb_refs": [
+        "KB-073"
+      ]
+    },
+    {
+      "statement": "Click \"Pick\" trên sản phẩm no-variant trong popup thêm ngay vào real cart (verify qua /cart thật); progress bar phản ánh cart thật, không phải counter riêng của widget.",
+      "source_strength": "STRONG",
+      "kb_refs": [
+        "KB-049",
+        "KB-050"
+      ]
+    },
+    {
+      "statement": "Dưới redirect-URL input có checkbox \"Show product recommendations\" (max 10 sản phẩm); áp dụng cho CẢ 2 selection mode (popup và redirect), không chỉ popup.",
+      "source_strength": "STRONG",
+      "kb_refs": [
+        "KB-052",
+        "KB-053"
+      ]
+    }
+  ],
+  "observed_behavior": [
+    {
+      "statement": "Backend lưu \"How discount is applied\" dưới field `tier_application_method` (`per_group` | `highest_tier_all`), xử lý trong `multibuy-discount` Function ở bước tier-matching.",
+      "knowledge_kind": "CONFIRMED_EXPECTED",
+      "confidence": "LOW",
+      "note": "derivation code_artifact — suy ra từ cách dữ liệu được tổ chức trong code, không phải một quy tắc được phát biểu rõ trong tài liệu. Không dùng làm oracle mạnh.",
+      "kb_refs": [
+        "KB-043"
+      ]
+    },
+    {
+      "statement": "Empty \"+\" combo slot của widget tồn tại trong DOM với id `qvl-multibuy-tier_add-more`.",
+      "knowledge_kind": "CONFIRMED_EXPECTED",
+      "confidence": "LOW",
+      "note": "derivation code_artifact — cùng loại nguồn yếu như KB-043, suy ra từ cách dữ liệu được tổ chức trong code, không phải một quy tắc được phát biểu rõ trong tài liệu.",
+      "kb_refs": [
+        "KB-051"
+      ]
+    },
+    {
+      "statement": "Internal name là text field, auto-default \"Offer #1\"/\"Offer #2\"...; merchant-only, không hiển thị customer. Offer title default template {{quantity_tier}} for {{total_price}}, hỗ trợ variable picker {}.",
+      "knowledge_kind": "INFERRED",
+      "confidence": "LOW",
+      "note": "Nguồn ticket QVD-103, chưa QA re-confirm — cùng ticket này đã được phát hiện sai ở 1 phần khác (tier title notation single vs double brace).",
+      "kb_refs": [
+        "KB-004",
+        "KB-005"
+      ]
+    },
+    {
+      "statement": "Automatic discount là default; đụng limit 25 hoặc muốn discount code → hướng dẫn liên hệ support, không self-serve.",
+      "knowledge_kind": "INFERRED",
+      "confidence": "LOW",
+      "note": "Nguồn ticket QVD-103, chưa QA re-confirm.",
+      "kb_refs": [
+        "KB-006",
+        "KB-007"
+      ]
+    },
+    {
+      "statement": "Customer product selection behavior: radio \"Open selection popup\" (default) \"Redirect to a specific page/URL\"; popup mode có variant picker trượt lên, overlay semi-transparent, cart summary cố định với CTA \"Buy now\"; no-variant product thêm cart ngay + icon đổi trạng thái.",
+      "knowledge_kind": "INFERRED",
+      "confidence": "LOW",
+      "note": "Nguồn ticket QVD-106/QVD-121, chưa QA re-confirm.",
+      "kb_refs": [
+        "KB-045",
+        "KB-046",
+        "KB-047",
+        "KB-048"
+      ]
+    },
+    {
+      "statement": "Discount combination: checkbox combine Order/Product/Shipping discount, default off.",
+      "knowledge_kind": "INFERRED",
+      "confidence": "LOW",
+      "note": "Nguồn ticket QVD-108, chưa QA re-confirm.",
+      "kb_refs": [
+        "KB-061"
+      ]
+    },
+    {
+      "statement": "Start date/time required, default = creation time, không là ngày quá khứ, dùng store timezone. End date/time optional sau toggle \"Enable end date\", default off = chạy vô thời hạn.",
+      "knowledge_kind": "INFERRED",
+      "confidence": "LOW",
+      "note": "Nguồn ticket QVD-109, chưa QA re-confirm (phần \"Enable countdown timer\" thì ĐÃ confirmed live, xem confirmed_rules KB-064 — giữ tách biệt).",
+      "kb_refs": [
+        "KB-062",
+        "KB-063"
+      ]
+    },
+    {
+      "statement": "Multibuy discount badge: optional, hiển thị trên product image ở collection pages/recommendation sections/optionally cart; Position dropdown có đúng 4 option (Top-left default, Top-right, Bottom-left, Bottom-right).",
+      "knowledge_kind": "INFERRED",
+      "confidence": "LOW",
+      "note": "Nguồn ticket QVD-132, chưa QA re-confirm — và chính phần default content/border-radius của badge đang CONFLICTED (xem conflicts[]).",
+      "kb_refs": [
+        "KB-065",
+        "KB-066"
+      ]
+    },
+    {
+      "statement": "Known, accepted limitation: nếu customer đổi quantity trực tiếp trong cart (không re-add từ product page), displayed discount/compare price có thể trông inconsistent — coi là Shopify cart-display constraint, không phải app bug, đã được accept chứ không fix.",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "confidence": "LOW",
+      "note": "status KNOWN_DEFECT trong KB gốc nhưng được tài liệu mô tả như limitation đã-được-chấp-nhận, không phải bug đang mở.",
+      "kb_refs": [
+        "KB-069"
+      ]
+    },
+    {
+      "statement": "Compare-at-Price logic hỗ trợ 1 \"silent\" mode optional (discount tự áp dụng, widget UI ẩn qua custom CSS) — feasible nhưng cần nói rõ giới hạn 25-automatic-discount của Shopify khi dùng.",
+      "knowledge_kind": "INFERRED",
+      "confidence": "LOW",
+      "kb_refs": [
+        "KB-070"
+      ]
+    }
+  ],
+  "observed_validations": [],
+  "permissions": [
+    {
+      "role": "merchant",
+      "scope": "portal",
+      "permission": "Create/edit/delete Multibuy offers và toàn bộ configuration section (trigger, tier, scheduling, appearance, discount combination, compare-at-price).",
+      "kb_refs": [
+        "KB-001",
+        "KB-003",
+        "KB-017",
+        "KB-028",
+        "KB-054",
+        "KB-061",
+        "KB-062",
+        "KB-067"
+      ],
+      "note": "Không có Portal role/sub-permission riêng nào được tài liệu hoá cho feature này — xem unknown_areas."
+    },
+    {
+      "role": "buyer",
+      "scope": "storefront",
+      "permission": "Xem widget discount khi trigger đáp ứng; chọn sản phẩm cho bundle (popup/redirect); nhận discount tự động ở cart.",
+      "kb_refs": [
+        "KB-008",
+        "KB-049",
+        "KB-050"
+      ],
+      "note": "Không có yêu cầu login/account nào được tài liệu hoá."
+    }
+  ],
+  "surface_mapping": {
+    "portal": [
+      "KB-004",
+      "KB-005",
+      "KB-006",
+      "KB-007",
+      "KB-009",
+      "KB-010",
+      "KB-011",
+      "KB-012",
+      "KB-013",
+      "KB-014",
+      "KB-015",
+      "KB-017",
+      "KB-018",
+      "KB-019",
+      "KB-020",
+      "KB-021",
+      "KB-022",
+      "KB-023",
+      "KB-024",
+      "KB-025",
+      "KB-026",
+      "KB-027",
+      "KB-028",
+      "KB-035",
+      "KB-037",
+      "KB-041",
+      "KB-042",
+      "KB-044",
+      "KB-045",
+      "KB-046",
+      "KB-047",
+      "KB-048",
+      "KB-052",
+      "KB-054",
+      "KB-055",
+      "KB-056",
+      "KB-057",
+      "KB-058",
+      "KB-059",
+      "KB-060",
+      "KB-061",
+      "KB-062",
+      "KB-063",
+      "KB-064",
+      "KB-065",
+      "KB-066",
+      "KB-070",
+      "KB-075",
+      "KB-078",
+      "KB-081",
+      "KB-082",
+      "KB-083",
+      "KB-084"
+    ],
+    "storefront": [
+      "KB-003",
+      "KB-008",
+      "KB-016",
+      "KB-029",
+      "KB-030",
+      "KB-031",
+      "KB-032",
+      "KB-033",
+      "KB-034",
+      "KB-036",
+      "KB-038",
+      "KB-039",
+      "KB-040",
+      "KB-049",
+      "KB-050",
+      "KB-051",
+      "KB-053",
+      "KB-068",
+      "KB-069",
+      "KB-072",
+      "KB-073",
+      "KB-076",
+      "KB-077",
+      "KB-079",
+      "KB-080"
+    ],
+    "api": [],
+    "data": [],
+    "code": [
+      "KB-043",
+      "KB-071"
+    ]
+  },
+  "dependencies": [
+    {
+      "depends_on": "quantity-break (feature, cùng object discount-offers)",
+      "relation": "trigger_overlap cart-level stacking",
+      "description": "Confirmed live: tạo Multibuy offer với trigger overlap 1 Quantity Break offer đã tồn tại trên cùng sản phẩm kích hoạt cảnh báo non-blocking \"This trigger overlaps with offer(s): <name>\", offer vẫn save được, cả 2 widget render đồng thời trên product page.",
+      "kb_refs": [
+        "KB-016",
+        "object:KB-003",
+        "object:KB-004",
+        "object:KB-007"
+      ]
+    },
+    {
+      "depends_on": "wholesale-pricing-offer (feature, cùng object discount-offers)",
+      "relation": "trigger_overlap cart-level stacking (3-way)",
+      "description": "Khi Multibuy, Quantity Break, Wholesale Pricing cùng trigger 1 sản phẩm: cả 3 widget render đồng thời trên PDP; đúng 1 discount thắng per cart overlap (never both/split) — nhưng biến quyết định offer nào thắng CHƯA xác định được (xem risks/unknown_areas, KHÔNG resolve ở đây).",
+      "kb_refs": [
+        "object:KB-004",
+        "object:KB-005",
+        "object:KB-006",
+        "object:KB-007"
+      ]
+    },
+    {
+      "depends_on": "Custom CSS (object-level shared advanced setting, discount-offers)",
+      "relation": "shared_advanced_setting",
+      "description": "Multibuy's Custom CSS field (Appearance & style) là shared setting dùng chung với Wholesale Pricing Offer và Quantity Break, gate behind contact-support-to-enable; phạm vi đầy đủ offer type dùng setting này có thể rộng hơn 3 loại đã xác nhận.",
+      "kb_refs": [
+        "KB-060",
+        "object:KB-001",
+        "object:KB-002"
+      ]
+    },
+    {
+      "depends_on": "Shopify native automatic discount limit (25) discount code platform",
+      "relation": "platform_constraint",
+      "description": "Multibuy default dùng Shopify automatic discount; chạm limit 25 hoặc muốn discount code đòi hỏi contact support — không self-serve trong UI.",
+      "kb_refs": [
+        "KB-006",
+        "KB-007"
+      ]
+    }
+  ],
+  "risks": [
+    {
+      "risk": "Offer-priority winner khi trigger overlap (2-way với Quantity Break, 3-way với cả Wholesale Pricing) CHƯA được xác định — kết quả đã bị 'flip' giữa 2 lần test live trên cùng 1 cặp offer. KHÔNG resolve trong profile này (theo chỉ dẫn task); đây là object-level open issue cần PO/Dev confirm trước khi viết được regression test case xác định cho stacking scenario.",
+      "kb_refs": [
+        "object:KB-005",
+        "object:KB-006"
+      ]
+    },
+    {
+      "risk": "2 intra-doc conflict chưa resolve về default của Multibuy discount badge (border radius 6px vs 10px; text \"MULTIBUY\" vs \"Multi buy\") — không dùng giá trị nào làm oracle cho test case mặc định badge cho tới khi được xác nhận.",
+      "kb_refs": [
+        "KB-081",
+        "KB-082",
+        "KB-083",
+        "KB-084"
+      ]
+    },
+    {
+      "risk": "2 KB item (backend field `tier_application_method`, DOM id `qvl-multibuy-tier_add-more`) suy ra từ cách dữ liệu được tổ chức trong code, không phải một quy tắc được phát biểu rõ trong tài liệu — độ tin cậy thấp hơn các confirmed_rule khác trong profile này; cần xác minh lại với source code thật trước khi dùng làm regression oracle mạnh.",
+      "kb_refs": [
+        "KB-043",
+        "KB-051"
+      ]
+    },
+    {
+      "risk": "7 Business Rules section hoàn toàn từ ticket spec, chưa được QA re-confirm (Internal name/Offer title, Discount method, Customer selection core radio + popup detail, Discount combination, base Offer scheduling, base badge definition/position) — cùng tài liệu này đã phát hiện ít nhất 3 trường hợp khác nơi ticket spec KHÔNG khớp hành vi live (Trigger settings exclude option, Tier title notation single/double brace, Multibuy badge content/radius). Rủi ro cao các section ticket-only còn lại cũng đã drift khỏi hành vi thật.",
+      "kb_refs": [
+        "KB-004",
+        "KB-005",
+        "KB-006",
+        "KB-007",
+        "KB-045",
+        "KB-046",
+        "KB-047",
+        "KB-048",
+        "KB-061",
+        "KB-062",
+        "KB-063",
+        "KB-065",
+        "KB-066"
+      ]
+    },
+    {
+      "risk": "confirmation_source.type của mọi confirmed_rule trong profile này (spec_doc/test_case) được quá trình chuẩn hoá gán theo heuristic chưa được PO/Dev xác nhận ('QA' là ai — person/role cụ thể hay chính quy trình qa-volume-kb). Nếu heuristic sai, oracle_strength thực tế của các rule này có thể cần hạ xuống.",
+      "kb_refs": [
+        "object:KB-003",
+        "object:KB-004",
+        "object:KB-005",
+        "object:KB-007"
+      ]
+    },
+    {
+      "risk": "Không có evidence API/DB/code-level thật nào cho Multibuy ngoài 2 fragment code_artifact (KB-043, KB-051) — mode DOC_BOOTSTRAP không chạy explorer nào; surface_mapping.api/data đang rỗng. Cần 1 run INCREMENTAL_UPDATE/explore riêng nếu cần oracle ở layer này.",
+      "kb_refs": [
+        "KB-043",
+        "KB-051"
+      ]
+    }
+  ],
+  "freshness": {
+    "observed_at": "2026-10-01"
+  },
+  "unknown_areas": [
+    {
+      "question": "Biến nào quyết định offer nào thắng khi trigger của Multibuy overlap với Quantity Break (2-way)?",
+      "why_it_matters": "Kết quả bị 'flip' giữa 2 lần test live trên cùng 1 cặp offer, không biến nào được xác định (rank/order trong Shopify admin? function evaluate sau? thứ tự add-to-cart?). Không viết được regression test case xác định cho trigger-overlap nếu thiếu câu trả lời này."
+    },
+    {
+      "question": "Biến nào quyết định offer nào thắng khi cả 3 offer type (Multibuy, Quantity Break, Wholesale Pricing) cùng trigger và ≥2 discount đang active cùng lúc (3-way)?",
+      "why_it_matters": "Test 3-way hiện có (qty=3) không phải test priority sạch vì Wholesale's Tier 1 là 0% ở mức quantity đó — chưa có dữ liệu trả lời priority thật."
+    },
+    {
+      "question": "True out-of-the-box default của Multibuy discount badge border radius là 6px (live-observed) hay 10px (ticket QVD-132)?",
+      "why_it_matters": "2 giá trị khác nhau trong cùng 1 tài liệu, chưa resolve — không dùng được làm expected default cho test case badge appearance."
+    },
+    {
+      "question": "True out-of-the-box default của Multibuy discount badge text là \"MULTIBUY\" (live example) hay \"Multi buy\" (ticket), hoặc liệu giá trị live đã bị merchant chỉnh?",
+      "why_it_matters": "Tương tự — không dùng được làm expected default cho test case badge text."
+    },
+    {
+      "question": "'QA' được dùng làm nguồn (Source) trong decision-log.\"Feature Map\" là 1 người/role cụ thể hay chính quy trình authoring qa-volume-kb?",
+      "why_it_matters": "Ảnh hưởng trực tiếp tới việc confirmation_source.type (po_dev_confirm/test_case/dev_doc) của MỌI confirmed_rule object-level mà profile này dependency vào — hiện là heuristic quá trình chuẩn hoá, chưa PO/Dev xác nhận."
+    },
+    {
+      "question": "7 Business Rules section hoàn toàn ticket-sourced (Internal name/Offer title, Discount method, Customer selection core + popup detail, Discount combination, base Offer scheduling, base badge definition/position) còn khớp hành vi live hiện tại không?",
+      "why_it_matters": "Cùng tài liệu này đã phát hiện ≥3 trường hợp khác nơi ticket spec không khớp live; các section ticket-only còn lại chưa được re-test nên rủi ro drift tương tự chưa loại trừ được."
+    },
+    {
+      "question": "Phạm vi đầy đủ offer type dùng Custom CSS có rộng hơn 3 loại (Multibuy/Wholesale Pricing/Quantity Break) đã xác nhận không?",
+      "why_it_matters": "Object-level tài liệu tự hedge 'at least' — ảnh hưởng phạm vi áp dụng thực tế của 1 shared setting mà Multibuy phụ thuộc vào."
+    },
+    {
+      "question": "Có permission/role boundary nào (vd Portal staff sub-role, plan/feature-flag gating) kiểm soát việc ai được cấu hình Multibuy không?",
+      "why_it_matters": "permissions[] trong profile này chỉ phân biệt ở mức merchant (Portal) vs buyer (storefront) — không phải 1 authorization model; chưa biết có cấp quyền chi tiết hơn hay không."
+    },
+    {
+      "question": "Multibuy có evidence ở layer API/DB/code thật (ngoài 2 fragment code_artifact) không?",
+      "why_it_matters": "surface_mapping.api và.data đang rỗng vì mode DOC_BOOTSTRAP không chạy explorer nào — cần 1 run riêng (INCREMENTAL_UPDATE/explore) nếu cần oracle ở layer này."
+    }
+  ],
+  "coverage_matrix": [
+    {
+      "layer": "portal",
+      "role": "merchant",
+      "state": "documented",
+      "environment": "documented",
+      "covered": true
+    },
+    {
+      "layer": "storefront",
+      "role": "buyer",
+      "state": "documented",
+      "environment": "documented",
+      "covered": true
+    },
+    {
+      "layer": "api",
+      "role": null,
+      "state": "documented",
+      "environment": "documented",
+      "covered": false
+    },
+    {
+      "layer": "data",
+      "role": null,
+      "state": "documented",
+      "environment": "documented",
+      "covered": false
+    },
+    {
+      "layer": "code",
+      "role": null,
+      "state": "documented",
+      "environment": "documented",
+      "covered": false
+    },
+    {
+      "layer": "portal",
+      "role": "merchant",
+      "state": "trigger_overlap_warning_shown",
+      "environment": "documented",
+      "covered": true
+    },
+    {
+      "layer": "storefront",
+      "role": "buyer",
+      "state": "trigger_overlap_priority_resolution",
+      "environment": "documented",
+      "covered": false
+    },
+    {
+      "layer": "storefront",
+      "role": "buyer",
+      "state": "badge_appearance_default",
+      "environment": "documented",
+      "covered": false
+    }
+  ],
+  "profile_conflicts": [
+    {
+      "conflict_id": "CONF-DOC04-001",
+      "summary": "Badge border radius default: 6px (live-observed) vs 10px (ticket QVD-132) — UNRESOLVED.",
+      "kb_refs": [
+        "KB-081",
+        "KB-082"
+      ]
+    },
+    {
+      "conflict_id": "CONF-DOC04-002",
+      "summary": "Badge text default: \"MULTIBUY\" (live example) vs \"Multi buy\" (ticket QVD-132) — UNRESOLVED.",
+      "kb_refs": [
+        "KB-083",
+        "KB-084"
+      ]
+    }
+  ],
+  "profile_relationships": [
+    {
+      "from": "multibuy-mix-match-combo",
+      "to": "quantity-break",
+      "relation": "cart_level_trigger_overlap_stacking",
+      "kb_refs": [
+        "KB-016",
+        "object:KB-003",
+        "object:KB-004",
+        "object:KB-005",
+        "object:KB-007"
+      ]
+    },
+    {
+      "from": "multibuy-mix-match-combo",
+      "to": "wholesale-pricing-offer",
+      "relation": "cart_level_trigger_overlap_stacking_3way",
+      "kb_refs": [
+        "object:KB-004",
+        "object:KB-005",
+        "object:KB-006",
+        "object:KB-007"
+      ]
+    }
+  ]
+}

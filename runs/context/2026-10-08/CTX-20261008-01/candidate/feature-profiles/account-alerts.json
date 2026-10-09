@@ -1,0 +1,721 @@
+{
+  "schema_version": "1.0",
+  "artifact_type": "FeatureProfileCandidate",
+  "artifact_id": "ART-FEATURE-PROFILE-account-alerts-CTX-20261008-01",
+  "workflow_id": "CTX-20261008-01",
+  "producer": "feature-profile-builder",
+  "source_refs": [
+    "candidate/product-kb/account-alerts.json",
+    "candidate/product-kb/_object-level.developer-settings.json",
+    "candidate/product-kb/_product-level.json",
+    "input/scope-plan.json",
+    "input/orchestrator-directives.json"
+  ],
+  "upstream_artifact_ids": [
+    "PKBC-CTX-20261008-01-developer-settings-account-alerts",
+    "PKBC-CTX-20261008-01-developer-settings-object-level",
+    "PKBC-CTX-20261008-01-_product-level"
+  ],
+  "status": "PARTIAL",
+  "confidence": "MEDIUM",
+  "observations": [
+    "Profile dựng hoàn toàn từ tài liệu, không có quan sát runtime trong lần chạy này; act_ids rỗng ở mọi nơi và observed_validations rỗng.",
+    "Hiện trạng khảo sát staging được giữ ở observed_behavior, tách khỏi confirmed_rules; mục chưa chắc chắn nằm ở risks.",
+    "feature_id dùng giá trị \"account-alerts\" như toàn bộ KB của feature; chưa có mã FEAT dạng số được cấp cho feature này."
+  ],
+  "assumptions": [],
+  "unknowns": [
+    "Trang Alerts trên portal có những gì: form tạo channel HTTP/Lark, nhập custom header, tick event, nút Test, sửa và xoá channel?",
+    "Thêm channel thứ 11 hoặc header thứ 11 thì portal phản hồi thế nào?",
+    "Nhập custom header trùng tên header hệ thống thì bị từ chối hay bị bỏ qua?",
+    "Lịch retry 6 lần, chỉ 2xx, timeout 10 giây, at-least-once có áp cho channel HTTP của alert không, hay chỉ cho task callback?",
+    "Message card Lark \"chỉnh sửa được\" nghĩa là người dùng chỉnh mẫu ở đâu và trong giới hạn nào?",
+    "\"Channel\" có thao tác tạo/xoá trên staging thuộc trang Alerts hay trang Webhooks?",
+    "Role nào (Owner, Admin, Editor, Viewer) được xem, tạo, sửa, xoá ở từng trang của nhóm Dev trên portal?"
+  ],
+  "conflicts": [],
+  "blocking_issues": [],
+  "payload": {
+    "feature_profiles": [
+      {
+        "feature_id": "account-alerts",
+        "feature_key": "account-alerts",
+        "name": "Alerts: channel nhận cảnh báo điều kiện tài khoản",
+        "user_goal": "Khách đăng ký channel HTTP hoặc Lark để được báo khi tài khoản rơi vào điều kiện cần xử lý (task fail, key provider hết tiền hoặc bị từ chối, hết credit) và khi điều kiện đó được khắc phục.",
+        "stable_since_version": "v1",
+        "actors": [
+          {
+            "role": "unspecified (người cấu hình trên portal)",
+            "permission_observed": "Cấu hình tối đa 10 channel ở mục Alerts, mỗi channel có URL, danh sách event, tối đa 10 custom header; gửi test message. Tài liệu không nói role nào được làm.",
+            "kb_refs": [
+              "KB-044",
+              "KB-045",
+              "KB-059",
+              "KB-061"
+            ]
+          },
+          {
+            "role": "hệ thống nhận (server của khách hoặc group chat Lark)",
+            "permission_observed": "HTTP endpoint nhận alert envelope nguyên bản, xác thực bằng chữ ký Standard Webhooks; Lark nhận message card, xác thực bằng chữ ký của Lark trong body.",
+            "kb_refs": [
+              "KB-046",
+              "KB-047"
+            ]
+          }
+        ],
+        "entry_points": [
+          {
+            "path": "Portal, nhóm Dev trên sidebar, trang Alerts (route `/alerts`)",
+            "precondition": "Đã đăng nhập dashboard.",
+            "kb_refs": [
+              "KB-044",
+              "KB-074",
+              "KB-P-027"
+            ]
+          }
+        ],
+        "capabilities": [
+          {
+            "name": "Quản lý alert channel",
+            "description": "Cấu hình ở mục Alerts, tối đa 10 channel mỗi account. Mỗi channel có URL riêng, danh sách event tick chọn riêng, tối đa 10 custom header; custom header không override được `webhook-id`, `webhook-timestamp`, `webhook-signature`, `content-type`, `content-length`, `host`.",
+            "kb_refs": [
+              "KB-044",
+              "KB-045",
+              "KB-059",
+              "KB-060",
+              "KB-074"
+            ],
+            "act_ids": []
+          },
+          {
+            "name": "Chọn loại channel và cách xác thực",
+            "description": "HTTP endpoint: body là alert envelope nguyên bản, ký Standard Webhooks bằng signing secret của org (3 header, HMAC-SHA256, verify trên raw body). Lark: body là message card chỉnh sửa được, xác thực bằng chữ ký của Lark trong body.",
+            "kb_refs": [
+              "KB-046",
+              "KB-047",
+              "KB-075",
+              "KB-076",
+              "KB-078",
+              "KB-080"
+            ],
+            "act_ids": []
+          },
+          {
+            "name": "Chọn event cần nhận",
+            "description": "4 event subscribe được: `task.failed`, `provider_key.insufficient_funds`, `provider_key.invalid`, `credits.exhausted`. `task.succeeded` cố ý không có vì đó là việc của task callback.",
+            "kb_refs": [
+              "KB-048",
+              "KB-053"
+            ],
+            "act_ids": []
+          },
+          {
+            "name": "Nhận cặp event mở và đóng của một điều kiện",
+            "description": "Alert báo điều kiện của tài khoản, kéo dài tới khi được khắc phục. Mỗi điều kiện gửi đúng 2 lần: lúc bắt đầu (`resolved_at: null`) và lúc kết thúc (`resolved_at` là timestamp), cùng `alert_key` và `opened_at`, không có event nào ở giữa. Điều kiện bắt đầu và kết thúc trước khi có channel subscribe thì không gửi gì. `task.failed` không phải điều kiện nên không có event hồi phục.",
+            "kb_refs": [
+              "KB-043",
+              "KB-049",
+              "KB-050",
+              "KB-051",
+              "KB-052",
+              "KB-054",
+              "KB-055",
+              "KB-056",
+              "KB-057"
+            ],
+            "act_ids": []
+          },
+          {
+            "name": "Gửi tới nhiều channel",
+            "description": "Một event gửi tới N channel đã subscribe tạo N delivery riêng, mỗi delivery có `id` và `webhook-id` riêng.",
+            "kb_refs": [
+              "KB-058"
+            ],
+            "act_ids": []
+          },
+          {
+            "name": "Kiểm tra channel",
+            "description": "Chức năng Test gửi sample message có `\"test\": true` ở cấp cao nhất của body; message test không được lưu vào delivery board.",
+            "kb_refs": [
+              "KB-061",
+              "KB-062"
+            ],
+            "act_ids": []
+          }
+        ],
+        "state_transitions": [
+          {
+            "from": "không có điều kiện",
+            "to": "điều kiện đang mở",
+            "trigger": "Phát sinh `provider_key.insufficient_funds`, `provider_key.invalid` hoặc `credits.exhausted`",
+            "condition": "Có ít nhất một channel subscribe event đó; event gửi đi có `resolved_at: null`",
+            "kb_refs": [
+              "KB-054",
+              "KB-055",
+              "KB-048"
+            ]
+          },
+          {
+            "from": "điều kiện đang mở (`provider_key.insufficient_funds`)",
+            "to": "điều kiện đã đóng",
+            "trigger": "Khách nạp tiền và generation kế tiếp thành công",
+            "condition": "Event đóng có `resolved_at` là timestamp, cùng `alert_key` và `opened_at`",
+            "kb_refs": [
+              "KB-050",
+              "KB-055",
+              "KB-056"
+            ]
+          },
+          {
+            "from": "điều kiện đang mở (`provider_key.invalid`)",
+            "to": "điều kiện đã đóng",
+            "trigger": "Khách thay key và generation kế tiếp thành công",
+            "condition": "Event đóng có `resolved_at` là timestamp, cùng `alert_key` và `opened_at`",
+            "kb_refs": [
+              "KB-051",
+              "KB-055",
+              "KB-056"
+            ]
+          },
+          {
+            "from": "điều kiện đang mở (`credits.exhausted`)",
+            "to": "điều kiện đã đóng",
+            "trigger": "Mua thêm credit hoặc quota được reset",
+            "condition": "Event đóng có `resolved_at` là timestamp, cùng `alert_key` và `opened_at`",
+            "kb_refs": [
+              "KB-052",
+              "KB-055",
+              "KB-056"
+            ]
+          },
+          {
+            "from": "điều kiện mở và đóng khi chưa có channel subscribe",
+            "to": "không gửi event nào",
+            "trigger": "Điều kiện kết thúc",
+            "condition": "Không gửi event hồi phục mồ côi",
+            "kb_refs": [
+              "KB-057"
+            ]
+          },
+          {
+            "from": "generation bị fail",
+            "to": "một event `task.failed` đã gửi",
+            "trigger": "Generation fail",
+            "condition": "Không có event đóng tương ứng",
+            "kb_refs": [
+              "KB-049"
+            ]
+          }
+        ],
+        "confirmed_rules": [
+          {
+            "statement": "Có hai loại webhook tách biệt là task callback và account alert, cấu hình ở hai mục khác nhau trên portal (Webhooks và Alerts).",
+            "knowledge_kind": "CONFIRMED_EXPECTED",
+            "confidence": "MEDIUM",
+            "kb_refs": [
+              "KB-074"
+            ]
+          },
+          {
+            "statement": "Task callback và account alert dùng chung cấu trúc envelope và cùng cơ chế chữ ký.",
+            "knowledge_kind": "CONFIRMED_EXPECTED",
+            "confidence": "MEDIUM",
+            "kb_refs": [
+              "KB-075"
+            ]
+          },
+          {
+            "statement": "Account alert báo một điều kiện của tài khoản (không phải một generation cụ thể), và điều kiện kéo dài tới khi được khắc phục.",
+            "knowledge_kind": "CONFIRMED_EXPECTED",
+            "confidence": "MEDIUM",
+            "kb_refs": [
+              "KB-043"
+            ]
+          },
+          {
+            "statement": "Alert được cấu hình ở mục Alerts trên portal, tối đa 10 channel cho mỗi account.",
+            "knowledge_kind": "CONFIRMED_EXPECTED",
+            "confidence": "MEDIUM",
+            "kb_refs": [
+              "KB-044"
+            ]
+          },
+          {
+            "statement": "Mỗi alert channel có URL riêng và danh sách event riêng được tick chọn.",
+            "knowledge_kind": "CONFIRMED_EXPECTED",
+            "confidence": "MEDIUM",
+            "kb_refs": [
+              "KB-045"
+            ]
+          },
+          {
+            "statement": "Channel loại HTTP endpoint gửi tới server của khách, body là alert envelope nguyên bản, xác thực bằng chữ ký Standard Webhooks dùng signing secret của org.",
+            "knowledge_kind": "CONFIRMED_EXPECTED",
+            "confidence": "MEDIUM",
+            "kb_refs": [
+              "KB-046"
+            ]
+          },
+          {
+            "statement": "Channel loại Lark gửi tới group chat Lark, body là message card chỉnh sửa được, xác thực bằng chữ ký riêng của Lark nằm trong body.",
+            "knowledge_kind": "CONFIRMED_EXPECTED",
+            "confidence": "MEDIUM",
+            "kb_refs": [
+              "KB-047"
+            ]
+          },
+          {
+            "statement": "Danh sách event subscribe được gồm 4 event: `task.failed`, `provider_key.insufficient_funds`, `provider_key.invalid`, `credits.exhausted`.",
+            "knowledge_kind": "CONFIRMED_EXPECTED",
+            "confidence": "MEDIUM",
+            "kb_refs": [
+              "KB-048"
+            ]
+          },
+          {
+            "statement": "`task.failed` báo một generation bị fail; nó không phải điều kiện nên không có event hồi phục.",
+            "knowledge_kind": "CONFIRMED_EXPECTED",
+            "confidence": "MEDIUM",
+            "kb_refs": [
+              "KB-049"
+            ]
+          },
+          {
+            "statement": "`provider_key.insufficient_funds` báo key provider riêng hết tiền; đóng khi khách nạp tiền và generation kế tiếp thành công.",
+            "knowledge_kind": "CONFIRMED_EXPECTED",
+            "confidence": "MEDIUM",
+            "kb_refs": [
+              "KB-050"
+            ]
+          },
+          {
+            "statement": "`provider_key.invalid` báo key provider riêng bị provider từ chối; đóng khi khách thay key và generation kế tiếp thành công.",
+            "knowledge_kind": "CONFIRMED_EXPECTED",
+            "confidence": "MEDIUM",
+            "kb_refs": [
+              "KB-051"
+            ]
+          },
+          {
+            "statement": "`credits.exhausted` báo balance credit ImagenHub không đủ; đóng khi mua thêm credit hoặc quota được reset.",
+            "knowledge_kind": "CONFIRMED_EXPECTED",
+            "confidence": "MEDIUM",
+            "kb_refs": [
+              "KB-052"
+            ]
+          },
+          {
+            "statement": "`task.succeeded` cố ý không có trong danh sách event của alert channel vì đó là việc của task callback.",
+            "knowledge_kind": "CONFIRMED_EXPECTED",
+            "confidence": "MEDIUM",
+            "kb_refs": [
+              "KB-053"
+            ]
+          },
+          {
+            "statement": "Mỗi điều kiện được gửi đúng 2 lần trong vòng đời: một lần lúc bắt đầu, một lần lúc kết thúc.",
+            "knowledge_kind": "CONFIRMED_EXPECTED",
+            "confidence": "MEDIUM",
+            "kb_refs": [
+              "KB-054"
+            ]
+          },
+          {
+            "statement": "Event lúc bắt đầu có `resolved_at: null`; event lúc kết thúc có `resolved_at` là timestamp.",
+            "knowledge_kind": "CONFIRMED_EXPECTED",
+            "confidence": "MEDIUM",
+            "kb_refs": [
+              "KB-055"
+            ]
+          },
+          {
+            "statement": "Hai event của cùng một điều kiện mang cùng `alert_key` và `opened_at`, và không có event nào được gửi ở giữa.",
+            "knowledge_kind": "CONFIRMED_EXPECTED",
+            "confidence": "MEDIUM",
+            "kb_refs": [
+              "KB-056"
+            ]
+          },
+          {
+            "statement": "Điều kiện bắt đầu và kết thúc trước khi có channel nào subscribe thì không có event nào được gửi.",
+            "knowledge_kind": "CONFIRMED_EXPECTED",
+            "confidence": "MEDIUM",
+            "kb_refs": [
+              "KB-057"
+            ]
+          },
+          {
+            "statement": "Một event gửi tới N channel đã subscribe tạo N delivery riêng, mỗi delivery có `id` và `webhook-id` riêng.",
+            "knowledge_kind": "CONFIRMED_EXPECTED",
+            "confidence": "MEDIUM",
+            "kb_refs": [
+              "KB-058"
+            ]
+          },
+          {
+            "statement": "Mỗi alert channel có tối đa 10 custom header.",
+            "knowledge_kind": "CONFIRMED_EXPECTED",
+            "confidence": "MEDIUM",
+            "kb_refs": [
+              "KB-059"
+            ]
+          },
+          {
+            "statement": "Custom header không override được `webhook-id`, `webhook-timestamp`, `webhook-signature`, `content-type`, `content-length`, `host`.",
+            "knowledge_kind": "CONFIRMED_EXPECTED",
+            "confidence": "MEDIUM",
+            "kb_refs": [
+              "KB-060"
+            ]
+          },
+          {
+            "statement": "Test alert channel gửi sample message có `\"test\": true` ở cấp cao nhất của body.",
+            "knowledge_kind": "CONFIRMED_EXPECTED",
+            "confidence": "MEDIUM",
+            "kb_refs": [
+              "KB-061"
+            ]
+          },
+          {
+            "statement": "Message test của alert channel không được lưu vào delivery board.",
+            "knowledge_kind": "CONFIRMED_EXPECTED",
+            "confidence": "MEDIUM",
+            "kb_refs": [
+              "KB-062"
+            ]
+          },
+          {
+            "statement": "Webhook mang 3 header ký Standard Webhooks `webhook-id`, `webhook-timestamp`, `webhook-signature`; chữ ký là HMAC-SHA256, verify trên raw body trước khi parse JSON.",
+            "knowledge_kind": "CONFIRMED_EXPECTED",
+            "confidence": "MEDIUM",
+            "kb_refs": [
+              "KB-076",
+              "KB-078",
+              "KB-080"
+            ]
+          }
+        ],
+        "observed_behavior": [],
+        "observed_validations": [],
+        "permissions": [
+          {
+            "statement": "Quyền theo role cho trang Alerts không được tài liệu mô tả.",
+            "kb_refs": [
+              "KB-044"
+            ]
+          }
+        ],
+        "surface_mapping": {
+          "portal": [
+            {
+              "item": "Trang Alerts (`/alerts`) trong nhóm Dev: tối đa 10 channel, URL và event tick chọn mỗi channel",
+              "kb_refs": [
+                "KB-044",
+                "KB-045",
+                "KB-074",
+                "KB-P-027"
+              ]
+            },
+            {
+              "item": "Custom header mỗi channel (tối đa 10; không override được header hệ thống)",
+              "kb_refs": [
+                "KB-059",
+                "KB-060"
+              ]
+            },
+            {
+              "item": "Chức năng Test channel",
+              "kb_refs": [
+                "KB-061",
+                "KB-062"
+              ]
+            }
+          ],
+          "storefront": [],
+          "api": [
+            {
+              "item": "Alert envelope gửi tới HTTP endpoint, ký Standard Webhooks",
+              "kb_refs": [
+                "KB-046",
+                "KB-075",
+                "KB-076",
+                "KB-078",
+                "KB-080"
+              ]
+            },
+            {
+              "item": "Event: `task.failed`, `provider_key.insufficient_funds`, `provider_key.invalid`, `credits.exhausted`; field `resolved_at`, `alert_key`, `opened_at`",
+              "kb_refs": [
+                "KB-048",
+                "KB-055",
+                "KB-056"
+              ]
+            }
+          ],
+          "data": [
+            {
+              "item": "Delivery board (không chứa message test); mỗi channel một delivery riêng",
+              "kb_refs": [
+                "KB-058",
+                "KB-062"
+              ]
+            }
+          ],
+          "code": [],
+          "integration": [
+            {
+              "item": "Channel Lark: message card tới group chat, chữ ký Lark trong body",
+              "kb_refs": [
+                "KB-047"
+              ]
+            }
+          ]
+        },
+        "dependencies": [
+          {
+            "target": "developer-settings / task-webhooks",
+            "relation": "shares_mechanism",
+            "note": "Dùng chung envelope và cơ chế chữ ký với task callback; báo task thành công là việc của task callback.",
+            "kb_refs": [
+              "KB-075",
+              "KB-053"
+            ]
+          },
+          {
+            "target": "developer-settings / provider-keys-byok",
+            "relation": "condition_source",
+            "note": "Điều kiện `provider_key.insufficient_funds` và `provider_key.invalid` phát sinh từ key provider riêng.",
+            "kb_refs": [
+              "KB-050",
+              "KB-051"
+            ]
+          },
+          {
+            "target": "organization-billing / credits-and-rate-limits",
+            "relation": "condition_source",
+            "note": "`credits.exhausted` gắn với balance và quota credit.",
+            "kb_refs": [
+              "KB-052"
+            ]
+          }
+        ],
+        "risks": [
+          {
+            "statement": "Trong lúc rotate signing secret, header chữ ký \"có thể\" chứa nhiều chữ ký; áp dụng cho channel HTTP vì dùng chung cơ chế chữ ký, nhưng chưa xác nhận.",
+            "knowledge_kind": "CONFIRMED_EXPECTED/INFERRED",
+            "confidence": "LOW",
+            "kb_refs": [
+              "KB-079",
+              "KB-075"
+            ]
+          }
+        ],
+        "freshness": {
+          "observed_at": "2026-08-27",
+          "run_id": "CTX-20261008-01",
+          "basis": "Docs chính thức bản QA đọc 2026-08-27"
+        },
+        "unknown_areas": [
+          {
+            "question": "Trang Alerts trên portal có những gì: form tạo channel HTTP/Lark, nhập custom header, tick event, nút Test, sửa và xoá channel?",
+            "why_it_matters": "Chưa có tài liệu chi tiết về giao diện trang Alerts; chỉ có mô tả ở mức docs chính thức.",
+            "kb_refs": [
+              "KB-044",
+              "KB-045"
+            ]
+          },
+          {
+            "question": "Thêm channel thứ 11 hoặc header thứ 11 thì portal phản hồi thế nào?",
+            "why_it_matters": "Có giới hạn rõ (10 channel, 10 header) nhưng không có expected result khi vượt.",
+            "kb_refs": [
+              "KB-044",
+              "KB-059"
+            ]
+          },
+          {
+            "question": "Nhập custom header trùng tên header hệ thống thì bị từ chối hay bị bỏ qua?",
+            "why_it_matters": "Docs chỉ nói không override được, không nói cách xử lý.",
+            "kb_refs": [
+              "KB-060"
+            ]
+          },
+          {
+            "question": "Lịch retry 6 lần, chỉ 2xx, timeout 10 giây, at-least-once có áp cho channel HTTP của alert không, hay chỉ cho task callback?",
+            "why_it_matters": "Docs mô tả quy tắc giao nhận ở phần chung nhưng không nói rõ phạm vi; không suy rộng sang alert.",
+            "kb_refs": [
+              "KB-075",
+              "KB-058"
+            ]
+          },
+          {
+            "question": "Message card Lark \"chỉnh sửa được\" nghĩa là người dùng chỉnh mẫu ở đâu và trong giới hạn nào?",
+            "why_it_matters": "Không viết được expected result cho nội dung tin Lark.",
+            "kb_refs": [
+              "KB-047"
+            ]
+          },
+          {
+            "question": "\"Channel\" có thao tác tạo/xoá trên staging thuộc trang Alerts hay trang Webhooks?",
+            "why_it_matters": "Không gán được hiện trạng đó cho đúng chức năng.",
+            "kb_refs": [
+              "KB-081"
+            ]
+          },
+          {
+            "question": "Role nào (Owner, Admin, Editor, Viewer) được xem, tạo, sửa, xoá ở từng trang của nhóm Dev trên portal?",
+            "why_it_matters": "Tài liệu không gán role cho các thao tác của nhóm trang này; không có expected result cho kiểm thử phân quyền.",
+            "kb_refs": []
+          }
+        ]
+      }
+    ],
+    "profile_relationships": [
+      {
+        "from": "account-alerts",
+        "to": "task-webhooks",
+        "relation": "SHARES_ENVELOPE_AND_SIGNATURE",
+        "kb_refs": [
+          "KB-075",
+          "KB-074"
+        ]
+      },
+      {
+        "from": "account-alerts",
+        "to": "provider-keys-byok",
+        "relation": "ALERTS_ON_CONDITION_OF",
+        "kb_refs": [
+          "KB-050",
+          "KB-051"
+        ]
+      },
+      {
+        "from": "account-alerts",
+        "to": "organization-billing/credits-and-rate-limits",
+        "relation": "ALERTS_ON_CONDITION_OF",
+        "kb_refs": [
+          "KB-052"
+        ]
+      }
+    ],
+    "coverage_matrix": [
+      {
+        "feature_id": "account-alerts",
+        "layer": "portal",
+        "role": "unspecified",
+        "state": "tạo channel trong giới hạn 10",
+        "environment": "documented",
+        "covered": true,
+        "note": "Docs chính thức, mức mô tả chức năng"
+      },
+      {
+        "feature_id": "account-alerts",
+        "layer": "portal",
+        "role": "unspecified",
+        "state": "vượt 10 channel hoặc 10 header",
+        "environment": "documented",
+        "covered": false,
+        "note": "Phản hồi khi vượt không được mô tả"
+      },
+      {
+        "feature_id": "account-alerts",
+        "layer": "portal",
+        "role": "unspecified",
+        "state": "test channel",
+        "environment": "documented",
+        "covered": true,
+        "note": "Docs chính thức"
+      },
+      {
+        "feature_id": "account-alerts",
+        "layer": "portal",
+        "role": "Owner/Admin/Editor/Viewer",
+        "state": "phân quyền theo role",
+        "environment": "documented",
+        "covered": false,
+        "note": "Không được mô tả"
+      },
+      {
+        "feature_id": "account-alerts",
+        "layer": "api",
+        "role": "hệ thống nhận",
+        "state": "điều kiện mở",
+        "environment": "documented",
+        "covered": true,
+        "note": "Docs chính thức"
+      },
+      {
+        "feature_id": "account-alerts",
+        "layer": "api",
+        "role": "hệ thống nhận",
+        "state": "điều kiện đóng",
+        "environment": "documented",
+        "covered": true,
+        "note": "Docs chính thức, theo từng event"
+      },
+      {
+        "feature_id": "account-alerts",
+        "layer": "api",
+        "role": "hệ thống nhận",
+        "state": "điều kiện mở và đóng trước khi có channel",
+        "environment": "documented",
+        "covered": true,
+        "note": "Docs chính thức"
+      },
+      {
+        "feature_id": "account-alerts",
+        "layer": "api",
+        "role": "hệ thống nhận",
+        "state": "endpoint lỗi hoặc timeout (retry)",
+        "environment": "documented",
+        "covered": false,
+        "note": "Chưa rõ quy tắc giao nhận có áp cho alert"
+      },
+      {
+        "feature_id": "account-alerts",
+        "layer": "integration",
+        "role": "hệ thống nhận",
+        "state": "channel Lark",
+        "environment": "documented",
+        "covered": true,
+        "note": "Docs chính thức, mức mô tả"
+      },
+      {
+        "feature_id": "account-alerts",
+        "layer": "code",
+        "role": "unspecified",
+        "state": "any",
+        "environment": "documented",
+        "covered": false,
+        "note": "Không có nguồn mã"
+      }
+    ],
+    "unassigned_kb_items": [
+      {
+        "kb_id": "KB-081",
+        "reason": "Hiện trạng tạo/xoá \"channel\" trên staging không nói rõ thuộc trang Webhooks hay Alerts; không gán vào capability nào, chỉ nêu ở unknown_areas."
+      },
+      {
+        "kb_id": "KB-077",
+        "reason": "`webhook-id` giữ nguyên qua retry chỉ có ý nghĩa nếu alert cũng được retry, điều này chưa rõ; mục này thuộc task callback."
+      }
+    ],
+    "profile_conflicts": [],
+    "profile_change_summary": [
+      "Profile tạo mới lần đầu từ bộ tài liệu; chưa có phiên bản trước để so."
+    ],
+    "kb_trace_complete": true
+  },
+  "gate": {
+    "decision": "CONDITIONAL_PASS",
+    "blocking_findings": [],
+    "conditions": [
+      "Giao diện portal của trang này chưa có tài liệu chi tiết; checklist ở tầng portal chỉ dùng được phần docs chính thức mô tả, phần còn lại là câu hỏi mở.",
+      "Role cho từng thao tác chưa được xác định; không viết expected result phân quyền.",
+      "Mục ở risks và observed_behavior không dùng làm expected result; observed_behavior là hiện trạng tại thời điểm khảo sát."
+    ],
+    "allowed_next_steps": [
+      "qa-checklist-builder",
+      "knowledge-diff-analyzer"
+    ]
+  }
+}

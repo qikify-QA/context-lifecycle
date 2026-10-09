@@ -1,0 +1,638 @@
+{
+  "feature_id": "provider-keys-byok",
+  "feature_key": "provider-keys-byok",
+  "name": "Provider Keys (BYOK) và Fail-Safe",
+  "user_goal": "Khách dùng key provider của chính mình để chi phí generation tính thẳng vào tài khoản provider theo giá provider, key được lưu mã hoá và hệ thống tự chuyển sang key của ImagenHub khi key riêng lỗi hoặc hết token.",
+  "stable_since_version": "v1",
+  "actors": [
+    {
+      "role": "unspecified (người quản lý key trên dashboard)",
+      "permission_observed": "Lưu, liệt kê, xoá provider key qua API xác thực bằng JWT (không bằng API key). Tài liệu không nói role nào được làm.",
+      "kb_refs": [
+        "KB-010",
+        "KB-P-011"
+      ]
+    },
+    {
+      "role": "api-caller (request generate)",
+      "permission_observed": "Không thao tác key trực tiếp; request generate được hệ thống định tuyến dùng BYOK key hoặc key hệ thống.",
+      "kb_refs": [
+        "KB-020",
+        "KB-021"
+      ]
+    }
+  ],
+  "entry_points": [
+    {
+      "path": "Portal, nhóm Dev trên sidebar, trang Provider Keys (BYOK) (route `/provider-keys`)",
+      "precondition": "Đã đăng nhập dashboard.",
+      "kb_refs": [
+        "KB-026",
+        "KB-P-027"
+      ]
+    },
+    {
+      "path": "API `POST /provider-keys`, `GET /provider-keys`, `DELETE /provider-keys/{id}`",
+      "precondition": "Request mang JWT.",
+      "kb_refs": [
+        "KB-010",
+        "KB-014",
+        "KB-015",
+        "KB-019"
+      ]
+    },
+    {
+      "path": "Bước chọn cách cấp quyền dùng model khi setup tích hợp Teeinblue (BYOK hoặc ImagenHub Subscription)",
+      "precondition": "Đang setup tích hợp Teeinblue.",
+      "kb_refs": [
+        "KB-024"
+      ]
+    }
+  ],
+  "capabilities": [
+    {
+      "name": "Lưu hoặc thay key provider riêng",
+      "description": "Gửi `provider_id` và `key` tới `POST /provider-keys` (JWT). Tạo key mới cho provider đã có key sẽ ghi đè key cũ; trên staging cũng thấy ghi đè, không thêm dòng mới. Đơn vị duy nhất của key (user hay organization) đang mâu thuẫn trong docs.",
+      "kb_refs": [
+        "KB-010",
+        "KB-015",
+        "KB-016",
+        "KB-017",
+        "KB-018",
+        "KB-026",
+        "KB-027"
+      ]
+    },
+    {
+      "name": "Giữ bí mật key provider",
+      "description": "Key mã hoá AES-256 khi lưu, chỉ giải mã lúc gọi provider; API không bao giờ trả giá trị đầy đủ, `GET /provider-keys` trả dạng masked.",
+      "kb_refs": [
+        "KB-011",
+        "KB-012",
+        "KB-013",
+        "KB-014"
+      ]
+    },
+    {
+      "name": "Xoá key provider",
+      "description": "`DELETE /provider-keys/{id}` là soft-delete, key vẫn được giữ cho audit. Trên staging trang Provider Keys có thao tác xoá.",
+      "kb_refs": [
+        "KB-019",
+        "KB-026"
+      ]
+    },
+    {
+      "name": "Tính chi phí theo nguồn key khi generate",
+      "description": "Có BYOK key cho provider: dùng key đó, chi phí tính vào tài khoản provider của khách theo giá provider. Không có: dùng key hệ thống và trừ credit ImagenHub. Docs còn nói BYOK vẫn có thể trừ credit tuỳ plan (chưa nêu plan). Trên staging, task dùng BYOK hiện \"Your key\" ở cột Est. Cost và không trừ credit.",
+      "kb_refs": [
+        "KB-020",
+        "KB-021",
+        "KB-023",
+        "KB-024",
+        "KB-025"
+      ]
+    },
+    {
+      "name": "Fail-Safe khi key riêng lỗi",
+      "description": "Key provider riêng lỗi hoặc hết token thì hệ thống tự chuyển sang key hệ thống của ImagenHub để service không gián đoạn; docs không nói việc này có trừ credit hay không.",
+      "kb_refs": [
+        "KB-022"
+      ]
+    }
+  ],
+  "state_transitions": [
+    {
+      "from": "chưa có key cho provider",
+      "to": "có key cho provider",
+      "trigger": "`POST /provider-keys` với `provider_id` và `key`",
+      "condition": "Request mang JWT",
+      "kb_refs": [
+        "KB-010",
+        "KB-015"
+      ]
+    },
+    {
+      "from": "có key cho provider",
+      "to": "key mới thay key cũ",
+      "trigger": "`POST /provider-keys` lần nữa cho cùng provider",
+      "condition": "Không giữ song song hai key cho cùng provider",
+      "kb_refs": [
+        "KB-016"
+      ]
+    },
+    {
+      "from": "có key cho provider",
+      "to": "key đã xoá mềm (giữ cho audit)",
+      "trigger": "`DELETE /provider-keys/{id}`",
+      "condition": "",
+      "kb_refs": [
+        "KB-019"
+      ]
+    },
+    {
+      "from": "request generate tới",
+      "to": "chạy bằng BYOK key, chi phí tính vào tài khoản provider",
+      "trigger": "Hệ thống kiểm tra có BYOK key cho provider",
+      "condition": "Có BYOK key cho provider đó",
+      "kb_refs": [
+        "KB-020"
+      ]
+    },
+    {
+      "from": "request generate tới",
+      "to": "chạy bằng key hệ thống, trừ credit ImagenHub",
+      "trigger": "Hệ thống kiểm tra có BYOK key cho provider",
+      "condition": "Không có BYOK key cho provider đó",
+      "kb_refs": [
+        "KB-021"
+      ]
+    },
+    {
+      "from": "đang chạy bằng BYOK key",
+      "to": "chạy bằng key hệ thống (Fail-Safe)",
+      "trigger": "Key riêng bị lỗi hoặc hết token",
+      "condition": "Việc trừ credit trong trường hợp này không được mô tả",
+      "kb_refs": [
+        "KB-022"
+      ]
+    }
+  ],
+  "confirmed_rules": [
+    {
+      "statement": "Provider key (BYOK) được lưu qua API xác thực bằng JWT, không phải API key.",
+      "knowledge_kind": "CONFIRMED_EXPECTED",
+      "confidence": "MEDIUM",
+      "kb_refs": [
+        "KB-010"
+      ]
+    },
+    {
+      "statement": "Provider key được mã hoá AES-256 khi lưu trữ.",
+      "knowledge_kind": "CONFIRMED_EXPECTED",
+      "confidence": "MEDIUM",
+      "kb_refs": [
+        "KB-011"
+      ]
+    },
+    {
+      "statement": "Provider key chỉ được giải mã tại thời điểm hệ thống gọi tới provider.",
+      "knowledge_kind": "CONFIRMED_EXPECTED",
+      "confidence": "MEDIUM",
+      "kb_refs": [
+        "KB-012"
+      ]
+    },
+    {
+      "statement": "API không bao giờ trả về giá trị đầy đủ của provider key.",
+      "knowledge_kind": "CONFIRMED_EXPECTED",
+      "confidence": "MEDIUM",
+      "kb_refs": [
+        "KB-013"
+      ]
+    },
+    {
+      "statement": "`GET /provider-keys` liệt kê provider key ở dạng masked; chuỗi `sk-proj-...abc` chỉ là ví dụ, quy tắc mask cụ thể không được nêu.",
+      "knowledge_kind": "CONFIRMED_EXPECTED",
+      "confidence": "MEDIUM",
+      "kb_refs": [
+        "KB-014"
+      ]
+    },
+    {
+      "statement": "`POST /provider-keys` nhận body gồm `provider_id` và `key`; field bắt buộc và mã lỗi validate không được nêu.",
+      "knowledge_kind": "CONFIRMED_EXPECTED",
+      "confidence": "MEDIUM",
+      "kb_refs": [
+        "KB-015"
+      ]
+    },
+    {
+      "statement": "Tạo key mới cho provider đã có key sẽ ghi đè key cũ, không giữ song song hai key cho cùng provider.",
+      "knowledge_kind": "CONFIRMED_EXPECTED",
+      "confidence": "MEDIUM",
+      "kb_refs": [
+        "KB-016"
+      ]
+    },
+    {
+      "statement": "`DELETE /provider-keys/{id}` là soft-delete; key bị xoá vẫn được giữ lại cho audit.",
+      "knowledge_kind": "CONFIRMED_EXPECTED",
+      "confidence": "MEDIUM",
+      "kb_refs": [
+        "KB-019"
+      ]
+    },
+    {
+      "statement": "Khi có BYOK key cho provider, hệ thống dùng key đó và chi phí tính trực tiếp vào tài khoản provider của khách theo giá provider.",
+      "knowledge_kind": "CONFIRMED_EXPECTED",
+      "confidence": "MEDIUM",
+      "kb_refs": [
+        "KB-020"
+      ]
+    },
+    {
+      "statement": "Khi không có BYOK key cho provider, hệ thống dùng key hệ thống và trừ credit ImagenHub.",
+      "knowledge_kind": "CONFIRMED_EXPECTED",
+      "confidence": "MEDIUM",
+      "kb_refs": [
+        "KB-021"
+      ]
+    },
+    {
+      "statement": "Khi key provider riêng lỗi hoặc hết token, hệ thống tự fallback sang key hệ thống của ImagenHub (Fail-Safe) để service không gián đoạn.",
+      "knowledge_kind": "CONFIRMED_EXPECTED",
+      "confidence": "MEDIUM",
+      "kb_refs": [
+        "KB-022"
+      ]
+    },
+    {
+      "statement": "Có hai cách cấp quyền dùng model: BYOK (key provider riêng, tự kiểm soát billing/usage) hoặc ImagenHub Subscription (dùng ngay thư viện model, không cần quản lý credential).",
+      "knowledge_kind": "CONFIRMED_EXPECTED",
+      "confidence": "MEDIUM",
+      "kb_refs": [
+        "KB-024"
+      ]
+    }
+  ],
+  "observed_behavior": [
+    {
+      "statement": "Trên staging (khảo sát 2026-08-30), cột Est. Cost của Task history hiện \"Your key\" cho task dùng BYOK key và credit ImagenHub không bị trừ (1 org test; plan không được nêu).",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "confidence": "LOW",
+      "status": "CURRENT_STATE",
+      "kb_refs": [
+        "KB-025"
+      ]
+    },
+    {
+      "statement": "Trên staging (khảo sát 2026-08-30), trang Provider Keys (`/provider-keys`) có thao tác tạo và xoá key; cùng ghi chép lại nói chưa submit key provider thật, nên chưa rõ thao tác tạo đã dùng key hợp lệ hay chưa.",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "confidence": "LOW",
+      "status": "CURRENT_STATE",
+      "kb_refs": [
+        "KB-026"
+      ]
+    },
+    {
+      "statement": "Trên staging (khảo sát 2026-08-30), thêm key cho provider đã có key sẽ ghi đè key cũ, không tạo dòng mới; chưa rõ có dùng key thật hay không.",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "confidence": "LOW",
+      "status": "CURRENT_STATE",
+      "kb_refs": [
+        "KB-027"
+      ]
+    }
+  ],
+  "observed_validations": [],
+  "permissions": [
+    {
+      "statement": "Quản lý provider key là thao tác dashboard, xác thực bằng JWT.",
+      "kb_refs": [
+        "KB-010",
+        "KB-P-011"
+      ]
+    },
+    {
+      "statement": "Quyền theo role cho trang Provider Keys không được tài liệu mô tả.",
+      "kb_refs": [
+        "KB-026"
+      ]
+    }
+  ],
+  "surface_mapping": {
+    "portal": [
+      {
+        "item": "Trang Provider Keys (BYOK) (`/provider-keys`) trong nhóm Dev, có thao tác tạo và xoá key (khảo sát staging)",
+        "kb_refs": [
+          "KB-026",
+          "KB-027",
+          "KB-P-027"
+        ]
+      },
+      {
+        "item": "Cột Est. Cost ở Task history hiện \"Your key\" cho task dùng BYOK (khảo sát staging)",
+        "kb_refs": [
+          "KB-025"
+        ]
+      }
+    ],
+    "storefront": [],
+    "api": [
+      {
+        "item": "`POST /provider-keys` (body `provider_id`, `key`), JWT",
+        "kb_refs": [
+          "KB-010",
+          "KB-015",
+          "KB-016"
+        ]
+      },
+      {
+        "item": "`GET /provider-keys` trả danh sách masked",
+        "kb_refs": [
+          "KB-013",
+          "KB-014"
+        ]
+      },
+      {
+        "item": "`DELETE /provider-keys/{id}` soft-delete",
+        "kb_refs": [
+          "KB-019"
+        ]
+      }
+    ],
+    "data": [
+      {
+        "item": "Key mã hoá AES-256 khi lưu, giải mã lúc gọi provider",
+        "kb_refs": [
+          "KB-011",
+          "KB-012"
+        ]
+      },
+      {
+        "item": "Key đã xoá vẫn được giữ cho audit",
+        "kb_refs": [
+          "KB-019"
+        ]
+      }
+    ],
+    "code": [],
+    "integration": [
+      {
+        "item": "Lựa chọn BYOK hoặc ImagenHub Subscription khi setup tích hợp Teeinblue",
+        "kb_refs": [
+          "KB-024"
+        ]
+      }
+    ]
+  },
+  "dependencies": [
+    {
+      "target": "developer-settings / account-alerts",
+      "relation": "emits_condition",
+      "note": "Key provider riêng hết tiền hoặc bị provider từ chối là điều kiện phát alert `provider_key.insufficient_funds` / `provider_key.invalid`.",
+      "kb_refs": [
+        "KB-050",
+        "KB-051",
+        "KB-022"
+      ]
+    },
+    {
+      "target": "tasks / task-history-list",
+      "relation": "displayed_in",
+      "note": "Cột Est. Cost hiển thị \"Your key\" hoặc số credit.",
+      "kb_refs": [
+        "KB-025"
+      ]
+    },
+    {
+      "target": "templates / template-post-processing",
+      "relation": "see_also",
+      "note": "Dạng \"Your key +N credits\": post-processing vẫn trừ credit khi model chính dùng BYOK.",
+      "kb_refs": [
+        "KB-025"
+      ]
+    },
+    {
+      "target": "organization-billing / credits-and-rate-limits",
+      "relation": "see_also",
+      "note": "Credit, plan, overage; câu \"BYOK vẫn có thể trừ credit tuỳ plan\" trỏ tới mảng gói dịch vụ chưa có tài liệu.",
+      "kb_refs": [
+        "KB-023",
+        "KB-021"
+      ]
+    },
+    {
+      "target": "organization-billing / organization-members",
+      "relation": "same_source_statement",
+      "note": "Phát biểu \"Organization sở hữu mọi thứ, gồm key\" thuộc phần Organization; nó là một phía của mâu thuẫn đơn vị sở hữu provider key.",
+      "kb_refs": [
+        "KB-018"
+      ]
+    }
+  ],
+  "risks": [
+    {
+      "statement": "Đơn vị sở hữu và đơn vị duy nhất của provider key chưa thống nhất: một mục docs ghi 1 key cho mỗi user mỗi provider, mục khác ghi Organization sở hữu mọi thứ kể cả key. Chưa dùng được làm expected result, nhất là cho quy tắc ghi đè.",
+      "knowledge_kind": "INFERRED",
+      "confidence": "LOW",
+      "kb_refs": [
+        "KB-017",
+        "KB-018"
+      ]
+    },
+    {
+      "statement": "Docs ghi với BYOK thì credit ImagenHub vẫn \"có thể\" bị trừ tuỳ plan nhưng không nêu plan nào; hiện trạng staging lại thấy không trừ.",
+      "knowledge_kind": "INFERRED/OBSERVED_CURRENT",
+      "confidence": "LOW",
+      "kb_refs": [
+        "KB-023",
+        "KB-025"
+      ]
+    }
+  ],
+  "freshness": {
+    "observed_at": "2026-08-30",
+    "basis": "Docs chính thức bản QA đọc 2026-08-27; khảo sát staging 2026-08-30"
+  },
+  "unknown_areas": [
+    {
+      "question": "Provider key thuộc user hay organization; quy tắc ghi đè áp theo user hay theo org?",
+      "why_it_matters": "Hai mục của docs chính thức mâu thuẫn; kiểm thử ghi đè và chia sẻ key giữa thành viên không có oracle.",
+      "kb_refs": [
+        "KB-017",
+        "KB-018",
+        "KB-016"
+      ],
+      "oq_id": "OQ-developer-settings-005"
+    },
+    {
+      "question": "Plan nào khiến BYOK vẫn trừ credit ImagenHub, và mức trừ?",
+      "why_it_matters": "Liên quan billing; docs nói \"có thể trừ tuỳ plan\" mà không liệt kê, trong khi staging thấy không trừ.",
+      "kb_refs": [
+        "KB-023",
+        "KB-025"
+      ],
+      "oq_id": "OQ-developer-settings-006"
+    },
+    {
+      "question": "Khi Fail-Safe chuyển sang key hệ thống thì có trừ credit ImagenHub không?",
+      "why_it_matters": "Ảnh hưởng trực tiếp tới số credit của khách khi key riêng lỗi.",
+      "kb_refs": [
+        "KB-022"
+      ],
+      "oq_id": "OQ-developer-settings-006"
+    },
+    {
+      "question": "Trang Provider Keys trên portal: form nhập key, provider nào được hỗ trợ, cách hiển thị masked, luồng xoá, trạng thái \"healthy\" nghĩa là gì?",
+      "why_it_matters": "Chưa có tài liệu chi tiết về giao diện trang này; chỉ có mô tả API.",
+      "kb_refs": [
+        "KB-026"
+      ],
+      "oq_id": "OQ-developer-settings-003"
+    },
+    {
+      "question": "Hệ thống có kiểm tra key với provider lúc lưu không; lưu key sai định dạng hoặc key không hợp lệ thì phản hồi thế nào?",
+      "why_it_matters": "Thao tác submit key thật chưa được thử; không có mã lỗi validate nào được nêu.",
+      "kb_refs": [
+        "KB-015",
+        "KB-026",
+        "KB-027"
+      ],
+      "oq_id": "OQ-developer-settings-004"
+    },
+    {
+      "question": "Có lấy lại hoặc khôi phục được provider key đã xoá mềm không?",
+      "why_it_matters": "Docs chỉ nói key xoá vẫn được giữ cho audit; không nói người dùng thấy gì sau khi xoá.",
+      "kb_refs": [
+        "KB-019"
+      ],
+      "oq_id": "OQ-developer-settings-018"
+    },
+    {
+      "question": "Role nào (Owner, Admin, Editor, Viewer) được xem, tạo, sửa, xoá ở từng trang của nhóm Dev trên portal?",
+      "why_it_matters": "Tài liệu không gán role cho các thao tác của nhóm trang này; không có expected result cho kiểm thử phân quyền.",
+      "kb_refs": [],
+      "oq_id": "OQ-developer-settings-020"
+    }
+  ],
+  "last_updated": {
+    "date": "2026-10-08",
+    "ccr_ref": "bootstrap"
+  },
+  "coverage_matrix": [
+    {
+      "feature_id": "provider-keys-byok",
+      "layer": "portal",
+      "role": "unspecified",
+      "state": "tạo hoặc thay key",
+      "environment": "documented",
+      "covered": true,
+      "note": "Chỉ có hiện trạng khảo sát staging, chưa rõ dùng key thật"
+    },
+    {
+      "feature_id": "provider-keys-byok",
+      "layer": "portal",
+      "role": "unspecified",
+      "state": "xem danh sách key",
+      "environment": "documented",
+      "covered": false,
+      "note": "Chưa có tài liệu giao diện"
+    },
+    {
+      "feature_id": "provider-keys-byok",
+      "layer": "portal",
+      "role": "unspecified",
+      "state": "xoá key",
+      "environment": "documented",
+      "covered": true,
+      "note": "Chỉ có hiện trạng khảo sát staging"
+    },
+    {
+      "feature_id": "provider-keys-byok",
+      "layer": "portal",
+      "role": "Owner/Admin/Editor/Viewer",
+      "state": "phân quyền theo role",
+      "environment": "documented",
+      "covered": false,
+      "note": "Không được mô tả"
+    },
+    {
+      "feature_id": "provider-keys-byok",
+      "layer": "api",
+      "role": "unspecified",
+      "state": "lưu, liệt kê, xoá key qua API",
+      "environment": "documented",
+      "covered": true,
+      "note": "Docs chính thức: POST/GET/DELETE /provider-keys"
+    },
+    {
+      "feature_id": "provider-keys-byok",
+      "layer": "api",
+      "role": "unspecified",
+      "state": "lưu key không hợp lệ",
+      "environment": "documented",
+      "covered": false,
+      "note": "Không có mã lỗi validate"
+    },
+    {
+      "feature_id": "provider-keys-byok",
+      "layer": "api",
+      "role": "api-caller",
+      "state": "generate có BYOK key",
+      "environment": "documented",
+      "covered": true,
+      "note": "Docs chính thức: chi phí tính vào tài khoản provider"
+    },
+    {
+      "feature_id": "provider-keys-byok",
+      "layer": "api",
+      "role": "api-caller",
+      "state": "generate không có BYOK key",
+      "environment": "documented",
+      "covered": true,
+      "note": "Docs chính thức: key hệ thống, trừ credit"
+    },
+    {
+      "feature_id": "provider-keys-byok",
+      "layer": "api",
+      "role": "api-caller",
+      "state": "BYOK key lỗi hoặc hết token (Fail-Safe)",
+      "environment": "documented",
+      "covered": true,
+      "note": "Docs chính thức; việc trừ credit chưa rõ"
+    },
+    {
+      "feature_id": "provider-keys-byok",
+      "layer": "data",
+      "role": "unspecified",
+      "state": "mã hoá, masking, soft-delete",
+      "environment": "documented",
+      "covered": true,
+      "note": "Docs chính thức"
+    },
+    {
+      "feature_id": "provider-keys-byok",
+      "layer": "data",
+      "role": "unspecified",
+      "state": "đơn vị sở hữu key",
+      "environment": "documented",
+      "covered": false,
+      "note": "Mâu thuẫn chưa giải quyết"
+    },
+    {
+      "feature_id": "provider-keys-byok",
+      "layer": "code",
+      "role": "unspecified",
+      "state": "any",
+      "environment": "documented",
+      "covered": false,
+      "note": "Không có nguồn mã"
+    }
+  ],
+  "profile_conflicts": [
+    {
+      "conflict_group": "CONF-IGH-developer-settings-01",
+      "topic": "Đơn vị sở hữu và đơn vị duy nhất của provider key",
+      "side_a": "Mỗi user chỉ có 1 key cho mỗi provider; key mới ghi đè key cũ (docs chính thức, mục BYOK).",
+      "side_b": "Organization là đơn vị sở hữu mọi thứ, gồm template, media, credit, key (docs chính thức, mục Organization).",
+      "resolution": "UNRESOLVED",
+      "kb_refs": [
+        "KB-017",
+        "KB-018"
+      ],
+      "impact_on_profile": "Capability lưu/thay key giữ quy tắc ghi đè đã xác nhận, nhưng phạm vi áp dụng (theo user hay theo org) chưa có oracle."
+    }
+  ],
+  "profile_relationships": [
+    {
+      "from": "provider-keys-byok",
+      "to": "account-alerts",
+      "relation": "EMITS_CONDITION_FOR",
+      "kb_refs": [
+        "KB-050",
+        "KB-051"
+      ]
+    }
+  ]
+}

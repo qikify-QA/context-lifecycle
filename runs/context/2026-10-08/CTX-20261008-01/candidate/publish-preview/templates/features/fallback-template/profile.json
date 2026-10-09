@@ -1,0 +1,1009 @@
+{
+  "feature_id": "fallback-template",
+  "feature_key": "fallback-template",
+  "name": "Fallback template (IGH-226)",
+  "user_goal": "Người cấu hình gắn một template dự phòng (B) vào template chính (A) để khi A fail vì một trong các loại lỗi đã chốt, hệ thống tự động chạy B mà không cần xác nhận — ở mọi nơi chạy qua template — và chỉ tính phí cho bước thực sự tạo ra ảnh.",
+  "stable_since_version": "v1",
+  "actors": [
+    {
+      "role": "người cấu hình template (role không được ghi)",
+      "permission_observed": "Gắn fallback qua dialog \"Choose a fallback template\"; tính năng không giới hạn theo plan hay quyền admin theo rule PO.",
+      "kb_refs": [
+        "KB-126",
+        "KB-142"
+      ]
+    },
+    {
+      "role": "Admin (org Free plan)",
+      "permission_observed": "Gắn fallback bình thường, không có nudge nâng gói (một đợt chạy staging 2026-09-17, chưa gắn test case/build).",
+      "kb_refs": [
+        "KB-139"
+      ]
+    },
+    {
+      "role": "Viewer",
+      "permission_observed": "Theo rule chỉ xem, không cấu hình; trên staging không thấy mục Fallback template (TC-IGH-204 PASS một phần).",
+      "kb_refs": [
+        "KB-127",
+        "KB-138"
+      ]
+    },
+    {
+      "role": "api-caller",
+      "permission_observed": "Fallback áp cho /process với template; header X-Credits-Used/X-Credits-Remaining thay đổi khi B chạy; webhook khi fail vẫn là task.failed.",
+      "kb_refs": [
+        "KB-122",
+        "KB-124",
+        "KB-130"
+      ]
+    }
+  ],
+  "entry_points": [
+    {
+      "path": "Portal /templates/{id} → panel \"Fallback template\" → dialog \"Choose a fallback template\" → Save",
+      "precondition": "Role không phải Viewer.",
+      "kb_refs": [
+        "KB-114",
+        "KB-138",
+        "KB-140",
+        "KB-142"
+      ]
+    },
+    {
+      "path": "Nút Run trên trang chi tiết template có fallback",
+      "precondition": "Org còn credit (hết credit thì bị từ chối ngay).",
+      "kb_refs": [
+        "KB-135",
+        "KB-137"
+      ]
+    },
+    {
+      "path": "API /process với template_id; Batch template runner",
+      "precondition": "Template chạy qua template (chạy model trực tiếp không có fallback).",
+      "kb_refs": [
+        "KB-124",
+        "KB-125"
+      ]
+    }
+  ],
+  "capabilities": [
+    {
+      "name": "Gắn và xem fallback trên template",
+      "description": "Fallback là một template khác, gắn qua một trường của template gốc (không phải step post-processing). Trang chi tiết phải hiện giá template fallback cạnh trường đó, nhưng hiện panel luôn báo \"was deleted\" và không hiện tên/giá (BUG-128/129) dù dữ liệu vẫn lưu đúng. A và B được phép khác kích thước ảnh, không có validate hay cảnh báo. Không giới hạn theo plan/quyền admin; Viewer chỉ xem và trên staging không thấy mục này.",
+      "kb_refs": [
+        "KB-114",
+        "KB-115",
+        "KB-126",
+        "KB-127",
+        "KB-128",
+        "KB-138",
+        "KB-139",
+        "KB-140",
+        "KB-141",
+        "KB-142",
+        "KB-143"
+      ]
+    },
+    {
+      "name": "Tự động chuyển sang B khi A fail",
+      "description": "Luôn chạy A trước; A thành công thì chain chỉ có bước Generate (một quan sát staging, chưa gắn test case/build). A fail vì một trong 4 loại lỗi đã chốt thì tự chạy B không hỏi; B fail thì task trả error ngay, không chạy fallback của B, không quay lại A. Áp cho mọi nơi chạy qua template (/process, Batch template runner); chạy model trực tiếp không có fallback; template không gắn fallback giữ nguyên hành vi (một quan sát staging phù hợp).",
+      "kb_refs": [
+        "KB-116",
+        "KB-117",
+        "KB-118",
+        "KB-119",
+        "KB-124",
+        "KB-125",
+        "KB-129",
+        "KB-133",
+        "KB-136"
+      ]
+    },
+    {
+      "name": "Tính phí với template có fallback",
+      "description": "Theo rule PO: chỉ bước thật sự tạo ra ảnh mới bị tính phí; ước tính trước khi chạy chỉ là giá A; khi B chạy, cost và header X-Credits-* thay đổi theo (chưa verify); lỗi credit (402 hoặc chạm trần Overage) fail ngay, không chạy B. Quan sát một đợt chạy staging (qua UI, chưa gắn test case/build): ước tính chỉ hiện giá A, A thành công chỉ trừ giá A, org 0 credit bấm Run bị từ chối ngay và không tạo task.",
+      "kb_refs": [
+        "KB-120",
+        "KB-121",
+        "KB-122",
+        "KB-123",
+        "KB-134",
+        "KB-135",
+        "KB-137",
+        "KB-145"
+      ]
+    },
+    {
+      "name": "Ghi nhận và thông báo khi chuyển/fail",
+      "description": "Task detail ghi lại việc A fail, lý do và việc chuyển sang B; webhook khi fail vẫn là task.failed, không thêm loại cảnh báo mới. Cả hai chưa verify (Q25).",
+      "kb_refs": [
+        "KB-130",
+        "KB-131"
+      ]
+    },
+    {
+      "name": "Bảo vệ khi xoá template đang làm fallback",
+      "description": "Xoá template đang làm fallback của template khác phải có cảnh báo; hiện dialog Delete Template generic (BUG-130).",
+      "kb_refs": [
+        "KB-132",
+        "KB-144"
+      ]
+    }
+  ],
+  "state_transitions": [
+    {
+      "from": "Template A chưa gắn fallback",
+      "to": "A đã gắn fallback B",
+      "trigger": "Chọn template trong dialog \"Choose a fallback template\" và Save",
+      "condition": "Toast \"Fallback template saved!\"; mở lại dialog thấy đúng template đích. Hiện panel vẫn báo sai \"was deleted\" (BUG-128/129).",
+      "kb_refs": [
+        "KB-140",
+        "KB-142"
+      ]
+    },
+    {
+      "from": "Task chạy A",
+      "to": "Hoàn tất bằng A; chain chỉ có bước Generate; chỉ trừ giá A",
+      "trigger": "A chạy thành công",
+      "condition": "Rule PO; một quan sát staging 2026-09-17 phù hợp (độ tin cậy thấp, chưa gắn test case/build).",
+      "kb_refs": [
+        "KB-116",
+        "KB-133",
+        "KB-134"
+      ]
+    },
+    {
+      "from": "Task chạy A",
+      "to": "Tự động chạy B; task detail ghi lý do; cost/header theo B",
+      "trigger": "A fail vì một trong 4 loại lỗi đã chốt",
+      "condition": "Rule PO; Chưa verify trên staging: các case cần ép template A fail bị chặn bởi câu hỏi mở Q25. Danh sách 4 loại lỗi không được tài liệu liệt kê.",
+      "kb_refs": [
+        "KB-117",
+        "KB-118",
+        "KB-122",
+        "KB-131"
+      ]
+    },
+    {
+      "from": "Task đang chạy B",
+      "to": "Task error (webhook task.failed); không chạy fallback của B, không quay lại A",
+      "trigger": "B fail",
+      "condition": "Rule PO; Chưa verify trên staging: các case cần ép template A fail bị chặn bởi câu hỏi mở Q25.",
+      "kb_refs": [
+        "KB-119",
+        "KB-130"
+      ]
+    },
+    {
+      "from": "Yêu cầu chạy template có fallback",
+      "to": "Fail ngay, không chạy B",
+      "trigger": "Org hết credit Monthly+Bonus (402) hoặc chạm trần Overage",
+      "condition": "Rule PO; một quan sát staging 2026-09-17 với org 0 credit, overage_limit 0: Run bị từ chối với \"Not enough credits...\", không tạo task nào, balance không đổi (độ tin cậy thấp, chưa gắn test case/build).",
+      "kb_refs": [
+        "KB-120",
+        "KB-137"
+      ]
+    },
+    {
+      "from": "Template đang làm fallback",
+      "to": "Dialog xoá có cảnh báo phụ thuộc",
+      "trigger": "Bấm Delete template đó",
+      "condition": "Expected theo rule; hiện tại dialog generic (BUG-130).",
+      "kb_refs": [
+        "KB-132",
+        "KB-144"
+      ]
+    }
+  ],
+  "confirmed_rules": [
+    {
+      "statement": "Fallback là một template khác, gắn vào template gốc qua một trường của chính template gốc, không phải step post-processing.",
+      "knowledge_kind": "CONFIRMED_EXPECTED",
+      "confidence": "MEDIUM",
+      "authority": "spec_doc",
+      "verification_status": "Rule PO/Dev; tài liệu không ghi test case riêng cho ý này.",
+      "kb_refs": [
+        "KB-114"
+      ]
+    },
+    {
+      "statement": "Trang chi tiết template hiển thị giá của template fallback cạnh trường fallback, cùng kiểu hiển thị cost như step post-processing.",
+      "knowledge_kind": "CONFIRMED_EXPECTED",
+      "confidence": "MEDIUM",
+      "authority": "spec_doc",
+      "verification_status": "Đang bị BUG-128/129 che trên staging 2026-09-17.",
+      "kb_refs": [
+        "KB-115"
+      ]
+    },
+    {
+      "statement": "Khi template có fallback được chạy, hệ thống luôn chạy template chính A trước.",
+      "knowledge_kind": "CONFIRMED_EXPECTED",
+      "confidence": "MEDIUM",
+      "authority": "spec_doc",
+      "verification_status": "Có một quan sát staging 2026-09-17 phù hợp (độ tin cậy thấp, chưa gắn test case/build) cho nhánh A thành công.",
+      "kb_refs": [
+        "KB-116"
+      ]
+    },
+    {
+      "statement": "Khi A fail, hệ thống tự động chạy B, không hỏi xác nhận.",
+      "knowledge_kind": "CONFIRMED_EXPECTED",
+      "confidence": "MEDIUM",
+      "authority": "spec_doc",
+      "verification_status": "Chưa verify trên staging: các case cần ép template A fail bị chặn bởi câu hỏi mở Q25.",
+      "kb_refs": [
+        "KB-117"
+      ]
+    },
+    {
+      "statement": "B chỉ chạy khi A gặp một trong 4 loại lỗi đã chốt (tài liệu không liệt kê 4 loại lỗi này).",
+      "knowledge_kind": "CONFIRMED_EXPECTED",
+      "confidence": "MEDIUM",
+      "authority": "spec_doc",
+      "verification_status": "Chưa verify trên staging: các case cần ép template A fail bị chặn bởi câu hỏi mở Q25.",
+      "kb_refs": [
+        "KB-118"
+      ]
+    },
+    {
+      "statement": "Fallback chỉ 1 cấp: B fail thì task trả error ngay, không chạy fallback của B và không quay lại A.",
+      "knowledge_kind": "CONFIRMED_EXPECTED",
+      "confidence": "MEDIUM",
+      "authority": "spec_doc",
+      "verification_status": "Chưa verify trên staging: các case cần ép template A fail bị chặn bởi câu hỏi mở Q25.",
+      "kb_refs": [
+        "KB-119"
+      ]
+    },
+    {
+      "statement": "Ngoại lệ lỗi credit: org hết credit Monthly+Bonus (402) hoặc chạm trần Overage thì task fail ngay, không chạy B.",
+      "knowledge_kind": "CONFIRMED_EXPECTED",
+      "confidence": "MEDIUM",
+      "authority": "spec_doc",
+      "verification_status": "Có một quan sát staging 2026-09-17 phù hợp (độ tin cậy thấp, chưa gắn test case/build) cho nhánh org 0 credit qua nút Run; nhánh chạm trần Overage và mã 402 qua API chưa có quan sát.",
+      "kb_refs": [
+        "KB-120"
+      ]
+    },
+    {
+      "statement": "Với template có fallback, chỉ bước thật sự tạo ra ảnh mới bị tính phí.",
+      "knowledge_kind": "CONFIRMED_EXPECTED",
+      "confidence": "MEDIUM",
+      "authority": "spec_doc",
+      "verification_status": "Có một quan sát staging 2026-09-17 phù hợp (độ tin cậy thấp, chưa gắn test case/build) cho nhánh A thành công; nhánh B chạy chưa verify (Q25).",
+      "kb_refs": [
+        "KB-121"
+      ]
+    },
+    {
+      "statement": "Khi B chạy, cost của task và header X-Credits-Used / X-Credits-Remaining thay đổi theo.",
+      "knowledge_kind": "CONFIRMED_EXPECTED",
+      "confidence": "MEDIUM",
+      "authority": "spec_doc",
+      "verification_status": "Chưa verify trên staging: các case cần ép template A fail bị chặn bởi câu hỏi mở Q25. Header chưa được kiểm qua API.",
+      "kb_refs": [
+        "KB-122"
+      ]
+    },
+    {
+      "statement": "Ước tính giá trước khi chạy template có fallback chỉ là giá A, không cộng giá fallback.",
+      "knowledge_kind": "CONFIRMED_EXPECTED",
+      "confidence": "MEDIUM",
+      "authority": "spec_doc",
+      "verification_status": "Có một quan sát staging 2026-09-17 phù hợp (độ tin cậy thấp, chưa gắn test case/build) trên nút Run.",
+      "kb_refs": [
+        "KB-123"
+      ]
+    },
+    {
+      "statement": "Mọi nơi chạy qua template đều áp dụng fallback, gồm API /process (với template) và Batch template runner.",
+      "knowledge_kind": "CONFIRMED_EXPECTED",
+      "confidence": "MEDIUM",
+      "authority": "spec_doc",
+      "verification_status": "Chưa verify trên staging: các case cần ép template A fail bị chặn bởi câu hỏi mở Q25.",
+      "kb_refs": [
+        "KB-124"
+      ]
+    },
+    {
+      "statement": "Chạy model trực tiếp ở tab model (không qua template) thì không có fallback.",
+      "knowledge_kind": "CONFIRMED_EXPECTED",
+      "confidence": "MEDIUM",
+      "authority": "spec_doc",
+      "verification_status": "Rule PO/Dev; tài liệu không ghi test case riêng cho ý này.",
+      "kb_refs": [
+        "KB-125"
+      ]
+    },
+    {
+      "statement": "Fallback không bị giới hạn theo plan và không bị giới hạn theo quyền admin.",
+      "knowledge_kind": "CONFIRMED_EXPECTED",
+      "confidence": "MEDIUM",
+      "authority": "spec_doc",
+      "verification_status": "Có một quan sát staging 2026-09-17 phù hợp (độ tin cậy thấp, chưa gắn test case/build): Admin org Free plan gắn được fallback.",
+      "kb_refs": [
+        "KB-126"
+      ]
+    },
+    {
+      "statement": "Role Viewer chỉ được xem, không cấu hình được fallback.",
+      "knowledge_kind": "CONFIRMED_EXPECTED",
+      "confidence": "MEDIUM",
+      "authority": "spec_doc",
+      "verification_status": "TC-IGH-204 PASS một phần: Viewer không thấy mục Fallback.",
+      "kb_refs": [
+        "KB-127"
+      ]
+    },
+    {
+      "statement": "Template A và B được phép cho ra kích thước ảnh khác nhau; hệ thống không validate và không cảnh báo.",
+      "knowledge_kind": "CONFIRMED_EXPECTED",
+      "confidence": "MEDIUM",
+      "authority": "spec_doc",
+      "verification_status": "Rule PO/Dev; tài liệu không ghi test case riêng cho ý này.",
+      "kb_refs": [
+        "KB-128"
+      ]
+    },
+    {
+      "statement": "Template không gắn fallback giữ nguyên hành vi như trước khi có tính năng fallback.",
+      "knowledge_kind": "CONFIRMED_EXPECTED",
+      "confidence": "MEDIUM",
+      "authority": "spec_doc",
+      "verification_status": "Có một quan sát staging 2026-09-17 phù hợp (độ tin cậy thấp, chưa gắn test case/build).",
+      "kb_refs": [
+        "KB-129"
+      ]
+    },
+    {
+      "statement": "Event webhook khi task fail (kể cả template có fallback) vẫn là task.failed; fallback không thêm loại cảnh báo mới.",
+      "knowledge_kind": "CONFIRMED_EXPECTED",
+      "confidence": "MEDIUM",
+      "authority": "spec_doc",
+      "verification_status": "Chưa verify trên staging: các case cần ép template A fail bị chặn bởi câu hỏi mở Q25.",
+      "kb_refs": [
+        "KB-130"
+      ]
+    },
+    {
+      "statement": "Task detail ghi lại việc A fail, lý do fail và việc chuyển sang B.",
+      "knowledge_kind": "CONFIRMED_EXPECTED",
+      "confidence": "MEDIUM",
+      "authority": "spec_doc",
+      "verification_status": "Chưa verify trên staging: các case cần ép template A fail bị chặn bởi câu hỏi mở Q25.",
+      "kb_refs": [
+        "KB-131"
+      ]
+    },
+    {
+      "statement": "Xoá một template đang được dùng làm fallback của template khác thì phải có cảnh báo.",
+      "knowledge_kind": "CONFIRMED_EXPECTED",
+      "confidence": "MEDIUM",
+      "authority": "spec_doc",
+      "verification_status": "Đang bị vi phạm (BUG-130).",
+      "kb_refs": [
+        "KB-132"
+      ]
+    },
+    {
+      "statement": "Role Viewer hoàn toàn không thấy mục \"Fallback template\" (ẩn hẳn, không chỉ readonly).",
+      "knowledge_kind": "CONFIRMED_EXPECTED",
+      "confidence": "MEDIUM",
+      "authority": "test_case",
+      "verification_status": "TC-IGH-204 PASS phần này; kịch bản Viewer xem template có biến + có fallback chưa verify.",
+      "kb_refs": [
+        "KB-138"
+      ]
+    }
+  ],
+  "observed_behavior": [
+    {
+      "statement": "Hành vi hiện tại (BUG-128/129): sau khi gắn fallback và Save (toast \"Fallback template saved!\"), panel luôn hiện sai \"The fallback template was deleted; runs behave as if none were set.\"",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "confidence": "LOW",
+      "status": "KNOWN_DEFECT",
+      "usable_as_expected": false,
+      "note": "Bug đã xác nhận, tái hiện mọi lần ở 3 org — regression watch.",
+      "kb_refs": [
+        "KB-140"
+      ]
+    },
+    {
+      "statement": "Hành vi hiện tại (BUG-128/129): panel không hiện tên và giá credit của template fallback ở bất kỳ đâu.",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "confidence": "LOW",
+      "status": "KNOWN_DEFECT",
+      "usable_as_expected": false,
+      "note": "Vi phạm rule hiện giá fallback.",
+      "kb_refs": [
+        "KB-141"
+      ]
+    },
+    {
+      "statement": "Trên staging (2026-09-17), mở lại dialog \"Choose a fallback template\" vẫn thấy đúng template đích được chọn và template đó vẫn tồn tại.",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "confidence": "LOW",
+      "usable_as_expected": false,
+      "kb_refs": [
+        "KB-142"
+      ]
+    },
+    {
+      "statement": "Người viết giả thuyết BUG-128/129 là lỗi tầng hiển thị, không phải dữ liệu hỏng.",
+      "knowledge_kind": "INFERRED",
+      "confidence": "LOW",
+      "usable_as_expected": false,
+      "note": "Giả thuyết chưa xác nhận.",
+      "kb_refs": [
+        "KB-143"
+      ]
+    },
+    {
+      "statement": "Hành vi hiện tại (BUG-130): dialog Delete Template khi xoá template đang làm fallback hoàn toàn generic.",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "confidence": "LOW",
+      "status": "KNOWN_DEFECT",
+      "usable_as_expected": false,
+      "note": "Bug đã xác nhận — regression watch.",
+      "kb_refs": [
+        "KB-144"
+      ]
+    },
+    {
+      "statement": "Trên staging (2026-09-17), gọi thẳng /api/process từ browser \"bị bypass billing\"; tài liệu chi tiết mà câu này dẫn tới không có trong bộ tài liệu.",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "confidence": "LOW",
+      "usable_as_expected": false,
+      "note": "Ý nghĩa cụ thể chưa được mô tả.",
+      "kb_refs": [
+        "KB-145"
+      ]
+    },
+    {
+      "statement": "Trên staging (một đợt chạy staging 2026-09-17, tài liệu ghi PASS \"đúng spec\" nhưng không gắn test case và build cho ý này): A chạy thành công thì processing chain chỉ có đúng 1 bước Generate, không có bước nào của B.",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "confidence": "LOW",
+      "usable_as_expected": false,
+      "note": "Quan sát một lần, không dùng làm expected; khớp với rule PO tương ứng nhưng chưa đủ để coi là đã kiểm chứng.",
+      "kb_refs": [
+        "KB-133"
+      ]
+    },
+    {
+      "statement": "Trên staging (một đợt chạy staging 2026-09-17, tài liệu ghi PASS \"đúng spec\" nhưng không gắn test case và build cho ý này): A chạy thành công thì credit bị trừ đúng giá A (4 credit trong fixture), không cộng giá B (15 credit).",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "confidence": "LOW",
+      "usable_as_expected": false,
+      "note": "Kiểm qua nút Run trên UI và cost/balance trong Task History, không phải qua API /process với header X-Credits-Used như test case viết. Quan sát một lần, không dùng làm expected; khớp với rule PO tương ứng nhưng chưa đủ để coi là đã kiểm chứng.",
+      "kb_refs": [
+        "KB-134"
+      ]
+    },
+    {
+      "statement": "Trên staging (một đợt chạy staging 2026-09-17, tài liệu ghi PASS \"đúng spec\" nhưng không gắn test case và build cho ý này): với template có fallback, nút Run và ước tính chi phí trước khi chạy chỉ hiển thị giá A.",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "confidence": "LOW",
+      "usable_as_expected": false,
+      "note": "Kiểm qua UI, không phải qua API như test case viết. Quan sát một lần, không dùng làm expected; khớp với rule PO tương ứng nhưng chưa đủ để coi là đã kiểm chứng.",
+      "kb_refs": [
+        "KB-135"
+      ]
+    },
+    {
+      "statement": "Trên staging (một đợt chạy staging 2026-09-17, tài liệu ghi PASS \"đúng spec\" nhưng không gắn test case và build cho ý này): template không gắn fallback có hành vi y hệt trước khi tính năng fallback được release.",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "confidence": "LOW",
+      "usable_as_expected": false,
+      "note": "Quan sát một lần, không dùng làm expected; khớp với rule PO tương ứng nhưng chưa đủ để coi là đã kiểm chứng.",
+      "kb_refs": [
+        "KB-136"
+      ]
+    },
+    {
+      "statement": "Trên staging (một đợt chạy staging 2026-09-17, tài liệu ghi PASS \"đúng spec\" nhưng không gắn test case và build cho ý này): org có 0 credit và overage_limit 0 bấm Run trên template có fallback thì nhận lỗi \"Not enough credits...\" ngay, không có task nào được tạo trong Task History (kể cả task của A), balance không đổi.",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "confidence": "LOW",
+      "usable_as_expected": false,
+      "note": "Chỉ kênh nút Run; mã 402 qua API và nhánh chạm trần Overage chưa có quan sát. Quan sát một lần, không dùng làm expected; khớp với rule PO tương ứng nhưng chưa đủ để coi là đã kiểm chứng.",
+      "kb_refs": [
+        "KB-137"
+      ]
+    },
+    {
+      "statement": "Trên staging (một đợt chạy staging 2026-09-17, tài liệu ghi PASS \"đúng spec\" nhưng không gắn test case và build cho ý này): Admin của org Free plan gắn fallback bình thường, không thấy nudge mời nâng gói.",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "confidence": "LOW",
+      "usable_as_expected": false,
+      "note": "Quan sát một lần, không dùng làm expected; khớp với rule PO tương ứng nhưng chưa đủ để coi là đã kiểm chứng.",
+      "kb_refs": [
+        "KB-139"
+      ]
+    }
+  ],
+  "documented_validations": [
+    {
+      "input": "Bấm Run trên template có fallback khi org có 0 credit và overage_limit 0",
+      "rule_or_message": "Not enough credits...",
+      "note": "Tài liệu chỉ ghi phần đầu của thông báo; quan sát một lần qua nút Run, chưa gắn test case/build.",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "confidence": "LOW",
+      "kb_refs": [
+        "KB-137"
+      ]
+    },
+    {
+      "input": "Gắn fallback B có kích thước ảnh khác A",
+      "rule_or_message": "Không validate, không cảnh báo.",
+      "knowledge_kind": "CONFIRMED_EXPECTED",
+      "confidence": "MEDIUM",
+      "kb_refs": [
+        "KB-128"
+      ]
+    }
+  ],
+  "permissions": [
+    {
+      "role": "Viewer",
+      "statement": "Chỉ xem, không cấu hình fallback; trên staging mục Fallback template bị ẩn hẳn.",
+      "kb_refs": [
+        "KB-127",
+        "KB-138"
+      ]
+    },
+    {
+      "role": "Admin (org Free plan)",
+      "statement": "Gắn được fallback, không bị nudge nâng gói (một quan sát staging, độ tin cậy thấp).",
+      "kb_refs": [
+        "KB-139"
+      ]
+    },
+    {
+      "role": "mọi plan / không phải admin",
+      "statement": "Fallback không bị giới hạn theo plan và không giới hạn theo quyền admin.",
+      "kb_refs": [
+        "KB-126"
+      ]
+    },
+    {
+      "role": "Editor / Owner",
+      "statement": "Không có quan sát gắn fallback theo các role này.",
+      "kb_refs": [
+        "KB-126"
+      ]
+    }
+  ],
+  "surface_mapping": {
+    "portal": [
+      {
+        "surface": "/templates/{id} — panel \"Fallback template\", dialog \"Choose a fallback template\", toast \"Fallback template saved!\"",
+        "kb_refs": [
+          "KB-115",
+          "KB-140",
+          "KB-142"
+        ]
+      },
+      {
+        "surface": "Nút Run và ước tính giá (chỉ giá A)",
+        "kb_refs": [
+          "KB-123",
+          "KB-135"
+        ]
+      },
+      {
+        "surface": "Task detail — ghi A fail, lý do, chuyển sang B; Task History",
+        "kb_refs": [
+          "KB-131",
+          "KB-137"
+        ]
+      },
+      {
+        "surface": "Dialog Delete Template",
+        "kb_refs": [
+          "KB-132",
+          "KB-144"
+        ]
+      }
+    ],
+    "storefront": [],
+    "api": [
+      {
+        "surface": "/process với template_id; header X-Credits-Used / X-Credits-Remaining",
+        "kb_refs": [
+          "KB-122",
+          "KB-124"
+        ]
+      },
+      {
+        "surface": "Webhook task.failed",
+        "kb_refs": [
+          "KB-130"
+        ]
+      },
+      {
+        "surface": "Batch template runner",
+        "kb_refs": [
+          "KB-124"
+        ]
+      },
+      {
+        "surface": "/api/process gọi thẳng từ browser (ý nghĩa \"bypass billing\" chưa rõ)",
+        "kb_refs": [
+          "KB-145"
+        ]
+      }
+    ],
+    "data": [
+      {
+        "surface": "Trường fallback trên template gốc (tên field không được mô tả)",
+        "kb_refs": [
+          "KB-114"
+        ]
+      },
+      {
+        "surface": "Credit Monthly/Bonus/Overage, overage_limit, mã 402",
+        "kb_refs": [
+          "KB-120",
+          "KB-137"
+        ]
+      }
+    ],
+    "code": []
+  },
+  "dependencies": [
+    {
+      "target": "templates/template-authoring",
+      "relation": "Xoá template đang làm fallback.",
+      "kb_refs": [
+        "KB-132",
+        "KB-038"
+      ]
+    },
+    {
+      "target": "templates/template-post-processing",
+      "relation": "Hiển thị giá fallback giống cost step post-processing; post-processing nào áp dụng khi B chạy chưa rõ.",
+      "kb_refs": [
+        "KB-115",
+        "KB-054"
+      ]
+    },
+    {
+      "target": "templates/template-variables",
+      "relation": "A/B có dùng chung bộ biến hay không chưa rõ.",
+      "kb_refs": [
+        "KB-117",
+        "KB-085"
+      ]
+    },
+    {
+      "target": "organization-billing (credit)",
+      "relation": "Ngoại lệ lỗi credit; tính phí; header credit.",
+      "kb_refs": [
+        "KB-120",
+        "KB-121",
+        "KB-122",
+        "KB-137"
+      ]
+    },
+    {
+      "target": "tasks",
+      "relation": "/process với template_id; task detail ghi việc chuyển sang B.",
+      "kb_refs": [
+        "KB-124",
+        "KB-131"
+      ]
+    },
+    {
+      "target": "bulk-tools (Batch)",
+      "relation": "Batch template runner áp dụng fallback; Batch mang nhãn Beta trên portal.",
+      "kb_refs": [
+        "KB-124"
+      ],
+      "product_kb_refs": [
+        "KB-P-026"
+      ]
+    },
+    {
+      "target": "developer-settings (webhooks/alerts)",
+      "relation": "task.failed khi fail, không thêm cảnh báo mới.",
+      "kb_refs": [
+        "KB-130"
+      ]
+    },
+    {
+      "target": "models",
+      "relation": "Chạy model trực tiếp không có fallback.",
+      "kb_refs": [
+        "KB-125"
+      ]
+    }
+  ],
+  "risks": [
+    {
+      "statement": "Luồng cốt lõi \"A fail → B\" (cùng 1 cấp, cost/header khi B chạy, phạm vi /process và Batch, webhook, task detail) chưa có bằng chứng test do Q25 — regression ở đây sẽ không bị phát hiện.",
+      "kb_refs": [
+        "KB-117",
+        "KB-119",
+        "KB-122",
+        "KB-124",
+        "KB-130",
+        "KB-131"
+      ]
+    },
+    {
+      "statement": "BUG-128/129 khiến người dùng tưởng fallback đã bị xoá dù đã lưu đúng, dễ dẫn tới cấu hình lại hoặc nghi ngờ tính năng; nếu giả thuyết tầng hiển thị sai, fallback có thể không được dùng khi chạy.",
+      "kb_refs": [
+        "KB-140",
+        "KB-141",
+        "KB-142",
+        "KB-143"
+      ]
+    },
+    {
+      "statement": "Xoá một template đang làm fallback không có cảnh báo (BUG-130) — người xoá không biết template khác đang phụ thuộc vào nó.",
+      "kb_refs": [
+        "KB-132",
+        "KB-144"
+      ]
+    },
+    {
+      "statement": "Câu \"gọi thẳng /api/process từ browser bị bypass billing\" có thể là rủi ro tính phí nhưng chưa được mô tả.",
+      "kb_refs": [
+        "KB-145"
+      ]
+    },
+    {
+      "statement": "Các ý \"đúng spec\" của đợt chạy staging 2026-09-17 (A thành công chỉ có bước Generate và chỉ trừ giá A, ước tính chỉ giá A, template không fallback giữ nguyên, org hết credit bị từ chối, Admin org Free plan gắn được fallback) chỉ là một lần quan sát, không gắn test case hay build; phần credit được kiểm qua UI thay vì API. Dùng làm oracle regression lúc này có thể che một sai lệch ở kênh API hoặc ở build khác.",
+      "kb_refs": [
+        "KB-133",
+        "KB-134",
+        "KB-135",
+        "KB-136",
+        "KB-137",
+        "KB-139"
+      ]
+    }
+  ],
+  "unknown_areas": [
+    {
+      "question": "Template A được thử lại bao nhiêu lần / timeout bao lâu trước khi chuyển sang B?",
+      "why_it_matters": "Ảnh hưởng thời gian chờ và expected khi A chậm hoặc lỗi tạm thời; PO/Dev chưa trả lời.",
+      "oq_id": "OQ-templates-016"
+    },
+    {
+      "question": "Khi B chạy thì post-processing của template nào được áp dụng (A hay B)?",
+      "why_it_matters": "Quyết định output và cost thực tế của task chạy fallback.",
+      "oq_id": "OQ-templates-017"
+    },
+    {
+      "question": "A và B có dùng chung bộ {{variables}} không?",
+      "why_it_matters": "Nếu B có biến khác, prompt của B có thể còn literal {{...}}.",
+      "oq_id": "OQ-templates-018"
+    },
+    {
+      "question": "\"4 loại lỗi đã chốt\" khiến A chuyển sang B là những lỗi nào?",
+      "why_it_matters": "Không có danh sách thì không viết được case kích hoạt đúng/sai điều kiện.",
+      "oq_id": "OQ-templates-019"
+    },
+    {
+      "question": "Q25: làm thế nào ép template A fail để test?",
+      "why_it_matters": "Chặn toàn bộ case cần A fail; các rule liên quan hiện chưa verify.",
+      "oq_id": "OQ-templates-019"
+    },
+    {
+      "question": "Nguyên nhân BUG-128/129 là tầng hiển thị hay dữ liệu? Fallback đã lưu có thực sự được dùng khi chạy không?",
+      "why_it_matters": "Giả thuyết hiện chỉ của người viết.",
+      "oq_id": "OQ-templates-022"
+    },
+    {
+      "question": "Header X-Credits-Used / X-Credits-Remaining khi fallback chạy, kiểm qua API thì ra sao?",
+      "why_it_matters": "Đợt test dùng nút Run và Task History thay cho API.",
+      "oq_id": "OQ-templates-025"
+    },
+    {
+      "question": "Viewer xem một template vừa có biến vừa có fallback thì thấy gì?",
+      "why_it_matters": "TC-IGH-204 bị chặn một phần do org Viewer chỉ có 1 template không gắn fallback.",
+      "oq_id": "OQ-templates-026"
+    },
+    {
+      "question": "\"Gọi thẳng /api/process từ browser bị bypass billing\" nghĩa là bỏ qua tính phí hay bỏ qua kiểm tra billing?",
+      "why_it_matters": "Tài liệu QA về endpoint API trên staging được nhắc tới nhưng không có trong bộ tài liệu; có thể là rủi ro tính phí.",
+      "oq_id": "OQ-templates-024"
+    },
+    {
+      "question": "Test case nào và build nào chứng minh từng ý \"đúng spec\" của đợt chạy staging 2026-09-17 (A thành công chỉ có bước Generate; chỉ trừ credit A; Run/ước tính chỉ hiện giá A; template không fallback y hệt trước release; org hết credit bị từ chối, không tạo task; Admin org Free plan gắn được fallback)? BUG-128 / BUG-129 ứng với test case và severity nào?",
+      "why_it_matters": "Tài liệu không gán test case cho từng ý và không ghi build, nên các ý này mới chỉ là quan sát một lần, chưa dùng làm expected được. Hai test case về credit được viết cho API /process với header X-Credits-Used nhưng lại chạy qua nút Run trên UI — cần chạy lại đúng kênh API.",
+      "oq_id": "OQ-templates-027"
+    },
+    {
+      "question": "Docs chính thức có mô tả fallback không?",
+      "why_it_matters": "Docs chính thức không nhắc fallback; toàn bộ rule đến từ quyết định PO/Dev ghi trong tài liệu QA. Tài liệu QA tổng hợp bug portal cũng được nhắc tới nhưng không có trong bộ tài liệu.",
+      "oq_id": "OQ-templates-045"
+    }
+  ],
+  "freshness": {
+    "observed_at": "2026-09-17"
+  },
+  "observed_validations": [],
+  "last_updated": {
+    "date": "2026-10-08",
+    "ccr_ref": "bootstrap"
+  },
+  "coverage_matrix": [
+    {
+      "feature_id": "fallback-template",
+      "layer": "portal",
+      "role": "unspecified",
+      "state": "rule PO — A thành công",
+      "environment": "documented",
+      "covered": true,
+      "note": "Một quan sát staging qua UI (độ tin cậy thấp), chưa gắn test case/build.",
+      "kb_refs": [
+        "KB-133",
+        "KB-134",
+        "KB-135"
+      ]
+    },
+    {
+      "feature_id": "fallback-template",
+      "layer": "api",
+      "role": "api-caller",
+      "state": "rule PO — A fail → B",
+      "environment": "documented",
+      "covered": false,
+      "note": "Rule có, chưa verify (Q25).",
+      "kb_refs": [
+        "KB-117",
+        "KB-118",
+        "KB-119"
+      ]
+    },
+    {
+      "feature_id": "fallback-template",
+      "layer": "portal",
+      "role": "unspecified",
+      "state": "org hết credit",
+      "environment": "documented",
+      "covered": true,
+      "note": "Một quan sát staging qua nút Run (độ tin cậy thấp), chưa gắn test case/build.",
+      "kb_refs": [
+        "KB-120",
+        "KB-137"
+      ]
+    },
+    {
+      "feature_id": "fallback-template",
+      "layer": "api",
+      "role": "api-caller",
+      "state": "org hết credit / chạm trần Overage qua /process",
+      "environment": "documented",
+      "covered": false,
+      "note": "Chưa có test qua API.",
+      "kb_refs": [
+        "KB-120"
+      ]
+    },
+    {
+      "feature_id": "fallback-template",
+      "layer": "portal",
+      "role": "Viewer",
+      "state": "staging (TC-IGH-204)",
+      "environment": "documented",
+      "covered": true,
+      "note": "Template không gắn fallback; kịch bản có biến + fallback chưa verify.",
+      "kb_refs": [
+        "KB-127",
+        "KB-138"
+      ]
+    },
+    {
+      "feature_id": "fallback-template",
+      "layer": "portal",
+      "role": "Admin",
+      "state": "org Free plan",
+      "environment": "documented",
+      "covered": true,
+      "note": "Gắn được fallback — một quan sát staging (độ tin cậy thấp).",
+      "kb_refs": [
+        "KB-139"
+      ]
+    },
+    {
+      "feature_id": "fallback-template",
+      "layer": "portal",
+      "role": "Editor / Owner",
+      "state": "staging",
+      "environment": "documented",
+      "covered": false,
+      "note": "Không có quan sát.",
+      "kb_refs": []
+    },
+    {
+      "feature_id": "fallback-template",
+      "layer": "portal",
+      "role": "unspecified",
+      "state": "đã gắn fallback (hiển thị panel)",
+      "environment": "documented",
+      "covered": true,
+      "note": "Bị BUG-128/129.",
+      "kb_refs": [
+        "KB-115",
+        "KB-140",
+        "KB-141"
+      ]
+    },
+    {
+      "feature_id": "fallback-template",
+      "layer": "integration",
+      "role": "unspecified",
+      "state": "Batch template runner",
+      "environment": "documented",
+      "covered": false,
+      "note": "Rule có, chưa verify.",
+      "kb_refs": [
+        "KB-124"
+      ]
+    }
+  ],
+  "profile_conflicts": [
+    {
+      "kind": "RULE_VS_KNOWN_DEFECT",
+      "summary": "Rule hiện giá template fallback cạnh trường fallback bị che bởi BUG-128/129 (panel luôn báo \"was deleted\", không hiện tên/giá).",
+      "side_a": "Expected: hiện giá template fallback.",
+      "side_b": "Hiện tại staging 2026-09-17: panel báo sai \"was deleted\", không hiện tên/giá.",
+      "resolution": "Giữ cả hai; rule là expected, bug là regression watch.",
+      "kb_refs": [
+        "KB-115",
+        "KB-140",
+        "KB-141"
+      ]
+    },
+    {
+      "kind": "RULE_VS_KNOWN_DEFECT",
+      "summary": "Rule xoá template đang làm fallback phải có cảnh báo vs dialog generic (BUG-130).",
+      "side_a": "Expected: có cảnh báo.",
+      "side_b": "Hiện tại staging 2026-09-17: dialog generic.",
+      "resolution": "Giữ cả hai.",
+      "kb_refs": [
+        "KB-132",
+        "KB-144"
+      ]
+    }
+  ],
+  "profile_relationships": [
+    {
+      "from": "fallback-template",
+      "to": "template-authoring",
+      "relation": "xoá template đang làm fallback cần cảnh báo",
+      "kb_refs": [
+        "KB-132",
+        "KB-144"
+      ]
+    },
+    {
+      "from": "fallback-template",
+      "to": "template-post-processing",
+      "relation": "hiển thị giá; post-processing khi B chạy chưa rõ",
+      "kb_refs": [
+        "KB-115"
+      ]
+    },
+    {
+      "from": "fallback-template",
+      "to": "template-variables",
+      "relation": "biến dùng chung giữa A và B chưa rõ",
+      "kb_refs": [
+        "KB-117"
+      ]
+    },
+    {
+      "from": "fallback-template",
+      "to": "template-run-history",
+      "relation": "ước tính trên nút Run chỉ giá A",
+      "kb_refs": [
+        "KB-123",
+        "KB-135"
+      ]
+    }
+  ]
+}

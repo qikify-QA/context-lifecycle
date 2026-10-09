@@ -1,0 +1,979 @@
+{
+  "schema_version": "1.0",
+  "artifact_type": "FeatureProfileCandidate",
+  "artifact_id": "ART-FEATURE-PROFILE-credits-and-rate-limits-CTX-20261008-01",
+  "workflow_id": "CTX-20261008-01",
+  "producer": "feature-profile-builder",
+  "source_refs": [
+    "candidate/product-kb/credits-and-rate-limits.json",
+    "candidate/product-kb/_object-level.organization-billing.json",
+    "candidate/product-kb/_product-level.json",
+    "input/orchestrator-directives.json",
+    "input/scope-plan.json"
+  ],
+  "upstream_artifact_ids": [
+    "PKB-imagenhub-organization-billing-credits-and-rate-limits",
+    "PKB-imagenhub-organization-billing-OBJECT-LEVEL",
+    "PKBC-CTX-20261008-01-_product-level"
+  ],
+  "status": "READY",
+  "confidence": "MEDIUM",
+  "observations": [
+    "Profile dựng từ bộ tài liệu, không có quan sát runtime nào trong lần chạy này: act_ids rỗng ở mọi nơi và observed_validations rỗng. Mọi phát biểu trong profile đều trỏ về kb_id của object Organization & Billing (KB-001..KB-056) hoặc của tầng product (KB-P-xxx).",
+    "Mọi rule trong confirmed_rules đều là CONFIRMED_EXPECTED với nguồn là docs chính thức ImagenHub (bản tóm tắt QA đọc 2026-08-27), độ tin cậy tối đa MEDIUM vì chỉ có một tài liệu nguồn. Hành vi khảo sát trên staging (2026-08-30/31) chỉ nằm ở observed_behavior, nêu là hiện trạng, không dùng làm expected result.",
+    "Lỗi chuẩn 402/429 ở tầng product (KB-P-020, KB-P-024) được trích cùng rule tương ứng của feature để người đọc thấy đủ type lỗi; không có mâu thuẫn giữa hai tầng."
+  ],
+  "assumptions": [],
+  "unknowns": [
+    "Con số rate limit, chu kỳ reset, BYOK theo plan, thứ tự trừ credit, giá/plan chính thức, luồng mua — xem unknown_areas."
+  ],
+  "conflicts": [],
+  "blocking_issues": [],
+  "payload": {
+    "feature_profiles": [
+      {
+        "feature_id": "FEAT-03-credits-and-rate-limits",
+        "feature_key": "credits-and-rate-limits",
+        "name": "Credit và rate limit",
+        "user_goal": "Org và người gọi API biết mình được dùng sản phẩm đến đâu (rate limit ở free tier, credit ở paid tier), theo dõi số dư và chi phí của từng request, xử lý đúng khi bị chặn vì vượt giới hạn hoặc hết credit, và xem plan/mua thêm credit trên portal.",
+        "stable_since_version": "v1",
+        "actors": [
+          {
+            "role": "Người gọi API ở free tier",
+            "permission_observed": "Theo docs chính thức: bị giới hạn số request theo phút và theo ngày; mọi response mang header X-RateLimit-*; vượt giới hạn nhận HTTP 429.",
+            "kb_refs": [
+              "KB-021",
+              "KB-023",
+              "KB-024",
+              "KB-025",
+              "KB-026"
+            ]
+          },
+          {
+            "role": "Người gọi API ở paid tier",
+            "permission_observed": "Theo docs chính thức: không bị rate limit; mỗi request trừ credit theo cost của cặp model-provider; hết credit nhận HTTP 402.",
+            "kb_refs": [
+              "KB-021",
+              "KB-027",
+              "KB-028",
+              "KB-030",
+              "KB-031"
+            ]
+          },
+          {
+            "role": "Owner",
+            "permission_observed": "Theo docs chính thức, chỉ Owner có quyền Manage ở khu vực Billing.",
+            "kb_refs": [
+              "KB-018"
+            ]
+          },
+          {
+            "role": "Mọi role, kể cả Viewer",
+            "permission_observed": "Theo docs chính thức, credit balance còn lại luôn hiển thị cho mọi role.",
+            "kb_refs": [
+              "KB-019"
+            ]
+          },
+          {
+            "role": "Người dùng portal (role chưa được nêu)",
+            "permission_observed": "Trên staging (khảo sát 2026-08-30) thấy card Active plan và Credits remaining trên Dashboard, trang Subscription và Plans, modal Buy credits; role của tài khoản khảo sát không được nêu.",
+            "kb_refs": [
+              "KB-033",
+              "KB-034",
+              "KB-039"
+            ]
+          }
+        ],
+        "entry_points": [
+          {
+            "path": "Mọi request API",
+            "precondition": "Header rate limit trả ở free tier; header credit trả ở paid tier.",
+            "kb_refs": [
+              "KB-026",
+              "KB-030"
+            ]
+          },
+          {
+            "path": "GET /ping",
+            "precondition": "Dùng để kiểm tra nhanh balance.",
+            "kb_refs": [
+              "KB-032"
+            ]
+          },
+          {
+            "path": "GET /model-providers (field cost)",
+            "precondition": "Dùng để xem cost của từng cặp model-provider.",
+            "kb_refs": [
+              "KB-029"
+            ]
+          },
+          {
+            "path": "/dashboard — card Active plan và Credits remaining",
+            "precondition": "Đã đăng nhập portal.",
+            "kb_refs": [
+              "KB-033",
+              "KB-056",
+              "KB-P-026"
+            ]
+          },
+          {
+            "path": "/subscription và /pricing (Subscription & Plans)",
+            "precondition": "Đã đăng nhập portal; role cần có chưa được nêu.",
+            "kb_refs": [
+              "KB-034",
+              "KB-P-028"
+            ]
+          },
+          {
+            "path": "Modal Buy credits",
+            "precondition": "Mở từ khu vực Subscription & Plans trên portal; luồng mua thật chưa được thử.",
+            "kb_refs": [
+              "KB-039"
+            ]
+          }
+        ],
+        "capabilities": [
+          {
+            "name": "Phân hạng sử dụng theo tier",
+            "description": "Theo docs chính thức, billing là pay-per-request bằng credit ở paid tier, free tier bị giới hạn bằng rate limit; paid tier không bị rate limit. Sản phẩm hỗ trợ hai cách dùng model: BYOK hoặc subscription ImagenHub.",
+            "kb_refs": [
+              "KB-021",
+              "KB-022",
+              "KB-027"
+            ],
+            "act_ids": []
+          },
+          {
+            "name": "Giới hạn request ở free tier",
+            "description": "Theo docs chính thức, free tier bị giới hạn request theo phút và theo ngày (docs không nêu con số); mọi response mang X-RateLimit-Limit-Minute, X-RateLimit-Remaining-Minute, X-RateLimit-Limit-Day, X-RateLimit-Remaining-Day; vượt giới hạn trả HTTP 429 type rate_limit_exceeded và caller cần đọc header Retry-After.",
+            "kb_refs": [
+              "KB-023",
+              "KB-024",
+              "KB-025",
+              "KB-026",
+              "KB-P-024"
+            ],
+            "act_ids": []
+          },
+          {
+            "name": "Trừ credit theo request ở paid tier",
+            "description": "Theo docs chính thức, mỗi request bị trừ credit theo cost của cặp model-provider; cost xem ở field cost của GET /model-providers; response mang X-Credits-Used và X-Credits-Remaining, giá trị có thể là \"unlimited\".",
+            "kb_refs": [
+              "KB-028",
+              "KB-029",
+              "KB-030"
+            ],
+            "act_ids": []
+          },
+          {
+            "name": "Chặn request khi hết credit",
+            "description": "Theo docs chính thức, khi hết credit API trả HTTP 402 (type credit_limit_exceeded) kèm credit_limit, credits_used và resets_at.",
+            "kb_refs": [
+              "KB-031",
+              "KB-P-020"
+            ],
+            "act_ids": []
+          },
+          {
+            "name": "Kiểm tra số dư",
+            "description": "Theo docs chính thức, GET /ping trả key.credit_limit, key.credits_used, key.credits_remaining và user.tier; credit balance luôn hiển thị cho mọi role. Trên staging Dashboard có card Credits remaining.",
+            "kb_refs": [
+              "KB-032",
+              "KB-019",
+              "KB-033"
+            ],
+            "act_ids": []
+          },
+          {
+            "name": "Xem plan và mua thêm credit trên portal",
+            "description": "Trên staging (khảo sát 2026-08-30): có trang Subscription và trang Plans (/pricing), Pro Plan hiển thị $19/tháng với 2,000 credit/tháng, Overage limit pay-as-you-go $0.01/credit với mức hiển thị \"max $30/tháng\", modal Buy credits có 6 gói. Đây là snapshot staging, chưa có nguồn xác nhận; luồng mua thật chưa được thử.",
+            "kb_refs": [
+              "KB-034",
+              "KB-035",
+              "KB-036",
+              "KB-037",
+              "KB-038",
+              "KB-039"
+            ],
+            "act_ids": []
+          },
+          {
+            "name": "Theo dõi mức tiêu thụ credit trên portal",
+            "description": "Trên staging (khảo sát 2026-08-30, qua nhiều session), Bonus credits giảm dần theo mỗi lần chạy generation; người khảo sát kết luận credit tracking cập nhật real-time nhưng không có phép đo độ trễ nào.",
+            "kb_refs": [
+              "KB-040",
+              "KB-041"
+            ],
+            "act_ids": []
+          }
+        ],
+        "state_transitions": [
+          {
+            "from": "Free tier, còn trong giới hạn request",
+            "to": "Bị chặn với HTTP 429 rate_limit_exceeded",
+            "trigger": "Vượt giới hạn request theo phút hoặc theo ngày",
+            "condition": "Con số giới hạn không được docs nêu; caller cần đọc Retry-After.",
+            "kb_refs": [
+              "KB-023",
+              "KB-024",
+              "KB-025",
+              "KB-P-024"
+            ]
+          },
+          {
+            "from": "Paid tier, còn credit",
+            "to": "Paid tier, credit giảm",
+            "trigger": "Mỗi request",
+            "condition": "Mức trừ bằng cost của cặp model-provider được dùng.",
+            "kb_refs": [
+              "KB-028",
+              "KB-029",
+              "KB-030"
+            ]
+          },
+          {
+            "from": "Paid tier, còn credit",
+            "to": "Bị chặn với HTTP 402",
+            "trigger": "Hết credit",
+            "condition": "Response kèm credit_limit, credits_used, resets_at; chu kỳ reset không được nêu.",
+            "kb_refs": [
+              "KB-031",
+              "KB-P-020"
+            ]
+          },
+          {
+            "from": "Bonus credits ở mức hiện tại",
+            "to": "Bonus credits thấp hơn",
+            "trigger": "Chạy generation (quan sát trên staging)",
+            "condition": "Hiện trạng quan sát được, ví dụ 2,301 xuống 2,280; thứ tự trừ giữa Bonus, credit của plan và Overage chưa được xác nhận.",
+            "kb_refs": [
+              "KB-040"
+            ]
+          }
+        ],
+        "confirmed_rules": [
+          {
+            "rule": "Billing là pay-per-request bằng credit ở paid tier; free tier bị giới hạn bằng rate limit.",
+            "knowledge_kind": "CONFIRMED_EXPECTED",
+            "confirmation_type": "spec_doc",
+            "confidence": "MEDIUM",
+            "kb_refs": [
+              "KB-021"
+            ],
+            "never_supersede_topics": [
+              "billing",
+              "credit-charging"
+            ]
+          },
+          {
+            "rule": "Sản phẩm hỗ trợ hai cách dùng model: BYOK (key provider riêng) hoặc subscription ImagenHub.",
+            "knowledge_kind": "CONFIRMED_EXPECTED",
+            "confirmation_type": "spec_doc",
+            "confidence": "MEDIUM",
+            "kb_refs": [
+              "KB-022"
+            ],
+            "never_supersede_topics": [
+              "billing"
+            ]
+          },
+          {
+            "rule": "Free tier bị giới hạn số request theo phút và theo ngày; docs không nêu con số cụ thể.",
+            "knowledge_kind": "CONFIRMED_EXPECTED",
+            "confirmation_type": "spec_doc",
+            "confidence": "MEDIUM",
+            "kb_refs": [
+              "KB-023"
+            ]
+          },
+          {
+            "rule": "Free tier vượt giới hạn request thì API trả HTTP 429 với error type rate_limit_exceeded.",
+            "knowledge_kind": "CONFIRMED_EXPECTED",
+            "confirmation_type": "spec_doc",
+            "confidence": "MEDIUM",
+            "kb_refs": [
+              "KB-024",
+              "KB-P-024"
+            ]
+          },
+          {
+            "rule": "Khi nhận HTTP 429 do rate limit, caller cần kiểm tra header Retry-After.",
+            "knowledge_kind": "CONFIRMED_EXPECTED",
+            "confirmation_type": "spec_doc",
+            "confidence": "MEDIUM",
+            "kb_refs": [
+              "KB-025",
+              "KB-P-024"
+            ]
+          },
+          {
+            "rule": "Ở free tier mọi response mang header X-RateLimit-Limit-Minute, X-RateLimit-Remaining-Minute, X-RateLimit-Limit-Day, X-RateLimit-Remaining-Day.",
+            "knowledge_kind": "CONFIRMED_EXPECTED",
+            "confirmation_type": "spec_doc",
+            "confidence": "MEDIUM",
+            "kb_refs": [
+              "KB-026"
+            ]
+          },
+          {
+            "rule": "Paid tier không bị rate limit.",
+            "knowledge_kind": "CONFIRMED_EXPECTED",
+            "confirmation_type": "spec_doc",
+            "confidence": "MEDIUM",
+            "kb_refs": [
+              "KB-027"
+            ]
+          },
+          {
+            "rule": "Ở paid tier mỗi request bị trừ credit theo cost của cặp model-provider được dùng.",
+            "knowledge_kind": "CONFIRMED_EXPECTED",
+            "confirmation_type": "spec_doc",
+            "confidence": "MEDIUM",
+            "kb_refs": [
+              "KB-028"
+            ],
+            "never_supersede_topics": [
+              "credit-charging"
+            ]
+          },
+          {
+            "rule": "Cost của mỗi cặp model-provider nằm ở field cost trong response của GET /model-providers.",
+            "knowledge_kind": "CONFIRMED_EXPECTED",
+            "confirmation_type": "spec_doc",
+            "confidence": "MEDIUM",
+            "kb_refs": [
+              "KB-029"
+            ]
+          },
+          {
+            "rule": "Ở paid tier response mang header X-Credits-Used và X-Credits-Remaining; giá trị có thể là \"unlimited\".",
+            "knowledge_kind": "CONFIRMED_EXPECTED",
+            "confirmation_type": "spec_doc",
+            "confidence": "MEDIUM",
+            "kb_refs": [
+              "KB-030"
+            ],
+            "never_supersede_topics": [
+              "credit-charging"
+            ]
+          },
+          {
+            "rule": "Hết credit thì API trả HTTP 402 (type credit_limit_exceeded) kèm credit_limit, credits_used và resets_at.",
+            "knowledge_kind": "CONFIRMED_EXPECTED",
+            "confirmation_type": "spec_doc",
+            "confidence": "MEDIUM",
+            "kb_refs": [
+              "KB-031",
+              "KB-P-020"
+            ],
+            "never_supersede_topics": [
+              "credit-charging",
+              "billing"
+            ]
+          },
+          {
+            "rule": "GET /ping dùng để kiểm tra nhanh balance, trả key.credit_limit, key.credits_used, key.credits_remaining và user.tier.",
+            "knowledge_kind": "CONFIRMED_EXPECTED",
+            "confirmation_type": "spec_doc",
+            "confidence": "MEDIUM",
+            "kb_refs": [
+              "KB-032"
+            ]
+          },
+          {
+            "rule": "Credit balance còn lại luôn hiển thị cho mọi role, kể cả Viewer.",
+            "knowledge_kind": "CONFIRMED_EXPECTED",
+            "confirmation_type": "spec_doc",
+            "confidence": "MEDIUM",
+            "kb_refs": [
+              "KB-019"
+            ],
+            "never_supersede_topics": [
+              "permission",
+              "billing"
+            ]
+          }
+        ],
+        "observed_behavior": [
+          {
+            "behavior": "Trên staging (khảo sát 2026-08-30, org test \"HUB 1\"), Dashboard có card Active plan và card Credits remaining.",
+            "knowledge_kind": "OBSERVED_CURRENT",
+            "status": null,
+            "confidence": "MEDIUM",
+            "kb_refs": [
+              "KB-033"
+            ]
+          },
+          {
+            "behavior": "Trên staging (cập nhật 2026-08-31), Dashboard chỉ gồm lời chào, card credit và 2 widget; không có form hay action nào để thao tác.",
+            "knowledge_kind": "OBSERVED_CURRENT",
+            "status": null,
+            "confidence": "MEDIUM",
+            "kb_refs": [
+              "KB-056"
+            ]
+          },
+          {
+            "behavior": "Trên staging (khảo sát 2026-08-30), ngoài trang Subscription còn có trang Plans ở route /pricing.",
+            "knowledge_kind": "OBSERVED_CURRENT",
+            "status": null,
+            "confidence": "MEDIUM",
+            "kb_refs": [
+              "KB-034"
+            ]
+          },
+          {
+            "behavior": "Trên staging (khảo sát 2026-08-30), Pro Plan hiển thị giá $19/tháng; chưa có nguồn xác nhận là giá đúng.",
+            "knowledge_kind": "OBSERVED_CURRENT",
+            "status": null,
+            "confidence": "LOW",
+            "kb_refs": [
+              "KB-035"
+            ],
+            "never_supersede_topics": [
+              "billing"
+            ]
+          },
+          {
+            "behavior": "Trên staging (khảo sát 2026-08-30), Pro Plan cấp 2,000 credit mỗi tháng; chưa có nguồn xác nhận.",
+            "knowledge_kind": "OBSERVED_CURRENT",
+            "status": null,
+            "confidence": "LOW",
+            "kb_refs": [
+              "KB-036"
+            ],
+            "never_supersede_topics": [
+              "billing"
+            ]
+          },
+          {
+            "behavior": "Trên staging (khảo sát 2026-08-30), Overage limit là pay-as-you-go với giá $0.01 mỗi credit.",
+            "knowledge_kind": "OBSERVED_CURRENT",
+            "status": null,
+            "confidence": "LOW",
+            "kb_refs": [
+              "KB-037"
+            ],
+            "never_supersede_topics": [
+              "billing",
+              "credit-charging"
+            ]
+          },
+          {
+            "behavior": "Trên staging (khảo sát 2026-08-30), Overage limit hiển thị \"max $30/tháng\"; chưa rõ là trần cố định của sản phẩm hay giá trị đang cấu hình cho org test.",
+            "knowledge_kind": "OBSERVED_CURRENT",
+            "status": null,
+            "confidence": "LOW",
+            "kb_refs": [
+              "KB-038"
+            ],
+            "never_supersede_topics": [
+              "billing",
+              "credit-charging"
+            ]
+          },
+          {
+            "behavior": "Trên staging (khảo sát 2026-08-30), modal Buy credits có 6 gói; nội dung từng gói không được liệt kê và chưa thử mua thật.",
+            "knowledge_kind": "OBSERVED_CURRENT",
+            "status": null,
+            "confidence": "LOW",
+            "kb_refs": [
+              "KB-039"
+            ],
+            "never_supersede_topics": [
+              "billing"
+            ]
+          },
+          {
+            "behavior": "Trên staging (khảo sát 2026-08-30, nhiều session), Bonus credits giảm dần theo mỗi lần chạy generation (ví dụ 2,301 xuống 2,280).",
+            "knowledge_kind": "OBSERVED_CURRENT",
+            "status": null,
+            "confidence": "MEDIUM",
+            "kb_refs": [
+              "KB-040"
+            ],
+            "never_supersede_topics": [
+              "credit-charging"
+            ]
+          },
+          {
+            "behavior": "Trên staging (khảo sát 2026-08-30), người khảo sát kết luận credit tracking cập nhật real-time dựa trên việc Bonus credits giảm dần; không có phép đo độ trễ nào.",
+            "knowledge_kind": "OBSERVED_CURRENT",
+            "status": null,
+            "confidence": "LOW",
+            "kb_refs": [
+              "KB-041"
+            ],
+            "never_supersede_topics": [
+              "credit-charging"
+            ]
+          }
+        ],
+        "limitations": [],
+        "observed_validations": [],
+        "permissions": [
+          {
+            "subject": "Owner",
+            "action": "Manage khu vực Billing",
+            "source": "docs chính thức",
+            "kb_refs": [
+              "KB-018"
+            ]
+          },
+          {
+            "subject": "Admin, Editor, Viewer",
+            "action": "Không có quyền ở khu vực Billing",
+            "source": "docs chính thức",
+            "kb_refs": [
+              "KB-018"
+            ]
+          },
+          {
+            "subject": "Mọi role",
+            "action": "Thấy credit balance còn lại",
+            "source": "docs chính thức",
+            "kb_refs": [
+              "KB-019"
+            ]
+          }
+        ],
+        "surface_mapping": {
+          "portal": [
+            {
+              "surface": "/dashboard — card Active plan, Credits remaining",
+              "kb_refs": [
+                "KB-033",
+                "KB-056",
+                "KB-P-026"
+              ]
+            },
+            {
+              "surface": "/subscription",
+              "kb_refs": [
+                "KB-034",
+                "KB-P-028"
+              ]
+            },
+            {
+              "surface": "/pricing (trang Plans)",
+              "kb_refs": [
+                "KB-034"
+              ]
+            },
+            {
+              "surface": "Modal Buy credits",
+              "kb_refs": [
+                "KB-039"
+              ]
+            }
+          ],
+          "storefront": [],
+          "api": [
+            {
+              "surface": "Header X-RateLimit-Limit-Minute, X-RateLimit-Remaining-Minute, X-RateLimit-Limit-Day, X-RateLimit-Remaining-Day (free tier)",
+              "kb_refs": [
+                "KB-026"
+              ]
+            },
+            {
+              "surface": "HTTP 429 rate_limit_exceeded + header Retry-After",
+              "kb_refs": [
+                "KB-024",
+                "KB-025",
+                "KB-P-024"
+              ]
+            },
+            {
+              "surface": "Header X-Credits-Used, X-Credits-Remaining (paid tier)",
+              "kb_refs": [
+                "KB-030"
+              ]
+            },
+            {
+              "surface": "HTTP 402 credit_limit_exceeded (credit_limit, credits_used, resets_at)",
+              "kb_refs": [
+                "KB-031",
+                "KB-P-020"
+              ]
+            },
+            {
+              "surface": "GET /ping",
+              "kb_refs": [
+                "KB-032"
+              ]
+            },
+            {
+              "surface": "GET /model-providers (field cost)",
+              "kb_refs": [
+                "KB-029"
+              ]
+            }
+          ],
+          "data": [],
+          "code": []
+        },
+        "dependencies": [
+          {
+            "depends_on": "roles-permissions",
+            "reason": "Quyền Billing chỉ Owner; credit balance hiển thị cho mọi role.",
+            "kb_refs": [
+              "KB-018",
+              "KB-019"
+            ]
+          },
+          {
+            "depends_on": "Model catalog (object Models)",
+            "reason": "Cost của cặp model-provider lấy từ GET /model-providers.",
+            "kb_refs": [
+              "KB-029"
+            ]
+          },
+          {
+            "depends_on": "Provider key BYOK (object Developer settings)",
+            "reason": "BYOK là một trong hai cách dùng model; tương tác giữa BYOK và việc trừ credit ImagenHub chưa được xác nhận cho từng plan.",
+            "kb_refs": [
+              "KB-022"
+            ]
+          },
+          {
+            "depends_on": "Fallback template (object Templates)",
+            "reason": "Rule về credit khi template có fallback (402 hoặc chạm trần Overage) được ghi ở object Templates, không nhân bản ở đây.",
+            "kb_refs": [
+              "KB-031"
+            ]
+          }
+        ],
+        "risks": [
+          {
+            "risk": "Chủ đề billing không được tự giải quyết hay ghi đè bằng tài liệu mới hơn: mô hình tier, quyền Billing và giá plan cần PO/Dev xác nhận khi thay đổi.",
+            "never_supersede_topic": "billing",
+            "kb_refs": [
+              "KB-021",
+              "KB-022",
+              "KB-031",
+              "KB-035",
+              "KB-036",
+              "KB-037",
+              "KB-038",
+              "KB-039"
+            ]
+          },
+          {
+            "risk": "Chủ đề credit-charging không được tự giải quyết: cách trừ credit theo cost, header credit, 402 khi hết credit và mức Overage là các điểm tính tiền, sai lệch gây thiệt hại trực tiếp cho khách.",
+            "never_supersede_topic": "credit-charging",
+            "kb_refs": [
+              "KB-021",
+              "KB-028",
+              "KB-030",
+              "KB-031",
+              "KB-037",
+              "KB-038",
+              "KB-040",
+              "KB-041"
+            ]
+          },
+          {
+            "risk": "Giá Pro $19/tháng, 2,000 credit/tháng, Overage $0.01/credit và mức \"max $30/tháng\" chỉ là snapshot staging, không dùng làm expected value.",
+            "kb_refs": [
+              "KB-035",
+              "KB-036",
+              "KB-037",
+              "KB-038"
+            ]
+          },
+          {
+            "risk": "Không có con số rate limit và chu kỳ reset credit, nên không kiểm được boundary của 429 và 402.",
+            "kb_refs": [
+              "KB-023",
+              "KB-031"
+            ]
+          },
+          {
+            "risk": "Test mua credit, bật Overage, đổi plan là thao tác tốn tiền thật trên org dùng chung; chưa từng được thử.",
+            "kb_refs": [
+              "KB-037",
+              "KB-039"
+            ]
+          }
+        ],
+        "freshness": {
+          "observed_at": null,
+          "documented_at": "docs chính thức tóm tắt 2026-08-27; khảo sát staging 2026-08-30 đến 2026-08-31",
+          "run_id": "CTX-20261008-01"
+        },
+        "unknown_areas": [
+          {
+            "question": "Giới hạn request theo phút và theo ngày của free tier là bao nhiêu?",
+            "why_it_matters": "Không có con số thì không kiểm được boundary 429 và giá trị header X-RateLimit-*."
+          },
+          {
+            "question": "Credit reset theo chu kỳ nào và resets_at được tính ra sao?",
+            "why_it_matters": "402 trả resets_at nhưng không có rule để kiểm giá trị."
+          },
+          {
+            "question": "Khi dùng BYOK, plan nào vẫn bị trừ credit ImagenHub?",
+            "why_it_matters": "Ảnh hưởng trực tiếp tới kết quả kiểm credit sau mỗi request dùng key riêng."
+          },
+          {
+            "question": "Thứ tự trừ credit giữa Bonus credits, credit của plan và Overage là gì?",
+            "why_it_matters": "Cần để biết số dư nào giảm sau một request."
+          },
+          {
+            "question": "Mức \"max $30/tháng\" của Overage là trần cố định hay giá trị cấu hình riêng cho org test?",
+            "why_it_matters": "Quyết định case chạm trần Overage có expected value hay không."
+          },
+          {
+            "question": "Giá Pro $19/tháng và 2,000 credit/tháng có phải giá chính thức không; ngoài Pro còn plan nào?",
+            "why_it_matters": "Hiện chỉ là snapshot staging."
+          },
+          {
+            "question": "6 gói Buy credits gồm những gói nào, luồng mua thật, Manage billing và Downgrade Pro sang Free hoạt động thế nào?",
+            "why_it_matters": "Tài liệu chi tiết về subscription/pricing được link từ QA KB ImagenHub \"Portal sitemap\" v1 không có sẵn; các luồng này chưa từng được thử."
+          },
+          {
+            "question": "Header X-Credits-Used/X-Credits-Remaining trả \"unlimited\" trong trường hợp nào?",
+            "why_it_matters": "Docs nêu giá trị có thể là \"unlimited\" nhưng không nêu điều kiện."
+          },
+          {
+            "question": "Request bị lỗi (lỗi provider hoặc lỗi người dùng) có bị trừ credit không?",
+            "why_it_matters": "Rule chỉ nói mỗi request bị trừ theo cost; chưa rõ áp cho request không thành công."
+          },
+          {
+            "question": "Credit tracking trên portal có thật sự cập nhật real-time không?",
+            "why_it_matters": "Hiện chỉ là kết luận của người khảo sát, không có phép đo."
+          },
+          {
+            "question": "Phía Teeinblue nhận gì khi task ImagenHub bị chặn vì hết credit?",
+            "why_it_matters": "Ảnh hưởng trải nghiệm storefront của merchant dùng tích hợp."
+          }
+        ]
+      }
+    ],
+    "profile_relationships": [
+      {
+        "from": "FEAT-03-credits-and-rate-limits",
+        "to": "FEAT-02-roles-permissions",
+        "relation": "governed_by",
+        "note": "Quyền Billing và việc hiển thị credit balance theo role.",
+        "kb_refs": [
+          "KB-018",
+          "KB-019"
+        ]
+      },
+      {
+        "from": "FEAT-03-credits-and-rate-limits",
+        "to": "FEAT-04-usage-analytics",
+        "relation": "related",
+        "note": "Log request trong Analytics có field cost; credit bị trừ theo cost của cặp model-provider. Quan hệ đơn vị giữa hai giá trị chưa được nêu.",
+        "kb_refs": [
+          "KB-028",
+          "KB-042"
+        ]
+      },
+      {
+        "from": "FEAT-03-credits-and-rate-limits",
+        "to_object": "templates",
+        "to_feature_key": "fallback-template",
+        "relation": "credit_rule_lives_there",
+        "note": "Rule credit khi template có fallback (402 hoặc chạm trần Overage) sống ở object Templates.",
+        "kb_refs": [
+          "KB-031"
+        ]
+      },
+      {
+        "from": "FEAT-03-credits-and-rate-limits",
+        "to_object": "models",
+        "to_feature_key": "model-catalog",
+        "relation": "cost_source",
+        "note": "GET /model-providers trả cost từng cặp model-provider.",
+        "kb_refs": [
+          "KB-029"
+        ]
+      },
+      {
+        "from": "FEAT-03-credits-and-rate-limits",
+        "to_object": "developer-settings",
+        "to_feature_key": "provider-keys-byok",
+        "relation": "billing_interaction",
+        "note": "BYOK tính cost vào tài khoản provider; credit ImagenHub có thể vẫn bị trừ tuỳ plan.",
+        "kb_refs": [
+          "KB-022"
+        ]
+      },
+      {
+        "from": "FEAT-03-credits-and-rate-limits",
+        "to_object": "developer-settings",
+        "to_feature_key": "account-alerts",
+        "relation": "credit_event",
+        "note": "Alert khi balance không đủ.",
+        "kb_refs": [
+          "KB-031"
+        ]
+      },
+      {
+        "from": "FEAT-03-credits-and-rate-limits",
+        "to_object": "developer-settings",
+        "to_feature_key": "mcp-server",
+        "relation": "credit_charging",
+        "note": "Generate qua MCP vẫn trừ credit như REST.",
+        "kb_refs": [
+          "KB-028"
+        ]
+      },
+      {
+        "from": "FEAT-03-credits-and-rate-limits",
+        "to_object": "tasks",
+        "to_feature_key": "task-history-list",
+        "relation": "cost_display",
+        "note": "Cột chi phí ước tính của Task history hiển thị credit hoặc key riêng.",
+        "kb_refs": [
+          "KB-028"
+        ]
+      }
+    ],
+    "coverage_matrix": [
+      {
+        "feature_id": "FEAT-03-credits-and-rate-limits",
+        "layer": "api",
+        "role": "unspecified",
+        "state": "free tier trong giới hạn",
+        "environment": "documented",
+        "covered": true,
+        "kb_refs": [
+          "KB-023",
+          "KB-026"
+        ],
+        "note": "Header rate limit theo docs; không có con số."
+      },
+      {
+        "feature_id": "FEAT-03-credits-and-rate-limits",
+        "layer": "api",
+        "role": "unspecified",
+        "state": "free tier vượt giới hạn",
+        "environment": "documented",
+        "covered": true,
+        "kb_refs": [
+          "KB-024",
+          "KB-025",
+          "KB-P-024"
+        ],
+        "note": "429 + Retry-After theo docs."
+      },
+      {
+        "feature_id": "FEAT-03-credits-and-rate-limits",
+        "layer": "api",
+        "role": "unspecified",
+        "state": "paid tier còn credit",
+        "environment": "documented",
+        "covered": true,
+        "kb_refs": [
+          "KB-027",
+          "KB-028",
+          "KB-029",
+          "KB-030"
+        ],
+        "note": "Theo docs."
+      },
+      {
+        "feature_id": "FEAT-03-credits-and-rate-limits",
+        "layer": "api",
+        "role": "unspecified",
+        "state": "paid tier hết credit",
+        "environment": "documented",
+        "covered": true,
+        "kb_refs": [
+          "KB-031",
+          "KB-P-020"
+        ],
+        "note": "402 theo docs; chu kỳ reset chưa rõ."
+      },
+      {
+        "feature_id": "FEAT-03-credits-and-rate-limits",
+        "layer": "api",
+        "role": "unspecified",
+        "state": "BYOK",
+        "environment": "documented",
+        "covered": false,
+        "kb_refs": [
+          "KB-022"
+        ],
+        "note": "Chưa rõ trừ credit theo plan."
+      },
+      {
+        "feature_id": "FEAT-03-credits-and-rate-limits",
+        "layer": "portal",
+        "role": "Owner",
+        "state": "quản lý billing",
+        "environment": "documented",
+        "covered": false,
+        "kb_refs": [
+          "KB-018"
+        ],
+        "note": "Có quyền theo docs nhưng luồng Manage billing chưa mô tả."
+      },
+      {
+        "feature_id": "FEAT-03-credits-and-rate-limits",
+        "layer": "portal",
+        "role": "Admin/Editor/Viewer",
+        "state": "xem credit balance",
+        "environment": "documented",
+        "covered": true,
+        "kb_refs": [
+          "KB-019"
+        ],
+        "note": "Theo docs; vị trí hiển thị chưa nêu."
+      },
+      {
+        "feature_id": "FEAT-03-credits-and-rate-limits",
+        "layer": "portal",
+        "role": "unspecified",
+        "state": "xem plan và giá",
+        "environment": "documented",
+        "covered": true,
+        "kb_refs": [
+          "KB-034",
+          "KB-035",
+          "KB-036",
+          "KB-037",
+          "KB-038"
+        ],
+        "note": "Chỉ là snapshot staging, không có oracle."
+      },
+      {
+        "feature_id": "FEAT-03-credits-and-rate-limits",
+        "layer": "portal",
+        "role": "unspecified",
+        "state": "mua credit, bật Overage, đổi plan",
+        "environment": "documented",
+        "covered": false,
+        "kb_refs": [
+          "KB-039"
+        ],
+        "note": "Chưa thử, thiếu tài liệu chi tiết."
+      }
+    ],
+    "unassigned_kb_items": [],
+    "profile_conflicts": [],
+    "profile_change_summary": [
+      {
+        "feature_id": "FEAT-03-credits-and-rate-limits",
+        "change": "CREATED",
+        "note": "Profile tạo mới lần đầu từ bộ tài liệu ImagenHub, phiên bản v1."
+      }
+    ],
+    "kb_trace_complete": true
+  },
+  "gate": {
+    "decision": "CONDITIONAL_PASS",
+    "blocking_findings": [],
+    "conditions": [
+      "Đủ cho regression discovery của 429/402/header credit ở mức rule docs; oracle cho boundary và luồng mua/plan còn unknown.",
+      "Chủ đề billing và credit-charging không được tự giải quyết; giá và plan trên staging không dùng làm expected value."
+    ],
+    "allowed_next_steps": [
+      "qa-checklist-builder",
+      "knowledge-diff-analyzer",
+      "context-quality-reviewer"
+    ]
+  }
+}

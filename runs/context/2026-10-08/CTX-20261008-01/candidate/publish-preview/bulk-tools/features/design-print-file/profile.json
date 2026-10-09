@@ -1,0 +1,1154 @@
+{
+  "feature_id": "design-print-file",
+  "feature_key": "design-print-file",
+  "object_id": "bulk-tools",
+  "name": "Design (Beta) — biến ảnh mockup thành file in",
+  "user_goal": "Người dùng biến ảnh mockup sản phẩm đã in thành file thiết kế phẳng, nền trong suốt, đúng kích thước in để in lại, qua một pipeline nhiều bước (tái tạo artwork, upscale, cắt nền, đặt kích thước in) trên portal.",
+  "stable_since_version": "v1",
+  "maturity": "Tính năng Beta, không có trong docs chính thức ImagenHub; mọi tri thức là quan sát staging từ một lần khảo sát và một lần chạy.",
+  "actors": [
+    {
+      "role": "unspecified",
+      "permission_observed": "Trang /design được khảo sát và chạy trên staging (2026-08-30); tài liệu không nêu role của tài khoản khảo sát hay ràng buộc quyền.",
+      "kb_refs": [
+        "KB-019"
+      ]
+    }
+  ],
+  "entry_points": [
+    {
+      "path": "Portal /design (sidebar nhóm chính, nhãn \"Beta\")",
+      "precondition": "Đã đăng nhập portal; role cần thiết chưa được tài liệu nêu.",
+      "kb_refs": [
+        "KB-019",
+        "KB-020"
+      ]
+    }
+  ],
+  "capabilities": [
+    {
+      "name": "Chọn mission thiết kế (Clone hoặc Redesign)",
+      "description": "Trên staging (2026-08-30), nhóm radio \"Design mission\" ảnh hưởng tới Step 1, mặc định Clone. Clone được mô tả là khôi phục design gốc 1:1 và prompt của nó ép model sao chép y hệt font/layout/màu; Redesign được mô tả là tạo design mới cùng theme/layout nhưng chưa từng được chạy.",
+      "kb_refs": [
+        "KB-028",
+        "KB-029",
+        "KB-030",
+        "KB-031",
+        "KB-054"
+      ]
+    },
+    {
+      "name": "Cấu hình các bước của pipeline",
+      "description": "Trên staging (2026-08-30): Step 0 Crop tự động khoanh vùng design; Step 1 Recreate artwork có combobox \"Choose a model\" mặc định google/gemini-3-pro-image/edit (tên hiển thị \"Nano Banana Pro Edit(Gemini 3.0)\") và toggle \"Custom instructions\" chưa được mô tả; Step 2 Upscale và Step 3 cắt nền không có giá trị mặc định, hai dropdown hiện cùng một danh sách đầy đủ model image-editor không lọc theo chức năng step (ghi nhận là quirk, không có rule nào nói phải lọc); Step 4 Set print size có preset (ví dụ \"tshirt (4500×5400)\") chỉ xuất hiện sau khi chọn model ở Step 1, trước đó là \"Custom size\" trống.",
+      "kb_refs": [
+        "KB-021",
+        "KB-022",
+        "KB-023",
+        "KB-024",
+        "KB-025",
+        "KB-026",
+        "KB-027",
+        "KB-037",
+        "KB-038",
+        "KB-039",
+        "KB-055"
+      ]
+    },
+    {
+      "name": "Thêm ảnh, xác nhận chi phí và chạy pipeline",
+      "description": "Trên staging (2026-08-30), ảnh thêm qua nút \"Add images\" (UI ghi tối đa 250 ảnh, chưa kiểm boundary); nút \"Process 0 images\" bị disable tới khi có ảnh và đã chọn đủ model cho các step cần thiết (step nào là cần thiết chưa được nêu). UI hiển thị chi phí \"15 credits/image + finishing steps\"; bấm Process mở confirm dialog hiện chi tiết pipeline, cost ước tính và câu \"Up to 5 run at once.\"; khi chạy hiện chip stage Generate → Upscale → Remove background → Resize và tiến độ \"N of 1 processed\" (lần chạy mẫu 1 ảnh).",
+      "kb_refs": [
+        "KB-032",
+        "KB-033",
+        "KB-034",
+        "KB-035",
+        "KB-036",
+        "KB-040",
+        "KB-041",
+        "KB-042",
+        "KB-043",
+        "KB-044"
+      ]
+    },
+    {
+      "name": "Nhận và tải file in",
+      "description": "Trên staging (2026-08-30), lần chạy mẫu (mission Clone, mockup áo thun) cho output là file thiết kế phẳng nền trong suốt; định dạng và kích thước thực tế không được ghi. Có nút Download cho từng ảnh và \"Download all (N)\".",
+      "kb_refs": [
+        "KB-020",
+        "KB-045",
+        "KB-046",
+        "KB-047"
+      ]
+    },
+    {
+      "name": "Truy vết pipeline Design trong Task History",
+      "description": "Trên staging (2026-08-30, quan sát từ 1 task), trong Task History bước Generate là task chính; Upscale, Remove background và Print size xuất hiện như 3 post-processing step nối sau Generate, Step 2/3 chạy đúng model đã chọn, Step 4 chạy qua teeinblue/image-edits chứ không phải teeinblue/resize-image. Với Clone, prompt yêu cầu render artwork lên nền xanh lá chroma-key, nền này được xoá ở Step 3.",
+      "kb_refs": [
+        "KB-048",
+        "KB-049",
+        "KB-050",
+        "KB-051",
+        "KB-052",
+        "KB-053",
+        "KB-055"
+      ]
+    }
+  ],
+  "state_transitions": [
+    {
+      "from": "design-step1-model-not-selected",
+      "to": "design-step1-model-selected",
+      "trigger": "Chọn model ở Step 1",
+      "condition": "Preset kích thước in ở Step 4 xuất hiện/được điền; trước đó Step 4 là \"Custom size\" với Width/Height trống.",
+      "kb_refs": [
+        "KB-026",
+        "KB-027"
+      ]
+    },
+    {
+      "from": "design-mission-clone",
+      "to": "design-mission-redesign",
+      "trigger": "Chọn Redesign trong nhóm radio \"Design mission\"",
+      "condition": "Mặc định là Clone; Redesign chưa từng được chạy.",
+      "kb_refs": [
+        "KB-028",
+        "KB-029",
+        "KB-031"
+      ]
+    },
+    {
+      "from": "design-no-images-or-models",
+      "to": "Process được bật",
+      "trigger": "Thêm ảnh và chọn đủ model cho các step cần thiết",
+      "condition": "Step nào là \"cần thiết\" chưa được nêu.",
+      "kb_refs": [
+        "KB-034",
+        "KB-036"
+      ]
+    },
+    {
+      "from": "Process được bật",
+      "to": "design-confirm-dialog-open",
+      "trigger": "Bấm Process",
+      "condition": "Dialog hiện chi tiết pipeline và cost ước tính (lần chạy mẫu).",
+      "kb_refs": [
+        "KB-040",
+        "KB-042"
+      ]
+    },
+    {
+      "from": "design-confirm-dialog-open",
+      "to": "design-processing",
+      "trigger": "Người dùng xác nhận",
+      "condition": "Hiện chip stage và tiến độ \"N of 1 processed\" (lần chạy mẫu).",
+      "kb_refs": [
+        "KB-040",
+        "KB-043",
+        "KB-044"
+      ]
+    },
+    {
+      "from": "design-processing",
+      "to": "design-processed",
+      "trigger": "Pipeline chạy xong",
+      "condition": "Có Download từng ảnh và Download all (N); task xuất hiện trong Task History.",
+      "kb_refs": [
+        "KB-045",
+        "KB-046",
+        "KB-047",
+        "KB-048"
+      ]
+    }
+  ],
+  "confirmed_rules": [],
+  "observed_behavior": [
+    {
+      "statement": "Theo QA KB ImagenHub \"Design\" v1 (phần mở đầu) và QA KB ImagenHub \"Portal sitemap\" v1 §Sidebar, trên staging (khảo sát 2026-08-30) trang Design nằm ở route portal /design, xuất hiện trong nhóm sidebar chính của portal và được gắn nhãn \"Beta\".",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "status": "OBSERVED_CURRENT",
+      "confidence": "MEDIUM",
+      "scope": {
+        "environment": "documented",
+        "role": "unspecified",
+        "surface": "portal",
+        "object_state": "design-page-loaded"
+      },
+      "kb_refs": [
+        "KB-019"
+      ],
+      "usable_as_oracle": false,
+      "note": "Hiện trạng đã ghi nhận, chưa có nguồn thẩm quyền xác nhận là hành vi đúng."
+    },
+    {
+      "statement": "Theo QA KB ImagenHub \"Design\" v1 §Tổng quan, trên staging (khảo sát 2026-08-30) trang Design mang mô tả \"Turn product photos into print files\": biến ảnh mockup sản phẩm đã in thành file thiết kế phẳng, sẵn sàng in lại.",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "status": "OBSERVED_CURRENT",
+      "confidence": "MEDIUM",
+      "scope": {
+        "environment": "documented",
+        "role": "unspecified",
+        "surface": "portal",
+        "object_state": "design-page-loaded"
+      },
+      "kb_refs": [
+        "KB-020"
+      ],
+      "usable_as_oracle": false,
+      "note": "Hiện trạng đã ghi nhận, chưa có nguồn thẩm quyền xác nhận là hành vi đúng."
+    },
+    {
+      "statement": "Theo QA KB ImagenHub \"Design\" v1 §Tổng quan, trên staging (khảo sát 2026-08-30) Step 0 (Crop) của Design tự động khoanh vùng design ra khỏi ảnh mockup, người dùng không cần chọn gì.",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "status": "OBSERVED_CURRENT",
+      "confidence": "MEDIUM",
+      "scope": {
+        "environment": "documented",
+        "role": "unspecified",
+        "surface": "portal",
+        "object_state": "design-page-loaded"
+      },
+      "kb_refs": [
+        "KB-021"
+      ],
+      "usable_as_oracle": false,
+      "note": "Hiện trạng đã ghi nhận, chưa có nguồn thẩm quyền xác nhận là hành vi đúng."
+    },
+    {
+      "statement": "Theo QA KB ImagenHub \"Design\" v1 §Tổng quan, trên staging (khảo sát 2026-08-30) combobox \"Choose a model\" của Step 1 (Recreate artwork) hiển thị sẵn giá trị mặc định google/gemini-3-pro-image/edit.",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "status": "OBSERVED_CURRENT",
+      "confidence": "MEDIUM",
+      "scope": {
+        "environment": "documented",
+        "role": "unspecified",
+        "surface": "portal",
+        "object_state": "design-page-loaded"
+      },
+      "kb_refs": [
+        "KB-022"
+      ],
+      "usable_as_oracle": false,
+      "note": "Hiện trạng đã ghi nhận, chưa có nguồn thẩm quyền xác nhận là hành vi đúng."
+    },
+    {
+      "statement": "Theo QA KB ImagenHub \"Design\" v1 §Tổng quan, trên staging (khảo sát 2026-08-30) Step 1 (Recreate artwork) có toggle \"Custom instructions\". Toggle này làm gì chưa được mô tả.",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "status": "OBSERVED_CURRENT",
+      "confidence": "MEDIUM",
+      "scope": {
+        "environment": "documented",
+        "role": "unspecified",
+        "surface": "portal",
+        "object_state": "design-page-loaded"
+      },
+      "kb_refs": [
+        "KB-023"
+      ],
+      "usable_as_oracle": false,
+      "note": "Hiện trạng đã ghi nhận, chưa có nguồn thẩm quyền xác nhận là hành vi đúng."
+    },
+    {
+      "statement": "Theo QA KB ImagenHub \"Design\" v1 §Tổng quan, trên staging (khảo sát 2026-08-30) combobox \"Choose an upscaler\" của Step 2 (Upscale) chưa có giá trị mặc định, người dùng phải chọn tay.",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "status": "OBSERVED_CURRENT",
+      "confidence": "MEDIUM",
+      "scope": {
+        "environment": "documented",
+        "role": "unspecified",
+        "surface": "portal",
+        "object_state": "design-page-loaded"
+      },
+      "kb_refs": [
+        "KB-024"
+      ],
+      "usable_as_oracle": false,
+      "note": "Hiện trạng đã ghi nhận, chưa có nguồn thẩm quyền xác nhận là hành vi đúng."
+    },
+    {
+      "statement": "Theo QA KB ImagenHub \"Design\" v1 §Tổng quan, trên staging (khảo sát 2026-08-30) combobox \"Choose a background remover\" của Step 3 (cắt nền) chưa có giá trị mặc định, người dùng phải chọn tay.",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "status": "OBSERVED_CURRENT",
+      "confidence": "MEDIUM",
+      "scope": {
+        "environment": "documented",
+        "role": "unspecified",
+        "surface": "portal",
+        "object_state": "design-page-loaded"
+      },
+      "kb_refs": [
+        "KB-025"
+      ],
+      "usable_as_oracle": false,
+      "note": "Hiện trạng đã ghi nhận, chưa có nguồn thẩm quyền xác nhận là hành vi đúng."
+    },
+    {
+      "statement": "Theo QA KB ImagenHub \"Design\" v1 §Tổng quan, trên staging (khảo sát 2026-08-30) Step 4 (Set print size) có nút preset kích thước in; tài liệu chỉ nêu một ví dụ là \"tshirt (4500×5400)\", không liệt kê danh sách preset đầy đủ.",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "status": "OBSERVED_CURRENT",
+      "confidence": "MEDIUM",
+      "scope": {
+        "environment": "documented",
+        "role": "unspecified",
+        "surface": "portal",
+        "object_state": "design-step1-model-selected"
+      },
+      "kb_refs": [
+        "KB-026"
+      ],
+      "usable_as_oracle": false,
+      "note": "Hiện trạng đã ghi nhận, chưa có nguồn thẩm quyền xác nhận là hành vi đúng."
+    },
+    {
+      "statement": "Theo QA KB ImagenHub \"Design\" v1 §Tổng quan, trên staging (khảo sát 2026-08-30) nút preset ở Step 4 chỉ xuất hiện/được điền sau khi đã chọn xong model ở Step 1; trước đó Step 4 hiển thị \"Custom size\" với Width/Height trống.",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "status": "OBSERVED_CURRENT",
+      "confidence": "LOW",
+      "scope": {
+        "environment": "documented",
+        "role": "unspecified",
+        "surface": "portal",
+        "object_state": "design-step1-model-not-selected"
+      },
+      "kb_refs": [
+        "KB-027"
+      ],
+      "usable_as_oracle": false,
+      "note": "Hiện trạng đã ghi nhận, chưa có nguồn thẩm quyền xác nhận là hành vi đúng."
+    },
+    {
+      "statement": "Theo QA KB ImagenHub \"Design\" v1 §Tổng quan, trên staging (khảo sát 2026-08-30) trang Design có nhóm radio \"Design mission\", lựa chọn ở đó ảnh hưởng tới Step 1.",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "status": "OBSERVED_CURRENT",
+      "confidence": "MEDIUM",
+      "scope": {
+        "environment": "documented",
+        "role": "unspecified",
+        "surface": "portal",
+        "object_state": "design-page-loaded"
+      },
+      "kb_refs": [
+        "KB-028"
+      ],
+      "usable_as_oracle": false,
+      "note": "Hiện trạng đã ghi nhận, chưa có nguồn thẩm quyền xác nhận là hành vi đúng."
+    },
+    {
+      "statement": "Theo QA KB ImagenHub \"Design\" v1 §Tổng quan, trên staging (khảo sát 2026-08-30) lựa chọn mặc định của Design mission là Clone.",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "status": "OBSERVED_CURRENT",
+      "confidence": "MEDIUM",
+      "scope": {
+        "environment": "documented",
+        "role": "unspecified",
+        "surface": "portal",
+        "object_state": "design-page-loaded"
+      },
+      "kb_refs": [
+        "KB-029"
+      ],
+      "usable_as_oracle": false,
+      "note": "Hiện trạng đã ghi nhận, chưa có nguồn thẩm quyền xác nhận là hành vi đúng."
+    },
+    {
+      "statement": "Theo QA KB ImagenHub \"Design\" v1 §Tổng quan, trên staging (khảo sát 2026-08-30) mission Clone được mô tả là khôi phục design gốc 1:1, y hệt ảnh input.",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "status": "OBSERVED_CURRENT",
+      "confidence": "LOW",
+      "scope": {
+        "environment": "documented",
+        "role": "unspecified",
+        "surface": "portal",
+        "object_state": "design-mission-clone"
+      },
+      "kb_refs": [
+        "KB-030"
+      ],
+      "usable_as_oracle": false,
+      "note": "Hiện trạng đã ghi nhận, chưa có nguồn thẩm quyền xác nhận là hành vi đúng."
+    },
+    {
+      "statement": "Theo QA KB ImagenHub \"Design\" v1 §Tổng quan, trên staging (khảo sát 2026-08-30) UI trang Design hiển thị chi phí \"15 credits/image + finishing steps\".",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "status": "OBSERVED_CURRENT",
+      "confidence": "MEDIUM",
+      "scope": {
+        "environment": "documented",
+        "role": "unspecified",
+        "surface": "portal",
+        "object_state": "design-page-loaded"
+      },
+      "kb_refs": [
+        "KB-032"
+      ],
+      "usable_as_oracle": false,
+      "note": "Hiện trạng đã ghi nhận, chưa có nguồn thẩm quyền xác nhận là hành vi đúng."
+    },
+    {
+      "statement": "Theo QA KB ImagenHub \"Design\" v1 §Tổng quan, trên staging (khảo sát 2026-08-30) ảnh được thêm vào trang Design qua nút \"Add images\".",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "status": "OBSERVED_CURRENT",
+      "confidence": "MEDIUM",
+      "scope": {
+        "environment": "documented",
+        "role": "unspecified",
+        "surface": "portal",
+        "object_state": "design-page-loaded"
+      },
+      "kb_refs": [
+        "KB-034"
+      ],
+      "usable_as_oracle": false,
+      "note": "Hiện trạng đã ghi nhận, chưa có nguồn thẩm quyền xác nhận là hành vi đúng."
+    },
+    {
+      "statement": "Theo QA KB ImagenHub \"Design\" v1 §Tổng quan, trên staging (khảo sát 2026-08-30) UI trang Design ghi giới hạn upload tối đa 250 ảnh. Hành vi khi vượt 250 ảnh chưa được kiểm, nên đây là giới hạn hiển thị, chưa phải boundary đã kiểm.",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "status": "OBSERVED_CURRENT",
+      "confidence": "LOW",
+      "scope": {
+        "environment": "documented",
+        "role": "unspecified",
+        "surface": "portal",
+        "object_state": "design-page-loaded"
+      },
+      "kb_refs": [
+        "KB-035"
+      ],
+      "usable_as_oracle": false,
+      "note": "Hiện trạng đã ghi nhận, chưa có nguồn thẩm quyền xác nhận là hành vi đúng."
+    },
+    {
+      "statement": "Theo QA KB ImagenHub \"Design\" v1 §Tổng quan, trên staging (khảo sát 2026-08-30) nút \"Process 0 images\" bị disable cho tới khi có ảnh và đã chọn đủ model cho các step cần thiết. Tài liệu không nói step nào là \"cần thiết\".",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "status": "OBSERVED_CURRENT",
+      "confidence": "LOW",
+      "scope": {
+        "environment": "documented",
+        "role": "unspecified",
+        "surface": "portal",
+        "object_state": "design-no-images-or-models"
+      },
+      "kb_refs": [
+        "KB-036"
+      ],
+      "usable_as_oracle": false,
+      "note": "Hiện trạng đã ghi nhận, chưa có nguồn thẩm quyền xác nhận là hành vi đúng."
+    },
+    {
+      "statement": "Theo QA KB ImagenHub \"Design\" v1 §Quirk dropdown Step 2/Step 3, trên staging (khảo sát 2026-08-30) hai combobox \"Choose an upscaler\" (Step 2) và \"Choose a background remover\" (Step 3) hiển thị y hệt cùng một danh sách đầy đủ mọi model image-editor, không lọc riêng theo đúng chức năng của step. Tài liệu ghi nhận đây là quirk, không gọi là bug; chưa có rule nào nói danh sách phải được lọc.",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "status": "OBSERVED_CURRENT",
+      "confidence": "MEDIUM",
+      "scope": {
+        "environment": "documented",
+        "role": "unspecified",
+        "surface": "portal",
+        "object_state": "design-page-loaded"
+      },
+      "kb_refs": [
+        "KB-037"
+      ],
+      "usable_as_oracle": false,
+      "note": "Hiện trạng đã ghi nhận, chưa có nguồn thẩm quyền xác nhận là hành vi đúng."
+    },
+    {
+      "statement": "Theo QA KB ImagenHub \"Design\" v1 §Quirk dropdown Step 2/Step 3, trên staging (khảo sát 2026-08-30) danh sách model chung của hai combobox Step 2/Step 3 gồm: bria/remove-background, ideogram/remove-background, removebg/remove-background, teeinblue/facecutout, teeinblue/image-edits, teeinblue/remove-background, teeinblue/remove-background-on-color, teeinblue/resize-image, teeinblue/upscaler, teeinblue/upscaler_imageAI, upscayl-standard-4x. Đây là snapshot tại thời điểm khảo sát.",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "status": "OBSERVED_CURRENT",
+      "confidence": "LOW",
+      "scope": {
+        "environment": "documented",
+        "role": "unspecified",
+        "surface": "portal",
+        "object_state": "design-page-loaded"
+      },
+      "kb_refs": [
+        "KB-038"
+      ],
+      "usable_as_oracle": false,
+      "note": "Hiện trạng đã ghi nhận, chưa có nguồn thẩm quyền xác nhận là hành vi đúng."
+    },
+    {
+      "statement": "Theo QA KB ImagenHub \"Design\" v1 §Run test thực tế (2026-08-30), trên staging, trong 1 lần chạy mẫu, bấm Process mở một confirm dialog hiện chi tiết pipeline (model tái tạo artwork, sau đó upscale, cắt nền và đặt kích thước in) trước khi chạy; người dùng xác nhận để bắt đầu.",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "status": "OBSERVED_CURRENT",
+      "confidence": "LOW",
+      "scope": {
+        "environment": "documented",
+        "role": "unspecified",
+        "surface": "portal",
+        "object_state": "design-confirm-dialog-open"
+      },
+      "kb_refs": [
+        "KB-040"
+      ],
+      "usable_as_oracle": false,
+      "note": "Hiện trạng đã ghi nhận, chưa có nguồn thẩm quyền xác nhận là hành vi đúng."
+    },
+    {
+      "statement": "Theo QA KB ImagenHub \"Design\" v1 §Run test thực tế (2026-08-30), trên staging, confirm dialog của Design có câu \"Up to 5 run at once.\" Đây là text hiển thị; giới hạn chạy đồng thời thực tế chưa được kiểm (lần chạy mẫu chỉ có 1 ảnh).",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "status": "OBSERVED_CURRENT",
+      "confidence": "LOW",
+      "scope": {
+        "environment": "documented",
+        "role": "unspecified",
+        "surface": "portal",
+        "object_state": "design-confirm-dialog-open"
+      },
+      "kb_refs": [
+        "KB-041"
+      ],
+      "usable_as_oracle": false,
+      "note": "Hiện trạng đã ghi nhận, chưa có nguồn thẩm quyền xác nhận là hành vi đúng."
+    },
+    {
+      "statement": "Theo QA KB ImagenHub \"Design\" v1 §Run test thực tế (2026-08-30), trên staging, sau khi chạy xong có nút Download riêng cho từng ảnh kết quả.",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "status": "OBSERVED_CURRENT",
+      "confidence": "LOW",
+      "scope": {
+        "environment": "documented",
+        "role": "unspecified",
+        "surface": "portal",
+        "object_state": "design-processed"
+      },
+      "kb_refs": [
+        "KB-046"
+      ],
+      "usable_as_oracle": false,
+      "note": "Hiện trạng đã ghi nhận, chưa có nguồn thẩm quyền xác nhận là hành vi đúng."
+    },
+    {
+      "statement": "Theo QA KB ImagenHub \"Design\" v1 §Run test thực tế (2026-08-30), trên staging, sau lần chạy mẫu 1 ảnh có nút \"Download all (1)\".",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "status": "OBSERVED_CURRENT",
+      "confidence": "LOW",
+      "scope": {
+        "environment": "documented",
+        "role": "unspecified",
+        "surface": "portal",
+        "object_state": "design-processed"
+      },
+      "kb_refs": [
+        "KB-047"
+      ],
+      "usable_as_oracle": false,
+      "note": "Hiện trạng đã ghi nhận, chưa có nguồn thẩm quyền xác nhận là hành vi đúng."
+    },
+    {
+      "statement": "Theo QA KB ImagenHub \"Design\" v1 §Cơ chế nội bộ, trên staging (khảo sát 2026-08-30) khi mở task Design vừa chạy trong Task History, bước Generate (Step 1) là task chính.",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "status": "OBSERVED_CURRENT",
+      "confidence": "LOW",
+      "scope": {
+        "environment": "documented",
+        "role": "unspecified",
+        "surface": "portal",
+        "object_state": "design-processed"
+      },
+      "kb_refs": [
+        "KB-048"
+      ],
+      "usable_as_oracle": false,
+      "note": "Hiện trạng đã ghi nhận, chưa có nguồn thẩm quyền xác nhận là hành vi đúng."
+    },
+    {
+      "statement": "Theo QA KB ImagenHub \"Design\" v1 §Cơ chế nội bộ, trên staging (khảo sát 2026-08-30) trong Task History, Step 4 \"Set print size\" của Design thực chất chạy qua model teeinblue/image-edits, không phải teeinblue/resize-image (quan sát từ 1 task).",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "status": "OBSERVED_CURRENT",
+      "confidence": "LOW",
+      "scope": {
+        "environment": "documented",
+        "role": "unspecified",
+        "surface": "portal",
+        "object_state": "design-processed"
+      },
+      "kb_refs": [
+        "KB-049"
+      ],
+      "usable_as_oracle": false,
+      "note": "Hiện trạng đã ghi nhận, chưa có nguồn thẩm quyền xác nhận là hành vi đúng."
+    },
+    {
+      "statement": "Theo QA KB ImagenHub \"Design\" v1 §Cơ chế nội bộ, trên staging (khảo sát 2026-08-30) trong Task History, các bước Upscale, Remove background và Print size của Design xuất hiện đúng thứ tự như 3 post-processing step nối sau Generate (quan sát từ 1 task).",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "status": "OBSERVED_CURRENT",
+      "confidence": "LOW",
+      "scope": {
+        "environment": "documented",
+        "role": "unspecified",
+        "surface": "portal",
+        "object_state": "design-processed"
+      },
+      "kb_refs": [
+        "KB-050"
+      ],
+      "usable_as_oracle": false,
+      "note": "Hiện trạng đã ghi nhận, chưa có nguồn thẩm quyền xác nhận là hành vi đúng."
+    },
+    {
+      "statement": "Theo QA KB ImagenHub \"Design\" v1 §Cơ chế nội bộ và QA KB ImagenHub \"Task history\" v1 §Input panel, trên staging (khảo sát 2026-08-30) với mission Clone, model ở bước Generate không tạo nền trong suốt trực tiếp: prompt yêu cầu model render artwork lên nền xanh lá chroma-key đồng nhất (\"place the artwork on a solid, uniform chroma-key green screen\") (quan sát từ 1 task).",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "status": "OBSERVED_CURRENT",
+      "confidence": "LOW",
+      "scope": {
+        "environment": "documented",
+        "role": "unspecified",
+        "surface": "portal",
+        "object_state": "design-mission-clone"
+      },
+      "kb_refs": [
+        "KB-052"
+      ],
+      "usable_as_oracle": false,
+      "note": "Hiện trạng đã ghi nhận, chưa có nguồn thẩm quyền xác nhận là hành vi đúng."
+    },
+    {
+      "statement": "Theo QA KB ImagenHub \"Design\" v1 §Cơ chế nội bộ, trên staging (khảo sát 2026-08-30) với mission Clone, nền xanh lá do bước Generate tạo ra được xoá ở Step 3 (background remover) (quan sát từ 1 task).",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "status": "OBSERVED_CURRENT",
+      "confidence": "LOW",
+      "scope": {
+        "environment": "documented",
+        "role": "unspecified",
+        "surface": "portal",
+        "object_state": "design-mission-clone"
+      },
+      "kb_refs": [
+        "KB-053"
+      ],
+      "usable_as_oracle": false,
+      "note": "Hiện trạng đã ghi nhận, chưa có nguồn thẩm quyền xác nhận là hành vi đúng."
+    },
+    {
+      "statement": "Theo QA KB ImagenHub \"Design\" v1 §Cơ chế nội bộ, trên staging (khảo sát 2026-08-30) prompt Clone ép model làm \"copy machine\": sao chép y hệt font/layout/màu, không được sáng tạo lại (quan sát từ 1 task).",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "status": "OBSERVED_CURRENT",
+      "confidence": "LOW",
+      "scope": {
+        "environment": "documented",
+        "role": "unspecified",
+        "surface": "portal",
+        "object_state": "design-mission-clone"
+      },
+      "kb_refs": [
+        "KB-054"
+      ],
+      "usable_as_oracle": false,
+      "note": "Hiện trạng đã ghi nhận, chưa có nguồn thẩm quyền xác nhận là hành vi đúng."
+    },
+    {
+      "statement": "Theo QA KB ImagenHub \"Design\" v1 §Cơ chế nội bộ, trên staging (khảo sát 2026-08-30) \"Nano Banana Pro Edit(Gemini 3.0)\" là tên hiển thị trên UI (Task History) của model google/gemini-3-pro-image/edit.",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "status": "OBSERVED_CURRENT",
+      "confidence": "MEDIUM",
+      "scope": {
+        "environment": "documented",
+        "role": "unspecified",
+        "surface": "portal",
+        "object_state": "task-detail-open"
+      },
+      "kb_refs": [
+        "KB-055"
+      ],
+      "usable_as_oracle": false,
+      "note": "Hiện trạng đã ghi nhận, chưa có nguồn thẩm quyền xác nhận là hành vi đúng."
+    }
+  ],
+  "limitations": [
+    {
+      "statement": "Theo QA KB ImagenHub \"Design\" v1 §Tổng quan, trên staging (khảo sát 2026-08-30) mission Redesign được mô tả là tạo design mới cùng theme/layout nhưng artwork khác. Redesign chưa từng được chạy thử (chỉ Clone được chạy), nên đây chỉ là ý nghĩa nhãn trên UI.",
+      "knowledge_kind": "INFERRED",
+      "status": "INFERRED",
+      "confidence": "LOW",
+      "scope": {
+        "environment": "documented",
+        "role": "unspecified",
+        "surface": "portal",
+        "object_state": "design-mission-redesign"
+      },
+      "kb_refs": [
+        "KB-031"
+      ],
+      "usable_as_oracle": false,
+      "note": "Suy luận/mẫu đơn lẻ độ tin cậy thấp; không tổng quát hoá thành rule."
+    },
+    {
+      "statement": "Theo QA KB ImagenHub \"Design\" v1 §Tổng quan, người viết diễn giải từ text UI rằng chi phí upscale và cắt nền được cộng thêm riêng theo từng bước, tương tự cách post-processing step cộng credit ở trang chi tiết template. Số credit thực tế bị trừ chưa được đối chiếu.",
+      "knowledge_kind": "INFERRED",
+      "status": "INFERRED",
+      "confidence": "LOW",
+      "scope": {
+        "environment": "documented",
+        "role": "unspecified",
+        "surface": "portal",
+        "object_state": "design-page-loaded"
+      },
+      "kb_refs": [
+        "KB-033"
+      ],
+      "usable_as_oracle": false,
+      "note": "Suy luận/mẫu đơn lẻ độ tin cậy thấp; không tổng quát hoá thành rule."
+    },
+    {
+      "statement": "Theo QA KB ImagenHub \"Design\" v1 §Quirk dropdown Step 2/Step 3, trên staging (khảo sát 2026-08-30) người dùng có thể chọn nhầm model (ví dụ teeinblue/facecutout cho step Upscale hoặc teeinblue/upscaler cho step \"Cut out background\") mà UI không hiện cảnh báo nào. Tài liệu không ghi lại lần chạy nào với cấu hình chọn nhầm.",
+      "knowledge_kind": "INFERRED",
+      "status": "INFERRED",
+      "confidence": "LOW",
+      "scope": {
+        "environment": "documented",
+        "role": "unspecified",
+        "surface": "portal",
+        "object_state": "design-page-loaded"
+      },
+      "kb_refs": [
+        "KB-039"
+      ],
+      "usable_as_oracle": false,
+      "note": "Suy luận/mẫu đơn lẻ độ tin cậy thấp; không tổng quát hoá thành rule."
+    },
+    {
+      "statement": "Theo QA KB ImagenHub \"Design\" v1 §Run test thực tế (2026-08-30), trên staging, trong 1 lần chạy mẫu với 1 ảnh, confirm dialog hiện \"Estimated cost: 15 credits — finishing steps bill separately.\" Số credit thực tế bị trừ sau toàn bộ pipeline chưa được đối chiếu.",
+      "knowledge_kind": "INFERRED",
+      "status": "INFERRED",
+      "confidence": "LOW",
+      "scope": {
+        "environment": "documented",
+        "role": "unspecified",
+        "surface": "portal",
+        "object_state": "design-confirm-dialog-open"
+      },
+      "kb_refs": [
+        "KB-042"
+      ],
+      "usable_as_oracle": false,
+      "note": "Suy luận/mẫu đơn lẻ độ tin cậy thấp; không tổng quát hoá thành rule."
+    },
+    {
+      "statement": "Theo QA KB ImagenHub \"Design\" v1 §Run test thực tế (2026-08-30), trên staging, trong 1 lần chạy mẫu (đủ 4 bước), khi đang chạy UI hiện chỉ báo stage dạng chip nối tiếp Generate → Upscale → Remove background → Resize; chip đang chạy được tô màu, chip đang chờ màu xám.",
+      "knowledge_kind": "INFERRED",
+      "status": "INFERRED",
+      "confidence": "LOW",
+      "scope": {
+        "environment": "documented",
+        "role": "unspecified",
+        "surface": "portal",
+        "object_state": "design-processing"
+      },
+      "kb_refs": [
+        "KB-043"
+      ],
+      "usable_as_oracle": false,
+      "note": "Suy luận/mẫu đơn lẻ độ tin cậy thấp; không tổng quát hoá thành rule."
+    },
+    {
+      "statement": "Theo QA KB ImagenHub \"Design\" v1 §Run test thực tế (2026-08-30), trên staging, trong 1 lần chạy mẫu với 1 ảnh, UI hiện tiến độ dạng \"N of 1 processed\".",
+      "knowledge_kind": "INFERRED",
+      "status": "INFERRED",
+      "confidence": "LOW",
+      "scope": {
+        "environment": "documented",
+        "role": "unspecified",
+        "surface": "portal",
+        "object_state": "design-processing"
+      },
+      "kb_refs": [
+        "KB-044"
+      ],
+      "usable_as_oracle": false,
+      "note": "Suy luận/mẫu đơn lẻ độ tin cậy thấp; không tổng quát hoá thành rule."
+    },
+    {
+      "statement": "Theo QA KB ImagenHub \"Design\" v1 §Run test thực tế (2026-08-30), trên staging, trong 1 lần chạy mẫu (mission Clone, ảnh mockup áo thun), output là file thiết kế phẳng, nền trong suốt, sẵn sàng in. Định dạng file và kích thước thực tế của output không được ghi lại.",
+      "knowledge_kind": "INFERRED",
+      "status": "INFERRED",
+      "confidence": "LOW",
+      "scope": {
+        "environment": "documented",
+        "role": "unspecified",
+        "surface": "portal",
+        "object_state": "design-processed"
+      },
+      "kb_refs": [
+        "KB-045"
+      ],
+      "usable_as_oracle": false,
+      "note": "Suy luận/mẫu đơn lẻ độ tin cậy thấp; không tổng quát hoá thành rule."
+    },
+    {
+      "statement": "Theo QA KB ImagenHub \"Design\" v1 §Cơ chế nội bộ, trên staging, trong task của lần chạy mẫu, Step 2 Upscale chạy teeinblue/upscaler và Step 3 cắt nền chạy removebg/remove-background, đúng hai model đã chọn trong cấu hình của lần chạy đó.",
+      "knowledge_kind": "INFERRED",
+      "status": "INFERRED",
+      "confidence": "LOW",
+      "scope": {
+        "environment": "documented",
+        "role": "unspecified",
+        "surface": "portal",
+        "object_state": "design-processed"
+      },
+      "kb_refs": [
+        "KB-051"
+      ],
+      "usable_as_oracle": false,
+      "note": "Suy luận/mẫu đơn lẻ độ tin cậy thấp; không tổng quát hoá thành rule."
+    }
+  ],
+  "observed_validations": [],
+  "permissions": [
+    {
+      "statement": "Tài liệu không nêu role nào trong Organization được truy cập và chạy Design.",
+      "knowledge_kind": "UNKNOWN",
+      "kb_refs": [
+        "KB-019"
+      ]
+    }
+  ],
+  "surface_mapping": {
+    "portal": [
+      {
+        "item": "Trang /design: Design mission, Step 0-4, Add images, nút Process, confirm dialog, chip tiến độ, Download, Download all (N)",
+        "kb_refs": [
+          "KB-019",
+          "KB-021",
+          "KB-022",
+          "KB-024",
+          "KB-025",
+          "KB-026",
+          "KB-028",
+          "KB-034",
+          "KB-036",
+          "KB-040",
+          "KB-043",
+          "KB-046",
+          "KB-047"
+        ]
+      },
+      {
+        "item": "Task History: task Design (Generate là task chính, các bước sau là post-processing step)",
+        "kb_refs": [
+          "KB-048",
+          "KB-050",
+          "KB-055"
+        ]
+      }
+    ],
+    "storefront": [],
+    "api": [],
+    "code": [],
+    "data": [
+      {
+        "item": "Task Design: bước Generate + 3 post-processing step với model đã chọn",
+        "kb_refs": [
+          "KB-048",
+          "KB-049",
+          "KB-050",
+          "KB-051"
+        ]
+      }
+    ]
+  },
+  "dependencies": [
+    {
+      "target": "models",
+      "relation": "Các step dùng model trong catalog (google/gemini-3-pro-image/edit, các model Teeinblue, removebg, bria, ideogram, upscayl).",
+      "kb_refs": [
+        "KB-022",
+        "KB-038",
+        "KB-049"
+      ]
+    },
+    {
+      "target": "tasks",
+      "relation": "Mỗi lần chạy tạo task với Generate là task chính, xem được trong Task History.",
+      "kb_refs": [
+        "KB-048",
+        "KB-052"
+      ]
+    },
+    {
+      "target": "templates",
+      "relation": "Các bước sau Generate chạy như post-processing step; cách cộng credit được người viết so sánh với post-processing của template.",
+      "kb_refs": [
+        "KB-033",
+        "KB-050"
+      ]
+    },
+    {
+      "target": "organization-billing",
+      "relation": "Chi phí 15 credits/image cộng finishing steps.",
+      "kb_refs": [
+        "KB-032",
+        "KB-042"
+      ]
+    }
+  ],
+  "risks": [
+    {
+      "risk": "Không có nguồn thẩm quyền nào cho Design (Beta, ngoài docs chính thức); không có rule CONFIRMED_EXPECTED.",
+      "kb_refs": [
+        "KB-019"
+      ]
+    },
+    {
+      "risk": "Chủ đề tính phí: chỉ có cost ước tính và diễn giải của người viết về finishing steps, chưa đối chiếu credit thật.",
+      "kb_refs": [
+        "KB-032",
+        "KB-033",
+        "KB-042"
+      ]
+    },
+    {
+      "risk": "Dropdown Step 2/3 không lọc theo chức năng và không cảnh báo khi chọn nhầm model; chưa rõ là chủ đích hay thiếu sót, không được tự kết luận là bug.",
+      "kb_refs": [
+        "KB-037",
+        "KB-039"
+      ]
+    },
+    {
+      "risk": "Cơ chế nội bộ (Step 4 qua teeinblue/image-edits, nền chroma-key) chỉ quan sát từ 1 task.",
+      "kb_refs": [
+        "KB-049",
+        "KB-052",
+        "KB-053"
+      ]
+    }
+  ],
+  "freshness": {
+    "observed_at": null,
+    "documented_at": [
+      "2026-08-30"
+    ]
+  },
+  "unknown_areas": [
+    {
+      "question": "Khi upload hơn 250 ảnh thì trang Design xử lý thế nào, và giới hạn \"Up to 5 run at once\" có thật khi chạy nhiều ảnh không?",
+      "why_it_matters": "Hai giới hạn chỉ là text UI; lần chạy mẫu chỉ có 1 ảnh.",
+      "kb_refs": [
+        "KB-035",
+        "KB-041"
+      ],
+      "oq_id": "OQ-bulk-tools-005"
+    },
+    {
+      "question": "Step nào là bắt buộc để nút Process được bật; thiếu model ở Step 2/3 thì sao; có bỏ qua được Upscale/cắt nền không?",
+      "why_it_matters": "Không có kỳ vọng cho điều kiện bật Process.",
+      "kb_refs": [
+        "KB-024",
+        "KB-025",
+        "KB-036"
+      ],
+      "oq_id": "OQ-bulk-tools-005"
+    },
+    {
+      "question": "Mission Redesign thực tế tạo ra gì (prompt, pipeline, chi phí, output)?",
+      "why_it_matters": "Redesign chưa từng được chạy.",
+      "kb_refs": [
+        "KB-031"
+      ],
+      "oq_id": "OQ-bulk-tools-007"
+    },
+    {
+      "question": "Số credit thực tế bị trừ sau toàn bộ pipeline là bao nhiêu và có khớp Task History / số dư Subscription không?",
+      "why_it_matters": "Billing là rủi ro cao, hiện chỉ có ước tính.",
+      "kb_refs": [
+        "KB-032",
+        "KB-033",
+        "KB-042"
+      ],
+      "oq_id": "OQ-bulk-tools-006"
+    },
+    {
+      "question": "Dropdown Step 2/3 không lọc model theo chức năng có phải chủ đích thiết kế không?",
+      "why_it_matters": "Quyết định có phải là lỗi hay không.",
+      "kb_refs": [
+        "KB-037",
+        "KB-038",
+        "KB-039"
+      ],
+      "oq_id": "OQ-bulk-tools-008"
+    },
+    {
+      "question": "Toggle \"Custom instructions\" ở Step 1 làm gì?",
+      "why_it_matters": "Tài liệu chỉ nêu toggle tồn tại.",
+      "kb_refs": [
+        "KB-023"
+      ],
+      "oq_id": "OQ-bulk-tools-009"
+    },
+    {
+      "question": "Danh sách preset đầy đủ của Step 4 và ràng buộc Width/Height của \"Custom size\" là gì?",
+      "why_it_matters": "Không suy được enum/boundary từ một ví dụ.",
+      "kb_refs": [
+        "KB-026",
+        "KB-027"
+      ],
+      "oq_id": "OQ-bulk-tools-009"
+    },
+    {
+      "question": "Khi một bước pipeline thất bại thì UI và output xử lý thế nào?",
+      "why_it_matters": "Chỉ có một lần chạy thành công.",
+      "kb_refs": [
+        "KB-043",
+        "KB-045"
+      ],
+      "oq_id": "OQ-bulk-tools-009"
+    },
+    {
+      "question": "Định dạng file output và kích thước thực tế có khớp preset (ví dụ 4500×5400) không?",
+      "why_it_matters": "Output chỉ được mô tả là phẳng, nền trong suốt.",
+      "kb_refs": [
+        "KB-045"
+      ],
+      "oq_id": "OQ-bulk-tools-009"
+    },
+    {
+      "question": "Design có được expose qua API/MCP hay chỉ có trên portal?",
+      "why_it_matters": "Tài liệu chỉ mô tả UI portal.",
+      "kb_refs": [
+        "KB-019"
+      ],
+      "oq_id": "OQ-bulk-tools-019"
+    },
+    {
+      "question": "Role nào trong Organization được dùng Design?",
+      "why_it_matters": "Chưa test được phân quyền.",
+      "kb_refs": [
+        "KB-019"
+      ],
+      "oq_id": "OQ-bulk-tools-020"
+    }
+  ],
+  "last_updated": {
+    "date": "2026-10-08",
+    "ccr_ref": "bootstrap"
+  },
+  "coverage_matrix": [
+    {
+      "feature_id": "design-print-file",
+      "layer": "portal",
+      "role": "unspecified",
+      "state": "design-page-loaded",
+      "environment": "documented",
+      "covered": true,
+      "note": "Hiện trạng staging"
+    },
+    {
+      "feature_id": "design-print-file",
+      "layer": "portal",
+      "role": "unspecified",
+      "state": "design-step1-model-not-selected / design-step1-model-selected",
+      "environment": "documented",
+      "covered": true,
+      "note": "Hiện trạng staging"
+    },
+    {
+      "feature_id": "design-print-file",
+      "layer": "portal",
+      "role": "unspecified",
+      "state": "design-no-images-or-models",
+      "environment": "documented",
+      "covered": true,
+      "note": "Hiện trạng staging"
+    },
+    {
+      "feature_id": "design-print-file",
+      "layer": "portal",
+      "role": "unspecified",
+      "state": "design-mission-clone",
+      "environment": "documented",
+      "covered": true,
+      "note": "1 lần chạy"
+    },
+    {
+      "feature_id": "design-print-file",
+      "layer": "portal",
+      "role": "unspecified",
+      "state": "design-mission-redesign",
+      "environment": "documented",
+      "covered": false,
+      "note": "Chưa từng chạy"
+    },
+    {
+      "feature_id": "design-print-file",
+      "layer": "portal",
+      "role": "unspecified",
+      "state": "design-confirm-dialog-open / design-processing / design-processed",
+      "environment": "documented",
+      "covered": true,
+      "note": "1 lần chạy 1 ảnh"
+    },
+    {
+      "feature_id": "design-print-file",
+      "layer": "portal",
+      "role": "unspecified",
+      "state": "bước pipeline thất bại / vượt 250 ảnh / nhiều ảnh",
+      "environment": "documented",
+      "covered": false,
+      "note": "Chưa có tài liệu"
+    },
+    {
+      "feature_id": "design-print-file",
+      "layer": "portal",
+      "role": "org-member theo từng role (Owner/Admin/Editor/Viewer)",
+      "state": "any",
+      "environment": "documented",
+      "covered": false,
+      "note": "Tài liệu không nêu role"
+    },
+    {
+      "feature_id": "design-print-file",
+      "layer": "data",
+      "role": "unspecified",
+      "state": "task Design trong Task History",
+      "environment": "documented",
+      "covered": true,
+      "note": "Quan sát từ 1 task"
+    },
+    {
+      "feature_id": "design-print-file",
+      "layer": "api",
+      "role": null,
+      "state": "any",
+      "environment": "documented",
+      "covered": false,
+      "note": "Chưa rõ có API/MCP không"
+    },
+    {
+      "feature_id": "design-print-file",
+      "layer": "code",
+      "role": null,
+      "state": "any",
+      "environment": "documented",
+      "covered": false
+    }
+  ],
+  "profile_conflicts": [],
+  "profile_relationships": [
+    {
+      "from": "design-print-file",
+      "to": "batch-edit",
+      "relation": "SIBLING_BULK_TOOL",
+      "kb_refs": [
+        "KB-019"
+      ]
+    },
+    {
+      "from": "design-print-file",
+      "to": "tasks",
+      "relation": "CREATES",
+      "kb_refs": [
+        "KB-048"
+      ]
+    },
+    {
+      "from": "design-print-file",
+      "to": "models",
+      "relation": "USES",
+      "kb_refs": [
+        "KB-022",
+        "KB-038"
+      ]
+    }
+  ]
+}

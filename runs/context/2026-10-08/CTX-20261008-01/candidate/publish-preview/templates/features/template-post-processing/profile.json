@@ -1,0 +1,555 @@
+{
+  "feature_id": "template-post-processing",
+  "feature_key": "template-post-processing",
+  "name": "Post-processing của template — cấu hình chuỗi bước xử lý sau generate",
+  "user_goal": "Người cấu hình template nối thêm các bước xử lý ảnh (upscale, remove background, resize, face cutout...) chạy sau bước generate của template, biết trước chi phí cộng thêm mỗi lần chạy, và theo dõi được kết quả của từng bước — kể cả khi một bước lỗi.",
+  "stable_since_version": "v1",
+  "actors": [
+    {
+      "role": "người cấu hình template trên portal (role không được ghi)",
+      "permission_observed": "Mở edit mode Post-processing, thêm/đổi thứ tự/xoá step trên staging.",
+      "kb_refs": [
+        "KB-053",
+        "KB-055",
+        "KB-056"
+      ]
+    },
+    {
+      "role": "Viewer",
+      "permission_observed": "Không thấy khu Post-processing (toàn bộ cột phải của trang chi tiết biến mất).",
+      "kb_refs": [
+        "KB-046"
+      ]
+    },
+    {
+      "role": "api-caller (nhận webhook)",
+      "permission_observed": "Theo docs chính thức, event task.succeeded có thể mang post_processing_status báo hậu xử lý lỗi.",
+      "kb_refs": [
+        "KB-069"
+      ]
+    }
+  ],
+  "entry_points": [
+    {
+      "path": "Portal /templates/{id} → cột phải → nút Edit cạnh Post-processing",
+      "precondition": "Role thấy cột phải (Viewer không thấy).",
+      "kb_refs": [
+        "KB-053",
+        "KB-046"
+      ]
+    },
+    {
+      "path": "Portal Task history → chi tiết task chạy từ template có post-processing",
+      "precondition": "Task đã chạy; xem trạng thái Generate/Post-processing và bảng step.",
+      "kb_refs": [
+        "KB-061"
+      ]
+    }
+  ],
+  "capabilities": [
+    {
+      "name": "Cấu hình chuỗi step post-processing",
+      "description": "Edit chuyển sang edit mode tại chỗ; mỗi step hiện tên model và cost ước tính; ↑ ↓ đổi thứ tự (disable khi chỉ có 1 step hoặc ở đầu/cuối); ✕ xoá step; \"+ Add step\" chỉ liệt kê model image-to-image loại editor; Cancel không lưu gì.",
+      "kb_refs": [
+        "KB-053",
+        "KB-054",
+        "KB-055",
+        "KB-056",
+        "KB-057",
+        "KB-060"
+      ]
+    },
+    {
+      "name": "Biết trước chi phí cộng thêm",
+      "description": "Cuối form edit có dòng \"adds ~X credits per run\"; nút Run trên trang chi tiết hiển thị tổng credit ước tính đã gồm post-processing; khi model chính dùng key riêng (BYOK) thì cột Est. Cost của Task history có dạng \"Your key +<N> credits\" vì bước post-processing vẫn trừ credit hệ thống.",
+      "kb_refs": [
+        "KB-054",
+        "KB-059",
+        "KB-068",
+        "KB-089"
+      ]
+    },
+    {
+      "name": "Thực thi post-processing sau bước generate",
+      "description": "Post-processing luôn chạy trên ảnh đã generate từ Main processing (quan sát staging).",
+      "kb_refs": [
+        "KB-058"
+      ]
+    },
+    {
+      "name": "Hành vi khi một step lỗi giữa chừng (chỉ từ 1 task quan sát)",
+      "description": "Ở task duy nhất được soi: Generate thành công, task Status Success nhưng Post-processing Failed; step 1 lỗi 401 \"Provider rejected the API key (401/403)\", step 2 không chạy; output là ảnh của bước Generate với log \"post-processing stopped; delivering last successful image\"; step lỗi hiện \"0 credits — refunded\". Chưa có spec xác nhận đây là thiết kế.",
+      "kb_refs": [
+        "KB-061",
+        "KB-062",
+        "KB-063",
+        "KB-064",
+        "KB-065",
+        "KB-066",
+        "KB-067"
+      ]
+    },
+    {
+      "name": "Báo kết quả post-processing cho caller",
+      "description": "Theo docs chính thức, task.succeeded vẫn có thể mang post_processing_status báo hậu xử lý lỗi; điều kiện và giá trị chưa rõ.",
+      "kb_refs": [
+        "KB-069"
+      ]
+    }
+  ],
+  "state_transitions": [
+    {
+      "from": "Post-processing ở chế độ xem",
+      "to": "Edit mode tại chỗ",
+      "trigger": "Bấm Edit cạnh Post-processing",
+      "condition": "Không mở modal riêng.",
+      "kb_refs": [
+        "KB-053"
+      ]
+    },
+    {
+      "from": "Edit mode",
+      "to": "Chế độ xem, không thay đổi",
+      "trigger": "Bấm Cancel",
+      "condition": "Không lưu và không có side-effect (quan sát staging).",
+      "kb_refs": [
+        "KB-060"
+      ]
+    },
+    {
+      "from": "Edit mode",
+      "to": "Chuỗi step mới được lưu, cost mỗi lần chạy cộng thêm theo dòng \"adds ~X credits per run\"",
+      "trigger": "Bấm Save",
+      "condition": "Tài liệu chỉ mô tả dòng ước tính credit nếu Save, không mô tả chi tiết sau khi lưu.",
+      "kb_refs": [
+        "KB-059"
+      ]
+    },
+    {
+      "from": "Generate thành công, đang chạy chuỗi post-processing",
+      "to": "Task Success + Post-processing Failed, các step sau không chạy, output là ảnh Generate",
+      "trigger": "Một step post-processing lỗi",
+      "condition": "Hành vi hiện tại khái quát từ đúng 1 task trên staging (2026-08-31) — không phải expected cho tới khi PO/Dev xác nhận.",
+      "kb_refs": [
+        "KB-061",
+        "KB-065",
+        "KB-066"
+      ]
+    }
+  ],
+  "confirmed_rules": [],
+  "observed_behavior": [
+    {
+      "statement": "Trên staging (2026-08-30), Edit cạnh Post-processing chuyển edit mode tại chỗ.",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "confidence": "MEDIUM",
+      "usable_as_expected": false,
+      "kb_refs": [
+        "KB-053"
+      ]
+    },
+    {
+      "statement": "Trên staging (2026-08-30), mỗi step hiện tên model và cost ước tính.",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "confidence": "MEDIUM",
+      "usable_as_expected": false,
+      "kb_refs": [
+        "KB-054"
+      ]
+    },
+    {
+      "statement": "Trên staging (2026-08-30), ↑ ↓ đổi thứ tự, disable khi chỉ có 1 step hoặc step ở đầu/cuối.",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "confidence": "MEDIUM",
+      "usable_as_expected": false,
+      "kb_refs": [
+        "KB-055"
+      ]
+    },
+    {
+      "statement": "Trên staging (2026-08-30), ✕ xoá một step.",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "confidence": "MEDIUM",
+      "usable_as_expected": false,
+      "kb_refs": [
+        "KB-056"
+      ]
+    },
+    {
+      "statement": "Trên staging (2026-08-30), \"+ Add step\" chỉ liệt kê model image-to-image loại editor.",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "confidence": "MEDIUM",
+      "usable_as_expected": false,
+      "kb_refs": [
+        "KB-057"
+      ]
+    },
+    {
+      "statement": "Trên staging (2026-08-30), post-processing luôn chạy trên ảnh đã generate.",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "confidence": "LOW",
+      "usable_as_expected": false,
+      "kb_refs": [
+        "KB-058"
+      ]
+    },
+    {
+      "statement": "Trên staging (2026-08-30), cuối form có dòng \"adds ~X credits per run\".",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "confidence": "MEDIUM",
+      "usable_as_expected": false,
+      "kb_refs": [
+        "KB-059"
+      ]
+    },
+    {
+      "statement": "Trên staging (2026-08-30), Cancel không lưu và không có side-effect.",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "confidence": "LOW",
+      "usable_as_expected": false,
+      "kb_refs": [
+        "KB-060"
+      ]
+    },
+    {
+      "statement": "Trên staging (1 task, 2026-08-31), Generate thành công, Status Success nhưng Post-processing Failed.",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "confidence": "LOW",
+      "usable_as_expected": false,
+      "kb_refs": [
+        "KB-061"
+      ]
+    },
+    {
+      "statement": "Trên staging (1 task), step teeinblue/upscaler lỗi Client Error, Code 401, \"Provider rejected the API key (401/403)\".",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "confidence": "LOW",
+      "usable_as_expected": false,
+      "kb_refs": [
+        "KB-062"
+      ]
+    },
+    {
+      "statement": "Người viết quy lỗi 401 cho key provider bị revoke hoặc hết hạn.",
+      "knowledge_kind": "INFERRED",
+      "confidence": "LOW",
+      "usable_as_expected": false,
+      "note": "Nhận định chưa xác nhận.",
+      "kb_refs": [
+        "KB-063"
+      ]
+    },
+    {
+      "statement": "Trên staging (1 task), step lỗi hiện \"0 credits — refunded\".",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "confidence": "LOW",
+      "usable_as_expected": false,
+      "note": "Tài liệu khái quát thành 'step lỗi được hoàn credit' từ 1 task — không phải rule.",
+      "kb_refs": [
+        "KB-064"
+      ]
+    },
+    {
+      "statement": "Trên staging (1 task), step bria/remove-background phía sau không chạy.",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "confidence": "LOW",
+      "usable_as_expected": false,
+      "note": "Khái quát 'chain dừng khi 1 step lỗi' chỉ từ 1 task.",
+      "kb_refs": [
+        "KB-065"
+      ]
+    },
+    {
+      "statement": "Trên staging (1 task), output là ảnh của bước Generate, log \"post-processing stopped; delivering last successful image\".",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "confidence": "LOW",
+      "usable_as_expected": false,
+      "note": "Khái quát từ 1 task.",
+      "kb_refs": [
+        "KB-066"
+      ]
+    },
+    {
+      "statement": "Trên staging (1 task), tổng cost 0 credits (\"0 generation + 0 post-processing\") vì generation dùng BYOK và step lỗi được refund.",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "confidence": "LOW",
+      "usable_as_expected": false,
+      "kb_refs": [
+        "KB-067"
+      ]
+    },
+    {
+      "statement": "Trên staging (2026-08-30), Est. Cost có dạng \"Your key +<N> credits\" khi model chính dùng BYOK.",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "confidence": "LOW",
+      "usable_as_expected": false,
+      "kb_refs": [
+        "KB-068"
+      ]
+    },
+    {
+      "statement": "Docs chính thức nói task.succeeded vẫn có thể mang post_processing_status báo hậu xử lý lỗi.",
+      "knowledge_kind": "INFERRED",
+      "confidence": "LOW",
+      "usable_as_expected": false,
+      "note": "Phát biểu dạng khả năng, chưa rõ điều kiện.",
+      "kb_refs": [
+        "KB-069"
+      ]
+    },
+    {
+      "statement": "Trên staging (2026-08-30), nút Run hiển thị tổng credit ước tính đã gồm post-processing.",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "confidence": "MEDIUM",
+      "usable_as_expected": false,
+      "kb_refs": [
+        "KB-089"
+      ]
+    }
+  ],
+  "documented_validations": [],
+  "permissions": [
+    {
+      "role": "Viewer",
+      "statement": "Không thấy khu Post-processing trên trang chi tiết template.",
+      "kb_refs": [
+        "KB-046"
+      ]
+    },
+    {
+      "role": "Editor / Owner / Admin",
+      "statement": "Không có quan sát cấu hình post-processing theo role; tài khoản khảo sát không ghi role.",
+      "kb_refs": [
+        "KB-053"
+      ]
+    }
+  ],
+  "surface_mapping": {
+    "portal": [
+      {
+        "surface": "/templates/{id} — khu Post-processing: Edit tại chỗ, danh sách step (tên model, cost), ↑ ↓ ✕, + Add step, dòng \"adds ~X credits per run\", Cancel/Save",
+        "kb_refs": [
+          "KB-053",
+          "KB-054",
+          "KB-055",
+          "KB-056",
+          "KB-057",
+          "KB-059",
+          "KB-060"
+        ]
+      },
+      {
+        "surface": "Task history — chi tiết task: Status, Post-processing badge, bảng step (status/code/cost/time); cột Est. Cost \"Your key +N credits\"",
+        "kb_refs": [
+          "KB-061",
+          "KB-062",
+          "KB-065",
+          "KB-068"
+        ]
+      }
+    ],
+    "storefront": [],
+    "api": [
+      {
+        "surface": "Webhook task.succeeded — field post_processing_status",
+        "kb_refs": [
+          "KB-069"
+        ]
+      }
+    ],
+    "data": [
+      {
+        "surface": "post_processing_status (giá trị chưa được mô tả)",
+        "kb_refs": [
+          "KB-069"
+        ]
+      }
+    ],
+    "code": []
+  },
+  "dependencies": [
+    {
+      "target": "tasks (Task history)",
+      "relation": "Kết quả từng step chỉ xem được ở trang chi tiết task.",
+      "kb_refs": [
+        "KB-061",
+        "KB-068"
+      ]
+    },
+    {
+      "target": "developer-settings (provider key riêng / BYOK)",
+      "relation": "Generation dùng key riêng thì không tốn credit hệ thống nhưng post-processing vẫn trừ; lỗi 401 của step gắn với key provider.",
+      "kb_refs": [
+        "KB-062",
+        "KB-067",
+        "KB-068"
+      ]
+    },
+    {
+      "target": "developer-settings (task webhooks)",
+      "relation": "post_processing_status đi trong event task.succeeded.",
+      "kb_refs": [
+        "KB-069"
+      ]
+    },
+    {
+      "target": "templates/template-run-history",
+      "relation": "Credit ước tính trên nút Run gồm post-processing.",
+      "kb_refs": [
+        "KB-089"
+      ]
+    },
+    {
+      "target": "templates/fallback-template",
+      "relation": "Chưa rõ khi fallback B chạy thì post-processing của template nào được áp dụng.",
+      "kb_refs": [
+        "KB-117"
+      ]
+    }
+  ],
+  "risks": [
+    {
+      "statement": "Toàn bộ cơ chế khi step lỗi (task vẫn Success, chain dừng, trả ảnh trước post-processing, hoàn credit) chỉ khái quát từ 1 task — dùng làm expected có thể sai.",
+      "kb_refs": [
+        "KB-061",
+        "KB-064",
+        "KB-065",
+        "KB-066"
+      ]
+    },
+    {
+      "statement": "Caller có thể nhận task.succeeded nhưng ảnh không phải ảnh mong muốn nếu không đọc post_processing_status.",
+      "kb_refs": [
+        "KB-066",
+        "KB-069"
+      ]
+    },
+    {
+      "statement": "Hoàn credit cho step lỗi là chủ đề tính phí; chưa có rule nào xác nhận.",
+      "kb_refs": [
+        "KB-064",
+        "KB-067"
+      ]
+    }
+  ],
+  "unknown_areas": [
+    {
+      "question": "Khi một step post-processing lỗi, việc task vẫn Success, chain dừng, trả ảnh thành công gần nhất và hoàn credit cho step lỗi có phải hành vi thiết kế không?",
+      "why_it_matters": "Hiện chỉ có 1 task quan sát; không có spec làm oracle.",
+      "oq_id": "OQ-templates-008"
+    },
+    {
+      "question": "Lỗi 401 của step là do key provider bị revoke hay hết hạn?",
+      "why_it_matters": "Ảnh hưởng cách dựng dữ liệu để tái hiện lỗi step.",
+      "oq_id": "OQ-templates-008"
+    },
+    {
+      "question": "post_processing_status có những giá trị nào và xuất hiện khi nào?",
+      "why_it_matters": "Docs chỉ nói 'có thể', không có contract để kiểm webhook.",
+      "oq_id": "OQ-templates-009"
+    },
+    {
+      "question": "Có giới hạn số step, và step bị lỗi có được thử lại không?",
+      "why_it_matters": "Tài liệu không đề cập.",
+      "oq_id": "OQ-templates-040"
+    },
+    {
+      "question": "Cơ chế provider key riêng và webhook/cảnh báo chi tiết ra sao?",
+      "why_it_matters": "Tài liệu QA về provider key và về webhook/cảnh báo được nhắc tới nhưng không có trong bộ tài liệu, nên tương tác giữa BYOK, lỗi step và thông báo không được mô tả.",
+      "oq_id": "OQ-templates-041"
+    }
+  ],
+  "freshness": {
+    "observed_at": "2026-08-31"
+  },
+  "observed_validations": [],
+  "last_updated": {
+    "date": "2026-10-08",
+    "ccr_ref": "bootstrap"
+  },
+  "coverage_matrix": [
+    {
+      "feature_id": "template-post-processing",
+      "layer": "portal",
+      "role": "unspecified",
+      "state": "staging (khảo sát) — cấu hình step",
+      "environment": "documented",
+      "covered": true,
+      "note": "Edit/reorder/xoá/thêm step.",
+      "kb_refs": [
+        "KB-053",
+        "KB-055",
+        "KB-056",
+        "KB-057"
+      ]
+    },
+    {
+      "feature_id": "template-post-processing",
+      "layer": "portal",
+      "role": "unspecified",
+      "state": "staging — step lỗi giữa chừng",
+      "environment": "documented",
+      "covered": true,
+      "note": "Chỉ 1 task, độ tin cậy thấp.",
+      "kb_refs": [
+        "KB-061",
+        "KB-065",
+        "KB-066"
+      ]
+    },
+    {
+      "feature_id": "template-post-processing",
+      "layer": "portal",
+      "role": "unspecified",
+      "state": "staging — mọi step thành công",
+      "environment": "documented",
+      "covered": false,
+      "note": "Tài liệu không mô tả task có post-processing chạy thành công trọn chuỗi.",
+      "kb_refs": []
+    },
+    {
+      "feature_id": "template-post-processing",
+      "layer": "portal",
+      "role": "Viewer",
+      "state": "staging",
+      "environment": "documented",
+      "covered": true,
+      "note": "Không thấy khu Post-processing.",
+      "kb_refs": [
+        "KB-046"
+      ]
+    },
+    {
+      "feature_id": "template-post-processing",
+      "layer": "api",
+      "role": "api-caller",
+      "state": "docs chính thức",
+      "environment": "documented",
+      "covered": true,
+      "note": "post_processing_status chỉ ở mức khả năng.",
+      "kb_refs": [
+        "KB-069"
+      ]
+    }
+  ],
+  "profile_conflicts": [],
+  "profile_relationships": [
+    {
+      "from": "template-post-processing",
+      "to": "template-run-history",
+      "relation": "credit ước tính khi Run gồm post-processing",
+      "kb_refs": [
+        "KB-089"
+      ]
+    },
+    {
+      "from": "template-post-processing",
+      "to": "fallback-template",
+      "relation": "cách hiển thị giá fallback giống cost step post-processing; post-processing áp dụng khi B chạy chưa rõ",
+      "kb_refs": [
+        "KB-115",
+        "KB-054"
+      ]
+    }
+  ]
+}
