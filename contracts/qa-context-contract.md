@@ -243,6 +243,7 @@ runs/context/YYYY-MM-DD/<ctx-run-id>/
 ├── input/bootstrap-request.json
 ├── input/scope-plan.json                           (scope-planner; BROAD/DOC — orchestrator ghi thêm FEATURE-ID đã mint)
 ├── input/ccr-fastpath-plan.json                    (§12.3a, chỉ khi run xuất phát từ CCR)
+├── input/approvals.json                            (quyết định của owner cho entry requires_human_decision, §12.5)
 ├── input/doc-manifest.json                         (mode doc: doc_id/version/generated_at/sha256 từng doc)
 ├── input/docs/<DOC-ID>/                            (mode doc: bản copy ĐÃ REDACT của tài liệu)
 ├── raw/{portal,network,storefront}/                (mode explore; RỖNG ở mode doc — đó là invariant)

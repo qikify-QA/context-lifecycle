@@ -270,3 +270,21 @@ test("publish-knowledge: --push bị từ chối", async () => {
   assert.equal(r.code, 1);
   assert.match(r.stderr, /--push đã bỏ/);
 });
+
+test("approval: SUPERSEDE cần người quyết phải có ACCEPT_CANDIDATE; CHANGELOG ghi người duyệt", async () => {
+  const { validateRun } = await import("../validate-run.mjs");
+  const diff = (resolution, blockers = ["b:impact_high"]) => env({ change_details: [{ type: "changed", kb_id: "KB-1", candidate_kb_id: "KB-9", resolution, strength: {}, requires_human_decision: true, supersede_blockers: blockers }] });
+  const base = { "run-manifest.json": manifest("CCR_INGEST") };
+  const noApproval = await validateRun(await makeRun({ ...base, "review/knowledge-diff.json": diff("SUPERSEDE") }));
+  assert.ok(noApproval.errors.some((e) => /chưa có approval/.test(e.problem)));
+  const approved = { approvals: [{ kb_id: "KB-1", decision: "ACCEPT_CANDIDATE", approver_role: "PO", ref: "QA Hub CBS-9 note", decided_at: "2026-10-11" }] };
+  const ok = await validateRun(await makeRun({ ...base, "input/approvals.json": approved, "review/knowledge-diff.json": diff("SUPERSEDE") }));
+  assert.deepEqual(ok.errors, []);
+  const scope = await validateRun(await makeRun({ ...base, "input/approvals.json": approved, "review/knowledge-diff.json": diff("SUPERSEDE", ["e:scope_differs"]) }));
+  assert.ok(scope.errors.some((e) => /phải là CONFLICTED/.test(e.problem)));
+
+  const { applySupersedes } = await import("../publish-strip.mjs");
+  const kbFiles = { k: { object: "o", featureKey: "f", items: [{ kb_id: "KB-1", statement: "cũ" }, { kb_id: "KB-9", statement: "mới" }] } };
+  const r = applySupersedes({ change_details: [{ resolution: "SUPERSEDE", kb_id: "KB-1", candidate_kb_id: "KB-9", feature_key: "f" }] }, kbFiles, { date: "2026-10-11", ccrRef: "CBS-9", mode: "CCR_INGEST", approvals: new Map([["KB-1", approved.approvals[0]]]) });
+  assert.match(r.changelog.o[0], /Duyệt: PO \(QA Hub CBS-9 note, 2026-10-11\)/);
+});

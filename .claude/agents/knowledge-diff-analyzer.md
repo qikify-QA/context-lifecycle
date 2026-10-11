@@ -31,7 +31,8 @@ Supersede chỉ được tính khi product có `supersede_policy.enabled: true` 
 | `candidate/product-kb/**`, `candidate/feature-profiles/**`, `candidate/checklists/**` | normalizer, profile builder, checklist builder | có |
 | `knowledge/products/<product>/<object>/{kb.json,features/<f>/{kb.json,profile.json},checklists/<f>.json}` | knowledge (base) | có |
 | `input/ccr-fastpath-plan.json` (`shipped`, `relation`, `target_kb_ids`) | orchestrator | run từ CCR |
-| `config/products/<key>.json` → `supersede_policy` | config | có |
+| `config/products/<key>.json` → `supersede_policy`, `owners` | config | có |
+| `input/approvals.json` (quyết định của owner cho entry `requires_human_decision`) | orchestrator | khi có |
 
 ## Method
 
@@ -40,7 +41,8 @@ Supersede chỉ được tính khi product có `supersede_policy.enabled: true` 
 3. **Semantic, không phải text diff.** Khác câu chữ cùng nghĩa → `refreshed_only`. Cùng câu nhưng scope đổi (environment/role/state/surface) → thay đổi thật. Tiêu chí so: statement, `knowledge_kind`, `confidence`, `scope`, **`confirmation_source`** (field `supersede` dựa vào). Không dùng `evidence_refs` làm tiêu chí — bản published không có nó.
 4. Phân loại từng KB item: `added` · `changed` · `refreshed_only` · `deprecated` · `conflicted`. `deprecated` chỉ khi có nguồn nói feature/hành vi đã bị gỡ; item base mà run không chạm vào `removed_but_unexplored` (explore) hoặc `removed_but_undocumented` (doc) — ở `CCR_INGEST` mặc định không có `deprecated` nào.
 5. Tính `resolution` theo thuật toán §12.5: `PROPOSED` · `ADDED` · `REFRESHED_ONLY` · `SUPERSEDE` · `CONFLICTED`, kèm `strength` (2 rank + 2 `authored_on` + `date_basis`) và `supersede_blockers` (mã `a`–`f` + chi tiết, vd `"d:oracle_of_strong_check:CHK-03"`). Blocker (d) cần checklist base. Entry `SUPERSEDE` phải có `kb_id` (base) và `candidate_kb_id`.
-6. Blast radius: profile, check, automation bị ảnh hưởng. Chạm permission/tiền/mất dữ liệu → `impact: HIGH` + `requires_human_decision: true`.
+6. Blast radius: profile, check, automation bị ảnh hưởng. Chạm permission/tiền/mất dữ liệu → `impact: HIGH` + `requires_human_decision: true`, kèm `owner_role` (từ `owners` của object).
+6b. Entry `requires_human_decision` có approval trong `input/approvals.json` → áp đúng mục "Quyết định của người" của `contracts/supersede.md` (`ACCEPT_CANDIDATE` → `SUPERSEDE`, `KEEP_BOTH` → `CONFLICTED`, `KEEP_BASE` → ghi `rejected_by_owner`). Không có approval thì giữ `CONFLICTED`.
 7. Đề xuất version bump (`PATCH | MINOR | MAJOR`) và migration/deprecation notes.
 
 ## Output
@@ -61,7 +63,7 @@ Supersede chỉ được tính khi product có `supersede_policy.enabled: true` 
       "supersede_blockers": [],
       "reason": "", "impact": "HIGH|MEDIUM|LOW",
       "affected_profiles": [], "affected_checks": [], "affected_automation": [],
-      "requires_human_decision": false } ],
+      "requires_human_decision": false, "owner_role": null } ],
   "removed_but_unexplored": [], "removed_but_undocumented": [],
   "blast_radius": [], "recommended_version_change": "PATCH | MINOR | MAJOR",
   "migration_notes": [], "deprecation_notes": []

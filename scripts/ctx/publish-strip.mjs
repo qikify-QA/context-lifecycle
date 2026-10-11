@@ -66,7 +66,7 @@ function objectOf(artifact, file, fallback) {
 }
 
 /** Áp các entry SUPERSEDE của diff vào map file→items. Trả { applied, problems, changelog }. */
-export function applySupersedes(diff, kbFiles, { date, ccrRef, mode }) {
+export function applySupersedes(diff, kbFiles, { date, ccrRef, mode, approvals = new Map() }) {
   const applied = [];
   const problems = [];
   const changelog = {}; // object → [line]
@@ -90,8 +90,10 @@ export function applySupersedes(diff, kbFiles, { date, ccrRef, mode }) {
     entry.items[baseIdx] = { ...cand, kb_id: base.kb_id, related_kb_ids: cand.related_kb_ids ?? base.related_kb_ids };
     entry.items.splice(candIdx, 1);
     const src = cand.confirmation_source ?? {};
+    const approval = approvals.get(base.kb_id);
+    const approvedBy = approval ? ` Duyệt: ${approval.approver_role} (${approval.ref}, ${approval.decided_at}).` : "";
     (changelog[entry.object] ??= []).push(
-      `- ${date} (\`${ccrRef}\`, ${mode}) — ${base.kb_id} superseded bởi ${src.type ?? "?"} (authored ${src.authored_on ?? "?"}). Cũ: "${base.statement}". Mới: "${cand.statement}".`
+      `- ${date} (\`${ccrRef}\`, ${mode}) — ${base.kb_id} superseded bởi ${src.type ?? "?"} (authored ${src.authored_on ?? "?"}). Cũ: "${base.statement}". Mới: "${cand.statement}".${approvedBy}`
     );
     applied.push({ kb_id: base.kb_id, candidate_kb_id: candId, object: entry.object, feature_key: entry.featureKey });
   }
@@ -146,7 +148,9 @@ async function main() {
 
   // 2. Supersede (§12.5) — áp trên items đã chuyển sang dạng published.
   const diff = await readJsonOr(paths.diff, null);
-  const sup = applySupersedes(diff?.payload ?? diff, kbFiles, { date, ccrRef, mode });
+  const approvalsFile = await readJsonOr(path.join(paths.runDir, "input", "approvals.json"), null);
+  const approvals = new Map((approvalsFile?.approvals ?? []).map((a) => [a.kb_id, a]));
+  const sup = applySupersedes(diff?.payload ?? diff, kbFiles, { date, ccrRef, mode, approvals });
   problems.push(...sup.problems);
 
   for (const [rel, { items }] of Object.entries(kbFiles)) {

@@ -31,7 +31,11 @@ Trình tự của orchestrator cho run xuất phát từ Context Change Request.
 6. Claim cần feature mới (`kb_address.feature_is_new: true`) → mint `FEATURE-ID` (§4). Feature đã có → dùng `feature_key` của base.
 7. Chốt mode: 0 explorer → `CCR_INGEST`; operator yêu cầu explore cho claim nào → `INCREMENTAL_UPDATE` (`.claude/orchestrator/mode-incremental.md`). Ghi `mode` + `mode_settled_at: "C0.5"` vào `run-manifest.json`.
 
-## 4. Trong lúc chạy
+## 4. Quyết định của owner
+
+Diff có entry `requires_human_decision: true` → hỏi đúng vai trò trong `owners` (qua operator hoặc note trên Proposal), không tự quyết. Có quyết định → ghi `input/approvals.json` (vai trò + link, không tên/email) rồi chạy lại diff analyzer. Chưa có → item đó không publish; nếu không còn gì publish được thì `DEFERRED` + `reason: awaiting_decision` + `approval_needed`. Chi tiết: `contracts/supersede.md` mục "Quyết định của người".
+
+## 4b. Trong lúc chạy
 
 Chỉ cập nhật tiến độ: `update_context_board_proposal({ proposal_id, status: "in-progress", note, results: { summary } })`. Không đổi status giữa chừng.
 

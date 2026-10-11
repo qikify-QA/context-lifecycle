@@ -5,7 +5,7 @@
 //   node scripts/ctx/validate-run.mjs --run CTX-...                  # mọi artifact có trên đĩa
 //   node scripts/ctx/validate-run.mjs --run CTX-... --stage kb       # chỉ một nhóm
 //
-// Stage: manifest · ccr-plan · doc · kb · profile · checklist · diff · verdict.
+// Stage: manifest · ccr-plan · approvals · doc · kb · profile · checklist · diff · verdict.
 // Orchestrator gọi sau mỗi bước của subagent; lỗi → retry đúng agent đó.
 // Exit 0 = sạch, 1 = có lỗi, 2 = input sai.
 
@@ -21,6 +21,7 @@ const DOC_MODES = new Set(["DOC_BOOTSTRAP", "CCR_INGEST"]);
 const STAGES = {
   manifest: { files: ["run-manifest.json"], schema: "run-manifest", envelope: false },
   "ccr-plan": { files: ["input/ccr-fastpath-plan.json"], schema: "ccr-plan", envelope: false },
+  approvals: { files: ["input/approvals.json"], schema: "approvals", envelope: false },
   doc: { dir: "intermediate/doc", match: /^DOC-\d+\.json$/, schema: "doc-evidence" },
   kb: { dir: "candidate/product-kb", match: /\.json$/, schema: "kb-shard" },
   profile: { dir: "candidate/feature-profiles", match: /\.json$/, schema: "feature-profile" },
@@ -86,16 +87,25 @@ const RULES = {
         return out;
       })
     ),
-  diff: (body) =>
+  diff: (body, ctx) =>
     (body.change_details ?? []).flatMap((c, i) => {
       const at = `change_details[${i}](${c.change_id ?? c.kb_id ?? "?"})`;
       const out = [];
+      const approval = ctx.approvals.get(c.kb_id);
+      if (c.requires_human_decision && c.resolution === "SUPERSEDE" && approval?.decision !== "ACCEPT_CANDIDATE") {
+        out.push({ path: at, problem: "SUPERSEDE cần người quyết nhưng chưa có approval ACCEPT_CANDIDATE trong input/approvals.json" });
+      }
+      if (approval && approval.decision !== "ACCEPT_CANDIDATE" && c.resolution === "SUPERSEDE") {
+        out.push({ path: at, problem: `approval ${approval.decision} mâu thuẫn với resolution SUPERSEDE` });
+      }
       if (c.resolution === "SUPERSEDE") {
         if (!c.kb_id || !c.candidate_kb_id) out.push({ path: at, problem: "SUPERSEDE cần kb_id + candidate_kb_id (§12.5)" });
         if (!c.strength) out.push({ path: at, problem: "SUPERSEDE thiếu strength (§12.5)" });
       }
-      if ((c.supersede_blockers ?? []).length && c.resolution && c.resolution !== "CONFLICTED") {
-        out.push({ path: at, problem: "có supersede_blockers thì resolution phải là CONFLICTED (§12.5)" });
+      const blockers = c.supersede_blockers ?? [];
+      const humanOverride = approval?.decision === "ACCEPT_CANDIDATE" && !blockers.some((b) => String(b).startsWith("e"));
+      if (blockers.length && c.resolution && c.resolution !== "CONFLICTED" && !(c.resolution === "SUPERSEDE" && humanOverride)) {
+        out.push({ path: at, problem: "có supersede_blockers thì resolution phải là CONFLICTED, trừ khi có approval ACCEPT_CANDIDATE (§12.5)" });
       }
       return out;
     }),
@@ -122,6 +132,8 @@ export async function validateRun(runDir, { stages = Object.keys(STAGES) } = {})
   const manifest = await readJson(path.join(runDir, "run-manifest.json")).catch(() => null);
   const mode = manifest?.mode ?? null;
   const envelope = await loadSchema(path.join(schemaDir, "envelope.schema.json"));
+  const approvalsFile = await readJson(path.join(runDir, "input", "approvals.json")).catch(() => null);
+  const approvals = new Map((approvalsFile?.approvals ?? []).map((a) => [a.kb_id, a]));
   for (const name of stages) {
     const stage = STAGES[name];
     if (!stage) throw new Error(`stage không tồn tại: ${name}`);
@@ -141,7 +153,7 @@ export async function validateRun(runDir, { stages = Object.keys(STAGES) } = {})
       // Artifact mới: nội dung ở payload (§1). Artifact cũ đặt thẳng ở top-level.
       const body = data && typeof data === "object" && data.payload && typeof data.payload === "object" ? data.payload : data;
       check(schema, body, "$", found);
-      found.push(...(RULES[name]?.(body, { mode, file: rel }) ?? []));
+      found.push(...(RULES[name]?.(body, { mode, file: rel, approvals }) ?? []));
       for (const f of found) errors.push({ file: rel, ...f });
     }
   }
