@@ -118,6 +118,20 @@ STEP 7 — CONFLICTED
 
 Diff entry `SUPERSEDE` phải mang `kb_id` (base B) và `candidate_kb_id` (C trong candidate shard) — `publish-strip.mjs` dùng đúng hai field đó để áp.
 
+## Quyết định của người (`requires_human_decision`)
+
+Blocker (a), (b), (c), (d), (f) và STEP 0 `shipped: UNKNOWN` không tự giải được — chúng cần người có vai trò trong `config/products/<key>.json` → `owners` (theo object, fallback `default`) quyết. Blocker (e) không phải chuyện cần quyết: scope khác thì là item mới (`ADDED`).
+
+1. Diff analyzer ghi entry `CONFLICTED` + `requires_human_decision: true`. Orchestrator hỏi đúng vai trò owner (qua operator, hoặc note trên Proposal) và **không** tự quyết.
+2. Có quyết định → orchestrator ghi `input/approvals.json` (schema `contracts/schemas/approvals.schema.json`): `kb_id`, `decision`, `approver_role`, `ref` (link comment/ticket/tin nhắn có quyết định), `decided_at`. Không ghi tên hay email người — repo build là public.
+3. Chạy lại diff analyzer, nó đọc `input/approvals.json`:
+   - `ACCEPT_CANDIDATE` → `SUPERSEDE` (kể cả khi có blocker a/b/c/d/f); dòng CHANGELOG ghi thêm vai trò + `ref` của người duyệt.
+   - `KEEP_BASE` → claim của CCR bị loại khỏi run (normalizer chạy lại không có nó), nêu trong `results` của Proposal.
+   - `KEEP_BOTH` → giữ `CONFLICTED`, OQ `CONFLICT` vẫn mở.
+4. Chưa có quyết định → item đó không publish; phần sạch vẫn publish (§12.4 rule 3); Proposal nhận `DEFERRED` + `reason: awaiting_decision` + `approval_needed: [{kb_id, blocker, owner_role}]` nếu không còn phần nào publish được.
+
+`validate-run.mjs` chặn mọi `SUPERSEDE` có `requires_human_decision` mà thiếu approval `ACCEPT_CANDIDATE`.
+
 ## Ba luật kèm theo
 
 **Giữ nguyên `kb_id` của base là bắt buộc.** `related_kb_ids` và `oracle.kb_ids` của checklist trỏ vào nó; cấp id mới sẽ orphan mọi consumer, im lặng.

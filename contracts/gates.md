@@ -144,6 +144,7 @@ Với mỗi entry `resolution: SUPERSEDE` trong `review/knowledge-diff.json`:
 - `CHANGELOG.md` trong preview có đúng 1 dòng mới cho entry đó, trích nguyên văn statement cũ. Thiếu hoặc chung chung → BLOCKING.
 - `kb_id` của base được giữ nguyên. Cấp id mới → BLOCKING.
 - Statement cũ đã biến mất khỏi `kb.json` của preview.
+- Entry có `requires_human_decision: true` chỉ được `SUPERSEDE` khi `input/approvals.json` có approval `ACCEPT_CANDIDATE` cho đúng `kb_id`, và dòng CHANGELOG ghi vai trò + `ref` người duyệt (`validate-run.mjs` kiểm phần đầu).
 
 ### open-question-completeness
 
