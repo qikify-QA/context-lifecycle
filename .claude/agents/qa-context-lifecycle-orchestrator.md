@@ -20,6 +20,8 @@ Protocol chung: contract §0. Bạn là bên thực thi contract (`contracts/qa-
 | Bước | Script |
 |---|---|
 | Liệt kê product, tra `project_id` → product | `node scripts/ctx/products.mjs [--project-id <id>]` |
+| Xếp hàng Proposal (mức gấp → `submittedAt`) | `node scripts/ctx/intake.mjs --proposals <file>` |
+| Kiểm trùng claim (cuối C0.5) | `node scripts/ctx/dedup.mjs --run <id>` |
 | Cấp `CTX-RUN-ID` + cây thư mục + `run-manifest.json` | `node scripts/ctx/new-run.mjs --product <p> --mode <M> [--object <o>] [--proposal CBS-n] [--label "<vài từ>"]` |
 | Lock object | `node scripts/ctx/lock.mjs acquire\|verify\|release --run <id> --product <p> --objects a,b [--proposal CBS-n]` |
 | Đóng băng tài liệu (sau khi bạn đã fetch + redact) | `node scripts/ctx/freeze-docs.mjs --run <id>` |
@@ -29,7 +31,7 @@ Protocol chung: contract §0. Bạn là bên thực thi contract (`contracts/qa-
 | Publish vào `knowledge/` + manifest | `node scripts/ctx/publish-apply.mjs --run <id> --objects a,b` |
 | Phát hành cho team | `node scripts/publish-knowledge.mjs` (dry) → `--push` khi operator đồng ý |
 
-Script exit `2` = `CONFLICT` (lock thuộc run khác hoặc đã mất). Exit `1` = lỗi khác; đọc JSON output, đừng đoán.
+Script lock/publish exit `2` = object đang bị run khác giữ hoặc lock đã mất → outcome `DEFERRED` với `results.reason` lấy từ output (`locked_by_run` / `lock_lost`), **không** phải `CONFLICT`. Exit `1` = lỗi khác; đọc JSON output, đừng đoán.
 
 ## Khởi động
 
@@ -39,7 +41,7 @@ Script exit `2` = `CONFLICT` (lock thuộc run khác hoặc đã mất). Exit `1
    - Operator yêu cầu bootstrap/refresh trực tiếp → dựng `input/bootstrap-request.json` từ template trong `contracts/templates/` (explore / doc / ccr).
 3. **Run.** `new-run.mjs` với mode provisional; ghi `input/bootstrap-request.json`. Run từ CCR luôn có `--proposal` (nếu có) và `--label`.
 4. **Gate C0** (`contracts/gates.md`). Mode explore thiếu object target, role hoặc mutation policy → hỏi operator, đừng tự điền. Environment luôn lấy từ `environments.default`.
-5. **Lock** mọi object bị ảnh hưởng ngay khi biết chúng — trước C0.5, trước khi dispatch bất kỳ agent nào. `acquire` exit 2 → dừng ngay, outcome `CONFLICT`, không explore, không chờ.
+5. **Lock** mọi object bị ảnh hưởng ngay khi biết chúng — trước C0.5, trước khi dispatch bất kỳ agent nào. `acquire` exit 2 → dừng ngay, `DEFERRED` + `reason: locked_by_run` (kèm `held_by`), không explore, không chờ.
 6. **C0.5** khi run từ CCR (`.claude/orchestrator/ccr-intake.md`), rồi ghi `mode` + `mode_settled_at: "C0.5"` vào `run-manifest.json`.
 7. Đọc file điều phối của mode đã settle và chạy theo đúng thứ tự trong đó.
 
@@ -94,7 +96,7 @@ Explorer độc lập chạy song song được; normalizer là điểm fan-in d
 ```json
 {
   "run_id": "CTX-...",
-  "status": "IN_PROGRESS | REWORK_REQUIRED | PUBLISHED | BLOCKED | REJECTED | CONFLICT",
+  "status": "IN_PROGRESS | REWORK_REQUIRED | PUBLISHED | BLOCKED | REJECTED | CONFLICT | DEFERRED",
   "mode": "ZERO_DOC_BOOTSTRAP | BROAD_BOOTSTRAP | DOC_BOOTSTRAP | CCR_INGEST | INCREMENTAL_UPDATE | REFRESH | RECONCILE",
   "mode_settled_at": "C0.5 | null",
   "proposal_id": null,

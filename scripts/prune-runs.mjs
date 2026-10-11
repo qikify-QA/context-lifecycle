@@ -11,7 +11,7 @@
 // dựa vào việc knowledge/ có nhắc tên run hay không nữa.
 //
 // Một run được coi là ĐỦ ĐIỀU KIỆN xoá khi CẢ HAI đúng:
-//   1. run-manifest.json.status là terminal: PUBLISHED | BLOCKED | REJECTED | CONFLICT
+//   1. run-manifest.json.status là terminal: PUBLISHED | BLOCKED | REJECTED | CONFLICT | DEFERRED
 //      (KHÔNG PHẢI IN_PROGRESS — run còn dở không bao giờ được xoá).
 //   2. Mọi oq_id trong run-manifest.json.produced_open_questions KHÔNG còn xuất hiện
 //      trong open-questions.md của object tương ứng (nghĩa là open-question do run này
@@ -38,7 +38,7 @@ const rootDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..")
 const knowledgeProductsDir = path.join(rootDir, "knowledge", "products");
 const runsDir = path.join(rootDir, "runs", "context");
 
-const TERMINAL_STATUSES = new Set(["PUBLISHED", "BLOCKED", "REJECTED", "CONFLICT"]);
+const TERMINAL_STATUSES = new Set(["PUBLISHED", "BLOCKED", "REJECTED", "CONFLICT", "DEFERRED"]);
 
 async function dirSize(dir) {
   const files = await walk(dir);

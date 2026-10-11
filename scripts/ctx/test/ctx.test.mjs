@@ -192,3 +192,58 @@ test("product config: placeholder vẫn bị chặn sau khi tách lib schema", a
   cfg.qa_hub.project_id = "<<< ĐIỀN >>>";
   assert.ok((await validateProduct(cfg)).some((p) => p.includes("placeholder")));
 });
+
+test("intake: xếp theo mức gấp rồi submittedAt, bỏ project lạ", async () => {
+  const { buildQueue, parseUrgency } = await import("../intake.mjs");
+  const ccr = (u) => `## 4.4 Mức độ gấp\n\n\`${u}\` — lý do\n\n# Phần 5`;
+  assert.equal(parseUrgency("## 4.4 Mức độ gấp `[BẠN]`\n\n`HIGH` (đang chặn) · `MEDIUM` · `LOW`\n"), "UNKNOWN");
+  assert.equal(parseUrgency("## 4.4 Mức độ gấp\n\n`MEDIUM` — có thể nâng lên `HIGH` nếu test P0 fail\n"), "MEDIUM");
+  const products = [{ product_key: "p", qa_hub: { project_id: "proj-1" } }];
+  const { queue, skipped } = buildQueue(
+    [
+      { id: "CBS-1", projectId: "proj-1", submittedAt: "2026-10-01", content: ccr("LOW") },
+      { id: "CBS-2", projectId: "proj-1", submittedAt: "2026-10-03", content: ccr("HIGH") },
+      { id: "CBS-3", projectId: "proj-1", submittedAt: "2026-10-02", content: ccr("HIGH") },
+      { id: "CBS-4", projectId: "proj-x", submittedAt: "2026-10-01", content: ccr("HIGH") }
+    ],
+    products
+  );
+  assert.deepEqual(queue.map((q) => q.proposal_id), ["CBS-3", "CBS-2", "CBS-1"]);
+  assert.deepEqual(skipped.map((s) => s.proposal_id), ["CBS-4"]);
+});
+
+test("dedup: trùng theo target_kb_ids hoặc confirmation_source, chỉ cùng object", async () => {
+  const { findDuplicates } = await import("../dedup.mjs");
+  const cs = { type: "dev_doc", ref: { citation: "Jira PROJ-1 §3" } };
+  const plan = { product_key: "p", object_key: "o", claims: [
+    { claim_key: "CBS-9__CLAIM-01", target_kb_ids: ["KB-5"] },
+    { claim_key: "CBS-9__CLAIM-02", confirmation_source: cs },
+    { claim_key: "CBS-9__CLAIM-03", target_kb_ids: ["KB-7"] } ] };
+  const others = [
+    { runId: "CTX-A", status: "IN_PROGRESS", product: "p", object: "o", plan: { proposal_id: "CBS-1", claims: [{ claim_key: "CBS-1__CLAIM-01", target_kb_ids: ["KB-5"] }, { claim_key: "CBS-1__CLAIM-02", confirmation_source: { type: "dev_doc", ref: { citation: "jira  proj-1 §3" } } }] } },
+    { runId: "CTX-B", status: "PUBLISHED", product: "p", object: "other", plan: { proposal_id: "CBS-2", claims: [{ claim_key: "CBS-2__CLAIM-01", target_kb_ids: ["KB-7"] }] } }
+  ];
+  const r = findDuplicates(plan, others, new Set(["KB-7"]));
+  assert.deepEqual(r.duplicates.map((d) => [d.claim_key, d.basis[0]]), [["CBS-9__CLAIM-01", "same_target_kb_ids"], ["CBS-9__CLAIM-02", "same_confirmation_source"]]);
+  assert.deepEqual(r.covered_by_open_question, [{ claim_key: "CBS-9__CLAIM-03", kb_ids: ["KB-7"] }]);
+});
+
+test("lock CLI: bị run khác giữ → DEFERRED + locked_by_run, không phải CONFLICT", async () => {
+  const { execFile } = await import("node:child_process");
+  const { promisify } = await import("node:util");
+  const run = promisify(execFile);
+  const cli = new URL("../lock.mjs", import.meta.url).pathname;
+  const obj = `zz-test-${process.pid}`;
+  const args = (id, action = "acquire") => [cli, action, "--run", id, "--product", "test", "--objects", obj];
+  await run("node", args("CTX-T-1"));
+  try {
+    const second = await run("node", args("CTX-T-2")).catch((e) => e);
+    assert.equal(second.code, 2);
+    const out = JSON.parse(second.stdout);
+    assert.equal(out.outcome, "DEFERRED");
+    assert.equal(out.reason, "locked_by_run");
+    assert.equal(out.conflict.held_by.ctx_run_id, "CTX-T-1");
+  } finally {
+    await run("node", args("CTX-T-1", "release"));
+  }
+});

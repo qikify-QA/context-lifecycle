@@ -7,7 +7,7 @@
 //
 // Chỉ orchestrator gọi script này, và chỉ sau khi reviewer trả publish_allowed: true.
 // Copy là merge: file trong preview ghi đè, file không có trong preview giữ nguyên.
-// Exit 2 = lock không còn thuộc run (outcome CONFLICT). Exit 1 = lỗi khác.
+// Exit 2 = lock không còn thuộc run (outcome DEFERRED, reason lock_lost). Exit 1 = lỗi khác.
 
 import { cp } from "node:fs/promises";
 import { execFile } from "node:child_process";
@@ -42,7 +42,7 @@ async function main() {
   const keys = args.objects.split(",").map((o) => o.trim()).filter(Boolean).map((object) => ({ product, object }));
   const lock = await verifyAll(keys, { ctxRunId });
   if (!lock.ok) {
-    console.log(JSON.stringify({ ok: false, outcome: "CONFLICT", lock_problems: lock.problems }, null, 2));
+    console.log(JSON.stringify({ ok: false, outcome: "DEFERRED", reason: "lock_lost", lock_problems: lock.problems }, null, 2));
     process.exit(2);
   }
 

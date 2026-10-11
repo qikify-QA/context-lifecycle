@@ -19,7 +19,7 @@ Khuôn CCR đầy đủ thuộc skill `create-ccr` (`references/ccr-template.md`
 3. Dựng map `project_id → product_key`. Proposal có `projectId` không nằm trong map → bỏ qua, ghi log, không xử lý.
 4. Với mỗi Proposal: `get_proposal({ proposal_id })` → `{ id, projectId, sourceTaskId, filename, status, submittedBy, submittedAt, content, ... }`. `content` là text thô của file CCR tại thời điểm Submit; đọc nó theo cấu trúc mục của khuôn `create-ccr`. `sourceTaskId` chỉ để tham chiếu ngược.
 5. **Product trước, object sau:** product đã biết từ `project_id`; `object_key` resolve qua `knowledge/products/<product_key>/_registry.json` của **đúng product đó**. Hai product có thể dùng chung tên object (`order`, `product-base`), nên resolve ngược lại sẽ map sai.
-6. Claim lock theo object (§16) → mỗi (product, object-set) là một run độc lập. Proposal không đụng cùng object chạy song song; Proposal claim lock sau nhận `CONFLICT` ngay.
+6. Thứ tự thử: `node scripts/ctx/intake.mjs --proposals <file>` xếp theo mức gấp (CCR mục 4.4) rồi `submittedAt`. Claim lock theo object (§16) → mỗi (product, object-set) là một run độc lập. Proposal không đụng cùng object chạy song song; Proposal claim lock sau nhận `DEFERRED` với `results.reason: "locked_by_run"` — **không** phải `CONFLICT`, vì đây không phải mâu thuẫn knowledge.
 
 **1 run = 1 Proposal = 1 product.** CCR chạm nhiều product → `NEEDS_INFO`: "Phần 0 — Cần mấy CCR? (CCR chạm nhiều product: X, Y — tách thành 1 CCR mỗi product)".
 
@@ -31,9 +31,19 @@ Khuôn CCR đầy đủ thuộc skill `create-ccr` (`references/ccr-template.md`
 |---|---|---|---|
 | `ACCEPTED` | Đủ evidence, vào context | `published` | `summary`, `published_context_version`, `product_kb_refs`, `feature_profile_refs`, `checklist_refs`, `feature_summary_refs` |
 | `NEEDS_INFO` | Thiếu thông tin để quyết | `blocked` | `summary`, `open_questions` (nêu **đúng tên mục** còn thiếu) |
-| `CONFLICT` | Mâu thuẫn với knowledge hiện có, hoặc lock thuộc run khác | `blocked` | `summary`, `conflicts` (cả hai phía kèm evidence) |
+| `CONFLICT` | Mâu thuẫn **nghiệp vụ** với knowledge hiện có | `blocked` | `summary`, `conflicts` (cả hai phía kèm evidence) |
 | `REJECTED` | Không vào context | `blocked` | `summary` nêu lý do |
-| `DEFERRED` | Đúng nhưng chưa làm bây giờ | `blocked` | `summary` nêu điều kiện để làm lại |
+| `DEFERRED` | Đúng nhưng chưa làm bây giờ — gồm cả lý do vận hành | `blocked` | `summary` nêu điều kiện để làm lại, `reason` (bảng dưới) |
+
+Board chỉ có 5 outcome cố định, nên lý do chi tiết đi trong `results.reason` (và field kèm theo):
+
+| `results.reason` | Outcome | Khi nào | Field kèm |
+|---|---|---|---|
+| `locked_by_run` | `DEFERRED` | object đang bị run khác giữ lock lúc bắt đầu | `held_by: {ctx_run_id, proposal_id}` — kéo Proposal lại sau khi run kia xong |
+| `lock_lost` | `DEFERRED` | lock hết hạn/mất trước bước publish | `lock_problems` — chạy lại run |
+| `object_has_no_base` | `DEFERRED` | object chưa bootstrap nên chưa ingest CCR được | — |
+| `duplicate_of` | `REJECTED` | **mọi** claim trùng với CCR đang chạy hoặc đã publish (`dedup.mjs`) | `duplicate_of: [{proposal_id, claim_key}]` |
+| `awaiting_decision` | `DEFERRED` | cần người quyết (approval, `requires_human_decision`) | `approval_needed: [...]` |
 
 Board status của Proposal chỉ có 4 giá trị: `todo` · `in-progress` · `blocked` · `published`. Toàn bộ pipeline (kể cả reviewer) chạy trong lúc Proposal ở `in-progress`. Không bao giờ set `published` cho outcome khác `ACCEPTED`.
 
@@ -75,6 +85,8 @@ Explore chỉ chạy khi operator yêu cầu tường minh cho một claim — k
 
 `authored_by` của nguồn `S3` không được trùng người gửi CCR — người gửi không tự làm authority cho chính mình.
 
+**Kiểm trùng:** sau khi ghi plan, chạy `node scripts/ctx/dedup.mjs --run <id>`. Claim trùng (cùng object, chung `target_kb_ids` hoặc cùng `confirmation_source`) với CCR đang `IN_PROGRESS`/`PUBLISHED` → bỏ claim đó khỏi run và nêu trong `results`; mọi claim đều trùng → `REJECTED` + `reason: duplicate_of`. `covered_by_open_question` chỉ là thông tin, không loại claim.
+
 Với mỗi claim: copy evidence vào `raw/ccr-evidence/<claim_key>/` (`claim_key` = `<proposal_id>__<CLAIM-nn>`); toàn văn Proposal vào `raw/ccr-evidence/_ccr-full-content.md`.
 
 **Output bắt buộc — `input/ccr-fastpath-plan.json`** (tên file giữ vì lý do lịch sử):
@@ -114,14 +126,14 @@ Mọi `NEEDS_CONFIRMATION`/`CONFLICT`/`OPEN_ISSUE` phát sinh trong run phải v
 
 ## 12.4 Quy tắc bắt buộc
 
-0. **Lock trước, làm sau** (§16): claim lock mọi object bị ảnh hưởng ngay khi xác định được object, trước C0.5. Lock mất giữa chừng → không publish, outcome `CONFLICT`.
+0. **Lock trước, làm sau** (§16): claim lock mọi object bị ảnh hưởng ngay khi xác định được object, trước C0.5. Lock mất giữa chừng → không publish, `DEFERRED` + `reason: lock_lost`.
 1. **Không tự resolve conflict** (§8) — áp cho mode explore và cho product có `supersede_policy.enabled: false`. Item conflict không được làm oracle; ghi vào KB dạng `status: UNRESOLVED` + `conflict_group`, kèm OQ `CONFLICT`. **Ngoại lệ duy nhất:** `CCR_INGEST`/`DOC_BOOTSTRAP` của product có `supersede_policy.enabled: true` → áp §12.5 (`contracts/supersede.md`); ở đó orchestrator vẫn không phán xử nghiệp vụ, chỉ áp kết quả tất định.
 2. **Độ mạnh nguồn quyết định `knowledge_kind`, không phải việc nó là CCR.** Người gửi quan sát thấy điều gì đó không tự biến nó thành expected behavior.
 3. **Publish từng phần được phép:** phần không bị chặn vẫn publish, phần bị chặn ghi rõ lý do. Không giữ cả update lại vì một item.
 4. **Phản hồi luôn về đúng Proposal đang xử lý** (không phải task gốc), qua MCP server `qa_hub.mcp_server` của product:
    - Gate C0 fail ngay từ đầu → `update_context_board_proposal({ proposal_id, status: "blocked", results, note })`, không chạy pipeline.
    - Trong lúc chạy: chỉ được cập nhật `note`/`results.summary` (tiến độ), giữ `status: "in-progress"`.
-   - Kết thúc: `finish_context_board_proposal({ proposal_id, outcome, results, note })` theo bảng §12.2. Bị chặn ở lock (đầu run hoặc trước publish) → outcome luôn `CONFLICT`, kể cả khi reviewer đã `publish_allowed: true`.
+   - Kết thúc: `finish_context_board_proposal({ proposal_id, outcome, results, note })` theo bảng §12.2. Bị chặn ở lock (đầu run hoặc trước publish) → `DEFERRED` + `reason`, kể cả khi reviewer đã `publish_allowed: true`.
    - `results` là JSON tự do (`summary` luôn có); QA Hub chỉ lưu và hiển thị, không parse.
 5. **`resolved_requests` trong `knowledge/manifest.json` được derive từ `CHANGELOG.md`** (`scripts/lib/changelog.mjs`) — orchestrator chỉ cần ghi dòng CHANGELOG có `ccr_ref` đúng, không ghi tay vào manifest.
 6. **Khi run tới trạng thái terminal**, ghi `run-manifest.json.status` và `produced_open_questions: [oq_id, ...]` — mọi `oq_id` run này tạo mới hoặc để mở, không thiếu, không thừa (§15) — rồi release lock.

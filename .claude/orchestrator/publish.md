@@ -42,12 +42,12 @@ Khi `review/verdict.json` có `publish_allowed: true`:
 node scripts/ctx/publish-apply.mjs --run <id> --objects <o1,o2,...>
 ```
 
-Script kiểm verdict + lock + audit, copy preview vào `knowledge/products/<product>/` (merge), sinh lại manifest dưới lock `_manifest`. Exit 2 → outcome `CONFLICT`, không ghi gì.
+Script kiểm verdict + lock + audit, copy preview vào `knowledge/products/<product>/` (merge), sinh lại manifest dưới lock `_manifest`. Exit 2 → `DEFERRED` + `reason: lock_lost`, không ghi gì.
 
 Phát hành cho team là bước riêng: `node scripts/publish-knowledge.mjs` (dry-run, đọc kết quả) rồi `--push` **chỉ khi operator đồng ý** — `--push` commit, tag và push repo dùng chung.
 
 ## 6. Kết thúc run
 
-1. Ghi vào `run-manifest.json`: `status` (`PUBLISHED`/`BLOCKED`/`REJECTED`/`CONFLICT`), `produced_open_questions`.
+1. Ghi vào `run-manifest.json`: `status` (`PUBLISHED`/`BLOCKED`/`REJECTED`/`CONFLICT`/`DEFERRED`), `produced_open_questions`.
 2. Run từ Proposal → `finish_context_board_proposal` (`.claude/orchestrator/ccr-intake.md` mục 5).
 3. `node scripts/ctx/lock.mjs release --run <id> --product <p> --objects <...>`.

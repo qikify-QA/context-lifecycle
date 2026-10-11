@@ -6,7 +6,8 @@
 //   node scripts/ctx/lock.mjs release --run CTX-... --product <key> --objects a,b
 //   node scripts/ctx/lock.mjs acquire --run CTX-... --name _manifest     (lock global, vd khi sinh manifest)
 //
-// In JSON kết quả. Exit 0 = OK, 2 = CONFLICT/lock không còn thuộc run, 1 = input sai.
+// In JSON kết quả. Exit 0 = OK; 2 = object đang bị run khác giữ / lock không còn thuộc run
+// (outcome Proposal: DEFERRED, reason locked_by_run — không phải CONFLICT nghiệp vụ); 1 = input sai.
 
 import { parseArgs } from "../lib/fs-utils.mjs";
 import { acquireAll, verifyAll, releaseAll, DEFAULT_TTL_SECONDS } from "../lib/locks.mjs";
@@ -36,6 +37,10 @@ async function main() {
     });
   } else if (action === "verify") result = await verifyAll(keys, opts);
   else result = { ok: true, released: await releaseAll(keys, opts) };
+  if (!result.ok) {
+    result.outcome = "DEFERRED";
+    result.reason = action === "acquire" ? "locked_by_run" : "lock_lost";
+  }
   console.log(JSON.stringify(result, null, 2));
   process.exit(result.ok ? 0 : 2);
 }
