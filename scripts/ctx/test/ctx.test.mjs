@@ -165,13 +165,15 @@ test("validate-run: bắt lỗi shape và luật có điều kiện", async () =
       kb_candidates: [
         kbItem({ knowledge_kind: "CONFIRMED_EXPECTED" }),
         kbItem({ kb_id: "KB-2", scope: { environment: "staging" } }),
-        kbItem({ kb_id: "KB-3", knowledge_kind: "CONFIRMED_EXPECTED", confirmation_source: { type: "dev_doc", ref: { locator: "x" } } })
+        kbItem({ kb_id: "KB-3", knowledge_kind: "CONFIRMED_EXPECTED", confirmation_source: { type: "dev_doc", ref: { locator: "x" } } }),
+        kbItem({ kb_id: "KB-4", knowledge_kind: "CONFIRMED_EXPECTED", last_updated: { date: "2026-09-15", ccr_ref: "bootstrap" } })
       ]
     }),
     "input/ccr-fastpath-plan.json": { proposal_id: "CBS-1", claims: [{ claim_id: "CLAIM-01", claim_key: "CBS-1__CLAIM-01", strength: "S3" }] },
     "review/verdict.json": env({ decision: "APPROVED", publish_allowed: true, gate_results: [{ gate: "C3", status: "FAIL" }] })
   });
   const problems = (await validateRun(dir)).errors.map((e) => e.problem);
+  assert.ok(!(await validateRun(dir)).errors.some((e) => e.path.includes("KB-4")), "item legacy carry-forward không bị chặn");
   for (const expected of [
     /không thuộc IN_PROGRESS/,
     /không khớp tên file shard/,

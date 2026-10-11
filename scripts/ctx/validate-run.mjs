@@ -55,7 +55,13 @@ const RULES = {
     (body.kb_candidates ?? []).forEach((it, i) => {
       const at = `kb_candidates[${i}](${it.kb_id ?? "?"})`;
       const cs = it.confirmation_source;
-      if (it.knowledge_kind === "CONFIRMED_EXPECTED") {
+      // Item carry-forward từ base mang sẵn last_updated (normalizer chỉ gán last_updated
+      // cho item base). Luật confirmation_source áp cho item tạo mới hoặc sửa (§3) — item
+      // legacy thiếu nguồn (DECISIONS §6) được chép nguyên trạng thì không bị chặn ở đây.
+      const carried = Boolean(it.last_updated);
+      if (it.knowledge_kind === "CONFIRMED_EXPECTED" && carried && !cs) {
+        // legacy known debt
+      } else if (it.knowledge_kind === "CONFIRMED_EXPECTED") {
         if (!cs) out.push({ path: at, problem: "CONFIRMED_EXPECTED thiếu confirmation_source (§3)" });
         else {
           if (!authoredOn(cs)) out.push({ path: `${at}.confirmation_source`, problem: "thiếu authored_on (§3)" });
