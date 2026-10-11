@@ -16,7 +16,9 @@
 import { readFile } from "node:fs/promises";
 
 /** Mã CCR thật. `CTX-...` và `bootstrap:...` là run id, KHÔNG phải CCR. */
-const CCR_REF_RE = /\b((?:CBS|CCR|QA)-[A-Za-z0-9][A-Za-z0-9._-]*)/gi;
+// Đúng 3 dạng của contract §5a: CBS-<n>, QA-<n>, CCR-<...>. Phân biệt hoa thường để
+// chữ thường như "QA-authored", "qa-volume-kb" trong mô tả không bị đếm là CCR.
+const CCR_REF_RE = /\b(CBS-\d+|QA-\d+|CCR-[A-Za-z0-9][A-Za-z0-9._-]*)/g;
 const RUN_ID_RE = /\b(?:bootstrap:)?CTX-\d{8}-\d+/gi;
 const LINE_RE = /^-\s+(\d{4}-\d{2}-\d{2})\b(.*)$/;
 // Mode chỉ được nhận khi nó là một mode CÓ THẬT (contract §10) và nằm trong

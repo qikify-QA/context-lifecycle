@@ -5,6 +5,7 @@ import { fileURLToPath } from "node:url";
 import { getProduct, soleActiveProductKey } from "../scripts/lib/product-config.mjs";
 import { extractOpenQuestions } from "../scripts/lib/open-questions.mjs";
 import { walk, readJson, readJsonOr, writeJson, exists as fileExists } from "../scripts/lib/fs-utils.mjs";
+import { contextHealth } from "../scripts/lib/context-health.mjs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const rootDir = path.resolve(__dirname, "..");
@@ -722,6 +723,10 @@ async function patchAgent(agentId, patch) {
 async function handleApi(req, res, url) {
   if (req.method === "GET" && url.pathname === "/api/board") {
     return send(res, 200, await getBoard());
+  }
+  // Sức khoẻ context theo product/object — tính từ knowledge/ mỗi lần gọi, không ghi file.
+  if (req.method === "GET" && url.pathname === "/api/health") {
+    return send(res, 200, await contextHealth());
   }
   const match = url.pathname.match(/^\/api\/agents\/([^/]+)$/);
   if (req.method === "PATCH" && match) {

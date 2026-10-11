@@ -288,3 +288,35 @@ test("approval: SUPERSEDE cần người quyết phải có ACCEPT_CANDIDATE; CH
   const r = applySupersedes({ change_details: [{ resolution: "SUPERSEDE", kb_id: "KB-1", candidate_kb_id: "KB-9", feature_key: "f" }] }, kbFiles, { date: "2026-10-11", ccrRef: "CBS-9", mode: "CCR_INGEST", approvals: new Map([["KB-1", approved.approvals[0]]]) });
   assert.match(r.changelog.o[0], /Duyệt: PO \(QA Hub CBS-9 note, 2026-10-11\)/);
 });
+
+test("changelog: chỉ đếm CBS-<n> / QA-<n> / CCR-<...>, không bắt chữ trong mô tả", async () => {
+  const { parseChangelog } = await import("../../lib/changelog.mjs");
+  const refs = parseChangelog([
+    "- 2026-10-09 (`bootstrap`, DOC_BOOTSTRAP) — từ bộ tài liệu QA-authored, repo qa-volume-kb",
+    "- 2026-10-10 (`CBS-12`, CCR_INGEST) — KB-1 superseded",
+    "- 2026-10-10 (`CCR-2026-09-25-photo-upload`, INCREMENTAL_UPDATE) — thêm KB-2; liên quan QA-123"
+  ].join("\n")).map((r) => r.ccr_ref);
+  assert.deepEqual(refs, ["CBS-12", "CCR-2026-09-25-PHOTO-UPLOAD", "QA-123"]);
+});
+
+test("context health: đếm KB/oracle/OQ/conflict và gắn cờ, không ghi file", async () => {
+  const { objectHealth } = await import("../../lib/context-health.mjs");
+  const { readdir } = await import("node:fs/promises");
+  const dir = await makeRun({
+    "publish-meta.json": { published_context_version: "2", published_at: "2000-01-01", mode: "CCR_INGEST" },
+    "kb.json": [{ kb_id: "KB-1", knowledge_kind: "OBSERVED_CURRENT", status: "UNRESOLVED" }],
+    "features/f/kb.json": [{ kb_id: "KB-2", knowledge_kind: "INFERRED" }, { kb_id: "KB-3", knowledge_kind: "OBSERVED_CURRENT", status: "KNOWN_DEFECT" }],
+    "checklists/f.json": { checks: [{ oracle: { oracle_strength: "NONE" } }, { oracle: { oracle_strength: "BASELINE" } }] }
+  });
+  await writeFile(path.join(dir, "open-questions.md"), '```json\n{"oq_id":"OQ-o-001","type":"CONFLICT"}\n```\n```json\n{"oq_id":"OQ-o-002","type":"NEEDS_CONFIRMATION"}\n```\n');
+  await writeFile(path.join(dir, "CHANGELOG.md"), "- 2026-10-01 (`bootstrap`, DOC_BOOTSTRAP) — QA-authored\n- 2026-10-05 (`CBS-7`, CCR_INGEST) — đổi KB-1\n");
+  const before = (await readdir(dir, { recursive: true })).sort();
+  const h = await objectHealth(dir, 45);
+  assert.equal(h.version, "2");
+  assert.deepEqual([h.kb.total, h.kb.OBSERVED_CURRENT, h.unresolved_conflicts, h.known_defects], [3, 2, 1, 1]);
+  assert.deepEqual(h.checks, { total: 2, STRONG: 0, BASELINE: 1, NONE: 1 });
+  assert.deepEqual(h.open_questions, { CONFLICT: 1, NEEDS_CONFIRMATION: 1, OPEN_ISSUE: 0 });
+  assert.deepEqual(h.last_ccr, { ccr_ref: "CBS-7", date: "2026-10-05" });
+  assert.deepEqual(h.flags.sort(), ["no_confirmed_expected", "open_conflicts", "stale", "weak_oracle"]);
+  assert.deepEqual((await readdir(dir, { recursive: true })).sort(), before);
+});

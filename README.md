@@ -31,7 +31,8 @@ npm install
 
 ```bash
 npm test                   # test các script tất định (scripts/ctx/)
-npm run ops-board          # bảng theo dõi run: http://127.0.0.1:4177
+npm run ops-board          # bảng theo dõi run + view "Context health": http://127.0.0.1:4177
+npm run health             # sức khoẻ context theo product/object (tính từ knowledge/, không ghi file)
 npm run products           # product ACTIVE + MCP server + playbook
 npm run portal-auth        # login portal staging (teeinblue), ghi playwright/.auth/owner.json
 npm run manifest           # sinh knowledge/manifest.json
