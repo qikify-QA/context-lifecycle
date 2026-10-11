@@ -81,3 +81,5 @@ Base URL/environment mơ hồ hoặc khác `expected_api_base` · cần mutation
 |---|---|
 | `qa-knowledge-normalizer` | `intermediate/api/action-api-map.json` |
 | orchestrator | danh sách `ACT-ID` thiếu capture (nếu `BLOCKED`) |
+
+Ví dụ: campaign của teeinblue
