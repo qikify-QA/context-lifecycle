@@ -4,15 +4,16 @@
 // một file config/products/<key>.json; tập product mà repo chịu trách nhiệm là
 // tập file có status: "ACTIVE".
 //
-// Có 3 consumer: scripts/generate-manifest.mjs, scripts/publish-knowledge.mjs,
-// ops-board/server.mjs. Chúng từng tự đoán giá trị mỗi nơi một kiểu — và đó
-// đúng là cách `confidence_source` / `confirmation_source` đã lệch nhau. Một
-// nguồn, không ba bản copy-paste.
+// Consumer: scripts/generate-manifest.mjs, scripts/sync-appendix.mjs, scripts/ctx/*,
+// ops-board/server.mjs. Một nguồn, không nhiều bản copy-paste.
+//
+// Config ACTIVE được validate theo config/products/_schema.json ngay lúc load —
+// config sai là throw, không im lặng chạy với giá trị đoán.
 //
 // File _*.json (vd _template.json) bị bỏ qua, cùng quy ước với cách
 // generate-manifest.mjs discover knowledge/products/*.
 
-import { readFile, readdir } from "node:fs/promises";
+import { readFile, readdir, stat } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -43,6 +44,10 @@ export async function loadProducts() {
       throw new Error(`config/products/${name} không parse được: ${e.message}`);
     }
     const expected = name.replace(/\.json$/, "");
+    if (cfg.status === "ACTIVE") {
+      const problems = await validateProduct(cfg);
+      if (problems.length) throw new Error(`config/products/${name} không hợp lệ:\n  - ${problems.join("\n  - ")}`);
+    }
     if (cfg.product_key !== expected) {
       throw new Error(
         `config/products/${name}: product_key "${cfg.product_key}" không khớp tên file "${expected}". ` +
@@ -102,10 +107,67 @@ export async function soleActiveProductKey() {
   return actives.length === 1 ? actives[0].product_key : null;
 }
 
-/** knowledge/products/<key>/<object>/... -> <key>. Trả null nếu không khớp. */
-export function resolveProductFromKnowledgePath(p) {
-  const m = String(p).replace(/\\/g, "/").match(/knowledge\/products\/([^/]+)\//);
-  return m ? m[1] : null;
+/** Đường dẫn tuyệt đối tới explore playbook của product, hoặc null. */
+export function explorePlaybookPath(cfg) {
+  const p = cfg?.explore?.playbook;
+  return typeof p === "string" && !isPlaceholder(p) ? path.join(rootDir, p) : null;
+}
+
+let schemaCache = null;
+async function loadSchema() {
+  schemaCache ??= JSON.parse(await readFile(path.join(configDir, "_schema.json"), "utf8"));
+  return schemaCache;
+}
+
+function typeOf(v) {
+  if (v === null) return "null";
+  if (Array.isArray(v)) return "array";
+  return typeof v;
+}
+
+// Subset JSON Schema đủ cho config: type, required, enum, properties, items.
+function check(schema, value, at, out) {
+  if (schema.enum && !schema.enum.includes(value)) out.push(`${at}: ${JSON.stringify(value)} không thuộc ${schema.enum.join(" | ")}`);
+  if (schema.type) {
+    const types = [].concat(schema.type);
+    if (!types.includes(typeOf(value))) {
+      out.push(`${at}: kiểu ${typeOf(value)}, cần ${types.join(" | ")}`);
+      return;
+    }
+  }
+  if (typeof value === "string" && isPlaceholder(value)) out.push(`${at}: còn placeholder <<< ... >>>`);
+  if (schema.required && value && typeof value === "object") {
+    for (const k of schema.required) if (!(k in value)) out.push(`${at}.${k}: thiếu`);
+  }
+  if (schema.properties && value && typeof value === "object") {
+    for (const [k, sub] of Object.entries(schema.properties)) if (k in value) check(sub, value[k], `${at}.${k}`, out);
+  }
+  if (schema.items && Array.isArray(value)) value.forEach((v, i) => check(schema.items, v, `${at}[${i}]`, out));
+}
+
+/** Danh sách lỗi của một config (rỗng = hợp lệ). */
+export async function validateProduct(cfg) {
+  const out = [];
+  check(await loadSchema(), cfg, cfg.product_key ?? "config", out);
+  const modes = cfg.modes ?? {};
+  if (modes.explore_enabled) {
+    if (!(modes.allowed_explorers ?? []).length) out.push("modes.explore_enabled=true nhưng allowed_explorers rỗng");
+    const playbook = explorePlaybookPath(cfg);
+    if (!playbook) out.push("modes.explore_enabled=true nhưng thiếu explore.playbook");
+    else {
+      try {
+        await stat(playbook);
+      } catch {
+        out.push(`explore.playbook không tồn tại: ${cfg.explore.playbook}`);
+      }
+    }
+  } else if ((modes.allowed_explorers ?? []).length) {
+    out.push("modes.explore_enabled=false nhưng allowed_explorers không rỗng");
+  }
+  if (cfg.environments && !(cfg.environments.allowed ?? []).includes(cfg.environments.default)) {
+    out.push(`environments.default "${cfg.environments.default}" không nằm trong environments.allowed`);
+  }
+  return out;
 }
 
 export function staleAfterDays(cfg, fallback = 45) {

@@ -23,19 +23,21 @@
 //   node scripts/publish-knowledge.mjs --push      # commit + push thật trong knowledge/ (side effect: repo dùng chung)
 //   node scripts/publish-knowledge.mjs --allow-unpublished   # cho qua object thiếu block publish
 
-import { readFile, mkdir, rm, readdir, stat, cp } from "node:fs/promises";
+import { readFile, mkdir, rm, stat, cp } from "node:fs/promises";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { walk } from "./lib/fs-utils.mjs";
+import { findForbiddenLeaks, findBadConfirmationRefs } from "./lib/forbidden-fields.mjs";
 
 const execFileAsync = promisify(execFile);
 const rootDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const knowledgeDir = path.join(rootDir, "knowledge");
 const stageDir = path.join(rootDir, ".publish-stage");
 
-const SOURCE_REPO = "qikify-QA/context-lifecycle";
-const TARGET_REPO = "https://github.com/qikify-QA/qa-knowledge.git";
+const SOURCE_REPO = process.env.CTX_SOURCE_REPO ?? "qikify-QA/context-lifecycle";
+const TARGET_REPO = process.env.CTX_TARGET_REPO ?? "https://github.com/qikify-QA/qa-knowledge.git";
 
 const doPush = process.argv.includes("--push");
 const allowUnpublished = process.argv.includes("--allow-unpublished");
@@ -45,173 +47,12 @@ async function git(...args) {
   return stdout.trim();
 }
 
-async function walk(dir, out = []) {
-  for (const entry of await readdir(dir, { withFileTypes: true })) {
-    const full = path.join(dir, entry.name);
-    if (entry.isDirectory()) await walk(full, out);
-    else out.push(full);
-  }
-  return out;
-}
-
-// Field/đường dẫn cấm xuất hiện trong bất kỳ file nào dưới knowledge/, theo contract §5a.
-// Đây là field thuộc "quá trình biết được sự thật" (run/act/doc nào tạo ra nó) —
-// knowledge/ chỉ được nói "sự thật hiện tại", không được nói quá trình đó.
-//
-// Contract §5a liệt 20+ tên; script này trước đây chỉ kiểm 5. Bổ sung phần còn
-// thiếu, NHƯNG không copy nguyên dạng /\b<name>\b/ — làm thế sẽ vỡ publish ngay,
-// đã xác minh trên dữ liệu thật:
-//   - "gate": có 62 hit chữ "gate" trong knowledge/, trong đó ĐANG được publish:
-//     _registry.json "password gate", order/.../profile.json "should gate
-//     regression test design", artwork/open-questions.md "bị gate bởi".
-//     -> chỉ soi dạng KEY JSON ("gate":), prose không bị đụng.
-//   - "ent_id": là substring của fulfillment_id và parent_id (12 hit trong
-//     product-base/**). -> bắt buộc dạng key hoặc word-bounded.
-// Vì vậy tên field nội bộ chỉ soi ở dạng `"<name>":` và chỉ trong file .json.
-const JSON_KEY_NAMES = [
-  "run_id",
-  "ctx_run_id",
-  "act_id",
-  "apiop_id",
-  "ent_id",
-  "evidence_refs",
-  "source_refs",
-  "upstream_artifact_ids",
-  "gate",
-  "candidate_local_id",
-  "legacy_kb_refs",
-  // mode doc (contract §4, §5a) — ID run-local, ngoài thư mục run là vô nghĩa
-  "doc_id",
-  "dsec_id",
-  "claim_id",
-  "claim_key",
-  "docset_id",
-  "doc_refs",
-  "normativity",
-  "doc_support",
-  "claim_ids",
-  "strength"
-];
-
-const JSON_KEY_PATTERNS = JSON_KEY_NAMES.map((name) => ({
-  name,
-  re: new RegExp(`"${name}"\\s*:`),
-  applies: (f) => f.endsWith(".json")
-}));
-
-// id_remap_* là một họ field, không phải một tên.
-const JSON_KEY_FAMILY = [
-  { name: "id_remap_*", re: /"id_remap_[a-z0-9_]*"\s*:/, applies: (f) => f.endsWith(".json") }
-];
-
-// Đường dẫn thì soi cả .json lẫn .md, kể cả trong prose — một path trỏ vào runs/
-// là leak bất kể nó nằm ở field hay ở câu văn.
-const PATH_PATTERNS = [
-  { name: "runs/context", re: /runs\/context/, applies: () => true },
-  { name: "input/docs", re: /input\/docs/, applies: () => true }
-];
-
-// Loại leak mà danh sách tên field BỎ SÓT: một `ACT-01-02-003` viết trong prose
-// của feature-summary.md không chứa chữ "act_id" nào, nên không pattern tên nào
-// thấy nó. Đây là chế độ WARN một vòng trước khi biến thành blocking — bật
-// blocking bằng PUBLISH_STRICT_IDS=1.
-const ID_IN_PROSE_PATTERNS = [
-  { name: "ACT-<n> trong nội dung", re: /\bACT-\d/, applies: () => true },
-  { name: "APIOP-<n> trong nội dung", re: /\bAPIOP-\d/, applies: () => true },
-  { name: "CTX-<date> trong nội dung", re: /\bCTX-\d{8}-\d/, applies: () => true },
-  { name: "DOC-<n> trong nội dung", re: /\bDOC-\d/, applies: () => true },
-  { name: "DSEC-<n> trong nội dung", re: /\bDSEC-\d/, applies: () => true },
-  { name: "CLM-<n> trong nội dung", re: /\bCLM-\d/, applies: () => true }
-];
-
+// Danh sách field/đường dẫn cấm (§5a) nằm ở contracts/forbidden-fields.json;
+// scripts/lib/forbidden-fields.mjs biên dịch nó. Bật blocking cho cảnh báo bằng
+// PUBLISH_STRICT_IDS=1 (ID nội bộ trong prose) và PUBLISH_STRICT_SELFCONTAINED=1
+// (tham chiếu trỏ ra ngoài gói publish).
 const STRICT_IDS = process.env.PUBLISH_STRICT_IDS === "1";
-
-// Tự chứa (contract §5a): knowledge/ sau khi publish không được trỏ RA NGOÀI gói
-// publish. Gói publish chỉ gồm products/**, manifest.json, how-to-request/** —
-// nên một tham chiếu tới knowledge/_open-issues/..., knowledge/<legacy>.md, hay
-// bất kỳ artifact nào của runs/ là một LINK CHẾT với mọi consumer, dù nó vẫn mở
-// được trên máy người publish.
-//
-// Tham chiếu NỘI BỘ trong products/** (vd "xem artwork/kb.json") KHÔNG vi phạm:
-// file đó cũng được publish, nên bundle vẫn tự chứa.
-//
-// Mặc định WARN. Bật blocking bằng PUBLISH_STRICT_SELFCONTAINED=1.
-const OUTSIDE_BUNDLE_RE =
-  /(?:runs\/\w|review\/(?:verdict|gate-results|knowledge-diff)\.json|candidate\/|intermediate\/|input\/docs\/|input\/ccr|docs-input\/|contracts\/|knowledge\/_open-issues\/|knowledge\/[\w.\-]+\.md|run-manifest\.json|product-kb\.json|ccr-fastpath-plan\.json|doc-manifest\.json)[\w.\-/]*/g;
 const STRICT_SELFCONTAINED = process.env.PUBLISH_STRICT_SELFCONTAINED === "1";
-
-const FORBIDDEN_PATTERNS = [...JSON_KEY_PATTERNS, ...JSON_KEY_FAMILY, ...PATH_PATTERNS];
-
-// `confirmation_source` KHÔNG nằm trong danh sách cấm — nó được phép dưới
-// knowledge/ (contract §3, §5a) vì nó trỏ ra nguồn thẩm quyền BÊN NGOÀI. Đã
-// kiểm: không pattern nào ở trên khớp nó ("source_refs" != "confirmation_source").
-// Nhưng chính `ref` của nó là chỗ một ID run-local dễ lọt qua dưới vỏ một field
-// được phép, nên nó có check dương riêng bên dưới.
-// `ref` phải là CÂU TRÍCH DẪN tự mô tả, còn đọc hiểu được sau khi nguồn bị xoá
-// (contract §3, §5a). Cấm id run-local VÀ cấm cú pháp đường dẫn.
-const CONFIRMATION_REF_BAD = /DOC-\d|DSEC-\d|CLM-\d|runs\//;
-const CONFIRMATION_REF_PATHLIKE = /(?:\.{0,2}\/)?[\w.\-]+\/[\w.\-]+\.(?:md|json|mjs|ya?ml|txt|csv|har)\b/;
-
-async function findForbiddenLeaks(dir) {
-  const leaks = [];
-  const warnings = [];
-  for (const file of await walk(dir)) {
-    if (!file.endsWith(".json") && !file.endsWith(".md")) continue;
-    const text = await readFile(file, "utf8");
-    for (const { name, re, applies } of FORBIDDEN_PATTERNS) {
-      if (applies(file) && re.test(text)) leaks.push({ file, name });
-    }
-    for (const { name, re, applies } of ID_IN_PROSE_PATTERNS) {
-      if (applies(file) && re.test(text)) (STRICT_IDS ? leaks : warnings).push({ file, name });
-    }
-    const outside = [...new Set((text.match(OUTSIDE_BUNDLE_RE) || []).map((m) => m.replace(/[.,);`]+$/, "")))];
-    for (const ref of outside) {
-      const entry = { file, name: `trỏ ra ngoài gói publish: ${ref}` };
-      (STRICT_SELFCONTAINED ? leaks : warnings).push(entry);
-    }
-  }
-  return { leaks, warnings };
-}
-
-/**
- * Check DƯƠNG: quét mọi kb.json staged, tìm item có confirmation_source.ref
- * mang ID run-local. Đây là lưới cuối trước khi nội dung rời repo build.
- */
-async function findBadConfirmationRefs(dir) {
-  const bad = [];
-  for (const file of await walk(dir)) {
-    if (path.basename(file) !== "kb.json") continue;
-    let items;
-    try {
-      items = JSON.parse(await readFile(file, "utf8"));
-    } catch {
-      continue; // shape sai đã bị generate-manifest bắt
-    }
-    if (!Array.isArray(items)) continue;
-    for (const item of items) {
-      const cs = item?.confirmation_source;
-      if (!cs) continue;
-      if (typeof cs.ref === "string" && CONFIRMATION_REF_BAD.test(cs.ref)) {
-        bad.push({ file, kb_id: item.kb_id, reason: "ref chứa ID run-local", ref: cs.ref });
-      }
-      if (typeof cs.ref === "string" && CONFIRMATION_REF_PATHLIKE.test(cs.ref)) {
-        bad.push({
-          file,
-          kb_id: item.kb_id,
-          reason: "ref dùng cú pháp đường dẫn — phải là câu trích dẫn còn đọc hiểu được sau khi nguồn bị xoá (§3)",
-          ref: cs.ref
-        });
-      }
-      if (cs.ref && typeof cs.ref !== "string") {
-        bad.push({ file, kb_id: item.kb_id, reason: "ref phải là chuỗi citation ở bản published (§3)" });
-      }
-      if (!cs.authored_on) {
-        bad.push({ file, kb_id: item.kb_id, reason: "thiếu authored_on — supersede lần sau không có gì để so (§12.5)" });
-      }
-    }
-  }
-  return bad;
-}
 
 async function main() {
   // 1. knowledge/ phải là submodule đã checkout. Sha repo build chỉ ghi vào commit message
@@ -226,10 +67,14 @@ async function main() {
 
   // 2. Sinh manifest + kiểm nhất quán
   console.log("== Kiểm tra knowledge ==");
-  await execFileAsync("node", [path.join(rootDir, "scripts", "generate-manifest.mjs")], {
-    cwd: rootDir,
-    stdio: "inherit"
-  }).catch(() => {});
+  try {
+    const { stdout } = await execFileAsync("node", [path.join(rootDir, "scripts", "generate-manifest.mjs")], { cwd: rootDir });
+    process.stdout.write(stdout);
+  } catch (e) {
+    process.stdout.write(e.stdout ?? "");
+    console.error(`FAIL: generate-manifest.mjs lỗi:\n${e.stderr ?? e.message}`);
+    process.exit(1);
+  }
   const manifest = JSON.parse(await readFile(path.join(knowledgeDir, "manifest.json"), "utf8"));
 
   if (manifest.summary.unpublished > 0 && !allowUnpublished) {
@@ -254,11 +99,9 @@ async function main() {
   await cp(path.join(knowledgeDir, "products"), path.join(stageDir, "products"), { recursive: true });
   await cp(path.join(knowledgeDir, "manifest.json"), path.join(stageDir, "manifest.json"));
   await mkdir(path.join(stageDir, "how-to-request"), { recursive: true });
-  // Khuôn CCR đầy đủ KHÔNG ship từ đây — nó thuộc skill `create-ccr` và dùng chung
-// cho mọi product. Repo chỉ ship PHỤ LỤC product-specific. Trước đây ship cả 2
-// template (trong đó 1 bản .json đã tự khai deprecated và lỗi nhịp cấu trúc), nên
-// consumer đọc được một khuôn không còn ai dùng.
-  for (const name of ["ccr-product-appendix.md"]) {
+  // Khuôn CCR đầy đủ thuộc skill `create-ccr`; repo chỉ ship phụ lục product-specific
+  // và hướng dẫn dùng context cho consumer.
+  for (const name of ["ccr-product-appendix.md", "consumer-guide.md"]) {
     await cp(path.join(rootDir, "contracts", name), path.join(stageDir, "how-to-request", name));
   }
 
@@ -267,7 +110,7 @@ async function main() {
   // publish strip (orchestrator) và audit của context-quality-reviewer đáng lẽ đã chặn
   // việc này từ trước, nhưng object nào lọt qua (bug, dữ liệu cũ chưa migrate lại, v.v.)
   // thì dừng ở đây, không để lọt tiếp.
-  const { leaks, warnings } = await findForbiddenLeaks(stageDir);
+  const { leaks, warnings } = await findForbiddenLeaks(stageDir, { strictIds: STRICT_IDS, strictSelfContained: STRICT_SELFCONTAINED });
   for (const { file, name } of warnings) {
     console.warn(`  WARN [${name}] ${path.relative(stageDir, file)}`);
   }
@@ -299,7 +142,7 @@ async function main() {
       console.error(`  [${b.kb_id ?? "?"}] ${path.relative(stageDir, b.file)} — ${b.reason}${b.ref ? `: ${b.ref}` : ""}`);
     }
     console.error("`ref` phải là chuỗi citation người đọc tự tra được (tên tài liệu@version §heading — url),");
-    console.error("không phải DOC-/SEC-/CLM- hay đường dẫn vào runs/. `authored_on` là ngày của nguồn.");
+    console.error("không phải DOC-/DSEC-/CLM- hay đường dẫn vào runs/. `authored_on` là ngày của nguồn.");
     process.exit(1);
   }
 

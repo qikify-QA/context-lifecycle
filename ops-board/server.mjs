@@ -1,14 +1,17 @@
 import { createServer } from "node:http";
-import { access, readFile, writeFile, readdir, stat } from "node:fs/promises";
+import { readFile, readdir, stat } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { getProduct, soleActiveProductKey } from "../scripts/lib/product-config.mjs";
 import { extractOpenQuestions } from "../scripts/lib/open-questions.mjs";
+import { walk, readJson, readJsonOr, writeJson, exists as fileExists } from "../scripts/lib/fs-utils.mjs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const rootDir = path.resolve(__dirname, "..");
 const publicDir = path.join(__dirname, "public");
-const stateFile = path.join(__dirname, "data", "agents.json");
+// roster.json: danh sách agent (track git). state.json: trạng thái live do PATCH ghi (gitignore).
+const rosterFile = path.join(__dirname, "data", "roster.json");
+const stateFile = path.join(__dirname, "data", "state.json");
 const port = Number(process.env.OPS_BOARD_PORT || process.env.PORT || 4177);
 // How many of the most recent runs get their own card. Older runs still exist
 // on disk but fall off the board rather than cluttering it forever.
@@ -20,23 +23,6 @@ const contentTypes = {
   ".js": "text/javascript; charset=utf-8",
   ".json": "application/json; charset=utf-8"
 };
-
-async function readJson(file) {
-  return JSON.parse(await readFile(file, "utf8"));
-}
-
-async function writeJson(file, value) {
-  await writeFile(file, `${JSON.stringify(value, null, 2)}\n`, "utf8");
-}
-
-async function fileExists(file) {
-  try {
-    await access(file);
-    return true;
-  } catch {
-    return false;
-  }
-}
 
 async function readBody(req) {
   const chunks = [];
@@ -59,69 +45,36 @@ function normalizeState(state) {
   return allowed.has(state) ? state : "idle";
 }
 
+const runsDir = path.join(rootDir, "runs", "context");
+const SIGNAL_FILES = new Set(["run-manifest.json", "verdict.json", "gate-results.json"]);
+
 async function collectRunSignals() {
-  const runsDir = path.join(rootDir, "runs", "context");
   const signals = [];
-  async function walk(dir) {
-    let entries = [];
+  for (const full of await walk(runsDir)) {
+    const name = path.basename(full);
+    if (!SIGNAL_FILES.has(name)) continue;
+    const rel = path.relative(rootDir, full);
     try {
-      entries = await readdir(dir, { withFileTypes: true });
+      const data = await readJson(full);
+      signals.push({
+        file: rel,
+        mtime_ms: (await stat(full)).mtimeMs,
+        status: data.status || data.verdict || data.decision || data.gate?.decision || "observed",
+        title: data.run_id || data.ctx_run_id || data.artifact_id || path.basename(path.dirname(full))
+      });
     } catch {
-      return;
-    }
-    for (const entry of entries) {
-      const full = path.join(dir, entry.name);
-      if (entry.isDirectory()) {
-        await walk(full);
-        continue;
-      }
-      if (entry.name === "run-manifest.json" || entry.name === "verdict.json" || entry.name === "gate-results.json") {
-        try {
-          const data = await readJson(full);
-          const rel = path.relative(rootDir, full);
-          signals.push({
-            file: rel,
-            mtime_ms: (await stat(full)).mtimeMs,
-            status: data.status || data.verdict || data.decision || data.gate?.decision || "observed",
-            title: data.run_id || data.context_id || data.artifact_id || data.workflow_id || path.basename(path.dirname(full))
-          });
-        } catch {
-          signals.push({ file: path.relative(rootDir, full), status: "unreadable", title: entry.name });
-        }
-      }
+      signals.push({ file: rel, status: "unreadable", title: name });
     }
   }
-  await walk(runsDir);
   return signals.sort((a, b) => (b.mtime_ms || 0) - (a.mtime_ms || 0)).slice(0, 12);
 }
 
-// Every run-manifest.json under runs/context/, newest first. The board shows
-// one card per run (capped at maxRuns) instead of only ever the single latest
-// one, so a finished task doesn't get silently overwritten the moment the
-// next run starts.
+// Mọi run-manifest.json dưới runs/context/, mới nhất trước — mỗi run một card (tối đa maxRuns).
 async function findRecentRuns(limit) {
-  const runsDir = path.join(rootDir, "runs", "context");
-  let manifests = [];
-  async function walk(dir) {
-    let entries = [];
-    try {
-      entries = await readdir(dir, { withFileTypes: true });
-    } catch {
-      return;
-    }
-    for (const entry of entries) {
-      const full = path.join(dir, entry.name);
-      if (entry.isDirectory()) {
-        await walk(full);
-      } else if (entry.name === "run-manifest.json") {
-        manifests.push(full);
-      }
-    }
-  }
-  await walk(runsDir);
-  manifests = await Promise.all(manifests.map(async (file) => ({ file, mtime_ms: (await stat(file)).mtimeMs })));
-  manifests.sort((a, b) => b.mtime_ms - a.mtime_ms);
-  return manifests.slice(0, limit).map((m) => path.dirname(m.file));
+  const manifests = (await walk(runsDir)).filter((f) => path.basename(f) === "run-manifest.json");
+  const withTime = await Promise.all(manifests.map(async (file) => ({ file, mtime_ms: (await stat(file)).mtimeMs })));
+  withTime.sort((a, b) => b.mtime_ms - a.mtime_ms);
+  return withTime.slice(0, limit).map((m) => path.dirname(m.file));
 }
 
 function artifactState(artifact) {
@@ -218,7 +171,7 @@ async function computeRun(runDir, roster) {
   const manifest = await readArtifact(runDir, "run-manifest.json");
   if (!manifest) return null;
 
-  const runId = manifest.data.run_id || path.basename(runDir);
+  const runId = manifest.data.run_id || manifest.data.ctx_run_id || path.basename(runDir);
   // Product và object KHÔNG được đoán nữa (trước đây default "teeinblue"/"sdk").
   // Repo phục vụ N product (contract §12.1); một run của product khác bị dán
   // nhãn sai sẽ đi đọc feature-summary.md của object thuộc product khác rồi
@@ -247,7 +200,9 @@ async function computeRun(runDir, roster) {
   // decomposes the doc set's table of contents instead. "explore unknown"
   // would be actively wrong here (there's no exploring at all), so fall back
   // to the run's own label.
-  const isDocBootstrap = manifest.data.mode === "DOC_BOOTSTRAP";
+  const mode = manifest.data.mode;
+  const isDocBootstrap = mode === "DOC_BOOTSTRAP";
+  const isCcrIngest = mode === "CCR_INGEST";
   // CCR-sourced runs carry source.proposal_id (+ an optional short human label)
   // written by the orchestrator into run-manifest.json — prefer that over the
   // generic "explore <object>" so a CCR-driven card reads e.g. "CBS-003 —
@@ -255,7 +210,7 @@ async function computeRun(runDir, roster) {
   const taskName = manifest.data.source?.proposal_id
     ? [manifest.data.source.proposal_id, manifest.data.label].filter(Boolean).join(" — ")
     : isDocBootstrap
-      ? manifest.data.label || `doc bootstrap ${runId}`
+      ? manifest.data.label || manifest.data.source?.label || `doc bootstrap ${runId}`
       : manifest.data.object_target?.object_key
         ? `explore ${manifest.data.object_target.object_key}`
         : `explore ${objectLabel}`;
@@ -343,37 +298,36 @@ async function computeRun(runDir, roster) {
     }
 
     normalizerInputs = ["intermediate/doc/DOC-*.json", "intermediate/doc/_docset-index.json"];
+  } else if (isCcrIngest) {
+    // CCR_INGEST: 0 explorer. Upstream của normalizer là kế hoạch C0.5 + evidence theo claim.
+    const plan = await readArtifact(runDir, "input/ccr-fastpath-plan.json");
+    upstreamDone = Boolean(plan);
+    normalizerInputs = ["input/ccr-fastpath-plan.json", "raw/ccr-evidence/<claim_key>/"];
   } else {
+    // Stage explorer theo modes.allowed_explorers của product. Explorer tuỳ chọn
+    // (storefront/db/code) chỉ hiện khi đã có artifact hoặc bootstrap-request bật surface đó.
+    const request = (await readArtifact(runDir, "input/bootstrap-request.json"))?.data ?? {};
+    const allowed = productCfg?.modes?.allowed_explorers ?? ["portal-explorer", "api-explorer"];
     const explorerStages = [
-      {
-        agent_id: "portal-explorer",
-        rel: "raw/portal/portal-evidence.json",
-        inputs: [sourceInput, "portal Product Page Settings scope"],
-        doneText: "Portal evidence captured"
-      },
-      {
-        agent_id: "api-explorer",
-        rel: "intermediate/api/action-api-map.json",
-        inputs: [sourceInput, "raw/network/*.json and storefront network refs"],
-        doneText: "API runtime trace mapped"
-      },
-      {
-        agent_id: "storefront-explorer",
-        rel: "raw/storefront/storefront-evidence.json",
-        inputs: [sourceInput, "storefront runtime verification scope"],
-        doneText: "Storefront evidence captured"
-      }
-    ];
+      { agent_id: "portal-explorer", rel: "raw/portal/portal-evidence.json", required: true, doneText: "Portal evidence captured" },
+      { agent_id: "api-explorer", rel: "intermediate/api/action-api-map.json", required: true, doneText: "API runtime trace mapped" },
+      { agent_id: "storefront-explorer", rel: "raw/storefront/storefront-evidence.json", surface: "storefront", doneText: "Storefront evidence captured" },
+      { agent_id: "db-explorer", rel: "intermediate/db/db-evidence.json", surface: "db", doneText: "DB evidence captured" },
+      { agent_id: "code-config-explorer", rel: "intermediate/code/code-evidence.json", surface: "code", doneText: "Code evidence captured" }
+    ].filter((stage) => allowed.includes(stage.agent_id));
 
     const explorerArtifacts = [];
     for (const item of explorerStages) {
       const artifact = await readArtifact(runDir, item.rel);
+      const expected = item.required || Boolean(request.surfaces?.[item.surface]?.enabled);
+      if (!artifact && !expected) continue;
       explorerArtifacts.push(artifact);
+      const inputs = [sourceInput];
       if (!artifact) {
         stamp(item.agent_id, {
           state: "running",
           current_task: taskName,
-          inputs: item.inputs,
+          inputs,
           outputs: [],
           blocked_by: [],
           last_event: `In progress for ${runId}: ${item.rel} not yet produced`
@@ -385,7 +339,7 @@ async function computeRun(runDir, roster) {
       stamp(item.agent_id, {
         state,
         current_task: taskName,
-        inputs: item.inputs,
+        inputs,
         outputs: [artifact.rel],
         blocked_by: artifact.data.blocking_issues || artifact.data.gate?.blocking_findings || [],
         status: artifact.data.status || null,
@@ -396,26 +350,20 @@ async function computeRun(runDir, roster) {
     }
 
     upstreamDone = explorerArtifacts.every(Boolean);
-    normalizerInputs = [
-      "raw/portal/portal-evidence.json",
-      "intermediate/api/action-api-map.json",
-      "raw/storefront/storefront-evidence.json"
-    ];
+    normalizerInputs = explorerStages.map((stage) => stage.rel);
   }
-  const normalizerArtifact = await readArtifact(runDir, "candidate/product-kb.json");
-  if (normalizerArtifact) {
-    const state = artifactState(normalizerArtifact.data);
-    const conditions = normalizerArtifact.data.gate?.conditions || [];
+  // Normalizer ghi một shard mỗi feature dưới candidate/product-kb/ (contract §5).
+  // Run cũ (trước 2026-09-28) ghi một file candidate/product-kb.json — vẫn đọc được.
+  const kbShards = (await readArtifactsInDir(runDir, "candidate/product-kb")).filter(Boolean);
+  const legacyKb = kbShards.length ? null : await readArtifact(runDir, "candidate/product-kb.json");
+  const kbArtifacts = kbShards.length ? kbShards : legacyKb ? [legacyKb] : [];
+  const normalizerArtifact = kbArtifacts.length ? kbArtifacts[0] : null;
+
+  if (kbArtifacts.length) {
     stamp("qa-knowledge-normalizer", {
-      state,
+      ...summarizeArtifacts("Product KB candidate(s) generated", runId, kbArtifacts),
       current_task: taskName,
-      inputs: normalizerInputs,
-      outputs: [normalizerArtifact.rel],
-      blocked_by: normalizerArtifact.data.blocking_issues || normalizerArtifact.data.gate?.blocking_findings || [],
-      status: normalizerArtifact.data.status || null,
-      gate_decision: normalizerArtifact.data.gate?.decision || null,
-      conditions,
-      last_event: `Product KB candidate generated for ${runId}: ${normalizerArtifact.data.status || "observed"} / ${normalizerArtifact.data.gate?.decision || "no gate"}${conditions.length ? ` (${conditions.length} condition(s))` : ""}`
+      inputs: normalizerInputs
     });
   } else {
     stamp("qa-knowledge-normalizer", {
@@ -425,8 +373,8 @@ async function computeRun(runDir, roster) {
       outputs: [],
       blocked_by: [],
       last_event: upstreamDone
-        ? `In progress for ${runId}: candidate/product-kb.json not yet produced`
-        : `Queued for ${runId}, waiting on ${isDocBootstrap ? "docset index" : "explorer evidence"}`
+        ? `In progress for ${runId}: candidate/product-kb/ not yet produced`
+        : `Queued for ${runId}, waiting on ${isDocBootstrap ? "docset index" : isCcrIngest ? "C0.5 plan" : "explorer evidence"}`
     });
   }
 
@@ -442,13 +390,13 @@ async function computeRun(runDir, roster) {
     stamp("feature-profile-builder", {
       ...summarizeArtifacts("Feature profile candidate(s) generated", runId, profileArtifacts),
       current_task: taskName,
-      inputs: ["candidate/product-kb.json"]
+      inputs: ["candidate/product-kb/*.json"]
     });
-  } else if (await fileExists(path.join(runDir, "candidate", "product-kb.json"))) {
+  } else if (kbArtifacts.length) {
     stamp("feature-profile-builder", {
       state: "running",
       current_task: taskName,
-      inputs: ["candidate/product-kb.json"],
+      inputs: ["candidate/product-kb/*.json"],
       outputs: ["candidate/feature-profiles/<feature-key>.json"],
       blocked_by: [],
       last_event: `Ready for feature profile build after Product KB candidate in ${runId}`
@@ -457,7 +405,7 @@ async function computeRun(runDir, roster) {
     stamp("feature-profile-builder", {
       state: "idle",
       current_task: taskName,
-      inputs: ["candidate/product-kb.json"],
+      inputs: ["candidate/product-kb/*.json"],
       outputs: [],
       blocked_by: [],
       last_event: `Queued for ${runId}, waiting on Product KB candidate`
@@ -496,7 +444,7 @@ async function computeRun(runDir, roster) {
     stamp("knowledge-diff-analyzer", {
       state: artifactState(diffArtifact.data),
       current_task: taskName,
-      inputs: ["candidate/product-kb.json", "candidate/feature-profiles/*.json", "candidate/checklists/*.json"],
+      inputs: ["candidate/product-kb/*.json", "candidate/feature-profiles/*.json", "candidate/checklists/*.json"],
       outputs: [diffArtifact.rel],
       blocked_by: diffArtifact.data.blocking_issues || diffArtifact.data.gate?.blocking_findings || [],
       status: diffArtifact.data.status || null,
@@ -529,7 +477,7 @@ async function computeRun(runDir, roster) {
   if (gateArtifact) {
     const reviewState = verdictArtifact ? verdictState(gateArtifact.data) : artifactState(gateArtifact.data);
     const blockers = gateArtifact.data.blocking_issues || gateArtifact.data.gate?.blocking_findings || [];
-    const publishAllowed = gateArtifact.data.payload?.publish_allowed;
+    const publishAllowed = gateArtifact.data.payload?.publish_allowed ?? gateArtifact.data.publish_allowed;
     stamp("context-quality-reviewer", {
       state: reviewState,
       current_task: taskName,
@@ -563,11 +511,14 @@ async function computeRun(runDir, roster) {
     // check existence first and skip the "pending" branch whenever an old
     // summary happened to exist, leaving orchestrator stuck on its very first
     // "coordinating fan-out" message even after publish was approved).
+    // run-manifest.status = PUBLISHED là tín hiệu chính (orchestrator ghi khi run terminal, §15).
+    // Run cũ không ghi status thì fallback: feature-summary của object được ghi sau manifest.
     const summaryFreshForThisRun =
-      summaryExists && (await stat(summaryFile)).mtimeMs >= (await stat(manifest.file)).mtimeMs;
+      manifest.data.status === "PUBLISHED" ||
+      (summaryExists && (await stat(summaryFile)).mtimeMs >= (await stat(manifest.file)).mtimeMs);
     if (summaryFreshForThisRun) {
       for (const agentId of [
-        ...(isDocBootstrap ? ["doc-ingest-explorer"] : ["portal-explorer", "api-explorer", "storefront-explorer"]),
+        ...Object.keys(agents).filter((id) => id.endsWith("-explorer")),
         "qa-knowledge-normalizer",
         "feature-profile-builder",
         "qa-checklist-builder",
@@ -585,7 +536,7 @@ async function computeRun(runDir, roster) {
         state: "done",
         current_task: `write feature summary for ${objectLabel}`,
         inputs: ["review/verdict.json", "candidate artifacts"],
-        outputs: [path.relative(rootDir, summaryFile)],
+        outputs: summaryFile ? [path.relative(rootDir, summaryFile)] : [],
         blocked_by: [],
         last_event: `Feature summary published after approved review for ${runId}`
       });
@@ -624,7 +575,7 @@ async function computeRun(runDir, roster) {
   // to carry it forward (not silently resolve it), so one open conflict can
   // show up as a condition on several agents at once. product-kb.json is the
   // most complete source for the run's conflict set (topic + resolution).
-  const conflicts = (normalizerArtifact?.data.conflicts || []).map((c) => ({
+  const conflicts = kbArtifacts.flatMap((a) => a.data.payload?.conflicts || a.data.conflicts || []).map((c) => ({
     id: c.conflict_id,
     topic: c.topic,
     resolution: c.resolution || c.status || "UNKNOWN"
@@ -638,8 +589,8 @@ async function computeRun(runDir, roster) {
   const results = {
     conflicts,
     open_questions: openQuestions,
-    product_kb: normalizerArtifact
-      ? { path: normalizerArtifact.rel, change: await classifyChange(canonPath("kb.json")) }
+    product_kb: kbArtifacts.length
+      ? { path: kbShards.length ? path.relative(rootDir, path.join(runDir, "candidate", "product-kb")) : normalizerArtifact.rel, shards: kbArtifacts.length, change: await classifyChange(canonPath("kb.json")) }
       : null,
     profiles: await Promise.all(
       profileFiles.map(async (name) => {
@@ -711,51 +662,61 @@ function overlayPatchedState(latestRun, roster) {
   latestRun.state = worstState(Object.values(latestRun.agents).map((agent) => agent.state));
 }
 
-async function getBoard() {
-  const board = await readJson(stateFile);
-  const runDirs = await findRecentRuns(maxRuns);
-  const runs = (await Promise.all(runDirs.map((dir) => computeRun(dir, board.agents)))).filter(Boolean);
-  if (runs[0]) overlayPatchedState(runs[0], board.agents);
-  board.runs = runs;
-  board.active_run = runs[0]
-    ? { run_id: runs[0].run_id, path: runs[0].path, status: runs[0].status, synced_at: runs[0].synced_at, results: runs[0].results }
-    : null;
-  board.local = {
-    repo: path.basename(rootDir),
-    root: rootDir,
-    generated_at: new Date().toISOString(),
-    integrations: { jira: false, slack: false, cloud: Boolean(process.env.QA_HUB_MCP_TOKEN) },
-    run_signals: await collectRunSignals()
-  };
-  return board;
+// Roster (tĩnh) + state live (PATCH) → danh sách agent như trước khi tách file.
+async function loadAgents() {
+  const roster = await readJson(rosterFile);
+  const state = await readJsonOr(stateFile, { agents: {}, events: [] });
+  const agents = roster.agents.map((a) => ({ ...a, ...(state.agents?.[a.id] ?? {}) }));
+  return { roster, state, agents };
 }
 
-// Manual/live overrides only: mutates the static roster record for one agent
-// (see overlayPatchedState above for how this surfaces on the board).
+async function getBoard() {
+  const { roster, state, agents } = await loadAgents();
+  const runDirs = await findRecentRuns(maxRuns);
+  const runs = (await Promise.all(runDirs.map((dir) => computeRun(dir, agents)))).filter(Boolean);
+  if (runs[0]) overlayPatchedState(runs[0], agents);
+  return {
+    source: roster.source,
+    workflows: roster.workflows,
+    agents,
+    events: state.events ?? [],
+    updated_at: state.updated_at ?? null,
+    runs,
+    active_run: runs[0]
+      ? { run_id: runs[0].run_id, path: runs[0].path, status: runs[0].status, synced_at: runs[0].synced_at, results: runs[0].results }
+      : null,
+    local: {
+      repo: path.basename(rootDir),
+      root: rootDir,
+      generated_at: new Date().toISOString(),
+      integrations: { cloud: Boolean(process.env.QA_HUB_MCP_TOKEN) },
+      run_signals: await collectRunSignals()
+    }
+  };
+}
+
+// Override live từ agent (contract §0 board_update) — chỉ ghi state.json, roster không đổi.
 async function patchAgent(agentId, patch) {
-  const board = await readJson(stateFile);
-  const agent = board.agents.find((item) => item.id === agentId);
-  if (!agent) return null;
-  const previous = { state: agent.state, current_task: agent.current_task };
+  const { roster, state } = await loadAgents();
+  const role = roster.agents.find((item) => item.id === agentId);
+  if (!role) return null;
+  state.agents ??= {};
+  const current = state.agents[agentId] ?? {};
+  const previous = { state: current.state ?? "idle" };
   const allowed = ["state", "confidence", "current_task", "last_event", "blocked_by", "inputs", "outputs"];
   for (const key of allowed) {
-    if (Object.prototype.hasOwnProperty.call(patch, key)) agent[key] = patch[key];
+    if (Object.prototype.hasOwnProperty.call(patch, key)) current[key] = patch[key];
   }
-  agent.state = normalizeState(agent.state);
-  agent.updated_at = new Date().toISOString();
-  board.updated_at = agent.updated_at;
-  board.events = board.events || [];
-  board.events.unshift({
-    id: `evt-${Date.now()}`,
-    at: agent.updated_at,
-    agent_id: agent.id,
-    from_state: previous.state,
-    to_state: agent.state,
-    text: patch.last_event || `Updated ${agent.label}`
-  });
-  board.events = board.events.slice(0, 80);
-  await writeJson(stateFile, board);
-  return agent;
+  current.state = normalizeState(current.state);
+  current.updated_at = new Date().toISOString();
+  state.agents[agentId] = current;
+  state.updated_at = current.updated_at;
+  state.events = [
+    { id: `evt-${Date.now()}`, at: current.updated_at, agent_id: agentId, from_state: previous.state, to_state: current.state, text: patch.last_event || `Updated ${role.label}` },
+    ...(state.events ?? [])
+  ].slice(0, 80);
+  await writeJson(stateFile, state);
+  return { ...role, ...current };
 }
 
 async function handleApi(req, res, url) {

@@ -247,12 +247,6 @@ async function describeObject(productKey, objectKey, staleDays = STALE_AFTER_DAY
 // file — không cố parse markdown/prose tự do. Heading chỉ để người đọc lướt nhanh, JSON
 // trong fence mới là nguồn dữ liệu thật được đọc ở đây.
 // Parser sống ở scripts/lib/open-questions.mjs — dùng CHUNG với ops-board.
-// Bản cũ ở đây chỉ đọc fence ```json, trong khi ops-board đọc brace-balanced,
-// nên entry không fence sẽ hiện trên board mà mất khỏi bản consolidated gửi
-// PO/Dev. Một parser, không hai.
-function extractOpenQuestionEntries(text) {
-  return extractOpenQuestions(text);
-}
 
 // Regenerate knowledge/_open-issues/consolidated-open-questions.md từ toàn bộ
 // open-questions.md theo object (§5a) — file này CHỈ ĐỌC, luôn bị ghi đè hoàn toàn ở
@@ -266,7 +260,10 @@ async function buildConsolidatedOpenQuestions(products) {
     for (const obj of product.objects) {
       const file = path.join(productsDir, product.product_key, obj.object_key, "open-questions.md");
       if (!(await exists(file))) continue;
-      const entries = extractOpenQuestionEntries(await readFile(file, "utf8"));
+      const text = await readFile(file, "utf8");
+      const entries = extractOpenQuestions(text);
+      const unfenced = findUnfencedEntries(text);
+      if (unfenced.length) console.warn(`WARN ${product.product_key}/${obj.object_key}/open-questions.md: entry ngoài fence \`\`\`json (§5a): ${unfenced.join(", ")}`);
       if (!entries.length) continue;
       totalEntries += entries.length;
 
@@ -432,7 +429,7 @@ async function main() {
     schema_version: "1.0",
     artifact_type: "KnowledgeManifest",
     generated_at: new Date().toISOString().slice(0, 10),
-    source_repo: "qikify-QA/context-lifecycle",
+    source_repo: process.env.CTX_SOURCE_REPO ?? "qikify-QA/context-lifecycle",
     how_to_use:
       "Đọc file này trước. Mỗi object có status (PUBLISHED/STALE/UNPUBLISHED), version, và issues[]. " +
       "Object UNPUBLISHED hoặc có kb_items.usable_as_oracle=false thì KHÔNG dùng làm expected result — " +

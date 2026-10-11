@@ -11,7 +11,7 @@
 // dựa vào việc knowledge/ có nhắc tên run hay không nữa.
 //
 // Một run được coi là ĐỦ ĐIỀU KIỆN xoá khi CẢ HAI đúng:
-//   1. run-manifest.json.status là terminal: PUBLISHED | BLOCKED | REJECTED
+//   1. run-manifest.json.status là terminal: PUBLISHED | BLOCKED | REJECTED | CONFLICT
 //      (KHÔNG PHẢI IN_PROGRESS — run còn dở không bao giờ được xoá).
 //   2. Mọi oq_id trong run-manifest.json.produced_open_questions KHÔNG còn xuất hiện
 //      trong open-questions.md của object tương ứng (nghĩa là open-question do run này
@@ -31,27 +31,14 @@
 import { readFile, readdir, stat, rm } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { walk } from "./lib/fs-utils.mjs";
+import { extractOpenQuestions } from "./lib/open-questions.mjs";
 
 const rootDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const knowledgeProductsDir = path.join(rootDir, "knowledge", "products");
 const runsDir = path.join(rootDir, "runs", "context");
 
-const TERMINAL_STATUSES = new Set(["PUBLISHED", "BLOCKED", "REJECTED"]);
-
-async function walk(dir, out = []) {
-  let entries = [];
-  try {
-    entries = await readdir(dir, { withFileTypes: true });
-  } catch {
-    return out;
-  }
-  for (const entry of entries) {
-    const full = path.join(dir, entry.name);
-    if (entry.isDirectory()) await walk(full, out);
-    else out.push(full);
-  }
-  return out;
-}
+const TERMINAL_STATUSES = new Set(["PUBLISHED", "BLOCKED", "REJECTED", "CONFLICT"]);
 
 async function dirSize(dir) {
   const files = await walk(dir);
@@ -59,24 +46,21 @@ async function dirSize(dir) {
   return sizes.reduce((a, b) => a + b, 0);
 }
 
-// Gộp toàn bộ open-questions.md (mọi product/object) thành 1 chuỗi để kiểm tra 1 oq_id
-// còn "xuất hiện" hay không. Kiểm tra trên toàn bộ thay vì chỉ đúng 1 object vì oq_id đã
-// mang tên object trong chính nó (OQ-<object-key>-<nnn>, §4) nên tra toàn cục vẫn chính
-// xác, mà không phải tự suy ngược object-key từ oq_id (object-key có thể chứa dấu gạch
-// ngang, ví dụ "asset-category", nên việc tách chuỗi dễ sai).
-async function loadAllOpenQuestionsText() {
-  let combined = "";
+// Tập oq_id còn mở trên toàn bộ knowledge/. oq_id mang sẵn tên object
+// (OQ-<object-key>-<nnn>, §4) nên tra toàn cục vẫn chính xác. Dùng parser thật thay vì
+// tìm substring: "OQ-x-01" không được khớp nhầm vào "OQ-x-014".
+async function loadOpenOqIds() {
+  const ids = new Set();
   for (const file of await walk(knowledgeProductsDir)) {
-    if (path.basename(file) === "open-questions.md") {
-      combined += `\n${await readFile(file, "utf8")}`;
-    }
+    if (path.basename(file) !== "open-questions.md") continue;
+    for (const e of extractOpenQuestions(await readFile(file, "utf8"))) if (e.oq_id) ids.add(e.oq_id);
   }
-  return combined;
+  return ids;
 }
 
 async function main() {
   const doDelete = process.argv.includes("--delete");
-  const oqText = await loadAllOpenQuestionsText();
+  const openOqIds = await loadOpenOqIds();
 
   const onDisk = [];
   for (const dateDir of (await readdir(runsDir).catch(() => [])).sort()) {
@@ -118,7 +102,7 @@ async function main() {
       continue;
     }
 
-    const stillOpen = manifest.produced_open_questions.filter((oqId) => oqText.includes(oqId));
+    const stillOpen = manifest.produced_open_questions.filter((oqId) => openOqIds.has(oqId));
     if (stillOpen.length) {
       pendingOq.push({ ...run, status, stillOpen });
     } else {
