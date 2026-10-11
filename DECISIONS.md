@@ -225,6 +225,12 @@ Trước đây `knowledge/` được track trong repo build, và `publish-knowle
 
 **Hệ quả:** `publish-strip.mjs` cần `candidate/oq-assignments.json` để gắn `oq_id` vào check/unknown_area (việc gộp OQ cần phán đoán nên vẫn do orchestrator quyết). Mọi `confirmation_source` trong candidate phải có `ref.citation` (hoặc `ref.locator` dạng citation) vì strip lấy `ref` từ đó.
 
+### 2.19 JSON Schema cho artifact trong `runs/`, không cho `knowledge/` (2026-10-11)
+
+Schema chỉ khai field bắt buộc + enum, cho phép field thêm (`additionalProperties` mở) — agent không bị trói, nhưng sai shape bị bắt ngay sau bước của agent đó thay vì ở reviewer hay `publish-strip`. Luật có điều kiện viết bằng code trong `validate-run.mjs`, không mở rộng ngôn ngữ schema. Validator tự viết (`scripts/lib/schema.mjs`), không thêm dependency. `knowledge/` không thêm file nào; schema published vẫn là allowlist trong `forbidden-fields.json`.
+
+**Replay trên 25 run lịch sử (2026-10-11):** 0 báo lỗi giả sau khi nới pattern `CLAIM-ID` cho hậu tố chữ (`CLM-31-100a` — tách claim mà giữ số cũ). Lỗi còn lại đều là dữ liệu cũ: enum `resolution` trước khi đổi tên (3 run doc), plan C0.5 dạng `fastpath` (CTX-20260928-01), và vài giá trị ngoài enum (verdict ghi `APPROVED_WITH_CONDITIONS` vào envelope `status`, checklist `OUT_OF_SCOPE_DECISION`, KB status `NEEDS_CONFIRMATION`, mode viết bằng câu). Không sửa run cũ — `validate-run` áp cho run mới.
+
 ---
 
 ## 3. Phát hiện làm đổi thiết kế

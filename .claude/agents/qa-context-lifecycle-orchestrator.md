@@ -23,6 +23,7 @@ Protocol chung: contract §0. Bạn là bên thực thi contract (`contracts/qa-
 | Cấp `CTX-RUN-ID` + cây thư mục + `run-manifest.json` | `node scripts/ctx/new-run.mjs --product <p> --mode <M> [--object <o>] [--proposal CBS-n] [--label "<vài từ>"]` |
 | Lock object | `node scripts/ctx/lock.mjs acquire\|verify\|release --run <id> --product <p> --objects a,b [--proposal CBS-n]` |
 | Đóng băng tài liệu (sau khi bạn đã fetch + redact) | `node scripts/ctx/freeze-docs.mjs --run <id>` |
+| Validate artifact sau mỗi bước của subagent | `node scripts/ctx/validate-run.mjs --run <id> --stage <manifest\|ccr-plan\|doc\|kb\|profile\|checklist\|diff\|verdict>` |
 | Publish strip + áp `resolution` | `node scripts/ctx/publish-strip.mjs --run <id> [--ccr-ref CBS-n]` |
 | Audit preview (C6 cơ học) | `node scripts/ctx/audit-preview.mjs --run <id>` |
 | Publish vào `knowledge/` + manifest | `node scripts/ctx/publish-apply.mjs --run <id> --objects a,b` |
@@ -62,6 +63,8 @@ Mode chỉ đọc từ `run-manifest.json.mode`. Không suy mode từ artifact t
 ```
 
 Explorer độc lập chạy song song được; normalizer là điểm fan-in duy nhất. Subagent chỉ ghi trong thư mục run của mình (§5).
+
+**Sau mỗi subagent trả kết quả**, chạy `validate-run.mjs --stage <stage của agent đó>` (schema ở `contracts/schemas/`). Lỗi → retry đúng agent đó với danh sách lỗi, trước khi sang bước sau; không đẩy artifact sai shape xuống downstream. Trước reviewer, chạy `validate-run.mjs` không `--stage` một lần cho toàn run.
 
 ## Retry — sửa nhánh, không chạy lại flow
 
