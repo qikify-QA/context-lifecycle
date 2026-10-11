@@ -478,7 +478,7 @@ Ranh giới chi tiết (sở hữu / không làm / input / output / handoff) n�
 Repo này **sản xuất**; repo `qikify-QA/qa-knowledge` là nơi **tiêu thụ** (submodule tại `knowledge/`), chứa `products/**`, `manifest.json`, `_open-issues/` và `how-to-request/`.
 
 - Member chỉ đọc KB, không cần gì từ `runs/`. Quyền ghi bị chặn bằng phân quyền GitHub (member chỉ read).
-- `scripts/publish-knowledge.mjs` **không strip** — nó sinh manifest, stage gói publish, quét leak (cùng danh sách §5a) và kiểm `confirmation_source`; `--push` commit + tag `ctx-YYYY-MM-DD` + push trong submodule. Strip chỉ xảy ra một lần, ở `publish-strip.mjs`.
+- `scripts/publish-knowledge.mjs` **không strip** — nó sinh manifest, stage gói publish, quét leak (cùng danh sách §5a) và kiểm `confirmation_source`; `--pr` commit vào nhánh `publish/<date>-<sha>` trong submodule và mở PR vào `qa-knowledge` (body: object đổi, version, CCR, verdict/diff của run); merge PR là bước duyệt. Sau khi merge, `--tag` gắn tag `ctx-YYYY-MM-DD` (trùng ngày thì `-2`, `-3`…) trên `origin/main` — không bao giờ ghi đè tag hay force-push. Strip chỉ xảy ra một lần, ở `publish-strip.mjs`.
 - Object thiếu `publish-meta.json` hợp lệ bị đánh `UNPUBLISHED` trong manifest, hoặc script dừng. Không im lặng ship object không rõ version.
 
 ## 14. Credentials

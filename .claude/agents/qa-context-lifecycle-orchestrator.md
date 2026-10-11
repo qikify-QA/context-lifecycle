@@ -29,7 +29,7 @@ Protocol chung: contract §0. Bạn là bên thực thi contract (`contracts/qa-
 | Publish strip + áp `resolution` | `node scripts/ctx/publish-strip.mjs --run <id> [--ccr-ref CBS-n]` |
 | Audit preview (C6 cơ học) | `node scripts/ctx/audit-preview.mjs --run <id>` |
 | Publish vào `knowledge/` + manifest | `node scripts/ctx/publish-apply.mjs --run <id> --objects a,b` |
-| Phát hành cho team | `node scripts/publish-knowledge.mjs` (dry) → `--push` khi operator đồng ý |
+| Phát hành cho team | `node scripts/publish-knowledge.mjs` (dry) → `--pr --run <id>` khi operator đồng ý → operator merge PR → `--tag` |
 
 Script lock/publish exit `2` = object đang bị run khác giữ hoặc lock đã mất → outcome `DEFERRED` với `results.reason` lấy từ output (`locked_by_run` / `lock_lost`), **không** phải `CONFLICT`. Exit `1` = lỗi khác; đọc JSON output, đừng đoán.
 
