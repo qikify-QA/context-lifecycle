@@ -335,7 +335,59 @@ function escapeHtml(value = "") {
   }[char]));
 }
 
-$("#refreshBoard").addEventListener("click", loadBoard);
+// Context health: view theo knowledge (product → object), tính từ /api/health.
+const FLAG_LABELS = {
+  unpublished: "chưa publish",
+  stale: "cũ",
+  no_confirmed_expected: "0 confirmed",
+  open_conflicts: "conflict mở",
+  weak_oracle: "oracle yếu"
+};
+
+async function loadHealth() {
+  $("#refreshStatus").textContent = "Loading health...";
+  const health = await (await fetch("/api/health")).json();
+  $("#health").innerHTML = health.products.map(renderHealthProduct).join("");
+  $("#refreshStatus").textContent = `Health ${new Date(health.generated_at).toLocaleTimeString()}`;
+}
+
+function renderHealthProduct(product) {
+  const t = product.totals;
+  const rows = product.objects.map((o) => {
+    const oq = o.open_questions;
+    const flags = o.flags.map((f) => `<span class="health-flag">${escapeHtml(FLAG_LABELS[f] || f)}</span>`).join(" ");
+    return `<tr>
+      <td>${escapeHtml(o.object_key)}</td>
+      <td>v${escapeHtml(o.version ?? "-")}</td>
+      <td>${o.age_days ?? "-"}d</td>
+      <td>${o.kb.total} <small>(${o.kb.CONFIRMED_EXPECTED} CE)</small></td>
+      <td>${o.checks.STRONG}/${o.checks.BASELINE}/${o.checks.NONE}</td>
+      <td>${o.unresolved_conflicts}</td>
+      <td>${oq.CONFLICT}/${oq.NEEDS_CONFIRMATION}/${oq.OPEN_ISSUE}</td>
+      <td>${escapeHtml(o.last_ccr?.ccr_ref ?? "")}</td>
+      <td>${flags}</td>
+    </tr>`;
+  }).join("");
+  return `<article class="health-product">
+    <h2>${escapeHtml(product.product_key)} <small>${t.objects} object · ${t.flagged} có cờ · KB ${t.kb} (${t.confirmed_expected} CE) · conflict ${t.unresolved_conflicts} · OQ ${t.open_questions}</small></h2>
+    <table class="health-table">
+      <thead><tr><th>Object</th><th>Version</th><th>Tuổi</th><th>KB</th><th>Oracle S/B/N</th><th>Conflict</th><th>OQ C/N/O</th><th>CCR gần nhất</th><th>Cờ</th></tr></thead>
+      <tbody>${rows}</tbody>
+    </table>
+  </article>`;
+}
+
+function setHealthView(on) {
+  $("#healthToggle").setAttribute("aria-pressed", String(on));
+  $("#health").hidden = !on;
+  $("#board").hidden = on;
+  $("#boardHeader").hidden = on;
+  if (on) loadHealth();
+  else loadBoard();
+}
+
+$("#healthToggle").addEventListener("click", () => setHealthView($("#health").hidden));
+$("#refreshBoard").addEventListener("click", () => ($("#health").hidden ? loadBoard() : loadHealth()));
 $("#autoRefreshToggle").addEventListener("click", () => setAutoRefresh(!isAutoRefreshOn()));
 
 // Click on the backdrop (outside the dialog's own box, padding included) to

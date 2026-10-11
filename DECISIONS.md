@@ -231,6 +231,12 @@ Schema chỉ khai field bắt buộc + enum, cho phép field thêm (`additionalP
 
 **Replay trên 25 run lịch sử (2026-10-11):** 0 báo lỗi giả sau khi nới pattern `CLAIM-ID` cho hậu tố chữ (`CLM-31-100a` — tách claim mà giữ số cũ). Lỗi còn lại đều là dữ liệu cũ: enum `resolution` trước khi đổi tên (3 run doc), plan C0.5 dạng `fastpath` (CTX-20260928-01), và vài giá trị ngoài enum (verdict ghi `APPROVED_WITH_CONDITIONS` vào envelope `status`, checklist `OUT_OF_SCOPE_DECISION`, KB status `NEEDS_CONFIRMATION`, mode viết bằng câu). Không sửa run cũ — `validate-run` áp cho run mới.
 
+### 2.20 Sức khoẻ context tính lúc đọc, không ghi vào `knowledge/` (2026-10-11)
+
+Đề xuất "context catalog" ghi thêm `catalog.json` / `context-health.json` vào repo consumer bị bỏ: chủ repo không muốn `knowledge/` phình thêm, và số liệu ghi sẵn sẽ lệch với KB thật (cùng bài học với 5 bản danh sách field cấm). `scripts/lib/context-health.mjs` tính mỗi lần đọc từ `kb.json`, checklist, `open-questions.md`, `CHANGELOG.md`, `publish-meta.json`; dùng cho `npm run health` và ops-board `/api/health`. Cờ: `unpublished`, `stale` (theo `publish.stale_after_days`), `no_confirmed_expected`, `open_conflicts`, `weak_oracle` (< 20% check STRONG).
+
+Phát hiện kèm theo: `scripts/lib/changelog.mjs` đếm chữ thường trong mô tả ("QA-authored", "qa-volume-kb") là mã CCR, nên `knowledge/manifest.json` → `resolved_requests` đang có `QA-AUTHORED`, `QA-VOLUME-KB`. Regex đã siết về đúng `CBS-<n>` / `QA-<n>` / `CCR-<...>`; manifest sẽ đúng lại ở lần sinh kế tiếp.
+
 ---
 
 ## 3. Phát hiện làm đổi thiết kế
