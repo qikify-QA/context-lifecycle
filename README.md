@@ -39,7 +39,8 @@ npm run manifest:check     # chỉ kiểm, exit 1 nếu có object chưa publish
 npm run appendix           # sinh lại bảng product trong contracts/ccr-product-appendix.md
 npm run publish:dry        # kiểm gói publish, KHÔNG đẩy
 npm run prune              # liệt kê run đủ điều kiện xoá (§15)
-node scripts/publish-knowledge.mjs --push   # commit + tag + push trong submodule knowledge/
+node scripts/publish-knowledge.mjs --pr --run CTX-...   # nhánh publish + PR vào qa-knowledge
+node scripts/publish-knowledge.mjs --tag                # sau khi PR merge: tag ctx-YYYY-MM-DD[-n]
 ```
 
 Việc của orchestrator trong một run (run-id, lock, đóng băng doc, strip, audit, publish) đều là script trong `scripts/ctx/` — xem bảng ở `.claude/agents/qa-context-lifecycle-orchestrator.md`.

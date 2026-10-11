@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 // Phát hành knowledge cho team: sinh manifest -> kiểm nhất quán -> kiểm không rò rỉ field
-// nội bộ -> commit + tag + push NGAY TRONG submodule knowledge/ (repo qikify-QA/qa-knowledge).
+// nội bộ -> mở PR vào repo qikify-QA/qa-knowledge (submodule knowledge/). Merge PR là bước
+// duyệt; tag được gắn sau khi merge, không bao giờ ghi đè tag cũ.
 //
 // knowledge/ là git submodule trỏ tới qa-knowledge, nên publish KHÔNG cần commit/push repo
 // build này. Muốn ghim phiên bản knowledge vào repo build thì tự `git add knowledge` (tuỳ chọn).
@@ -20,7 +21,8 @@
 // repo consumer dùng chung cho cả team.
 //
 //   node scripts/publish-knowledge.mjs             # dry-run: chuẩn bị + kiểm, KHÔNG đẩy
-//   node scripts/publish-knowledge.mjs --push      # commit + push thật trong knowledge/ (side effect: repo dùng chung)
+//   node scripts/publish-knowledge.mjs --pr [--run CTX-... ...]   # nhánh publish/<date>-<sha> + PR vào qa-knowledge
+//   node scripts/publish-knowledge.mjs --tag       # sau khi PR đã merge: tag ctx-YYYY-MM-DD[-n] trên origin/main
 //   node scripts/publish-knowledge.mjs --allow-unpublished   # cho qua object thiếu block publish
 
 import { readFile, mkdir, rm, stat, cp } from "node:fs/promises";
@@ -28,7 +30,10 @@ import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { walk } from "./lib/fs-utils.mjs";
+import { walk, readJsonOr, today } from "./lib/fs-utils.mjs";
+import { resolveRunDir, runPaths } from "./lib/run-layout.mjs";
+import { nextTagName, buildPrBody } from "./lib/publish-release.mjs";
+import { writeFile } from "node:fs/promises";
 import { findForbiddenLeaks, findBadConfirmationRefs } from "./lib/forbidden-fields.mjs";
 
 const execFileAsync = promisify(execFile);
@@ -39,7 +44,9 @@ const stageDir = path.join(rootDir, ".publish-stage");
 const SOURCE_REPO = process.env.CTX_SOURCE_REPO ?? "qikify-QA/context-lifecycle";
 const TARGET_REPO = process.env.CTX_TARGET_REPO ?? "https://github.com/qikify-QA/qa-knowledge.git";
 
-const doPush = process.argv.includes("--push");
+const doPr = process.argv.includes("--pr");
+const doTag = process.argv.includes("--tag");
+const runArgs = process.argv.flatMap((a, i, all) => (a === "--run" && all[i + 1] ? [all[i + 1]] : []));
 const allowUnpublished = process.argv.includes("--allow-unpublished");
 
 async function git(...args) {
@@ -54,7 +61,41 @@ async function git(...args) {
 const STRICT_IDS = process.env.PUBLISH_STRICT_IDS === "1";
 const STRICT_SELFCONTAINED = process.env.PUBLISH_STRICT_SELFCONTAINED === "1";
 
+async function tagMerged() {
+  const run = (...a) => git("-C", knowledgeDir, ...a);
+  await run("fetch", "origin", "main", "--tags");
+  const date = today();
+  const tag = nextTagName((await run("tag", "-l", `ctx-${date}*`)).split("\n").filter(Boolean), date);
+  await run("tag", "-a", tag, "origin/main", "-m", `Knowledge release ${tag}`);
+  await run("push", "origin", tag);
+  console.log(`Đã gắn tag ${tag} trên origin/main của ${TARGET_REPO}.`);
+}
+
+async function runSummaries() {
+  const out = [];
+  for (const id of runArgs) {
+    const paths = runPaths(resolveRunDir(id));
+    const manifest = await readJsonOr(paths.manifest, {});
+    const verdict = await readJsonOr(paths.verdict, null);
+    const diff = await readJsonOr(paths.diff, null);
+    out.push({
+      run_id: manifest.run_id ?? manifest.ctx_run_id ?? id,
+      proposal_id: manifest.source?.proposal_id ?? null,
+      mode: manifest.mode,
+      verdict: verdict?.payload ?? verdict,
+      diff: diff?.payload ?? diff,
+      open_questions: Array.isArray(manifest.produced_open_questions) ? manifest.produced_open_questions.length : null
+    });
+  }
+  return out;
+}
+
 async function main() {
+  if (process.argv.includes("--push")) {
+    console.error("--push đã bỏ (commit thẳng + ghi đè tag). Dùng --pr, rồi --tag sau khi PR merge.");
+    process.exit(1);
+  }
+  if (doTag) return tagMerged();
   // 1. knowledge/ phải là submodule đã checkout. Sha repo build chỉ ghi vào commit message
   // để tra ngược (không bắt buộc đã push — knowledge publish độc lập với repo build).
   try {
@@ -157,28 +198,31 @@ async function main() {
   console.log(`  object          : ${manifest.summary.published} published, ${manifest.summary.stale} stale, ${manifest.summary.unpublished} unpublished`);
   console.log(`  staging         : ${path.relative(rootDir, stageDir)}`);
 
-  if (!doPush) {
-    console.log(`\nDRY-RUN — chưa đẩy đi đâu. Kiểm tra ${path.relative(rootDir, stageDir)} rồi chạy lại với --push.`);
+  if (!doPr) {
+    console.log(`\nDRY-RUN — chưa đẩy đi đâu. Kiểm tra ${path.relative(rootDir, stageDir)} rồi chạy lại với --pr.`);
     return;
   }
 
-  // 5. Commit + tag + push trong submodule knowledge/. how-to-request/ được đồng bộ từ
-  // contracts/ vào knowledge/ trước khi commit để consumer luôn có bản mới nhất.
-  const tag = `ctx-${new Date().toISOString().slice(0, 10)}`;
-  console.log(`\n== Đẩy knowledge/ -> ${TARGET_REPO} (tag ${tag}) ==`);
+  // 5. Nhánh publish + PR trong submodule knowledge/. how-to-request/ được đồng bộ từ
+  // contracts/ trước khi commit để consumer luôn có bản mới nhất.
   await rm(path.join(knowledgeDir, "how-to-request"), { recursive: true, force: true });
   await cp(path.join(stageDir, "how-to-request"), path.join(knowledgeDir, "how-to-request"), { recursive: true });
   const run = (...a) => git("-C", knowledgeDir, ...a);
   await run("add", "-A");
-  if (!(await run("status", "--porcelain"))) {
+  const files = (await run("diff", "--cached", "--name-only")).split("\n").filter(Boolean);
+  if (!files.length) {
     console.log("knowledge/ không có thay đổi — không có gì để publish.");
     return;
   }
+  const branch = `publish/${today()}-${sha.slice(0, 8)}`;
+  await run("switch", "-c", branch);
   await run("commit", "-m", `Publish knowledge from ${SOURCE_REPO}@${sha.slice(0, 8)}`);
-  await run("tag", "-f", tag);
-  await run("push", "origin", "HEAD");
-  await run("push", "-f", "origin", tag);
-  console.log(`Xong. Team lấy bằng: git clone --depth 1 ${TARGET_REPO}`);
+  await run("push", "-u", "origin", branch);
+  const bodyFile = path.join(stageDir, "pr-body.md");
+  await writeFile(bodyFile, buildPrBody({ sourceRepo: SOURCE_REPO, sha, manifest, files, runs: await runSummaries() }));
+  const repo = TARGET_REPO.replace(/^https:\/\/github\.com\//, "").replace(/\.git$/, "");
+  const { stdout } = await execFileAsync("gh", ["pr", "create", "--repo", repo, "--base", "main", "--head", branch, "--title", `Publish knowledge ${today()} (${sha.slice(0, 8)})`, "--body-file", bodyFile], { cwd: knowledgeDir });
+  console.log(`PR: ${stdout.trim()}\nReview + merge PR, rồi chạy: node scripts/publish-knowledge.mjs --tag`);
 }
 
 main().catch((e) => {

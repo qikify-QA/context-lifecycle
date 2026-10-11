@@ -247,3 +247,26 @@ test("lock CLI: bị run khác giữ → DEFERRED + locked_by_run, không phải
     await run("node", args("CTX-T-1", "release"));
   }
 });
+
+test("publish release: tag không ghi đè, PR body đủ object/version/run", async () => {
+  const { nextTagName, changedObjects, buildPrBody } = await import("../../lib/publish-release.mjs");
+  assert.equal(nextTagName([], "2026-10-11"), "ctx-2026-10-11");
+  assert.equal(nextTagName(["ctx-2026-10-11", "ctx-2026-10-11-2"], "2026-10-11"), "ctx-2026-10-11-3");
+  const files = ["products/p/o/kb.json", "products/p/o/features/f/kb.json", "products/p/_registry.json", "manifest.json"];
+  assert.deepEqual(changedObjects(files), ["p/o"]);
+  const body = buildPrBody({
+    sourceRepo: "org/build", sha: "abcdef1234567", files,
+    manifest: { products: [{ product_key: "p", objects: [{ object_key: "o", published_context_version: "3", status: "PUBLISHED" }] }] },
+    runs: [{ run_id: "CTX-20261011-01", proposal_id: "CBS-7", mode: "CCR_INGEST", verdict: { decision: "APPROVED" }, diff: { added: [1], changed: [], refreshed_only: [], conflicted: [] }, open_questions: 2 }]
+  });
+  for (const s of ["`p/o` — version 3", "CBS-7", "CCR_INGEST", "verdict APPROVED", "+1", "2 open question", "abcdef12"]) assert.ok(body.includes(s), `thiếu "${s}"`);
+});
+
+test("publish-knowledge: --push bị từ chối", async () => {
+  const { execFile } = await import("node:child_process");
+  const { promisify } = await import("node:util");
+  const cli = new URL("../../publish-knowledge.mjs", import.meta.url).pathname;
+  const r = await promisify(execFile)("node", [cli, "--push"]).catch((e) => e);
+  assert.equal(r.code, 1);
+  assert.match(r.stderr, /--push đã bỏ/);
+});

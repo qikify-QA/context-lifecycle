@@ -44,7 +44,7 @@ node scripts/ctx/publish-apply.mjs --run <id> --objects <o1,o2,...>
 
 Script kiểm verdict + lock + audit, copy preview vào `knowledge/products/<product>/` (merge), sinh lại manifest dưới lock `_manifest`. Exit 2 → `DEFERRED` + `reason: lock_lost`, không ghi gì.
 
-Phát hành cho team là bước riêng: `node scripts/publish-knowledge.mjs` (dry-run, đọc kết quả) rồi `--push` **chỉ khi operator đồng ý** — `--push` commit, tag và push repo dùng chung.
+Phát hành cho team là bước riêng, **chỉ khi operator đồng ý**: `node scripts/publish-knowledge.mjs` (dry-run, đọc kết quả) → `--pr --run <id>` (mở PR vào `qa-knowledge`, đưa link cho operator) → operator review + merge → `--tag`.
 
 ## 6. Kết thúc run
 
