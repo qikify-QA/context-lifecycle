@@ -33,7 +33,7 @@ Product phục vụ nhiều brand trên cùng codebase (vd qikfiliate): claim ch
 3. **Kéo Proposal sang `In Progress`** khi sẵn sàng. Đây là tín hiệu duy nhất để context builder nhặt CCR; Proposal ở `Todo` không được xử lý.
 4. Kết quả trả về ngay trên Proposal: `published` (kèm version mới) hoặc `blocked` (kèm lý do: thiếu thông tin, conflict, bị từ chối hoặc hoãn).
 
-Nhiều CCR cùng lúc thì kéo hết sang `In Progress` được — CCR chạm object khác nhau chạy song song; CCR chạm cùng object với một CCR đang chạy sẽ nhận `CONFLICT` và cần kéo lại sau.
+Nhiều CCR cùng lúc thì kéo hết sang `In Progress` được — CCR được xử lý theo mức gấp (mục 4.4) rồi theo thời điểm submit; CCR chạm object khác nhau chạy song song. CCR chạm cùng object với một CCR đang chạy sẽ nhận `blocked` với lý do `locked_by_run` (không phải conflict nội dung) — kéo lại sau khi CCR kia xong. CCR trùng hoàn toàn với một CCR đang chạy hoặc đã publish nhận lý do `duplicate_of`.
 
 Một CCR chỉ thuộc một product. CCR chạm nhiều product → tách thành nhiều CCR.
 

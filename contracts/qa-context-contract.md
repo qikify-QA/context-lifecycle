@@ -232,7 +232,7 @@ API và DB evidence BẮT BUỘC map về `ACT-ID` (mode explore) hoặc `DSEC-I
 ## 5. Write scope
 
 - Subagent CHỈ ghi vào `runs/context/<YYYY-MM-DD>/<CTX-RUN-ID>/`, theo thư mục được cấp trong agent definition.
-- KHÔNG subagent nào được ghi vào `knowledge/`. Chỉ `qa-context-lifecycle-orchestrator` publish (`scripts/ctx/publish-apply.mjs`), và CHỈ khi **cả 2** điều kiện đúng: (a) reviewer trả `publish_allowed: true`, **và** (b) lock của mọi object bị ảnh hưởng vẫn thuộc `ctx_run_id` của chính run này (§16). Thiếu (b) → DỪNG, không ghi `knowledge/`, outcome `CONFLICT`.
+- KHÔNG subagent nào được ghi vào `knowledge/`. Chỉ `qa-context-lifecycle-orchestrator` publish (`scripts/ctx/publish-apply.mjs`), và CHỈ khi **cả 2** điều kiện đúng: (a) reviewer trả `publish_allowed: true`, **và** (b) lock của mọi object bị ảnh hưởng vẫn thuộc `ctx_run_id` của chính run này (§16). Thiếu (b) → DỪNG, không ghi `knowledge/`, `DEFERRED` + `reason: lock_lost`.
 - **Thứ tự bắt buộc: checklist-builder → `knowledge-diff-analyzer` (khi có base) → publish strip → reviewer → publish.** Publish strip (`scripts/ctx/publish-strip.mjs`) đọc candidate gốc và sinh `candidate/publish-preview/` theo đúng layout `knowledge/products/<product>/` và đúng schema §5a, đồng thời áp `resolution: SUPERSEDE` của diff (§12.5). Preview là bản **y hệt** sẽ được copy vào `knowledge/`. Candidate gốc giữ nguyên envelope/evidence, không bị sửa.
 - Sau strip, orchestrator cập nhật file prose trong preview (`feature-summary.md`, `open-questions.md`, `CHANGELOG.md`, `_registry.json`). Reviewer chạy C1–C5 trên candidate gốc và C6 trên preview (`scripts/ctx/audit-preview.mjs`). Publish copy nguyên preview sang `knowledge/` (merge: file không có trong preview giữ nguyên), không strip lại.
 - Không sửa file của agent khác. Cần dữ liệu bước trước thì đọc, đừng ghi đè.
@@ -497,7 +497,7 @@ Credential nằm trong `.env` ở project root, gitignored, chỉ đọc qua bi�
 
 Một run được phép xoá khi **cả 2** đúng:
 
-1. `run-manifest.json.status` là terminal (`PUBLISHED | BLOCKED | REJECTED | CONFLICT`). `IN_PROGRESS` và `REWORK_REQUIRED` là trạng thái chưa terminal.
+1. `run-manifest.json.status` là terminal (`PUBLISHED | BLOCKED | REJECTED | CONFLICT | DEFERRED`). `IN_PROGRESS` và `REWORK_REQUIRED` là trạng thái chưa terminal.
 2. Mọi `oq_id` trong `run-manifest.json.produced_open_questions` **không còn** trong `open-questions.md` tương ứng.
 
 Khi một run sau resolve một open question: gỡ entry khỏi `open-questions.md`, thêm 1 dòng vào `CHANGELOG.md` ("Resolved OQ-xxx — ...").
@@ -510,7 +510,7 @@ Mỗi object bị một run ảnh hưởng được khoá suốt vòng đời ru
 
 - Lock file: `runs/.locks/<product>__<object-key>.lock`, exclusive-create nguyên tử. Thao tác qua `scripts/ctx/lock.mjs acquire|verify|release`.
 - Nội dung: `{"proposal_id": "...", "ctx_run_id": "...", "claimed_at": "...", "ttl_seconds": 7200, "pid": ...}`. Hết TTL thì coi như free; run kế tiếp claim lại kèm cảnh báo run trước có thể đã crash.
-- Claim mọi object liên quan **trước** C0.5 và trước khi dispatch agent nào; một cái thất bại → release hết, outcome `CONFLICT` ngay, không chờ/polling.
+- Claim mọi object liên quan **trước** C0.5 và trước khi dispatch agent nào; một cái thất bại → release hết, outcome `DEFERRED` + `reason: locked_by_run` ngay, không chờ/polling. Lock không phải mâu thuẫn knowledge nên không bao giờ trả `CONFLICT`.
 - Object khác nhau → lock khác nhau → chạy song song bình thường.
 - Re-verify ngay trước publish (`publish-apply.mjs` tự làm). Release khi run tới trạng thái terminal.
 - Lock global `_manifest` bao bước sinh `knowledge/manifest.json` + `consolidated-open-questions.md` (`publish-apply.mjs` tự làm).
