@@ -131,3 +131,64 @@ test("lint: agent definitions theo template chung", async () => {
   const { lintAgents } = await import("../lint-agents.mjs");
   assert.deepEqual(await lintAgents(), []);
 });
+
+async function makeRun(files) {
+  const { mkdir } = await import("node:fs/promises");
+  const dir = await tmp();
+  for (const [rel, data] of Object.entries(files)) {
+    await mkdir(path.dirname(path.join(dir, rel)), { recursive: true });
+    await writeFile(path.join(dir, rel), JSON.stringify(data));
+  }
+  return dir;
+}
+const env = (payload) => ({ artifact_type: "X", producer: "p", status: "READY", payload });
+const manifest = (mode = "DOC_BOOTSTRAP") => ({ run_id: "CTX-20261011-01", product: "p", mode, status: "IN_PROGRESS" });
+const kbItem = (o = {}) => ({ kb_id: "KB-1", statement: "s", knowledge_kind: "INFERRED", confidence: "LOW", scope: { environment: "documented" }, ...o });
+
+test("validate-run: run hợp lệ thì ok", async () => {
+  const { validateRun } = await import("../validate-run.mjs");
+  const dir = await makeRun({
+    "run-manifest.json": manifest(),
+    "candidate/product-kb/f.json": env({ kb_context: { feature_key: "f" }, kb_candidates: [kbItem()] }),
+    "candidate/checklists/f.json": env({ checklists: [{ feature_key: "f", checks: [{ check_id: "CHK-001", status: "NEEDS_CONFIRMATION", oracle: { oracle_strength: "NONE" } }] }] })
+  });
+  const r = await validateRun(dir);
+  assert.deepEqual(r.errors, []);
+});
+
+test("validate-run: bắt lỗi shape và luật có điều kiện", async () => {
+  const { validateRun } = await import("../validate-run.mjs");
+  const dir = await makeRun({
+    "run-manifest.json": { ...manifest(), status: "DONE" },
+    "candidate/product-kb/f.json": env({
+      kb_context: { feature_key: "other" },
+      kb_candidates: [
+        kbItem({ knowledge_kind: "CONFIRMED_EXPECTED" }),
+        kbItem({ kb_id: "KB-2", scope: { environment: "staging" } }),
+        kbItem({ kb_id: "KB-3", knowledge_kind: "CONFIRMED_EXPECTED", confirmation_source: { type: "dev_doc", ref: { locator: "x" } } })
+      ]
+    }),
+    "input/ccr-fastpath-plan.json": { proposal_id: "CBS-1", claims: [{ claim_id: "CLAIM-01", claim_key: "CBS-1__CLAIM-01", strength: "S3" }] },
+    "review/verdict.json": env({ decision: "APPROVED", publish_allowed: true, gate_results: [{ gate: "C3", status: "FAIL" }] })
+  });
+  const problems = (await validateRun(dir)).errors.map((e) => e.problem);
+  for (const expected of [
+    /không thuộc IN_PROGRESS/,
+    /không khớp tên file shard/,
+    /CONFIRMED_EXPECTED thiếu confirmation_source/,
+    /mode doc phải là documented/,
+    /thiếu authored_on/,
+    /dev_doc thiếu derivation/,
+    /claim S3 thiếu confirmation_source/,
+    /true trong khi gate FAIL/
+  ]) assert.ok(problems.some((p) => expected.test(p)), `thiếu lỗi ${expected}`);
+});
+
+test("product config: placeholder vẫn bị chặn sau khi tách lib schema", async () => {
+  const { validateProduct } = await import("../../lib/product-config.mjs");
+  const { readFile } = await import("node:fs/promises");
+  const cfg = JSON.parse(await readFile(new URL("../../../config/products/duos.json", import.meta.url)));
+  assert.deepEqual(await validateProduct(cfg), []);
+  cfg.qa_hub.project_id = "<<< ĐIỀN >>>";
+  assert.ok((await validateProduct(cfg)).some((p) => p.includes("placeholder")));
+});

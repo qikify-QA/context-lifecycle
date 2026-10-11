@@ -13,6 +13,7 @@ Luật được chia thành nhiều file, mỗi luật chỉ nằm ở đúng m�
 | `contracts/supersede.md` | §12.5: thuật toán supersede và 6 blocker |
 | `contracts/gates.md` | §12.6 + định nghĩa đầy đủ gate C0–C6 và các audit |
 | `contracts/forbidden-fields.json` | danh sách field/đường dẫn cấm dưới `knowledge/` (máy đọc) |
+| `contracts/schemas/` | JSON Schema cho artifact trong `runs/` |
 
 Khác biệt giữa các product (environment, explorer được phép, cách login, vocabulary) nằm trong `config/products/<key>.json` và `config/products/<key>/explore-playbook.md`, **không** nằm trong contract hay agent definition.
 
@@ -23,6 +24,7 @@ Khác biệt giữa các product (environment, explorer được phép, cách lo
 - **Thứ tự đọc:** contract này → `run-manifest.json` (mode đã settle) → `input/bootstrap-request.json` → input riêng của agent.
 - **Write root:** chỉ ghi dưới `runs/context/<YYYY-MM-DD>/<CTX-RUN-ID>/`, đúng thư mục ghi trong agent definition (§5).
 - **Envelope:** mọi artifact bọc trong Artifact Envelope (§1).
+- **Shape:** artifact chính có JSON Schema ở `contracts/schemas/` (field bắt buộc + enum; field thêm được phép). Orchestrator chạy `scripts/ctx/validate-run.mjs` sau mỗi bước; luật có điều kiện giữa field (vd `CONFIRMED_EXPECTED` ⇒ có `confirmation_source`) nằm trong script đó.
 - **Redaction:** chạy §6 trước khi ghi bất kỳ file nào.
 - **Product context:** đọc `config/products/<key>.json`; agent explore đọc thêm playbook khai ở `explore.playbook`. Không suy hành vi product từ hiểu biết chung.
 - **Skill binding:** khi một skill tương ứng với vai trò của agent tồn tại, nạp nó và coi nó ưu tiên hơn hướng dẫn trong agent definition. Hiện chưa có skill nào cho các vai trò context builder.
@@ -209,7 +211,7 @@ CTX-RUN-ID -> DOCSET-ID -> DOC-ID -> DSEC-ID -> CLAIM-ID
 | `DOCSET-ID` | orchestrator (lúc C0) | `DOCSET-<CTX-RUN-ID>` | `DOCSET-CTX-20260930-01` |
 | `DOC-ID` | orchestrator (lúc C0), theo thứ tự `doc_sources[]` | `DOC-<nn>` | `DOC-01` |
 | `DSEC-ID` | doc-ingest-explorer | `DSEC-<doc-nn>-<nnn>` | `DSEC-01-014` |
-| `CLAIM-ID` | doc-ingest-explorer (`DOC_BOOTSTRAP`) · orchestrator (`CCR_INGEST`) | `CLM-<doc-nn>-<nnn>` · `CLAIM-<nn>` | `CLM-01-007` · `CLAIM-01` |
+| `CLAIM-ID` | doc-ingest-explorer (`DOC_BOOTSTRAP`) · orchestrator (`CCR_INGEST`) | `CLM-<doc-nn>-<nnn>[a-z]` · `CLAIM-<nn>` | `CLM-01-007`, `CLM-01-007a` (tách claim, giữ số cũ) · `CLAIM-01` |
 
 **`APIOP-ID`/`ENT-ID` ở mode doc PHẢI doc-scoped**, vì nhiều `doc-ingest-explorer` chạy song song, mỗi instance chỉ thấy tài liệu của mình. Mode explore chỉ có một explorer mint chúng nên dùng namespace phẳng.
 
