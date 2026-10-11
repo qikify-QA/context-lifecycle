@@ -198,6 +198,7 @@ test("intake: xếp theo mức gấp rồi submittedAt, bỏ project lạ", asyn
   const ccr = (u) => `## 4.4 Mức độ gấp\n\n\`${u}\` — lý do\n\n# Phần 5`;
   assert.equal(parseUrgency("## 4.4 Mức độ gấp `[BẠN]`\n\n`HIGH` (đang chặn) · `MEDIUM` · `LOW`\n"), "UNKNOWN");
   assert.equal(parseUrgency("## 4.4 Mức độ gấp\n\n`MEDIUM` — có thể nâng lên `HIGH` nếu test P0 fail\n"), "MEDIUM");
+  assert.equal(parseUrgency("## 4.4 Mức độ gấp `[BẠN]`\n\n**MEDIUM** (đề xuất, BẠN duyệt)\n"), "MEDIUM");
   const products = [{ product_key: "p", qa_hub: { project_id: "proj-1" } }];
   const { queue, skipped } = buildQueue(
     [

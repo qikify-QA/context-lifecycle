@@ -22,7 +22,8 @@ export function parseUrgency(content = "") {
   if (start < 0) return "UNKNOWN";
   for (const line of lines.slice(start + 1)) {
     if (/^#{1,4}\s/.test(line)) break;
-    const found = [...line.matchAll(/`(HIGH|MEDIUM|LOW)`/g)].map((m) => m[1]);
+    // Người gửi viết mức gấp trong backtick (`MEDIUM`) hoặc in đậm (**MEDIUM**).
+    const found = [...line.matchAll(/(?:`|\*\*)(HIGH|MEDIUM|LOW)(?:`|\*\*)/g)].map((m) => m[1]);
     if (!found.length) continue;
     // Dòng chú thích của khuôn liệt kê đủ cả 3 mức = người gửi chưa chọn.
     if (new Set(found).size === 3) return "UNKNOWN";
