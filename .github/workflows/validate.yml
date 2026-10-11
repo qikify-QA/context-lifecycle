@@ -1,0 +1,64 @@
+name: validate
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  repo:
+    name: contracts, config, agents, scripts
+    runs-on: ubuntu-latest
+    steps:
+      # runs/context (~280MB evidence) không cần cho validate — bỏ khỏi checkout.
+      - uses: actions/checkout@v4
+        with:
+          submodules: false
+          sparse-checkout-cone-mode: false
+          sparse-checkout: |
+            /*
+            !/runs/context/
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      # Script chỉ dùng thư viện chuẩn của Node — không cần npm ci.
+      - name: Contracts, schemas, templates, config, appendix, agents
+        run: node scripts/ctx/validate-contracts.mjs
+      - name: Deterministic script tests
+        run: npm test
+      - name: Không commit token MCP
+        run: |
+          if git grep -nE 'tlmcp_[A-Za-z0-9]{8,}|/api/mcp/u/[A-Za-z0-9]{16,}|Bearer [A-Za-z0-9._-]{24,}' -- ':!scripts/ctx/test/**'; then
+            echo "::error::Phát hiện token trong file được track"; exit 1
+          fi
+
+  knowledge:
+    name: knowledge package (báo cáo)
+    runs-on: ubuntu-latest
+    # qa-knowledge là repo private: cần secret QA_KNOWLEDGE_READ_TOKEN (fine-grained, read-only).
+    # Chưa có secret thì job này bỏ qua.
+    if: ${{ vars.CHECK_KNOWLEDGE == 'true' }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout-cone-mode: false
+          sparse-checkout: |
+            /*
+            !/runs/context/
+      - name: Checkout submodule knowledge
+        run: |
+          git -c "http.extraheader=AUTHORIZATION: basic $(printf 'x-access-token:%s' '${{ secrets.QA_KNOWLEDGE_READ_TOKEN }}' | base64 -w0)" \
+            submodule update --init --depth 1 knowledge
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      # Nợ dữ liệu đã biết (DECISIONS mục 6) làm hai bước này đỏ — chỉ báo cáo cho tới khi trả nợ.
+      - name: Audit zero-run-reference trên knowledge/
+        continue-on-error: true
+        run: node scripts/ctx/audit-preview.mjs --dir knowledge/products
+      - name: Manifest check
+        continue-on-error: true
+        run: node scripts/generate-manifest.mjs --check
