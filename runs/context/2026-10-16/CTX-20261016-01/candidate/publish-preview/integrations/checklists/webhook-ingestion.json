@@ -1,0 +1,958 @@
+{
+  "feature_id": "FEAT-02-webhook-ingestion",
+  "feature_key": "webhook-ingestion",
+  "object_id": "integrations",
+  "checklist_version": "1",
+  "checks": [
+    {
+      "check_id": "CHK-001",
+      "dimension": "CORE",
+      "layer": "api",
+      "title": "Webhook orders/paid qua đường HTTP trực tiếp (/webhook) có HMAC đúng được nhận và giao cho bộ xử lý orders/paid",
+      "applicability": {
+        "role": "system (Shopify)",
+        "state": "HMAC tính đúng bằng bí mật app, có đủ header, body không rỗng",
+        "environment": "documented",
+        "surface_or_device": "endpoint /webhook (đường HTTP trực tiếp; tài liệu nêu staging dùng đường này)"
+      },
+      "precondition": "Môi trường test nhận webhook qua /webhook; shop test cài app, có box đang bán. Có quyền xem Horizon (bảng điều khiển hàng đợi).",
+      "steps": [
+        "Khách đặt và thanh toán một đơn có box trên shop test để Shopify gửi orders/paid (hoặc gửi lại một webhook orders/paid hợp lệ đã lưu, chữ ký HMAC tính trên body bằng bí mật app).",
+        "Ghi lại response Mysbox trả cho webhook (log giao webhook phía Shopify hoặc công cụ gửi HTTP).",
+        "Mở Horizon, tìm job vừa xếp cho đơn này và xem nội dung job."
+      ],
+      "observation_point": "Response của /webhook; job mới trong Horizon (loại bộ xử lý, nội dung job có event id).",
+      "expected_result": "Webhook không bị từ chối 401; sau xác thực, bộ nhận nội bộ gắn event id vào nội dung và giao webhook cho bộ xử lý orders/paid (thấy job tương ứng cho đơn trong Horizon). (Status trả về khi thành công chưa có trong tài liệu — ghi lại giá trị quan sát được.)",
+      "oracle": {
+        "kb_ids": [
+          "webhook-ingestion#KB-007",
+          "webhook-ingestion#KB-008",
+          "webhook-ingestion#KB-017",
+          "webhook-ingestion#KB-019",
+          "webhook-ingestion#KB-020"
+        ],
+        "oracle_strength": "STRONG"
+      },
+      "status": "NEEDS_CONFIRMATION",
+      "open_question_draft": "Luồng webhook orders/paid qua đường HTTP trực tiếp có HMAC đúng được nhận, gắn event id và giao cho bộ xử lý orders/paid đã được xác nhận bằng test case chạy PASS chưa? Khi thành công Mysbox trả mã trạng thái nào?",
+      "related_kb_ids": [
+        "webhook-ingestion#KB-001",
+        "webhook-ingestion#KB-010",
+        "webhook-ingestion#KB-018"
+      ],
+      "regression_watch_kb_ids": [],
+      "risk_refs": [
+        "Đơn đã thanh toán không vào Mysbox → khách không nhận box/quà"
+      ],
+      "priority": "P1",
+      "automation_suitability": "HYBRID",
+      "oq_id": "OQ-integrations-026"
+    },
+    {
+      "check_id": "CHK-002",
+      "dimension": "PERMISSION",
+      "layer": "api",
+      "title": "Webhook trên /webhook có chữ ký HMAC sai bị từ chối 401",
+      "applicability": {
+        "role": "system (nguồn gửi giả mạo)",
+        "state": "chữ ký HMAC không khớp body/bí mật app",
+        "environment": "documented",
+        "surface_or_device": "endpoint /webhook (công cụ gửi HTTP)"
+      },
+      "precondition": "Đã lưu một webhook orders/paid hợp lệ (như CHK-001) cho một đơn test.",
+      "steps": [
+        "Biến thể A: gửi lại webhook đã lưu tới /webhook nhưng sửa một ký tự trong body, giữ chữ ký HMAC cũ.",
+        "Biến thể B: gửi body gốc với chữ ký HMAC tính bằng một bí mật khác bí mật app.",
+        "Với mỗi biến thể, ghi lại response và kiểm Horizon có job mới cho đơn hay không."
+      ],
+      "observation_point": "HTTP status của response; danh sách job trong Horizon trước/sau khi gửi.",
+      "expected_result": "Cả hai biến thể bị từ chối với 401 và không có job mới được giao cho bộ xử lý.",
+      "oracle": {
+        "kb_ids": [
+          "webhook-ingestion#KB-008",
+          "webhook-ingestion#KB-020"
+        ],
+        "oracle_strength": "STRONG"
+      },
+      "status": "NEEDS_CONFIRMATION",
+      "open_question_draft": "Việc webhook có chữ ký HMAC sai trên đường HTTP trực tiếp bị từ chối 401 và không được xử lý đã được xác nhận bằng test case chạy PASS chưa?",
+      "related_kb_ids": [
+        "webhook-ingestion#KB-007",
+        "webhook-ingestion#KB-017"
+      ],
+      "regression_watch_kb_ids": [],
+      "risk_refs": [
+        "Webhook giả mạo tạo đơn/rút thăm giả"
+      ],
+      "priority": "P1",
+      "automation_suitability": "SUITABLE",
+      "oq_id": "OQ-integrations-026"
+    },
+    {
+      "check_id": "CHK-003",
+      "dimension": "INTEGRATION",
+      "layer": "api",
+      "title": "Webhook thật bị Mysbox từ chối 401 thì Shopify coi là thất bại và gửi lại",
+      "applicability": {
+        "role": "system (Shopify)",
+        "state": "Mysbox ở môi trường test được cấu hình bí mật app khác bí mật Shopify dùng để ký (tạm thời)",
+        "environment": "documented",
+        "surface_or_device": "endpoint /webhook; log giao webhook phía Shopify"
+      },
+      "precondition": "Môi trường test riêng được phép đổi cấu hình bí mật app; shop test cài app trỏ webhook về môi trường này.",
+      "steps": [
+        "Đổi bí mật app phía Mysbox của môi trường test sang một giá trị khác bí mật Shopify dùng ký webhook.",
+        "Khách đặt và thanh toán một đơn có box để Shopify gửi orders/paid.",
+        "Theo dõi log giao webhook phía Shopify cho đơn đó trong một khoảng thời gian.",
+        "Khôi phục bí mật app đúng."
+      ],
+      "observation_point": "Log giao webhook phía Shopify (trạng thái lần giao, các lần gửi lại); response 401 của Mysbox.",
+      "expected_result": "Mysbox trả 401; Shopify ghi lần giao là thất bại và gửi lại webhook theo lịch của Shopify.",
+      "oracle": {
+        "kb_ids": [
+          "webhook-ingestion#KB-008",
+          "webhook-ingestion#KB-009"
+        ],
+        "oracle_strength": "STRONG"
+      },
+      "status": "READY",
+      "open_question_draft": null,
+      "related_kb_ids": [
+        "webhook-ingestion#KB-010"
+      ],
+      "regression_watch_kb_ids": [],
+      "risk_refs": [
+        "Webhook bị từ chối không được khôi phục"
+      ],
+      "priority": "P2",
+      "automation_suitability": "NOT_SUITABLE"
+    },
+    {
+      "check_id": "CHK-004",
+      "dimension": "CORE",
+      "layer": "api",
+      "title": "Webhook qua EventBridge (/webhook/event-bridge) có X-Api-Key khớp được nhận mà không kiểm HMAC",
+      "applicability": {
+        "role": "system (AWS EventBridge)",
+        "state": "khoá X-Api-Key đã cấu hình, header X-Api-Key khớp",
+        "environment": "documented",
+        "surface_or_device": "endpoint /webhook/event-bridge (đường EventBridge; tài liệu nêu production dùng đường này)"
+      },
+      "precondition": "Môi trường test có endpoint /webhook/event-bridge với khoá X-Api-Key đã cấu hình và biết giá trị khoá; đã lưu một webhook orders/paid hợp lệ cho đơn test.",
+      "steps": [
+        "Gửi webhook orders/paid tới /webhook/event-bridge với header X-Api-Key đúng khoá đã cấu hình và không kèm chữ ký HMAC (hoặc kèm chữ ký HMAC sai).",
+        "Ghi lại response.",
+        "Mở Horizon, tìm job cho đơn này."
+      ],
+      "observation_point": "Response của /webhook/event-bridge; job mới trong Horizon và bộ xử lý của job.",
+      "expected_result": "Webhook không bị từ chối dù không có/sai HMAC; được đi qua cùng bộ nhận nội bộ và giao cho bộ xử lý orders/paid (thấy job tương ứng trong Horizon).",
+      "oracle": {
+        "kb_ids": [
+          "webhook-ingestion#KB-011",
+          "webhook-ingestion#KB-012",
+          "webhook-ingestion#KB-013",
+          "webhook-ingestion#KB-014",
+          "webhook-ingestion#KB-017",
+          "webhook-ingestion#KB-020"
+        ],
+        "oracle_strength": "STRONG"
+      },
+      "status": "NEEDS_CONFIRMATION",
+      "open_question_draft": "Luồng webhook qua EventBridge với X-Api-Key khớp được nhận (không kiểm HMAC) và giao cho đúng bộ xử lý đã được xác nhận bằng test case chạy PASS chưa?",
+      "related_kb_ids": [
+        "webhook-ingestion#KB-018",
+        "webhook-ingestion#KB-019"
+      ],
+      "regression_watch_kb_ids": [],
+      "risk_refs": [
+        "Đường EventBridge không kiểm HMAC; an toàn phụ thuộc hoàn toàn vào khoá X-Api-Key"
+      ],
+      "priority": "P1",
+      "automation_suitability": "SUITABLE",
+      "oq_id": "OQ-integrations-026"
+    },
+    {
+      "check_id": "CHK-005",
+      "dimension": "PERMISSION",
+      "layer": "api",
+      "title": "Webhook qua EventBridge có X-Api-Key sai bị từ chối 401; thiếu X-Api-Key bị từ chối",
+      "applicability": {
+        "role": "system (nguồn gửi giả mạo)",
+        "state": "khoá X-Api-Key đã cấu hình; request mang khoá sai hoặc không có header X-Api-Key",
+        "environment": "documented",
+        "surface_or_device": "endpoint /webhook/event-bridge (công cụ gửi HTTP)"
+      },
+      "precondition": "Như CHK-004.",
+      "steps": [
+        "Biến thể A: gửi webhook orders/paid đã lưu tới /webhook/event-bridge với X-Api-Key là một giá trị sai.",
+        "Biến thể B: gửi cùng webhook nhưng bỏ header X-Api-Key.",
+        "Với mỗi biến thể, ghi lại response và kiểm Horizon có job mới cho đơn hay không."
+      ],
+      "observation_point": "HTTP status của response; danh sách job trong Horizon trước/sau khi gửi.",
+      "expected_result": "Biến thể A bị từ chối với 401; biến thể B bị từ chối (mã cụ thể chưa có trong tài liệu — ghi lại). Cả hai không có job mới được giao cho bộ xử lý.",
+      "oracle": {
+        "kb_ids": [
+          "webhook-ingestion#KB-014",
+          "webhook-ingestion#KB-016"
+        ],
+        "oracle_strength": "STRONG"
+      },
+      "status": "NEEDS_CONFIRMATION",
+      "open_question_draft": "Việc webhook qua EventBridge có khoá X-Api-Key sai bị từ chối 401 (và thiếu khoá bị từ chối) đã được xác nhận bằng test case chạy PASS chưa? Thiếu header X-Api-Key thì trả mã nào?",
+      "related_kb_ids": [
+        "webhook-ingestion#KB-012",
+        "webhook-ingestion#KB-013"
+      ],
+      "regression_watch_kb_ids": [],
+      "risk_refs": [
+        "Đường EventBridge không kiểm HMAC; an toàn phụ thuộc hoàn toàn vào khoá X-Api-Key"
+      ],
+      "priority": "P1",
+      "automation_suitability": "SUITABLE",
+      "oq_id": "OQ-integrations-026"
+    },
+    {
+      "check_id": "CHK-006",
+      "dimension": "NEGATIVE",
+      "layer": "api",
+      "title": "Khoá X-Api-Key chưa cấu hình thì mọi webhook qua EventBridge bị từ chối",
+      "applicability": {
+        "role": "system (AWS EventBridge)",
+        "state": "khoá X-Api-Key chưa được cấu hình phía Mysbox",
+        "environment": "documented",
+        "surface_or_device": "endpoint /webhook/event-bridge (công cụ gửi HTTP)"
+      },
+      "precondition": "Môi trường test riêng được phép bỏ cấu hình khoá X-Api-Key; đã lưu webhook orders/paid hợp lệ.",
+      "steps": [
+        "Bỏ cấu hình khoá X-Api-Key phía Mysbox ở môi trường test.",
+        "Gửi webhook orders/paid tới /webhook/event-bridge lần lượt: với một giá trị X-Api-Key bất kỳ, với X-Api-Key rỗng, và không có header X-Api-Key.",
+        "Ghi lại response từng lần và kiểm Horizon có job mới hay không.",
+        "Khôi phục cấu hình khoá."
+      ],
+      "observation_point": "HTTP status từng response; danh sách job trong Horizon.",
+      "expected_result": "Mọi lần gửi đều bị từ chối và không có job mới được giao cho bộ xử lý. (Mã trạng thái chưa có trong tài liệu — ghi lại giá trị quan sát được.)",
+      "oracle": {
+        "kb_ids": [
+          "webhook-ingestion#KB-015"
+        ],
+        "oracle_strength": "STRONG"
+      },
+      "status": "NEEDS_CONFIRMATION",
+      "open_question_draft": "Khi khoá X-Api-Key chưa được cấu hình, webhook qua EventBridge bị từ chối với mã trạng thái nào? Hành vi từ chối tất cả đã được xác nhận bằng test case chạy PASS chưa?",
+      "related_kb_ids": [
+        "webhook-ingestion#KB-014"
+      ],
+      "regression_watch_kb_ids": [],
+      "risk_refs": [
+        "Cấu hình thiếu khoá làm đường EventBridge mở hoặc làm mất mọi webhook production"
+      ],
+      "priority": "P1",
+      "automation_suitability": "HYBRID",
+      "oq_id": "OQ-integrations-026"
+    },
+    {
+      "check_id": "CHK-007",
+      "dimension": "NEGATIVE",
+      "layer": "api",
+      "title": "Webhook thiếu header bắt buộc bị từ chối",
+      "applicability": {
+        "role": "system",
+        "state": "xác thực hợp lệ nhưng thiếu một header bắt buộc",
+        "environment": "documented",
+        "surface_or_device": "endpoint /webhook và /webhook/event-bridge (công cụ gửi HTTP)"
+      },
+      "precondition": "Có webhook orders/paid hợp lệ đã lưu cho từng đường vào; có danh sách header bắt buộc từ chủ sở hữu (tài liệu chưa nêu).",
+      "steps": [
+        "Với từng header trong danh sách header bắt buộc: gửi webhook hợp lệ nhưng bỏ đúng header đó (giữ xác thực hợp lệ).",
+        "Ghi lại response và kiểm Horizon có job mới hay không."
+      ],
+      "observation_point": "HTTP status từng response; danh sách job trong Horizon.",
+      "expected_result": "Mỗi request thiếu một header bắt buộc đều bị từ chối và không được giao cho bộ xử lý. (Mã trạng thái chưa có trong tài liệu — ghi lại.)",
+      "oracle": {
+        "kb_ids": [
+          "webhook-ingestion#KB-021"
+        ],
+        "oracle_strength": "STRONG"
+      },
+      "status": "NEEDS_CONFIRMATION",
+      "open_question_draft": "Những header nào là header bắt buộc của webhook, và request thiếu một header bắt buộc bị từ chối với mã trạng thái nào?",
+      "related_kb_ids": [
+        "webhook-ingestion#KB-017"
+      ],
+      "regression_watch_kb_ids": [],
+      "risk_refs": [
+        "Webhook thiếu thông tin vẫn được xử lý sai"
+      ],
+      "priority": "P2",
+      "automation_suitability": "SUITABLE",
+      "oq_id": "OQ-integrations-027"
+    },
+    {
+      "check_id": "CHK-008",
+      "dimension": "NEGATIVE",
+      "layer": "api",
+      "title": "Webhook có body rỗng bị từ chối",
+      "applicability": {
+        "role": "system",
+        "state": "đủ header, body rỗng",
+        "environment": "documented",
+        "surface_or_device": "endpoint /webhook và /webhook/event-bridge (công cụ gửi HTTP)"
+      },
+      "precondition": "Có webhook orders/paid hợp lệ đã lưu cho từng đường vào.",
+      "steps": [
+        "Đường /webhook: gửi webhook với đủ header như bản đã lưu, body rỗng, chữ ký HMAC tính trên body rỗng bằng bí mật app.",
+        "Đường /webhook/event-bridge: gửi webhook với đủ header và X-Api-Key đúng, body rỗng.",
+        "Ghi lại response và kiểm Horizon có job mới hay không."
+      ],
+      "observation_point": "HTTP status từng response; danh sách job trong Horizon.",
+      "expected_result": "Cả hai request bị từ chối và không được giao cho bộ xử lý. (Mã trạng thái chưa có trong tài liệu — ghi lại.)",
+      "oracle": {
+        "kb_ids": [
+          "webhook-ingestion#KB-022"
+        ],
+        "oracle_strength": "STRONG"
+      },
+      "status": "READY",
+      "open_question_draft": null,
+      "related_kb_ids": [
+        "webhook-ingestion#KB-017"
+      ],
+      "regression_watch_kb_ids": [],
+      "risk_refs": [
+        "Webhook rỗng làm lỗi bộ xử lý"
+      ],
+      "priority": "P2",
+      "automation_suitability": "SUITABLE"
+    },
+    {
+      "check_id": "CHK-009",
+      "dimension": "NEGATIVE",
+      "layer": "api",
+      "title": "Webhook có topic không có bộ xử lý trả lỗi 500",
+      "applicability": {
+        "role": "system",
+        "state": "xác thực hợp lệ, topic nằm ngoài mọi danh sách topic mà tài liệu nêu",
+        "environment": "documented",
+        "surface_or_device": "endpoint /webhook (công cụ gửi HTTP)"
+      },
+      "precondition": "Biết bí mật app của môi trường test; chọn một topic không nằm trong bất kỳ danh sách topic nào tài liệu nêu (vd products/update).",
+      "steps": [
+        "Dựng webhook với topic đã chọn, body JSON không rỗng, đủ header như webhook orders/paid đã lưu, chữ ký HMAC đúng bằng bí mật app.",
+        "Gửi tới /webhook và ghi lại response."
+      ],
+      "observation_point": "HTTP status của response.",
+      "expected_result": "Mysbox trả lỗi 500.",
+      "oracle": {
+        "kb_ids": [
+          "webhook-ingestion#KB-031"
+        ],
+        "oracle_strength": "STRONG"
+      },
+      "status": "READY",
+      "open_question_draft": null,
+      "related_kb_ids": [
+        "webhook-ingestion#KB-018",
+        "webhook-ingestion#KB-020",
+        "webhook-ingestion#KB-002",
+        "webhook-ingestion#KB-003",
+        "webhook-ingestion#KB-004"
+      ],
+      "regression_watch_kb_ids": [],
+      "risk_refs": [
+        "Topic lạ làm hỏng bộ nhận"
+      ],
+      "priority": "P2",
+      "automation_suitability": "SUITABLE"
+    },
+    {
+      "check_id": "CHK-010",
+      "dimension": "STATE_DATA",
+      "layer": "api",
+      "title": "orders/paid giao trùng cùng (đơn + event id) chỉ được xếp hàng xử lý một lần",
+      "applicability": {
+        "role": "system (Shopify / AWS EventBridge)",
+        "state": "cùng một webhook orders/paid (cùng đơn, cùng event id) đến hai lần",
+        "environment": "documented",
+        "surface_or_device": "endpoint /webhook hoặc /webhook/event-bridge (cùng bộ nhận nội bộ)"
+      },
+      "precondition": "Đã lưu một webhook orders/paid hợp lệ của một đơn test có box (kèm event id).",
+      "steps": [
+        "Gửi webhook orders/paid đã lưu lần thứ nhất (xác thực hợp lệ theo đường vào).",
+        "Sau khi job lần thứ nhất xử lý xong, gửi lại nguyên webhook đó (cùng đơn, cùng event id).",
+        "Kiểm Horizon số job đã xếp cho đơn với event id này; kiểm số lượt rút thăm/box của đơn trong Mysbox."
+      ],
+      "observation_point": "Danh sách job trong Horizon cho đơn; số box/lượt rút thăm của đơn trong Mysbox.",
+      "expected_result": "Chỉ có một job được xếp hàng xử lý cho cặp (đơn + event id); lần giao trùng không tạo xử lý thứ hai, đơn không bị rút thăm hai lần.",
+      "oracle": {
+        "kb_ids": [
+          "webhook-ingestion#KB-023",
+          "webhook-ingestion#KB-037"
+        ],
+        "oracle_strength": "STRONG"
+      },
+      "status": "NEEDS_CONFIRMATION",
+      "open_question_draft": "Việc orders/paid giao trùng cùng đơn và cùng event id chỉ được xử lý một lần đã được xác nhận bằng test case chạy PASS chưa? Khoá chống trùng tồn tại trong bao lâu?",
+      "related_kb_ids": [
+        "webhook-ingestion#KB-017",
+        "webhook-ingestion#KB-019"
+      ],
+      "regression_watch_kb_ids": [],
+      "risk_refs": [
+        "Rút thăm/ghi nhận đơn hai lần khi webhook giao trùng"
+      ],
+      "priority": "P1",
+      "automation_suitability": "HYBRID",
+      "oq_id": "OQ-integrations-026"
+    },
+    {
+      "check_id": "CHK-011",
+      "dimension": "BOUNDARY",
+      "layer": "api",
+      "title": "orders/paid cùng đơn nhưng event id khác",
+      "applicability": {
+        "role": "system (Shopify / AWS EventBridge)",
+        "state": "hai webhook orders/paid cùng đơn, khác event id",
+        "environment": "documented",
+        "surface_or_device": "endpoint /webhook hoặc /webhook/event-bridge"
+      },
+      "precondition": "Như CHK-010.",
+      "steps": [
+        "Gửi webhook orders/paid đã lưu lần thứ nhất.",
+        "Sau khi xử lý xong, gửi lại cùng nội dung đơn nhưng với event id khác (xác thực hợp lệ).",
+        "Kiểm Horizon số job đã xếp cho đơn; kiểm số box/lượt rút thăm của đơn trong Mysbox."
+      ],
+      "observation_point": "Danh sách job trong Horizon cho đơn; số box/lượt rút thăm của đơn.",
+      "expected_result": "",
+      "oracle": {
+        "kb_ids": [],
+        "oracle_strength": "NONE"
+      },
+      "status": "NEEDS_CONFIRMATION",
+      "open_question_draft": "Khi Mysbox nhận hai webhook orders/paid cho cùng một đơn nhưng khác event id, đơn có bị xử lý (rút thăm) lần thứ hai không, hay có lớp bảo vệ theo đơn?",
+      "related_kb_ids": [
+        "webhook-ingestion#KB-023",
+        "webhook-ingestion#KB-024"
+      ],
+      "regression_watch_kb_ids": [],
+      "risk_refs": [
+        "Rút thăm/ghi nhận đơn hai lần khi webhook giao trùng"
+      ],
+      "priority": "P1",
+      "automation_suitability": "SUITABLE",
+      "oq_id": "OQ-integrations-028"
+    },
+    {
+      "check_id": "CHK-012",
+      "dimension": "INTEGRATION",
+      "layer": "api",
+      "title": "Khoá theo đơn: webhook orders/paid và action Flow cho kênh bán khác không xử lý đồng thời cùng một đơn",
+      "applicability": {
+        "role": "system (Shopify webhook + Shopify Flow)",
+        "state": "webhook orders/paid và action Flow cho kênh bán khác đến gần như cùng lúc cho cùng một đơn",
+        "environment": "documented",
+        "surface_or_device": "endpoint webhook + endpoint action Shopify Flow; job nền"
+      },
+      "precondition": "Shop test cài app, có workflow Shopify Flow dùng action cho kênh bán khác; đã lưu webhook orders/paid hợp lệ và request action Flow hợp lệ cho cùng một đơn test.",
+      "steps": [
+        "Gửi đồng thời webhook orders/paid và request action Flow cho cùng một đơn.",
+        "Trong Horizon, ghi lại thời điểm bắt đầu/kết thúc của các job xử lý đơn này.",
+        "Kiểm số box/lượt rút thăm của đơn trong Mysbox."
+      ],
+      "observation_point": "Thời gian chạy các job của đơn trong Horizon (có chồng lấn hay không); trạng thái đơn trong Mysbox.",
+      "expected_result": "Hai luồng không xử lý đồng thời cùng một đơn: các job của đơn chạy tuần tự (không chồng lấn thời gian xử lý).",
+      "oracle": {
+        "kb_ids": [
+          "webhook-ingestion#KB-024"
+        ],
+        "oracle_strength": "STRONG"
+      },
+      "status": "NEEDS_CONFIRMATION",
+      "open_question_draft": "Việc khoá theo đơn ngăn webhook orders/paid và action Flow cho kênh bán khác xử lý đồng thời cùng một đơn đã được xác nhận bằng test case chạy PASS chưa? Thời gian chờ khoá đơn được quy định là bao nhiêu?",
+      "related_kb_ids": [
+        "webhook-ingestion#KB-023"
+      ],
+      "regression_watch_kb_ids": [],
+      "risk_refs": [
+        "Rút thăm/ghi nhận đơn hai lần khi hai kênh cùng xử lý một đơn"
+      ],
+      "priority": "P1",
+      "automation_suitability": "HYBRID",
+      "oq_id": "OQ-integrations-026"
+    },
+    {
+      "check_id": "CHK-013",
+      "dimension": "STATE_DATA",
+      "layer": "api",
+      "title": "bulk_operations/finish được xử lý kết quả và chống trùng theo (mã tác vụ + event id)",
+      "applicability": {
+        "role": "system (Shopify)",
+        "state": "cùng webhook bulk_operations/finish (cùng mã tác vụ, cùng event id) đến hai lần",
+        "environment": "documented",
+        "surface_or_device": "endpoint webhook (cùng bộ nhận nội bộ)"
+      },
+      "precondition": "Môi trường test thực sự đăng ký topic bulk_operations/finish (đang thuộc conflict tập topic — xác nhận trước khi chạy); đã lưu một webhook bulk_operations/finish hợp lệ của một tác vụ hàng loạt do app tạo.",
+      "steps": [
+        "Gửi webhook bulk_operations/finish đã lưu lần thứ nhất (xác thực hợp lệ theo đường vào).",
+        "Kiểm Horizon: có job xử lý kết quả tác vụ hàng loạt.",
+        "Gửi lại nguyên webhook (cùng mã tác vụ, cùng event id) và kiểm Horizon lần nữa."
+      ],
+      "observation_point": "Danh sách job trong Horizon cho mã tác vụ này; dữ liệu kết quả tác vụ phía Mysbox.",
+      "expected_result": "Lần đầu app xử lý kết quả của tác vụ hàng loạt; lần giao trùng cùng (mã tác vụ + event id) không được xử lý lại.",
+      "oracle": {
+        "kb_ids": [
+          "webhook-ingestion#KB-027",
+          "webhook-ingestion#KB-029"
+        ],
+        "oracle_strength": "STRONG"
+      },
+      "status": "NEEDS_CONFIRMATION",
+      "open_question_draft": "App có thực sự đăng ký và nhận topic bulk_operations/finish không (các tài liệu mâu thuẫn)? Nếu có, việc xử lý kết quả và chống trùng theo mã tác vụ + event id đã có test case chạy PASS chưa?",
+      "related_kb_ids": [
+        "webhook-ingestion#KB-006",
+        "webhook-ingestion#KB-028",
+        "webhook-ingestion#KB-002",
+        "webhook-ingestion#KB-003",
+        "webhook-ingestion#KB-004",
+        "webhook-ingestion#KB-005"
+      ],
+      "regression_watch_kb_ids": [],
+      "risk_refs": [
+        "Tập topic webhook chưa thống nhất giữa các tài liệu"
+      ],
+      "priority": "P2",
+      "automation_suitability": "HYBRID",
+      "oq_id": "OQ-integrations-002"
+    },
+    {
+      "check_id": "CHK-014",
+      "dimension": "STATE_DATA",
+      "layer": "api",
+      "title": "app/uninstalled và ba topic dữ liệu cá nhân không có chống xử lý trùng",
+      "applicability": {
+        "role": "system (Shopify)",
+        "state": "cùng một webhook (cùng event id) đến hai lần",
+        "environment": "documented",
+        "surface_or_device": "endpoint webhook (cùng bộ nhận nội bộ)"
+      },
+      "precondition": "Shop test riêng chấp nhận được việc dọn dữ liệu; đã lưu webhook hợp lệ cho app/uninstalled và cho từng topic customers/data_request, customers/redact, shop/redact (ba topic này đang thuộc conflict tập topic — xác nhận đã đăng ký trước khi chạy).",
+      "steps": [
+        "Với từng topic: gửi webhook đã lưu lần thứ nhất, chờ job xử lý xong.",
+        "Gửi lại nguyên webhook đó (cùng event id).",
+        "Kiểm Horizon số job đã xếp cho webhook này."
+      ],
+      "observation_point": "Danh sách job trong Horizon theo topic và event id.",
+      "expected_result": "Lần giao trùng không bị chặn bởi cơ chế chống trùng: có job thứ hai được xếp cho cùng webhook.",
+      "oracle": {
+        "kb_ids": [
+          "webhook-ingestion#KB-025",
+          "webhook-ingestion#KB-030"
+        ],
+        "oracle_strength": "STRONG"
+      },
+      "status": "NEEDS_CONFIRMATION",
+      "open_question_draft": "Việc app/uninstalled và ba topic dữ liệu cá nhân không có chống xử lý trùng là thiết kế có chủ đích không, và ba topic dữ liệu cá nhân có thực sự được đăng ký không? Đã có test case chạy PASS cho hành vi này chưa?",
+      "related_kb_ids": [
+        "webhook-ingestion#KB-037",
+        "webhook-ingestion#KB-004"
+      ],
+      "regression_watch_kb_ids": [],
+      "risk_refs": [
+        "app/uninstalled và ba topic dữ liệu cá nhân không có chống xử lý trùng — giao trùng có thể xử lý lặp"
+      ],
+      "priority": "P1",
+      "automation_suitability": "HYBRID",
+      "oq_id": "OQ-integrations-026"
+    },
+    {
+      "check_id": "CHK-015",
+      "dimension": "STATE_DATA",
+      "layer": "api",
+      "title": "shop/update giao trùng hoặc xử lý lỗi: ý nghĩa 'thử lại tối đa 3 lần'",
+      "applicability": {
+        "role": "system (Shopify)",
+        "state": "cùng webhook shop/update đến hai lần; hoặc job shop/update gặp lỗi",
+        "environment": "documented",
+        "surface_or_device": "endpoint webhook; Horizon"
+      },
+      "precondition": "Đã lưu một webhook shop/update hợp lệ cho shop test.",
+      "steps": [
+        "Gửi webhook shop/update đã lưu, sau đó gửi lại nguyên webhook (cùng event id).",
+        "Kiểm Horizon số job và số lần thử của job shop/update."
+      ],
+      "observation_point": "Danh sách job shop/update trong Horizon và số lần thử từng job.",
+      "expected_result": "",
+      "oracle": {
+        "kb_ids": [],
+        "oracle_strength": "NONE"
+      },
+      "status": "NEEDS_CONFIRMATION",
+      "open_question_draft": "'Thử lại tối đa 3 lần' của shop/update là số lần job tự thử lại khi lỗi hay là cơ chế chống trùng? shop/update giao trùng có bị xử lý hai lần không?",
+      "related_kb_ids": [
+        "webhook-ingestion#KB-026"
+      ],
+      "regression_watch_kb_ids": [],
+      "risk_refs": [
+        "Hành vi giao trùng shop/update chưa rõ"
+      ],
+      "priority": "P2",
+      "automation_suitability": "HYBRID",
+      "oq_id": "OQ-integrations-029"
+    },
+    {
+      "check_id": "CHK-016",
+      "dimension": "INTEGRATION",
+      "layer": "portal",
+      "title": "Job webhook thất bại nằm ở danh sách failed của Horizon và được xử lý sau khi nhân viên chạy lại thủ công",
+      "applicability": {
+        "role": "admin-staff",
+        "state": "có job webhook (vd orders/paid) đã xếp hàng nhưng thất bại",
+        "environment": "documented",
+        "surface_or_device": "Horizon (bảng điều khiển hàng đợi)"
+      },
+      "precondition": "Có quyền truy cập Horizon; trên môi trường test có ít nhất một job webhook ở trạng thái thất bại (cách gây lỗi tuỳ môi trường — xem câu hỏi mở).",
+      "steps": [
+        "Mở Horizon, vào danh sách failed jobs và tìm job webhook thất bại.",
+        "Ghi lại đơn/topic của job; kiểm trạng thái đơn trong Mysbox trước khi chạy lại.",
+        "Chạy lại job thủ công từ Horizon.",
+        "Kiểm trạng thái job và trạng thái đơn trong Mysbox sau khi chạy lại."
+      ],
+      "observation_point": "Danh sách failed jobs trong Horizon; trạng thái job sau khi chạy lại; dữ liệu đơn/box trong Mysbox.",
+      "expected_result": "Job thất bại có mặt trong danh sách failed của Horizon; sau khi nhân viên chạy lại thủ công, job được xử lý và đơn có dữ liệu tương ứng trong Mysbox.",
+      "oracle": {
+        "kb_ids": [
+          "webhook-ingestion#KB-033",
+          "webhook-ingestion#KB-035"
+        ],
+        "oracle_strength": "STRONG"
+      },
+      "status": "NEEDS_CONFIRMATION",
+      "open_question_draft": "Luồng job webhook thất bại nằm ở danh sách failed của Horizon và được khôi phục khi nhân viên chạy lại thủ công đã được xác nhận bằng test case chạy PASS chưa? Cách tái tạo một job webhook thất bại trên môi trường test là gì?",
+      "related_kb_ids": [
+        "webhook-ingestion#KB-036"
+      ],
+      "regression_watch_kb_ids": [],
+      "risk_refs": [
+        "Job webhook thất bại không tự retry, phụ thuộc nhân viên chạy lại thủ công"
+      ],
+      "priority": "P1",
+      "automation_suitability": "NOT_SUITABLE",
+      "oq_id": "OQ-integrations-026"
+    },
+    {
+      "check_id": "CHK-017",
+      "dimension": "INTEGRATION",
+      "layer": "api",
+      "title": "Tập topic webhook thực sự được đăng ký cho app",
+      "applicability": {
+        "role": "system",
+        "state": "app đã cài trên shop test",
+        "environment": "documented",
+        "surface_or_device": "cấu hình app / danh sách đăng ký webhook của app trên Shopify"
+      },
+      "precondition": "Shop test cài app; có quyền xem cấu hình app hoặc danh sách đăng ký webhook của app.",
+      "steps": [
+        "Lấy danh sách topic webhook app đang đăng ký (cấu hình app hoặc danh sách đăng ký webhook của app trên Shopify).",
+        "So với các danh sách tài liệu nêu: ba sự kiện; bốn webhook (thêm bulk_operations/finish); bốn topic cộng ba topic dữ liệu cá nhân."
+      ],
+      "observation_point": "Danh sách topic webhook đăng ký thực tế.",
+      "expected_result": "",
+      "oracle": {
+        "kb_ids": [],
+        "oracle_strength": "NONE"
+      },
+      "status": "NEEDS_CONFIRMATION",
+      "open_question_draft": "App thực sự đăng ký những topic webhook nào: chỉ orders/paid, app/uninstalled, shop/update; thêm bulk_operations/finish; hay thêm cả ba topic dữ liệu cá nhân customers/data_request, customers/redact, shop/redact?",
+      "related_kb_ids": [
+        "webhook-ingestion#KB-002",
+        "webhook-ingestion#KB-003",
+        "webhook-ingestion#KB-004",
+        "webhook-ingestion#KB-005",
+        "webhook-ingestion#KB-006"
+      ],
+      "regression_watch_kb_ids": [],
+      "risk_refs": [
+        "Tập topic webhook chưa thống nhất giữa các tài liệu"
+      ],
+      "priority": "P1",
+      "automation_suitability": "SUITABLE",
+      "oq_id": "OQ-integrations-002"
+    },
+    {
+      "check_id": "CHK-018",
+      "dimension": "INTEGRATION",
+      "layer": "api",
+      "title": "Webhook orders/paid cho đơn test",
+      "applicability": {
+        "role": "system (Shopify)",
+        "state": "đơn test (thanh toán bằng cổng test) có box",
+        "environment": "documented",
+        "surface_or_device": "endpoint webhook; Horizon; dữ liệu đơn trong Mysbox"
+      },
+      "precondition": "Shop test cài app, có box đang bán, bật cổng thanh toán test.",
+      "steps": [
+        "Đặt và thanh toán một đơn test có box.",
+        "Kiểm response webhook orders/paid và Horizon có job cho đơn hay không.",
+        "Kiểm trong Mysbox: đơn có yêu cầu mở box, kết quả rút thăm, ghi usage hay không."
+      ],
+      "observation_point": "Horizon; dữ liệu đơn/box/usage của đơn test trong Mysbox.",
+      "expected_result": "",
+      "oracle": {
+        "kb_ids": [],
+        "oracle_strength": "NONE"
+      },
+      "status": "NEEDS_CONFIRMATION",
+      "open_question_draft": "Webhook cho đơn test có được xử lý như đơn thật không (tạo yêu cầu mở box, rút thăm, ghi usage)?",
+      "related_kb_ids": [
+        "webhook-ingestion#KB-041"
+      ],
+      "regression_watch_kb_ids": [],
+      "risk_refs": [
+        "Đơn test bị tính usage hoặc rút thăm như đơn thật"
+      ],
+      "priority": "P2",
+      "automation_suitability": "HYBRID",
+      "oq_id": "OQ-integrations-030"
+    },
+    {
+      "check_id": "CHK-019",
+      "dimension": "REGRESSION",
+      "layer": "api",
+      "title": "Defect watch: lỗi lúc xếp việc bị nuốt, Shopify nhận 204 và không gửi lại webhook",
+      "applicability": {
+        "role": "system (Shopify)",
+        "state": "bộ xử lý webhook ném lỗi lúc xếp việc",
+        "environment": "documented",
+        "surface_or_device": "endpoint webhook; log giao webhook phía Shopify; Horizon/log"
+      },
+      "precondition": "Môi trường test có cách làm bộ xử lý ném lỗi lúc xếp việc (vd hàng đợi tạm không khả dụng — cần chủ sở hữu xác nhận cách tái tạo). Hành vi lỗi hiện tại theo tài liệu dev: lỗi bị nuốt, Shopify nhận 204 và không gửi lại; đơn đã trả có thể không có trong Mysbox.",
+      "steps": [
+        "Tạo điều kiện bộ xử lý webhook ném lỗi lúc xếp việc trên môi trường test.",
+        "Đặt và thanh toán một đơn có box để Shopify gửi orders/paid.",
+        "Ghi lại response Mysbox trả cho webhook, log giao webhook phía Shopify, và đơn có xuất hiện trong Mysbox hay không.",
+        "Khôi phục điều kiện bình thường."
+      ],
+      "observation_point": "Response của webhook; log giao webhook phía Shopify (có gửi lại không); dữ liệu đơn trong Mysbox; Horizon hoặc log ứng dụng.",
+      "expected_result": "",
+      "current_defect_behavior": "Lỗi lúc xếp việc bị nuốt, Mysbox trả 204 'thành công', Shopify không gửi lại; đơn đã trả có thể không có trong Mysbox và tình huống chỉ thấy được ở Horizon hoặc log.",
+      "oracle": {
+        "kb_ids": [],
+        "oracle_strength": "NONE"
+      },
+      "status": "NEEDS_CONFIRMATION",
+      "open_question_draft": "Lỗi nuốt khi xếp việc (Shopify nhận 204 nên không gửi lại webhook) có kế hoạch sửa không? Hành vi mong đợi là gì, ví dụ trả mã lỗi để Shopify gửi lại?",
+      "related_kb_ids": [
+        "webhook-ingestion#KB-038"
+      ],
+      "regression_watch_kb_ids": [
+        "webhook-ingestion#KB-032"
+      ],
+      "risk_refs": [
+        "Lỗi lúc xếp việc bị nuốt, Shopify nhận 204 và không gửi lại — đơn đã trả có thể mất khỏi Mysbox một cách im lặng"
+      ],
+      "priority": "P1",
+      "automation_suitability": "NOT_SUITABLE",
+      "oq_id": "OQ-integrations-010"
+    },
+    {
+      "check_id": "CHK-020",
+      "dimension": "REGRESSION",
+      "layer": "portal",
+      "title": "Defect watch: job webhook đã xếp hàng mà thất bại không tự thử lại",
+      "applicability": {
+        "role": "system",
+        "state": "job webhook (vd orders/paid) thất bại sau khi Shopify đã nhận 204",
+        "environment": "documented",
+        "surface_or_device": "Horizon (bảng điều khiển hàng đợi)"
+      },
+      "precondition": "Như CHK-016: có cách tạo một job webhook thất bại trên môi trường test. Hành vi lỗi hiện tại theo tài liệu dev: job không tự thử lại, đơn nằm ở failed jobs cho tới khi được chạy lại.",
+      "steps": [
+        "Tạo một job webhook orders/paid thất bại trên môi trường test.",
+        "Không can thiệp; theo dõi Horizon trong một khoảng thời gian.",
+        "Ghi lại job có được tự thử lại hay vẫn ở danh sách failed."
+      ],
+      "observation_point": "Trạng thái và số lần thử của job trong Horizon theo thời gian.",
+      "expected_result": "",
+      "current_defect_behavior": "Job webhook đã xếp hàng mà thất bại không tự thử lại; đơn nằm ở failed jobs cho tới khi được chạy lại thủ công.",
+      "oracle": {
+        "kb_ids": [],
+        "oracle_strength": "NONE"
+      },
+      "status": "NEEDS_CONFIRMATION",
+      "open_question_draft": "Job webhook thất bại không tự thử lại có kế hoạch thêm retry tự động không, và hành vi mong đợi là gì?",
+      "related_kb_ids": [
+        "webhook-ingestion#KB-033",
+        "webhook-ingestion#KB-035"
+      ],
+      "regression_watch_kb_ids": [
+        "webhook-ingestion#KB-034"
+      ],
+      "risk_refs": [
+        "Job webhook thất bại không tự retry, phụ thuộc nhân viên chạy lại thủ công"
+      ],
+      "priority": "P1",
+      "automation_suitability": "NOT_SUITABLE",
+      "oq_id": "OQ-integrations-011"
+    },
+    {
+      "check_id": "CHK-021",
+      "dimension": "REGRESSION",
+      "layer": "api",
+      "title": "Defect watch: đơn từ POS / kênh bán khác không gửi thông báo 'đơn đã trả' chuẩn",
+      "applicability": {
+        "role": "system (Shopify)",
+        "state": "đơn có box tạo và thanh toán từ POS hoặc kênh bán khác",
+        "environment": "documented",
+        "surface_or_device": "endpoint webhook; dữ liệu đơn trong Mysbox"
+      },
+      "precondition": "Shop test cài app, có box đang bán và có kênh POS hoặc kênh bán khác. Hành vi lỗi hiện tại theo tài liệu: đơn từ các kênh này không gửi thông báo 'đơn đã trả' chuẩn nên có thể không có đơn/box trong Mysbox.",
+      "steps": [
+        "Tạo và thanh toán một đơn có box từ POS (hoặc kênh bán khác).",
+        "Kiểm có webhook orders/paid đến Mysbox (Horizon/log) và đơn có xuất hiện trong Mysbox không."
+      ],
+      "observation_point": "Horizon/log nhận webhook; dữ liệu đơn/box trong Mysbox.",
+      "expected_result": "",
+      "current_defect_behavior": "Đơn từ POS hoặc kênh bán khác không gửi thông báo 'đơn đã trả' chuẩn; đơn đã trả có thể không có đơn/box trong Mysbox.",
+      "oracle": {
+        "kb_ids": [],
+        "oracle_strength": "NONE"
+      },
+      "status": "NEEDS_CONFIRMATION",
+      "open_question_draft": "Những kênh bán nào không gửi thông báo 'đơn đã trả' chuẩn, và hành vi mong đợi cho đơn từ các kênh đó là gì (ví dụ bắt buộc dùng action Shopify Flow cho kênh bán khác)?",
+      "related_kb_ids": [
+        "webhook-ingestion#KB-024"
+      ],
+      "regression_watch_kb_ids": [
+        "webhook-ingestion#KB-042"
+      ],
+      "risk_refs": [
+        "Đơn từ POS / kênh bán khác không gửi thông báo đơn đã trả chuẩn nên có thể không có đơn/box trong Mysbox"
+      ],
+      "priority": "P1",
+      "automation_suitability": "NOT_SUITABLE",
+      "oq_id": "OQ-integrations-012"
+    }
+  ],
+  "coverage_by_feature_and_risk": [
+    {
+      "feature_id": "FEAT-02-webhook-ingestion",
+      "item": "capability: Xác thực webhook theo đường vào",
+      "check_ids": [
+        "CHK-001",
+        "CHK-002",
+        "CHK-003",
+        "CHK-004",
+        "CHK-005",
+        "CHK-006"
+      ],
+      "coverage": "COVERED",
+      "note": "HMAC đúng/sai trên /webhook, retry của Shopify, X-Api-Key khớp/sai/thiếu/chưa cấu hình trên /webhook/event-bridge. Status khi khoá chưa cấu hình và khi thành công chưa có."
+    },
+    {
+      "feature_id": "FEAT-02-webhook-ingestion",
+      "item": "capability: Kiểm hợp lệ và định tuyến webhook về bộ xử lý của topic",
+      "check_ids": [
+        "CHK-001",
+        "CHK-004",
+        "CHK-007",
+        "CHK-008",
+        "CHK-009"
+      ],
+      "coverage": "PARTIAL",
+      "note": "Danh sách header bắt buộc và quy tắc chuẩn hoá topic chưa có → CHK-007 NEEDS_CONFIRMATION; chuẩn hoá topic chỉ kiểm gián tiếp qua định tuyến."
+    },
+    {
+      "feature_id": "FEAT-02-webhook-ingestion",
+      "item": "capability: Chống xử lý trùng và tuần tự hoá theo đơn",
+      "check_ids": [
+        "CHK-010",
+        "CHK-011",
+        "CHK-012",
+        "CHK-013",
+        "CHK-014",
+        "CHK-015"
+      ],
+      "coverage": "PARTIAL",
+      "note": "Thời hạn khoá chống trùng và cùng đơn khác event id chưa có oracle; shop/update chưa rõ nghĩa."
+    },
+    {
+      "feature_id": "FEAT-02-webhook-ingestion",
+      "item": "capability: Xử lý kết quả tác vụ hàng loạt khi nhận bulk_operations/finish",
+      "check_ids": [
+        "CHK-013",
+        "CHK-017"
+      ],
+      "coverage": "PARTIAL",
+      "note": "Phụ thuộc conflict tập topic."
+    },
+    {
+      "feature_id": "FEAT-02-webhook-ingestion",
+      "item": "capability: Khôi phục job webhook thất bại",
+      "check_ids": [
+        "CHK-016",
+        "CHK-020"
+      ],
+      "coverage": "COVERED",
+      "note": "Cách tái tạo job thất bại trên môi trường test chưa có."
+    },
+    {
+      "feature_id": "FEAT-02-webhook-ingestion",
+      "item": "risk: Lỗi lúc xếp việc bị nuốt 204 (KNOWN_DEFECT)",
+      "check_ids": [
+        "CHK-019"
+      ],
+      "coverage": "COVERED",
+      "note": "Regression watch, không oracle."
+    },
+    {
+      "feature_id": "FEAT-02-webhook-ingestion",
+      "item": "risk: Job thất bại không tự retry (KNOWN_DEFECT)",
+      "check_ids": [
+        "CHK-020",
+        "CHK-016"
+      ],
+      "coverage": "COVERED",
+      "note": "Regression watch + check khôi phục thủ công."
+    },
+    {
+      "feature_id": "FEAT-02-webhook-ingestion",
+      "item": "risk: Đơn POS / kênh bán khác không có thông báo đơn đã trả chuẩn (KNOWN_DEFECT)",
+      "check_ids": [
+        "CHK-021"
+      ],
+      "coverage": "COVERED",
+      "note": "Regression watch, không oracle."
+    },
+    {
+      "feature_id": "FEAT-02-webhook-ingestion",
+      "item": "risk: app/uninstalled và topic dữ liệu cá nhân không chống trùng",
+      "check_ids": [
+        "CHK-014"
+      ],
+      "coverage": "COVERED",
+      "note": ""
+    },
+    {
+      "feature_id": "FEAT-02-webhook-ingestion",
+      "item": "risk: Đường EventBridge không kiểm HMAC; an toàn phụ thuộc khoá X-Api-Key",
+      "check_ids": [
+        "CHK-004",
+        "CHK-005",
+        "CHK-006"
+      ],
+      "coverage": "COVERED",
+      "note": ""
+    },
+    {
+      "feature_id": "FEAT-02-webhook-ingestion",
+      "item": "gap: 'Dọn dữ liệu liên quan' khi app/uninstalled; thời hạn khoá chống trùng; lịch gửi lại của Shopify",
+      "check_ids": [],
+      "coverage": "GAP",
+      "note": "Không có kb_id mô tả hành vi kiểm được trong shard (hệ quả gỡ app thuộc feature vòng đời shop); không sinh check."
+    }
+  ],
+  "excluded_dimensions": [],
+  "last_updated": {
+    "date": "2026-10-16",
+    "ccr_ref": "bootstrap"
+  }
+}

@@ -1,0 +1,596 @@
+{
+  "feature_id": "FEAT-08-background-jobs-and-queue-monitoring",
+  "feature_key": "background-jobs-and-queue-monitoring",
+  "name": "Job định kỳ, độ trễ và theo dõi hàng đợi (Horizon)",
+  "user_goal": "Engineer/support hiểu job nền chạy thế nào (scheduler cho job theo lịch, hàng đợi cho việc theo sự kiện) để chẩn đoán trễ, theo dõi hàng đợi và job lỗi qua Horizon (chỉ super_admin) và retry/xoá job lỗi thủ công.",
+  "user_goal_kb_refs": [
+    "background-jobs-and-queue-monitoring#KB-001",
+    "background-jobs-and-queue-monitoring#KB-003",
+    "background-jobs-and-queue-monitoring#KB-005",
+    "background-jobs-and-queue-monitoring#KB-015",
+    "background-jobs-and-queue-monitoring#KB-018",
+    "background-jobs-and-queue-monitoring#KB-019"
+  ],
+  "stable_since_version": "1",
+  "actors": [
+    {
+      "role": "admin (super_admin)",
+      "permission_observed": "Không quan sát (mode doc). Theo tài liệu: chỉ super_admin mở được Horizon; trong Horizon có thể retry hoặc xoá job.",
+      "kb_refs": [
+        "background-jobs-and-queue-monitoring#KB-003",
+        "background-jobs-and-queue-monitoring#KB-005"
+      ]
+    },
+    {
+      "role": "admin-staff (engineer, support)",
+      "permission_observed": "Không quan sát. Engineer dùng Horizon theo dõi queue và xem failed jobs; support playbook dùng Horizon trong phân loại nhanh, nhưng support có super_admin hay không chưa rõ.",
+      "kb_refs": [
+        "background-jobs-and-queue-monitoring#KB-001"
+      ]
+    },
+    {
+      "role": "system",
+      "permission_observed": "Scheduler (tiến trình riêng chạy liên tục) chạy job theo lịch; việc tức thì theo sự kiện chạy trên hàng đợi với số worker giới hạn.",
+      "kb_refs": [
+        "background-jobs-and-queue-monitoring#KB-010",
+        "background-jobs-and-queue-monitoring#KB-011",
+        "background-jobs-and-queue-monitoring#KB-015",
+        "background-jobs-and-queue-monitoring#KB-018"
+      ]
+    }
+  ],
+  "entry_points": [
+    {
+      "path": "/admin/horizon (route riêng, không qua menu trái của admin panel)",
+      "precondition": "Đã đăng nhập admin panel với role super_admin",
+      "kb_refs": [
+        "background-jobs-and-queue-monitoring#KB-002",
+        "background-jobs-and-queue-monitoring#KB-003"
+      ]
+    }
+  ],
+  "capabilities": [
+    {
+      "name": "Theo dõi hàng đợi và job lỗi qua Horizon",
+      "description": "Horizon (route /admin/horizon, chỉ super_admin) hiển thị tốc độ xử lý, thời gian chờ, worker và job lỗi kèm thời điểm; job lỗi giữ 7 ngày, lịch sử job hoàn tất chỉ giữ 60 phút. Production: queue thường tối đa 10 worker, queue chậm tối đa 5; staging: 3 và 2.",
+      "kb_refs": [
+        "background-jobs-and-queue-monitoring#KB-001",
+        "background-jobs-and-queue-monitoring#KB-002",
+        "background-jobs-and-queue-monitoring#KB-003",
+        "background-jobs-and-queue-monitoring#KB-004",
+        "background-jobs-and-queue-monitoring#KB-006",
+        "background-jobs-and-queue-monitoring#KB-007",
+        "background-jobs-and-queue-monitoring#KB-010",
+        "background-jobs-and-queue-monitoring#KB-011",
+        "background-jobs-and-queue-monitoring#KB-012",
+        "background-jobs-and-queue-monitoring#KB-013"
+      ]
+    },
+    {
+      "name": "Xử lý job lỗi thủ công",
+      "description": "Job lỗi được retry thủ công trong Horizon; trong Horizon cũng có thể xoá job. Chính sách thử lại tự động (\"thường chỉ thử một lần\") chưa xác nhận — xem unknown_areas.",
+      "kb_refs": [
+        "background-jobs-and-queue-monitoring#KB-005",
+        "background-jobs-and-queue-monitoring#KB-008",
+        "background-jobs-and-queue-monitoring#KB-009"
+      ]
+    },
+    {
+      "name": "Chẩn đoán trễ do scheduler hoặc hàng đợi",
+      "description": "Job theo lịch chạy bởi scheduler (tiến trình riêng chạy liên tục); việc tức thì theo sự kiện chạy trên hàng đợi. Scheduler dừng thì mọi job lịch dừng im lặng; hàng đợi kẹt/worker dừng là nguyên nhân phần lớn ticket trễ. Job \"inspire\" chạy hằng giờ và không có tác dụng gì (không phải dấu hiệu lỗi).",
+      "kb_refs": [
+        "background-jobs-and-queue-monitoring#KB-015",
+        "background-jobs-and-queue-monitoring#KB-016",
+        "background-jobs-and-queue-monitoring#KB-017",
+        "background-jobs-and-queue-monitoring#KB-018",
+        "background-jobs-and-queue-monitoring#KB-019",
+        "background-jobs-and-queue-monitoring#KB-014",
+        "background-jobs-and-queue-monitoring#KB-020"
+      ]
+    }
+  ],
+  "state_transitions": [
+    {
+      "from": "Job trên hàng đợi đang chạy",
+      "to": "Job hoàn tất (hiện trong lịch sử Horizon)",
+      "trigger": "Worker xử lý xong",
+      "condition": "",
+      "kb_refs": [
+        "background-jobs-and-queue-monitoring#KB-004",
+        "background-jobs-and-queue-monitoring#KB-007"
+      ]
+    },
+    {
+      "from": "Job hoàn tất trong lịch sử Horizon",
+      "to": "Không còn trong lịch sử Horizon",
+      "trigger": "Quá 60 phút",
+      "condition": "",
+      "kb_refs": [
+        "background-jobs-and-queue-monitoring#KB-007"
+      ]
+    },
+    {
+      "from": "Job trên hàng đợi đang chạy",
+      "to": "Job lỗi (hiện trong danh sách failed jobs kèm thời điểm)",
+      "trigger": "Job gặp lỗi",
+      "condition": "Có tự thử lại hay không chưa xác nhận",
+      "kb_refs": [
+        "background-jobs-and-queue-monitoring#KB-001",
+        "background-jobs-and-queue-monitoring#KB-004"
+      ]
+    },
+    {
+      "from": "Job lỗi",
+      "to": "Job được đưa lại hàng đợi (retry) hoặc bị xoá",
+      "trigger": "super_admin bấm retry hoặc xoá trong Horizon",
+      "condition": "Role super_admin",
+      "kb_refs": [
+        "background-jobs-and-queue-monitoring#KB-003",
+        "background-jobs-and-queue-monitoring#KB-005"
+      ]
+    },
+    {
+      "from": "Job lỗi",
+      "to": "Không còn trong Horizon",
+      "trigger": "Quá 7 ngày",
+      "condition": "",
+      "kb_refs": [
+        "background-jobs-and-queue-monitoring#KB-006"
+      ]
+    },
+    {
+      "from": "Scheduler đang chạy",
+      "to": "Scheduler dừng — mọi job theo lịch dừng im lặng",
+      "trigger": "Tiến trình scheduler dừng",
+      "condition": "Hành vi hiện tại đã biết (KNOWN_DEFECT), không phải expected",
+      "kb_refs": [
+        "background-jobs-and-queue-monitoring#KB-016"
+      ]
+    }
+  ],
+  "confirmed_rules": [
+    {
+      "rule": "Horizon là màn theo dõi hàng đợi job nền và job lỗi; engineer dùng nó để theo dõi queue và xem danh sách failed jobs kèm thời điểm.",
+      "kb_refs": [
+        "background-jobs-and-queue-monitoring#KB-001"
+      ]
+    },
+    {
+      "rule": "Horizon nằm ở route riêng /admin/horizon, không đi qua menu trái của admin panel.",
+      "kb_refs": [
+        "background-jobs-and-queue-monitoring#KB-002"
+      ]
+    },
+    {
+      "rule": "Chỉ admin có role super_admin mới mở được Horizon (/admin/horizon).",
+      "kb_refs": [
+        "background-jobs-and-queue-monitoring#KB-003"
+      ]
+    },
+    {
+      "rule": "Horizon hiển thị tốc độ xử lý, thời gian chờ, worker và job lỗi.",
+      "kb_refs": [
+        "background-jobs-and-queue-monitoring#KB-004"
+      ]
+    },
+    {
+      "rule": "Job lỗi được retry thủ công trong Horizon; trong Horizon có thể retry hoặc xoá job.",
+      "kb_refs": [
+        "background-jobs-and-queue-monitoring#KB-005"
+      ]
+    },
+    {
+      "rule": "Job lỗi được giữ trong Horizon 7 ngày.",
+      "kb_refs": [
+        "background-jobs-and-queue-monitoring#KB-006"
+      ]
+    },
+    {
+      "rule": "Lịch sử job hoàn tất trong Horizon chỉ được giữ 60 phút.",
+      "kb_refs": [
+        "background-jobs-and-queue-monitoring#KB-007"
+      ]
+    },
+    {
+      "rule": "Trên production, queue thường có tối đa 10 worker.",
+      "kb_refs": [
+        "background-jobs-and-queue-monitoring#KB-010"
+      ]
+    },
+    {
+      "rule": "Trên production, queue chậm có tối đa 5 worker.",
+      "kb_refs": [
+        "background-jobs-and-queue-monitoring#KB-011"
+      ]
+    },
+    {
+      "rule": "Trên staging, queue thường có tối đa 3 worker.",
+      "kb_refs": [
+        "background-jobs-and-queue-monitoring#KB-012"
+      ]
+    },
+    {
+      "rule": "Trên staging, queue chậm có tối đa 2 worker.",
+      "kb_refs": [
+        "background-jobs-and-queue-monitoring#KB-013"
+      ]
+    },
+    {
+      "rule": "Scheduler là một tiến trình riêng chạy liên tục.",
+      "kb_refs": [
+        "background-jobs-and-queue-monitoring#KB-015"
+      ]
+    },
+    {
+      "rule": "Job \"inspire\" chạy hằng giờ, chỉ in một câu trích dẫn và không có tác dụng gì.",
+      "kb_refs": [
+        "background-jobs-and-queue-monitoring#KB-017"
+      ]
+    },
+    {
+      "rule": "Các việc xử lý tức thì theo sự kiện chạy trên hàng đợi.",
+      "kb_refs": [
+        "background-jobs-and-queue-monitoring#KB-018"
+      ]
+    }
+  ],
+  "observed_behavior": [
+    {
+      "behavior": "Nếu scheduler dừng thì mọi job theo lịch đều dừng im lặng, không có báo hiệu.",
+      "status": "KNOWN_DEFECT",
+      "note": "Known defect / rủi ro vận hành theo tài liệu; regression watch, không dùng làm oracle.",
+      "kb_refs": [
+        "background-jobs-and-queue-monitoring#KB-016"
+      ]
+    },
+    {
+      "behavior": "Hàng đợi kẹt hoặc worker dừng là nguyên nhân của phần lớn ticket \"trễ\".",
+      "status": "KNOWN_DEFECT",
+      "note": "Known defect / vấn đề vận hành theo tài liệu; regression watch, không dùng làm oracle.",
+      "kb_refs": [
+        "background-jobs-and-queue-monitoring#KB-019"
+      ]
+    }
+  ],
+  "observed_validations": [],
+  "permissions": [
+    {
+      "permission": "Chỉ super_admin mở được Horizon (chủ đề never-supersede: permission).",
+      "kb_refs": [
+        "background-jobs-and-queue-monitoring#KB-003"
+      ]
+    },
+    {
+      "permission": "Trong Horizon có thể retry hoặc xoá job.",
+      "kb_refs": [
+        "background-jobs-and-queue-monitoring#KB-005"
+      ]
+    },
+    {
+      "permission": "Merchant và khách không bao giờ thấy admin panel.",
+      "kb_refs": [
+        "_object-level.admin-panel#KB-003"
+      ]
+    }
+  ],
+  "surface_mapping": {
+    "admin_panel": [
+      {
+        "item": "/admin/horizon — tốc độ xử lý, thời gian chờ, worker, failed jobs, retry/xoá",
+        "kb_refs": [
+          "background-jobs-and-queue-monitoring#KB-002",
+          "background-jobs-and-queue-monitoring#KB-004",
+          "background-jobs-and-queue-monitoring#KB-005"
+        ]
+      }
+    ],
+    "portal": [],
+    "storefront": [],
+    "api": [],
+    "data": [
+      {
+        "item": "Lưu job lỗi 7 ngày; lịch sử job hoàn tất 60 phút",
+        "kb_refs": [
+          "background-jobs-and-queue-monitoring#KB-006",
+          "background-jobs-and-queue-monitoring#KB-007"
+        ]
+      }
+    ],
+    "code": [
+      {
+        "item": "Scheduler (tiến trình riêng) và hàng đợi thường/chậm với giới hạn worker theo môi trường; job inspire hằng giờ",
+        "kb_refs": [
+          "background-jobs-and-queue-monitoring#KB-010",
+          "background-jobs-and-queue-monitoring#KB-011",
+          "background-jobs-and-queue-monitoring#KB-012",
+          "background-jobs-and-queue-monitoring#KB-013",
+          "background-jobs-and-queue-monitoring#KB-015",
+          "background-jobs-and-queue-monitoring#KB-017",
+          "background-jobs-and-queue-monitoring#KB-018"
+        ]
+      }
+    ]
+  },
+  "dependencies": [
+    {
+      "feature_key": "admin-login-and-roles",
+      "reason": "Role super_admin là điều kiện mở Horizon.",
+      "kb_refs": [
+        "background-jobs-and-queue-monitoring#KB-003"
+      ]
+    },
+    {
+      "feature_key": "pool-refill",
+      "reason": "Lệnh backfill token hàng đợi của pool refill là phía còn lại của conflict về lệnh chỉ-có-trên-staging.",
+      "kb_refs": [
+        "background-jobs-and-queue-monitoring#KB-021",
+        "pool-refill#KB-050"
+      ]
+    }
+  ],
+  "risks": [
+    {
+      "risk": "Scheduler dừng không có báo hiệu: mọi job lịch có thể ngừng mà không ai biết cho tới khi có ticket.",
+      "kb_refs": [
+        "background-jobs-and-queue-monitoring#KB-016"
+      ]
+    },
+    {
+      "risk": "Lịch sử job hoàn tất chỉ giữ 60 phút: kiểm job đã chạy hay chưa phải làm sớm, sau đó không còn dấu vết trong Horizon.",
+      "kb_refs": [
+        "background-jobs-and-queue-monitoring#KB-007"
+      ]
+    },
+    {
+      "risk": "Giới hạn worker staging (3/2) thấp hơn production (10/5): độ trễ đo trên staging không đại diện production.",
+      "kb_refs": [
+        "background-jobs-and-queue-monitoring#KB-010",
+        "background-jobs-and-queue-monitoring#KB-011",
+        "background-jobs-and-queue-monitoring#KB-012",
+        "background-jobs-and-queue-monitoring#KB-013"
+      ]
+    },
+    {
+      "risk": "Quyền mở Horizon là chủ đề never-supersede (permission).",
+      "kb_refs": [
+        "background-jobs-and-queue-monitoring#KB-003"
+      ]
+    }
+  ],
+  "limitations": [
+    {
+      "limitation": "Hai lệnh vận hành và một dòng lịch kiểm tra nguồn đơn chỉ có trên nhánh build-staging, chưa lên production; không dùng làm expected cho production.",
+      "kb_refs": [
+        "background-jobs-and-queue-monitoring#KB-021",
+        "_product-level#KB-PL-022",
+        "_product-level#KB-PL-023"
+      ]
+    }
+  ],
+  "freshness": {
+    "observed_at": null
+  },
+  "unknown_areas": [
+    {
+      "question": "Job trên hàng đợi có thực sự chỉ thử một lần không; job nào là ngoại lệ có retry tự động và retry bao nhiêu lần?",
+      "why_it_matters": "Quyết kỳ vọng khi job lỗi tạm thời (ví dụ Shopify API timeout) cho từng luồng; tài liệu chỉ nói \"thường\".",
+      "kb_refs": [
+        "background-jobs-and-queue-monitoring#KB-008",
+        "background-jobs-and-queue-monitoring#KB-009"
+      ],
+      "oq_id": "OQ-admin-panel-088"
+    },
+    {
+      "question": "Scheduler trên production chạy ở đâu và theo múi giờ nào? Tài liệu ghi giờ theo đồng hồ máy chủ, mặc định coi là UTC, nhưng tự khai chưa xác nhận.",
+      "why_it_matters": "Mọi expected result về giờ chạy job (usage charge, auto-unbox, đưa quà vào đơn, nhắc Flow) phụ thuộc múi giờ.",
+      "kb_refs": [
+        "background-jobs-and-queue-monitoring#KB-014",
+        "_product-level#KB-PL-028"
+      ],
+      "oq_id": "OQ-admin-panel-089"
+    },
+    {
+      "question": "Có cảnh báo/giám sát nào khi scheduler hoặc worker dừng, hay chỉ phát hiện qua ticket?",
+      "why_it_matters": "Tài liệu chỉ nói job dừng im lặng; không biết có cơ chế phát hiện để kiểm.",
+      "kb_refs": [
+        "background-jobs-and-queue-monitoring#KB-016",
+        "background-jobs-and-queue-monitoring#KB-019"
+      ],
+      "oq_id": "OQ-admin-panel-055"
+    },
+    {
+      "question": "Admin không có role super_admin truy cập /admin/horizon thì nhận gì (ẩn, 403 hay redirect)? Support có super_admin không?",
+      "why_it_matters": "Cần để viết check phân quyền Horizon.",
+      "kb_refs": [
+        "background-jobs-and-queue-monitoring#KB-003"
+      ],
+      "oq_id": "OQ-admin-panel-057"
+    },
+    {
+      "question": "Khi scheduler đã dừng, Horizon có luôn cho thấy queue trống, không có job lỗi và không có job lịch chạy (như ví dụ minh hoạ) không?",
+      "why_it_matters": "Dấu hiệu chẩn đoán chỉ có trong ví dụ, chưa phải rule.",
+      "kb_refs": [
+        "background-jobs-and-queue-monitoring#KB-020"
+      ],
+      "oq_id": "OQ-admin-panel-058"
+    },
+    {
+      "question": "Có bao nhiêu lệnh vận hành chỉ có trên staging (tài liệu nói hai, bảng lệnh chỉ gắn thẻ cho một lệnh backfill token hàng đợi của pool refill), lệnh còn lại là gì, và khi nào các phần này cùng dòng lịch kiểm tra nguồn đơn lên production?",
+      "why_it_matters": "Ảnh hưởng phạm vi khác biệt production/staging; hiện chưa lên production và đang mâu thuẫn trong tài liệu.",
+      "kb_refs": [
+        "background-jobs-and-queue-monitoring#KB-021",
+        "pool-refill#KB-050"
+      ],
+      "oq_id": "OQ-admin-panel-003"
+    },
+    {
+      "question": "Tài liệu không nêu endpoint hay bảng dữ liệu nào cho Horizon/hàng đợi ngoài route /admin/horizon.",
+      "why_it_matters": "Không kiểm được qua API/data layer.",
+      "kb_refs": [],
+      "oq_id": "OQ-admin-panel-059"
+    }
+  ],
+  "last_updated": {
+    "date": "2026-10-16",
+    "ccr_ref": "bootstrap"
+  },
+  "coverage_matrix": [
+    {
+      "feature_id": "FEAT-08-background-jobs-and-queue-monitoring",
+      "layer": "admin_panel",
+      "role": "super_admin",
+      "state": "mở Horizon, xem queue/failed jobs",
+      "environment": "documented",
+      "covered": true
+    },
+    {
+      "feature_id": "FEAT-08-background-jobs-and-queue-monitoring",
+      "layer": "admin_panel",
+      "role": "super_admin",
+      "state": "retry / xoá job lỗi",
+      "environment": "documented",
+      "covered": true
+    },
+    {
+      "feature_id": "FEAT-08-background-jobs-and-queue-monitoring",
+      "layer": "admin_panel",
+      "role": "admin không có super_admin",
+      "state": "truy cập /admin/horizon",
+      "environment": "documented",
+      "covered": false
+    },
+    {
+      "feature_id": "FEAT-08-background-jobs-and-queue-monitoring",
+      "layer": "data",
+      "role": "system",
+      "state": "job lỗi > 7 ngày / job hoàn tất > 60 phút",
+      "environment": "documented",
+      "covered": true
+    },
+    {
+      "feature_id": "FEAT-08-background-jobs-and-queue-monitoring",
+      "layer": "code",
+      "role": "system",
+      "state": "job lỗi — tự retry hay không",
+      "environment": "documented",
+      "covered": false
+    },
+    {
+      "feature_id": "FEAT-08-background-jobs-and-queue-monitoring",
+      "layer": "code",
+      "role": "system",
+      "state": "giới hạn worker",
+      "environment": "documented (production 10/5)",
+      "covered": true
+    },
+    {
+      "feature_id": "FEAT-08-background-jobs-and-queue-monitoring",
+      "layer": "code",
+      "role": "system",
+      "state": "giới hạn worker",
+      "environment": "documented (staging 3/2)",
+      "covered": true
+    },
+    {
+      "feature_id": "FEAT-08-background-jobs-and-queue-monitoring",
+      "layer": "code",
+      "role": "system",
+      "state": "scheduler dừng (known defect)",
+      "environment": "documented",
+      "covered": true
+    },
+    {
+      "feature_id": "FEAT-08-background-jobs-and-queue-monitoring",
+      "layer": "code",
+      "role": "system",
+      "state": "múi giờ scheduler production",
+      "environment": "documented",
+      "covered": false
+    },
+    {
+      "feature_id": "FEAT-08-background-jobs-and-queue-monitoring",
+      "layer": "code",
+      "role": "admin-staff (engineer)",
+      "state": "lệnh vận hành / lịch kiểm tra nguồn đơn chỉ-có-trên-staging",
+      "environment": "staging (chưa lên production)",
+      "covered": false
+    },
+    {
+      "feature_id": "FEAT-08-background-jobs-and-queue-monitoring",
+      "layer": "api",
+      "role": "any",
+      "state": "any",
+      "environment": "documented",
+      "covered": false
+    }
+  ],
+  "profile_conflicts": [
+    {
+      "conflict_group": "CONF-admin-panel-01",
+      "resolution": "UNRESOLVED",
+      "summary": "Tài liệu job nền nói có hai lệnh vận hành chỉ có trên staging (cùng một dòng lịch kiểm tra nguồn đơn), nhưng bảng lệnh chỉ gắn thẻ chỉ-có-trên-staging cho một lệnh (backfill token hàng đợi của pool refill). Cần dev xác nhận.",
+      "kb_refs": [
+        "background-jobs-and-queue-monitoring#KB-021",
+        "pool-refill#KB-050"
+      ],
+      "impact_on_profile": "Phần staging-only chỉ ghi ở limitations/unknown_areas, không vào confirmed_rules."
+    }
+  ],
+  "profile_relationships": [
+    {
+      "from": "background-jobs-and-queue-monitoring",
+      "to": "daily-usage-charge-and-charge-status",
+      "type": "RUNS_JOBS_OF",
+      "note": "Job usage charge theo lịch do scheduler chạy; lịch cụ thể nằm ở profile kia.",
+      "kb_refs": [
+        "background-jobs-and-queue-monitoring#KB-015"
+      ]
+    },
+    {
+      "from": "background-jobs-and-queue-monitoring",
+      "to": "auto-unbox",
+      "type": "RUNS_JOBS_OF",
+      "note": "Job auto-unbox theo lịch; lịch cụ thể nằm ở profile kia.",
+      "kb_refs": [
+        "background-jobs-and-queue-monitoring#KB-015"
+      ]
+    },
+    {
+      "from": "background-jobs-and-queue-monitoring",
+      "to": "prizes-added-to-order",
+      "type": "RUNS_JOBS_OF",
+      "note": "Job đưa quà vào đơn theo lịch; lịch cụ thể nằm ở profile kia.",
+      "kb_refs": [
+        "background-jobs-and-queue-monitoring#KB-015"
+      ]
+    },
+    {
+      "from": "background-jobs-and-queue-monitoring",
+      "to": "shop-connection-and-reauth",
+      "type": "RUNS_JOBS_OF",
+      "note": "Job token theo lịch.",
+      "kb_refs": [
+        "background-jobs-and-queue-monitoring#KB-015"
+      ]
+    },
+    {
+      "from": "background-jobs-and-queue-monitoring",
+      "to": "partner-events-bigquery-sync",
+      "type": "RUNS_JOBS_OF",
+      "note": "Job đồng bộ BigQuery theo lịch.",
+      "kb_refs": [
+        "background-jobs-and-queue-monitoring#KB-015"
+      ]
+    },
+    {
+      "from": "background-jobs-and-queue-monitoring",
+      "to": "pool-refill",
+      "type": "CONFLICT_LINK",
+      "note": "Lệnh chỉ-có-trên-staging (conflict CONF-admin-panel-01).",
+      "kb_refs": [
+        "background-jobs-and-queue-monitoring#KB-021",
+        "pool-refill#KB-050"
+      ]
+    }
+  ]
+}

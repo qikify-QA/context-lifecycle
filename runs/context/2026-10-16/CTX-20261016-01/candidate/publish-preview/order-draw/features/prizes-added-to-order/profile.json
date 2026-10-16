@@ -1,0 +1,1137 @@
+{
+  "feature_id": "FEAT-02-prizes-added-to-order",
+  "feature_key": "prizes-added-to-order",
+  "name": "Quà được thêm vào đơn Shopify (dòng $0)",
+  "user_goal": "Merchant nhận quà digital ngay trên chính đơn Shopify (dòng quà giá gốc kèm giảm 100% \"MYSBOX\", giá cuối 0, chưa fulfill) để fulfil như hàng thường, đúng thời điểm mọi box digital đã mở và cửa sổ resell đã hết (hoặc khi đường mở bỏ qua cửa sổ); trạng thái QUEUED / COMPLETED / FAILED phản ánh kết quả, đơn lớn và lỗi Shopify có đường xử lý và retry.",
+  "user_goal_kb_refs": [
+    "prizes-added-to-order#KB-001",
+    "prizes-added-to-order#KB-018",
+    "prizes-added-to-order#KB-019",
+    "prizes-added-to-order#KB-021",
+    "prizes-added-to-order#KB-037",
+    "prizes-added-to-order#KB-050",
+    "prizes-added-to-order#KB-055",
+    "_object-level.order-draw#KB-008"
+  ],
+  "stable_since_version": "1",
+  "actors": [
+    {
+      "role": "system",
+      "permission_observed": "Kiểm điều kiện, chạy job sync định kỳ, mở phiên order edit trên Shopify, thêm dòng quà, áp giảm giá, commit, cập nhật trạng thái đơn.",
+      "kb_refs": [
+        "prizes-added-to-order#KB-001",
+        "prizes-added-to-order#KB-007",
+        "prizes-added-to-order#KB-024",
+        "prizes-added-to-order#KB-025",
+        "prizes-added-to-order#KB-033"
+      ]
+    },
+    {
+      "role": "customer",
+      "permission_observed": "Mở box cuối (Unbox / Multi-unbox) là một đường kích hoạt; thấy quà ở trang kết quả trước khi đơn Shopify có; không nhận email Mysbox ở bước này.",
+      "kb_refs": [
+        "prizes-added-to-order#KB-005",
+        "prizes-added-to-order#KB-006",
+        "prizes-added-to-order#KB-032",
+        "prizes-added-to-order#KB-066"
+      ]
+    },
+    {
+      "role": "merchant",
+      "permission_observed": "Mở box qua action Shopify Flow; thấy và fulfil dòng quà trên đơn Shopify; xem khối \"Mysbox prizes\" trên trang đơn Shopify admin; xem mục Orders trong portal.",
+      "kb_refs": [
+        "prizes-added-to-order#KB-013",
+        "prizes-added-to-order#KB-037",
+        "prizes-added-to-order#KB-038",
+        "prizes-added-to-order#KB-064",
+        "_object-level.order-draw#KB-021"
+      ]
+    },
+    {
+      "role": "support",
+      "permission_observed": "Retry việc thêm quà cho đơn FAILED trong admin nội bộ; xem status dòng box ở tab Boxes.",
+      "kb_refs": [
+        "prizes-added-to-order#KB-055",
+        "prizes-added-to-order#KB-056",
+        "prizes-added-to-order#KB-057",
+        "_object-level.order-draw#KB-018"
+      ]
+    },
+    {
+      "role": "admin",
+      "permission_observed": "Nhân viên Mysbox đổi setting ẩn trong back-office (vd skip order line item sync).",
+      "kb_refs": [
+        "prizes-added-to-order#KB-061"
+      ]
+    }
+  ],
+  "entry_points": [
+    {
+      "path": "Storefront — nút \"Unbox\" / \"Multi-unbox\" ở box cuối của đơn",
+      "precondition": "Mọi box digital của đơn đã mở và cửa sổ resell đã hết (hoặc không có).",
+      "kb_refs": [
+        "prizes-added-to-order#KB-005",
+        "prizes-added-to-order#KB-006"
+      ]
+    },
+    {
+      "path": "Job định kỳ \"sync\" 00:00 / 08:00 / 16:00",
+      "precondition": "Đơn đã mở hết box, cửa sổ resell kết thúc trong 24 giờ gần nhất.",
+      "kb_refs": [
+        "prizes-added-to-order#KB-007",
+        "prizes-added-to-order#KB-008",
+        "prizes-added-to-order#KB-011"
+      ]
+    },
+    {
+      "path": "Shopify Flow action \"Open all mystery boxes in an order\"",
+      "precondition": "Merchant cấu hình Flow.",
+      "kb_refs": [
+        "prizes-added-to-order#KB-013"
+      ]
+    },
+    {
+      "path": "Auto-unbox",
+      "precondition": "Đơn tới giờ auto-unbox.",
+      "kb_refs": [
+        "prizes-added-to-order#KB-014"
+      ]
+    },
+    {
+      "path": "Admin nội bộ — retry thêm quà cho đơn",
+      "precondition": "Nhân viên support; đơn FAILED hoặc quà chưa vào đơn.",
+      "kb_refs": [
+        "prizes-added-to-order#KB-055",
+        "prizes-added-to-order#KB-056"
+      ]
+    },
+    {
+      "path": "Shopify admin — trang đơn (dòng quà, khối \"Mysbox prizes\")",
+      "precondition": "Quà đã được thêm vào đơn.",
+      "kb_refs": [
+        "prizes-added-to-order#KB-018",
+        "prizes-added-to-order#KB-064"
+      ]
+    }
+  ],
+  "capabilities": [
+    {
+      "name": "Cổng điều kiện thêm quà vào đơn",
+      "description": "Quà digital chỉ được thêm khi mọi box digital của đơn đã mở, cửa sổ resell đã hết (hoặc box không có resell) và đơn không bị khoá do resell đang chạy; thiếu điều kiện thì đơn ở lại QUEUED; quà/box đã resell không được thêm.",
+      "kb_refs": [
+        "prizes-added-to-order#KB-001",
+        "prizes-added-to-order#KB-002",
+        "prizes-added-to-order#KB-003",
+        "prizes-added-to-order#KB-004",
+        "prizes-added-to-order#KB-023",
+        "prizes-added-to-order#KB-058",
+        "prizes-added-to-order#KB-017",
+        "_object-level.order-draw#KB-012"
+      ]
+    },
+    {
+      "name": "Kích hoạt khi khách mở box cuối",
+      "description": "Khách mở box cuối bằng \"Unbox\" (hoặc \"Multi-unbox\") khi cửa sổ resell đã hết thì quà được thêm ngay; ngoài trường hợp đó mở một box không thêm quà.",
+      "kb_refs": [
+        "prizes-added-to-order#KB-005",
+        "prizes-added-to-order#KB-006"
+      ]
+    },
+    {
+      "name": "Job sync định kỳ sau cửa sổ resell",
+      "description": "Khi khách đã mở hết box mà cửa sổ resell còn, quà được thêm bởi job sync chạy 3 lần/ngày lúc 00:00, 08:00, 16:00 ở lượt kế tiếp sau khi cửa sổ hết; chỉ xét đơn có cửa sổ kết thúc trong 24 giờ gần nhất và đã mở hết box; trễ tối đa gần 8 giờ.",
+      "kb_refs": [
+        "prizes-added-to-order#KB-007",
+        "prizes-added-to-order#KB-008",
+        "prizes-added-to-order#KB-009",
+        "prizes-added-to-order#KB-011",
+        "prizes-added-to-order#KB-012",
+        "prizes-added-to-order#KB-060"
+      ]
+    },
+    {
+      "name": "Đường mở bỏ qua cửa sổ resell",
+      "description": "Mở bằng action Shopify Flow \"Open all mystery boxes in an order\" hoặc bằng auto-unbox thì quà được thêm ngay, bỏ qua cửa sổ resell. Việc merchant mở thủ công (portal / Shopify admin) có bỏ qua cửa sổ hay không đang mâu thuẫn.",
+      "kb_refs": [
+        "prizes-added-to-order#KB-013",
+        "prizes-added-to-order#KB-014",
+        "prizes-added-to-order#KB-015",
+        "prizes-added-to-order#KB-016"
+      ]
+    },
+    {
+      "name": "Sửa đơn Shopify để thêm dòng quà $0",
+      "description": "App mở phiên order edit, thêm mỗi loại quà trúng với giá gốc rồi áp giảm giá 100% mô tả \"MYSBOX\" (giá cuối 0), giữ nguyên dòng box gốc, không đổi tổng đơn, commit phiên; dòng quà ở trạng thái chưa fulfill để merchant fulfil như hàng thường.",
+      "kb_refs": [
+        "prizes-added-to-order#KB-018",
+        "prizes-added-to-order#KB-019",
+        "prizes-added-to-order#KB-020",
+        "prizes-added-to-order#KB-021",
+        "prizes-added-to-order#KB-024",
+        "prizes-added-to-order#KB-025",
+        "prizes-added-to-order#KB-036",
+        "prizes-added-to-order#KB-037",
+        "prizes-added-to-order#KB-038",
+        "_object-level.order-draw#KB-005"
+      ]
+    },
+    {
+      "name": "Thông báo sửa đơn cho khách",
+      "description": "Mặc định khi commit, app yêu cầu Shopify gửi email \"order edit notification\" cho khách; Mysbox không gửi email riêng ở bước này. Việc khách luôn nhận email hay không (cấu hình ẩn, cài đặt store) đang mâu thuẫn.",
+      "kb_refs": [
+        "prizes-added-to-order#KB-026",
+        "prizes-added-to-order#KB-032",
+        "prizes-added-to-order#KB-027",
+        "prizes-added-to-order#KB-028",
+        "prizes-added-to-order#KB-029",
+        "prizes-added-to-order#KB-030"
+      ]
+    },
+    {
+      "name": "Thêm quà cho đơn lớn",
+      "description": "Ngưỡng tính theo số loại quà khác nhau: ≤20 loại thêm trong job thường, 21–100 loại bằng job dài, >100 loại dùng bulk operation Shopify hai pha (thêm món, rồi áp giảm giá); ở bulk mỗi bước chờ thông báo Shopify, tối đa 5 bulk job mỗi shop, mỗi lần retry xếp thêm việc bulk.",
+      "kb_refs": [
+        "prizes-added-to-order#KB-041",
+        "prizes-added-to-order#KB-042",
+        "prizes-added-to-order#KB-043",
+        "prizes-added-to-order#KB-045",
+        "prizes-added-to-order#KB-046",
+        "prizes-added-to-order#KB-047",
+        "prizes-added-to-order#KB-048",
+        "prizes-added-to-order#KB-049"
+      ]
+    },
+    {
+      "name": "Phản ánh kết quả bằng trạng thái đơn và dòng box",
+      "description": "Commit xong thì đơn COMPLETED (xoá giờ auto-unbox và hạn resell); mọi lỗi Shopify khi thêm quà (đơn không sửa được, đơn huỷ/đóng/hoàn hết, sản phẩm/biến thể bị xoá, rate limit, quyền truy cập hết hiệu lực) làm đơn FAILED, không có tình trạng làm dở (phiên chưa commit bị bỏ); dòng box PENDING = đang thêm quà.",
+      "kb_refs": [
+        "prizes-added-to-order#KB-033",
+        "prizes-added-to-order#KB-034",
+        "prizes-added-to-order#KB-035",
+        "prizes-added-to-order#KB-050",
+        "prizes-added-to-order#KB-051",
+        "prizes-added-to-order#KB-052",
+        "prizes-added-to-order#KB-054",
+        "prizes-added-to-order#KB-059",
+        "prizes-added-to-order#KB-063",
+        "_object-level.order-draw#KB-008",
+        "_object-level.order-draw#KB-010",
+        "_object-level.order-draw#KB-013",
+        "_object-level.order-draw#KB-014",
+        "_object-level.order-draw#KB-017",
+        "_object-level.order-draw#KB-018",
+        "_object-level.order-draw#KB-019",
+        "_object-level.order-draw#KB-020"
+      ]
+    },
+    {
+      "name": "Retry thêm quà sau thất bại",
+      "description": "Support retry trong admin nội bộ làm lại việc thêm quà với đủ quà, không thêm trùng cho đơn FAILED; nhưng nếu dòng quà đã được thêm tay trong Shopify thì retry sync vẫn thêm lần nữa.",
+      "kb_refs": [
+        "prizes-added-to-order#KB-055",
+        "prizes-added-to-order#KB-056",
+        "prizes-added-to-order#KB-057"
+      ]
+    },
+    {
+      "name": "Bỏ qua bước thêm dòng quà theo setting ẩn",
+      "description": "Shop bật setting ẩn \"skip order line item sync\" thì app không thêm dòng quà và đơn vẫn COMPLETED (chủ ý).",
+      "kb_refs": [
+        "prizes-added-to-order#KB-061",
+        "prizes-added-to-order#KB-062"
+      ]
+    },
+    {
+      "name": "Merchant và khách thấy quà",
+      "description": "Merchant nhận biết quà digital qua chính các dòng thêm vào đơn; khối \"Mysbox prizes\" trên trang đơn Shopify admin đọc metafield đơn `mysbox_prize_ids` và metafield biến thể `mysbox.box`; trang kết quả của khách có quà trước khi đơn Shopify có là bình thường.",
+      "kb_refs": [
+        "prizes-added-to-order#KB-038",
+        "prizes-added-to-order#KB-064",
+        "prizes-added-to-order#KB-065",
+        "prizes-added-to-order#KB-066",
+        "_object-level.order-draw#KB-021"
+      ]
+    }
+  ],
+  "state_transitions": [
+    {
+      "from": "QUEUED",
+      "to": "QUEUED (chờ)",
+      "trigger": "Bất kỳ lần xét thêm quà",
+      "condition": "Thiếu một trong các điều kiện: chưa mở hết box digital, cửa sổ resell chưa hết, đơn đang khoá do resell",
+      "kb_refs": [
+        "prizes-added-to-order#KB-002",
+        "prizes-added-to-order#KB-003",
+        "prizes-added-to-order#KB-004",
+        "_object-level.order-draw#KB-012"
+      ]
+    },
+    {
+      "from": "QUEUED",
+      "to": "COMPLETED",
+      "trigger": "Khách mở box cuối khi cửa sổ đã hết / job sync / Flow / auto-unbox; app commit phiên order edit",
+      "condition": "Đủ điều kiện (hoặc đường kích hoạt bỏ qua cửa sổ); COMPLETED xoá giờ auto-unbox và hạn resell",
+      "kb_refs": [
+        "prizes-added-to-order#KB-005",
+        "prizes-added-to-order#KB-007",
+        "prizes-added-to-order#KB-013",
+        "prizes-added-to-order#KB-014",
+        "prizes-added-to-order#KB-033",
+        "prizes-added-to-order#KB-034"
+      ]
+    },
+    {
+      "from": "QUEUED",
+      "to": "FAILED",
+      "trigger": "Shopify trả lỗi khi thêm quà",
+      "condition": "Đơn không sửa được / huỷ / đóng / hoàn hết, sản phẩm hoặc biến thể bị xoá, rate limit, quyền truy cập hết hiệu lực; phiên chưa commit bị bỏ",
+      "kb_refs": [
+        "prizes-added-to-order#KB-050",
+        "prizes-added-to-order#KB-051",
+        "prizes-added-to-order#KB-052",
+        "prizes-added-to-order#KB-054"
+      ]
+    },
+    {
+      "from": "FAILED",
+      "to": "COMPLETED",
+      "trigger": "Support retry thêm quà",
+      "condition": "Retry làm lại với đủ quà, không thêm trùng",
+      "kb_refs": [
+        "prizes-added-to-order#KB-055",
+        "prizes-added-to-order#KB-056"
+      ]
+    },
+    {
+      "from": "QUEUED",
+      "to": "COMPLETED (không có dòng quà)",
+      "trigger": "Xét thêm quà",
+      "condition": "Shop bật setting ẩn skip order line item sync",
+      "kb_refs": [
+        "prizes-added-to-order#KB-061"
+      ]
+    },
+    {
+      "from": "dòng box QUEUED",
+      "to": "dòng box PENDING → COMPLETED / FAILED",
+      "trigger": "App đang thêm quà vào đơn",
+      "condition": "PENDING = đang thêm ngay lúc này",
+      "kb_refs": [
+        "_object-level.order-draw#KB-017",
+        "_object-level.order-draw#KB-018",
+        "_object-level.order-draw#KB-019",
+        "_object-level.order-draw#KB-020"
+      ]
+    }
+  ],
+  "confirmed_rules": [
+    {
+      "rule": "Quà của box digital chỉ được thêm vào chính đơn Shopify khi mọi box digital của đơn đã mở và cửa sổ resell đã hết (hoặc box không có resell); đơn mới mở một phần thì chưa có quà nào được thêm.",
+      "kb_refs": [
+        "prizes-added-to-order#KB-001",
+        "prizes-added-to-order#KB-002"
+      ]
+    },
+    {
+      "rule": "Một điều kiện để thêm quà là đơn không bị khoá vì một lần resell đang chạy; thiếu điều kiện thì đơn ở lại QUEUED và chờ; đơn đã mở hết box vẫn QUEUED suốt cửa sổ resell.",
+      "kb_refs": [
+        "prizes-added-to-order#KB-003",
+        "prizes-added-to-order#KB-004",
+        "_object-level.order-draw#KB-012"
+      ]
+    },
+    {
+      "rule": "Khách mở box cuối bằng \"Unbox\" khi cửa sổ resell đã hết (hoặc không có) thì quà được thêm ngay; ngoài trường hợp đó mở một box không thêm quà. \"Multi-unbox\" theo cùng điều kiện.",
+      "kb_refs": [
+        "prizes-added-to-order#KB-005",
+        "prizes-added-to-order#KB-006"
+      ]
+    },
+    {
+      "rule": "Khi đã mở hết box mà cửa sổ resell còn, quà được thêm bởi job sync chạy mỗi 8 giờ (00:00, 08:00, 16:00) ở lượt kế tiếp sau khi cửa sổ hết; trễ tối đa gần 8 giờ.",
+      "kb_refs": [
+        "prizes-added-to-order#KB-007",
+        "prizes-added-to-order#KB-009"
+      ]
+    },
+    {
+      "rule": "Job sync chỉ xét đơn có cửa sổ resell kết thúc trong 24 giờ gần nhất (đơn đóng cửa sổ quá 1 ngày không được tự nhặt) và chỉ xử lý đơn đã mở hết box.",
+      "kb_refs": [
+        "prizes-added-to-order#KB-008",
+        "prizes-added-to-order#KB-011"
+      ]
+    },
+    {
+      "rule": "Đưa quà vào đơn thuộc nhóm việc theo sự kiện, xử lý tức thì khi có sự kiện.",
+      "kb_refs": [
+        "prizes-added-to-order#KB-012"
+      ]
+    },
+    {
+      "rule": "Mở bằng action Shopify Flow \"Open all mystery boxes in an order\" hoặc bằng auto-unbox thì quà được thêm ngay vào đơn, bỏ qua cửa sổ resell.",
+      "kb_refs": [
+        "prizes-added-to-order#KB-013",
+        "prizes-added-to-order#KB-014"
+      ]
+    },
+    {
+      "rule": "Mỗi loại quà trúng được thêm với giá gốc rồi áp giảm giá 100% mô tả \"MYSBOX\"; dòng quà có giá cuối 0; tổng đơn không đổi (chủ ý); dòng box gốc giữ nguyên.",
+      "kb_refs": [
+        "prizes-added-to-order#KB-018",
+        "prizes-added-to-order#KB-019",
+        "prizes-added-to-order#KB-020",
+        "prizes-added-to-order#KB-036"
+      ]
+    },
+    {
+      "rule": "Ở bước cuối của box digital, hệ thống sửa đơn Shopify (\"Sync\") để thêm quà đã trúng thành dòng sản phẩm giá 0: mở phiên order edit, thêm quà, commit phiên.",
+      "kb_refs": [
+        "prizes-added-to-order#KB-021",
+        "prizes-added-to-order#KB-024",
+        "prizes-added-to-order#KB-025",
+        "_object-level.order-draw#KB-005"
+      ]
+    },
+    {
+      "rule": "Quà không được thêm cho box hoặc quà đã resell.",
+      "kb_refs": [
+        "prizes-added-to-order#KB-023"
+      ]
+    },
+    {
+      "rule": "Mặc định khi commit phiên sửa đơn, app yêu cầu Shopify gửi email \"order edit notification\" cho khách; Mysbox không gửi email riêng ở bước thêm quà.",
+      "kb_refs": [
+        "prizes-added-to-order#KB-026",
+        "prizes-added-to-order#KB-032"
+      ]
+    },
+    {
+      "rule": "Sau commit, đơn chuyển COMPLETED; khi COMPLETED, giờ auto-unbox và hạn resell của đơn bị xoá.",
+      "kb_refs": [
+        "prizes-added-to-order#KB-033",
+        "prizes-added-to-order#KB-034",
+        "prizes-added-to-order#KB-035"
+      ]
+    },
+    {
+      "rule": "Với box digital, dòng quà được thêm ở trạng thái chưa fulfill, merchant fulfil như hàng thường và nhận biết quà qua chính các dòng này.",
+      "kb_refs": [
+        "prizes-added-to-order#KB-037",
+        "prizes-added-to-order#KB-038"
+      ]
+    },
+    {
+      "rule": "Ngưỡng chọn cách thêm quà tính theo số loại quà khác nhau (không theo số box): ≤20 loại thêm trong job thường; 21–100 loại bằng job dài; >100 loại dùng bulk operation Shopify hai pha (thêm món, rồi áp giảm giá).",
+      "kb_refs": [
+        "prizes-added-to-order#KB-041",
+        "prizes-added-to-order#KB-042",
+        "prizes-added-to-order#KB-043",
+        "prizes-added-to-order#KB-045"
+      ]
+    },
+    {
+      "rule": "Ở chế độ bulk, mỗi bước chờ thông báo Shopify; mỗi shop chạy tối đa 5 bulk job; mỗi lần retry sync xếp thêm việc bulk.",
+      "kb_refs": [
+        "prizes-added-to-order#KB-046",
+        "prizes-added-to-order#KB-047",
+        "prizes-added-to-order#KB-048"
+      ]
+    },
+    {
+      "rule": "Mọi lỗi Shopify khi thêm quà làm đơn FAILED, gồm Shopify từ chối sửa đơn (đơn huỷ/đóng/hoàn hết, sản phẩm hay biến thể bị xoá), rate limit, hoặc thông tin xác thực của app với shop hết hiệu lực.",
+      "kb_refs": [
+        "prizes-added-to-order#KB-050",
+        "prizes-added-to-order#KB-051",
+        "prizes-added-to-order#KB-052"
+      ]
+    },
+    {
+      "rule": "Khi thêm quà thất bại không có tình trạng làm dở một nửa: phiên sửa đơn chưa commit bị bỏ.",
+      "kb_refs": [
+        "prizes-added-to-order#KB-054"
+      ]
+    },
+    {
+      "rule": "Retry sau thất bại làm lại việc thêm quà với đủ quà; retry đơn FAILED không thêm trùng quà.",
+      "kb_refs": [
+        "prizes-added-to-order#KB-055",
+        "prizes-added-to-order#KB-056"
+      ]
+    },
+    {
+      "rule": "Nếu dòng quà đã được thêm tay trong Shopify, retry sync vẫn thêm dòng quà lần nữa.",
+      "kb_refs": [
+        "prizes-added-to-order#KB-057"
+      ]
+    },
+    {
+      "rule": "Nguyên nhân quà chưa vào đơn: khách chưa mở hết và chưa tới giờ auto-unbox; lần thêm trước bị lỗi (FAILED); shop cần cấp quyền lại cho app.",
+      "kb_refs": [
+        "prizes-added-to-order#KB-058",
+        "prizes-added-to-order#KB-059",
+        "prizes-added-to-order#KB-063"
+      ]
+    },
+    {
+      "rule": "Shop bật setting ẩn \"skip order line item sync\" (`skip_order_line_item_sync`) thì app không thêm dòng quà và đơn vẫn COMPLETED; đó là chủ ý.",
+      "kb_refs": [
+        "prizes-added-to-order#KB-061"
+      ]
+    },
+    {
+      "rule": "Khối đơn \"Mysbox prizes\" trong Shopify admin đọc metafield đơn `mysbox_prize_ids` và metafield biến thể `mysbox.box`.",
+      "kb_refs": [
+        "prizes-added-to-order#KB-064",
+        "prizes-added-to-order#KB-065"
+      ]
+    },
+    {
+      "rule": "Trang kết quả đã cho thấy quà trong khi đơn Shopify chưa có quà là hành vi bình thường.",
+      "kb_refs": [
+        "prizes-added-to-order#KB-066"
+      ]
+    },
+    {
+      "rule": "Status đơn: QUEUED = quà chưa (đủ) trên đơn Shopify; COMPLETED = quà đã vào đơn hoặc không có gì để thêm; FAILED = lần sửa đơn thêm quà gần nhất lỗi.",
+      "kb_refs": [
+        "_object-level.order-draw#KB-008",
+        "_object-level.order-draw#KB-010",
+        "_object-level.order-draw#KB-013",
+        "_object-level.order-draw#KB-014"
+      ]
+    },
+    {
+      "rule": "Status dòng box (opening request) trên tab Boxes của admin nội bộ: QUEUED = chưa đưa hết quà vào đơn; PENDING = đang thêm quà ngay lúc này; COMPLETED = quà đã vào đơn; FAILED = lần thêm gần nhất lỗi.",
+      "kb_refs": [
+        "_object-level.order-draw#KB-017",
+        "_object-level.order-draw#KB-018",
+        "_object-level.order-draw#KB-019",
+        "_object-level.order-draw#KB-020"
+      ]
+    },
+    {
+      "rule": "Mục Orders của portal hiển thị danh sách đơn, số box và trạng thái fulfilment Shopify.",
+      "kb_refs": [
+        "_object-level.order-draw#KB-021"
+      ]
+    }
+  ],
+  "observed_behavior": [
+    {
+      "behavior": "Một thông báo bulk của Shopify bị mất làm chiếm chỗ bulk job tới 24 giờ, khiến đơn nhiều loại quà bị kẹt.",
+      "status": "KNOWN_DEFECT",
+      "note": "Known defect / hạn chế đã biết — không dùng làm oracle.",
+      "kb_refs": [
+        "prizes-added-to-order#KB-049"
+      ]
+    },
+    {
+      "behavior": "Nếu scheduler tắt quá 1 ngày, đơn chờ thêm quà sau cửa sổ resell bị job bỏ sót (vì job chỉ xét cửa sổ hết trong 24 giờ qua).",
+      "status": "KNOWN_DEFECT",
+      "note": "Known defect / hạn chế đã biết — chưa rõ đơn có tự phục hồi không.",
+      "kb_refs": [
+        "prizes-added-to-order#KB-060"
+      ]
+    }
+  ],
+  "observed_validations": [],
+  "permissions": [
+    {
+      "rule": "Retry thêm quà thực hiện bởi support trong admin nội bộ (quyền cụ thể chưa nêu).",
+      "kb_refs": [
+        "prizes-added-to-order#KB-055"
+      ]
+    },
+    {
+      "rule": "Setting ẩn skip order line item sync do nhân viên Mysbox đổi trong back-office.",
+      "kb_refs": [
+        "prizes-added-to-order#KB-061"
+      ]
+    }
+  ],
+  "surface_mapping": {
+    "portal": [
+      {
+        "item": "Mục Orders: danh sách đơn, số box, trạng thái fulfilment Shopify",
+        "kb_refs": [
+          "_object-level.order-draw#KB-021"
+        ]
+      }
+    ],
+    "storefront": [
+      {
+        "item": "Unbox / Multi-unbox ở box cuối là đường kích hoạt; trang kết quả có quà trước đơn Shopify",
+        "kb_refs": [
+          "prizes-added-to-order#KB-005",
+          "prizes-added-to-order#KB-006",
+          "prizes-added-to-order#KB-066"
+        ]
+      }
+    ],
+    "api": [
+      {
+        "item": "Shopify order edit (mở phiên, thêm dòng, áp giảm giá 100% \"MYSBOX\", commit) — mutation cụ thể không có trong tài liệu",
+        "kb_refs": [
+          "prizes-added-to-order#KB-018",
+          "prizes-added-to-order#KB-024",
+          "prizes-added-to-order#KB-025"
+        ]
+      },
+      {
+        "item": "Shopify bulk operation hai pha cho đơn >100 loại quà",
+        "kb_refs": [
+          "prizes-added-to-order#KB-045",
+          "prizes-added-to-order#KB-046"
+        ]
+      },
+      {
+        "item": "Shopify Flow action \"Open all mystery boxes in an order\"",
+        "kb_refs": [
+          "prizes-added-to-order#KB-013"
+        ]
+      }
+    ],
+    "data": [
+      {
+        "item": "Status đơn QUEUED/COMPLETED/FAILED và status dòng box QUEUED/PENDING/COMPLETED/FAILED",
+        "kb_refs": [
+          "_object-level.order-draw#KB-008",
+          "_object-level.order-draw#KB-017"
+        ]
+      },
+      {
+        "item": "Metafield đơn `mysbox_prize_ids`, metafield biến thể `mysbox.box`",
+        "kb_refs": [
+          "prizes-added-to-order#KB-064",
+          "prizes-added-to-order#KB-065"
+        ]
+      },
+      {
+        "item": "Setting ẩn `skip_order_line_item_sync`",
+        "kb_refs": [
+          "prizes-added-to-order#KB-061"
+        ]
+      },
+      {
+        "item": "Giờ auto-unbox và hạn resell bị xoá khi COMPLETED",
+        "kb_refs": [
+          "prizes-added-to-order#KB-034"
+        ]
+      }
+    ],
+    "code": [
+      {
+        "item": "Job sync 00:00/08:00/16:00, cửa sổ xét 24 giờ",
+        "kb_refs": [
+          "prizes-added-to-order#KB-007",
+          "prizes-added-to-order#KB-008"
+        ]
+      },
+      {
+        "item": "Job thường / job dài / bulk theo số loại quà",
+        "kb_refs": [
+          "prizes-added-to-order#KB-042",
+          "prizes-added-to-order#KB-043",
+          "prizes-added-to-order#KB-045"
+        ]
+      }
+    ]
+  },
+  "dependencies": [
+    {
+      "dependency": "Kết quả bốc thăm đã chốt của từng box",
+      "kb_refs": [
+        "prizes-added-to-order#KB-021"
+      ]
+    },
+    {
+      "dependency": "Cửa sổ resell và khoá resell của đơn",
+      "kb_refs": [
+        "prizes-added-to-order#KB-001",
+        "prizes-added-to-order#KB-003"
+      ]
+    },
+    {
+      "dependency": "Auto-unbox và Shopify Flow như đường kích hoạt",
+      "kb_refs": [
+        "prizes-added-to-order#KB-013",
+        "prizes-added-to-order#KB-014"
+      ]
+    },
+    {
+      "dependency": "Shopify order edit / bulk operation, quyền truy cập app với shop",
+      "kb_refs": [
+        "prizes-added-to-order#KB-024",
+        "prizes-added-to-order#KB-045",
+        "prizes-added-to-order#KB-052",
+        "prizes-added-to-order#KB-063"
+      ]
+    },
+    {
+      "dependency": "Scheduler chạy job định kỳ",
+      "kb_refs": [
+        "prizes-added-to-order#KB-007",
+        "prizes-added-to-order#KB-060"
+      ]
+    }
+  ],
+  "risks": [
+    {
+      "risk": "P1: retry có thể nhân dòng quà khi dòng đã được thêm tay trong Shopify; tính idempotent khi bấm retry lặp chưa được xác nhận.",
+      "kb_refs": [
+        "prizes-added-to-order#KB-056",
+        "prizes-added-to-order#KB-057"
+      ]
+    },
+    {
+      "risk": "Đơn kẹt QUEUED vĩnh viễn khi job lỡ lượt hoặc scheduler tắt quá 1 ngày.",
+      "kb_refs": [
+        "prizes-added-to-order#KB-008",
+        "prizes-added-to-order#KB-060"
+      ]
+    },
+    {
+      "risk": "Đơn lớn bị kẹt khi bulk job bị chiếm chỗ (tối đa 5 mỗi shop).",
+      "kb_refs": [
+        "prizes-added-to-order#KB-047",
+        "prizes-added-to-order#KB-049"
+      ]
+    },
+    {
+      "risk": "Thêm quà trước khi hết cửa sổ resell (đường mở của merchant đang mâu thuẫn) có thể sai lệch với resell.",
+      "kb_refs": [
+        "prizes-added-to-order#KB-015",
+        "prizes-added-to-order#KB-016"
+      ]
+    },
+    {
+      "risk": "Mốc giờ của job phụ thuộc múi giờ chưa xác nhận, ảnh hưởng mọi expected result theo giờ.",
+      "kb_refs": [
+        "prizes-added-to-order#KB-007"
+      ]
+    }
+  ],
+  "limitations": [
+    {
+      "limitation": "Các ví dụ minh hoạ (hết 24 giờ thì quà vào đơn dạng dòng $0, mở hết bằng Multi-unbox khi hạn resell chưa qua, đơn không bao giờ được auto-unbox, mở xong khi cửa sổ còn, job bỏ qua đơn cửa sổ chưa hết, quà đã resell bị trừ khi thêm, đơn sau khi thêm quà, cửa sổ đóng 17:00 thì quà lên lúc 00:00, hơn 30 giờ từ lúc mua là bình thường, đơn đã random chưa mở ở QUEUED) chỉ minh hoạ; số giờ trong ví dụ không phải mặc định.",
+      "kb_refs": [
+        "prizes-added-to-order#KB-067",
+        "prizes-added-to-order#KB-068",
+        "prizes-added-to-order#KB-069",
+        "prizes-added-to-order#KB-070",
+        "prizes-added-to-order#KB-071",
+        "prizes-added-to-order#KB-072",
+        "prizes-added-to-order#KB-073",
+        "prizes-added-to-order#KB-074",
+        "prizes-added-to-order#KB-075",
+        "_object-level.order-draw#KB-016"
+      ]
+    }
+  ],
+  "freshness": {
+    "observed_at": null
+  },
+  "unknown_areas": [
+    {
+      "question": "Khách có luôn nhận email thông báo sửa đơn của Shopify mỗi lần quà được thêm không, hay phụ thuộc cấu hình ẩn `orderUpdateEmailDisabled` và cài đặt thông báo của store?",
+      "why_it_matters": "Câu hỏi thường gặp nói một email mỗi lần thêm; mục bước sửa đơn nói tắt được bằng cấu hình ẩn và còn phụ thuộc store (chưa xác nhận).",
+      "kb_refs": [
+        "prizes-added-to-order#KB-027",
+        "prizes-added-to-order#KB-028",
+        "prizes-added-to-order#KB-029",
+        "prizes-added-to-order#KB-030"
+      ],
+      "oq_id": "OQ-order-draw-003"
+    },
+    {
+      "question": "Cấu hình tắt email sửa đơn có chỗ nào trong portal để merchant sửa không, hay chỉ nhân viên Mysbox đổi trong back-office?",
+      "why_it_matters": "Không xác định được tiền đề khi test email; tác giả tài liệu ghi chưa kiểm chứng.",
+      "kb_refs": [
+        "prizes-added-to-order#KB-031"
+      ],
+      "oq_id": "OQ-order-draw-044"
+    },
+    {
+      "question": "Điều kiện \"cửa sổ resell đã hết\" bắt buộc cho mọi đường kích hoạt, hay chỉ cho đường khách tự mở và job sync?",
+      "why_it_matters": "Khối điều kiện ghi cần đủ ba điều kiện, bảng \"Ai kích hoạt\" ghi Flow/auto-unbox thêm ngay không xét cửa sổ.",
+      "kb_refs": [
+        "prizes-added-to-order#KB-017",
+        "auto-unbox#KB-049"
+      ],
+      "oq_id": "OQ-order-draw-004"
+    },
+    {
+      "question": "Merchant mở box thủ công (\"Open all boxes\" ở portal, \"Unbox all boxes\" ở trang đơn Shopify admin) thì quà được thêm ngay hay vẫn chờ cửa sổ resell?",
+      "why_it_matters": "Hai nhóm tài liệu nói ngược nhau; ảnh hưởng thời điểm quà vào đơn và resell.",
+      "kb_refs": [
+        "prizes-added-to-order#KB-015",
+        "prizes-added-to-order#KB-016"
+      ],
+      "oq_id": "OQ-order-draw-005"
+    },
+    {
+      "question": "Múi giờ thực tế và nơi cấu hình của job 00:00/08:00/16:00 ở production (\"UTC mặc định\" hay \"giờ máy chủ\")?",
+      "why_it_matters": "Mọi expected result về thời điểm quà lên đơn phụ thuộc múi giờ.",
+      "kb_refs": [
+        "prizes-added-to-order#KB-007"
+      ],
+      "oq_id": "OQ-order-draw-043"
+    },
+    {
+      "question": "QUEUED có chắc chắn kéo dài suốt thời gian mở box và cửa sổ resell không, hay chỉ trong một số trường hợp?",
+      "why_it_matters": "Tài liệu viết ở dạng \"có thể\".",
+      "kb_refs": [
+        "_object-level.order-draw#KB-011"
+      ],
+      "oq_id": "OQ-order-draw-038"
+    },
+    {
+      "question": "Các phát biểu có rào đón: độ trễ \"có thể\" tới 8 giờ, merchant nhận quà để đóng gói, đơn đã fulfill \"có thể\" cần fulfill lần hai, lô \"khoảng chục món\" của job dài, cờ ẩn admin \"có thể\" bỏ qua hẳn bước sửa đơn cho vài merchant — có đúng không?",
+      "why_it_matters": "Cần xác nhận trước khi dùng làm oracle.",
+      "kb_refs": [
+        "prizes-added-to-order#KB-010",
+        "prizes-added-to-order#KB-022",
+        "prizes-added-to-order#KB-039",
+        "prizes-added-to-order#KB-044",
+        "prizes-added-to-order#KB-062"
+      ],
+      "oq_id": "OQ-order-draw-047"
+    },
+    {
+      "question": "Shopify có tính lại phí ship hoặc thuế khi app thêm dòng quà giá 0 không?",
+      "why_it_matters": "Ảnh hưởng tổng đơn merchant/khách thấy; tài liệu tự khai chưa xác nhận.",
+      "kb_refs": [
+        "prizes-added-to-order#KB-040"
+      ],
+      "oq_id": "OQ-order-draw-045"
+    },
+    {
+      "question": "Thêm quà trên đơn đã huỷ / đóng / hoàn tiền hết: chắc chắn thất bại và đơn FAILED?",
+      "why_it_matters": "Một tài liệu ghi chưa xác nhận (dự kiến thất bại), playbook khẳng định FAILED.",
+      "kb_refs": [
+        "prizes-added-to-order#KB-053",
+        "prizes-added-to-order#KB-051"
+      ],
+      "oq_id": "OQ-order-draw-046"
+    },
+    {
+      "question": "Đơn bị job bỏ sót (scheduler tắt lâu, cửa sổ hết quá 24 giờ) hoặc bulk job bị chiếm chỗ có tự phục hồi không, hay luôn cần xử lý tay?",
+      "why_it_matters": "Có thể để đơn kẹt QUEUED vĩnh viễn; đây là hạn chế đã biết.",
+      "kb_refs": [
+        "prizes-added-to-order#KB-060",
+        "prizes-added-to-order#KB-049",
+        "prizes-added-to-order#KB-008"
+      ],
+      "oq_id": "OQ-order-draw-017"
+    },
+    {
+      "question": "Retry thêm quà và retry xử lý đơn có idempotent khi bấm lặp không; retry đưa quà vào đơn khi cửa sổ resell còn mở thì khách còn bán lại được không, dòng quà có bị gỡ khi bán lại?",
+      "why_it_matters": "Retry có thể nhân quà là rủi ro P1; nút retry không tự kiểm cửa sổ resell.",
+      "kb_refs": [
+        "prizes-added-to-order#KB-056",
+        "prizes-added-to-order#KB-057"
+      ],
+      "oq_id": "OQ-order-draw-019"
+    },
+    {
+      "question": "Role/quyền nào trong admin nội bộ được chạy retry thêm quà?",
+      "why_it_matters": "Cần cho kiểm thử phân quyền; tài liệu chỉ nói \"Support\".",
+      "kb_refs": [
+        "prizes-added-to-order#KB-055"
+      ],
+      "oq_id": "OQ-order-draw-020"
+    },
+    {
+      "question": "Bulk operation hai pha lỗi ở pha áp giảm giá thì xử lý thế nào; quy tắc \"không làm dở một nửa\" có áp không; job dài/bulk mất bao lâu và status dòng box khi bulk lỗi giữa chừng?",
+      "why_it_matters": "Rủi ro dòng quà giá gốc chưa giảm 100% nằm trên đơn; không có ngưỡng thời gian để kiểm retry đơn lớn.",
+      "kb_refs": [
+        "prizes-added-to-order#KB-045",
+        "prizes-added-to-order#KB-054"
+      ],
+      "oq_id": "OQ-order-draw-021"
+    },
+    {
+      "question": "Chuỗi \"MYSBOX\" nằm ở đâu trên dòng quà (mô tả discount, title, tag, property)?",
+      "why_it_matters": "Tester không biết kiểm field nào của line item quà.",
+      "kb_refs": [
+        "prizes-added-to-order#KB-018",
+        "prizes-added-to-order#KB-019"
+      ],
+      "oq_id": "OQ-order-draw-022"
+    },
+    {
+      "question": "Mutation/endpoint Shopify cụ thể cho order edit, áp discount và bulk operation là gì?",
+      "why_it_matters": "Không lập được api_operations; không đối chiếu được lỗi Shopify cụ thể dẫn tới FAILED.",
+      "oq_id": "OQ-order-draw-023"
+    },
+    {
+      "question": "Đơn nhiều box: khi Flow/auto-unbox/merchant mở một box, quà của box đó hay của cả đơn được thêm ngay?",
+      "why_it_matters": "Quy tắc \"mọi box digital đã mở\" và \"thêm ngay, bỏ qua cửa sổ\" tương tác ở đơn mở một phần.",
+      "kb_refs": [
+        "prizes-added-to-order#KB-002",
+        "prizes-added-to-order#KB-013"
+      ],
+      "oq_id": "OQ-order-draw-024"
+    },
+    {
+      "question": "Độ dài và mốc bắt đầu của cửa sổ resell; khoá do resell đang chạy kéo dài bao lâu và đơn được xét lại khi nào sau khi mở khoá?",
+      "why_it_matters": "Quyết định thời điểm quà vào đơn; điều kiện khoá không có tiêu chí kết thúc để test.",
+      "kb_refs": [
+        "prizes-added-to-order#KB-003"
+      ],
+      "oq_id": "OQ-order-draw-025"
+    },
+    {
+      "question": "\"Đơn dài hơn giới hạn 7 ngày của auto-unbox\" nghĩa cụ thể là gì (tuổi đơn hay số giờ cấu hình)?",
+      "why_it_matters": "Không suy được điều kiện biên cho nguyên nhân trễ này.",
+      "oq_id": "OQ-order-draw-026"
+    },
+    {
+      "question": "Setting ẩn skip order line item sync và loại trừ đơn test nằm ở đâu, ai bật được, giá trị mặc định là gì?",
+      "why_it_matters": "Tài liệu nêu hệ quả khi bật nhưng không nêu mặc định.",
+      "kb_refs": [
+        "prizes-added-to-order#KB-061"
+      ],
+      "oq_id": "OQ-order-draw-027"
+    }
+  ],
+  "last_updated": {
+    "date": "2026-10-16",
+    "ccr_ref": "bootstrap"
+  },
+  "coverage_matrix": [
+    {
+      "feature_id": "FEAT-02-prizes-added-to-order",
+      "layer": "storefront",
+      "role": "customer",
+      "state": "mở box cuối, cửa sổ đã hết",
+      "environment": "documented",
+      "covered": true
+    },
+    {
+      "feature_id": "FEAT-02-prizes-added-to-order",
+      "layer": "code",
+      "role": "system",
+      "state": "QUEUED chờ cửa sổ resell / khoá resell",
+      "environment": "documented",
+      "covered": true
+    },
+    {
+      "feature_id": "FEAT-02-prizes-added-to-order",
+      "layer": "code",
+      "role": "system",
+      "state": "job sync sau cửa sổ (24 giờ)",
+      "environment": "documented",
+      "covered": true
+    },
+    {
+      "feature_id": "FEAT-02-prizes-added-to-order",
+      "layer": "code",
+      "role": "system",
+      "state": "múi giờ job",
+      "environment": "documented",
+      "covered": false
+    },
+    {
+      "feature_id": "FEAT-02-prizes-added-to-order",
+      "layer": "api",
+      "role": "merchant",
+      "state": "mở qua Shopify Flow",
+      "environment": "documented",
+      "covered": true
+    },
+    {
+      "feature_id": "FEAT-02-prizes-added-to-order",
+      "layer": "portal",
+      "role": "merchant",
+      "state": "Open all boxes / Unbox all boxes",
+      "environment": "documented",
+      "covered": false
+    },
+    {
+      "feature_id": "FEAT-02-prizes-added-to-order",
+      "layer": "api",
+      "role": "system",
+      "state": "order edit thêm dòng $0 → COMPLETED",
+      "environment": "documented",
+      "covered": true
+    },
+    {
+      "feature_id": "FEAT-02-prizes-added-to-order",
+      "layer": "api",
+      "role": "system",
+      "state": "lỗi Shopify → FAILED",
+      "environment": "documented",
+      "covered": true
+    },
+    {
+      "feature_id": "FEAT-02-prizes-added-to-order",
+      "layer": "api",
+      "role": "system",
+      "state": "đơn lớn ≤20 / 21–100 / >100 loại",
+      "environment": "documented",
+      "covered": true
+    },
+    {
+      "feature_id": "FEAT-02-prizes-added-to-order",
+      "layer": "api",
+      "role": "system",
+      "state": "bulk lỗi pha 2",
+      "environment": "documented",
+      "covered": false
+    },
+    {
+      "feature_id": "FEAT-02-prizes-added-to-order",
+      "layer": "admin_panel",
+      "role": "support",
+      "state": "retry đơn FAILED",
+      "environment": "documented",
+      "covered": true
+    },
+    {
+      "feature_id": "FEAT-02-prizes-added-to-order",
+      "layer": "admin_panel",
+      "role": "support",
+      "state": "phân quyền retry / retry lặp",
+      "environment": "documented",
+      "covered": false
+    },
+    {
+      "feature_id": "FEAT-02-prizes-added-to-order",
+      "layer": "email",
+      "role": "customer",
+      "state": "email sửa đơn",
+      "environment": "documented",
+      "covered": false
+    },
+    {
+      "feature_id": "FEAT-02-prizes-added-to-order",
+      "layer": "shopify_admin",
+      "role": "merchant",
+      "state": "dòng quà chưa fulfill, khối Mysbox prizes",
+      "environment": "documented",
+      "covered": true
+    },
+    {
+      "feature_id": "FEAT-02-prizes-added-to-order",
+      "layer": "db",
+      "role": "admin",
+      "state": "skip order line item sync bật",
+      "environment": "documented",
+      "covered": true
+    }
+  ],
+  "profile_conflicts": [
+    {
+      "conflict_group": "CONF-order-draw-01",
+      "topic": "Khách có luôn nhận email thông báo sửa đơn khi quà được thêm hay không",
+      "kb_refs": [
+        "prizes-added-to-order#KB-027",
+        "prizes-added-to-order#KB-028",
+        "prizes-added-to-order#KB-029",
+        "prizes-added-to-order#KB-030"
+      ],
+      "resolution": "UNRESOLVED"
+    },
+    {
+      "conflict_group": "CONF-reveal-01",
+      "topic": "Điều kiện cửa sổ resell đã hết có bắt buộc cho mọi đường kích hoạt hay không",
+      "kb_refs": [
+        "prizes-added-to-order#KB-017",
+        "auto-unbox#KB-049"
+      ],
+      "resolution": "UNRESOLVED"
+    },
+    {
+      "conflict_group": "CONF-order-draw-02",
+      "topic": "Merchant mở box thủ công: thêm quà ngay hay chờ cửa sổ resell",
+      "kb_refs": [
+        "prizes-added-to-order#KB-015",
+        "prizes-added-to-order#KB-016"
+      ],
+      "resolution": "UNRESOLVED"
+    }
+  ],
+  "profile_relationships": [
+    {
+      "from": "prizes-added-to-order",
+      "to": "purchase-and-prize-draw",
+      "relation": "dùng kết quả bốc thăm đã chốt; đơn khởi đầu ở QUEUED",
+      "kb_refs": [
+        "prizes-added-to-order#KB-021",
+        "_object-level.order-draw#KB-009"
+      ]
+    },
+    {
+      "from": "prizes-added-to-order",
+      "to": "reveal-journey",
+      "relation": "khách mở box cuối là một đường kích hoạt; trang kết quả có quà trước đơn Shopify",
+      "kb_refs": [
+        "prizes-added-to-order#KB-005",
+        "prizes-added-to-order#KB-066"
+      ]
+    },
+    {
+      "from": "prizes-added-to-order",
+      "to": "auto-unbox",
+      "relation": "auto-unbox thêm quà ngay, bỏ qua cửa sổ resell; COMPLETED xoá giờ auto-unbox",
+      "kb_refs": [
+        "prizes-added-to-order#KB-014",
+        "prizes-added-to-order#KB-034"
+      ]
+    },
+    {
+      "from": "prizes-added-to-order",
+      "to": "shopify-flow-actions",
+      "relation": "action Flow mở mọi box và thêm quà ngay",
+      "kb_refs": [
+        "prizes-added-to-order#KB-013"
+      ]
+    },
+    {
+      "from": "prizes-added-to-order",
+      "to": "resell-items-mode",
+      "relation": "cửa sổ resell và khoá resell chặn việc thêm quà; quà đã resell không được thêm",
+      "kb_refs": [
+        "prizes-added-to-order#KB-001",
+        "prizes-added-to-order#KB-003",
+        "prizes-added-to-order#KB-023"
+      ]
+    },
+    {
+      "from": "prizes-added-to-order",
+      "to": "admin-order-inspection-and-retry",
+      "relation": "support retry thêm quà và xem status dòng box",
+      "kb_refs": [
+        "prizes-added-to-order#KB-055",
+        "_object-level.order-draw#KB-018"
+      ]
+    },
+    {
+      "from": "prizes-added-to-order",
+      "to": "general-settings",
+      "relation": "setting ẩn skip order line item sync và cấu hình ẩn email sửa đơn",
+      "kb_refs": [
+        "prizes-added-to-order#KB-061",
+        "prizes-added-to-order#KB-029"
+      ]
+    },
+    {
+      "from": "prizes-added-to-order",
+      "to": "shop-connection-and-reauth",
+      "relation": "quyền truy cập hết hiệu lực / cần cấp quyền lại làm quà không vào đơn",
+      "kb_refs": [
+        "prizes-added-to-order#KB-052",
+        "prizes-added-to-order#KB-063"
+      ]
+    },
+    {
+      "from": "prizes-added-to-order",
+      "to": "physical-sealed-box-fulfilment",
+      "relation": "chỉ box digital đi qua bước thêm dòng quà; box physical đi đường hậu xử lý",
+      "kb_refs": [
+        "prizes-added-to-order#KB-001"
+      ]
+    }
+  ]
+}

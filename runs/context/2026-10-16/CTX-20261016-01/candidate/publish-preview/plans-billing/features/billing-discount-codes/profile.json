@@ -1,0 +1,819 @@
+{
+  "feature_id": "FEAT-07-billing-discount-codes",
+  "feature_key": "billing-discount-codes",
+  "object_key": "plans-billing",
+  "name": "Billing discount — mã giảm giá subscription và thêm trial",
+  "user_goal": "Admin nội bộ tạo mã billing discount (giảm theo phần trăm hoặc số tiền cố định trong một số kỳ, và/hoặc cộng thêm ngày trial; giới hạn lượt, thời gian, shop và plan) để merchant dùng khi chọn plan trả phí và được Shopify áp giảm giá subscription — không đổi quota hay phí usage; mỗi cặp shop–plan dùng mã một lần.",
+  "user_goal_kb_refs": [
+    "billing-discount-codes#KB-001",
+    "billing-discount-codes#KB-002",
+    "billing-discount-codes#KB-003",
+    "billing-discount-codes#KB-004",
+    "billing-discount-codes#KB-038",
+    "billing-discount-codes#KB-039",
+    "billing-discount-codes#KB-042"
+  ],
+  "stable_since_version": "1",
+  "priority": "P1",
+  "staging_only": false,
+  "actors": [
+    {
+      "role": "admin",
+      "permission_observed": "Admin nội bộ (đội billing/partnership, admin/support) tạo billing discount trong admin panel, Marketing tools > Discounts; màn có quyền xem, tạo, sửa, xoá; không có nút gán mã trực tiếp cho một shop.",
+      "kb_refs": [
+        "billing-discount-codes#KB-003",
+        "billing-discount-codes#KB-027",
+        "billing-discount-codes#KB-057",
+        "billing-discount-codes#KB-058"
+      ]
+    },
+    {
+      "role": "merchant",
+      "permission_observed": "Khi chọn plan trả phí có thể kèm mã để được giảm giá hoặc thêm ngày trial; nơi nhập mã trên portal chưa thống nhất.",
+      "kb_refs": [
+        "billing-discount-codes#KB-004",
+        "billing-discount-codes#KB-028",
+        "billing-discount-codes#KB-048",
+        "billing-discount-codes#KB-050"
+      ]
+    },
+    {
+      "role": "support",
+      "permission_observed": "Nút \"Generate recurring payment link\" của support không kèm billing discount.",
+      "kb_refs": [
+        "billing-discount-codes#KB-029"
+      ]
+    },
+    {
+      "role": "system",
+      "permission_observed": "Server kiểm tra mã trước khi trả đường dẫn duyệt, ghi nhận mã sau khi duyệt, tăng Total used, lưu giá niêm yết; thao tác extend trial dùng discount id = 1.",
+      "kb_refs": [
+        "billing-discount-codes#KB-005",
+        "billing-discount-codes#KB-006",
+        "billing-discount-codes#KB-040",
+        "billing-discount-codes#KB-041",
+        "billing-discount-codes#KB-044"
+      ]
+    },
+    {
+      "role": "shopify (bên ngoài)",
+      "permission_observed": "Shopify là bên áp giảm giá, tại trang duyệt subscription.",
+      "kb_refs": [
+        "billing-discount-codes#KB-042"
+      ]
+    }
+  ],
+  "entry_points": [
+    {
+      "path": "Admin panel > Marketing tools > Discounts (list, chi tiết với tab Plans / Users / Applicable users)",
+      "precondition": "Admin nội bộ có quyền trên màn Discounts.",
+      "kb_refs": [
+        "billing-discount-codes#KB-025",
+        "billing-discount-codes#KB-057",
+        "billing-discount-codes#KB-058",
+        "_object-level.plans-billing#KB-023"
+      ]
+    },
+    {
+      "path": "Yêu cầu lấy đường dẫn duyệt subscription kèm tham số `code` khi merchant chọn plan",
+      "precondition": "Mã qua các điều kiện kiểm tra; plan đang chọn nằm trong Plans của mã.",
+      "kb_refs": [
+        "billing-discount-codes#KB-005",
+        "billing-discount-codes#KB-028",
+        "billing-discount-codes#KB-037"
+      ]
+    },
+    {
+      "path": "Ô nhập mã / \"Apply discount\" trên trang Pricing (chưa thống nhất)",
+      "precondition": "Chưa rõ có tồn tại trong portal hay không.",
+      "kb_refs": [
+        "billing-discount-codes#KB-048",
+        "billing-discount-codes#KB-049",
+        "billing-discount-codes#KB-050",
+        "billing-discount-codes#KB-051"
+      ]
+    },
+    {
+      "path": "Thao tác \"extend trial\" cho shop đang trial",
+      "precondition": "Dùng riêng billing discount có id = 1.",
+      "kb_refs": [
+        "billing-discount-codes#KB-044"
+      ]
+    }
+  ],
+  "capabilities": [
+    {
+      "name": "Cấu hình billing discount",
+      "description": "Admin đặt Code (duy nhất, luôn lưu HOA), Plans (theo slug, cần ít nhất một), Starts at / Ends at, công tắc Active (hiệu lực ngay kể cả chưa Save), Total amount (-1 không giới hạn, mặc định 0 = hết lượt ngay), Total used, Type percentage/amount, Value, Intervals (0/trống = suốt đời), Extra trial days, Applicable users All/Limited.",
+      "kb_refs": [
+        "billing-discount-codes#KB-003",
+        "billing-discount-codes#KB-007",
+        "billing-discount-codes#KB-008",
+        "billing-discount-codes#KB-009",
+        "billing-discount-codes#KB-010",
+        "billing-discount-codes#KB-011",
+        "billing-discount-codes#KB-012",
+        "billing-discount-codes#KB-013",
+        "billing-discount-codes#KB-014",
+        "billing-discount-codes#KB-015",
+        "billing-discount-codes#KB-016",
+        "billing-discount-codes#KB-017",
+        "billing-discount-codes#KB-018",
+        "billing-discount-codes#KB-019",
+        "billing-discount-codes#KB-020",
+        "billing-discount-codes#KB-022",
+        "billing-discount-codes#KB-023",
+        "billing-discount-codes#KB-024",
+        "billing-discount-codes#KB-057",
+        "billing-discount-codes#KB-058"
+      ]
+    },
+    {
+      "name": "Giới hạn và theo dõi việc dùng mã",
+      "description": "Màn chi tiết có tab Plans, Users (shop đã dùng, kèm giá trị lúc đó), Applicable users; giới hạn mã cho một số shop bằng Limited (không có nút gán cho shop; link thanh toán của support không kèm mã).",
+      "kb_refs": [
+        "billing-discount-codes#KB-025",
+        "billing-discount-codes#KB-027",
+        "billing-discount-codes#KB-029",
+        "billing-discount-codes#KB-030"
+      ]
+    },
+    {
+      "name": "Áp mã khi chọn plan trả phí",
+      "description": "Merchant kèm mã khi chọn plan Paid; server kiểm tra mã trước khi trả đường dẫn duyệt; từ chối \"forbidden\" khi hết lượt, Active tắt, ngoài khoảng ngày, shop không thuộc Limited, plan không thuộc Plans của mã, hoặc shop đã dùng mã trên chính plan đó; dùng lại được trên plan khác.",
+      "kb_refs": [
+        "billing-discount-codes#KB-001",
+        "billing-discount-codes#KB-004",
+        "billing-discount-codes#KB-005",
+        "billing-discount-codes#KB-028",
+        "billing-discount-codes#KB-031",
+        "billing-discount-codes#KB-032",
+        "billing-discount-codes#KB-033",
+        "billing-discount-codes#KB-034",
+        "billing-discount-codes#KB-035",
+        "billing-discount-codes#KB-036",
+        "billing-discount-codes#KB-037",
+        "billing-discount-codes#KB-038",
+        "billing-discount-codes#KB-039",
+        "billing-discount-codes#KB-048",
+        "billing-discount-codes#KB-049",
+        "billing-discount-codes#KB-050",
+        "billing-discount-codes#KB-051",
+        "billing-discount-codes#KB-052",
+        "billing-discount-codes#KB-053",
+        "billing-discount-codes#KB-054",
+        "billing-discount-codes#KB-055",
+        "billing-discount-codes#KB-056"
+      ]
+    },
+    {
+      "name": "Giảm giá subscription qua Shopify sau khi duyệt",
+      "description": "Shopify áp giảm giá tại trang duyệt; Mysbox ghi nhận mã sau duyệt, tăng Total used 1 và lưu giá niêm yết (không phải giá sau giảm); không đổi quota hay phí usage.",
+      "kb_refs": [
+        "billing-discount-codes#KB-002",
+        "billing-discount-codes#KB-006",
+        "billing-discount-codes#KB-040",
+        "billing-discount-codes#KB-041",
+        "billing-discount-codes#KB-042"
+      ]
+    },
+    {
+      "name": "Thêm ngày trial và extend trial",
+      "description": "Extra trial days cộng vào trial của plan, tuân quy tắc trial chung khi đăng ký lại; thao tác extend trial cho shop đang trial dùng riêng discount id = 1 (mã dựng sẵn do seeder tạo, seeder không tự chạy).",
+      "kb_refs": [
+        "billing-discount-codes#KB-020",
+        "billing-discount-codes#KB-021",
+        "billing-discount-codes#KB-043",
+        "billing-discount-codes#KB-044",
+        "billing-discount-codes#KB-045",
+        "billing-discount-codes#KB-046",
+        "billing-discount-codes#KB-047"
+      ]
+    },
+    {
+      "name": "Discount mang sẵn trong plan",
+      "description": "Plan có thể mang sẵn discount trong các trường của plan (Discount Type / Value / Intervals), dùng khi merchant không nhập mã.",
+      "kb_refs": [
+        "billing-discount-codes#KB-026"
+      ]
+    }
+  ],
+  "state_transitions": [
+    {
+      "from": "Mã Active",
+      "to": "Mã \"deactivated\"",
+      "trigger": "Admin gạt tắt công tắc Active",
+      "condition": "Có hiệu lực ngay, kể cả chưa bấm Save",
+      "kb_refs": [
+        "billing-discount-codes#KB-011"
+      ]
+    },
+    {
+      "from": "Total used = n",
+      "to": "Total used = n + 1",
+      "trigger": "Kích hoạt xong subscription có dùng mã",
+      "condition": "Merchant đã duyệt subscription có kèm mã",
+      "kb_refs": [
+        "billing-discount-codes#KB-006",
+        "billing-discount-codes#KB-040"
+      ]
+    },
+    {
+      "from": "Mã còn lượt",
+      "to": "Mã hết lượt (bị từ chối \"forbidden\")",
+      "trigger": "Total used >= Total amount",
+      "condition": "Total amount khác -1; mã mới tạo mặc định Total amount 0 nên hết lượt ngay",
+      "kb_refs": [
+        "billing-discount-codes#KB-013",
+        "billing-discount-codes#KB-014",
+        "billing-discount-codes#KB-032"
+      ]
+    },
+    {
+      "from": "Applicable users = Limited (có danh sách shop)",
+      "to": "Applicable users = All (danh sách shop bị xoá)",
+      "trigger": "Admin chọn All",
+      "condition": "Hiện cảnh báo trước khi xoá danh sách",
+      "kb_refs": [
+        "billing-discount-codes#KB-024"
+      ]
+    }
+  ],
+  "confirmed_rules": [
+    {
+      "rule": "Billing discount là mã dùng lúc merchant chọn plan để giảm giá subscription do Shopify thu (theo phần trăm hoặc số tiền cố định) và/hoặc cộng thêm ngày trial.",
+      "kb_refs": [
+        "billing-discount-codes#KB-001"
+      ]
+    },
+    {
+      "rule": "Billing discount không đổi quota (capacity) hay phí box vượt / phí usage; cộng quota là việc của promote code; đổi giá thuộc billing discount.",
+      "kb_refs": [
+        "billing-discount-codes#KB-002",
+        "_object-level.plans-billing#KB-018"
+      ]
+    },
+    {
+      "rule": "Admin nội bộ tạo billing discount trong admin panel, nhóm menu Marketing tools > Discounts; màn Discounts có quyền xem, tạo, sửa, xoá và thao tác ở đây có tác động đổi giá.",
+      "kb_refs": [
+        "billing-discount-codes#KB-003",
+        "billing-discount-codes#KB-057",
+        "billing-discount-codes#KB-058",
+        "_object-level.plans-billing#KB-022",
+        "_object-level.plans-billing#KB-023"
+      ]
+    },
+    {
+      "rule": "Khi chọn plan trả phí, merchant có thể kèm billing discount để được giảm giá hoặc thêm ngày trial.",
+      "kb_refs": [
+        "billing-discount-codes#KB-004"
+      ]
+    },
+    {
+      "rule": "Khi merchant chọn plan có kèm mã, server kiểm tra billing discount trước khi trả đường dẫn duyệt; yêu cầu lấy đường dẫn duyệt nhận tham số `code`.",
+      "kb_refs": [
+        "billing-discount-codes#KB-005",
+        "billing-discount-codes#KB-028"
+      ]
+    },
+    {
+      "rule": "Sau khi merchant duyệt subscription, Mysbox ghi nhận billing discount đã dùng; khi kích hoạt xong, Total used tăng 1.",
+      "kb_refs": [
+        "billing-discount-codes#KB-006",
+        "billing-discount-codes#KB-040"
+      ]
+    },
+    {
+      "rule": "Code của billing discount phải duy nhất và được tự chuyển, luôn lưu dạng chữ HOA.",
+      "kb_refs": [
+        "billing-discount-codes#KB-007",
+        "billing-discount-codes#KB-008"
+      ]
+    },
+    {
+      "rule": "Trường Plans (các plan theo slug mà mã hợp lệ) phải có ít nhất một plan thì mã mới chạy; Starts at / Ends at là thời hạn hiệu lực.",
+      "kb_refs": [
+        "billing-discount-codes#KB-009",
+        "billing-discount-codes#KB-010"
+      ]
+    },
+    {
+      "rule": "Công tắc Active có hiệu lực ngay khi gạt, kể cả chưa bấm Save; tắt thì mã ở trạng thái \"deactivated\".",
+      "kb_refs": [
+        "billing-discount-codes#KB-011"
+      ]
+    },
+    {
+      "rule": "Total amount là số lượt dùng tối đa; -1 = không giới hạn; mã mới tạo mặc định 0 và 0 nghĩa là hết lượt ngay; Total used là bộ đếm bắt đầu từ 0.",
+      "kb_refs": [
+        "billing-discount-codes#KB-012",
+        "billing-discount-codes#KB-013",
+        "billing-discount-codes#KB-014",
+        "billing-discount-codes#KB-015"
+      ]
+    },
+    {
+      "rule": "Type là `percentage` hoặc `amount`; Value là phần trăm (20 = 20%) với percentage hoặc số đô-la với amount.",
+      "kb_refs": [
+        "billing-discount-codes#KB-016",
+        "billing-discount-codes#KB-017"
+      ]
+    },
+    {
+      "rule": "Intervals là số kỳ billing áp giảm giá; 0 hoặc để trống = áp suốt đời subscription.",
+      "kb_refs": [
+        "billing-discount-codes#KB-018",
+        "billing-discount-codes#KB-019"
+      ]
+    },
+    {
+      "rule": "Extra trial days là số ngày được cộng thêm vào trial của plan.",
+      "kb_refs": [
+        "billing-discount-codes#KB-020"
+      ]
+    },
+    {
+      "rule": "Applicable users là \"All\" hoặc \"Limited\"; Limited áp theo danh sách shop và bắt buộc kèm danh sách; chọn All sẽ xoá danh sách shop kèm cảnh báo; để giới hạn mã cho một số shop, admin đặt Limited.",
+      "kb_refs": [
+        "billing-discount-codes#KB-022",
+        "billing-discount-codes#KB-023",
+        "billing-discount-codes#KB-024",
+        "billing-discount-codes#KB-030"
+      ]
+    },
+    {
+      "rule": "Màn chi tiết billing discount có tab Plans, Users (shop đã dùng, kèm giá trị lúc đó) và Applicable users (shop được phép).",
+      "kb_refs": [
+        "billing-discount-codes#KB-025"
+      ]
+    },
+    {
+      "rule": "Một plan có thể mang sẵn discount trong chính các trường của plan (Discount Type / Value / Intervals); discount này được dùng khi merchant không nhập mã.",
+      "kb_refs": [
+        "billing-discount-codes#KB-026"
+      ]
+    },
+    {
+      "rule": "Admin panel không có nút \"gán cho shop\" để gán billing discount trực tiếp; nút \"Generate recurring payment link\" của support không kèm billing discount.",
+      "kb_refs": [
+        "billing-discount-codes#KB-027",
+        "billing-discount-codes#KB-029"
+      ]
+    },
+    {
+      "rule": "Mỗi lỗi kiểm tra mã được báo \"forbidden\" kèm thông điệp; mã bị từ chối khi: hết lượt (Total used >= Total amount, trừ Total amount = -1); công tắc Active tắt; chưa tới Starts at; đã quá Ends at; Applicable users = Limited mà shop không trong danh sách; plan đang chọn không trong Plans của mã; shop đã dùng mã này trên chính plan đang chọn.",
+      "kb_refs": [
+        "billing-discount-codes#KB-031",
+        "billing-discount-codes#KB-032",
+        "billing-discount-codes#KB-033",
+        "billing-discount-codes#KB-034",
+        "billing-discount-codes#KB-035",
+        "billing-discount-codes#KB-036",
+        "billing-discount-codes#KB-037",
+        "billing-discount-codes#KB-038"
+      ]
+    },
+    {
+      "rule": "Shop đã dùng một mã vẫn dùng lại được mã đó trên một plan khác.",
+      "kb_refs": [
+        "billing-discount-codes#KB-039"
+      ]
+    },
+    {
+      "rule": "Mysbox lưu giá niêm yết của plan, không phải giá sau giảm; Shopify là bên áp giảm giá, tại trang duyệt subscription; hoá đơn Shopify = giá plan đã giảm + các dòng usage.",
+      "kb_refs": [
+        "billing-discount-codes#KB-041",
+        "billing-discount-codes#KB-042",
+        "_object-level.plans-billing#KB-010"
+      ]
+    },
+    {
+      "rule": "Ngày trial cộng thêm từ mã tuân theo quy tắc trial chung: khi đăng ký lại chỉ còn số ngày trial chưa dùng.",
+      "kb_refs": [
+        "billing-discount-codes#KB-043"
+      ]
+    },
+    {
+      "rule": "Thao tác \"extend trial\" (thêm ngày trial cho shop đang trial) dùng riêng billing discount có id = 1.",
+      "kb_refs": [
+        "billing-discount-codes#KB-044"
+      ]
+    },
+    {
+      "rule": "Seeder tạo mã extend trial dựng sẵn không tự chạy.",
+      "kb_refs": [
+        "billing-discount-codes#KB-047"
+      ]
+    },
+    {
+      "rule": "Admin Mysbox nội bộ có nhiệm vụ quản lý mã.",
+      "kb_refs": [
+        "_object-level.plans-billing#KB-001"
+      ]
+    }
+  ],
+  "observed_behavior": [],
+  "observed_validations": [],
+  "permissions": [
+    {
+      "permission": "Màn Discounts: xem, tạo, sửa, xoá (admin nội bộ).",
+      "kb_refs": [
+        "billing-discount-codes#KB-058"
+      ]
+    },
+    {
+      "permission": "Không có quyền/nút gán mã trực tiếp cho một shop; giới hạn bằng Applicable users = Limited.",
+      "kb_refs": [
+        "billing-discount-codes#KB-027",
+        "billing-discount-codes#KB-030"
+      ]
+    }
+  ],
+  "surface_mapping": {
+    "portal": [
+      {
+        "item": "Chọn plan Paid kèm mã (ô nhập / \"Apply discount\" trên Pricing — chưa thống nhất)",
+        "kb_refs": [
+          "billing-discount-codes#KB-004",
+          "billing-discount-codes#KB-050",
+          "billing-discount-codes#KB-051"
+        ]
+      },
+      {
+        "item": "Thông điệp từ chối hiển thị cho merchant (ánh xạ chưa thống nhất)",
+        "kb_refs": [
+          "billing-discount-codes#KB-052",
+          "billing-discount-codes#KB-053",
+          "billing-discount-codes#KB-054",
+          "billing-discount-codes#KB-055",
+          "billing-discount-codes#KB-056"
+        ]
+      }
+    ],
+    "storefront": [],
+    "api": [
+      {
+        "item": "Yêu cầu lấy đường dẫn duyệt subscription với tham số `code`; lỗi \"forbidden\" kèm thông điệp",
+        "kb_refs": [
+          "billing-discount-codes#KB-028",
+          "billing-discount-codes#KB-031"
+        ]
+      }
+    ],
+    "data": [
+      {
+        "item": "Billing discount (Code, Plans, Starts/Ends, Active, Total amount, Total used, Type, Value, Intervals, Extra trial days, Applicable users)",
+        "kb_refs": [
+          "billing-discount-codes#KB-007",
+          "billing-discount-codes#KB-009",
+          "billing-discount-codes#KB-012",
+          "billing-discount-codes#KB-015",
+          "billing-discount-codes#KB-016",
+          "billing-discount-codes#KB-018",
+          "billing-discount-codes#KB-020",
+          "billing-discount-codes#KB-022"
+        ]
+      },
+      {
+        "item": "Giá niêm yết lưu ở Mysbox; discount id = 1 cho extend trial",
+        "kb_refs": [
+          "billing-discount-codes#KB-041",
+          "billing-discount-codes#KB-044"
+        ]
+      },
+      {
+        "item": "Trường discount mang sẵn trong plan",
+        "kb_refs": [
+          "billing-discount-codes#KB-026"
+        ]
+      }
+    ],
+    "code": [],
+    "admin_panel": [
+      {
+        "item": "Marketing tools > Discounts; tab Plans / Users / Applicable users",
+        "kb_refs": [
+          "billing-discount-codes#KB-025",
+          "billing-discount-codes#KB-057"
+        ]
+      }
+    ]
+  },
+  "dependencies": [
+    {
+      "depends_on": "plan-upgrade-downgrade-cancel (luồng chọn plan và duyệt subscription)",
+      "kb_refs": [
+        "billing-discount-codes#KB-005",
+        "billing-discount-codes#KB-006"
+      ]
+    },
+    {
+      "depends_on": "plan-catalog-administration (discount mang sẵn trong trường của plan; slug plan)",
+      "kb_refs": [
+        "billing-discount-codes#KB-009",
+        "billing-discount-codes#KB-026",
+        "plan-catalog-administration#KB-010"
+      ]
+    },
+    {
+      "depends_on": "Shopify Billing (áp giảm giá tại trang duyệt)",
+      "kb_refs": [
+        "billing-discount-codes#KB-042",
+        "_object-level.plans-billing#KB-010"
+      ]
+    }
+  ],
+  "risks": [
+    {
+      "risk": "Mã mới tạo mặc định Total amount 0 nên hết lượt ngay nếu admin quên đặt.",
+      "kb_refs": [
+        "billing-discount-codes#KB-014"
+      ]
+    },
+    {
+      "risk": "Active có hiệu lực ngay kể cả chưa Save: gạt nhầm ảnh hưởng merchant ngay.",
+      "kb_refs": [
+        "billing-discount-codes#KB-011"
+      ]
+    },
+    {
+      "risk": "Thao tác extend trial phụ thuộc bản ghi id = 1; giá trị trên production chưa xác nhận.",
+      "kb_refs": [
+        "billing-discount-codes#KB-044",
+        "billing-discount-codes#KB-045"
+      ]
+    }
+  ],
+  "limitations": [
+    {
+      "limitation": "Các số trong ví dụ (percentage 20 trong 3 kỳ trên plan $29 → $23.20; amount 5 → $24.00; trial 7 + 7 = 14 ngày; Total used tăng 1; quota không đổi; hai lần forbidden) chỉ minh hoạ, không phải oracle.",
+      "kb_refs": [
+        "billing-discount-codes#KB-059",
+        "billing-discount-codes#KB-060",
+        "billing-discount-codes#KB-061",
+        "billing-discount-codes#KB-062",
+        "billing-discount-codes#KB-063",
+        "billing-discount-codes#KB-064",
+        "billing-discount-codes#KB-065",
+        "billing-discount-codes#KB-066"
+      ]
+    },
+    {
+      "limitation": "Thuộc tính của mã extend trial dựng sẵn (+7 ngày, mọi shop trừ development store) là của bản ghi seed, chưa xác nhận trên production.",
+      "kb_refs": [
+        "billing-discount-codes#KB-045",
+        "billing-discount-codes#KB-046"
+      ]
+    }
+  ],
+  "freshness": {
+    "observed_at": null
+  },
+  "unknown_areas": [
+    {
+      "question": "Merchant nhập mã billing discount ở đâu: có ô nhập mã / hành động \"Apply discount\" trên trang Pricing, hay mã chỉ áp được qua tham số `code` ở server?",
+      "why_it_matters": "Các tài liệu mâu thuẫn và một tài liệu tự mâu thuẫn; quyết định case UI nhập mã.",
+      "kb_refs": [
+        "billing-discount-codes#KB-048",
+        "billing-discount-codes#KB-049",
+        "billing-discount-codes#KB-050",
+        "billing-discount-codes#KB-051"
+      ],
+      "conflict_group": "CONF-plans-billing-04",
+      "oq_id": "OQ-plans-billing-003"
+    },
+    {
+      "question": "Mỗi điều kiện từ chối có thông điệp riêng (\"Out of discount code\" chỉ cho hết lượt, \"not active\", \"not been applied yet\" / \"expired\", \"has been used\"), hay \"Out of discount code\" hiển thị cho nhiều điều kiện?",
+      "why_it_matters": "Expected message cho từng negative case; các quy tắc từ chối vẫn là CONFIRMED_EXPECTED.",
+      "kb_refs": [
+        "billing-discount-codes#KB-052",
+        "billing-discount-codes#KB-053",
+        "billing-discount-codes#KB-054",
+        "billing-discount-codes#KB-055",
+        "billing-discount-codes#KB-056"
+      ],
+      "conflict_group": "CONF-plans-billing-05",
+      "oq_id": "OQ-plans-billing-004"
+    },
+    {
+      "question": "Bản ghi id = 1 trên production có đúng là mã extend trial dựng sẵn (+7 ngày, mọi shop trừ development store) không; số 7 ngày có cấu hình được; mã này có giới hạn lượt/plan như mã thường; nếu id 1 bị sửa/xoá hoặc là mã khác thì extend trial hành xử thế nào?",
+      "why_it_matters": "Giá trị hiện có chỉ là của bản ghi seed; ảnh hưởng thao tác extend trial trên production.",
+      "kb_refs": [
+        "billing-discount-codes#KB-044",
+        "billing-discount-codes#KB-045",
+        "billing-discount-codes#KB-046",
+        "billing-discount-codes#KB-047"
+      ],
+      "oq_id": "OQ-plans-billing-084"
+    },
+    {
+      "question": "Extra trial days áp thế nào, kể cả với plan không có trial (0 ngày)?",
+      "why_it_matters": "Một tài liệu chỉ nói billing discount 'có thể' cộng ngày trial mà không nêu điều kiện.",
+      "kb_refs": [
+        "billing-discount-codes#KB-020",
+        "billing-discount-codes#KB-021"
+      ],
+      "oq_id": "OQ-plans-billing-085"
+    },
+    {
+      "question": "Promote code và billing discount có áp đồng thời cho cùng một shop/plan được không?",
+      "why_it_matters": "Quy tắc kết hợp không được nêu.",
+      "kb_refs": [
+        "billing-discount-codes#KB-002",
+        "promote-codes#KB-002"
+      ],
+      "oq_id": "OQ-plans-billing-016"
+    },
+    {
+      "question": "Route/method của yêu cầu lấy đường dẫn duyệt và mã HTTP của phản hồi \"forbidden\"?",
+      "why_it_matters": "Cần cho API-level test và assert phản hồi lỗi.",
+      "kb_refs": [
+        "billing-discount-codes#KB-028",
+        "billing-discount-codes#KB-031"
+      ],
+      "oq_id": "OQ-plans-billing-017"
+    },
+    {
+      "question": "Khi merchant nhập mã trên plan có discount mang sẵn, discount của plan bị thay thế hay cộng dồn?",
+      "why_it_matters": "Tài liệu chỉ nói discount của plan dùng khi không nhập mã.",
+      "kb_refs": [
+        "billing-discount-codes#KB-026"
+      ],
+      "oq_id": "OQ-plans-billing-018"
+    },
+    {
+      "question": "Giới hạn hợp lệ của Value (percentage > 100, amount lớn hơn giá plan, âm), Extra trial days, Intervals âm?",
+      "why_it_matters": "Boundary test form admin và tính giá.",
+      "kb_refs": [
+        "billing-discount-codes#KB-017",
+        "billing-discount-codes#KB-018",
+        "billing-discount-codes#KB-020"
+      ],
+      "oq_id": "OQ-plans-billing-019"
+    },
+    {
+      "question": "Total used tăng chính xác lúc nào ('kích hoạt xong' = merchant duyệt trên Shopify?) và có giảm khi merchant huỷ/không duyệt/subscription bị huỷ không?",
+      "why_it_matters": "Ảnh hưởng đếm lượt và điều kiện 'shop đã dùng mã này trên plan này'.",
+      "kb_refs": [
+        "billing-discount-codes#KB-040",
+        "billing-discount-codes#KB-038"
+      ],
+      "oq_id": "OQ-plans-billing-020"
+    },
+    {
+      "question": "Mã nhập chữ thường có được chấp nhận không (mã luôn lưu chữ HOA)?",
+      "why_it_matters": "Case merchant nhập mã chữ thường.",
+      "kb_refs": [
+        "billing-discount-codes#KB-008"
+      ],
+      "oq_id": "OQ-plans-billing-021"
+    },
+    {
+      "question": "Cơ chế tự áp mã affiliate (giá trị prefix, cờ môi trường, thứ tự ưu tiên giữa dạng mã có REF và dạng ngắn) hoạt động thế nào?",
+      "why_it_matters": "Case tự áp mã affiliate; không có KB item nào mô tả.",
+      "kb_refs": [],
+      "oq_id": "OQ-plans-billing-022"
+    },
+    {
+      "question": "Quyền trên màn Discounts tách riêng xem/tạo/sửa/xoá hay một quyền cho cả nhóm?",
+      "why_it_matters": "Quyết định số tổ hợp permission cần kiểm.",
+      "kb_refs": [
+        "billing-discount-codes#KB-058"
+      ],
+      "oq_id": "OQ-plans-billing-023"
+    }
+  ],
+  "last_updated": {
+    "date": "2026-10-16",
+    "ccr_ref": "bootstrap"
+  },
+  "coverage_matrix": [
+    {
+      "feature_id": "FEAT-07-billing-discount-codes",
+      "layer": "admin_panel",
+      "role": "admin",
+      "state": "tạo/sửa mã",
+      "environment": "documented",
+      "covered": true
+    },
+    {
+      "feature_id": "FEAT-07-billing-discount-codes",
+      "layer": "admin_panel",
+      "role": "admin",
+      "state": "Limited / All",
+      "environment": "documented",
+      "covered": true
+    },
+    {
+      "feature_id": "FEAT-07-billing-discount-codes",
+      "layer": "api",
+      "role": "merchant",
+      "state": "áp mã hợp lệ khi chọn plan",
+      "environment": "documented",
+      "covered": true
+    },
+    {
+      "feature_id": "FEAT-07-billing-discount-codes",
+      "layer": "api",
+      "role": "merchant",
+      "state": "7 điều kiện từ chối",
+      "environment": "documented",
+      "covered": true
+    },
+    {
+      "feature_id": "FEAT-07-billing-discount-codes",
+      "layer": "api",
+      "role": "merchant",
+      "state": "contract route/status",
+      "environment": "documented",
+      "covered": false
+    },
+    {
+      "feature_id": "FEAT-07-billing-discount-codes",
+      "layer": "portal",
+      "role": "merchant",
+      "state": "ô nhập mã trên Pricing",
+      "environment": "documented",
+      "covered": false
+    },
+    {
+      "feature_id": "FEAT-07-billing-discount-codes",
+      "layer": "portal",
+      "role": "merchant",
+      "state": "thông điệp lỗi theo điều kiện",
+      "environment": "documented",
+      "covered": false
+    },
+    {
+      "feature_id": "FEAT-07-billing-discount-codes",
+      "layer": "integration",
+      "role": "system",
+      "state": "Shopify áp giảm giá tại trang duyệt",
+      "environment": "documented",
+      "covered": true
+    },
+    {
+      "feature_id": "FEAT-07-billing-discount-codes",
+      "layer": "data",
+      "role": "system",
+      "state": "extend trial (id = 1) trên production",
+      "environment": "documented",
+      "covered": false
+    }
+  ],
+  "profile_conflicts": [
+    {
+      "conflict_group": "CONF-plans-billing-04",
+      "kb_refs": [
+        "billing-discount-codes#KB-048",
+        "billing-discount-codes#KB-049",
+        "billing-discount-codes#KB-050",
+        "billing-discount-codes#KB-051"
+      ],
+      "resolution": "UNRESOLVED"
+    },
+    {
+      "conflict_group": "CONF-plans-billing-05",
+      "kb_refs": [
+        "billing-discount-codes#KB-052",
+        "billing-discount-codes#KB-053",
+        "billing-discount-codes#KB-054",
+        "billing-discount-codes#KB-055",
+        "billing-discount-codes#KB-056"
+      ],
+      "resolution": "UNRESOLVED"
+    }
+  ],
+  "profile_relationships": [
+    {
+      "from": "billing-discount-codes",
+      "to": "plan-upgrade-downgrade-cancel",
+      "type": "integrates",
+      "note": "Mã được kiểm tra trong luồng chọn plan và ghi nhận sau khi duyệt.",
+      "kb_refs": [
+        "billing-discount-codes#KB-005",
+        "billing-discount-codes#KB-006"
+      ]
+    },
+    {
+      "from": "billing-discount-codes",
+      "to": "promote-codes",
+      "type": "distinct_from",
+      "note": "Billing discount đổi giá/trial; promote code đổi quota.",
+      "kb_refs": [
+        "billing-discount-codes#KB-002",
+        "_object-level.plans-billing#KB-018"
+      ]
+    },
+    {
+      "from": "billing-discount-codes",
+      "to": "plan-catalog-administration",
+      "type": "related",
+      "note": "Plan có thể mang sẵn discount trong trường của plan.",
+      "kb_refs": [
+        "billing-discount-codes#KB-026",
+        "plan-catalog-administration#KB-010"
+      ]
+    }
+  ]
+}

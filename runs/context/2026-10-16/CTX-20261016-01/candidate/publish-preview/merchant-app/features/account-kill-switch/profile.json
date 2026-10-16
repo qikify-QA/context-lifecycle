@@ -1,0 +1,689 @@
+{
+  "feature_id": "FEAT-04-account-kill-switch",
+  "feature_key": "account-kill-switch",
+  "object_key": "merchant-app",
+  "name": "Công tắc tài khoản shop (Security status) — chặn truy cập app",
+  "priority": "P1",
+  "staging_only": false,
+  "user_goal": "Nhân viên Mysbox bật/tắt quyền dùng app của một shop bằng Status ở mục Security: khi Tắt, merchant bị chặn portal và khách không mở được box, trong khi webhook đơn vẫn tạo đơn và bốc thăm, billing không dừng và box không bị gỡ; bật lại thì shop được khôi phục quyền dùng app. Shop trial của Shopify thiếu tỉnh/thành cũng bị chặn portal.",
+  "user_goal_kb_refs": [
+    "account-kill-switch#KB-001",
+    "account-kill-switch#KB-008",
+    "account-kill-switch#KB-007",
+    "account-kill-switch#KB-021",
+    "account-kill-switch#KB-010",
+    "account-kill-switch#KB-025",
+    "account-kill-switch#KB-026",
+    "account-kill-switch#KB-024",
+    "account-kill-switch#KB-012"
+  ],
+  "stable_since_version": "1",
+  "actors": [
+    {
+      "role": "admin-staff",
+      "permission_observed": "Chỉ nhân viên Mysbox bật/tắt được công tắc tài khoản (Status trong Shop > Edit > Security ở admin nội bộ); section Security có Status và Note (ghi chú nội bộ).",
+      "kb_refs": [
+        "account-kill-switch#KB-008",
+        "account-kill-switch#KB-018",
+        "account-kill-switch#KB-023"
+      ]
+    },
+    {
+      "role": "merchant",
+      "permission_observed": "Bị chặn portal khi công tắc Tắt (thông điệp chính xác đang conflict) hoặc khi shop trial thiếu tỉnh/thành; không tự bật lại được.",
+      "kb_refs": [
+        "account-kill-switch#KB-003",
+        "account-kill-switch#KB-004",
+        "account-kill-switch#KB-012",
+        "account-kill-switch#KB-016"
+      ]
+    },
+    {
+      "role": "customer",
+      "permission_observed": "Khi công tắc Tắt, trang reveal và lời gọi của khách qua app proxy bị từ chối; khách không mở được box.",
+      "kb_refs": [
+        "account-kill-switch#KB-007",
+        "account-kill-switch#KB-021",
+        "account-kill-switch#KB-022"
+      ]
+    },
+    {
+      "role": "support",
+      "permission_observed": "Dùng field Status (Security) = OFF làm dấu hiệu phân loại tình huống app bị tắt cho shop.",
+      "kb_refs": [
+        "account-kill-switch#KB-019"
+      ]
+    },
+    {
+      "role": "system",
+      "permission_observed": "Không bao giờ tự bật/tắt công tắc; vẫn xử lý webhook đơn và billing khi công tắc Tắt; ghi trạng thái công tắc sang metafield user_status.",
+      "kb_refs": [
+        "account-kill-switch#KB-009",
+        "account-kill-switch#KB-010",
+        "account-kill-switch#KB-015",
+        "account-kill-switch#KB-026"
+      ]
+    }
+  ],
+  "entry_points": [
+    {
+      "path": "Admin nội bộ: Shop > Edit > Security (Status, Note)",
+      "precondition": "Người thao tác là nhân viên Mysbox.",
+      "kb_refs": [
+        "account-kill-switch#KB-008",
+        "account-kill-switch#KB-023"
+      ]
+    },
+    {
+      "path": "Portal merchant (bị thay bằng banner chặn)",
+      "precondition": "Công tắc Tắt, hoặc shop trial của Shopify thiếu tỉnh/thành.",
+      "kb_refs": [
+        "account-kill-switch#KB-003",
+        "account-kill-switch#KB-012"
+      ]
+    },
+    {
+      "path": "Trang reveal / trang khách qua app proxy",
+      "precondition": "Công tắc Tắt.",
+      "kb_refs": [
+        "account-kill-switch#KB-007",
+        "account-kill-switch#KB-022"
+      ]
+    }
+  ],
+  "capabilities": [
+    {
+      "name": "Tắt/bật quyền dùng app của một shop",
+      "description": "Nhân viên Mysbox đổi Status (Security) giữa Bật (ACTIVATED) và Tắt (DEACTIVATED); mặc định Bật; hệ thống không bao giờ tự đổi; Status này không phải trạng thái cài đặt; Note là ghi chú nội bộ; trạng thái được ghi sang metafield user_status trên Shopify. Shop có nhiều trạng thái độc lập (install status, công tắc tài khoản, action status, gói, ...).",
+      "kb_refs": [
+        "account-kill-switch#KB-001",
+        "account-kill-switch#KB-002",
+        "account-kill-switch#KB-008",
+        "account-kill-switch#KB-009",
+        "account-kill-switch#KB-015",
+        "account-kill-switch#KB-017",
+        "account-kill-switch#KB-018",
+        "account-kill-switch#KB-023",
+        "_object-level.merchant-app#KB-012"
+      ]
+    },
+    {
+      "name": "Chặn merchant và khách khi công tắc Tắt",
+      "description": "Khi Tắt: portal merchant bị thay bằng khối thông báo chặn, API của portal bị từ chối (thông điệp/mã chính xác đang conflict), trang reveal và lời gọi của khách qua app proxy bị từ chối, khách không mở được box, trang khách có thể báo 404/trắng/đẩy sang đăng nhập.",
+      "kb_refs": [
+        "account-kill-switch#KB-003",
+        "account-kill-switch#KB-004",
+        "account-kill-switch#KB-005",
+        "account-kill-switch#KB-006",
+        "account-kill-switch#KB-007",
+        "account-kill-switch#KB-021",
+        "account-kill-switch#KB-022"
+      ]
+    },
+    {
+      "name": "Giữ xử lý nền của shop khi bị tắt",
+      "description": "Webhook đơn vẫn tạo đơn và bốc thăm; tắt Status không gỡ box và không dừng billing.",
+      "kb_refs": [
+        "account-kill-switch#KB-010",
+        "account-kill-switch#KB-011",
+        "account-kill-switch#KB-025",
+        "account-kill-switch#KB-026"
+      ]
+    },
+    {
+      "name": "Khôi phục quyền dùng app",
+      "description": "Bật lại Status (Security) thì shop được khôi phục quyền dùng app; portal đọc trạng thái lúc tải trang nên có thể vẫn báo restricted tới khi tải lại.",
+      "kb_refs": [
+        "account-kill-switch#KB-024",
+        "account-kill-switch#KB-016"
+      ]
+    },
+    {
+      "name": "Chặn portal cho shop trial thiếu tỉnh/thành",
+      "description": "Shop có plan Shopify \"trial\" thiếu province hoặc city thấy cùng banner restricted; chỉ portal bị chặn; merchant điền địa chỉ (tỉnh/thành) thì banner không còn chặn.",
+      "kb_refs": [
+        "account-kill-switch#KB-012",
+        "account-kill-switch#KB-013",
+        "account-kill-switch#KB-014"
+      ]
+    },
+    {
+      "name": "Nhận diện shop bị tắt khi hỗ trợ",
+      "description": "Support dùng Status (Security) = OFF làm dấu hiệu phân loại sang tình huống kill switch.",
+      "kb_refs": [
+        "account-kill-switch#KB-019",
+        "account-kill-switch#KB-020"
+      ]
+    }
+  ],
+  "state_transitions": [
+    {
+      "from": "ACTIVATED (Bật, mặc định)",
+      "to": "DEACTIVATED (Tắt)",
+      "trigger": "Nhân viên Mysbox tắt Status trong Shop > Edit > Security",
+      "condition": "Chỉ nhân viên Mysbox; hệ thống không tự đổi",
+      "kb_refs": [
+        "account-kill-switch#KB-001",
+        "account-kill-switch#KB-002",
+        "account-kill-switch#KB-008",
+        "account-kill-switch#KB-009"
+      ]
+    },
+    {
+      "from": "DEACTIVATED (Tắt)",
+      "to": "ACTIVATED (Bật), shop được khôi phục quyền dùng app",
+      "trigger": "Nhân viên Mysbox bật lại Status",
+      "condition": "Portal có thể vẫn báo restricted tới khi tải lại trang",
+      "kb_refs": [
+        "account-kill-switch#KB-024",
+        "account-kill-switch#KB-016"
+      ]
+    },
+    {
+      "from": "Công tắc đổi trạng thái",
+      "to": "Metafield user_status trên Shopify cập nhật theo",
+      "trigger": "Đổi Status (Security)",
+      "condition": "",
+      "kb_refs": [
+        "account-kill-switch#KB-015"
+      ]
+    },
+    {
+      "from": "Shop trial thiếu tỉnh/thành: portal bị chặn",
+      "to": "Portal không còn bị chặn",
+      "trigger": "Merchant điền địa chỉ (tỉnh/thành)",
+      "condition": "Plan Shopify là \"trial\"",
+      "kb_refs": [
+        "account-kill-switch#KB-012",
+        "account-kill-switch#KB-014"
+      ]
+    }
+  ],
+  "confirmed_rules": [
+    {
+      "rule": "Công tắc tài khoản (mục Security) có hai giá trị Bật (ACTIVATED) và Tắt (DEACTIVATED); mặc định Bật.",
+      "kb_refs": [
+        "account-kill-switch#KB-001",
+        "account-kill-switch#KB-002"
+      ]
+    },
+    {
+      "rule": "Chỉ nhân viên Mysbox bật/tắt được công tắc tài khoản (Status trong Shop > Edit > Security ở admin nội bộ).",
+      "kb_refs": [
+        "account-kill-switch#KB-008"
+      ]
+    },
+    {
+      "rule": "Hệ thống không bao giờ tự động tắt hoặc bật công tắc tài khoản của shop.",
+      "kb_refs": [
+        "account-kill-switch#KB-009"
+      ]
+    },
+    {
+      "rule": "Khi công tắc Tắt, trang reveal và các lời gọi của khách qua app proxy bị từ chối (\"access denied\").",
+      "kb_refs": [
+        "account-kill-switch#KB-007"
+      ]
+    },
+    {
+      "rule": "Khách không mở được box khi shop đang OFF.",
+      "kb_refs": [
+        "account-kill-switch#KB-021"
+      ]
+    },
+    {
+      "rule": "Status của shop ở OFF là một nguyên nhân trang khách (my orders / unbox) báo 404, trắng hoặc đẩy sang đăng nhập.",
+      "kb_refs": [
+        "account-kill-switch#KB-022"
+      ]
+    },
+    {
+      "rule": "Webhook đơn vẫn tạo đơn và bốc thăm cho shop có công tắc Tắt.",
+      "kb_refs": [
+        "account-kill-switch#KB-010"
+      ]
+    },
+    {
+      "rule": "Tắt Status (Security) không gỡ box của shop và không dừng billing của shop.",
+      "kb_refs": [
+        "account-kill-switch#KB-025",
+        "account-kill-switch#KB-026"
+      ]
+    },
+    {
+      "rule": "Bật lại Status (Security) thì shop được khôi phục quyền dùng app.",
+      "kb_refs": [
+        "account-kill-switch#KB-024"
+      ]
+    },
+    {
+      "rule": "Portal đọc trạng thái công tắc lúc tải trang, nên sau khi công tắc được bật lại portal có thể vẫn báo restricted cho tới khi tải lại trang.",
+      "kb_refs": [
+        "account-kill-switch#KB-016"
+      ]
+    },
+    {
+      "rule": "Banner restricted cũng hiện cho shop trial của Shopify thiếu tỉnh/thành (plan \"trial\", thiếu province hoặc city); với shop này chỉ portal bị chặn; merchant điền tỉnh/thành thì banner không còn chặn portal.",
+      "kb_refs": [
+        "account-kill-switch#KB-012",
+        "account-kill-switch#KB-013",
+        "account-kill-switch#KB-014"
+      ]
+    },
+    {
+      "rule": "Trạng thái công tắc tài khoản còn được ghi sang metafield của app trên Shopify (user_status).",
+      "kb_refs": [
+        "account-kill-switch#KB-015"
+      ]
+    },
+    {
+      "rule": "Status của section Security không phải trạng thái cài đặt của shop; Note trong section Security là ghi chú nội bộ; Shop > Edit > Security hiển thị Status và Note.",
+      "kb_refs": [
+        "account-kill-switch#KB-017",
+        "account-kill-switch#KB-018",
+        "account-kill-switch#KB-023"
+      ]
+    },
+    {
+      "rule": "Field Status (Security) có giá trị OFF được dùng làm dấu hiệu phân loại sang tình huống app bị tắt cho shop (kill switch).",
+      "kb_refs": [
+        "account-kill-switch#KB-019"
+      ]
+    },
+    {
+      "rule": "Một shop có nhiều trạng thái độc lập (install status, công tắc tài khoản, action status, gói Mysbox, capacity, tên gói Shopify, kết nối token, dev store).",
+      "kb_refs": [
+        "_object-level.merchant-app#KB-012"
+      ]
+    }
+  ],
+  "observed_behavior": [],
+  "observed_validations": [],
+  "limitations": [
+    {
+      "kind": "conflict",
+      "statement": "Thông điệp portal khi công tắc Tắt: một nguồn ghi banner \"Access to Mysbox is currently restricted\" kèm nút \"Contact support\"; nguồn khác ghi khối \"App is not available yet. Please wait for the app to be ready or try again later.\" khi Status bằng 0. Cả hai INFERRED, UNRESOLVED.",
+      "kb_refs": [
+        "account-kill-switch#KB-003",
+        "account-kill-switch#KB-004"
+      ]
+    },
+    {
+      "kind": "conflict",
+      "statement": "Phản hồi API khi công tắc Tắt: một nguồn ghi mọi API portal trả 403 \"Your account is not activated. Please contact support.\"; nguồn khác ghi app nhúng trả \"access denied\" cho mọi thao tác. Cả hai INFERRED, UNRESOLVED.",
+      "kb_refs": [
+        "account-kill-switch#KB-005",
+        "account-kill-switch#KB-006"
+      ]
+    },
+    {
+      "kind": "hedged",
+      "statement": "Tài liệu ghi kèm 'chưa xác nhận' rằng webhook không đi qua lớp chặn của công tắc tài khoản (INFERRED/LOW).",
+      "kb_refs": [
+        "account-kill-switch#KB-011"
+      ]
+    },
+    {
+      "kind": "inferred",
+      "statement": "Kill switch là một gốc thường gặp khiến cả shop sai nhiều thứ cùng lúc (box không hiện, đơn không xử lý, dữ liệu cũ) — nhận định support, INFERRED, không dùng làm oracle; mâu thuẫn bề ngoài với rule webhook đơn vẫn được xử lý khi Tắt.",
+      "kb_refs": [
+        "account-kill-switch#KB-020",
+        "account-kill-switch#KB-010"
+      ]
+    }
+  ],
+  "permissions": [
+    {
+      "permission": "Bật/tắt công tắc tài khoản shop",
+      "holder": "Chỉ nhân viên Mysbox (admin nội bộ).",
+      "kb_refs": [
+        "account-kill-switch#KB-008"
+      ]
+    },
+    {
+      "permission": "Dùng portal merchant",
+      "holder": "Merchant của shop có công tắc Bật và không phải shop trial thiếu tỉnh/thành.",
+      "kb_refs": [
+        "account-kill-switch#KB-012",
+        "account-kill-switch#KB-024"
+      ]
+    },
+    {
+      "permission": "Mở box / trang reveal",
+      "holder": "Khách của shop có công tắc Bật.",
+      "kb_refs": [
+        "account-kill-switch#KB-007",
+        "account-kill-switch#KB-021"
+      ]
+    }
+  ],
+  "surface_mapping": {
+    "portal": [
+      {
+        "item": "Khối/banner chặn thay cho portal khi công tắc Tắt hoặc shop trial thiếu tỉnh/thành (chữ chính xác đang conflict)",
+        "kb_refs": [
+          "account-kill-switch#KB-003",
+          "account-kill-switch#KB-004",
+          "account-kill-switch#KB-012"
+        ]
+      }
+    ],
+    "storefront": [
+      {
+        "item": "Trang reveal và lời gọi của khách qua app proxy bị từ chối; trang khách 404/trắng/đẩy đăng nhập",
+        "kb_refs": [
+          "account-kill-switch#KB-007",
+          "account-kill-switch#KB-021",
+          "account-kill-switch#KB-022"
+        ]
+      }
+    ],
+    "api": [
+      {
+        "item": "API của portal bị từ chối khi công tắc Tắt (403 \"Your account is not activated...\" hay \"access denied\" — conflict)",
+        "kb_refs": [
+          "account-kill-switch#KB-005",
+          "account-kill-switch#KB-006"
+        ]
+      },
+      {
+        "item": "Webhook đơn vẫn được xử lý khi công tắc Tắt",
+        "kb_refs": [
+          "account-kill-switch#KB-010",
+          "account-kill-switch#KB-011"
+        ]
+      }
+    ],
+    "data": [
+      {
+        "item": "Status (Security) của shop: ACTIVATED/DEACTIVATED (hiển thị OFF/0 ở admin), Note nội bộ",
+        "kb_refs": [
+          "account-kill-switch#KB-001",
+          "account-kill-switch#KB-004",
+          "account-kill-switch#KB-018"
+        ]
+      },
+      {
+        "item": "Metafield user_status của app trên Shopify",
+        "kb_refs": [
+          "account-kill-switch#KB-015"
+        ]
+      }
+    ],
+    "code": []
+  },
+  "dependencies": [
+    {
+      "feature_key": "admin-shop-management",
+      "reason": "Công tắc nằm ở section Security của form Shop > Edit trong admin nội bộ.",
+      "kb_refs": [
+        "account-kill-switch#KB-008",
+        "account-kill-switch#KB-023"
+      ]
+    },
+    {
+      "feature_key": "reveal-journey",
+      "reason": "Trang reveal của khách bị từ chối khi Tắt.",
+      "kb_refs": [
+        "account-kill-switch#KB-007",
+        "account-kill-switch#KB-021"
+      ]
+    },
+    {
+      "feature_key": "customer-portal-access-magic-link",
+      "reason": "Trang khách (my orders / unbox) bị ảnh hưởng khi Status OFF.",
+      "kb_refs": [
+        "account-kill-switch#KB-022"
+      ]
+    },
+    {
+      "feature_key": "webhook-ingestion",
+      "reason": "Webhook đơn vẫn chạy khi Tắt.",
+      "kb_refs": [
+        "account-kill-switch#KB-010",
+        "account-kill-switch#KB-011"
+      ]
+    },
+    {
+      "feature_key": "purchase-and-prize-draw",
+      "reason": "Đơn vẫn được tạo và bốc thăm khi Tắt.",
+      "kb_refs": [
+        "account-kill-switch#KB-010"
+      ]
+    },
+    {
+      "feature_key": "daily-usage-charge-and-charge-status",
+      "reason": "Billing không dừng khi Tắt.",
+      "kb_refs": [
+        "account-kill-switch#KB-026"
+      ]
+    },
+    {
+      "feature_key": "storefront-data-sync",
+      "reason": "Trạng thái công tắc được ghi sang metafield user_status cho storefront.",
+      "kb_refs": [
+        "account-kill-switch#KB-015"
+      ]
+    }
+  ],
+  "risks": [
+    {
+      "risk": "Shop bị Tắt vẫn bị tính billing và vẫn nhận đơn/bốc thăm, nhưng khách không mở được box: dễ phát sinh khiếu nại.",
+      "kb_refs": [
+        "account-kill-switch#KB-010",
+        "account-kill-switch#KB-021",
+        "account-kill-switch#KB-026"
+      ]
+    },
+    {
+      "risk": "Sau khi bật lại, portal vẫn có thể báo restricted cho tới khi tải lại trang.",
+      "kb_refs": [
+        "account-kill-switch#KB-016"
+      ]
+    },
+    {
+      "risk": "Shop trial thiếu tỉnh/thành bị chặn portal bằng cùng banner, dễ bị nhầm với kill switch.",
+      "kb_refs": [
+        "account-kill-switch#KB-012",
+        "account-kill-switch#KB-019"
+      ]
+    }
+  ],
+  "freshness": {
+    "observed_at": null
+  },
+  "unknown_areas": [
+    {
+      "question": "Khi công tắc Tắt, portal của merchant hiện chữ nào: \"Access to Mysbox is currently restricted\" kèm \"Contact support\" hay \"App is not available yet. Please wait for the app to be ready or try again later.\" (hoặc mỗi chữ hiện trong điều kiện nào)?",
+      "why_it_matters": "Hai nguồn mâu thuẫn (UNRESOLVED); chưa có oracle cho thông điệp portal.",
+      "kb_refs": [
+        "account-kill-switch#KB-003",
+        "account-kill-switch#KB-004"
+      ],
+      "oq_id": "OQ-merchant-app-002"
+    },
+    {
+      "question": "API của portal khi công tắc Tắt trả status code và nội dung gì chính xác (403 \"Your account is not activated. Please contact support.\" hay \"access denied\")?",
+      "why_it_matters": "Hai nguồn mâu thuẫn (UNRESOLVED); chưa có oracle cho phản hồi API.",
+      "kb_refs": [
+        "account-kill-switch#KB-005",
+        "account-kill-switch#KB-006"
+      ],
+      "oq_id": "OQ-merchant-app-003"
+    },
+    {
+      "question": "Webhook (orders paid, shop update, ...) có thực sự bỏ qua lớp chặn của công tắc tài khoản không?",
+      "why_it_matters": "Tài liệu ghi kèm 'chưa xác nhận'; cần để kiểm xử lý nền khi shop bị Tắt.",
+      "kb_refs": [
+        "account-kill-switch#KB-011",
+        "account-kill-switch#KB-010"
+      ],
+      "oq_id": "OQ-merchant-app-061"
+    },
+    {
+      "question": "Khi công tắc Tắt, storefront (widget, theme block, block Unbox, store credit) có bị ẩn/chặn không ngoài trang reveal, và widget dùng metafield user_status thế nào?",
+      "why_it_matters": "Hiệu ứng lên storefront chưa xác nhận; chưa có expected result cho case kill switch trên storefront.",
+      "kb_refs": [
+        "account-kill-switch#KB-007",
+        "account-kill-switch#KB-015"
+      ],
+      "oq_id": "OQ-merchant-app-009"
+    },
+    {
+      "question": "Trang reveal / lời gọi của khách bị từ chối trả status code và nội dung gì; với từng nguyên nhân trang khách trả 404, trang trắng hay đẩy sang đăng nhập?",
+      "why_it_matters": "Không có giá trị kỳ vọng cụ thể cho case khách mở reveal khi shop bị Tắt.",
+      "kb_refs": [
+        "account-kill-switch#KB-007",
+        "account-kill-switch#KB-022"
+      ],
+      "oq_id": "OQ-merchant-app-009"
+    },
+    {
+      "question": "Shop trial vừa cài (chưa nhận thông báo shop update chứa tên plan) có bị nhận diện là trial thiếu tỉnh/thành và chặn portal ngay không?",
+      "why_it_matters": "Điều kiện dựa vào plan 'trial' nhưng tên plan Shopify chỉ đến qua thông báo shop update, không phải lúc cài.",
+      "kb_refs": [
+        "account-kill-switch#KB-012"
+      ],
+      "oq_id": "OQ-merchant-app-010"
+    },
+    {
+      "question": "Field Status (Security) trong admin có những giá trị hiển thị nào ngoài OFF, và Note có bắt buộc khi đổi Status không?",
+      "why_it_matters": "Chưa có enum hiển thị đầy đủ hay tính bắt buộc của Note.",
+      "kb_refs": [
+        "account-kill-switch#KB-019",
+        "account-kill-switch#KB-018"
+      ],
+      "oq_id": "OQ-merchant-app-011"
+    }
+  ],
+  "last_updated": {
+    "date": "2026-10-16",
+    "ccr_ref": "bootstrap"
+  },
+  "coverage_matrix": [
+    {
+      "feature_id": "FEAT-04-account-kill-switch",
+      "layer": "admin_panel",
+      "role": "admin-staff",
+      "state": "Bật → Tắt",
+      "environment": "documented",
+      "covered": true
+    },
+    {
+      "feature_id": "FEAT-04-account-kill-switch",
+      "layer": "admin_panel",
+      "role": "admin-staff",
+      "state": "Tắt → Bật",
+      "environment": "documented",
+      "covered": true
+    },
+    {
+      "feature_id": "FEAT-04-account-kill-switch",
+      "layer": "portal",
+      "role": "merchant",
+      "state": "công tắc Tắt (thông điệp)",
+      "environment": "documented",
+      "covered": false
+    },
+    {
+      "feature_id": "FEAT-04-account-kill-switch",
+      "layer": "portal",
+      "role": "merchant",
+      "state": "shop trial thiếu tỉnh/thành",
+      "environment": "documented",
+      "covered": true
+    },
+    {
+      "feature_id": "FEAT-04-account-kill-switch",
+      "layer": "api",
+      "role": "merchant",
+      "state": "công tắc Tắt (mã/nội dung phản hồi)",
+      "environment": "documented",
+      "covered": false
+    },
+    {
+      "feature_id": "FEAT-04-account-kill-switch",
+      "layer": "storefront",
+      "role": "customer",
+      "state": "công tắc Tắt — trang reveal",
+      "environment": "documented",
+      "covered": true
+    },
+    {
+      "feature_id": "FEAT-04-account-kill-switch",
+      "layer": "storefront",
+      "role": "customer",
+      "state": "công tắc Tắt — widget/block khác",
+      "environment": "documented",
+      "covered": false
+    },
+    {
+      "feature_id": "FEAT-04-account-kill-switch",
+      "layer": "backend",
+      "role": "system",
+      "state": "công tắc Tắt — webhook đơn, billing",
+      "environment": "documented",
+      "covered": true
+    },
+    {
+      "feature_id": "FEAT-04-account-kill-switch",
+      "layer": "data",
+      "role": "system",
+      "state": "metafield user_status",
+      "environment": "documented",
+      "covered": true
+    }
+  ],
+  "profile_conflicts": [
+    {
+      "feature_id": "FEAT-04-account-kill-switch",
+      "conflict_group": "CONF-merchant-app-02",
+      "summary": "Thông điệp portal của merchant khi công tắc Tắt không thống nhất giữa các tài liệu.",
+      "kb_refs": [
+        "account-kill-switch#KB-003",
+        "account-kill-switch#KB-004"
+      ],
+      "resolution": "UNRESOLVED"
+    },
+    {
+      "feature_id": "FEAT-04-account-kill-switch",
+      "conflict_group": "CONF-merchant-app-03",
+      "summary": "Phản hồi API của app nhúng khi công tắc Tắt được mô tả bằng hai thông điệp khác nhau.",
+      "kb_refs": [
+        "account-kill-switch#KB-005",
+        "account-kill-switch#KB-006"
+      ],
+      "resolution": "UNRESOLVED"
+    }
+  ],
+  "profile_relationships": [
+    {
+      "from": "account-kill-switch",
+      "to": "admin-shop-management",
+      "type": "configured_by",
+      "note": "Section Security của Shop > Edit.",
+      "kb_refs": [
+        "account-kill-switch#KB-023"
+      ]
+    },
+    {
+      "from": "account-kill-switch",
+      "to": "reveal-journey",
+      "type": "blocks",
+      "note": "Khách không mở được box khi Tắt.",
+      "kb_refs": [
+        "account-kill-switch#KB-021"
+      ]
+    },
+    {
+      "from": "account-kill-switch",
+      "to": "shop-uninstall-reinstall-lifecycle",
+      "type": "distinct_from",
+      "note": "Status Security không phải trạng thái cài đặt của shop.",
+      "kb_refs": [
+        "account-kill-switch#KB-017",
+        "_object-level.merchant-app#KB-012"
+      ]
+    }
+  ]
+}

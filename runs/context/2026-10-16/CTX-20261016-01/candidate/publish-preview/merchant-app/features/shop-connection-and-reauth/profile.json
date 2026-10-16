@@ -1,0 +1,964 @@
+{
+  "feature_id": "FEAT-05-shop-connection-and-reauth",
+  "feature_key": "shop-connection-and-reauth",
+  "name": "Kết nối Shopify của shop: token, làm mới, re-auth",
+  "user_goal": "Shop luôn giữ được kết nối với Shopify để app thay mặt shop làm việc khi merchant không online (token có hạn tự làm mới, job gia hạn hằng ngày, token kiểu cũ được chuyển dần); khi kết nối hỏng, shop bị đánh cờ cần cấp quyền lại, merchant được dẫn qua màn cấp quyền và nhận một email reconnect, cấp quyền lại thì cờ được xoá.",
+  "user_goal_kb_refs": [
+    "shop-connection-and-reauth#KB-038",
+    "shop-connection-and-reauth#KB-003",
+    "shop-connection-and-reauth#KB-007",
+    "shop-connection-and-reauth#KB-013",
+    "shop-connection-and-reauth#KB-009",
+    "shop-connection-and-reauth#KB-018",
+    "shop-connection-and-reauth#KB-021",
+    "shop-connection-and-reauth#KB-029"
+  ],
+  "stable_since_version": "1",
+  "actors": [
+    {
+      "role": "merchant",
+      "permission_observed": "Mở app từ Shopify admin; bị chuyển qua màn cấp quyền khi shop cần cấp quyền lại hoặc phiên/token không dùng được; nhận email reconnect; chấp nhận màn cấp quyền để xoá cờ. Quyền mở app do Shopify quyết định, app không phân biệt chủ shop và nhân viên.",
+      "kb_refs": [
+        "shop-connection-and-reauth#KB-018",
+        "shop-connection-and-reauth#KB-019",
+        "shop-connection-and-reauth#KB-020",
+        "shop-connection-and-reauth#KB-029",
+        "shop-connection-and-reauth#KB-034",
+        "shop-connection-and-reauth#KB-037",
+        "_object-level.merchant-app#KB-004",
+        "_object-level.merchant-app#KB-005",
+        "_object-level.merchant-app#KB-006"
+      ]
+    },
+    {
+      "role": "system",
+      "permission_observed": "Đổi mã OAuth lấy offline token; tự làm mới khoá truy cập; job hằng ngày gia hạn token sắp hết hạn; job hằng tuần chuyển token kiểu cũ; đặt cờ cần cấp quyền lại và gửi email reconnect.",
+      "kb_refs": [
+        "shop-connection-and-reauth#KB-038",
+        "shop-connection-and-reauth#KB-003",
+        "shop-connection-and-reauth#KB-007",
+        "shop-connection-and-reauth#KB-013",
+        "shop-connection-and-reauth#KB-009",
+        "shop-connection-and-reauth#KB-022"
+      ]
+    },
+    {
+      "role": "admin-staff",
+      "permission_observed": "Xem mục Tokens của shop trong admin (Re-auth Required At, Refresh Token Expires At, loại token) để chẩn đoán; bấm thao tác \"Refresh access token\" (không thành công nếu khoá làm mới đã chết).",
+      "kb_refs": [
+        "shop-connection-and-reauth#KB-017",
+        "shop-connection-and-reauth#KB-030",
+        "shop-connection-and-reauth#KB-031",
+        "shop-connection-and-reauth#KB-032",
+        "shop-connection-and-reauth#KB-035"
+      ]
+    },
+    {
+      "role": "engineer (role unspecified trong KB)",
+      "permission_observed": "Chạy lệnh vận hành làm mới token sắp hết hạn và chuyển token kiểu cũ khi hàng loạt shop cần token mới; các lệnh lặp lại an toàn.",
+      "kb_refs": [
+        "shop-connection-and-reauth#KB-036"
+      ]
+    }
+  ],
+  "entry_points": [
+    {
+      "path": "Cài app lần đầu từ Shopify: màn cấp quyền (OAuth)",
+      "precondition": "Shop chưa cài app",
+      "kb_refs": [
+        "shop-connection-and-reauth#KB-037",
+        "shop-connection-and-reauth#KB-038"
+      ]
+    },
+    {
+      "path": "Mở app từ Shopify admin (embedded app)",
+      "precondition": "Shop đang có cờ cần cấp quyền lại, hoặc phiên không dùng được / token kiểu cũ / token chết, hoặc app vừa đổi danh sách quyền (scope)",
+      "kb_refs": [
+        "shop-connection-and-reauth#KB-018",
+        "shop-connection-and-reauth#KB-019",
+        "shop-connection-and-reauth#KB-029",
+        "shop-connection-and-reauth#KB-040",
+        "_object-level.merchant-app#KB-011"
+      ]
+    },
+    {
+      "path": "Email \"reconnect the app\" gửi merchant",
+      "precondition": "Cờ cần cấp quyền lại vừa được đặt; shop còn cài app và plan Shopify chưa đóng",
+      "kb_refs": [
+        "shop-connection-and-reauth#KB-020",
+        "shop-connection-and-reauth#KB-021",
+        "shop-connection-and-reauth#KB-022"
+      ]
+    },
+    {
+      "path": "Admin panel: Shop -> View -> mục Tokens",
+      "precondition": "Nhân viên admin đăng nhập admin panel",
+      "kb_refs": [
+        "shop-connection-and-reauth#KB-017",
+        "shop-connection-and-reauth#KB-030",
+        "shop-connection-and-reauth#KB-031"
+      ]
+    },
+    {
+      "path": "Admin panel: thao tác \"Refresh access token\" trên trang chi tiết shop",
+      "precondition": "Nhân viên admin; khoá làm mới của shop còn sống thì mới thành công",
+      "kb_refs": [
+        "shop-connection-and-reauth#KB-032",
+        "shop-connection-and-reauth#KB-035"
+      ]
+    },
+    {
+      "path": "Job theo lịch: gia hạn token hằng ngày, đổi token cũ hằng tuần; lệnh vận hành tương ứng",
+      "precondition": "Không cần người dùng",
+      "kb_refs": [
+        "shop-connection-and-reauth#KB-007",
+        "shop-connection-and-reauth#KB-013",
+        "shop-connection-and-reauth#KB-036"
+      ]
+    }
+  ],
+  "capabilities": [
+    {
+      "name": "Thiết lập kết nối ban đầu",
+      "description": "Lần cài đầu, Shopify đưa merchant qua màn cấp quyền; Mysbox đổi mã lấy offline token có hạn kèm refresh token để thay mặt shop gọi Shopify khi merchant không online. Đổi scope của app buộc mọi shop cấp quyền lại.",
+      "kb_refs": [
+        "shop-connection-and-reauth#KB-037",
+        "shop-connection-and-reauth#KB-038",
+        "shop-connection-and-reauth#KB-039",
+        "shop-connection-and-reauth#KB-040"
+      ]
+    },
+    {
+      "name": "Tự duy trì token còn hạn",
+      "description": "Khoá truy cập hết hạn sau 1 giờ và được app tự làm mới trước khi hết hạn (không cần merchant OAuth lại); khoá làm mới sống 90 ngày; job hằng ngày làm mới cặp token khi khoá làm mới còn dưới 10 ngày.",
+      "kb_refs": [
+        "shop-connection-and-reauth#KB-002",
+        "shop-connection-and-reauth#KB-003",
+        "shop-connection-and-reauth#KB-004",
+        "shop-connection-and-reauth#KB-007"
+      ]
+    },
+    {
+      "name": "Chuyển token kiểu cũ sang token có hạn",
+      "description": "Job hằng tuần thử chuyển mỗi shop còn token kiểu cũ (không hết hạn) một lần mỗi tuần sang token có hạn, merchant không thấy tác động, việc chuyển là một chiều; Shopify khai tử token kiểu cũ ngày 1/1/2027.",
+      "kb_refs": [
+        "shop-connection-and-reauth#KB-011",
+        "shop-connection-and-reauth#KB-013",
+        "shop-connection-and-reauth#KB-014",
+        "shop-connection-and-reauth#KB-015",
+        "shop-connection-and-reauth#KB-016",
+        "shop-connection-and-reauth#KB-036"
+      ]
+    },
+    {
+      "name": "Phát hiện mất kết nối và đánh cờ cần cấp quyền lại",
+      "description": "Shop bị đánh cờ \"cần cấp quyền lại\" (có ngày ở Re-auth Required At) khi không làm mới được token: khoá làm mới hết hạn/bị từ chối, gia hạn lỗi 10 ngày liên tiếp, token kiểu cũ quá hạn cắt, store đóng/đóng băng lâu rồi mở lại mà token đã chết, hoặc shop còn 'đã cài' mà token chết.",
+      "kb_refs": [
+        "shop-connection-and-reauth#KB-006",
+        "shop-connection-and-reauth#KB-008",
+        "shop-connection-and-reauth#KB-009",
+        "shop-connection-and-reauth#KB-010",
+        "shop-connection-and-reauth#KB-012",
+        "shop-connection-and-reauth#KB-017",
+        "shop-connection-and-reauth#KB-023",
+        "shop-connection-and-reauth#KB-041"
+      ]
+    },
+    {
+      "name": "Thông báo và dẫn merchant cấp quyền lại",
+      "description": "Khi cờ được đặt, đúng một email \"reconnect the app\" được gửi (chỉ khi shop còn cài app và plan Shopify chưa đóng); merchant mở app thì bị chuyển qua màn xin quyền của Shopify; Shopify từ chối làm mới thì merchant phải mở lại app để cấp quyền lại.",
+      "kb_refs": [
+        "shop-connection-and-reauth#KB-018",
+        "shop-connection-and-reauth#KB-019",
+        "shop-connection-and-reauth#KB-020",
+        "shop-connection-and-reauth#KB-021",
+        "shop-connection-and-reauth#KB-022",
+        "shop-connection-and-reauth#KB-034"
+      ]
+    },
+    {
+      "name": "Hạn chế hoạt động của shop khi mất kết nối",
+      "description": "Khi shop có cờ cần cấp quyền lại, Mysbox không đọc được đơn, không thêm được quà vào đơn, không ghi được dữ liệu box/metafield, không tính được usage, không lấy được giá; mọi job nền của shop lỗi; đơn khách đã trả có thể không có đơn/box tương ứng trong Mysbox.",
+      "kb_refs": [
+        "shop-connection-and-reauth#KB-024",
+        "shop-connection-and-reauth#KB-025",
+        "shop-connection-and-reauth#KB-026",
+        "shop-connection-and-reauth#KB-028"
+      ]
+    },
+    {
+      "name": "Khôi phục kết nối",
+      "description": "Cờ cần cấp quyền lại được xoá khi merchant mở app từ Shopify admin và chấp nhận màn cấp quyền (hệ thống cấp cặp khoá mới), hoặc khi gỡ app; gỡ rồi cài lại không gây ra cờ.",
+      "kb_refs": [
+        "shop-connection-and-reauth#KB-029"
+      ]
+    },
+    {
+      "name": "Support chẩn đoán và làm mới token thủ công",
+      "description": "Nhân viên admin xác nhận shop cần cấp quyền lại qua mục Tokens (Re-auth Required At có ngày, Refresh Token Expires At đã qua, token kiểu cũ); thao tác \"Refresh access token\" chỉ nên bấm một lần vì khoá làm mới chỉ dùng được một lần, và không thành công nếu khoá làm mới đã chết.",
+      "kb_refs": [
+        "shop-connection-and-reauth#KB-017",
+        "shop-connection-and-reauth#KB-030",
+        "shop-connection-and-reauth#KB-031",
+        "shop-connection-and-reauth#KB-032",
+        "shop-connection-and-reauth#KB-035"
+      ]
+    }
+  ],
+  "state_transitions": [
+    {
+      "from": "khoá truy cập sắp/đã hết hạn",
+      "to": "khoá truy cập mới (khoẻ)",
+      "trigger": "app tự làm mới trước khi hết hạn",
+      "condition": "khoá làm mới còn dùng được; không cần merchant OAuth lại",
+      "kb_refs": [
+        "shop-connection-and-reauth#KB-002",
+        "shop-connection-and-reauth#KB-003"
+      ]
+    },
+    {
+      "from": "khoẻ (khoá làm mới còn dưới 10 ngày)",
+      "to": "khoẻ (cặp token mới)",
+      "trigger": "job gia hạn token chạy hằng ngày",
+      "condition": "khoá làm mới hết hạn trong 10 ngày tới",
+      "kb_refs": [
+        "shop-connection-and-reauth#KB-004",
+        "shop-connection-and-reauth#KB-007"
+      ]
+    },
+    {
+      "from": "token cũ",
+      "to": "khoẻ (token có hạn)",
+      "trigger": "job đổi token cũ chạy hằng tuần (hoặc lệnh vận hành)",
+      "condition": "mỗi shop thử một lần mỗi tuần; một chiều, không quay lại token kiểu cũ",
+      "kb_refs": [
+        "shop-connection-and-reauth#KB-006",
+        "shop-connection-and-reauth#KB-013",
+        "shop-connection-and-reauth#KB-014",
+        "shop-connection-and-reauth#KB-016",
+        "shop-connection-and-reauth#KB-036"
+      ]
+    },
+    {
+      "from": "khoẻ",
+      "to": "cần re-auth",
+      "trigger": "không làm mới được token",
+      "condition": "khoá làm mới 90 ngày hết hạn hoặc bị từ chối; gia hạn lỗi 10 ngày liên tiếp; job không gia hạn được khi shop không liên lạc được nhiều tuần hoặc app từng ngừng",
+      "kb_refs": [
+        "shop-connection-and-reauth#KB-008",
+        "shop-connection-and-reauth#KB-009",
+        "shop-connection-and-reauth#KB-010"
+      ]
+    },
+    {
+      "from": "token cũ",
+      "to": "cần re-auth",
+      "trigger": "quá hạn cắt của Shopify",
+      "condition": "token kiểu cũ còn dùng sau 1/1/2027",
+      "kb_refs": [
+        "shop-connection-and-reauth#KB-011",
+        "shop-connection-and-reauth#KB-012"
+      ]
+    },
+    {
+      "from": "store đóng/đóng băng lâu",
+      "to": "cần re-auth",
+      "trigger": "store mở lại",
+      "condition": "token đã chết; email yêu cầu cấp quyền lại được gửi",
+      "kb_refs": [
+        "shop-connection-and-reauth#KB-023"
+      ]
+    },
+    {
+      "from": "đã cài, token chết",
+      "to": "cần re-auth",
+      "trigger": "phát hiện token chết (do mất app/uninstalled)",
+      "condition": "shop vẫn ở trạng thái 'đã cài'",
+      "kb_refs": [
+        "shop-connection-and-reauth#KB-041"
+      ]
+    },
+    {
+      "from": "cần re-auth",
+      "to": "khoẻ",
+      "trigger": "merchant mở app từ Shopify admin và chấp nhận màn cấp quyền",
+      "condition": "hệ thống cấp cặp khoá mới, cờ được xoá",
+      "kb_refs": [
+        "shop-connection-and-reauth#KB-029"
+      ]
+    },
+    {
+      "from": "cần re-auth",
+      "to": "cờ re-auth được xoá (shop đã gỡ app)",
+      "trigger": "merchant gỡ app",
+      "condition": "gỡ rồi cài lại không phải nguyên nhân gây cờ",
+      "kb_refs": [
+        "shop-connection-and-reauth#KB-029"
+      ]
+    }
+  ],
+  "confirmed_rules": [
+    {
+      "rule": "Khoá truy cập của shop hết hạn sau 1 giờ.",
+      "kb_refs": [
+        "shop-connection-and-reauth#KB-002"
+      ]
+    },
+    {
+      "rule": "Offline token dạng expiring tự xoay: app tự làm mới khoá truy cập trước khi hết hạn; khoá truy cập hết hạn là bình thường, không cần merchant cấp quyền lại.",
+      "kb_refs": [
+        "shop-connection-and-reauth#KB-003"
+      ]
+    },
+    {
+      "rule": "Khoá làm mới (refresh token) của offline token có thời hạn 90 ngày.",
+      "kb_refs": [
+        "shop-connection-and-reauth#KB-004"
+      ]
+    },
+    {
+      "rule": "Trạng thái kết nối (token) của shop gồm: khoẻ, token cũ, cần re-auth.",
+      "kb_refs": [
+        "shop-connection-and-reauth#KB-006"
+      ]
+    },
+    {
+      "rule": "Job chạy hằng ngày làm mới cặp token của shop có khoá làm mới hết hạn trong 10 ngày tới.",
+      "kb_refs": [
+        "shop-connection-and-reauth#KB-007"
+      ]
+    },
+    {
+      "rule": "Gia hạn token lỗi 10 ngày liên tiếp thì shop phải cấp quyền lại.",
+      "kb_refs": [
+        "shop-connection-and-reauth#KB-008"
+      ]
+    },
+    {
+      "rule": "Không làm mới được token (khoá làm mới hết hạn hoặc bị từ chối) thì shop bị đánh cờ \"cần cấp quyền lại\".",
+      "kb_refs": [
+        "shop-connection-and-reauth#KB-009"
+      ]
+    },
+    {
+      "rule": "Job làm mới hằng ngày không gia hạn được khoá làm mới khi shop không liên lạc được nhiều tuần hoặc app từng ngừng.",
+      "kb_refs": [
+        "shop-connection-and-reauth#KB-010"
+      ]
+    },
+    {
+      "rule": "Token kiểu cũ (không hết hạn) bị Shopify khai tử ngày 1/1/2027.",
+      "kb_refs": [
+        "shop-connection-and-reauth#KB-011"
+      ]
+    },
+    {
+      "rule": "Token kiểu cũ đã quá hạn cắt của Shopify (1/1/2027) là nguyên nhân cần cấp quyền lại.",
+      "kb_refs": [
+        "shop-connection-and-reauth#KB-012"
+      ]
+    },
+    {
+      "rule": "Job hằng tuần chuyển dần các shop còn token kiểu cũ sang token có hạn.",
+      "kb_refs": [
+        "shop-connection-and-reauth#KB-013"
+      ]
+    },
+    {
+      "rule": "Job đổi token cũ thử mỗi shop một lần mỗi tuần.",
+      "kb_refs": [
+        "shop-connection-and-reauth#KB-014"
+      ]
+    },
+    {
+      "rule": "Merchant không thấy tác động của job đổi token cũ sang token có hạn.",
+      "kb_refs": [
+        "shop-connection-and-reauth#KB-015"
+      ]
+    },
+    {
+      "rule": "Việc chuyển token kiểu cũ là một chiều.",
+      "kb_refs": [
+        "shop-connection-and-reauth#KB-016"
+      ]
+    },
+    {
+      "rule": "Shop cần cấp quyền lại được nhận biết bằng ngày ở trường \"Re-auth Required At\" (admin: Shop -> View -> mục Tokens).",
+      "kb_refs": [
+        "shop-connection-and-reauth#KB-017"
+      ]
+    },
+    {
+      "rule": "Khi shop cần cấp quyền lại, merchant mở app bị chuyển qua màn xin quyền của Shopify.",
+      "kb_refs": [
+        "shop-connection-and-reauth#KB-018"
+      ]
+    },
+    {
+      "rule": "Mở app buộc merchant qua bước cấp quyền nếu phiên không dùng được, token kiểu cũ hoặc token chết.",
+      "kb_refs": [
+        "shop-connection-and-reauth#KB-019"
+      ]
+    },
+    {
+      "rule": "Khi shop bị gắn cờ cần cấp quyền lại, merchant nhận email \"reconnect the app\".",
+      "kb_refs": [
+        "shop-connection-and-reauth#KB-020"
+      ]
+    },
+    {
+      "rule": "Đúng một email \"reconnect the app\" được gửi đúng lúc cờ re-auth được đặt.",
+      "kb_refs": [
+        "shop-connection-and-reauth#KB-021"
+      ]
+    },
+    {
+      "rule": "Email \"reconnect the app\" chỉ gửi khi shop còn cài app và plan Shopify chưa đóng.",
+      "kb_refs": [
+        "shop-connection-and-reauth#KB-022"
+      ]
+    },
+    {
+      "rule": "Store đóng hoặc đóng băng lâu rồi mở lại mà token đã chết thì shop bị gắn cờ cần cấp quyền lại và email yêu cầu cấp quyền lại được gửi.",
+      "kb_refs": [
+        "shop-connection-and-reauth#KB-023"
+      ]
+    },
+    {
+      "rule": "Khi shop có cờ cần cấp quyền lại, Mysbox không đọc được đơn, không thêm được quà vào đơn, không ghi được dữ liệu box/metafield sang shop và không tính được usage.",
+      "kb_refs": [
+        "shop-connection-and-reauth#KB-024"
+      ]
+    },
+    {
+      "rule": "Khi shop có cờ cần cấp quyền lại, Mysbox không lấy được giá cho shop.",
+      "kb_refs": [
+        "shop-connection-and-reauth#KB-025"
+      ]
+    },
+    {
+      "rule": "Khi shop có cờ cần cấp quyền lại, mọi job nền của shop đều lỗi.",
+      "kb_refs": [
+        "shop-connection-and-reauth#KB-026"
+      ]
+    },
+    {
+      "rule": "Shop đang cần cấp quyền lại là một nguyên nhân khiến đơn khách đã trả không có đơn/box tương ứng trong Mysbox.",
+      "kb_refs": [
+        "shop-connection-and-reauth#KB-028"
+      ]
+    },
+    {
+      "rule": "Cờ cần cấp quyền lại được xoá khi merchant cấp quyền lại (hệ thống cấp cặp khoá mới) hoặc khi gỡ app; gỡ rồi cài lại không gây ra cờ.",
+      "kb_refs": [
+        "shop-connection-and-reauth#KB-029"
+      ]
+    },
+    {
+      "rule": "Refresh Token Expires At đã qua trong mục Tokens là dấu hiệu xác nhận shop cần cấp quyền lại.",
+      "kb_refs": [
+        "shop-connection-and-reauth#KB-030"
+      ]
+    },
+    {
+      "rule": "Shop mang token kiểu cũ không hết hạn là một dấu hiệu xác nhận khi shop bị yêu cầu cấp quyền lại.",
+      "kb_refs": [
+        "shop-connection-and-reauth#KB-031"
+      ]
+    },
+    {
+      "rule": "Khoá làm mới chỉ dùng được một lần; không nên bấm \"Refresh access token\" nhiều lần.",
+      "kb_refs": [
+        "shop-connection-and-reauth#KB-032"
+      ]
+    },
+    {
+      "rule": "Shopify từ chối làm mới token thì merchant phải mở lại app để cấp quyền lại.",
+      "kb_refs": [
+        "shop-connection-and-reauth#KB-034"
+      ]
+    },
+    {
+      "rule": "Thao tác admin \"Refresh access token\" không thành công nếu khoá làm mới đã chết.",
+      "kb_refs": [
+        "shop-connection-and-reauth#KB-035"
+      ]
+    },
+    {
+      "rule": "Lệnh vận hành tokens:refresh-expiring và tokens:migrate-legacy lặp lại an toàn.",
+      "kb_refs": [
+        "shop-connection-and-reauth#KB-036"
+      ]
+    },
+    {
+      "rule": "Ở lần cài đầu, Shopify đưa merchant qua màn hình cấp quyền (OAuth).",
+      "kb_refs": [
+        "shop-connection-and-reauth#KB-037"
+      ]
+    },
+    {
+      "rule": "Sau OAuth, Mysbox đổi mã lấy offline token để thay mặt shop gọi Shopify khi merchant không online.",
+      "kb_refs": [
+        "shop-connection-and-reauth#KB-038"
+      ]
+    },
+    {
+      "rule": "Offline token của shop có thời hạn và đi kèm refresh token.",
+      "kb_refs": [
+        "shop-connection-and-reauth#KB-039"
+      ]
+    },
+    {
+      "rule": "Đổi danh sách quyền (scope) của app buộc mọi shop đi lại màn hình cấp quyền.",
+      "kb_refs": [
+        "shop-connection-and-reauth#KB-040"
+      ]
+    },
+    {
+      "rule": "Shop còn 'đã cài' mà token chết (do mất app/uninstalled) thì cờ cấp quyền lại được bật.",
+      "kb_refs": [
+        "shop-connection-and-reauth#KB-041"
+      ]
+    }
+  ],
+  "observed_behavior": [
+    {
+      "behavior": "Bấm \"Refresh access token\" nhiều lần, hoặc thao tác này chạy đua với job nền làm mới token, khiến một bên bị lỗi; tài liệu gọi lỗi này là vô hại.",
+      "status": "KNOWN_DEFECT",
+      "note": "Known defect (OBSERVED_CURRENT theo tài liệu) — không dùng làm oracle; chỉ regression watch. Cần OQ OPEN_ISSUE.",
+      "kb_refs": [
+        "shop-connection-and-reauth#KB-033"
+      ]
+    }
+  ],
+  "observed_validations": [],
+  "permissions": [
+    {
+      "statement": "Chủ shop và mọi nhân viên Shopify được phép mở app đều mở được merchant app; app không phân biệt chủ và nhân viên; quyền mở app do Shopify quyết định.",
+      "kb_refs": [
+        "_object-level.merchant-app#KB-004",
+        "_object-level.merchant-app#KB-005",
+        "_object-level.merchant-app#KB-006"
+      ]
+    },
+    {
+      "statement": "Thao tác \"Refresh access token\" và mục Tokens nằm trong admin panel, dành cho nhân viên admin.",
+      "kb_refs": [
+        "shop-connection-and-reauth#KB-017",
+        "shop-connection-and-reauth#KB-035"
+      ]
+    }
+  ],
+  "surface_mapping": {
+    "portal": [
+      {
+        "item": "Màn cấp quyền Shopify khi cài lần đầu / khi mở app lúc cần cấp quyền lại / khi đổi scope",
+        "kb_refs": [
+          "shop-connection-and-reauth#KB-018",
+          "shop-connection-and-reauth#KB-019",
+          "shop-connection-and-reauth#KB-037",
+          "shop-connection-and-reauth#KB-040"
+        ]
+      }
+    ],
+    "storefront": [],
+    "api": [
+      {
+        "item": "Gọi Shopify thay mặt shop bằng offline token (đọc đơn, thêm quà, ghi metafield, lấy giá)",
+        "kb_refs": [
+          "shop-connection-and-reauth#KB-038",
+          "shop-connection-and-reauth#KB-024",
+          "shop-connection-and-reauth#KB-025"
+        ]
+      }
+    ],
+    "data": [
+      {
+        "item": "Trường Re-auth Required At của shop",
+        "kb_refs": [
+          "shop-connection-and-reauth#KB-017"
+        ]
+      },
+      {
+        "item": "Trường Refresh Token Expires At và loại token (kiểu cũ / có hạn) trong mục Tokens",
+        "kb_refs": [
+          "shop-connection-and-reauth#KB-030",
+          "shop-connection-and-reauth#KB-031"
+        ]
+      },
+      {
+        "item": "Shop giữ token",
+        "kb_refs": [
+          "_object-level.merchant-app#KB-001"
+        ]
+      }
+    ],
+    "code": [
+      {
+        "item": "Job theo lịch: gia hạn token hằng ngày, đổi token cũ hằng tuần",
+        "kb_refs": [
+          "shop-connection-and-reauth#KB-007",
+          "shop-connection-and-reauth#KB-013"
+        ]
+      },
+      {
+        "item": "Lệnh vận hành tokens:refresh-expiring, tokens:migrate-legacy",
+        "kb_refs": [
+          "shop-connection-and-reauth#KB-036"
+        ]
+      }
+    ],
+    "admin_panel": [
+      {
+        "item": "Shop -> View -> mục Tokens; thao tác \"Refresh access token\"",
+        "kb_refs": [
+          "shop-connection-and-reauth#KB-017",
+          "shop-connection-and-reauth#KB-032",
+          "shop-connection-and-reauth#KB-035"
+        ]
+      }
+    ],
+    "email": [
+      {
+        "item": "Email \"reconnect the app\"",
+        "kb_refs": [
+          "shop-connection-and-reauth#KB-020",
+          "shop-connection-and-reauth#KB-021",
+          "shop-connection-and-reauth#KB-022"
+        ]
+      }
+    ]
+  },
+  "dependencies": [
+    {
+      "feature_key": "install-and-onboarding",
+      "reason": "Kết nối được thiết lập ở lần cài đầu qua OAuth.",
+      "kb_refs": [
+        "shop-connection-and-reauth#KB-037",
+        "shop-connection-and-reauth#KB-038"
+      ]
+    },
+    {
+      "feature_key": "request-authentication",
+      "reason": "Admin nhúng dùng phiên/offline token; phiên không dùng được thì buộc cấp quyền.",
+      "kb_refs": [
+        "shop-connection-and-reauth#KB-003",
+        "shop-connection-and-reauth#KB-019"
+      ]
+    },
+    {
+      "feature_key": "background-jobs-and-queue-monitoring",
+      "reason": "Job gia hạn/đổi token chạy theo lịch; mọi job nền của shop lỗi khi cần cấp quyền lại.",
+      "kb_refs": [
+        "shop-connection-and-reauth#KB-007",
+        "shop-connection-and-reauth#KB-013",
+        "shop-connection-and-reauth#KB-026"
+      ]
+    },
+    {
+      "feature_key": "system-emails-and-notifications",
+      "reason": "Email \"reconnect the app\".",
+      "kb_refs": [
+        "shop-connection-and-reauth#KB-020",
+        "shop-connection-and-reauth#KB-021"
+      ]
+    },
+    {
+      "feature_key": "admin-shop-management",
+      "reason": "Mục Tokens và thao tác \"Refresh access token\" ở màn Shops.",
+      "kb_refs": [
+        "shop-connection-and-reauth#KB-017",
+        "shop-connection-and-reauth#KB-032"
+      ]
+    },
+    {
+      "feature_key": "prizes-added-to-order",
+      "reason": "Không thêm được quà vào đơn khi shop cần cấp quyền lại.",
+      "kb_refs": [
+        "shop-connection-and-reauth#KB-024"
+      ]
+    },
+    {
+      "feature_key": "daily-usage-charge-and-charge-status",
+      "reason": "Không tính được usage khi shop cần cấp quyền lại.",
+      "kb_refs": [
+        "shop-connection-and-reauth#KB-024"
+      ]
+    }
+  ],
+  "risks": [
+    {
+      "risk": "Shop cần cấp quyền lại làm dừng gần như toàn bộ xử lý của shop (đơn, quà, metafield, usage, giá, job nền) — tác động doanh thu và trải nghiệm khách.",
+      "kb_refs": [
+        "shop-connection-and-reauth#KB-024",
+        "shop-connection-and-reauth#KB-025",
+        "shop-connection-and-reauth#KB-026",
+        "shop-connection-and-reauth#KB-028"
+      ]
+    },
+    {
+      "risk": "Hạn cắt token kiểu cũ 1/1/2027: shop chưa được chuyển sẽ phải cấp quyền lại hàng loạt.",
+      "kb_refs": [
+        "shop-connection-and-reauth#KB-011",
+        "shop-connection-and-reauth#KB-012",
+        "shop-connection-and-reauth#KB-013"
+      ]
+    },
+    {
+      "risk": "Khoá làm mới chỉ dùng một lần: bấm \"Refresh access token\" lặp hoặc đua với job nền gây lỗi.",
+      "kb_refs": [
+        "shop-connection-and-reauth#KB-032",
+        "shop-connection-and-reauth#KB-033"
+      ]
+    },
+    {
+      "risk": "Đổi scope của app buộc mọi shop cấp quyền lại.",
+      "kb_refs": [
+        "shop-connection-and-reauth#KB-040"
+      ]
+    }
+  ],
+  "limitations": [
+    {
+      "statement": "Ví dụ minh hoạ (không phải rule): merchant đóng cửa hàng dài ngày khi mở lại thấy yêu cầu authorize và nhận email; đơn đã trả trong khoảng chưa authorize được support xử lý lại bằng \"Retry Handle Order\" sau khi cấp quyền lại. Không dùng làm oracle.",
+      "kb_refs": [
+        "shop-connection-and-reauth#KB-042",
+        "shop-connection-and-reauth#KB-043"
+      ]
+    }
+  ],
+  "freshness": {
+    "observed_at": null
+  },
+  "unknown_areas": [
+    {
+      "question": "Thời hạn chính xác của khoá truy cập: một nguồn ghi 'khoảng 1 giờ', nguồn khác ghi đúng 1 giờ?",
+      "why_it_matters": "Boundary để dựng case làm mới khoá truy cập.",
+      "kb_refs": [
+        "shop-connection-and-reauth#KB-001",
+        "shop-connection-and-reauth#KB-002"
+      ],
+      "oq_id": "OQ-merchant-app-095"
+    },
+    {
+      "question": "Khi store bị Shopify đóng băng lâu, token của shop chết sau đúng bao lâu (tài liệu ghi 'khoảng 90 ngày')?",
+      "why_it_matters": "Không có boundary cho case store mở lại sau đóng băng.",
+      "kb_refs": [
+        "shop-connection-and-reauth#KB-005",
+        "shop-connection-and-reauth#KB-004"
+      ],
+      "oq_id": "OQ-merchant-app-095"
+    },
+    {
+      "question": "Khi shop cần cấp quyền lại, chức năng nào vẫn còn chạy (tài liệu nói 'gần như mọi thứ' dừng và re-auth 'thường' là gốc chung)?",
+      "why_it_matters": "Phạm vi regression khi shop ở trạng thái cần re-auth.",
+      "kb_refs": [
+        "shop-connection-and-reauth#KB-027",
+        "shop-connection-and-reauth#KB-024"
+      ],
+      "oq_id": "OQ-merchant-app-096"
+    },
+    {
+      "question": "Lỗi đua khi bấm \"Refresh access token\" lặp hoặc đua với job nền có được sửa không; sau khi một bên lỗi, cờ cần cấp quyền lại ở trạng thái nào; thao tác thất bại hiển thị gì cho nhân viên admin?",
+      "why_it_matters": "Chưa có expected result cho case bấm lặp và case làm mới khi khoá làm mới đã chết.",
+      "kb_refs": [
+        "shop-connection-and-reauth#KB-033",
+        "shop-connection-and-reauth#KB-035"
+      ],
+      "oq_id": "OQ-merchant-app-049"
+    },
+    {
+      "question": "Nội dung, tiêu đề và tên template theo môi trường của email \"reconnect the app\"; email có gửi lại nếu cờ bị xoá rồi đặt lại không?",
+      "why_it_matters": "Không có oracle cho email và không kiểm được việc gửi ở staging/production.",
+      "kb_refs": [
+        "shop-connection-and-reauth#KB-020",
+        "shop-connection-and-reauth#KB-021"
+      ],
+      "oq_id": "OQ-merchant-app-050"
+    },
+    {
+      "question": "Merchant từ chối màn xin quyền của Shopify lúc cài thì hệ thống làm gì?",
+      "why_it_matters": "Luồng lỗi của cài đặt chưa có expected result.",
+      "kb_refs": [
+        "shop-connection-and-reauth#KB-037"
+      ],
+      "oq_id": "OQ-merchant-app-051"
+    },
+    {
+      "question": "Trong 10 ngày gia hạn token lỗi trước khi phải cấp quyền lại, merchant có thấy thông báo gì không?",
+      "why_it_matters": "Ảnh hưởng trải nghiệm re-auth và test luồng token hết hạn.",
+      "kb_refs": [
+        "shop-connection-and-reauth#KB-008"
+      ],
+      "oq_id": "OQ-merchant-app-052"
+    },
+    {
+      "question": "Job gia hạn hằng ngày và job đổi token hằng tuần chạy lúc nào; job nền nào đua với nút \"Refresh access token\"?",
+      "why_it_matters": "Cần để dựng điều kiện tái hiện và timing của case làm mới.",
+      "kb_refs": [
+        "shop-connection-and-reauth#KB-007",
+        "shop-connection-and-reauth#KB-013",
+        "shop-connection-and-reauth#KB-033"
+      ],
+      "oq_id": "OQ-merchant-app-049"
+    },
+    {
+      "question": "'Shop không liên lạc được nhiều tuần' là bao lâu, và cờ cần cấp quyền lại được đặt đúng lúc nào?",
+      "why_it_matters": "Không có boundary để dựng case chuyển sang cần re-auth.",
+      "kb_refs": [
+        "shop-connection-and-reauth#KB-010",
+        "shop-connection-and-reauth#KB-009"
+      ],
+      "oq_id": "OQ-merchant-app-053"
+    },
+    {
+      "question": "Shop còn 'đã cài' mà token chết được phát hiện thế nào (thành phần nào bật cờ, khi nào)?",
+      "why_it_matters": "Tài liệu chỉ nêu hệ quả, không nêu cơ chế.",
+      "kb_refs": [
+        "shop-connection-and-reauth#KB-041"
+      ],
+      "oq_id": "OQ-merchant-app-054"
+    },
+    {
+      "question": "Đơn khách đã trả trong lúc shop cần cấp quyền lại có tự được xử lý lại sau khi cấp quyền không, hay bắt buộc support retry tay?",
+      "why_it_matters": "Chỉ có ví dụ minh hoạ, chưa có rule cho phục hồi đơn.",
+      "kb_refs": [
+        "shop-connection-and-reauth#KB-043",
+        "shop-connection-and-reauth#KB-028"
+      ],
+      "oq_id": "OQ-merchant-app-099"
+    }
+  ],
+  "last_updated": {
+    "date": "2026-10-16",
+    "ccr_ref": "bootstrap"
+  },
+  "coverage_matrix": [
+    {
+      "feature_id": "FEAT-05-shop-connection-and-reauth",
+      "layer": "backend",
+      "role": "system",
+      "state": "khoẻ",
+      "environment": "documented",
+      "covered": true
+    },
+    {
+      "feature_id": "FEAT-05-shop-connection-and-reauth",
+      "layer": "backend",
+      "role": "system",
+      "state": "token cũ",
+      "environment": "documented",
+      "covered": true
+    },
+    {
+      "feature_id": "FEAT-05-shop-connection-and-reauth",
+      "layer": "backend",
+      "role": "system",
+      "state": "cần re-auth",
+      "environment": "documented",
+      "covered": true
+    },
+    {
+      "feature_id": "FEAT-05-shop-connection-and-reauth",
+      "layer": "portal",
+      "role": "merchant",
+      "state": "chưa cài",
+      "environment": "documented",
+      "covered": true
+    },
+    {
+      "feature_id": "FEAT-05-shop-connection-and-reauth",
+      "layer": "portal",
+      "role": "merchant",
+      "state": "cần re-auth",
+      "environment": "documented",
+      "covered": true
+    },
+    {
+      "feature_id": "FEAT-05-shop-connection-and-reauth",
+      "layer": "email",
+      "role": "merchant",
+      "state": "cần re-auth",
+      "environment": "documented",
+      "covered": true
+    },
+    {
+      "feature_id": "FEAT-05-shop-connection-and-reauth",
+      "layer": "admin_panel",
+      "role": "admin-staff",
+      "state": "cần re-auth",
+      "environment": "documented",
+      "covered": true
+    },
+    {
+      "feature_id": "FEAT-05-shop-connection-and-reauth",
+      "layer": "admin_panel",
+      "role": "admin-staff",
+      "state": "khoẻ",
+      "environment": "documented",
+      "covered": true
+    },
+    {
+      "feature_id": "FEAT-05-shop-connection-and-reauth",
+      "layer": "code",
+      "role": "engineer",
+      "state": "token cũ",
+      "environment": "documented",
+      "covered": true
+    },
+    {
+      "feature_id": "FEAT-05-shop-connection-and-reauth",
+      "layer": "portal",
+      "role": "merchant",
+      "state": "cần re-auth (10 ngày gia hạn lỗi)",
+      "environment": "documented",
+      "covered": false
+    },
+    {
+      "feature_id": "FEAT-05-shop-connection-and-reauth",
+      "layer": "all",
+      "role": "all",
+      "state": "all",
+      "environment": "staging",
+      "covered": false
+    },
+    {
+      "feature_id": "FEAT-05-shop-connection-and-reauth",
+      "layer": "all",
+      "role": "all",
+      "state": "all",
+      "environment": "production",
+      "covered": false
+    }
+  ],
+  "profile_conflicts": [],
+  "profile_relationships": [
+    {
+      "from": "shop-connection-and-reauth",
+      "to": "shop-uninstall-reinstall-lifecycle",
+      "type": "related",
+      "note": "Gỡ app xoá cờ re-auth; shop còn 'đã cài' mà token chết (mất thông báo gỡ app) bật cờ re-auth.",
+      "kb_refs": [
+        "shop-connection-and-reauth#KB-029",
+        "shop-connection-and-reauth#KB-041"
+      ]
+    },
+    {
+      "from": "shop-connection-and-reauth",
+      "to": "install-and-onboarding",
+      "type": "depends_on",
+      "kb_refs": [
+        "shop-connection-and-reauth#KB-037"
+      ]
+    },
+    {
+      "from": "shop-connection-and-reauth",
+      "to": "background-jobs-and-queue-monitoring",
+      "type": "depends_on",
+      "kb_refs": [
+        "shop-connection-and-reauth#KB-007",
+        "shop-connection-and-reauth#KB-026"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,585 @@
+{
+  "feature_id": "FEAT-01-request-authentication",
+  "feature_key": "request-authentication",
+  "object_id": "integrations",
+  "checklist_version": "1",
+  "checks": [
+    {
+      "check_id": "CHK-001",
+      "dimension": "CORE",
+      "layer": "portal",
+      "title": "Portal nhúng gọi Mysbox API kèm session token và được đi tiếp với shop đã cài app, quyền hợp lệ",
+      "applicability": {
+        "role": "merchant",
+        "state": "shop đã cài app, quyền truy cập hợp lệ, session token còn hạn",
+        "environment": "documented",
+        "surface_or_device": "portal nhúng trong Shopify admin (desktop browser)"
+      },
+      "precondition": "Shop test đã cài app Mysbox và đang có quyền truy cập hợp lệ; merchant đăng nhập Shopify admin của shop đó.",
+      "steps": [
+        "Mở DevTools (tab Network) của trình duyệt.",
+        "Trong Shopify admin, mở app Mysbox (portal nhúng).",
+        "Thực hiện một thao tác đọc dữ liệu trên portal (vd mở danh sách box).",
+        "Chọn các request gọi tới Mysbox API trong tab Network và xem header request."
+      ],
+      "observation_point": "Tab Network: header của từng request gọi Mysbox API và response tương ứng; dữ liệu hiển thị trên portal.",
+      "expected_result": "Mỗi request portal gọi Mysbox API đều kèm session token do Shopify cấp; request được đi tiếp (portal hiển thị dữ liệu) và dữ liệu thuộc đúng shop đang mở app.",
+      "oracle": {
+        "kb_ids": [
+          "request-authentication#KB-003",
+          "request-authentication#KB-004",
+          "request-authentication#KB-005",
+          "request-authentication#KB-006",
+          "request-authentication#KB-007",
+          "request-authentication#KB-008"
+        ],
+        "oracle_strength": "STRONG"
+      },
+      "status": "NEEDS_CONFIRMATION",
+      "open_question_draft": "Luồng portal nhúng gửi session token trong mỗi lời gọi API và chỉ cho đi tiếp với shop đã cài app, có quyền hợp lệ đã được xác nhận bằng một test case chạy PASS chưa? Nếu chưa, ai chạy và trên build nào?",
+      "related_kb_ids": [
+        "request-authentication#KB-001",
+        "request-authentication#KB-002"
+      ],
+      "regression_watch_kb_ids": [],
+      "risk_refs": [
+        "Phân quyền portal nhúng phụ thuộc session token và trạng thái cài app của shop"
+      ],
+      "priority": "P1",
+      "automation_suitability": "HYBRID",
+      "oq_id": "OQ-integrations-021"
+    },
+    {
+      "check_id": "CHK-002",
+      "dimension": "STATE_DATA",
+      "layer": "portal",
+      "title": "Session token hết hạn thì portal nhúng tự quay về Shopify lấy token mới",
+      "applicability": {
+        "role": "merchant",
+        "state": "session token đã hết hạn, shop vẫn cài app và có quyền hợp lệ",
+        "environment": "documented",
+        "surface_or_device": "portal nhúng trong Shopify admin (desktop browser)"
+      },
+      "precondition": "Như CHK-001; portal nhúng đang mở.",
+      "steps": [
+        "Mở DevTools (tab Network), bật giữ log khi điều hướng.",
+        "Mở app Mysbox trong Shopify admin và ghi lại session token đang dùng trong request gọi Mysbox API.",
+        "Để portal mở không thao tác cho tới khi token đã ghi hết hạn (thời điểm hết hạn đọc từ chính token; thời hạn chưa có trong tài liệu).",
+        "Thực hiện một thao tác trên portal gọi Mysbox API (vd mở danh sách box)."
+      ],
+      "observation_point": "Tab Network: chuỗi request sau thao tác ở bước 4 (điều hướng/lời gọi về Shopify, token dùng ở request API kế tiếp); trạng thái giao diện portal.",
+      "expected_result": "Portal tự quay về Shopify để lấy session token mới; request Mysbox API sau đó dùng token mới (khác token đã hết hạn) và thao tác hoàn tất mà merchant không phải đăng nhập lại thủ công.",
+      "oracle": {
+        "kb_ids": [
+          "request-authentication#KB-009"
+        ],
+        "oracle_strength": "STRONG"
+      },
+      "status": "READY",
+      "open_question_draft": null,
+      "related_kb_ids": [
+        "request-authentication#KB-004",
+        "request-authentication#KB-005"
+      ],
+      "regression_watch_kb_ids": [],
+      "risk_refs": [
+        "Phiên portal nhúng bị gián đoạn khi token ngắn hạn hết hạn"
+      ],
+      "priority": "P2",
+      "automation_suitability": "HYBRID"
+    },
+    {
+      "check_id": "CHK-003",
+      "dimension": "NEGATIVE",
+      "layer": "api",
+      "title": "Request portal mang session token sai chữ ký không được đi tiếp",
+      "applicability": {
+        "role": "merchant",
+        "state": "session token bị sửa (chữ ký không còn khớp), shop đã cài app",
+        "environment": "documented",
+        "surface_or_device": "Mysbox API gọi từ portal nhúng (công cụ gửi HTTP như curl/Postman)"
+      },
+      "precondition": "Đã lấy được một request Mysbox API hợp lệ từ portal (như CHK-001) kèm session token còn hạn.",
+      "steps": [
+        "Sao chép request Mysbox API hợp lệ (URL, method, header, body) từ DevTools sang công cụ gửi HTTP.",
+        "Gửi lại nguyên request để xác nhận request gốc được đi tiếp.",
+        "Sửa một ký tự trong phần chữ ký của session token (giữ nguyên phần còn lại) và gửi lại request."
+      ],
+      "observation_point": "HTTP status và body response của request ở bước 3, so với bước 2.",
+      "expected_result": "Request ở bước 3 không được đi tiếp: không trả dữ liệu của shop và không thực hiện thao tác. (Status code cụ thể chưa có trong tài liệu — ghi lại giá trị quan sát được.)",
+      "oracle": {
+        "kb_ids": [
+          "request-authentication#KB-006",
+          "request-authentication#KB-008"
+        ],
+        "oracle_strength": "STRONG"
+      },
+      "status": "NEEDS_CONFIRMATION",
+      "open_question_draft": "Khi session token của portal nhúng sai chữ ký, Mysbox trả mã lỗi hoặc redirect gì? Hành vi chặn request này đã được xác nhận bằng test case chạy PASS chưa?",
+      "related_kb_ids": [
+        "request-authentication#KB-005"
+      ],
+      "regression_watch_kb_ids": [],
+      "risk_refs": [
+        "Token giả mạo được chấp nhận làm lộ dữ liệu shop"
+      ],
+      "priority": "P1",
+      "automation_suitability": "SUITABLE",
+      "oq_id": "OQ-integrations-021"
+    },
+    {
+      "check_id": "CHK-004",
+      "dimension": "PERMISSION",
+      "layer": "api",
+      "title": "Request tới Mysbox API của portal không kèm session token (chưa xác thực)",
+      "applicability": {
+        "role": "unauthenticated",
+        "state": "request không có session token",
+        "environment": "documented",
+        "surface_or_device": "Mysbox API gọi từ portal nhúng (công cụ gửi HTTP)"
+      },
+      "precondition": "Đã lấy được một request Mysbox API hợp lệ từ portal (như CHK-001).",
+      "steps": [
+        "Sao chép request Mysbox API hợp lệ sang công cụ gửi HTTP.",
+        "Bỏ hoàn toàn session token khỏi request và gửi."
+      ],
+      "observation_point": "HTTP status và body response.",
+      "expected_result": "",
+      "oracle": {
+        "kb_ids": [],
+        "oracle_strength": "NONE"
+      },
+      "status": "NEEDS_CONFIRMATION",
+      "open_question_draft": "Request gọi Mysbox API của portal nhúng mà không kèm session token thì bị xử lý thế nào (bị chặn với mã lỗi nào, hay redirect về Shopify)?",
+      "related_kb_ids": [
+        "request-authentication#KB-005",
+        "request-authentication#KB-008"
+      ],
+      "regression_watch_kb_ids": [],
+      "risk_refs": [
+        "API portal truy cập được khi chưa xác thực"
+      ],
+      "priority": "P1",
+      "automation_suitability": "SUITABLE",
+      "oq_id": "OQ-integrations-022"
+    },
+    {
+      "check_id": "CHK-005",
+      "dimension": "PERMISSION",
+      "layer": "api",
+      "title": "Request portal của shop đã gỡ app / không còn quyền truy cập hợp lệ không được đi tiếp",
+      "applicability": {
+        "role": "merchant",
+        "state": "shop đã gỡ app hoặc không còn quyền truy cập hợp lệ",
+        "environment": "documented",
+        "surface_or_device": "Mysbox API gọi từ portal nhúng (công cụ gửi HTTP)"
+      },
+      "precondition": "Một shop test đã từng cài app; đã lưu lại một request Mysbox API hợp lệ của shop đó. Sau đó shop gỡ app (hoặc quyền truy cập bị thu hồi). Session token dùng để gửi lại còn trong hạn.",
+      "steps": [
+        "Khi shop còn cài app: lưu một request Mysbox API hợp lệ từ portal (như CHK-001).",
+        "Gỡ app khỏi shop test.",
+        "Trong thời hạn của session token, gửi lại request đã lưu bằng công cụ gửi HTTP."
+      ],
+      "observation_point": "HTTP status và body response của request ở bước 3.",
+      "expected_result": "Request không được đi tiếp: không trả dữ liệu và không thực hiện thao tác cho shop đã gỡ app / không có quyền hợp lệ. (Status code cụ thể chưa có trong tài liệu — ghi lại giá trị quan sát được.)",
+      "oracle": {
+        "kb_ids": [
+          "request-authentication#KB-008"
+        ],
+        "oracle_strength": "STRONG"
+      },
+      "status": "NEEDS_CONFIRMATION",
+      "open_question_draft": "Request portal của shop chưa cài app hoặc không còn quyền truy cập hợp lệ bị trả mã lỗi gì? Hành vi chặn này đã có test case chạy PASS chưa?",
+      "related_kb_ids": [
+        "request-authentication#KB-006",
+        "request-authentication#KB-007"
+      ],
+      "regression_watch_kb_ids": [],
+      "risk_refs": [
+        "Shop đã gỡ app vẫn truy cập được API"
+      ],
+      "priority": "P1",
+      "automation_suitability": "HYBRID",
+      "oq_id": "OQ-integrations-021"
+    },
+    {
+      "check_id": "CHK-006",
+      "dimension": "PERMISSION",
+      "layer": "api",
+      "title": "Shop của request portal được xác định từ session token, không từ tham số khác (cross-tenant)",
+      "applicability": {
+        "role": "merchant",
+        "state": "hai shop test A và B cùng cài app; dùng session token của shop A",
+        "environment": "documented",
+        "surface_or_device": "Mysbox API gọi từ portal nhúng (công cụ gửi HTTP)"
+      },
+      "precondition": "Hai shop test A và B đều cài app, mỗi shop có ít nhất một box với tên phân biệt được. Có request Mysbox API hợp lệ của shop A và biết định danh (tên shop, mã box) của shop B.",
+      "steps": [
+        "Lấy request Mysbox API đọc dữ liệu hợp lệ từ portal của shop A (như CHK-001).",
+        "Trong công cụ gửi HTTP, giữ nguyên session token của shop A, thay mọi tham số chỉ định shop/tài nguyên trong URL hoặc body bằng giá trị của shop B (vd tên shop B, mã box của shop B).",
+        "Gửi request."
+      ],
+      "observation_point": "Body response: dữ liệu trả về thuộc shop nào.",
+      "expected_result": "Mysbox xử lý request theo shop xác định từ session token (shop A): không trả dữ liệu và không thực hiện thao tác trên shop B.",
+      "oracle": {
+        "kb_ids": [
+          "request-authentication#KB-007",
+          "request-authentication#KB-008"
+        ],
+        "oracle_strength": "STRONG"
+      },
+      "status": "NEEDS_CONFIRMATION",
+      "open_question_draft": "Việc Mysbox chỉ dùng shop xác định từ session token (bỏ qua shop/tài nguyên của shop khác trong tham số) đã được xác nhận bằng test case chạy PASS chưa?",
+      "related_kb_ids": [
+        "request-authentication#KB-006"
+      ],
+      "regression_watch_kb_ids": [],
+      "risk_refs": [
+        "Lộ/sửa dữ liệu chéo giữa các shop"
+      ],
+      "priority": "P1",
+      "automation_suitability": "SUITABLE",
+      "oq_id": "OQ-integrations-021"
+    },
+    {
+      "check_id": "CHK-007",
+      "dimension": "CORE",
+      "layer": "api",
+      "title": "Action Shopify Flow có chữ ký HMAC đúng được Mysbox nhận",
+      "applicability": {
+        "role": "system (Shopify Flow)",
+        "state": "request ký bằng bí mật chung của app, nội dung không bị sửa",
+        "environment": "documented",
+        "surface_or_device": "endpoint action Shopify Flow của Mysbox"
+      },
+      "precondition": "Shop test cài app, có một workflow Shopify Flow dùng action của Mysbox; biết bí mật chung của app ở môi trường test.",
+      "steps": [
+        "Chạy workflow Shopify Flow để Flow gọi action của Mysbox (hoặc dựng request tương đương: chữ ký HMAC tính từ nội dung gửi cộng bí mật chung của app).",
+        "Ghi lại response của Mysbox và kết quả của action."
+      ],
+      "observation_point": "Lịch sử chạy workflow trong Shopify Flow (trạng thái bước action) hoặc HTTP status/body nếu gửi request dựng tay; kết quả action trong Mysbox.",
+      "expected_result": "Mysbox tính lại HMAC, khớp nên nhận request: không trả lỗi 400 và action được thực hiện.",
+      "oracle": {
+        "kb_ids": [
+          "request-authentication#KB-010",
+          "request-authentication#KB-011",
+          "request-authentication#KB-012"
+        ],
+        "oracle_strength": "STRONG"
+      },
+      "status": "NEEDS_CONFIRMATION",
+      "open_question_draft": "Việc action Shopify Flow có chữ ký HMAC đúng được Mysbox nhận đã được xác nhận bằng test case chạy PASS chưa?",
+      "related_kb_ids": [
+        "request-authentication#KB-002"
+      ],
+      "regression_watch_kb_ids": [],
+      "risk_refs": [
+        "Xác thực Shopify Flow chặn nhầm request hợp lệ"
+      ],
+      "priority": "P1",
+      "automation_suitability": "HYBRID",
+      "oq_id": "OQ-integrations-021"
+    },
+    {
+      "check_id": "CHK-008",
+      "dimension": "NEGATIVE",
+      "layer": "api",
+      "title": "Action Shopify Flow có HMAC không khớp bị trả 400",
+      "applicability": {
+        "role": "system (Shopify Flow)",
+        "state": "HMAC không khớp nội dung (nội dung bị sửa sau khi ký, hoặc ký bằng bí mật sai)",
+        "environment": "documented",
+        "surface_or_device": "endpoint action Shopify Flow của Mysbox (công cụ gửi HTTP)"
+      },
+      "precondition": "Có một request action Shopify Flow hợp lệ (như CHK-007) đã lưu lại.",
+      "steps": [
+        "Biến thể A: gửi lại request đã lưu nhưng sửa một ký tự trong nội dung, giữ nguyên chữ ký HMAC cũ.",
+        "Biến thể B: gửi lại nội dung gốc nhưng chữ ký HMAC tính bằng một bí mật khác bí mật chung của app.",
+        "Ghi lại response của từng biến thể."
+      ],
+      "observation_point": "HTTP status và body response của từng biến thể; kết quả action trong Mysbox.",
+      "expected_result": "Cả hai biến thể bị Mysbox trả lỗi 400 và action không được thực hiện.",
+      "oracle": {
+        "kb_ids": [
+          "request-authentication#KB-011",
+          "request-authentication#KB-012"
+        ],
+        "oracle_strength": "STRONG"
+      },
+      "status": "NEEDS_CONFIRMATION",
+      "open_question_draft": "Việc request Shopify Flow có HMAC không khớp bị trả 400 và không thực hiện action đã được xác nhận bằng test case chạy PASS chưa?",
+      "related_kb_ids": [
+        "request-authentication#KB-010"
+      ],
+      "regression_watch_kb_ids": [],
+      "risk_refs": [
+        "Request giả mạo Shopify Flow thực hiện được action"
+      ],
+      "priority": "P1",
+      "automation_suitability": "SUITABLE",
+      "oq_id": "OQ-integrations-021"
+    },
+    {
+      "check_id": "CHK-009",
+      "dimension": "BOUNDARY",
+      "layer": "api",
+      "title": "Phản hồi khi Shopify Flow vượt giới hạn tần suất gọi theo shop",
+      "applicability": {
+        "role": "system (Shopify Flow)",
+        "state": "số lời gọi action trong một phút của một shop vượt giới hạn",
+        "environment": "documented",
+        "surface_or_device": "endpoint action Shopify Flow của Mysbox (công cụ gửi HTTP)"
+      },
+      "precondition": "Có request action Shopify Flow hợp lệ (như CHK-007); biết giới hạn tần suất áp cho shop test.",
+      "steps": [
+        "Gửi liên tiếp request action Shopify Flow hợp lệ cho cùng một shop, vượt giới hạn tần suất trong vòng một phút.",
+        "Ghi lại response của các request vượt giới hạn và kết quả action tương ứng."
+      ],
+      "observation_point": "HTTP status/body của các request vượt giới hạn; action có được thực hiện, xếp hàng hay bị bỏ.",
+      "expected_result": "",
+      "oracle": {
+        "kb_ids": [],
+        "oracle_strength": "NONE"
+      },
+      "status": "NEEDS_CONFIRMATION",
+      "open_question_draft": "Khi Shopify Flow gọi action của Mysbox vượt giới hạn tần suất theo shop, Mysbox phản hồi thế nào (mã trạng thái nào, request bị xếp hàng hay bị bỏ)?",
+      "related_kb_ids": [
+        "request-authentication#KB-010"
+      ],
+      "regression_watch_kb_ids": [],
+      "risk_refs": [
+        "Hành vi khi vượt rate limit chưa được tài liệu nêu"
+      ],
+      "priority": "P2",
+      "automation_suitability": "SUITABLE",
+      "oq_id": "OQ-integrations-023"
+    },
+    {
+      "check_id": "CHK-010",
+      "dimension": "INTEGRATION",
+      "layer": "storefront",
+      "title": "Block trang cảm ơn / trạng thái đơn mở box qua Mysbox API chỉ bằng tên shop (không chữ ký) với đơn có thật ở Shopify",
+      "applicability": {
+        "role": "system (extension trang cảm ơn / trạng thái đơn)",
+        "state": "đơn có box đã thanh toán, tồn tại ở Shopify",
+        "environment": "documented",
+        "surface_or_device": "trang cảm ơn / trạng thái đơn của Shopify checkout (desktop và mobile browser)"
+      },
+      "precondition": "Shop test cài app, có box đang bán; block Mysbox đã được đặt ở trang cảm ơn / trạng thái đơn; khách đặt và thanh toán thành công một đơn có box.",
+      "steps": [
+        "Mở DevTools (tab Network) trước khi tới trang cảm ơn / trạng thái đơn của đơn vừa thanh toán.",
+        "Trên block Mysbox, thực hiện thao tác mở box.",
+        "Xem request gọi Mysbox API do block gửi (header, tham số) và response."
+      ],
+      "observation_point": "Tab Network: request block gửi Mysbox API (có/không có chữ ký, tham số tên shop và mã khách) và response; kết quả hiển thị trên block.",
+      "expected_result": "Request của block chỉ kèm tên shop (và mã khách), không có chữ ký; vì đơn tồn tại thật ở Shopify nên Mysbox trả dữ liệu và box được mở trên block.",
+      "oracle": {
+        "kb_ids": [
+          "request-authentication#KB-013",
+          "request-authentication#KB-014"
+        ],
+        "oracle_strength": "STRONG"
+      },
+      "status": "NEEDS_CONFIRMATION",
+      "open_question_draft": "Luồng block trang cảm ơn / trạng thái đơn gọi Mysbox API bằng tên shop (không chữ ký) và chỉ nhận dữ liệu khi đơn tồn tại ở Shopify đã được xác nhận bằng test case chạy PASS chưa?",
+      "related_kb_ids": [
+        "request-authentication#KB-001"
+      ],
+      "regression_watch_kb_ids": [],
+      "risk_refs": [
+        "Request extension không ký, chỉ dựa trên tên shop (và mã khách)"
+      ],
+      "priority": "P1",
+      "automation_suitability": "HYBRID",
+      "oq_id": "OQ-integrations-021"
+    },
+    {
+      "check_id": "CHK-011",
+      "dimension": "NEGATIVE",
+      "layer": "api",
+      "title": "Request extension với đơn không tồn tại ở Shopify không nhận được dữ liệu",
+      "applicability": {
+        "role": "system (extension)",
+        "state": "mã đơn không tồn tại ở Shopify",
+        "environment": "documented",
+        "surface_or_device": "Mysbox API gọi từ extension (công cụ gửi HTTP)"
+      },
+      "precondition": "Đã lưu được một request extension hợp lệ (như CHK-010).",
+      "steps": [
+        "Sao chép request extension hợp lệ sang công cụ gửi HTTP.",
+        "Thay mã đơn bằng một giá trị không tồn tại ở Shopify (giữ nguyên tên shop) và gửi."
+      ],
+      "observation_point": "HTTP status và body response; có dữ liệu đơn/box nào được trả hay không.",
+      "expected_result": "Mysbox không trả dữ liệu đơn/box cho mã đơn không tồn tại ở Shopify. (Dạng phản hồi cụ thể chưa có trong tài liệu — ghi lại giá trị quan sát được.)",
+      "oracle": {
+        "kb_ids": [
+          "request-authentication#KB-014"
+        ],
+        "oracle_strength": "STRONG"
+      },
+      "status": "NEEDS_CONFIRMATION",
+      "open_question_draft": "Request từ extension cho mã đơn không tồn tại ở Shopify nhận phản hồi gì (mã trạng thái, nội dung)? Việc không trả dữ liệu trong trường hợp này đã có test case chạy PASS chưa?",
+      "related_kb_ids": [
+        "request-authentication#KB-013"
+      ],
+      "regression_watch_kb_ids": [],
+      "risk_refs": [
+        "Request extension không ký, chỉ dựa trên tên shop (và mã khách)"
+      ],
+      "priority": "P1",
+      "automation_suitability": "SUITABLE",
+      "oq_id": "OQ-integrations-021"
+    },
+    {
+      "check_id": "CHK-012",
+      "dimension": "PERMISSION",
+      "layer": "api",
+      "title": "Request extension ghép tên shop A với đơn của shop B (cross-tenant)",
+      "applicability": {
+        "role": "system (extension)",
+        "state": "tên shop A, mã đơn có thật nhưng thuộc shop B",
+        "environment": "documented",
+        "surface_or_device": "Mysbox API gọi từ extension (công cụ gửi HTTP)"
+      },
+      "precondition": "Hai shop test A và B cùng cài app; shop B có một đơn có box đã thanh toán; đã lưu request extension hợp lệ của shop A (như CHK-010).",
+      "steps": [
+        "Sao chép request extension hợp lệ của shop A sang công cụ gửi HTTP.",
+        "Giữ tên shop A, thay mã đơn (và mã khách nếu có) bằng giá trị của đơn thuộc shop B, rồi gửi."
+      ],
+      "observation_point": "HTTP status và body response; có dữ liệu đơn/box của shop B được trả hay box của shop B bị mở hay không.",
+      "expected_result": "",
+      "oracle": {
+        "kb_ids": [],
+        "oracle_strength": "NONE"
+      },
+      "status": "NEEDS_CONFIRMATION",
+      "open_question_draft": "Khi request từ extension (không ký) mang tên một shop nhưng mã đơn thuộc shop khác, Mysbox có kiểm đơn thuộc đúng shop đó không, và phản hồi thế nào?",
+      "related_kb_ids": [
+        "request-authentication#KB-013",
+        "request-authentication#KB-014"
+      ],
+      "regression_watch_kb_ids": [],
+      "risk_refs": [
+        "Request extension không ký, chỉ dựa trên tên shop (và mã khách)",
+        "Lộ/mở box chéo giữa các shop"
+      ],
+      "priority": "P1",
+      "automation_suitability": "SUITABLE",
+      "oq_id": "OQ-integrations-024"
+    },
+    {
+      "check_id": "CHK-013",
+      "dimension": "REGRESSION",
+      "layer": "api",
+      "title": "Defect watch: endpoint nhận review App Store không có xác thực phía trước",
+      "applicability": {
+        "role": "unauthenticated (nguồn ngoài)",
+        "state": "request không kèm bất kỳ thông tin xác thực nào",
+        "environment": "documented",
+        "surface_or_device": "POST api/shopify-app/review (công cụ gửi HTTP)"
+      },
+      "precondition": "Môi trường test (không chạy trên production vì request có thể ghi dữ liệu review). Hành vi lỗi hiện tại theo tài liệu dev: endpoint POST api/shopify-app/review không có xác thực phía trước.",
+      "steps": [
+        "Gửi POST api/shopify-app/review từ công cụ gửi HTTP, không kèm header hay token xác thực nào (payload hợp lệ cần lấy từ chủ sở hữu vì tài liệu chưa nêu).",
+        "Ghi lại response và kiểm review có được ghi nhận hay không."
+      ],
+      "observation_point": "HTTP status/body; dữ liệu review được ghi nhận phía Mysbox (nếu quan sát được).",
+      "expected_result": "",
+      "current_defect_behavior": "Endpoint nhận review App Store chấp nhận request mà không có xác thực phía trước.",
+      "oracle": {
+        "kb_ids": [],
+        "oracle_strength": "NONE"
+      },
+      "status": "NEEDS_CONFIRMATION",
+      "open_question_draft": "Endpoint nhận review App Store không có xác thực là lỗ hổng đã biết hay thiết kế có chủ đích? Payload hợp lệ gồm những field nào, và hành vi mong đợi (có xác thực, giới hạn tần suất hay kiểm nguồn) là gì?",
+      "related_kb_ids": [],
+      "regression_watch_kb_ids": [
+        "request-authentication#KB-015"
+      ],
+      "risk_refs": [
+        "Endpoint review App Store không xác thực có thể bị lạm dụng"
+      ],
+      "priority": "P1",
+      "automation_suitability": "SUITABLE",
+      "oq_id": "OQ-integrations-003"
+    }
+  ],
+  "coverage_by_feature_and_risk": [
+    {
+      "feature_id": "FEAT-01-request-authentication",
+      "item": "capability: Xác thực merchant ở portal nhúng bằng session token Shopify",
+      "check_ids": [
+        "CHK-001",
+        "CHK-003",
+        "CHK-004",
+        "CHK-005",
+        "CHK-006"
+      ],
+      "coverage": "COVERED",
+      "note": "Happy path + chữ ký sai + thiếu token + shop không hợp lệ + cross-tenant. Status code negative chưa có oracle."
+    },
+    {
+      "feature_id": "FEAT-01-request-authentication",
+      "item": "capability: Duy trì phiên portal nhúng khi session token hết hạn",
+      "check_ids": [
+        "CHK-002"
+      ],
+      "coverage": "COVERED",
+      "note": "Thời hạn token chưa có trong tài liệu; step đọc thời điểm hết hạn từ chính token."
+    },
+    {
+      "feature_id": "FEAT-01-request-authentication",
+      "item": "capability: Xác thực lời gọi action từ Shopify Flow bằng HMAC",
+      "check_ids": [
+        "CHK-007",
+        "CHK-008",
+        "CHK-009"
+      ],
+      "coverage": "PARTIAL",
+      "note": "Rate limit chưa có kb_id trong shard này (thuộc feature Shopify Flow actions) và phản hồi khi vượt chưa có → CHK-009 oracle NONE."
+    },
+    {
+      "feature_id": "FEAT-01-request-authentication",
+      "item": "capability: Phục vụ extension không ký bằng tên shop kèm kiểm đơn tồn tại",
+      "check_ids": [
+        "CHK-010",
+        "CHK-011",
+        "CHK-012"
+      ],
+      "coverage": "PARTIAL",
+      "note": "Cross-tenant (tên shop A + đơn shop B) chưa có oracle → CHK-012 NONE."
+    },
+    {
+      "feature_id": "FEAT-01-request-authentication",
+      "item": "risk: Endpoint review App Store không xác thực (KNOWN_DEFECT)",
+      "check_ids": [
+        "CHK-013"
+      ],
+      "coverage": "COVERED",
+      "note": "Regression watch, không oracle."
+    },
+    {
+      "feature_id": "FEAT-01-request-authentication",
+      "item": "risk: Request extension không ký, chỉ dựa trên tên shop",
+      "check_ids": [
+        "CHK-010",
+        "CHK-011",
+        "CHK-012"
+      ],
+      "coverage": "COVERED",
+      "note": ""
+    },
+    {
+      "feature_id": "FEAT-01-request-authentication",
+      "item": "gap: Xác thực trang đơn hàng của khách, banner 'Unbox alert', hai endpoint affiliate",
+      "check_ids": [],
+      "coverage": "GAP",
+      "note": "Không có kb_id trong shard; không sinh check để tránh oracle bịa. Đã nằm trong unknown_areas của profile."
+    }
+  ],
+  "excluded_dimensions": [],
+  "last_updated": {
+    "date": "2026-10-16",
+    "ccr_ref": "bootstrap"
+  }
+}

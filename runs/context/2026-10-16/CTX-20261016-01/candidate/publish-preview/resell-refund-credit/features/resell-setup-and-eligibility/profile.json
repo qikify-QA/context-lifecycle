@@ -1,0 +1,994 @@
+{
+  "feature_id": "FEAT-01-resell-setup-and-eligibility",
+  "feature_key": "resell-setup-and-eligibility",
+  "object_key": "resell-refund-credit",
+  "name": "Cấu hình buyback và điều kiện để khách resell",
+  "user_goal": "Merchant bật và cấu hình buyback cho từng box (refund method, Value %, Percentage on, buyback method) cùng độ dài cửa sổ resell chung cho cả shop trên gói trả phí; hệ thống chỉ cho khách resell khi đơn/box thoả mọi điều kiện tại lúc bấm (box digital, buyback bật ở version box của đơn, cửa sổ còn hạn, box chưa bán, đơn chưa huỷ/đóng và còn hoàn được, số dư store credit sau hoàn không vượt trần).",
+  "user_goal_kb_refs": [
+    "resell-setup-and-eligibility#KB-015",
+    "resell-setup-and-eligibility#KB-009",
+    "resell-setup-and-eligibility#KB-019",
+    "resell-setup-and-eligibility#KB-055",
+    "resell-setup-and-eligibility#KB-044",
+    "resell-setup-and-eligibility#KB-045",
+    "resell-setup-and-eligibility#KB-004"
+  ],
+  "stable_since_version": "1",
+  "priority": "P1",
+  "staging_only": false,
+  "actors": [
+    {
+      "role": "merchant",
+      "permission_observed": "Bật/cấu hình buyback ở màn sửa box và đặt 'Buyback limit time' ở General settings; cả hai chỉ sửa được trên gói trả phí (Free/Early-bird bị khoá ở giao diện).",
+      "kb_refs": [
+        "resell-setup-and-eligibility#KB-015",
+        "resell-setup-and-eligibility#KB-009",
+        "resell-setup-and-eligibility#KB-011",
+        "resell-setup-and-eligibility#KB-019"
+      ]
+    },
+    {
+      "role": "customer",
+      "permission_observed": "Khách hàng cuối là actor thực hiện resell; chỉ resell được khi mọi điều kiện đúng tại lúc bấm.",
+      "kb_refs": [
+        "resell-setup-and-eligibility#KB-001",
+        "resell-setup-and-eligibility#KB-055"
+      ]
+    },
+    {
+      "role": "system",
+      "permission_observed": "Mở cửa sổ resell khi nhận webhook orders/paid; đọc 'Buyback limit time' và xét điều kiện buyback tại lúc draw.",
+      "kb_refs": [
+        "resell-setup-and-eligibility#KB-003",
+        "resell-setup-and-eligibility#KB-012",
+        "resell-setup-and-eligibility#KB-046"
+      ]
+    },
+    {
+      "role": "admin",
+      "permission_observed": "Xem 'resell expires' và 'resell processing at' trong admin panel; không có thao tác gia hạn hay mở lại cửa sổ resell đã hết.",
+      "kb_refs": [
+        "resell-setup-and-eligibility#KB-061",
+        "resell-setup-and-eligibility#KB-062",
+        "resell-setup-and-eligibility#KB-014"
+      ]
+    }
+  ],
+  "entry_points": [
+    {
+      "path": "Portal > màn sửa box > mục \"Buy back function\"",
+      "precondition": "Shop dùng gói trả phí; box không phải \"Sealed box\" (chọn Sealed box thì phần buyback bị ẩn).",
+      "kb_refs": [
+        "resell-setup-and-eligibility#KB-015",
+        "resell-setup-and-eligibility#KB-019",
+        "resell-setup-and-eligibility#KB-020"
+      ]
+    },
+    {
+      "path": "Portal > General settings > Buyback > \"Buyback limit time\"",
+      "precondition": "Shop dùng gói trả phí.",
+      "kb_refs": [
+        "resell-setup-and-eligibility#KB-009",
+        "resell-setup-and-eligibility#KB-011"
+      ]
+    },
+    {
+      "path": "Storefront > trang chi tiết đơn của khách > nút \"Resell\"",
+      "precondition": "Đơn còn ít nhất một box bán lại được.",
+      "kb_refs": [
+        "resell-setup-and-eligibility#KB-057"
+      ]
+    },
+    {
+      "path": "Storefront > màn hình kết quả mở box (reveal) > nút \"Resell\"",
+      "precondition": "Còn hạn bán lại.",
+      "kb_refs": [
+        "resell-setup-and-eligibility#KB-058"
+      ]
+    },
+    {
+      "path": "Admin panel > Orders > Boxes (trường resell expires)",
+      "precondition": "Người dùng admin panel của Mysbox.",
+      "kb_refs": [
+        "resell-setup-and-eligibility#KB-061"
+      ]
+    }
+  ],
+  "capabilities": [
+    {
+      "name": "Bật và cấu hình buyback cho từng box",
+      "description": "Merchant bật công tắc \"Enable buyback for this box\" (mặc định tắt) và chọn Refund method (store credit; \"By cash\" bị khoá), Trading price > Value (%) và Percentage on (Original item price = ITEMS, Box price = BOX), Buyback method (chỉ cho bundle). Công tắc chỉ có hiệu lực khi có phương thức buyback và Value > 0.",
+      "kb_refs": [
+        "resell-setup-and-eligibility#KB-015",
+        "resell-setup-and-eligibility#KB-016",
+        "resell-setup-and-eligibility#KB-017",
+        "resell-setup-and-eligibility#KB-018",
+        "resell-setup-and-eligibility#KB-021",
+        "resell-setup-and-eligibility#KB-022",
+        "resell-setup-and-eligibility#KB-023",
+        "resell-setup-and-eligibility#KB-024",
+        "resell-setup-and-eligibility#KB-026",
+        "resell-setup-and-eligibility#KB-027",
+        "resell-setup-and-eligibility#KB-030",
+        "resell-setup-and-eligibility#KB-031",
+        "resell-setup-and-eligibility#KB-032",
+        "resell-setup-and-eligibility#KB-033",
+        "resell-setup-and-eligibility#KB-034",
+        "resell-setup-and-eligibility#KB-035",
+        "resell-setup-and-eligibility#KB-036",
+        "resell-setup-and-eligibility#KB-037",
+        "resell-setup-and-eligibility#KB-038",
+        "_object-level.resell-refund-credit#KB-010",
+        "_object-level.resell-refund-credit#KB-011"
+      ]
+    },
+    {
+      "name": "Đặt độ dài cửa sổ resell cho cả shop",
+      "description": "\"Buyback limit time\" (đơn vị giờ, mặc định 24, tối thiểu 1) là cài đặt chung cho cả shop; được đọc lúc draw và thay đổi chỉ áp cho đơn mới.",
+      "kb_refs": [
+        "resell-setup-and-eligibility#KB-006",
+        "resell-setup-and-eligibility#KB-009",
+        "resell-setup-and-eligibility#KB-010",
+        "resell-setup-and-eligibility#KB-012",
+        "resell-setup-and-eligibility#KB-013",
+        "_object-level.resell-refund-credit#KB-001"
+      ]
+    },
+    {
+      "name": "Khoá buyback theo gói",
+      "description": "Ở gói Free/Early-bird, mục \"Buy back function\" và \"Buyback limit time\" bị khoá kèm thông báo nâng cấp gói. Giới hạn này hiện chỉ chặn ở giao diện (hạn chế đã biết, xem observed_behavior).",
+      "kb_refs": [
+        "resell-setup-and-eligibility#KB-011",
+        "resell-setup-and-eligibility#KB-019",
+        "resell-setup-and-eligibility#KB-042",
+        "resell-setup-and-eligibility#KB-043"
+      ]
+    },
+    {
+      "name": "Đóng băng cấu hình buyback theo version box của đơn",
+      "description": "% và phương thức buyback được chốt theo phiên bản box tại lúc đơn được bốc; điều kiện buyback (bật và đủ cấu hình) xét tại lúc draw; merchant sửa sau đó không đổi đơn cũ.",
+      "kb_refs": [
+        "resell-setup-and-eligibility#KB-041",
+        "resell-setup-and-eligibility#KB-045",
+        "resell-setup-and-eligibility#KB-046"
+      ]
+    },
+    {
+      "name": "Mở và hết hạn cửa sổ resell",
+      "description": "Cửa sổ resell mở khi nhận webhook orders/paid, hạn = giờ draw + \"Buyback limit time\" (chỉ khi box bật buyback); hết cửa sổ thì nút Resell biến mất, resell trả thông báo hết hạn, và không có thao tác nào gia hạn/mở lại.",
+      "kb_refs": [
+        "resell-setup-and-eligibility#KB-003",
+        "resell-setup-and-eligibility#KB-004",
+        "resell-setup-and-eligibility#KB-005",
+        "resell-setup-and-eligibility#KB-007",
+        "resell-setup-and-eligibility#KB-014"
+      ]
+    },
+    {
+      "name": "Xét điều kiện resell khi khách bấm Resell",
+      "description": "Tại lúc bấm, mọi điều kiện phải đúng: box digital, buyback bật ở version box, cửa sổ còn hạn, box chưa bán, đơn Shopify chưa huỷ/đóng và ở trạng thái refundable, dòng box còn đủ số lượng chưa fulfill/chưa refund, số dư store credit sau hoàn không vượt 15.000 USD; đơn 0 đồng vẫn resell được. Sai một điều kiện thì khách thấy thông báo lỗi tương ứng.",
+      "kb_refs": [
+        "resell-setup-and-eligibility#KB-044",
+        "resell-setup-and-eligibility#KB-045",
+        "resell-setup-and-eligibility#KB-004",
+        "resell-setup-and-eligibility#KB-047",
+        "resell-setup-and-eligibility#KB-048",
+        "resell-setup-and-eligibility#KB-049",
+        "resell-setup-and-eligibility#KB-050",
+        "resell-setup-and-eligibility#KB-051",
+        "resell-setup-and-eligibility#KB-052",
+        "resell-setup-and-eligibility#KB-053",
+        "resell-setup-and-eligibility#KB-054",
+        "resell-setup-and-eligibility#KB-055",
+        "resell-setup-and-eligibility#KB-005"
+      ]
+    },
+    {
+      "name": "Lối vào Resell cho khách",
+      "description": "Nút Resell ở trang chi tiết đơn (chỉ khi còn box bán lại được) và ở màn hình kết quả mở box (khi còn hạn); đơn nhiều box mở một phần vẫn resell được box đã mở. Resell là cơ hội thứ hai duy nhất sau khi quà đã chọn; credit cộng vào tài khoản khách và chỉ dùng ở shop đó.",
+      "kb_refs": [
+        "resell-setup-and-eligibility#KB-057",
+        "resell-setup-and-eligibility#KB-058",
+        "resell-setup-and-eligibility#KB-059",
+        "resell-setup-and-eligibility#KB-060",
+        "resell-setup-and-eligibility#KB-028",
+        "resell-setup-and-eligibility#KB-029",
+        "_object-level.resell-refund-credit#KB-004",
+        "_object-level.resell-refund-credit#KB-006"
+      ]
+    },
+    {
+      "name": "Admin xem trạng thái resell của box",
+      "description": "Admin panel hiển thị 'resell expires' ở Orders > Boxes; box chỉ còn resell được khi 'resell processing at' trống.",
+      "kb_refs": [
+        "resell-setup-and-eligibility#KB-061",
+        "resell-setup-and-eligibility#KB-062"
+      ]
+    }
+  ],
+  "state_transitions": [
+    {
+      "from": "Buyback tắt (mặc định)",
+      "to": "Buyback bật có hiệu lực",
+      "trigger": "Merchant bật \"Enable buyback for this box\"",
+      "condition": "Gói trả phí; box có phương thức buyback và Value > 0.",
+      "kb_refs": [
+        "resell-setup-and-eligibility#KB-018",
+        "resell-setup-and-eligibility#KB-019",
+        "resell-setup-and-eligibility#KB-021"
+      ]
+    },
+    {
+      "from": "Đơn chưa paid",
+      "to": "Cửa sổ resell mở",
+      "trigger": "Mysbox nhận webhook orders/paid và draw",
+      "condition": "Box bật buyback (đủ cấu hình) ở version box tại lúc draw; hạn = giờ draw + Buyback limit time.",
+      "kb_refs": [
+        "resell-setup-and-eligibility#KB-003",
+        "resell-setup-and-eligibility#KB-007",
+        "resell-setup-and-eligibility#KB-046"
+      ]
+    },
+    {
+      "from": "Cửa sổ resell mở",
+      "to": "Cửa sổ resell hết hạn",
+      "trigger": "Thời gian vượt hạn resell",
+      "condition": "Không có thao tác gia hạn/mở lại; nút Resell không còn; resell trả \"The resell window for this order has expired.\"",
+      "kb_refs": [
+        "resell-setup-and-eligibility#KB-004",
+        "resell-setup-and-eligibility#KB-005",
+        "resell-setup-and-eligibility#KB-014"
+      ]
+    },
+    {
+      "from": "Box còn bán lại được",
+      "to": "Box không còn resell được",
+      "trigger": "Đã bán lại hết / đơn Shopify bị huỷ hoặc đóng",
+      "condition": "Nút Resell không hiện.",
+      "kb_refs": [
+        "resell-setup-and-eligibility#KB-047",
+        "resell-setup-and-eligibility#KB-048",
+        "resell-setup-and-eligibility#KB-049"
+      ]
+    }
+  ],
+  "confirmed_rules": [
+    {
+      "rule": "Cửa sổ resell được mở khi Mysbox nhận webhook orders/paid.",
+      "kb_refs": [
+        "resell-setup-and-eligibility#KB-003"
+      ]
+    },
+    {
+      "rule": "Khách chỉ resell được khi cửa sổ resell còn hạn; hết cửa sổ thì nút \"Resell\" không còn hiển thị.",
+      "kb_refs": [
+        "resell-setup-and-eligibility#KB-004",
+        "_object-level.resell-refund-credit#KB-001"
+      ]
+    },
+    {
+      "rule": "Khi cửa sổ resell đã hết, resell trả thông báo \"The resell window for this order has expired.\".",
+      "kb_refs": [
+        "resell-setup-and-eligibility#KB-005"
+      ]
+    },
+    {
+      "rule": "\"Buyback limit time\" tính theo giờ, mặc định 24 giờ, tối thiểu 1 giờ.",
+      "kb_refs": [
+        "resell-setup-and-eligibility#KB-006",
+        "resell-setup-and-eligibility#KB-010"
+      ]
+    },
+    {
+      "rule": "Cửa sổ resell tính từ lúc draw, không phải lúc khách mở box; hạn resell = giờ random + \"Buyback limit time\", chỉ có khi box bật buyback.",
+      "kb_refs": [
+        "resell-setup-and-eligibility#KB-007"
+      ]
+    },
+    {
+      "rule": "Độ dài cửa sổ resell là cài đặt chung cho cả shop tại General settings > Buyback (nhãn \"Buyback limit time\"), không đặt riêng theo box.",
+      "kb_refs": [
+        "resell-setup-and-eligibility#KB-009"
+      ]
+    },
+    {
+      "rule": "\"Buyback limit time\" chỉ sửa được trên gói trả phí.",
+      "kb_refs": [
+        "resell-setup-and-eligibility#KB-011"
+      ]
+    },
+    {
+      "rule": "\"Buyback limit time\" được đọc tại thời điểm draw; đổi giá trị (kể cả tăng) chỉ áp cho đơn mới, đơn đã draw giữ nguyên cửa sổ.",
+      "kb_refs": [
+        "resell-setup-and-eligibility#KB-012",
+        "resell-setup-and-eligibility#KB-013"
+      ]
+    },
+    {
+      "rule": "Không có thao tác nào (kể cả trong admin panel) để gia hạn hay mở lại cửa sổ resell đã hết.",
+      "kb_refs": [
+        "resell-setup-and-eligibility#KB-014"
+      ]
+    },
+    {
+      "rule": "Buyback bật và cấu hình riêng cho từng box tại mục \"Buy back function\" trên màn sửa box (bật buyback, refund method, value %); merchant chọn cách tính và % giá trị.",
+      "kb_refs": [
+        "resell-setup-and-eligibility#KB-015",
+        "resell-setup-and-eligibility#KB-016",
+        "resell-setup-and-eligibility#KB-017"
+      ]
+    },
+    {
+      "rule": "Công tắc \"Enable buyback for this box\" mặc định tắt và chỉ có hiệu lực khi box có phương thức buyback và Value > 0.",
+      "kb_refs": [
+        "resell-setup-and-eligibility#KB-018",
+        "resell-setup-and-eligibility#KB-021"
+      ]
+    },
+    {
+      "rule": "Ở gói Free/Early-bird mục \"Buy back function\" bị khoá kèm thông báo \"Upgrade subscription plan to use this feature. It is not available on Free and Early-bird plan.\".",
+      "kb_refs": [
+        "resell-setup-and-eligibility#KB-019"
+      ]
+    },
+    {
+      "rule": "Chọn \"Sealed box\" thì phần buyback bị ẩn khỏi form box.",
+      "kb_refs": [
+        "resell-setup-and-eligibility#KB-020"
+      ]
+    },
+    {
+      "rule": "\"Buyback method\" chỉ áp cho box dạng bundle; mặc định \"Buy back individual items in the bundle\"; lựa chọn \"Buy back the entire bundle only (coming soon)\" bị khoá.",
+      "kb_refs": [
+        "resell-setup-and-eligibility#KB-022",
+        "resell-setup-and-eligibility#KB-023",
+        "resell-setup-and-eligibility#KB-024"
+      ]
+    },
+    {
+      "rule": "\"Refund method\" mặc định \"By store credit\"; \"By cash (coming soon)\" bị khoá; credit được cộng vào tài khoản khách và chỉ dùng ở shop đó.",
+      "kb_refs": [
+        "resell-setup-and-eligibility#KB-026",
+        "resell-setup-and-eligibility#KB-027",
+        "resell-setup-and-eligibility#KB-028",
+        "resell-setup-and-eligibility#KB-029",
+        "_object-level.resell-refund-credit#KB-006"
+      ]
+    },
+    {
+      "rule": "\"Trading price\" > \"Value\" là số, tối thiểu 1, mặc định 80 (%), áp lên loại giá chọn ở \"Percentage on\".",
+      "kb_refs": [
+        "resell-setup-and-eligibility#KB-030",
+        "resell-setup-and-eligibility#KB-031",
+        "resell-setup-and-eligibility#KB-032"
+      ]
+    },
+    {
+      "rule": "\"Percentage on\" có hai lựa chọn \"Original item price\" (chế độ ITEMS, mặc định) và \"Box price\" (chế độ BOX); box bundle không chọn được \"Box price\". Kiểu buyback trong cấu hình box là Box hoặc Items.",
+      "kb_refs": [
+        "resell-setup-and-eligibility#KB-033",
+        "resell-setup-and-eligibility#KB-034",
+        "resell-setup-and-eligibility#KB-035",
+        "resell-setup-and-eligibility#KB-036",
+        "_object-level.resell-refund-credit#KB-010",
+        "_object-level.resell-refund-credit#KB-011"
+      ]
+    },
+    {
+      "rule": "Backend còn hỗ trợ hoàn resell về phương thức thanh toán gốc (card) nhưng portal không cho merchant chọn.",
+      "kb_refs": [
+        "resell-setup-and-eligibility#KB-037",
+        "resell-setup-and-eligibility#KB-038"
+      ]
+    },
+    {
+      "rule": "Cấu hình % và phương thức buyback được đóng băng theo phiên bản box lúc đơn được bốc; sửa sau đó không đổi đơn cũ.",
+      "kb_refs": [
+        "resell-setup-and-eligibility#KB-041"
+      ]
+    },
+    {
+      "rule": "Chỉ box digital mới resell được (khi buyback bật); box vật lý không bao giờ resell được.",
+      "kb_refs": [
+        "resell-setup-and-eligibility#KB-044"
+      ]
+    },
+    {
+      "rule": "Khách chỉ resell được khi buyback bật ở phiên bản box của đơn; điều kiện buyback xét tại lúc draw, box tắt buyback lúc draw thì nút \"Resell\" không hiện.",
+      "kb_refs": [
+        "resell-setup-and-eligibility#KB-045",
+        "resell-setup-and-eligibility#KB-046"
+      ]
+    },
+    {
+      "rule": "Khách chỉ resell được khi box chưa bán; đã bán lại hết thì nút \"Resell\" không còn.",
+      "kb_refs": [
+        "resell-setup-and-eligibility#KB-047"
+      ]
+    },
+    {
+      "rule": "Khách chỉ resell được khi đơn Shopify chưa huỷ, chưa đóng và ở trạng thái refundable; các thông báo \"Order has been cancelled.\" / \"closed.\" / \"not refundable.\" phản ánh trạng thái này.",
+      "kb_refs": [
+        "resell-setup-and-eligibility#KB-048",
+        "resell-setup-and-eligibility#KB-049",
+        "resell-setup-and-eligibility#KB-050",
+        "resell-setup-and-eligibility#KB-051"
+      ]
+    },
+    {
+      "rule": "Đơn giá trị 0 đồng (trả bằng ticket hoặc mua bằng store credit) vẫn resell được.",
+      "kb_refs": [
+        "resell-setup-and-eligibility#KB-052"
+      ]
+    },
+    {
+      "rule": "Khách chỉ resell được khi dòng box trên Shopify còn đủ số lượng chưa fulfill và chưa refund.",
+      "kb_refs": [
+        "resell-setup-and-eligibility#KB-053"
+      ]
+    },
+    {
+      "rule": "Khách chỉ resell được khi số dư store credit sau khi hoàn không vượt 15.000 USD (quy đổi).",
+      "kb_refs": [
+        "resell-setup-and-eligibility#KB-054"
+      ]
+    },
+    {
+      "rule": "Mọi điều kiện resell được xét tại thời điểm bấm và tất cả phải đúng; sai một điều kiện thì khách thấy thông báo lỗi tương ứng.",
+      "kb_refs": [
+        "resell-setup-and-eligibility#KB-055"
+      ]
+    },
+    {
+      "rule": "Nút \"Resell\" trên trang chi tiết đơn chỉ hiện khi đơn còn ít nhất một box bán lại được; màn kết quả mở box có nút \"Resell\" khi còn hạn.",
+      "kb_refs": [
+        "resell-setup-and-eligibility#KB-057",
+        "resell-setup-and-eligibility#KB-058"
+      ]
+    },
+    {
+      "rule": "Đơn nhiều box mở một phần: khách vẫn resell được box đã mở khi các box khác chưa mở.",
+      "kb_refs": [
+        "resell-setup-and-eligibility#KB-059"
+      ]
+    },
+    {
+      "rule": "Resell là \"cơ hội thứ hai\" duy nhất của khách sau khi quà đã được chọn; resell chỉ trả tiền, không trả hàng vào đơn.",
+      "kb_refs": [
+        "resell-setup-and-eligibility#KB-060",
+        "_object-level.resell-refund-credit#KB-014"
+      ]
+    },
+    {
+      "rule": "Admin panel hiển thị 'resell expires' tại Orders > Boxes; để box còn resell được thì 'resell processing at' phải trống.",
+      "kb_refs": [
+        "resell-setup-and-eligibility#KB-061",
+        "resell-setup-and-eligibility#KB-062"
+      ]
+    },
+    {
+      "rule": "Hành vi resell/refund/store credit giống nhau trên production và staging.",
+      "kb_refs": [
+        "_object-level.resell-refund-credit#KB-002"
+      ]
+    }
+  ],
+  "observed_behavior": [
+    {
+      "behavior": "Giới hạn theo gói của cấu hình buyback chỉ chặn ở giao diện portal; server không kiểm tra gói khi lưu cấu hình.",
+      "status": "KNOWN_DEFECT",
+      "note": "Hạn chế đã biết theo tài liệu; không dùng làm oracle của check theo gói.",
+      "kb_refs": [
+        "resell-setup-and-eligibility#KB-042"
+      ]
+    },
+    {
+      "behavior": "Server không kiểm tra gói của shop khi khách resell.",
+      "status": "KNOWN_DEFECT",
+      "note": "Hạn chế đã biết theo tài liệu; không dùng làm oracle.",
+      "kb_refs": [
+        "resell-setup-and-eligibility#KB-043"
+      ]
+    }
+  ],
+  "observed_validations": [],
+  "limitations": [
+    {
+      "note": "Câu tổng quan 'khách có thể bán lại quà' viết dạng không khẳng định, không nêu điều kiện — chỉ là mô tả.",
+      "kb_refs": [
+        "resell-setup-and-eligibility#KB-002"
+      ]
+    },
+    {
+      "note": "\"Order has been cancelled.\" chỉ được nêu làm ví dụ cho lỗi đơn đã huỷ trong mục điều kiện; danh sách thông báo theo từng điều kiện chưa đầy đủ.",
+      "kb_refs": [
+        "resell-setup-and-eligibility#KB-056"
+      ]
+    },
+    {
+      "note": "Ví dụ auto-unbox 6 giờ khiến nút Resell mất sớm hơn 24 giờ chỉ là minh hoạ, phụ thuộc mâu thuẫn về mở box.",
+      "kb_refs": [
+        "resell-setup-and-eligibility#KB-072"
+      ]
+    },
+    {
+      "note": "Các ví dụ minh hoạ (BOX 80%, hạn = paid + 24 giờ, đơn cũ giữ 80% sau khi đổi 70%, mở box 9:00 đóng 9:00 hôm sau) là seed, không phải rule hay giá trị production.",
+      "kb_refs": [
+        "resell-setup-and-eligibility#KB-074",
+        "resell-setup-and-eligibility#KB-075",
+        "resell-setup-and-eligibility#KB-076",
+        "resell-setup-and-eligibility#KB-077"
+      ]
+    }
+  ],
+  "permissions": [
+    {
+      "permission": "Cấu hình buyback và Buyback limit time chỉ ở gói trả phí (chặn ở UI).",
+      "kb_refs": [
+        "resell-setup-and-eligibility#KB-011",
+        "resell-setup-and-eligibility#KB-019",
+        "resell-setup-and-eligibility#KB-042"
+      ]
+    },
+    {
+      "permission": "Admin/support không có thao tác gia hạn/mở lại cửa sổ resell.",
+      "kb_refs": [
+        "resell-setup-and-eligibility#KB-014"
+      ]
+    }
+  ],
+  "surface_mapping": {
+    "portal": [
+      {
+        "element": "Màn sửa box > \"Buy back function\" (Enable buyback, Refund method, Trading price Value / Percentage on, Buyback method)",
+        "kb_refs": [
+          "resell-setup-and-eligibility#KB-015",
+          "resell-setup-and-eligibility#KB-018",
+          "resell-setup-and-eligibility#KB-022",
+          "resell-setup-and-eligibility#KB-026",
+          "resell-setup-and-eligibility#KB-030",
+          "resell-setup-and-eligibility#KB-033"
+        ]
+      },
+      {
+        "element": "General settings > Buyback > \"Buyback limit time\"",
+        "kb_refs": [
+          "resell-setup-and-eligibility#KB-009"
+        ]
+      }
+    ],
+    "storefront": [
+      {
+        "element": "Trang chi tiết đơn của khách — nút Resell",
+        "kb_refs": [
+          "resell-setup-and-eligibility#KB-057"
+        ]
+      },
+      {
+        "element": "Màn kết quả mở box — nút Resell",
+        "kb_refs": [
+          "resell-setup-and-eligibility#KB-058"
+        ]
+      },
+      {
+        "element": "Thông báo lỗi điều kiện resell (hết cửa sổ, huỷ/đóng/không hoàn được)",
+        "kb_refs": [
+          "resell-setup-and-eligibility#KB-005",
+          "resell-setup-and-eligibility#KB-051"
+        ]
+      }
+    ],
+    "api": [
+      {
+        "element": "Webhook Shopify orders/paid mở cửa sổ resell",
+        "kb_refs": [
+          "resell-setup-and-eligibility#KB-003"
+        ]
+      }
+    ],
+    "data": [
+      {
+        "element": "Hạn resell của bundle (giờ random + Buyback limit time)",
+        "kb_refs": [
+          "resell-setup-and-eligibility#KB-007"
+        ]
+      },
+      {
+        "element": "Trường 'resell expires' và 'resell processing at' (admin panel)",
+        "kb_refs": [
+          "resell-setup-and-eligibility#KB-061",
+          "resell-setup-and-eligibility#KB-062"
+        ]
+      }
+    ],
+    "code": []
+  },
+  "dependencies": [
+    {
+      "feature_key": "purchase-and-prize-draw",
+      "reason": "Cửa sổ resell và cấu hình buyback được chốt tại lúc draw.",
+      "kb_refs": [
+        "resell-setup-and-eligibility#KB-007",
+        "resell-setup-and-eligibility#KB-012",
+        "resell-setup-and-eligibility#KB-046"
+      ]
+    },
+    {
+      "feature_key": "general-settings",
+      "reason": "\"Buyback limit time\" nằm ở General settings.",
+      "kb_refs": [
+        "resell-setup-and-eligibility#KB-009"
+      ]
+    },
+    {
+      "feature_key": "box-create-and-publish",
+      "reason": "Cấu hình buyback nằm trong form box; Sealed box ẩn buyback.",
+      "kb_refs": [
+        "resell-setup-and-eligibility#KB-015",
+        "resell-setup-and-eligibility#KB-020"
+      ]
+    },
+    {
+      "feature_key": "physical-sealed-box-fulfilment",
+      "reason": "Box vật lý không bao giờ resell được.",
+      "kb_refs": [
+        "resell-setup-and-eligibility#KB-044"
+      ]
+    },
+    {
+      "feature_key": "plan-capacity-and-cycle",
+      "reason": "Buyback chỉ cho gói trả phí.",
+      "kb_refs": [
+        "resell-setup-and-eligibility#KB-011",
+        "resell-setup-and-eligibility#KB-019"
+      ]
+    },
+    {
+      "feature_key": "reveal-journey",
+      "reason": "Nút Resell trên màn reveal / chi tiết đơn của khách; tương tác giữa mở box và resell.",
+      "kb_refs": [
+        "resell-setup-and-eligibility#KB-057",
+        "resell-setup-and-eligibility#KB-058",
+        "resell-setup-and-eligibility#KB-059"
+      ]
+    },
+    {
+      "feature_key": "auto-unbox",
+      "reason": "Ảnh hưởng của auto-unbox lên cửa sổ resell chưa thống nhất.",
+      "kb_refs": [
+        "resell-setup-and-eligibility#KB-065",
+        "resell-setup-and-eligibility#KB-073"
+      ]
+    },
+    {
+      "feature_key": "refund-amount-calculation",
+      "reason": "Trần số dư store credit 15.000 USD và phương thức hoàn card/store credit.",
+      "kb_refs": [
+        "resell-setup-and-eligibility#KB-054",
+        "resell-setup-and-eligibility#KB-037"
+      ]
+    },
+    {
+      "feature_key": "order-cancellation-and-refund-sync",
+      "reason": "Đơn huỷ/đóng/không hoàn được chặn resell.",
+      "kb_refs": [
+        "resell-setup-and-eligibility#KB-048",
+        "resell-setup-and-eligibility#KB-049",
+        "resell-setup-and-eligibility#KB-050"
+      ]
+    }
+  ],
+  "risks": [
+    {
+      "risk": "P1 tiền: điều kiện 'box đã mở' và hệ quả của auto-unbox/COMPLETED/'Open all boxes' lên cửa sổ resell mâu thuẫn trong tài liệu — expected result của nhánh eligibility chính chưa chốt.",
+      "kb_refs": [
+        "resell-setup-and-eligibility#KB-063",
+        "resell-setup-and-eligibility#KB-066",
+        "resell-setup-and-eligibility#KB-068",
+        "resell-setup-and-eligibility#KB-070"
+      ]
+    },
+    {
+      "risk": "Giới hạn theo gói chỉ chặn ở UI: shop gói Free có thể có buyback nếu gọi thẳng server.",
+      "kb_refs": [
+        "resell-setup-and-eligibility#KB-042",
+        "resell-setup-and-eligibility#KB-043"
+      ]
+    }
+  ],
+  "freshness": {
+    "observed_at": null
+  },
+  "unknown_areas": [
+    {
+      "question": "Box phải đã được mở mới resell được (box chưa mở báo \"Cannot resell a box that has not been opened.\", box qua giờ auto-unbox coi như đã mở), hay mở box / đơn chuyển COMPLETED (merchant mở hộ, auto-unbox, Flow) lại đóng ngay cửa sổ resell? 'Mở' ở mỗi phát biểu là hành động nào?",
+      "why_it_matters": "Tài liệu tự mâu thuẫn; đây là expected result chính của resell eligibility.",
+      "kb_refs": [
+        "resell-setup-and-eligibility#KB-063",
+        "resell-setup-and-eligibility#KB-064",
+        "resell-setup-and-eligibility#KB-065",
+        "resell-setup-and-eligibility#KB-066",
+        "resell-setup-and-eligibility#KB-067"
+      ],
+      "oq_id": "OQ-resell-refund-credit-003"
+    },
+    {
+      "question": "Merchant bấm \"Open all boxes\" có chấm dứt resell của đơn không (một nguồn nói chỉ Flow/auto-unbox mới chấm dứt và khách vẫn resell được nếu cửa sổ chưa hết; nguồn khác nói 'Open all boxes' chấm dứt resell)?",
+      "why_it_matters": "Mâu thuẫn chéo tài liệu; quyết định expected result khi merchant mở hộ.",
+      "kb_refs": [
+        "resell-setup-and-eligibility#KB-068",
+        "resell-setup-and-eligibility#KB-069",
+        "resell-setup-and-eligibility#KB-070"
+      ],
+      "oq_id": "OQ-resell-refund-credit-004"
+    },
+    {
+      "question": "Mốc bắt đầu cửa sổ resell là lúc draw, lúc đơn paid, hay lúc tạo đơn (nhãn cài đặt ghi 'from order is created')?",
+      "why_it_matters": "Quyết định thời điểm hết hạn resell và thời điểm quà vào đơn; đang mâu thuẫn.",
+      "kb_refs": [
+        "resell-setup-and-eligibility#KB-007",
+        "resell-setup-and-eligibility#KB-008",
+        "resell-setup-and-eligibility#KB-009"
+      ],
+      "oq_id": "OQ-resell-refund-credit-005"
+    },
+    {
+      "question": "Sau khi auto-unbox đã mở box mà cửa sổ resell chưa hết, khách còn resell được không? Box đã qua giờ auto-unbox nhưng job chưa chạy thì sao?",
+      "why_it_matters": "Tài liệu tự ghi chưa xác nhận; gắn với mâu thuẫn về mở box.",
+      "kb_refs": [
+        "resell-setup-and-eligibility#KB-073",
+        "resell-setup-and-eligibility#KB-065"
+      ],
+      "oq_id": "OQ-resell-refund-credit-003"
+    },
+    {
+      "question": "Những nguyên nhân nào làm đơn chuyển Completed (ngoài merchant/auto-unbox mở hết box)?",
+      "why_it_matters": "Tài liệu chỉ nói 'thường', không khẳng định danh sách đầy đủ.",
+      "kb_refs": [
+        "resell-setup-and-eligibility#KB-071"
+      ],
+      "oq_id": "OQ-resell-refund-credit-052"
+    },
+    {
+      "question": "\"Buyback method\" hiện chỉ chọn được buyback từng quà — trạng thái này có cố định không, và khi nào lựa chọn 'entire bundle' mở?",
+      "why_it_matters": "Phát biểu ở dạng trạng thái hiện tại, không khẳng định.",
+      "kb_refs": [
+        "resell-setup-and-eligibility#KB-025"
+      ],
+      "oq_id": "OQ-resell-refund-credit-053"
+    },
+    {
+      "question": "Phương thức hoàn 'original payment' còn xuất hiện ở box dữ liệu cũ không, và hành vi khi thẻ đã bị hoàn một phần trước đó?",
+      "why_it_matters": "Chỉ có ghi chú không khẳng định; ảnh hưởng nhánh hoàn tiền về card.",
+      "kb_refs": [
+        "resell-setup-and-eligibility#KB-039",
+        "resell-setup-and-eligibility#KB-040"
+      ],
+      "oq_id": "OQ-resell-refund-credit-093"
+    },
+    {
+      "question": "Giá trị tối đa của \"Buyback limit time\", có nhận số thập phân không, và thông báo lỗi khi nhỏ hơn 1?",
+      "why_it_matters": "Boundary test của form; tài liệu chỉ nêu mặc định 24 và tối thiểu 1.",
+      "kb_refs": [
+        "resell-setup-and-eligibility#KB-006",
+        "resell-setup-and-eligibility#KB-010"
+      ],
+      "oq_id": "OQ-resell-refund-credit-054"
+    },
+    {
+      "question": "Giá trị tối đa của \"Trading price\" > \"Value\" (có cho > 100% không, có số lẻ không)?",
+      "why_it_matters": "Boundary test của Value; tài liệu chỉ nêu tối thiểu 1 và mặc định 80.",
+      "kb_refs": [
+        "resell-setup-and-eligibility#KB-030",
+        "resell-setup-and-eligibility#KB-031"
+      ],
+      "oq_id": "OQ-resell-refund-credit-055"
+    },
+    {
+      "question": "Gói nào được tính là 'gói trả phí' cho cấu hình buyback và Buyback limit time?",
+      "why_it_matters": "Permission theo gói; tài liệu chỉ loại trừ Free/Early-bird.",
+      "kb_refs": [
+        "resell-setup-and-eligibility#KB-011",
+        "resell-setup-and-eligibility#KB-019"
+      ],
+      "oq_id": "OQ-resell-refund-credit-056"
+    },
+    {
+      "question": "Thông báo lỗi cụ thể cho từng điều kiện resell không thoả (box vật lý, buyback tắt, số lượng Shopify không đủ, vượt trần 15.000 USD)?",
+      "why_it_matters": "Tester cần expected message cho từng nhánh điều kiện.",
+      "kb_refs": [
+        "resell-setup-and-eligibility#KB-055",
+        "resell-setup-and-eligibility#KB-056"
+      ],
+      "oq_id": "OQ-resell-refund-credit-057"
+    },
+    {
+      "question": "Trần 15.000 USD là của Shopify hay của app; khi vượt thì resell bị chặn toàn bộ hay hoàn một phần, và trạng thái resell sau lỗi?",
+      "why_it_matters": "Biên P1 về tiền; cần hệ quả để viết expected result.",
+      "kb_refs": [
+        "resell-setup-and-eligibility#KB-054"
+      ],
+      "oq_id": "OQ-resell-refund-credit-058"
+    },
+    {
+      "question": "Nếu khách mở box sau khi cửa sổ resell (tính từ draw) đã hết thì có resell được không? Sau khi hết cửa sổ, quà được thêm vào đơn lúc nào (job, độ trễ)?",
+      "why_it_matters": "Mốc draw và điều kiện 'mở box' tương tác; cần mốc thời gian để kiểm bước sync.",
+      "kb_refs": [
+        "resell-setup-and-eligibility#KB-007"
+      ],
+      "oq_id": "OQ-resell-refund-credit-059"
+    },
+    {
+      "question": "Retry Sync đưa quà vào đơn trong lúc cửa sổ resell còn mở thì khách còn bán lại được không, dòng quà có bị gỡ khi bán lại?",
+      "why_it_matters": "Tài liệu tự khai chưa xác nhận; nút Retry Sync không tự kiểm cửa sổ resell nên có rủi ro sai lệch đơn.",
+      "kb_refs": [],
+      "oq_id": "OQ-resell-refund-credit-060"
+    },
+    {
+      "question": "Box bundle với \"Original item price\" có hành vi resell nào khác chế độ ITEMS thường không?",
+      "why_it_matters": "Tài liệu cấu hình chỉ nói bundle không chọn được \"Box price\".",
+      "kb_refs": [
+        "resell-setup-and-eligibility#KB-035"
+      ],
+      "oq_id": "OQ-resell-refund-credit-061"
+    },
+    {
+      "question": "Nguyên tắc 'thay đổi chỉ áp cho đơn mới' có áp cho các cài đặt khác của General settings hay chỉ cho lịch resell/auto-unbox?",
+      "why_it_matters": "Quyết định expected result khi đổi setting với đơn đang mở.",
+      "kb_refs": [
+        "resell-setup-and-eligibility#KB-013"
+      ],
+      "oq_id": "OQ-resell-refund-credit-062"
+    }
+  ],
+  "last_updated": {
+    "date": "2026-10-16",
+    "ccr_ref": "bootstrap"
+  },
+  "coverage_matrix": [
+    {
+      "feature_id": "FEAT-01-resell-setup-and-eligibility",
+      "layer": "portal",
+      "role": "merchant",
+      "state": "paid plan — cấu hình buyback box",
+      "environment": "documented",
+      "covered": true
+    },
+    {
+      "feature_id": "FEAT-01-resell-setup-and-eligibility",
+      "layer": "portal",
+      "role": "merchant",
+      "state": "Free/Early-bird — bị khoá",
+      "environment": "documented",
+      "covered": true
+    },
+    {
+      "feature_id": "FEAT-01-resell-setup-and-eligibility",
+      "layer": "portal",
+      "role": "merchant",
+      "state": "Buyback limit time — biên tối đa",
+      "environment": "documented",
+      "covered": false
+    },
+    {
+      "feature_id": "FEAT-01-resell-setup-and-eligibility",
+      "layer": "storefront",
+      "role": "customer",
+      "state": "đủ điều kiện resell",
+      "environment": "documented",
+      "covered": true
+    },
+    {
+      "feature_id": "FEAT-01-resell-setup-and-eligibility",
+      "layer": "storefront",
+      "role": "customer",
+      "state": "không đủ điều kiện (hết cửa sổ, huỷ/đóng, không hoàn được)",
+      "environment": "documented",
+      "covered": true
+    },
+    {
+      "feature_id": "FEAT-01-resell-setup-and-eligibility",
+      "layer": "storefront",
+      "role": "customer",
+      "state": "box chưa mở / đã auto-unbox / đơn COMPLETED",
+      "environment": "documented",
+      "covered": false
+    },
+    {
+      "feature_id": "FEAT-01-resell-setup-and-eligibility",
+      "layer": "api",
+      "role": "system",
+      "state": "orders/paid mở cửa sổ",
+      "environment": "documented",
+      "covered": true
+    },
+    {
+      "feature_id": "FEAT-01-resell-setup-and-eligibility",
+      "layer": "api",
+      "role": "system",
+      "state": "server kiểm tra gói khi lưu/resell",
+      "environment": "documented",
+      "covered": false
+    },
+    {
+      "feature_id": "FEAT-01-resell-setup-and-eligibility",
+      "layer": "db",
+      "role": "system",
+      "state": "hạn resell / resell processing at",
+      "environment": "documented",
+      "covered": true
+    },
+    {
+      "feature_id": "FEAT-01-resell-setup-and-eligibility",
+      "layer": "admin_panel",
+      "role": "admin",
+      "state": "xem resell expires",
+      "environment": "documented",
+      "covered": true
+    }
+  ],
+  "profile_conflicts": [
+    {
+      "conflict_group": "CONF-resell-refund-credit-02",
+      "topic": "Mở box là điều kiện để resell hay điểm kết thúc resell",
+      "kb_refs": [
+        "resell-setup-and-eligibility#KB-063",
+        "resell-setup-and-eligibility#KB-064",
+        "resell-setup-and-eligibility#KB-065",
+        "resell-setup-and-eligibility#KB-066",
+        "resell-setup-and-eligibility#KB-067"
+      ],
+      "resolution": "UNRESOLVED"
+    },
+    {
+      "conflict_group": "CONF-resell-refund-credit-03",
+      "topic": "\"Open all boxes\" có chấm dứt resell không",
+      "kb_refs": [
+        "resell-setup-and-eligibility#KB-068",
+        "resell-setup-and-eligibility#KB-069",
+        "resell-setup-and-eligibility#KB-070"
+      ],
+      "resolution": "UNRESOLVED"
+    },
+    {
+      "conflict_group": "CONF-merchant-app-01",
+      "topic": "Mốc bắt đầu cửa sổ resell",
+      "kb_refs": [
+        "resell-setup-and-eligibility#KB-008"
+      ],
+      "resolution": "UNRESOLVED"
+    }
+  ],
+  "profile_relationships": [
+    {
+      "from": "resell-setup-and-eligibility",
+      "to": "resell-box-mode",
+      "type": "configures",
+      "note": "\"Percentage on\" = \"Box price\" chọn chế độ BOX.",
+      "kb_refs": [
+        "_object-level.resell-refund-credit#KB-010",
+        "resell-setup-and-eligibility#KB-033"
+      ]
+    },
+    {
+      "from": "resell-setup-and-eligibility",
+      "to": "resell-items-mode",
+      "type": "configures",
+      "note": "\"Percentage on\" = \"Original item price\" (mặc định) chọn chế độ ITEMS.",
+      "kb_refs": [
+        "_object-level.resell-refund-credit#KB-011",
+        "resell-setup-and-eligibility#KB-034"
+      ]
+    },
+    {
+      "from": "resell-setup-and-eligibility",
+      "to": "refund-amount-calculation",
+      "type": "gates",
+      "note": "Điều kiện resell (trần store credit, refund method) đi trước bước tính tiền hoàn.",
+      "kb_refs": [
+        "resell-setup-and-eligibility#KB-054",
+        "resell-setup-and-eligibility#KB-027"
+      ]
+    }
+  ]
+}

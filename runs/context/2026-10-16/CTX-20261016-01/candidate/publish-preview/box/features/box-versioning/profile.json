@@ -1,0 +1,699 @@
+{
+  "feature_id": "FEAT-03-box-versioning",
+  "feature_key": "box-versioning",
+  "object_key": "box",
+  "name": "Box version bất biến — đơn giữ cấu hình lúc mua",
+  "user_goal": "Merchant sửa box mà không làm đổi quà hay điều khoản buyback của đơn đã mua: thay đổi cấu hình khi lưu tạo version bất biến mới, đơn luôn đọc version đã gắn với nó, và xoá box không xoá version nên đơn cũ vẫn mở được.",
+  "user_goal_kb_refs": [
+    "box-versioning#KB-006",
+    "box-versioning#KB-011",
+    "box-versioning#KB-012",
+    "box-versioning#KB-013",
+    "box-versioning#KB-016",
+    "box-versioning#KB-017",
+    "box-versioning#KB-018"
+  ],
+  "stable_since_version": "1",
+  "priority": "P1",
+  "staging_only": false,
+  "actors": [
+    {
+      "role": "merchant",
+      "permission_observed": "Sửa cấu hình box (live config) trên màn hình merchant; không làm việc trực tiếp với version.",
+      "kb_refs": [
+        "box-versioning#KB-021",
+        "box-versioning#KB-024",
+        "box-versioning#KB-032",
+        "_product-level#KB-PL-002"
+      ]
+    },
+    {
+      "role": "admin",
+      "permission_observed": "Edit box và lưu Configure Tier Settings ở trang Box của admin panel; Configure Tier Settings tạo version mới, Edit chỉ ảnh hưởng đơn mua sau.",
+      "kb_refs": [
+        "box-versioning#KB-041",
+        "box-versioning#KB-042",
+        "_product-level#KB-PL-006"
+      ]
+    },
+    {
+      "role": "customer",
+      "permission_observed": "Mở hộp / resell theo version gắn với đơn của mình (item, animation, buyback), kể cả sau khi box bị xoá.",
+      "kb_refs": [
+        "box-versioning#KB-016",
+        "box-versioning#KB-018",
+        "box-versioning#KB-040",
+        "_product-level#KB-PL-004"
+      ]
+    },
+    {
+      "role": "system",
+      "permission_observed": "Bốc thăm, mở hộp, resell, đồng bộ đơn đều đọc box version chứ không đọc box.",
+      "kb_refs": [
+        "box-versioning#KB-011",
+        "box-versioning#KB-010"
+      ]
+    }
+  ],
+  "entry_points": [
+    {
+      "path": "App merchant → form box → Save (sau khi box về Draft)",
+      "precondition": "Box chỉ sửa được khi ở Draft (xem box-create-and-publish).",
+      "kb_refs": [
+        "box-versioning#KB-021",
+        "box-versioning#KB-032",
+        "box-create-and-publish#KB-013"
+      ]
+    },
+    {
+      "path": "Admin panel → trang Box → Edit / Configure Tier Settings",
+      "precondition": "Không nêu trong KB.",
+      "kb_refs": [
+        "box-versioning#KB-041",
+        "box-versioning#KB-042"
+      ]
+    }
+  ],
+  "capabilities": [
+    {
+      "name": "Tạo version bất biến khi lưu thay đổi cấu hình box",
+      "description": "Version đầu tiên sinh ra khi box được tạo; box trỏ tới version hiện hành qua `current_version_id`; một box có nhiều version (1-N). Đổi item/số lượng/chance, variant link, loại box, cờ tracked, category, picking mode, tier mode, deactivate/draft on empty, refill, animation, buyback %, store credit, hiển thị chance/tồn kho đều tạo version mới; publish, unpublish hay đổi trạng thái đồng bộ không tạo version. Version là bản chụp không bao giờ sửa được; version bung collection thành danh sách variant, và khi chỉ đổi cài đặt thì version mới dùng lại danh sách đã bung, không hỏi lại Shopify.",
+      "kb_refs": [
+        "box-versioning#KB-006",
+        "box-versioning#KB-008",
+        "box-versioning#KB-009",
+        "box-versioning#KB-020",
+        "box-versioning#KB-021",
+        "box-versioning#KB-022",
+        "box-versioning#KB-023",
+        "box-versioning#KB-024",
+        "box-versioning#KB-025",
+        "box-versioning#KB-026",
+        "box-versioning#KB-027",
+        "box-versioning#KB-028",
+        "box-versioning#KB-029",
+        "box-versioning#KB-030",
+        "box-versioning#KB-031",
+        "box-versioning#KB-032",
+        "box-versioning#KB-043",
+        "box-versioning#KB-001",
+        "box-versioning#KB-002",
+        "box-versioning#KB-003",
+        "_product-level#KB-PL-009"
+      ]
+    },
+    {
+      "name": "Đơn giữ đúng cấu hình của version đã gắn",
+      "description": "Opening request ghi nhớ box version đã mua; mọi logic bốc thăm, mở hộp, resell, đồng bộ đơn đọc version. Sửa box về sau (kể cả unpublish rồi sửa) không đổi quà/kết quả, chance, animation hay điều khoản buyback của đơn đã có; đơn mới dùng version mới nhất. Thời điểm gắn version (lúc mua hay lúc bốc thăm) đang conflict.",
+      "kb_refs": [
+        "box-versioning#KB-010",
+        "box-versioning#KB-011",
+        "box-versioning#KB-012",
+        "box-versioning#KB-013",
+        "box-versioning#KB-016",
+        "box-versioning#KB-033",
+        "box-versioning#KB-039",
+        "box-versioning#KB-040",
+        "box-versioning#KB-004",
+        "box-versioning#KB-005",
+        "box-versioning#KB-034",
+        "_product-level#KB-PL-010"
+      ]
+    },
+    {
+      "name": "Xoá box mà đơn cũ vẫn mở được",
+      "description": "Xoá box không xoá version (không có ràng buộc xoá dây chuyền box-version); đơn đã bốc thăm của box đã xoá vẫn hiển thị prize và reveal được.",
+      "kb_refs": [
+        "box-versioning#KB-017",
+        "box-versioning#KB-018",
+        "box-versioning#KB-038"
+      ]
+    },
+    {
+      "name": "Sửa box từ admin panel chỉ áp cho đơn mua sau",
+      "description": "Thay đổi qua Edit ở trang Box admin panel chỉ ảnh hưởng đơn mua sau đó; lưu Configure Tier Settings tạo một box version mới.",
+      "kb_refs": [
+        "box-versioning#KB-041",
+        "box-versioning#KB-042"
+      ]
+    }
+  ],
+  "state_transitions": [
+    {
+      "from": "Box chưa tồn tại",
+      "to": "Box có version đầu tiên (current_version_id trỏ tới)",
+      "trigger": "Box được tạo",
+      "condition": "",
+      "kb_refs": [
+        "box-versioning#KB-023",
+        "box-versioning#KB-009"
+      ]
+    },
+    {
+      "from": "current_version = vN",
+      "to": "current_version = vN+1 (vN giữ nguyên, bất biến)",
+      "trigger": "Merchant lưu box sau khi đổi item/số lượng/chance, variant link, loại box, tracked, category, picking/tier mode, refill, animation, buyback, store credit hoặc hiển thị",
+      "condition": "Box ở Draft; trường hợp lưu không đổi gì đang conflict (CONF-box-01)",
+      "kb_refs": [
+        "box-versioning#KB-024",
+        "box-versioning#KB-025",
+        "box-versioning#KB-026",
+        "box-versioning#KB-027",
+        "box-versioning#KB-028",
+        "box-versioning#KB-032",
+        "box-versioning#KB-043",
+        "box-versioning#KB-006"
+      ]
+    },
+    {
+      "from": "current_version = vN",
+      "to": "current_version = vN (không đổi)",
+      "trigger": "Publish, unpublish hoặc thay đổi trạng thái đồng bộ",
+      "condition": "",
+      "kb_refs": [
+        "box-versioning#KB-029"
+      ]
+    },
+    {
+      "from": "current_version = vN",
+      "to": "current_version = vN+1",
+      "trigger": "Admin lưu Configure Tier Settings ở admin panel",
+      "condition": "",
+      "kb_refs": [
+        "box-versioning#KB-042"
+      ]
+    },
+    {
+      "from": "Box tồn tại, có các version",
+      "to": "Box đã xoá, các version vẫn còn",
+      "trigger": "Box bị xoá",
+      "condition": "",
+      "kb_refs": [
+        "box-versioning#KB-017",
+        "box-versioning#KB-038"
+      ]
+    }
+  ],
+  "confirmed_rules": [
+    {
+      "rule": "Box version là bản chụp bất biến của cấu hình box và không bao giờ sửa được.",
+      "kb_refs": [
+        "box-versioning#KB-006"
+      ]
+    },
+    {
+      "rule": "\"Box\" là cấu hình sống của merchant; \"Version\" là bản chụp bất biến; màn hình merchant làm việc trên box, không trên version.",
+      "kb_refs": [
+        "box-versioning#KB-020",
+        "box-versioning#KB-021"
+      ]
+    },
+    {
+      "rule": "Một Box có nhiều Box version (1-N); box trỏ tới version hiện hành qua `current_version_id`.",
+      "kb_refs": [
+        "box-versioning#KB-008",
+        "box-versioning#KB-009"
+      ]
+    },
+    {
+      "rule": "Ngay khi box được tạo, version đầu tiên được sinh ra.",
+      "kb_refs": [
+        "box-versioning#KB-023"
+      ]
+    },
+    {
+      "rule": "Sửa item, số lượng hoặc chance tạo version mới.",
+      "kb_refs": [
+        "box-versioning#KB-024"
+      ]
+    },
+    {
+      "rule": "Đổi variant được link, loại box hoặc cờ tracked tạo version mới.",
+      "kb_refs": [
+        "box-versioning#KB-025"
+      ]
+    },
+    {
+      "rule": "Đổi picking mode, tier mode, deactivate/draft on empty hoặc refill (bật/tắt, mode) tạo version mới.",
+      "kb_refs": [
+        "box-versioning#KB-026"
+      ]
+    },
+    {
+      "rule": "Đổi animation, buyback %, store credit hoặc hiển thị chance/tồn kho tạo version mới.",
+      "kb_refs": [
+        "box-versioning#KB-027"
+      ]
+    },
+    {
+      "rule": "Đổi category (số ↔ vật lý) tạo version mới.",
+      "kb_refs": [
+        "box-versioning#KB-028"
+      ]
+    },
+    {
+      "rule": "Bất kỳ chỉnh sửa nào trên box cũng làm box đổi version; merchant sửa box sau khi đơn đã bốc thăm thì sinh version mới.",
+      "kb_refs": [
+        "box-versioning#KB-043",
+        "box-versioning#KB-032"
+      ]
+    },
+    {
+      "rule": "Publish, unpublish hoặc thay đổi trạng thái đồng bộ không tạo version mới.",
+      "kb_refs": [
+        "box-versioning#KB-029"
+      ]
+    },
+    {
+      "rule": "Box giữ collection dưới dạng collection; version lưu collection đã bung thành danh sách variant cụ thể.",
+      "kb_refs": [
+        "box-versioning#KB-022"
+      ]
+    },
+    {
+      "rule": "Khi chỉ đổi cài đặt (không đụng item), version mới dùng lại danh sách item đã bung của version cũ và không cần hỏi lại Shopify.",
+      "kb_refs": [
+        "box-versioning#KB-030",
+        "box-versioning#KB-031"
+      ]
+    },
+    {
+      "rule": "Mỗi opening request trỏ tới và ghi nhớ box version đã mua.",
+      "kb_refs": [
+        "box-versioning#KB-010"
+      ]
+    },
+    {
+      "rule": "Mọi logic bốc thăm, mở hộp, resell và đồng bộ đơn đọc box version, không đọc box.",
+      "kb_refs": [
+        "box-versioning#KB-011"
+      ]
+    },
+    {
+      "rule": "Sửa box về sau (kể cả unpublish rồi sửa) không làm đổi quà/kết quả của khách đã mua trước đó; xoá box cũng không làm đổi kết quả đơn cũ.",
+      "kb_refs": [
+        "box-versioning#KB-012"
+      ]
+    },
+    {
+      "rule": "Sửa box về sau không làm đổi điều khoản buyback của các đơn đã có.",
+      "kb_refs": [
+        "box-versioning#KB-013"
+      ]
+    },
+    {
+      "rule": "Sửa chance không làm đổi kết quả của đơn đã bán.",
+      "kb_refs": [
+        "box-versioning#KB-039"
+      ]
+    },
+    {
+      "rule": "Đơn cũ vẫn được mở theo version lúc đó, gồm item, animation và điều khoản buyback của version đó; khách đang mở dở khi merchant đổi animation vẫn dùng animation của version lúc mua.",
+      "kb_refs": [
+        "box-versioning#KB-016",
+        "box-versioning#KB-040"
+      ]
+    },
+    {
+      "rule": "Đơn mới (sau khi box được sửa) dùng version mới nhất.",
+      "kb_refs": [
+        "box-versioning#KB-033"
+      ]
+    },
+    {
+      "rule": "Khi box bị xoá, các version vẫn còn; giữa box và version không có ràng buộc xoá dây chuyền.",
+      "kb_refs": [
+        "box-versioning#KB-017",
+        "box-versioning#KB-038"
+      ]
+    },
+    {
+      "rule": "Sau khi box bị xoá, đơn đã bốc thăm của box đó vẫn mở được: vẫn hiển thị prize và reveal được.",
+      "kb_refs": [
+        "box-versioning#KB-018"
+      ]
+    },
+    {
+      "rule": "Thay đổi qua Edit (admin panel) chỉ ảnh hưởng đơn mua sau đó; lưu Configure Tier Settings tạo một box version mới.",
+      "kb_refs": [
+        "box-versioning#KB-041",
+        "box-versioning#KB-042"
+      ]
+    }
+  ],
+  "observed_behavior": [
+    {
+      "behavior": "Tồn tại một khoảng hẹp với các đơn vừa thanh toán ngay trước lúc merchant pause sales để sửa box; tài liệu không nêu hệ quả cụ thể.",
+      "status": "KNOWN_DEFECT",
+      "note": "Known defect theo tài liệu — không dùng làm oracle; cần OQ OPEN_ISSUE.",
+      "kb_refs": [
+        "box-versioning#KB-034"
+      ]
+    }
+  ],
+  "observed_validations": [],
+  "limitations": [
+    {
+      "statement": "Ví dụ minh hoạ (lần lưu đầu là v1; đổi buyback tạo version mới; đơn cũ dùng version cũ; v7 → v8 sau khi deactivate-sửa-activate; khách cũ resell 80% × 20 = 16 USD, khách mới 50% × 20 = 10 USD; khách vẫn mở hộp sau khi box bị xoá) là INFERRED/LOW — không dùng làm oracle; phần hành vi tổng quát đã có rule CONFIRMED tương ứng.",
+      "kb_refs": [
+        "box-versioning#KB-007",
+        "box-versioning#KB-014",
+        "box-versioning#KB-015",
+        "box-versioning#KB-019",
+        "box-versioning#KB-035",
+        "box-versioning#KB-036",
+        "box-versioning#KB-037"
+      ]
+    },
+    {
+      "statement": "Một mục tài liệu chỉ nói lưu thay đổi \"có thể\" tạo version mới (diễn đạt không chắc chắn).",
+      "kb_refs": [
+        "box-versioning#KB-003"
+      ]
+    }
+  ],
+  "permissions": [
+    {
+      "permission": "Merchant chỉ thao tác trên box (cấu hình sống), không sửa được version.",
+      "kb_refs": [
+        "box-versioning#KB-006",
+        "box-versioning#KB-021"
+      ]
+    }
+  ],
+  "surface_mapping": {
+    "portal": [
+      {
+        "name": "Form box của merchant (Save tạo version khi có thay đổi)",
+        "kb_refs": [
+          "box-versioning#KB-021",
+          "box-versioning#KB-024"
+        ]
+      }
+    ],
+    "admin_panel": [
+      {
+        "name": "Trang Box → Edit / Configure Tier Settings",
+        "kb_refs": [
+          "box-versioning#KB-041",
+          "box-versioning#KB-042"
+        ]
+      }
+    ],
+    "storefront": [
+      {
+        "name": "Mở hộp / reveal / resell theo version của đơn (kể cả box đã xoá)",
+        "kb_refs": [
+          "box-versioning#KB-016",
+          "box-versioning#KB-018",
+          "box-versioning#KB-040"
+        ]
+      }
+    ],
+    "api": [],
+    "data": [
+      {
+        "name": "Box version (bản chụp bất biến, 1-N với box, danh sách variant đã bung)",
+        "kb_refs": [
+          "box-versioning#KB-006",
+          "box-versioning#KB-008",
+          "box-versioning#KB-022"
+        ]
+      },
+      {
+        "name": "Box.current_version_id",
+        "kb_refs": [
+          "box-versioning#KB-009"
+        ]
+      },
+      {
+        "name": "Opening request → box version đã mua",
+        "kb_refs": [
+          "box-versioning#KB-010"
+        ]
+      }
+    ],
+    "code": [
+      {
+        "name": "Logic bốc thăm, mở hộp, resell, đồng bộ đơn đọc version",
+        "kb_refs": [
+          "box-versioning#KB-011"
+        ]
+      }
+    ]
+  },
+  "dependencies": [
+    {
+      "dependency": "Vòng đời Draft/Active: chỉ sửa được box khi Draft, nên tạo version gắn với luồng deactivate-sửa-activate.",
+      "kb_refs": [
+        "box-create-and-publish#KB-013",
+        "box-create-and-publish#KB-067"
+      ]
+    },
+    {
+      "dependency": "Bốc thăm / mở hộp / resell (order-draw, reveal, resell) là consumer của version.",
+      "kb_refs": [
+        "box-versioning#KB-011"
+      ]
+    },
+    {
+      "dependency": "Shopify collection: version bung collection thành variant; version chỉ đổi cài đặt không hỏi lại Shopify.",
+      "kb_refs": [
+        "box-versioning#KB-022",
+        "box-versioning#KB-031"
+      ]
+    }
+  ],
+  "risks": [
+    {
+      "risk": "Hai mốc gắn version (mua vs bốc thăm) có thể cho ra version khác nhau nếu merchant sửa box ở giữa — ảnh hưởng quà và buyback (never-supersede prize-draw, refund).",
+      "kb_refs": [
+        "box-versioning#KB-004",
+        "box-versioning#KB-005",
+        "box-versioning#KB-034"
+      ]
+    },
+    {
+      "risk": "Version chỉ đổi cài đặt dùng lại danh sách variant đã bung — có thể lệch với collection hiện tại trên Shopify.",
+      "kb_refs": [
+        "box-versioning#KB-030",
+        "box-versioning#KB-031"
+      ]
+    }
+  ],
+  "freshness": {
+    "observed_at": null
+  },
+  "unknown_areas": [
+    {
+      "question": "Lưu box mà không có thay đổi nào thì có tạo version mới không (một bên nói version tạo mỗi lần lưu, bên kia nói chỉ khi ít nhất một thuộc tính cấu hình thay đổi)?",
+      "why_it_matters": "Conflict giữa hai tài liệu; ảnh hưởng số version và việc đơn mới gắn version nào.",
+      "kb_refs": [
+        "box-versioning#KB-001",
+        "box-versioning#KB-002",
+        "box-versioning#KB-003"
+      ],
+      "oq_id": "OQ-box-002"
+    },
+    {
+      "question": "Đơn được gắn với box version tại thời điểm mua (thanh toán) hay tại thời điểm server bốc thăm?",
+      "why_it_matters": "Conflict giữa các tài liệu; nếu bốc thăm trễ so với thanh toán và merchant sửa box ở giữa, hai mốc cho ra version khác nhau.",
+      "kb_refs": [
+        "box-versioning#KB-004",
+        "box-versioning#KB-005"
+      ],
+      "oq_id": "OQ-box-003"
+    },
+    {
+      "question": "Đơn thanh toán trong khoảng hẹp ngay trước lúc pause sales được gắn với version nào và có hệ quả gì (sai item, sai điều khoản buyback, lỗi)?",
+      "why_it_matters": "Tài liệu nêu edge case nhưng không có hành vi kỳ vọng; không có oracle cho race condition này.",
+      "kb_refs": [
+        "box-versioning#KB-034"
+      ],
+      "oq_id": "OQ-box-003"
+    },
+    {
+      "question": "Danh sách đầy đủ các cài đặt tạo version mới là gì (tài liệu liệt kê kèm '...')?",
+      "why_it_matters": "Không kiểm hết được các setting tạo version khi danh sách mở.",
+      "kb_refs": [
+        "box-versioning#KB-002",
+        "box-versioning#KB-027"
+      ],
+      "oq_id": "OQ-box-002"
+    },
+    {
+      "question": "Merchant có xem được lịch sử version, số version hoặc rollback trên UI không?",
+      "why_it_matters": "Xác định có kiểm version trực tiếp từ portal được không hay chỉ gián tiếp qua hành vi đơn.",
+      "kb_refs": [
+        "box-versioning#KB-021"
+      ],
+      "oq_id": "OQ-box-028"
+    },
+    {
+      "question": "Khi collection trên Shopify đổi variant sau khi version đã bung, version mới chỉ đổi cài đặt có cập nhật danh sách variant không?",
+      "why_it_matters": "Version mới dùng lại danh sách đã bung và không hỏi lại Shopify; có thể lệch với collection hiện tại.",
+      "kb_refs": [
+        "box-versioning#KB-022",
+        "box-versioning#KB-030",
+        "box-versioning#KB-031"
+      ],
+      "oq_id": "OQ-box-029"
+    },
+    {
+      "question": "'Trạng thái đồng bộ' (thay đổi không tạo version) cụ thể là trạng thái gì?",
+      "why_it_matters": "Cần biết thao tác nào thuộc nhóm không tạo version để test.",
+      "kb_refs": [
+        "box-versioning#KB-029"
+      ],
+      "oq_id": "OQ-box-030"
+    },
+    {
+      "question": "Việc dựng lại tồn kho khi tạo version ảnh hưởng thế nào tới pool/tồn kho đã trừ của đơn đang mở dở?",
+      "why_it_matters": "Side effect trên inventory khi sửa box còn đơn chưa mở; KB không có item nào trả lời.",
+      "kb_refs": [],
+      "oq_id": "OQ-box-031"
+    },
+    {
+      "question": "Edit (sửa JSON settings/bundles) ở admin panel có tạo box version mới không, và JSON không hợp lệ bị chặn thế nào?",
+      "why_it_matters": "Configure Tier Settings được nêu rõ là tạo version, còn Edit chỉ nói ảnh hưởng đơn mua sau.",
+      "kb_refs": [
+        "box-versioning#KB-041",
+        "box-versioning#KB-042"
+      ],
+      "oq_id": "OQ-box-032"
+    }
+  ],
+  "last_updated": {
+    "date": "2026-10-16",
+    "ccr_ref": "bootstrap"
+  },
+  "coverage_matrix": [
+    {
+      "feature_id": "FEAT-03-box-versioning",
+      "layer": "portal",
+      "role": "merchant",
+      "state": "documented",
+      "environment": "documented",
+      "covered": true
+    },
+    {
+      "feature_id": "FEAT-03-box-versioning",
+      "layer": "code",
+      "role": "system",
+      "state": "documented",
+      "environment": "documented",
+      "covered": true,
+      "note": "Thời điểm gắn version đang conflict."
+    },
+    {
+      "feature_id": "FEAT-03-box-versioning",
+      "layer": "storefront",
+      "role": "customer",
+      "state": "documented",
+      "environment": "documented",
+      "covered": true,
+      "note": "Mở hộp/resell theo version; số tiền resell chỉ có ví dụ."
+    },
+    {
+      "feature_id": "FEAT-03-box-versioning",
+      "layer": "portal",
+      "role": "admin-staff",
+      "state": "documented",
+      "environment": "documented",
+      "covered": true,
+      "note": "Edit / Configure Tier Settings; Edit có tạo version không chưa rõ."
+    },
+    {
+      "feature_id": "FEAT-03-box-versioning",
+      "layer": "db",
+      "role": "system",
+      "state": "documented",
+      "environment": "documented",
+      "covered": false,
+      "note": "Chỉ có thực thể mức nghiệp vụ (current_version_id), không có bảng/cột thật."
+    },
+    {
+      "feature_id": "FEAT-03-box-versioning",
+      "layer": "api",
+      "role": "merchant",
+      "state": "documented",
+      "environment": "documented",
+      "covered": false
+    }
+  ],
+  "profile_conflicts": [
+    {
+      "conflict_group": "CONF-box-01",
+      "topic": "Version tạo mỗi lần lưu box vs chỉ khi lưu có thay đổi cấu hình",
+      "side_a_kb_refs": [
+        "box-versioning#KB-001"
+      ],
+      "side_b_kb_refs": [
+        "box-versioning#KB-002"
+      ],
+      "related_kb_refs": [
+        "box-versioning#KB-003",
+        "box-versioning#KB-043"
+      ],
+      "resolution": null,
+      "note": "Giữ song song từ KB; KB-043 (CONFIRMED, 'mọi chỉnh sửa đổi version') không phân xử trường hợp lưu không đổi gì."
+    },
+    {
+      "conflict_group": "CONF-box-02",
+      "topic": "Đơn gắn version tại thời điểm mua vs tại thời điểm bốc thăm",
+      "side_a_kb_refs": [
+        "box-versioning#KB-004"
+      ],
+      "side_b_kb_refs": [
+        "box-versioning#KB-005"
+      ],
+      "related_kb_refs": [
+        "box-versioning#KB-010",
+        "box-versioning#KB-034"
+      ],
+      "resolution": null,
+      "note": "Giữ song song từ KB; KB-010 (opening request nhớ version 'đã mua') không xác định mốc thời gian."
+    }
+  ],
+  "profile_relationships": [
+    {
+      "from_feature_key": "box-versioning",
+      "to_feature_key": "box-create-and-publish",
+      "relation": "edit_requires_draft",
+      "note": "Sửa box (tạo version) chỉ khi box ở Draft; publish/unpublish không tạo version.",
+      "kb_refs": [
+        "box-create-and-publish#KB-013",
+        "box-versioning#KB-029"
+      ]
+    },
+    {
+      "from_feature_key": "box-versioning",
+      "to_feature_key": "box-type-and-prize-setup",
+      "relation": "snapshot_of_configuration",
+      "note": "Version chụp lại loại box, item, chance, category đã cấu hình.",
+      "kb_refs": [
+        "box-versioning#KB-024",
+        "box-versioning#KB-025",
+        "box-versioning#KB-028"
+      ]
+    },
+    {
+      "from_feature_key": "box-versioning",
+      "to_feature_key": "pool-refill",
+      "relation": "refill_settings_create_version",
+      "note": "Đổi refill (bật/tắt, mode) tạo version mới.",
+      "kb_refs": [
+        "box-versioning#KB-026"
+      ]
+    },
+    {
+      "from_feature_key": "box-versioning",
+      "to_feature_key": "picking-modes",
+      "relation": "picking_mode_creates_version",
+      "note": "Đổi picking mode / tier mode tạo version mới.",
+      "kb_refs": [
+        "box-versioning#KB-026"
+      ]
+    }
+  ]
+}

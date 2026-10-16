@@ -12,6 +12,7 @@ Bảng sinh tự động từ cấu hình product (`node scripts/sync-appendix.m
 | `duos` | Duos B2B | `DUOS` | tài liệu (doc-first) | `documented` | có |
 | `imagenhub` | ImagenHub | `IGH` | tài liệu (doc-first) | `documented` | có |
 | `mailtro` | Mailtro | `MTRO` | tài liệu (doc-first) | `documented` | có |
+| `mysbox` | Mysbox | `MYS` | tài liệu (doc-first) | `documented` | có |
 | `qik-volume` | Qikify Volume Discounts | `QVL` | tài liệu (doc-first) | `documented` | có |
 | `qikfiliate` | Qikfiliate | `QAF` | tài liệu (doc-first) | `documented` | có |
 | `teeinblue` | Teeinblue | `TIB` | explore (portal-explorer, storefront-explorer, api-explorer, db-explorer, code-config-explorer) | `staging` | không — CCR mâu thuẫn canon luôn giữ cả hai phía |
