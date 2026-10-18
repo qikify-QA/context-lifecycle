@@ -1,0 +1,163 @@
+{
+  "mode": "REFRESH",
+  "product_key": "mysbox",
+  "mode_note": "REFRESH theo yêu cầu trực tiếp của operator (DirectOperatorRequest, không Proposal): explore staging để trả lời open question đang mở của 3 object merchant-app, automation-growth, integrations. Base = canonical hiện tại (v1). Mục tiêu = OQ bucket a trong input/refresh-targets.json (45 OQ; 190 bucket b giữ nguyên). Ghi OBSERVED_CURRENT; KHÔNG nâng CONFIRMED_EXPECTED, KHÔNG tự đóng conflict, KHÔNG supersede. NEEDS_CONFIRMATION/CONFLICT chỉ nhận staging_observation. Không spawn scope-planner. Run CTX-20261017-01/-02 chạy trước trên cùng store — raw/ của chúng chỉ để biết state, không là evidence của run này.",
+  "context": {
+    "environment": "staging",
+    "role": "merchant"
+  },
+  "object_target": {
+    "object_key": "merchant-app",
+    "object_type": "Merchant app embedded (Dashboard, General Settings, Analytics center, setup guide, App extension status)",
+    "object_id_or_url": "Portal env MYS_SHOPIFY_ADMIN_APP_URL → Dashboard, General Settings, Analytics",
+    "initial_state": "Shop gói Free; Auto-unbox tắt; Shopify Flow tắt; Koin chưa cấu hình. Box QA- của run trước ở Draft."
+  },
+  "additional_object_targets": [
+    {
+      "object_key": "automation-growth",
+      "object_type": "Recent pulls feed, share unboxing, Shopify Flow (chỉ đọc), email",
+      "object_id_or_url": "Portal Style Settings → Recent pulls/Share; General Settings → Shopify Flow (KHÔNG bật); storefront product page block 'Mysbox recent pulls'",
+      "initial_state": "Flow OFF"
+    },
+    {
+      "object_key": "integrations",
+      "object_type": "Request authentication + webhook ingestion (chỉ hệ quả quan sát được)",
+      "object_id_or_url": "Network capture portal/storefront; đơn test của run",
+      "initial_state": "—"
+    }
+  ],
+  "feature_scope": {
+    "_note": "REFRESH: dùng lại feature_key của base. OQ mục tiêu ở input/refresh-targets.json (bucket=a). Bucket b KHÔNG đụng.",
+    "merchant-app": [
+      "dashboard-and-analytics",
+      "general-settings",
+      "install-and-onboarding (chỉ setup guide/extension status quan sát được)",
+      "account-kill-switch / shop-connection-and-reauth: không"
+    ],
+    "automation-growth": [
+      "recent-pulls-feed",
+      "share-unboxing (chỉ setting + translations)",
+      "shopify-flow-triggers (chỉ trạng thái công tắc, không bật)",
+      "system-emails-and-notifications: không"
+    ],
+    "integrations": [
+      "request-authentication (chỉ quan sát tên tham số/header, KHÔNG replay/sửa token)",
+      "webhook-ingestion (chỉ hệ quả: đơn xuất hiện sau orders/paid)"
+    ]
+  },
+  "test_design": {
+    "_note": "Tên product/box tiền tố QA-CTX0117-B5/B6.",
+    "boxes_to_create": {
+      "B5": "Single, digital, tracked, 2 prize item, có ít nhất 1 món chance ≥50% (ưu tiên prize 'Inventory not tracked'), không buyback.",
+      "B6": "Single, Sealed box (physical), 1 prize — chỉ để xem block 'Mysbox recent pulls' trên trang product box physical (automation-growth-056); không đặt đơn."
+    },
+    "orders": {
+      "O1": "B5 × 1 qua Bogus. Nếu Style Settings → Recent pulls có tuỳ chọn 'publish test orders' thì ghi giá trị cũ, bật tạm trước đơn, tắt lại sau (settings_revert) — nếu bị permission classifier từ chối thì bỏ qua. Ghi Box sales limit trước/sau, thời gian từ paid tới khi đơn có trong Manage orders + thank-you có link Unbox (integrations-025/026/030), tên tham số xác thực request trang khách (integrations-009), unbox trên trang reveal rồi đọc window.mysboxStore.mysboxRecentPulls trên product page (automation-growth-005/028/057), translations share-unboxing (automation-growth-074)."
+    },
+    "settings_validation": "General Settings: Auto-unbox after / Trigger before / Buyback limit time — thử 0, -1, 1.5, trống, 99999, Trigger before ≥ Auto-unbox after; ghi lỗi inline/thuộc tính min/max/step và request lưu (nếu Save) rồi Discard/khôi phục đúng giá trị cũ. Lưu ý: ở CTX-20261017-01 việc tick 'Enable auto-unbox' bị permission classifier từ chối — nếu bị từ chối lần nữa: ghi skipped, không thử lại, không lách.",
+    "delete_dialog": "merchant-app-022/073: trên box B5 sau khi Deactivate (Draft), bấm Delete chỉ để ghi nguyên văn hộp xác nhận rồi bấm Cancel — KHÔNG xác nhận xoá."
+  },
+  "surfaces": {
+    "portal": {
+      "enabled": true,
+      "auth": "operator_session_handover (Shopify admin đã đăng nhập sẵn trong browser Playwright dùng chung, profile ~/.pw-mcp-profile)"
+    },
+    "storefront": {
+      "enabled": true,
+      "entry_url": "https://<MYS_STORE_DOMAIN>/ (qua /password) — trang product của box QA-CTX0117-B5/B6",
+      "buyer_state": "guest + magic link của đơn test do run tạo. KHÔNG có session logged_in_customer — bỏ qua buyer state đó và ghi unknowns.",
+      "buyer_facing_features": [
+        "automation-growth/recent-pulls-feed: block 'Mysbox recent pulls' + window.mysboxStore.mysboxRecentPulls trước/sau đơn test (field nào, có PII không, test order có lên feed không)",
+        "automation-growth/share-unboxing: translations share-unboxing trên trang khách (share cần customer đăng nhập — không có)",
+        "integrations/request-authentication: tên tham số/header xác thực của request trang khách và thank-you block (không ghi giá trị, không replay)",
+        "integrations/webhook-ingestion: độ trễ paid → đơn có trong Manage orders/thank-you",
+        "merchant-app/general-settings: 'Buy box by store credit' với guest khi Store credit app chưa cấu hình (merchant-app-082)"
+      ]
+    },
+    "api": {
+      "enabled": true,
+      "variant": "runtime-trace",
+      "base_env": "MYS_API_BASE (== environments.staging.expected_api_base, orchestrator đã kiểm env khớp 2026-10-17)",
+      "host_note": "Host staging-api.mysbox.io đã thấy ở run trước, khác expected_api_base (OQ-reveal-050 đang chờ operator). Giữ xử lý như CTX-20261016-02: api-explorer tag host_not_in_expected_api_base, normalizer ghi OBSERVED_CURRENT/LOW, không oracle. Không sửa config."
+    },
+    "db": {
+      "enabled": false,
+      "reason": "explore.surfaces.db.enabled=false"
+    },
+    "code": {
+      "enabled": false,
+      "reason": "explore.surfaces.code.enabled=false"
+    },
+    "admin_panel": {
+      "enabled": false,
+      "reason": "NOT_COVERED theo config"
+    }
+  },
+  "network_capture": {
+    "enabled": true,
+    "capture_request_body": true,
+    "capture_response_body": true,
+    "redact_headers": [
+      "authorization",
+      "cookie",
+      "set-cookie",
+      "x-api-key",
+      "x-shopify-access-token",
+      "x-csrf-token",
+      "customer-token"
+    ],
+    "redact_also": [
+      "?parameters= của magic link (base64 JSON chứa token) — toàn bộ giá trị trong URL, screenshot thanh địa chỉ, network",
+      "Shopify session token (JWT)",
+      "id_token/hmac/signature trong query app proxy",
+      "email/tên/địa chỉ buyer",
+      "tên staff/store owner trong ảnh Shopify admin"
+    ]
+  },
+  "exploration_policy": {
+    "mutation_policy": "SAFE_REVERSIBLE_ONLY",
+    "extra_authorization": {
+      "checkout_boundary": "bogus_gateway_test_order",
+      "rule": "playbook §5: test order CHỈ qua Shopify Bogus Gateway trên development store đã xác minh; buyer email = MYS_TEST_BUYER_EMAIL, tên/địa chỉ 'QA Test'; chỉ mua box tiền tố QA-.",
+      "max_test_orders_this_run": 1,
+      "max_boxes_per_order": 3,
+      "note": "'Preview by test order' tạo đơn test → TÍNH vào giới hạn 3 đơn."
+    },
+    "allowed_reversible": [
+      "tạo product/variant + box QA-CTX0117-B5/B6 (Save lần đầu tự publish Active)",
+      "Deactivate box QA-CTX0117-B5/B6 do run tạo; bấm Delete rồi Cancel (không xoá)",
+      "sửa General Settings / Style Settings rồi Discard hoặc khôi phục đúng giá trị cũ (ghi giá trị trước); thử giá trị ngoài biên",
+      "chọn khoảng ngày trên Analytics center của Dashboard (chỉ đọc)",
+      "bấm tắt thẻ Setup guide nếu đang hiện (ghi request/storage) — chỉ khi có cách mở lại; không thì chỉ quan sát",
+      "Unbox / Multi-unbox trên đơn test của chính run"
+    ],
+    "not_allowed_this_run": [
+      "replay/sửa/bỏ token, Authorization, order_id, customer-token để dò xác thực (OQ-integrations-004/005/022 chờ operator duyệt)",
+      "bật 'Enable Mysbox triggers in Shopify Flow', lưu Koin key, đổi theme/embed/block",
+      "Pricing: không bấm Choose this plan/Upgrade/Downgrade/Cancel",
+      "xoá box (chỉ Cancel ở hộp xác nhận)"
+    ],
+    "do_not_touch": [
+      "box 1022–1028 (box của operator và run trước) — chỉ đọc",
+      "đơn #1006 trở đi không phải của run — chỉ đọc",
+      "mọi box/product không phải QA-CTX0117-B5/B6"
+    ],
+    "forbidden_actions": [
+      "delete_non_qa_data",
+      "charge",
+      "plan_change",
+      "real_payment",
+      "uninstall",
+      "theme_change",
+      "save_koin_key",
+      "enable_shopify_flow",
+      "admin_panel_write",
+      "edit_shopify_order",
+      "send_notification_to_real_customer"
+    ],
+    "cleanup_required": true,
+    "cleanup_plan": "Cuối run (portal pass 2): Deactivate B5/B6; product QA-CTX0117-B5/B6 giữ, ghi retention; settings → khôi phục/Discard; đơn test: retention, không archive; cart → xoá."
+  },
+  "execution_order": "TUẦN TỰ (một browser dùng chung): portal pass 1 (account guard; Dashboard/Analytics center/extension status/setup guide; General Settings validation rồi khôi phục; Style Settings Recent pulls/Share; tạo B5/B6; bật tạm 'publish test orders' nếu có) → storefront pass (account guard; product B5/B6 recent pulls; O1; trang khách; translations; Buy box by store credit guest) → portal pass 2 (Manage orders, Box sales limit sau, tắt 'publish test orders' về giá trị cũ, Delete→Cancel trên B5 Draft, cleanup) → api-explorer runtime-trace.",
+  "session_rule": "Không tự login. Account guard (playbook §2: store handle trong URL admin, host storefront == MYS_STORE_DOMAIN, development store) là bước ĐẦU TIÊN của mỗi pass. Session hết hạn / bị đẩy ra login / OAuth re-authorize / sai store → DỪNG ngay, trả BLOCKED kèm lý do để operator bàn giao lại."
+}

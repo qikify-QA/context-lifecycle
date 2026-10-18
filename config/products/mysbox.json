@@ -11,7 +11,7 @@
     "mysterybox"
   ],
   "status": "ACTIVE",
-  "status_note": "Tạo config 2026-10-16: project 'mysbox' (key MYS) có sẵn trên Testlane (list_projects, isMember=true) nhưng chưa có config/products/mysbox.json và chưa có knowledge/products/mysbox/. Đặt ACTIVE ngay vì qa_hub.project_id đã xác minh thật và new-run.mjs chỉ nhận product ACTIVE (cùng đường với duos/mailtro). Lần bootstrap đầu tiên, chưa có published_context_version.",
+  "status_note": "Tạo config 2026-10-16: project 'mysbox' (key MYS) có sẵn trên Testlane (list_projects, isMember=true) nhưng chưa có config/products/mysbox.json và chưa có knowledge/products/mysbox/. Đặt ACTIVE ngay vì qa_hub.project_id đã xác minh thật và new-run.mjs chỉ nhận product ACTIVE (cùng đường với duos/mailtro). Lần bootstrap đầu tiên, chưa có published_context_version. 2026-10-16 (sau publish v1): bật explore (portal embedded + storefront/reveal + network capture) để REFRESH/RECONCILE KB doc-first trên staging; admin panel, DB, code chưa bật.",
   "product_note": "Mysbox là Shopify app bán mystery box (blind box, gacha). Merchant biến một variant Shopify thành 'box', khai phần thưởng + xác suất rồi publish; khách mua như hàng thường, phần thưởng được BỐC THĂM khi webhook orders/paid về server (không phải lúc bấm mở). Hai kiểu box: Digital ('Instantly opening box', reveal trên web/app proxy /apps/mysbox/) và Physical ('Sealed box', ghi metafield đơn). Box type Single/Bundle/Group-Tier; box version bất biến (đơn giữ cấu hình lúc mua); inventory tracked/pool, picking mode, pool refill. Sau khi mọi box đã mở và hết cửa sổ resell, quà được thêm vào chính đơn Shopify dưới dạng dòng giá 0. Resell (box mode / items mode) hoàn tiền hoặc store credit Koin; ticket + cart Function giảm 100%. Billing: plan + capacity miễn phí theo chu kỳ 30 ngày, usage fee cho box vượt hạn mức gộp 1 Shopify usage charge/ngày, promote code (thêm hạn mức) ≠ billing discount (giảm giá/trial). Surface: merchant app embedded (onboarding, dashboard/analytics, settings), storefront widget/theme block + trang reveal, admin panel nội bộ (shops, orders retry, boxes, plans, banners, jobs), Shopify Flow, webhook, tích hợp Koin, Qikfiliate, Mailgun/Brevo, BigQuery. Vocabulary: 'User' trong code = SHOP; khách cuối = Customer; draw/pull ≠ unbox/reveal; redeem (khách tự mở) ≠ unbox (merchant/job/Flow mở, bỏ qua cửa sổ resell); status đơn QUEUED/COMPLETED/FAILED; test order mặc định bị loại khỏi hạn mức/billing/analytics.",
   "qa_hub": {
     "project_id": "proj-f972a2de-46df-441f-bf8f-34afb7bc746d",
@@ -21,15 +21,24 @@
     "project_id_note": "Xác minh 2026-10-16 bằng list_projects trên MCP testlane (isMember=true). Knowledge (search_knowledge) đang rỗng; toàn bộ nguồn nằm ở project context."
   },
   "modes": {
-    "explore_enabled": false,
+    "explore_enabled": true,
     "default_mode_bootstrap": "DOC_BOOTSTRAP",
     "default_mode_update": "CCR_INGEST",
     "allowed_modes": [
       "DOC_BOOTSTRAP",
       "CCR_INGEST",
-      "REFRESH"
+      "REFRESH",
+      "RECONCILE",
+      "INCREMENTAL_UPDATE",
+      "BROAD_BOOTSTRAP",
+      "ZERO_DOC_BOOTSTRAP"
     ],
-    "allowed_explorers": []
+    "allowed_explorers": [
+      "portal-explorer",
+      "storefront-explorer",
+      "api-explorer"
+    ],
+    "_note": "Đã có base v1 từ DOC_BOOTSTRAP (CTX-20261016-01). Explore dùng chủ yếu cho REFRESH (xác minh CONFIRMED_EXPECTED chỉ dựa trên dev doc, nhất là 382 check P1 NEEDS_CONFIRMATION) và RECONCILE (59 conflict_group mở). DOC_BOOTSTRAP/CCR_INGEST giữ nguyên."
   },
   "doc_input": {
     "enabled": true,
@@ -45,35 +54,62 @@
     "allow_supersede_from_changelog": true
   },
   "environments": {
-    "default": "documented",
+    "default": "staging",
     "allowed": [
+      "staging",
       "documented"
     ],
     "forbidden": [
-      "production",
-      "staging"
+      "production"
     ],
+    "staging": {
+      "api_base_env": "MYS_API_BASE",
+      "openapi_base_env": null,
+      "portal_base_env": "MYS_SHOPIFY_ADMIN_APP_URL",
+      "expected_api_base": "https://staging-embedded.mysbox.io",
+      "_note": "expected_api_base do operator cung cấp 2026-10-16 (host embedded app staging). Run explore đầu tiên phải xác nhận qua network capture rằng API của portal/app proxy thực sự gọi host này; khác → ghi unknowns và báo operator, không tự sửa."
+    },
     "documented": {
       "api_base_env": null,
       "openapi_base_env": null,
       "portal_base_env": null,
-      "expected_api_base": null
+      "expected_api_base": null,
+      "_note": "Giữ cho DOC_BOOTSTRAP (scope.environment phải là documented)."
     }
   },
   "credentials": {
-    "env_prefix": null,
-    "required_env": [],
+    "env_prefix": "MYS_",
+    "required_env": [
+      "MYS_STORE_HANDLE",
+      "MYS_STORE_DOMAIN",
+      "MYS_SHOPIFY_ADMIN_APP_URL",
+      "MYS_STOREFRONT_PASSWORD",
+      "MYS_API_BASE",
+      "MYS_TEST_BUYER_EMAIL"
+    ],
     "secondary_account_env": [],
-    "negative_auth_env": []
+    "negative_auth_env": [],
+    "_note": "Không có email/password Shopify admin trong .env — session do operator bàn giao. MYS_TEST_BUYER_EMAIL = hộp thư QA nhận email đơn test/magic link."
   },
   "defaults": {
     "object_key_fallback": null,
-    "role": null,
-    "mutation_policy": "NO_MUTATION",
+    "role": "merchant",
+    "mutation_policy": "SAFE_REVERSIBLE_ONLY",
     "forbidden_actions": [
-      "*"
+      "delete_non_qa_data",
+      "charge",
+      "plan_change",
+      "real_payment",
+      "uninstall",
+      "theme_change",
+      "save_koin_key",
+      "enable_shopify_flow",
+      "admin_panel_write",
+      "edit_shopify_order",
+      "send_notification_to_real_customer"
     ],
-    "cleanup_required": false
+    "cleanup_required": true,
+    "_note": "Ngoài SAFE_REVERSIBLE_ONLY, playbook §5 cho phép đúng một loại mutation không đảo ngược: test order qua Bogus Gateway trên development store (cần cho draw/reveal/resell). Mọi thứ khác trong forbidden_actions là stop condition."
   },
   "risk_tier": "UNKNOWN",
   "supersede_policy": {
@@ -103,5 +139,54 @@
   "publish": {
     "consumer_label": "Mysbox QA context",
     "stale_after_days": 90
+  },
+  "explore": {
+    "playbook": "config/products/mysbox/explore-playbook.md",
+    "surfaces": {
+      "portal": {
+        "enabled": true,
+        "base_env": "MYS_SHOPIFY_ADMIN_APP_URL",
+        "auth": "operator_session_handover",
+        "session": "shopify_admin_cookie + app session token (iframe)",
+        "embedded": true,
+        "note": "Merchant app chạy trong iframe Shopify admin. Operator tự login Shopify admin (2FA) trong browser Playwright rồi bàn giao; explorer không tự login."
+      },
+      "storefront": {
+        "enabled": true,
+        "base_env": "MYS_STORE_DOMAIN",
+        "password_env": "MYS_STOREFRONT_PASSWORD",
+        "checkout_boundary": "bogus_gateway_test_order",
+        "buyer_states": [
+          "guest",
+          "magic_link",
+          "logged_in_customer"
+        ],
+        "note": "Được phép hoàn tất checkout CHỈ bằng Shopify Bogus Gateway trên development store, theo điều kiện ở playbook §5. logged_in_customer cần operator bàn giao session customer account."
+      },
+      "api": {
+        "enabled": true,
+        "base_env": "MYS_API_BASE",
+        "spec_env": null,
+        "note": "Không có OpenAPI; api-explorer chỉ chạy runtime-trace trên network capture của portal/storefront."
+      },
+      "db": {
+        "enabled": false,
+        "note": "Chưa có read-only DB access staging."
+      },
+      "code": {
+        "enabled": false,
+        "note": "Chưa cấp repo/revision."
+      },
+      "admin_panel": {
+        "enabled": false,
+        "note": "Filament /admin chỉ Sign in with Slack; chưa bật. Khi bật: operator bàn giao session, explorer chỉ đọc."
+      }
+    },
+    "account_guard": {
+      "verify": "Shopify admin URL chứa /store/<MYS_STORE_HANDLE>/ + storefront host == MYS_STORE_DOMAIN + store là development store",
+      "expected_store_handle_env": "MYS_STORE_HANDLE",
+      "expected_store_domain_env": "MYS_STORE_DOMAIN",
+      "note": "Xác minh là bước đầu tiên và sau mỗi lần operator bàn giao session lại. Sai store hoặc store không phải development store là stop condition. Chi tiết ở playbook §2."
+    }
   }
 }

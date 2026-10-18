@@ -1,0 +1,2095 @@
+{
+  "feature_id": "FEAT-02-box-create-and-publish",
+  "feature_key": "box-create-and-publish",
+  "object_key": "box",
+  "name": "Tạo box, Draft/Active, publish, unpublish, xoá",
+  "user_goal": "Merchant tạo box từ một variant Shopify, điền Box settings, lưu (gặp đúng lỗi validation khi cấu hình sai), rồi publish/unpublish/xoá box để khách mua được hay không.",
+  "user_goal_kb_refs": [
+    "box-create-and-publish#KB-001",
+    "box-create-and-publish#KB-002",
+    "box-create-and-publish#KB-003",
+    "box-create-and-publish#KB-020",
+    "box-create-and-publish#KB-057",
+    "box-create-and-publish#KB-058",
+    "box-create-and-publish#KB-012"
+  ],
+  "stable_since_version": "1",
+  "priority": "P2",
+  "staging_only": false,
+  "actors": [
+    {
+      "role": "merchant",
+      "permission_observed": "Tạo, lưu, activate/publish, deactivate/unpublish, sửa (chỉ khi Draft), preview, xoá (chỉ khi Draft) box trong app; tài liệu không phân biệt chủ shop hay nhân viên shop.",
+      "kb_refs": [
+        "box-create-and-publish#KB-001",
+        "box-create-and-publish#KB-003",
+        "box-create-and-publish#KB-006",
+        "box-create-and-publish#KB-013",
+        "box-create-and-publish#KB-059",
+        "box-create-and-publish#KB-074",
+        "_product-level#KB-PL-002"
+      ]
+    },
+    {
+      "role": "customer",
+      "permission_observed": "Chỉ thấy widget / mua được box khi box Active, có ngày publish không ở tương lai, có bundles và sync status completed.",
+      "kb_refs": [
+        "box-create-and-publish#KB-012",
+        "box-create-and-publish#KB-075",
+        "box-create-and-publish#KB-076",
+        "box-create-and-publish#KB-077",
+        "_product-level#KB-PL-004"
+      ]
+    },
+    {
+      "role": "system",
+      "permission_observed": "Ghi metafield lên variant khi publish, xoá metafield khi xoá box, đồng bộ inventory/collection khi lưu box Group; có thể tự unpublish box.",
+      "kb_refs": [
+        "box-create-and-publish#KB-009",
+        "box-create-and-publish#KB-052",
+        "box-create-and-publish#KB-048",
+        "box-create-and-publish#KB-050",
+        "box-create-and-publish#KB-073"
+      ]
+    },
+    {
+      "role": "merchant (staging, quan sát)",
+      "permission_observed": "OBSERVED_CURRENT staging/gói Free, một tài khoản merchant: tạo box Single/Bundle, Save lần đầu tự publish, Deactivate, sửa khi Draft, publish lại bằng combobox Status; xoá box và Preview không thử.",
+      "basis": "OBSERVED_CURRENT",
+      "kb_refs": [
+        "box-create-and-publish#KB-081",
+        "box-create-and-publish#KB-082",
+        "box-create-and-publish#KB-083",
+        "box-create-and-publish#KB-084"
+      ],
+      "refresh_note": "Quan sát staging 2026-10-17: tạo thêm Single digital, Bundle digital, Single \"Sealed box\" (3/3 tự publish) và Deactivate 3/3; thấy tooltip Actions Deactivate/Edit/Analytics/Delete (Active) và Activate/Edit (Draft) nhưng không bấm.",
+      "refresh_kb_refs": [
+        "box-create-and-publish#KB-096",
+        "box-create-and-publish#KB-097",
+        "box-create-and-publish#KB-098"
+      ]
+    },
+    {
+      "role": "guest buyer (staging, quan sát)",
+      "permission_observed": "OBSERVED_CURRENT staging: thấy widget \"Box items\"/\"Prize #n\" và mua được box Active qua checkout (2/2 box).",
+      "basis": "OBSERVED_CURRENT",
+      "kb_refs": [
+        "box-create-and-publish#KB-091"
+      ],
+      "refresh_note": "Quan sát staging 2026-10-17: thêm 3/3 box (B1, B2, B3) — widget render từ bản nhúng Liquid.",
+      "refresh_kb_refs": [
+        "box-create-and-publish#KB-105"
+      ]
+    }
+  ],
+  "entry_points": [
+    {
+      "path": "App merchant → Dashboard → \"Create new box\"",
+      "precondition": "Không nêu trong KB.",
+      "kb_refs": [
+        "box-create-and-publish#KB-014"
+      ]
+    },
+    {
+      "path": "App merchant → \"Boxes\" → \"Set up new box\"",
+      "precondition": "Không nêu trong KB.",
+      "kb_refs": [
+        "box-create-and-publish#KB-015",
+        "box-create-and-publish#KB-005"
+      ]
+    },
+    {
+      "path": "Form box → \"Duplicate box\"",
+      "precondition": "Có box nguồn; điều kiện khác (loại box, trạng thái) không nêu.",
+      "kb_refs": [
+        "box-create-and-publish#KB-016"
+      ],
+      "refresh_note": "Quan sát staging 2026-10-17: hai pass cùng ngày ghi trái nhau về nút \"Duplicate box\" ở header form (CONF-box-12); không bấm.",
+      "refresh_kb_refs": [
+        "box-create-and-publish#KB-099",
+        "box-create-and-publish#KB-100"
+      ]
+    },
+    {
+      "path": "App merchant → Manage boxes (thẻ \"Single box\" / \"Bundle box\", danh sách box) → sửa / bật bán / xoá",
+      "precondition": "Sửa và xoá chỉ khi box ở Draft.",
+      "kb_refs": [
+        "box-create-and-publish#KB-069",
+        "box-create-and-publish#KB-070",
+        "box-create-and-publish#KB-071",
+        "box-create-and-publish#KB-003",
+        "box-create-and-publish#KB-006",
+        "box-create-and-publish#KB-013"
+      ]
+    },
+    {
+      "path": "Form tạo box mới /boxes/box-settings?type=single|bundles (quan sát staging)",
+      "precondition": "OBSERVED_CURRENT: form mở ở badge Draft, Status disabled, Save/Discard disabled khi chưa có thay đổi.",
+      "basis": "OBSERVED_CURRENT",
+      "kb_refs": [
+        "box-create-and-publish#KB-087"
+      ]
+    },
+    {
+      "path": "Thẻ \"Single box\"/\"Bundle box\" → \"Manage\" → danh sách → icon thứ hai ở Actions (tooltip \"Edit\") → /boxes/box-settings/<id> (quan sát staging)",
+      "precondition": "OBSERVED_CURRENT: bấm tên box không điều hướng.",
+      "basis": "OBSERVED_CURRENT",
+      "kb_refs": [
+        "box-create-and-publish#KB-090"
+      ]
+    },
+    {
+      "path": "Form box mới → \"create a new product\" → modal \"Add product\" của Shopify admin (quan sát staging)",
+      "precondition": "OBSERVED_CURRENT: modal ngoài iframe app.",
+      "basis": "OBSERVED_CURRENT",
+      "kb_refs": [
+        "box-create-and-publish#KB-088"
+      ]
+    },
+    {
+      "path": "Danh sách Single box (/boxes/single) → icon Actions theo trạng thái: \"Deactivate\"/\"Edit\"/\"Analytics\"/\"Delete\" (hàng Active), \"Activate\"/\"Edit\" (hàng Draft) (quan sát staging)",
+      "precondition": "OBSERVED_CURRENT, 1 mẫu: tooltip khi hover, không bấm; không có thao tác \"Duplicate\" ở danh sách.",
+      "basis": "OBSERVED_CURRENT",
+      "kb_refs": [
+        "box-create-and-publish#KB-098"
+      ]
+    }
+  ],
+  "capabilities": [
+    {
+      "name": "Khởi tạo box mới",
+      "description": "Merchant vào form tạo box từ Dashboard (\"Create new box\"), từ Boxes (\"Set up new box\") hoặc bằng \"Duplicate box\" (copy mọi cài đặt sang một box mới chưa lưu). Box mới tạo ở trạng thái Draft.",
+      "kb_refs": [
+        "box-create-and-publish#KB-001",
+        "box-create-and-publish#KB-005",
+        "box-create-and-publish#KB-007",
+        "box-create-and-publish#KB-014",
+        "box-create-and-publish#KB-015",
+        "box-create-and-publish#KB-016"
+      ],
+      "observed_kb_refs": [
+        "box-create-and-publish#KB-087",
+        "box-create-and-publish#KB-099",
+        "box-create-and-publish#KB-100"
+      ]
+    },
+    {
+      "name": "Liên kết box với variant sản phẩm mystery",
+      "description": "\"Link to mystery product\" là bắt buộc, chọn qua \"Select product to sell as mystery box\"; form hiện \"N boxes in stock\" hoặc \"Product is out of stock or deleted\". Một box liên kết đúng 1 variant, một variant chỉ thuộc một box (mỗi variant là một box độc lập). App không đổi giá/tên/ảnh/tồn kho của variant mystery và chỉ đọc tên, ảnh, giá của variant prize.",
+      "kb_refs": [
+        "box-create-and-publish#KB-004",
+        "box-create-and-publish#KB-017",
+        "box-create-and-publish#KB-018",
+        "box-create-and-publish#KB-019",
+        "box-create-and-publish#KB-020",
+        "box-create-and-publish#KB-021",
+        "box-create-and-publish#KB-051",
+        "box-create-and-publish#KB-053",
+        "_object-level.box#KB-004",
+        "_object-level.box#KB-005",
+        "_object-level.box#KB-006",
+        "_object-level.box#KB-007",
+        "_product-level#KB-PL-008"
+      ],
+      "observed_kb_refs": [
+        "box-create-and-publish#KB-088",
+        "box-create-and-publish#KB-089",
+        "box-create-and-publish#KB-106"
+      ]
+    },
+    {
+      "name": "Lưu box và nhận đúng lỗi validation",
+      "description": "Save kiểm tra sản phẩm mystery, set/nhóm rỗng, tổng quantity/percent, chance nhóm, pool so với tồn kho, variant đã thuộc box khác, tracked khớp \"Track quantity\" Shopify, các set bằng nhau, tài nguyên Shopify còn tồn tại; kết quả sau lưu là \"Box created!\", \"Box updated!\", \"Syncing inventory...\" hoặc \"Sync failed. Please contact support for assistance.\".",
+      "kb_refs": [
+        "box-create-and-publish#KB-029",
+        "box-create-and-publish#KB-030",
+        "box-create-and-publish#KB-031",
+        "box-create-and-publish#KB-032",
+        "box-create-and-publish#KB-033",
+        "box-create-and-publish#KB-034",
+        "box-create-and-publish#KB-035",
+        "box-create-and-publish#KB-036",
+        "box-create-and-publish#KB-037",
+        "box-create-and-publish#KB-038",
+        "box-create-and-publish#KB-039",
+        "box-create-and-publish#KB-040",
+        "box-create-and-publish#KB-041",
+        "box-create-and-publish#KB-042",
+        "box-create-and-publish#KB-043",
+        "box-create-and-publish#KB-044",
+        "box-create-and-publish#KB-045"
+      ],
+      "observed_kb_refs": [
+        "box-create-and-publish#KB-086",
+        "box-create-and-publish#KB-082",
+        "box-create-and-publish#KB-092",
+        "box-create-and-publish#KB-103"
+      ]
+    },
+    {
+      "name": "Publish / activate box để bán",
+      "description": "Box Draft chuyển Active khi Save lần đầu (Single/Bundle tự publish ngay; Group lưu, chờ \"Syncing inventory...\" rồi mới publish) hoặc khi bấm Activate. Publish chỉ thành công khi đồng bộ xong, Shopify nhận metafield, và box Group pool chưa cạn. \"Status\" bị khoá khi form còn thay đổi chưa lưu. Publish/Unpublish từ portal còn đi qua kiểm tra riêng của API.",
+      "kb_refs": [
+        "box-create-and-publish#KB-002",
+        "box-create-and-publish#KB-006",
+        "box-create-and-publish#KB-008",
+        "box-create-and-publish#KB-009",
+        "box-create-and-publish#KB-022",
+        "box-create-and-publish#KB-023",
+        "box-create-and-publish#KB-046",
+        "box-create-and-publish#KB-048",
+        "box-create-and-publish#KB-049",
+        "box-create-and-publish#KB-050",
+        "box-create-and-publish#KB-056",
+        "box-create-and-publish#KB-057",
+        "box-create-and-publish#KB-062",
+        "box-create-and-publish#KB-063",
+        "box-create-and-publish#KB-064",
+        "box-create-and-publish#KB-072",
+        "box-create-and-publish#KB-078",
+        "box-create-and-publish#KB-079",
+        "_object-level.box#KB-010",
+        "_object-level.box#KB-018"
+      ],
+      "observed_kb_refs": [
+        "box-create-and-publish#KB-081",
+        "box-create-and-publish#KB-083",
+        "box-create-and-publish#KB-093",
+        "box-create-and-publish#KB-096",
+        "box-create-and-publish#KB-104"
+      ]
+    },
+    {
+      "name": "Đưa box về Draft để sửa (deactivate / unpublish / pause sales)",
+      "description": "Box Active bị khoá sửa (banner \"The box is on sale and cannot be edited. Pause sales to make changes.\", route sửa trả \"not found\"). Muốn sửa phải deactivate/unpublish (\"Deactivate box\" hoặc toggle), sửa, lưu (và sync), rồi bật lại; Save khi sửa box Draft chỉ lưu, không tự publish.",
+      "kb_refs": [
+        "box-create-and-publish#KB-010",
+        "box-create-and-publish#KB-013",
+        "box-create-and-publish#KB-047",
+        "box-create-and-publish#KB-058",
+        "box-create-and-publish#KB-060",
+        "box-create-and-publish#KB-067",
+        "box-create-and-publish#KB-068",
+        "box-create-and-publish#KB-074",
+        "box-create-and-publish#KB-080"
+      ],
+      "observed_kb_refs": [
+        "box-create-and-publish#KB-084",
+        "box-create-and-publish#KB-085",
+        "box-create-and-publish#KB-094",
+        "box-create-and-publish#KB-082",
+        "box-create-and-publish#KB-097",
+        "box-create-and-publish#KB-101"
+      ]
+    },
+    {
+      "name": "Cập nhật lại dữ liệu Shopify vào box",
+      "description": "Bản sao dữ liệu Shopify trong Mysbox chỉ được cập nhật khi deactivate → lưu lại (hoặc \"Sync data\" với box Group, nút có khi box Draft) → activate; \"Sync data\" dùng khi product/collection ở Shopify thay đổi sau publish.",
+      "kb_refs": [
+        "box-create-and-publish#KB-027",
+        "box-create-and-publish#KB-028",
+        "box-create-and-publish#KB-054",
+        "box-create-and-publish#KB-055"
+      ]
+    },
+    {
+      "name": "Xem trước box bằng đơn test (Preview)",
+      "description": "\"Preview\" (\"Preview by test order\") tạo đơn test mang tag `mysbox-preview-order` rồi mở trang order status để xem animation; nút bị khoá khi box Draft hoặc chưa lưu.",
+      "kb_refs": [
+        "box-create-and-publish#KB-024",
+        "box-create-and-publish#KB-025",
+        "box-create-and-publish#KB-026"
+      ],
+      "observed_kb_refs": [
+        "box-create-and-publish#KB-087",
+        "box-create-and-publish#KB-102"
+      ]
+    },
+    {
+      "name": "Xoá box",
+      "description": "Chỉ xoá được box Draft (xác nhận \"Are you sure you want to delete this box?\"); xoá box Active bị chặn với thông báo yêu cầu deactivate trước. Xoá box xoá metafield của box trên variant và bỏ luôn tồn kho của box.",
+      "kb_refs": [
+        "box-create-and-publish#KB-003",
+        "box-create-and-publish#KB-052",
+        "box-create-and-publish#KB-059",
+        "box-create-and-publish#KB-065",
+        "box-create-and-publish#KB-066"
+      ],
+      "observed_kb_refs": [
+        "box-create-and-publish#KB-098"
+      ]
+    },
+    {
+      "name": "Box hiện / bán được trên storefront theo trạng thái",
+      "description": "Box Draft chưa bán dạng mystery và widget ẩn; box Active là đang bán. Widget chỉ hiện khi box có ngày publish không ở tương lai, có bundles và sync status completed; box bị tự unpublish thì ngày publish trống.",
+      "kb_refs": [
+        "box-create-and-publish#KB-011",
+        "box-create-and-publish#KB-012",
+        "box-create-and-publish#KB-061",
+        "box-create-and-publish#KB-073",
+        "box-create-and-publish#KB-075",
+        "box-create-and-publish#KB-076",
+        "box-create-and-publish#KB-077"
+      ],
+      "observed_kb_refs": [
+        "box-create-and-publish#KB-091",
+        "box-create-and-publish#KB-105",
+        "_object-level.box#KB-022"
+      ]
+    },
+    {
+      "name": "Tạo product mystery mới ngay từ form box (quan sát staging)",
+      "description": "OBSERVED_CURRENT staging: \"create a new product\" mở modal \"Add product\" của Shopify admin; sau khi lưu, form hiện product vừa tạo ở \"Link to mystery product\" kèm \"N boxes in stock\" (2/2).",
+      "basis": "OBSERVED_CURRENT",
+      "kb_refs": [
+        "box-create-and-publish#KB-088"
+      ],
+      "observed_kb_refs": [
+        "box-create-and-publish#KB-106"
+      ],
+      "refresh_note": "Quan sát staging 2026-10-17: thêm 3/3 (Single, Bundle, Single \"Sealed box\"); modal tick sẵn \"Inventory tracked\", Status \"Active\", Publishing \"All channels\"."
+    },
+    {
+      "name": "Publish bằng combobox Status trên sidebar (quan sát staging)",
+      "description": "OBSERVED_CURRENT staging, 1 mẫu: chọn \"Active\" ở combobox Status của box Draft đã lưu gọi ngay POST /api/boxes/{id}/publish, không cần Save.",
+      "basis": "OBSERVED_CURRENT",
+      "kb_refs": [
+        "box-create-and-publish#KB-083"
+      ],
+      "observed_kb_refs": [
+        "box-create-and-publish#KB-097"
+      ],
+      "refresh_note": "Quan sát staging 2026-10-17: form Draft sau Deactivate không có nút \"Activate\" riêng, chỉ combobox Status; Activate thủ công không làm."
+    },
+    {
+      "name": "Duyệt danh sách box theo loại trong Manage boxes (quan sát staging)",
+      "description": "OBSERVED_CURRENT staging: \"Manage\" trên thẻ Single box / Bundle box mở danh sách cột Image/Box/Status/Total/Inventory/Actions, không search/filter/sort; Dashboard và danh sách gọi GET /api/boxes.",
+      "basis": "OBSERVED_CURRENT",
+      "kb_refs": [
+        "box-create-and-publish#KB-090",
+        "box-create-and-publish#KB-095"
+      ],
+      "observed_kb_refs": [
+        "box-create-and-publish#KB-098"
+      ]
+    }
+  ],
+  "state_transitions": [
+    {
+      "from": "(chưa có)",
+      "to": "Draft",
+      "trigger": "Merchant tạo box từ sản phẩm mystery và các variant prize",
+      "condition": "",
+      "kb_refs": [
+        "box-create-and-publish#KB-007"
+      ]
+    },
+    {
+      "from": "Draft",
+      "to": "Active",
+      "trigger": "Save lần đầu box Single/Bundle (tự publish ngay)",
+      "condition": "Validation khi Save qua; đồng bộ xong; Shopify nhận metafield",
+      "kb_refs": [
+        "box-create-and-publish#KB-046",
+        "box-create-and-publish#KB-057",
+        "box-create-and-publish#KB-022",
+        "box-create-and-publish#KB-062",
+        "box-create-and-publish#KB-064"
+      ]
+    },
+    {
+      "from": "Draft",
+      "to": "Active",
+      "trigger": "Save box Group (lưu, chờ \"Syncing inventory...\", rồi publish)",
+      "condition": "Sync xong (không thất bại); box pool chưa cạn item; backend chờ tới 180 giây phân giải collection",
+      "kb_refs": [
+        "box-create-and-publish#KB-048",
+        "box-create-and-publish#KB-050",
+        "box-create-and-publish#KB-063",
+        "box-create-and-publish#KB-079"
+      ]
+    },
+    {
+      "from": "Draft",
+      "to": "Active",
+      "trigger": "Merchant bấm Activate / publish",
+      "condition": "Sync xong; Shopify nhận metafield; pool chưa cạn; không có thay đổi chưa lưu (Status bị khoá khi có)",
+      "kb_refs": [
+        "box-create-and-publish#KB-057",
+        "box-create-and-publish#KB-008",
+        "box-create-and-publish#KB-023",
+        "box-create-and-publish#KB-062",
+        "box-create-and-publish#KB-063",
+        "box-create-and-publish#KB-064",
+        "box-create-and-publish#KB-079"
+      ]
+    },
+    {
+      "from": "Draft",
+      "to": "Draft",
+      "trigger": "Save khi sửa box Draft",
+      "condition": "Chỉ lưu, không tự publish",
+      "kb_refs": [
+        "box-create-and-publish#KB-047"
+      ]
+    },
+    {
+      "from": "Active",
+      "to": "Draft",
+      "trigger": "Merchant bấm \"Deactivate box\" hoặc toggle (unpublish)",
+      "condition": "",
+      "kb_refs": [
+        "box-create-and-publish#KB-058",
+        "box-create-and-publish#KB-074"
+      ]
+    },
+    {
+      "from": "Active (đã publish)",
+      "to": "Không publish (ngày publish trống)",
+      "trigger": "Hệ thống tự unpublish box",
+      "condition": "Điều kiện kích hoạt không nêu trong KB",
+      "kb_refs": [
+        "box-create-and-publish#KB-073"
+      ]
+    },
+    {
+      "from": "Draft",
+      "to": "Đã xoá",
+      "trigger": "Merchant xoá box và xác nhận \"Are you sure you want to delete this box?\"",
+      "condition": "Box ở Draft",
+      "kb_refs": [
+        "box-create-and-publish#KB-065",
+        "box-create-and-publish#KB-052",
+        "box-create-and-publish#KB-066"
+      ]
+    },
+    {
+      "from": "Active",
+      "to": "Active (không đổi)",
+      "trigger": "Merchant cố xoá box Active",
+      "condition": "Bị chặn với thông báo yêu cầu deactivate trước",
+      "kb_refs": [
+        "box-create-and-publish#KB-059"
+      ]
+    },
+    {
+      "from": "sync status syncing",
+      "to": "completed hoặc failed",
+      "trigger": "Đồng bộ inventory sau khi lưu box (box Group)",
+      "condition": "",
+      "kb_refs": [
+        "_object-level.box#KB-018",
+        "box-create-and-publish#KB-045",
+        "box-create-and-publish#KB-048"
+      ]
+    },
+    {
+      "from": "(form mới, combobox Status hiện Draft)",
+      "to": "Active",
+      "trigger": "Save lần đầu box Single/Bundle — POST /api/boxes (201, published_at null) rồi POST /api/boxes/{id}/publish (200)",
+      "condition": "OBSERVED_CURRENT staging, 2/2 (Single 1023, Bundle 1024, digital no-buyback, gói Free)",
+      "basis": "OBSERVED_CURRENT",
+      "kb_refs": [
+        "box-create-and-publish#KB-081",
+        "box-create-and-publish#KB-092",
+        "box-create-and-publish#KB-093"
+      ]
+    },
+    {
+      "from": "Draft",
+      "to": "Active",
+      "trigger": "Chọn \"Active\" ở combobox Status (không Save) — POST /api/boxes/{id}/publish",
+      "condition": "OBSERVED_CURRENT staging, 1 mẫu; form không có thay đổi chưa lưu; current_version_id giữ nguyên",
+      "basis": "OBSERVED_CURRENT",
+      "kb_refs": [
+        "box-create-and-publish#KB-083",
+        "box-create-and-publish#KB-093"
+      ]
+    },
+    {
+      "from": "Active",
+      "to": "Draft",
+      "trigger": "\"Deactivate box\" trên banner — POST /api/boxes/{id}/unpublish (200), không hộp xác nhận, toast \"Deactivated\"",
+      "condition": "OBSERVED_CURRENT staging, 3/3; current_version_id và inventory.bundles không đổi",
+      "basis": "OBSERVED_CURRENT",
+      "kb_refs": [
+        "box-create-and-publish#KB-084",
+        "box-create-and-publish#KB-094"
+      ]
+    },
+    {
+      "from": "Draft",
+      "to": "Draft",
+      "trigger": "Save khi sửa box Draft — chỉ PUT /api/boxes/{id} (200), không gọi /publish",
+      "condition": "OBSERVED_CURRENT staging, 2/2",
+      "basis": "OBSERVED_CURRENT",
+      "kb_refs": [
+        "box-create-and-publish#KB-082"
+      ]
+    },
+    {
+      "from": "(form mới Single digital / Bundle digital / Single \"Sealed box\")",
+      "to": "Active",
+      "trigger": "Save lần đầu — POST /api/boxes (201, published_at null, sync_status completed) → POST /api/boxes/{id}/publish (200) → GET /api/boxes/{id}",
+      "condition": "OBSERVED_CURRENT staging, 3/3 gồm box physical; current_version_id không đổi giữa POST và /publish",
+      "basis": "OBSERVED_CURRENT",
+      "kb_refs": [
+        "box-create-and-publish#KB-096"
+      ]
+    },
+    {
+      "from": "Active (box đã có đơn test)",
+      "to": "Draft",
+      "trigger": "\"Deactivate box\" trên banner — POST /api/boxes/{id}/unpublish (body rỗng, 200)",
+      "condition": "OBSERVED_CURRENT staging, 3/3 (Single digital, Bundle digital, Single physical); không hộp xác nhận; published_at null, current_version_id và inventory.bundles giữ nguyên",
+      "basis": "OBSERVED_CURRENT",
+      "kb_refs": [
+        "box-create-and-publish#KB-097"
+      ]
+    }
+  ],
+  "confirmed_rules": [
+    {
+      "rule": "Box có hai trạng thái Draft và Active; form box có mục \"Status\" ở cột phải với hai giá trị \"Draft\" và \"Active\".",
+      "kb_refs": [
+        "box-create-and-publish#KB-002",
+        "_object-level.box#KB-010"
+      ]
+    },
+    {
+      "rule": "Box do merchant tạo ra ở trạng thái Draft.",
+      "kb_refs": [
+        "box-create-and-publish#KB-007"
+      ]
+    },
+    {
+      "rule": "Box Draft là chưa bán dạng mystery, sửa được, widget ẩn; box Active là đang bán.",
+      "kb_refs": [
+        "box-create-and-publish#KB-010",
+        "box-create-and-publish#KB-011",
+        "box-create-and-publish#KB-012",
+        "box-create-and-publish#KB-061"
+      ]
+    },
+    {
+      "rule": "Box Draft khi published_at trống.",
+      "kb_refs": [
+        "box-create-and-publish#KB-056"
+      ]
+    },
+    {
+      "rule": "Merchant vào form tạo box bằng \"Create new box\" ở Dashboard hoặc \"Boxes\" → \"Set up new box\".",
+      "kb_refs": [
+        "box-create-and-publish#KB-014",
+        "box-create-and-publish#KB-015",
+        "box-create-and-publish#KB-005"
+      ]
+    },
+    {
+      "rule": "\"Duplicate box\" copy mọi cài đặt sang một box mới chưa lưu.",
+      "kb_refs": [
+        "box-create-and-publish#KB-016"
+      ]
+    },
+    {
+      "rule": "\"Link to mystery product\" là bắt buộc; sản phẩm mystery chọn qua \"Select product to sell as mystery box\".",
+      "kb_refs": [
+        "box-create-and-publish#KB-017",
+        "box-create-and-publish#KB-018"
+      ]
+    },
+    {
+      "rule": "Sau khi chọn sản phẩm mystery, form hiện \"N boxes in stock\" hoặc \"Product is out of stock or deleted\".",
+      "kb_refs": [
+        "box-create-and-publish#KB-019"
+      ]
+    },
+    {
+      "rule": "Một box chỉ liên kết với 1 variant mystery; một variant chỉ thuộc một box; mỗi variant là một box độc lập.",
+      "kb_refs": [
+        "box-create-and-publish#KB-020",
+        "box-create-and-publish#KB-021",
+        "box-create-and-publish#KB-004",
+        "_object-level.box#KB-005"
+      ]
+    },
+    {
+      "rule": "\"Status\" là Active sau lần lưu đầu và bị khoá khi form có thay đổi chưa lưu.",
+      "kb_refs": [
+        "box-create-and-publish#KB-022",
+        "box-create-and-publish#KB-023"
+      ]
+    },
+    {
+      "rule": "Save khi chưa chọn sản phẩm mystery hiện \"Missing mystery product. Please select one from your list to be the mystery box.\".",
+      "kb_refs": [
+        "box-create-and-publish#KB-029"
+      ]
+    },
+    {
+      "rule": "Save khi set rỗng hiện thông báo bắt đầu bằng \"The random set is empty...\".",
+      "kb_refs": [
+        "box-create-and-publish#KB-030"
+      ]
+    },
+    {
+      "rule": "Save khi có nhóm rỗng hiện \"Each group must have at least one item added.\".",
+      "kb_refs": [
+        "box-create-and-publish#KB-031"
+      ]
+    },
+    {
+      "rule": "Save khi tổng quantity của set không khớp tồn kho hiện \"The item quantities in {set} are inconsistent. Please adjust each item so that the total quantities equals {N}.\"; với box dùng phần trăm, tổng khác 100 hiện cùng mẫu với \"percentages\" và 100.",
+      "kb_refs": [
+        "box-create-and-publish#KB-032",
+        "box-create-and-publish#KB-033"
+      ]
+    },
+    {
+      "rule": "Save khi chance các nhóm khác 100 hiện \"Group chances must total 100%\".",
+      "kb_refs": [
+        "box-create-and-publish#KB-034"
+      ]
+    },
+    {
+      "rule": "Save box pool mà tổng item ít hơn tồn kho hiện \"You need to set the total random items in all tiers are more than or equal the box stock.\".",
+      "kb_refs": [
+        "box-create-and-publish#KB-035"
+      ]
+    },
+    {
+      "rule": "Save khi variant đã thuộc box khác (kể cả box Draft) hiện \"The selected mystery product is already linked to another box.\".",
+      "kb_refs": [
+        "box-create-and-publish#KB-036"
+      ]
+    },
+    {
+      "rule": "Save khi cài đặt tracked của form khác \"Track quantity\" của variant ở Shopify hiện \"Box tracking settings do not match the box variant tracking settings in Shopify.\".",
+      "kb_refs": [
+        "box-create-and-publish#KB-037"
+      ]
+    },
+    {
+      "rule": "% item không tròn 100% có thể hiện \"Box items rates must sum to 1\"; % bundle không tròn 100% có thể hiện \"Total bundle rate must sum to 1.\".",
+      "kb_refs": [
+        "box-create-and-publish#KB-038",
+        "box-create-and-publish#KB-039"
+      ]
+    },
+    {
+      "rule": "Các set không bằng nhau hiện \"All bundles must have the same total quantity of items.\"; số item khác tồn kho của variant box hiện \"Box items count does not match the box variant count\".",
+      "kb_refs": [
+        "box-create-and-publish#KB-040",
+        "box-create-and-publish#KB-041"
+      ]
+    },
+    {
+      "rule": "Thiếu tài nguyên ở Shopify có thể hiện \"Related box not found\"; thiếu variant item ở Shopify có thể hiện \"One or more item variants not found in Shopify.\".",
+      "kb_refs": [
+        "box-create-and-publish#KB-042",
+        "box-create-and-publish#KB-043"
+      ]
+    },
+    {
+      "rule": "Kết quả sau lưu là một trong \"Box created!\", \"Box updated!\", \"Syncing inventory...\", \"Sync failed. Please contact support for assistance.\".",
+      "kb_refs": [
+        "box-create-and-publish#KB-045"
+      ]
+    },
+    {
+      "rule": "Save box Single/Bundle mới tạo box rồi tự publish ngay (Active); Save khi sửa box Draft chỉ lưu, không tự publish.",
+      "kb_refs": [
+        "box-create-and-publish#KB-046",
+        "box-create-and-publish#KB-047"
+      ]
+    },
+    {
+      "rule": "Save box Group thì lưu, chờ \"Syncing inventory...\" rồi mới publish; backend chờ tới 180 giây để phân giải collection của box Group.",
+      "kb_refs": [
+        "box-create-and-publish#KB-048",
+        "box-create-and-publish#KB-050"
+      ]
+    },
+    {
+      "rule": "Box chuyển Draft → Active khi Save lần đầu hoặc bấm Activate; Active → Draft qua \"Deactivate box\" hoặc toggle; merchant tự unpublish được box.",
+      "kb_refs": [
+        "box-create-and-publish#KB-057",
+        "box-create-and-publish#KB-058",
+        "box-create-and-publish#KB-074",
+        "box-create-and-publish#KB-008"
+      ]
+    },
+    {
+      "rule": "Khi box được publish, app ghi dữ liệu vào variant Shopify dưới dạng metafield; nếu Shopify từ chối metafield thì publish thất bại.",
+      "kb_refs": [
+        "box-create-and-publish#KB-009",
+        "box-create-and-publish#KB-064"
+      ]
+    },
+    {
+      "rule": "Publish trong portal chỉ thành công khi đồng bộ đã xong, nếu chưa hiện \"Box sync is not complete.\"; box không publish được khi sync chưa xong hoặc thất bại.",
+      "kb_refs": [
+        "box-create-and-publish#KB-062",
+        "box-create-and-publish#KB-079"
+      ]
+    },
+    {
+      "rule": "Publish box chưa sync xong hiện toast \"Box must finish syncing before it can be published.\".",
+      "kb_refs": [
+        "box-create-and-publish#KB-078"
+      ]
+    },
+    {
+      "rule": "Box Group dạng pool không còn item thì không publish được: \"Cannot publish: inventory pools are exhausted.\".",
+      "kb_refs": [
+        "box-create-and-publish#KB-063"
+      ]
+    },
+    {
+      "rule": "Publish/Unpublish từ portal của merchant còn đi qua các kiểm tra riêng của API.",
+      "kb_refs": [
+        "box-create-and-publish#KB-072"
+      ]
+    },
+    {
+      "rule": "Box Active bị khoá sửa (chủ ý): hiện banner \"The box is on sale and cannot be edited. Pause sales to make changes.\" và route sửa của box đã publish trả \"not found\".",
+      "kb_refs": [
+        "box-create-and-publish#KB-013",
+        "box-create-and-publish#KB-060",
+        "box-create-and-publish#KB-080"
+      ]
+    },
+    {
+      "rule": "Muốn sửa box Active phải deactivate/unpublish (pause sales), sửa, lưu (và sync), rồi bật lại Active.",
+      "kb_refs": [
+        "box-create-and-publish#KB-067",
+        "box-create-and-publish#KB-068"
+      ]
+    },
+    {
+      "rule": "Bản sao dữ liệu Shopify trong Mysbox chỉ được cập nhật khi deactivate → lưu lại (hoặc \"Sync data\" với box Group) → activate.",
+      "kb_refs": [
+        "box-create-and-publish#KB-055"
+      ]
+    },
+    {
+      "rule": "Nút \"Sync data\" có ở box Group khi box Draft, dùng khi product/collection ở Shopify thay đổi sau publish.",
+      "kb_refs": [
+        "box-create-and-publish#KB-027",
+        "box-create-and-publish#KB-028"
+      ]
+    },
+    {
+      "rule": "App không đổi giá, tên, ảnh, tồn kho của sản phẩm/variant mystery và chỉ đọc tên, ảnh, giá của variant prize.",
+      "kb_refs": [
+        "box-create-and-publish#KB-051",
+        "box-create-and-publish#KB-053",
+        "_object-level.box#KB-007"
+      ]
+    },
+    {
+      "rule": "\"Preview\" (\"Preview by test order\") tạo đơn test tag `mysbox-preview-order` rồi mở trang order status để xem animation; bị khoá khi box Draft hoặc chưa lưu.",
+      "kb_refs": [
+        "box-create-and-publish#KB-024",
+        "box-create-and-publish#KB-025",
+        "box-create-and-publish#KB-026"
+      ]
+    },
+    {
+      "rule": "Box Active không xoá được: \"To delete this box, you must deactivate it first, and should pause sales to avoid any disruption to your customers.\".",
+      "kb_refs": [
+        "box-create-and-publish#KB-059"
+      ]
+    },
+    {
+      "rule": "Xoá box Draft hiện xác nhận \"Are you sure you want to delete this box?\"; xoá box xoá metafield của box trên variant và bỏ luôn tồn kho của box.",
+      "kb_refs": [
+        "box-create-and-publish#KB-065",
+        "box-create-and-publish#KB-052",
+        "box-create-and-publish#KB-066",
+        "box-create-and-publish#KB-003"
+      ]
+    },
+    {
+      "rule": "Manage boxes có hai thẻ \"Single box\" / \"Bundle box\", hiển thị danh sách box; từ đây merchant sửa, bật bán và xoá box.",
+      "kb_refs": [
+        "box-create-and-publish#KB-069",
+        "box-create-and-publish#KB-070",
+        "box-create-and-publish#KB-071",
+        "box-create-and-publish#KB-006"
+      ]
+    },
+    {
+      "rule": "Widget chỉ hiện khi box có ngày publish không ở tương lai, có bundles và sync status completed; box bị tự unpublish thì ngày publish trống.",
+      "kb_refs": [
+        "box-create-and-publish#KB-075",
+        "box-create-and-publish#KB-076",
+        "box-create-and-publish#KB-077",
+        "box-create-and-publish#KB-073"
+      ]
+    },
+    {
+      "rule": "Sync status của box có ba giá trị hiển thị: completed (xanh), syncing (vàng), failed (đỏ).",
+      "kb_refs": [
+        "_object-level.box#KB-018"
+      ]
+    },
+    {
+      "rule": "Merchant biến một sản phẩm Shopify thành box, khai báo phần thưởng và xác suất, rồi publish.",
+      "kb_refs": [
+        "box-create-and-publish#KB-001",
+        "_object-level.box#KB-004",
+        "_object-level.box#KB-006"
+      ]
+    }
+  ],
+  "observed_behavior": [
+    {
+      "behavior": "Lỗi tạm thời của Shopify khi lưu box có thể hiện thành thông báo thiếu tài nguyên (\"Related box not found\", \"One or more item variants not found in Shopify.\") dù tài nguyên không thật sự thiếu.",
+      "status": "KNOWN_DEFECT",
+      "note": "Known defect theo tài liệu — không dùng làm oracle; cần OQ OPEN_ISSUE.",
+      "kb_refs": [
+        "box-create-and-publish#KB-044"
+      ]
+    },
+    {
+      "behavior": "Khi merchant nhập thêm hàng hoặc sửa product/collection ở Shopify, bản sao dữ liệu trong Mysbox không tự cập nhật.",
+      "status": "KNOWN_DEFECT",
+      "note": "Known defect / hạn chế theo tài liệu — không dùng làm oracle; cách cập nhật đã biết nằm ở confirmed_rules (KB-055).",
+      "kb_refs": [
+        "box-create-and-publish#KB-054",
+        "box-create-and-publish#KB-055"
+      ]
+    },
+    {
+      "behavior": "Save lần đầu box Single/Bundle mới: combobox Status hiện \"Draft\" (disabled) trước khi bấm; app gọi POST /api/boxes (201, published_at null, đã có current_version_id) rồi ngay POST /api/boxes/{id}/publish (200); form chuyển /boxes/box-settings/<id>, badge \"Active\" và banner khoá — 2/2.",
+      "basis": "OBSERVED_CURRENT",
+      "environment": "staging",
+      "observed_count": 2,
+      "confidence": "MEDIUM",
+      "note": "Khớp base KB-046/KB-022/KB-057 (corroboration); box Group (Tier) không thử.",
+      "kb_refs": [
+        "box-create-and-publish#KB-081"
+      ]
+    },
+    {
+      "behavior": "Save sau khi sửa box Draft chỉ gọi PUT /api/boxes/{id} (200), không gọi /publish; box vẫn Draft — 2/2.",
+      "basis": "OBSERVED_CURRENT",
+      "environment": "staging",
+      "observed_count": 2,
+      "confidence": "MEDIUM",
+      "note": "Khớp base KB-047.",
+      "kb_refs": [
+        "box-create-and-publish#KB-082"
+      ]
+    },
+    {
+      "behavior": "Chọn \"Active\" ở combobox Status của box Draft đã lưu (không Save) gọi ngay POST /api/boxes/{id}/publish (200); current_version_id giữ nguyên; badge Active + banner khoá.",
+      "basis": "OBSERVED_CURRENT",
+      "environment": "staging",
+      "observed_count": 1,
+      "confidence": "LOW",
+      "note": "1 mẫu; không thấy nút \"Activate\" riêng — chưa biết KB-057 \"bấm nút Activate\" là combobox này hay nút khác.",
+      "kb_refs": [
+        "box-create-and-publish#KB-083"
+      ]
+    },
+    {
+      "behavior": "\"Deactivate box\" không có hộp xác nhận; gọi POST /api/boxes/{id}/unpublish (không phải /deactivate), published_at null, current_version_id và inventory.bundles không đổi; toast \"Deactivated\" (bắt được 2/3), badge và Status về \"Draft\" — 3/3.",
+      "basis": "OBSERVED_CURRENT",
+      "environment": "staging",
+      "observed_count": 3,
+      "confidence": "HIGH",
+      "note": "Box 1024: request ~1.7s nhưng badge đổi sau ~18s (1 mẫu).",
+      "kb_refs": [
+        "box-create-and-publish#KB-084"
+      ]
+    },
+    {
+      "behavior": "Form box Active: badge \"Active\", banner \"The box is on sale and cannot be edited. Pause sales to make changes.\" / \"This box is currently active and available for purchase. To make any changes to its settings, you must pause sales first.Any modifications may affect item availability and sales data.\" kèm \"Deactivate box\"; Save/Discard disabled; \"Browse\" prize không tương tác; sidebar \"Box settings can only be edited in draft status\". Sau Deactivate form sửa được.",
+      "basis": "OBSERVED_CURRENT",
+      "environment": "staging",
+      "observed_count": 4,
+      "confidence": "MEDIUM",
+      "kb_refs": [
+        "box-create-and-publish#KB-085"
+      ]
+    },
+    {
+      "behavior": "Form tạo box mới: badge \"Draft\", nút \"Select product to sell as mystery box\" + \"Choose an existing product to sell as a mystery box or create a new product\", Status \"Draft\" disabled kèm \"Box settings can only be edited in draft status\", Save/Discard disabled khi chưa có thay đổi, nút \"Preview\" (card \"Preview by test order\") mờ.",
+      "basis": "OBSERVED_CURRENT",
+      "environment": "staging",
+      "observed_count": 3,
+      "confidence": "MEDIUM",
+      "kb_refs": [
+        "box-create-and-publish#KB-087"
+      ]
+    },
+    {
+      "behavior": "\"create a new product\" mở modal \"Add product\" của Shopify admin (ngoài iframe app; ProductCreateSet + ProductCreatePublish); sau khi lưu form hiện product vừa tạo kèm \"N boxes in stock\" bằng tồn kho vừa nhập (5 và 3) — 2/2.",
+      "basis": "OBSERVED_CURRENT",
+      "environment": "staging",
+      "observed_count": 2,
+      "confidence": "MEDIUM",
+      "kb_refs": [
+        "box-create-and-publish#KB-088"
+      ]
+    },
+    {
+      "behavior": "Sau tạo/publish/deactivate/sửa/activate lại box 1023, product mystery trên Shopify admin giữ nguyên title, Price, \"Inventory tracked\", tồn kho 5, \"Sell when out of stock\" Off, Status Active; mục metafield hiện \"No metafields pinned\".",
+      "basis": "OBSERVED_CURRENT",
+      "environment": "staging",
+      "observed_count": 1,
+      "confidence": "LOW",
+      "note": "Variant prize và metafield ẩn mysbox.box không kiểm.",
+      "kb_refs": [
+        "box-create-and-publish#KB-089"
+      ]
+    },
+    {
+      "behavior": "Danh sách Single/Bundle box: heading + \"Set up new box\", cột Image/Box/Status/Total/Inventory/Actions (vd \"Single - 2 items\", \"Bundle - 2 prizes\", \"N available\"), không search/filter/sort; bấm tên box không điều hướng; icon thứ hai ở Actions (tooltip \"Edit\") mở form.",
+      "basis": "OBSERVED_CURRENT",
+      "environment": "staging",
+      "observed_count": 3,
+      "confidence": "MEDIUM",
+      "note": "3/4 icon Actions không nhãn, không bấm.",
+      "kb_refs": [
+        "box-create-and-publish#KB-090"
+      ]
+    },
+    {
+      "behavior": "Box vừa Save lần đầu (tự Active) hiện widget Mysbox (\"Box items\"/\"Prize #n\") ngay lần mở đầu với item và chance khớp form portal; dữ liệu box nằm ở window.mysboxStore.mysboxProductPageData.variantMetafields (id, published_at, current_version_id, sync_status completed); mua được qua checkout — 2/2; trang product không gọi <MYS_API_BASE> hay /apps/mysbox.",
+      "basis": "OBSERVED_CURRENT",
+      "environment": "staging",
+      "observed_count": 2,
+      "confidence": "MEDIUM",
+      "note": "Độ trễ lan truyền không đo được; widget ẩn sau Deactivate không kiểm.",
+      "kb_refs": [
+        "box-create-and-publish#KB-091"
+      ]
+    },
+    {
+      "behavior": "Save lần đầu trên form box mới (Single digital, Bundle digital, Single \"Sealed box\"): POST /api/boxes (201, published_at null, đã có current_version_id, sync_status \"completed\") rồi tự POST /api/boxes/{box_id}/publish (200, published_at được gán, current_version_id không đổi) và GET /api/boxes/{box_id}; URL chuyển /boxes/box-settings/{box_id}, badge \"Active\" — 3/3 gồm box physical.",
+      "basis": "OBSERVED_CURRENT",
+      "environment": "staging",
+      "observed_count": 3,
+      "confidence": "HIGH",
+      "note": "Corroborate base KB-046/KB-022/KB-081/KB-092/KB-093; không bắt được toast \"Box created!\".",
+      "kb_refs": [
+        "box-create-and-publish#KB-096"
+      ]
+    },
+    {
+      "behavior": "\"Deactivate box\" trên banner box Active (đã có đơn test): không hộp xác nhận; POST /api/boxes/{box_id}/unpublish (body rỗng, 200), published_at null, current_version_id và inventory.bundles giữ nguyên, sync_status \"completed\"; badge \"Active\" → \"Draft\", banner biến mất, Status = \"Draft\", Save/Discard vẫn disabled khi chưa sửa, dòng \"Box settings can only be edited in draft status\" vẫn hiện; form Draft không có nút \"Activate\" riêng (chỉ combobox Status) — 3/3.",
+      "basis": "OBSERVED_CURRENT",
+      "environment": "staging",
+      "observed_count": 3,
+      "confidence": "HIGH",
+      "note": "Corroborate KB-058/KB-084/KB-094/KB-056; toast không bắt được; Activate lại không làm.",
+      "kb_refs": [
+        "box-create-and-publish#KB-097"
+      ]
+    },
+    {
+      "behavior": "Tooltip icon Actions ở danh sách Single box: \"Deactivate\", \"Edit\", \"Analytics\", \"Delete\" (hàng Active) và \"Activate\", \"Edit\" (hàng Draft); không có \"Duplicate\" ở danh sách; danh sách gọi GET /api/boxes?limit=10&page=1&order_by=published_at&type=SINGLE%2CTIER. Không bấm.",
+      "basis": "OBSERVED_CURRENT",
+      "environment": "staging",
+      "observed_count": 1,
+      "confidence": "LOW",
+      "kb_refs": [
+        "box-create-and-publish#KB-098"
+      ]
+    },
+    {
+      "behavior": "Portal pass 2: form Box settings của box 1025/1026/1027 (Active và sau khi về Draft) có nút \"Duplicate box\" ở header cạnh badge; không bấm.",
+      "basis": "OBSERVED_CURRENT",
+      "environment": "staging",
+      "observed_count": 1,
+      "confidence": "LOW",
+      "status": "UNRESOLVED",
+      "conflict_group": "CONF-box-12",
+      "note": "Trái với KB-100 (pass 1 cùng ngày) — giữ cả hai phía, không tự chọn bên.",
+      "kb_refs": [
+        "box-create-and-publish#KB-099"
+      ]
+    },
+    {
+      "behavior": "Portal pass 1: rà danh sách Single box và form Box settings không thấy control \"Duplicate\" nào.",
+      "basis": "OBSERVED_CURRENT",
+      "environment": "staging",
+      "observed_count": 1,
+      "confidence": "LOW",
+      "status": "UNRESOLVED",
+      "conflict_group": "CONF-box-12",
+      "note": "Trái với KB-099 (pass 2 cùng ngày) — có thể pass 1 bỏ sót nút ở header hoặc UI đổi trong ngày.",
+      "kb_refs": [
+        "box-create-and-publish#KB-100"
+      ]
+    },
+    {
+      "behavior": "Form box Active /boxes/box-settings/{box_id}: badge \"Active\", banner khoá sửa + \"Deactivate box\", mọi field chỉ đọc, Save/Discard disabled, combobox \"Status\" bật ở \"Active\", bảng prize cột \"Random item\"/\"Original\"/\"Remaining\"/\"Chance\"/\"Color\"; trang chỉ gọi document 200 + GET /api/boxes/{box_id} 200, không có request 4xx/\"not found\"; không có số version, lịch sử hay rollback — 6 lần mở trên 3 box.",
+      "basis": "OBSERVED_CURRENT",
+      "environment": "staging",
+      "observed_count": 6,
+      "confidence": "HIGH",
+      "note": "Corroborate KB-060/KB-067/KB-085; KB-080 (route sửa trả \"not found\") không tái hiện qua UI.",
+      "kb_refs": [
+        "box-create-and-publish#KB-101"
+      ]
+    },
+    {
+      "behavior": "Card \"Preview by test order\" (\"This will create a test order and redirect you to the order status page, where you can preview the unbox animation.\") với nút \"Preview\": xám trên form mới chưa lưu, bật trên box Active đã lưu; không có bước chọn box/variant trước khi bấm. Không bấm Preview.",
+      "basis": "OBSERVED_CURRENT",
+      "environment": "staging",
+      "observed_count": 2,
+      "confidence": "MEDIUM",
+      "note": "Corroborate KB-024/KB-025/KB-026 phần trạng thái nút; đơn preview không quan sát.",
+      "kb_refs": [
+        "box-create-and-publish#KB-102"
+      ]
+    },
+    {
+      "behavior": "Metafield variant \"mysbox.box\" (unstructured, không definition) chứa JSON box khi box 1027 Active; ~1 phút sau Deactivate (API trả published_at null) metafield vẫn còn và published_at trong JSON vẫn là thời điểm publish cũ.",
+      "basis": "OBSERVED_CURRENT",
+      "environment": "staging",
+      "observed_count": 1,
+      "confidence": "LOW",
+      "note": "Có thể lệch với KB-061/KB-075 (widget ẩn khi Draft) — INCONCLUSIVE vì widget sau Deactivate chưa xem; không phải conflict.",
+      "kb_refs": [
+        "box-create-and-publish#KB-104"
+      ]
+    },
+    {
+      "behavior": "Trang product box Active (B1, B2, B3): widget gọi Storefront GraphQL getProducts xin metafield(namespace \"mysbox\", key \"box\") và nhận null 3/3; widget render từ bản nhúng Liquid window.mysboxStore.mysboxProductPageData.variantMetafields; getVariants lấy title/giá/ảnh prize.",
+      "basis": "OBSERVED_CURRENT",
+      "environment": "staging",
+      "observed_count": 3,
+      "confidence": "HIGH",
+      "kb_refs": [
+        "box-create-and-publish#KB-105"
+      ]
+    },
+    {
+      "behavior": "\"create a new product\" (Single, Bundle, Single \"Sealed box\") mở modal Shopify \"Add product\" ngoài iframe (Inventory \"Inventory tracked\" tick sẵn, \"Sell when out of stock\" \"Off\", Status \"Active\", Publishing \"All channels\"); Save gọi ProductCreateSet + ProductCreatePublish, form gắn product và hiện \"<n> boxes in stock\" — 3/3.",
+      "basis": "OBSERVED_CURRENT",
+      "environment": "staging",
+      "observed_count": 3,
+      "confidence": "HIGH",
+      "note": "Corroborate KB-018/KB-019/KB-088.",
+      "kb_refs": [
+        "box-create-and-publish#KB-106"
+      ]
+    }
+  ],
+  "observed_validations": [
+    {
+      "input": "Save form box Single mới đã link product (5 boxes in stock) nhưng Prize #1 chưa có item",
+      "message_verbatim": "The random set is empty. Please add items to the set.",
+      "message_title_verbatim": "Couldn't be saved",
+      "condition": "staging, merchant, gói Free; box không được lưu (URL không có id)",
+      "observed_count": 1,
+      "rule_confidence": "LOW",
+      "note": "Toàn văn của thông báo base KB-030 (\"The random set is empty...\"); 1 mẫu — không tổng quát hoá.",
+      "kb_refs": [
+        "box-create-and-publish#KB-086"
+      ]
+    },
+    {
+      "input": "Save form box Single mới đã link product test B1 nhưng Prize #1 chưa có item",
+      "message_verbatim": "The random set is empty. Please add items to the set.",
+      "message_title_verbatim": "Couldn't be saved",
+      "condition": "staging, merchant, gói Free; lỗi inline dưới Prize; box không được lưu; không có request nào tới <MYS_API_BASE> (chặn phía client)",
+      "observed_count": 1,
+      "rule_confidence": "LOW",
+      "note": "Lần quan sát thứ 2 qua hai đợt quan sát (cùng KB-086) — tổng 2 < 3, không tổng quát hoá thành rule; không suy server có kiểm lại hay không.",
+      "kb_refs": [
+        "box-create-and-publish#KB-103"
+      ]
+    }
+  ],
+  "limitations": [
+    {
+      "statement": "Thời gian chờ \"Syncing inventory...\" khoảng 60 giây chỉ được tài liệu diễn đạt xấp xỉ (INFERRED/LOW) — không dùng làm boundary.",
+      "kb_refs": [
+        "box-create-and-publish#KB-049"
+      ]
+    },
+    {
+      "statement": "Một số thông báo lỗi được tài liệu nêu với \"có thể hiện\" (KB-038, KB-039, KB-042, KB-043) — check nên chấp nhận đây là thông báo có thể gặp, không khẳng định là thông báo duy nhất.",
+      "kb_refs": [
+        "box-create-and-publish#KB-038",
+        "box-create-and-publish#KB-039",
+        "box-create-and-publish#KB-042",
+        "box-create-and-publish#KB-043"
+      ]
+    }
+  ],
+  "permissions": [
+    {
+      "permission": "Chỉ sửa và xoá được box ở Draft; box Active bị khoá sửa và chặn xoá.",
+      "kb_refs": [
+        "box-create-and-publish#KB-013",
+        "box-create-and-publish#KB-059"
+      ]
+    },
+    {
+      "permission": "Preview chỉ dùng được khi box đã lưu và Active.",
+      "kb_refs": [
+        "box-create-and-publish#KB-026"
+      ]
+    }
+  ],
+  "surface_mapping": {
+    "portal": [
+      {
+        "name": "Dashboard → \"Create new box\"; Boxes → \"Set up new box\"; \"Duplicate box\"",
+        "kb_refs": [
+          "box-create-and-publish#KB-014",
+          "box-create-and-publish#KB-015",
+          "box-create-and-publish#KB-016"
+        ]
+      },
+      {
+        "name": "Box settings → \"Link to mystery product\" / \"Select product to sell as mystery box\" / \"N boxes in stock\"",
+        "kb_refs": [
+          "box-create-and-publish#KB-017",
+          "box-create-and-publish#KB-018",
+          "box-create-and-publish#KB-019"
+        ]
+      },
+      {
+        "name": "Cột phải → \"Status\" (Draft/Active), \"Preview\", \"Sync data\"",
+        "kb_refs": [
+          "box-create-and-publish#KB-002",
+          "box-create-and-publish#KB-023",
+          "box-create-and-publish#KB-024",
+          "box-create-and-publish#KB-027"
+        ]
+      },
+      {
+        "name": "Nút Save và các thông báo kết quả/lỗi",
+        "kb_refs": [
+          "box-create-and-publish#KB-029",
+          "box-create-and-publish#KB-045"
+        ]
+      },
+      {
+        "name": "\"Deactivate box\"/toggle, Activate, banner box đang bán",
+        "kb_refs": [
+          "box-create-and-publish#KB-057",
+          "box-create-and-publish#KB-058",
+          "box-create-and-publish#KB-060"
+        ]
+      },
+      {
+        "name": "Manage boxes (danh sách, thẻ Single/Bundle, sửa, bật bán, xoá)",
+        "kb_refs": [
+          "box-create-and-publish#KB-069",
+          "box-create-and-publish#KB-070",
+          "box-create-and-publish#KB-071",
+          "box-create-and-publish#KB-003"
+        ]
+      },
+      {
+        "name": "Form tạo box mới /boxes/box-settings?type=single|bundles (badge Draft, Status disabled, Preview mờ) — staging",
+        "basis": "OBSERVED_CURRENT",
+        "kb_refs": [
+          "box-create-and-publish#KB-087"
+        ]
+      },
+      {
+        "name": "Banner khoá form box Active + \"Deactivate box\" + toast \"Deactivated\" — staging",
+        "basis": "OBSERVED_CURRENT",
+        "kb_refs": [
+          "box-create-and-publish#KB-084",
+          "box-create-and-publish#KB-085",
+          "box-create-and-publish#KB-097",
+          "box-create-and-publish#KB-101"
+        ]
+      },
+      {
+        "name": "Danh sách box (cột Image/Box/Status/Total/Inventory/Actions, icon \"Edit\") — staging",
+        "basis": "OBSERVED_CURRENT",
+        "kb_refs": [
+          "box-create-and-publish#KB-090"
+        ]
+      },
+      {
+        "name": "Modal \"Add product\" của Shopify admin (từ \"create a new product\") — staging",
+        "basis": "OBSERVED_CURRENT",
+        "kb_refs": [
+          "box-create-and-publish#KB-088",
+          "box-create-and-publish#KB-106"
+        ]
+      },
+      {
+        "name": "Icon Actions theo trạng thái ở danh sách Single box (Deactivate/Edit/Analytics/Delete; Activate/Edit) — staging",
+        "basis": "OBSERVED_CURRENT",
+        "kb_refs": [
+          "box-create-and-publish#KB-098"
+        ]
+      },
+      {
+        "name": "Nút \"Duplicate box\" ở header form box — staging, CONF-box-12 (pass 1 không thấy / pass 2 thấy)",
+        "basis": "OBSERVED_CURRENT",
+        "kb_refs": [
+          "box-create-and-publish#KB-099",
+          "box-create-and-publish#KB-100"
+        ]
+      },
+      {
+        "name": "Card \"Preview by test order\" + nút \"Preview\" (xám khi chưa lưu, bật khi Active) — staging",
+        "basis": "OBSERVED_CURRENT",
+        "kb_refs": [
+          "box-create-and-publish#KB-102"
+        ]
+      },
+      {
+        "name": "Toast \"Couldn't be saved\" + lỗi inline dưới Prize khi set rỗng — staging",
+        "basis": "OBSERVED_CURRENT",
+        "kb_refs": [
+          "box-create-and-publish#KB-103"
+        ]
+      },
+      {
+        "name": "Shopify admin (chỉ đọc) → Unstructured variant metafields \"mysbox.box\" — staging",
+        "basis": "OBSERVED_CURRENT",
+        "kb_refs": [
+          "box-create-and-publish#KB-104"
+        ]
+      }
+    ],
+    "storefront": [
+      {
+        "name": "Widget box trên trang sản phẩm (ẩn khi Draft; điều kiện publish date, bundles, sync completed)",
+        "kb_refs": [
+          "box-create-and-publish#KB-061",
+          "box-create-and-publish#KB-075",
+          "box-create-and-publish#KB-076",
+          "box-create-and-publish#KB-077"
+        ]
+      },
+      {
+        "name": "Trang order status của đơn Preview (xem animation)",
+        "kb_refs": [
+          "box-create-and-publish#KB-025"
+        ]
+      },
+      {
+        "name": "Widget \"Box items\"/\"Prize #n\" trên trang product box Active, dữ liệu từ window.mysboxStore.mysboxProductPageData.variantMetafields — staging",
+        "basis": "OBSERVED_CURRENT",
+        "kb_refs": [
+          "box-create-and-publish#KB-091",
+          "box-create-and-publish#KB-105",
+          "_object-level.box#KB-022"
+        ]
+      }
+    ],
+    "api": [
+      {
+        "name": "Publish/Unpublish đi qua kiểm tra riêng của API (endpoint không nêu)",
+        "kb_refs": [
+          "box-create-and-publish#KB-072"
+        ]
+      },
+      {
+        "name": "Route sửa box đã publish trả \"not found\" (route không nêu)",
+        "kb_refs": [
+          "box-create-and-publish#KB-080"
+        ]
+      },
+      {
+        "name": "POST /api/boxes",
+        "method": "POST",
+        "route": "/api/boxes",
+        "host": "<MYS_API_BASE>",
+        "observed": "201, data = box object (published_at null, current_version_id có); 2 sample; request body không capture",
+        "basis": "OBSERVED_CURRENT",
+        "kb_refs": [
+          "box-create-and-publish#KB-092",
+          "box-create-and-publish#KB-081",
+          "box-create-and-publish#KB-096",
+          "_object-level.box#KB-022"
+        ],
+        "refresh_note": "Quan sát staging 2026-10-17: +3 sample (gồm Single physical), sync_status \"completed\"; body vẫn không capture."
+      },
+      {
+        "name": "POST /api/boxes/{box_id}/publish",
+        "method": "POST",
+        "route": "/api/boxes/{box_id}/publish",
+        "host": "<MYS_API_BASE>",
+        "observed": "200, published_at ISO-8601, current_version_id không đổi; 3/3",
+        "basis": "OBSERVED_CURRENT",
+        "kb_refs": [
+          "box-create-and-publish#KB-093",
+          "box-create-and-publish#KB-083",
+          "box-create-and-publish#KB-096"
+        ],
+        "refresh_note": "Quan sát staging 2026-10-17: +3 sample tự gọi sau Save lần đầu."
+      },
+      {
+        "name": "POST /api/boxes/{box_id}/unpublish",
+        "method": "POST",
+        "route": "/api/boxes/{box_id}/unpublish",
+        "host": "<MYS_API_BASE>",
+        "observed": "200, published_at null, current_version_id và inventory.bundles giữ nguyên; 3/3",
+        "basis": "OBSERVED_CURRENT",
+        "kb_refs": [
+          "box-create-and-publish#KB-094",
+          "box-create-and-publish#KB-084",
+          "box-create-and-publish#KB-097"
+        ],
+        "refresh_note": "Quan sát staging 2026-10-17: +3 sample, body rỗng, box đã có đơn test."
+      },
+      {
+        "name": "PUT /api/boxes/{box_id}",
+        "method": "PUT",
+        "route": "/api/boxes/{box_id}",
+        "host": "<MYS_API_BASE>",
+        "observed": "200 khi Save box Draft; không kèm /publish; 2/2",
+        "basis": "OBSERVED_CURRENT",
+        "kb_refs": [
+          "box-create-and-publish#KB-082"
+        ]
+      },
+      {
+        "name": "GET /api/boxes",
+        "method": "GET",
+        "route": "/api/boxes?limit&page&order_by=published_at&type=SINGLE,TIER|BUNDLES",
+        "host": "<MYS_API_BASE>",
+        "observed": "200, data[] box object + meta.total; limit 5 ở Dashboard, 10 ở danh sách; 3 sample",
+        "basis": "OBSERVED_CURRENT",
+        "kb_refs": [
+          "box-create-and-publish#KB-095",
+          "box-create-and-publish#KB-090",
+          "box-create-and-publish#KB-098"
+        ]
+      },
+      {
+        "name": "GET /api/boxes/{box_id}",
+        "method": "GET",
+        "route": "/api/boxes/{box_id}",
+        "host": "<MYS_API_BASE>",
+        "observed": "200, shape box object (linked_id, type, category, settings, bundles[].items[], published_at, sync_status, current_version_id, inventory.bundles); 9/9",
+        "basis": "OBSERVED_CURRENT",
+        "kb_refs": [
+          "_object-level.box#KB-020",
+          "_object-level.box#KB-022",
+          "box-create-and-publish#KB-101"
+        ],
+        "refresh_note": "Quan sát staging 2026-10-17: shape chi tiết settings/bundles[]/inventory.bundles ghi ở _object-level.box#KB-022; mở form box Active chỉ gọi GET này (200)."
+      },
+      {
+        "name": "Shopify admin native ProductCreateSet / ProductCreatePublish / product by id (không phải API Mysbox)",
+        "method": "POST",
+        "route": "Shopify admin GraphQL (native)",
+        "basis": "OBSERVED_CURRENT",
+        "kb_refs": [
+          "box-create-and-publish#KB-088",
+          "box-create-and-publish#KB-106"
+        ]
+      },
+      {
+        "name": "Storefront getVariants / getProducts trên trang product (không gọi <MYS_API_BASE>)",
+        "method": "POST",
+        "route": "Storefront GraphQL getVariants / getProducts",
+        "observed": "getProducts trả metafield(namespace mysbox, key box) = null ở mọi variant node",
+        "basis": "OBSERVED_CURRENT",
+        "kb_refs": [
+          "box-create-and-publish#KB-091",
+          "box-create-and-publish#KB-105"
+        ],
+        "refresh_note": "Quan sát staging 2026-10-17: null 3/3 box (B1, B2, B3)."
+      }
+    ],
+    "data": [
+      {
+        "name": "published_at của box (trống = Draft / đã tự unpublish)",
+        "kb_refs": [
+          "box-create-and-publish#KB-056",
+          "box-create-and-publish#KB-073"
+        ]
+      },
+      {
+        "name": "Metafield của box trên variant Shopify (ghi khi publish, xoá khi xoá box)",
+        "kb_refs": [
+          "box-create-and-publish#KB-009",
+          "box-create-and-publish#KB-052",
+          "box-create-and-publish#KB-064",
+          "_product-level#KB-PL-025"
+        ]
+      },
+      {
+        "name": "Sync status (completed / syncing / failed)",
+        "kb_refs": [
+          "_object-level.box#KB-018",
+          "box-create-and-publish#KB-077"
+        ]
+      },
+      {
+        "name": "Đơn test tag `mysbox-preview-order`",
+        "kb_refs": [
+          "box-create-and-publish#KB-024"
+        ]
+      },
+      {
+        "name": "Tồn kho của box (bỏ khi xoá box)",
+        "kb_refs": [
+          "box-create-and-publish#KB-066"
+        ]
+      },
+      {
+        "name": "Box object qua API: published_at, current_version_id, sync_status, inventory.bundles — staging",
+        "basis": "OBSERVED_CURRENT",
+        "kb_refs": [
+          "_object-level.box#KB-020",
+          "box-create-and-publish#KB-092",
+          "box-create-and-publish#KB-093",
+          "box-create-and-publish#KB-094",
+          "_object-level.box#KB-022"
+        ]
+      },
+      {
+        "name": "Thuộc tính product/variant mystery trên Shopify admin (title, price, tracked, tồn kho, Status) không đổi sau vòng đời box — staging",
+        "basis": "OBSERVED_CURRENT",
+        "kb_refs": [
+          "box-create-and-publish#KB-089"
+        ]
+      },
+      {
+        "name": "Metafield variant \"mysbox.box\" (unstructured, JSON box; còn sau Deactivate với published_at cũ ~1 phút) — staging",
+        "basis": "OBSERVED_CURRENT",
+        "kb_refs": [
+          "box-create-and-publish#KB-104"
+        ]
+      },
+      {
+        "name": "Bản nhúng Liquid window.mysboxStore.mysboxProductPageData.variantMetafields (cùng shape box object) — staging",
+        "basis": "OBSERVED_CURRENT",
+        "kb_refs": [
+          "box-create-and-publish#KB-105",
+          "_object-level.box#KB-022"
+        ]
+      }
+    ],
+    "code": []
+  },
+  "dependencies": [
+    {
+      "dependency": "Shopify product/variant mystery và variant prize (đọc tên/ảnh/giá; kiểm tồn tại khi Save).",
+      "kb_refs": [
+        "box-create-and-publish#KB-018",
+        "box-create-and-publish#KB-042",
+        "box-create-and-publish#KB-043",
+        "box-create-and-publish#KB-053"
+      ]
+    },
+    {
+      "dependency": "Shopify metafield: publish thất bại nếu Shopify từ chối.",
+      "kb_refs": [
+        "box-create-and-publish#KB-064"
+      ]
+    },
+    {
+      "dependency": "Đồng bộ inventory/collection (sync) phải completed trước khi publish và để widget hiện.",
+      "kb_refs": [
+        "box-create-and-publish#KB-062",
+        "box-create-and-publish#KB-077",
+        "box-create-and-publish#KB-079"
+      ]
+    },
+    {
+      "dependency": "Cấu hình loại box và prize (box-type-and-prize-setup) quyết định validation khi Save.",
+      "kb_refs": [
+        "box-type-and-prize-setup#KB-011",
+        "box-type-and-prize-setup#KB-012",
+        "box-type-and-prize-setup#KB-050"
+      ]
+    },
+    {
+      "dependency": "Modal \"Add product\" native của Shopify admin để tạo product mystery từ form box (quan sát staging).",
+      "basis": "OBSERVED_CURRENT",
+      "kb_refs": [
+        "box-create-and-publish#KB-088",
+        "box-create-and-publish#KB-106"
+      ]
+    },
+    {
+      "dependency": "Bản nhúng Liquid trên trang product (theme app embed) là nguồn dữ liệu widget; Storefront API trả metafield null (quan sát staging).",
+      "basis": "OBSERVED_CURRENT",
+      "kb_refs": [
+        "box-create-and-publish#KB-105"
+      ]
+    }
+  ],
+  "risks": [
+    {
+      "risk": "Lỗi tạm Shopify hiện như thiếu tài nguyên — tester dễ ghi nhầm thành bug dữ liệu.",
+      "kb_refs": [
+        "box-create-and-publish#KB-044"
+      ]
+    },
+    {
+      "risk": "Dữ liệu Shopify trong Mysbox không tự cập nhật — box có thể bán với thông tin/tồn kho cũ.",
+      "kb_refs": [
+        "box-create-and-publish#KB-054"
+      ]
+    },
+    {
+      "risk": "Xoá box bỏ tồn kho và metafield — thao tác không hoàn tác được theo KB.",
+      "kb_refs": [
+        "box-create-and-publish#KB-052",
+        "box-create-and-publish#KB-066"
+      ]
+    },
+    {
+      "risk": "security-observation: response <MYS_API_BASE>/api/* (kèm allow-header Authorization) và /apps/mysbox/api/* mang access-control-allow-origin: * — chưa biết là cấu hình chủ ý; không đánh giá là lỗi.",
+      "basis": "OBSERVED_CURRENT",
+      "tags": [
+        "security-observation"
+      ],
+      "kb_refs": [
+        "_object-level.box#KB-021"
+      ]
+    },
+    {
+      "risk": "Deactivate không có hộp xác nhận — một click đưa box đang bán về Draft (ngừng bán).",
+      "basis": "OBSERVED_CURRENT",
+      "kb_refs": [
+        "box-create-and-publish#KB-084",
+        "box-create-and-publish#KB-097"
+      ]
+    },
+    {
+      "risk": "Metafield \"mysbox.box\" vẫn giữ published_at cũ sau Deactivate (~1 phút) — nếu widget đọc bản này, box Draft có thể vẫn hiện/bán được trên storefront (chưa kiểm).",
+      "basis": "OBSERVED_CURRENT",
+      "kb_refs": [
+        "box-create-and-publish#KB-104",
+        "box-create-and-publish#KB-105"
+      ]
+    },
+    {
+      "risk": "Validation \"random set is empty\" chỉ thấy chặn phía client (0 request) — chưa biết server có kiểm lại; gọi API trực tiếp có thể lưu được set rỗng.",
+      "basis": "OBSERVED_CURRENT",
+      "kb_refs": [
+        "box-create-and-publish#KB-103"
+      ]
+    }
+  ],
+  "freshness": {
+    "observed_at": "2026-10-17",
+    "base_observed_at": "2026-10-16"
+  },
+  "unknown_areas": [
+    {
+      "question": "Vai trò nào (chủ shop hay nhân viên shop) được tạo, publish, unpublish và xoá box?",
+      "why_it_matters": "Tài liệu chỉ ghi 'merchant'; chưa có ma trận quyền để viết check permission.",
+      "kb_refs": [
+        "box-create-and-publish#KB-001",
+        "box-create-and-publish#KB-003",
+        "box-create-and-publish#KB-006",
+        "box-create-and-publish#KB-057"
+      ],
+      "oq_id": "OQ-box-059"
+    },
+    {
+      "question": "Màn hình \"Syncing inventory...\" chờ tối đa chính xác bao lâu và hành vi khi quá thời gian?",
+      "why_it_matters": "Tài liệu nêu xấp xỉ khoảng 60 giây (backend chờ tới 180 giây phân giải collection); không có boundary rõ.",
+      "kb_refs": [
+        "box-create-and-publish#KB-049",
+        "box-create-and-publish#KB-050"
+      ],
+      "oq_id": "OQ-box-058"
+    },
+    {
+      "question": "Khi Save box Group gặp \"Sync failed. Please contact support for assistance.\" thì box ở trạng thái nào và có retry được không?",
+      "why_it_matters": "Quyết định expected result của luồng lưu box Group khi sync lỗi.",
+      "kb_refs": [
+        "box-create-and-publish#KB-045",
+        "box-create-and-publish#KB-048"
+      ],
+      "oq_id": "OQ-box-010"
+    },
+    {
+      "question": "Metafield nào (namespace/key) được ghi lên variant khi publish, và deactivate/unpublish có xoá metafield không hay chỉ xoá khi delete?",
+      "why_it_matters": "Kiểm side effect trên Shopify và hành vi widget khi box về Draft.",
+      "kb_refs": [
+        "box-create-and-publish#KB-009",
+        "box-create-and-publish#KB-052",
+        "box-create-and-publish#KB-061"
+      ],
+      "oq_id": "OQ-box-011",
+      "refresh_note": "Quan sát staging 2026-10-17 (1 box): metafield \"mysbox.box\" (unstructured) chứa JSON box khi Active; ~1 phút sau Deactivate vẫn còn với published_at cũ; trang product đọc bản nhúng Liquid. Chưa biết metafield có được xoá/cập nhật muộn hơn và widget sau Deactivate.",
+      "refresh_kb_refs": [
+        "box-create-and-publish#KB-104",
+        "box-create-and-publish#KB-105"
+      ]
+    },
+    {
+      "question": "\"Duplicate box\" dùng được với mọi loại box và box Active không; box duplicate có giữ liên kết variant (vốn chỉ thuộc một box) không?",
+      "why_it_matters": "Luật một variant thuộc một box có thể làm box duplicate lỗi khi Save.",
+      "kb_refs": [
+        "box-create-and-publish#KB-016",
+        "box-create-and-publish#KB-021",
+        "box-create-and-publish#KB-036"
+      ],
+      "oq_id": "OQ-box-013",
+      "refresh_note": "Quan sát staging 2026-10-17: pass 1 không thấy control Duplicate, pass 2 thấy \"Duplicate box\" ở header form box Active và Draft (CONF-box-12); không bấm nên hành vi copy chưa biết.",
+      "refresh_kb_refs": [
+        "box-create-and-publish#KB-099",
+        "box-create-and-publish#KB-100"
+      ]
+    },
+    {
+      "question": "Đơn test tạo từ \"Preview\" có bốc thăm thật và có tính vào quota/usage không?",
+      "why_it_matters": "Ảnh hưởng đếm capacity và dữ liệu thử nghiệm.",
+      "kb_refs": [
+        "box-create-and-publish#KB-024"
+      ],
+      "oq_id": "OQ-box-014",
+      "refresh_note": "Quan sát staging 2026-10-17: card \"Preview by test order\" có trên staging (bật khi Active, không có bước chọn box) nhưng không bấm — chưa có đơn preview.",
+      "refresh_kb_refs": [
+        "box-create-and-publish#KB-102"
+      ]
+    },
+    {
+      "question": "\"Pause sales\", \"deactivate\" và \"unpublish\" có phải cùng một thao tác/nút UI đưa box về Draft không?",
+      "why_it_matters": "Precondition sửa box được nêu bằng nhiều thuật ngữ khác nhau; cần đúng nút UI để viết bước test.",
+      "kb_refs": [
+        "box-create-and-publish#KB-058",
+        "box-create-and-publish#KB-060",
+        "box-create-and-publish#KB-067",
+        "box-create-and-publish#KB-068"
+      ],
+      "oq_id": "OQ-box-015",
+      "refresh_note": "Quan sát staging 2026-10-17: banner \"Pause sales to make changes.\" đi kèm nút \"Deactivate box\" gọi POST /unpublish (3/3); danh sách có tooltip \"Deactivate\" (không bấm) — endpoint của Actions danh sách và combobox Status chưa thấy.",
+      "refresh_kb_refs": [
+        "box-create-and-publish#KB-097",
+        "box-create-and-publish#KB-098",
+        "box-create-and-publish#KB-101"
+      ]
+    },
+    {
+      "question": "Có điều kiện nào (ngoài trạng thái Draft) chặn xoá box khi box đã có đơn không?",
+      "why_it_matters": "Tài liệu tự khai chưa xác nhận; không viết được expected result cho xoá box có đơn.",
+      "kb_refs": [
+        "box-create-and-publish#KB-059",
+        "box-create-and-publish#KB-066"
+      ],
+      "oq_id": "OQ-box-016"
+    },
+    {
+      "question": "Unpublish/deactivate có hộp xác nhận không; ở admin panel Unpublish và Delete có xác nhận không?",
+      "why_it_matters": "Chỉ xoá box Draft trong app có xác nhận được nêu.",
+      "kb_refs": [
+        "box-create-and-publish#KB-058",
+        "box-create-and-publish#KB-065"
+      ],
+      "oq_id": "OQ-box-015",
+      "refresh_note": "Staging quan sát: Deactivate trong app không có hộp xác nhận, 3/3 (KB-084, OBSERVED_CURRENT); admin panel vẫn NOT_COVERED. Quan sát staging 2026-10-17: thêm 3/3 (KB-097), gồm box đã có đơn.",
+      "refresh_kb_refs": [
+        "box-create-and-publish#KB-084",
+        "box-create-and-publish#KB-097"
+      ]
+    },
+    {
+      "question": "Khi Shopify lỗi và publish bị huỷ, người dùng thấy thông báo gì và sync status có đổi không?",
+      "why_it_matters": "Nhánh lỗi metafield không có thông điệp cụ thể.",
+      "kb_refs": [
+        "box-create-and-publish#KB-064",
+        "box-create-and-publish#KB-072"
+      ],
+      "oq_id": "OQ-box-017"
+    },
+    {
+      "question": "Route sửa box đã publish là route nào, và 'not found' là HTTP 404 hay thông báo UI?",
+      "why_it_matters": "Cần cho check API; tài liệu không nêu route.",
+      "kb_refs": [
+        "box-create-and-publish#KB-080"
+      ],
+      "oq_id": "OQ-box-018",
+      "refresh_note": "Quan sát staging 2026-10-17: mở form box Active chỉ gọi document 200 + GET /api/boxes/{id} 200, không có 4xx/\"not found\" — KB-080 không tái hiện qua UI; có thể là route ghi (PUT) không được gọi, nên route và dạng \"not found\" vẫn chưa biết.",
+      "refresh_kb_refs": [
+        "box-create-and-publish#KB-101"
+      ]
+    },
+    {
+      "question": "Hai thông báo \"Box sync is not complete.\" và \"Box must finish syncing before it can be published.\" (và \"Cannot publish: inventory pools are exhausted.\") hiện ở portal hay admin panel, và trong tình huống nào mỗi cái?",
+      "why_it_matters": "Hai text khác nhau cho cùng điều kiện sync chưa xong; check cần biết surface và text mong đợi.",
+      "kb_refs": [
+        "box-create-and-publish#KB-062",
+        "box-create-and-publish#KB-078",
+        "box-create-and-publish#KB-063"
+      ],
+      "oq_id": "OQ-box-020"
+    },
+    {
+      "question": "Hệ thống tự unpublish box trong điều kiện nào?",
+      "why_it_matters": "KB chỉ nêu hệ quả (ngày publish trống), không nêu trigger; cần để test vòng đời và widget.",
+      "kb_refs": [
+        "box-create-and-publish#KB-073"
+      ],
+      "oq_id": "OQ-box-021"
+    },
+    {
+      "question": "\"Bấm nút Activate\" (KB-057) là combobox Status trên sidebar hay một nút khác? Staging chỉ thấy combobox Status gọi /publish.",
+      "why_it_matters": "Bước test publish box Draft cần đúng control UI; quan sát mới 1 mẫu.",
+      "kb_refs": [
+        "box-create-and-publish#KB-083",
+        "box-create-and-publish#KB-057"
+      ],
+      "oq_id": "OQ-box-095",
+      "refresh_note": "Quan sát staging 2026-10-17: form Draft không có nút \"Activate\" riêng (chỉ combobox Status); danh sách có tooltip \"Activate\" ở hàng Draft — không bấm, endpoint chưa thấy.",
+      "refresh_kb_refs": [
+        "box-create-and-publish#KB-097",
+        "box-create-and-publish#KB-098"
+      ]
+    },
+    {
+      "question": "Request body của POST /api/boxes, PUT /api/boxes/{id}, POST /publish, /unpublish gồm field nào, field nào bắt buộc, và lỗi 4xx/422 trả gì?",
+      "why_it_matters": "Body không capture được; không viết được check API contract/validation phía server.",
+      "kb_refs": [
+        "box-create-and-publish#KB-092",
+        "box-create-and-publish#KB-093",
+        "box-create-and-publish#KB-094",
+        "box-create-and-publish#KB-082"
+      ],
+      "oq_id": "OQ-box-096",
+      "refresh_note": "Quan sát staging 2026-10-17: /unpublish body rỗng (3/3); body POST /api/boxes và /publish vẫn không capture (giới hạn công cụ); không có PUT.",
+      "refresh_kb_refs": [
+        "box-create-and-publish#KB-096",
+        "box-create-and-publish#KB-097"
+      ]
+    },
+    {
+      "question": "Vì sao Storefront getProducts trả metafield(namespace mysbox, key box) = null ở mọi variant node trong khi widget đọc dữ liệu từ window.mysboxStore?",
+      "why_it_matters": "Quyết định nguồn dữ liệu widget và oracle cho check 'publish ghi metafield' (KB-009).",
+      "kb_refs": [
+        "box-create-and-publish#KB-091",
+        "box-create-and-publish#KB-009"
+      ],
+      "oq_id": "OQ-box-097",
+      "refresh_note": "Quan sát staging 2026-10-17: metafield \"mysbox.box\" có giá trị trên Shopify admin (unstructured, không definition) nhưng getProducts trả null 3/3; quyền Storefront access không hiện — lý do gốc cần Dev.",
+      "refresh_kb_refs": [
+        "box-create-and-publish#KB-104",
+        "box-create-and-publish#KB-105"
+      ]
+    },
+    {
+      "question": "CORS access-control-allow-origin: * trên API merchant (kèm allow-header Authorization) và app proxy có phải cấu hình chủ ý không?",
+      "why_it_matters": "Quan sát bảo mật về CORS mở trên API merchant và app proxy; cần owner xác nhận trước khi viết check bảo mật. Không tự escalate — hỏi operator.",
+      "kb_refs": [
+        "_object-level.box#KB-021"
+      ],
+      "oq_id": "OQ-box-091"
+    },
+    {
+      "question": "Server có kiểm lại \"The random set is empty\" (set rỗng) khi request đi thẳng tới POST /api/boxes không, hay chỉ chặn phía client?",
+      "why_it_matters": "Staging chỉ thấy chặn phía client (0 request); thiếu kiểm phía server là rủi ro dữ liệu box hỏng — cần cho check API validation.",
+      "kb_refs": [
+        "box-create-and-publish#KB-103",
+        "box-create-and-publish#KB-030"
+      ],
+      "oq_id": "OQ-box-128"
+    },
+    {
+      "question": "Icon Actions \"Analytics\" ở hàng box Active và các icon \"Deactivate\"/\"Activate\"/\"Delete\" ở danh sách gọi endpoint nào và có hộp xác nhận không?",
+      "why_it_matters": "Danh sách là điểm vào thứ hai để đổi trạng thái/xoá box; chưa bấm nên chưa viết được bước test và expected cho các icon này.",
+      "kb_refs": [
+        "box-create-and-publish#KB-098"
+      ],
+      "oq_id": "OQ-box-129"
+    }
+  ],
+  "last_updated": {
+    "date": "2026-10-17",
+    "ccr_ref": "bootstrap"
+  },
+  "coverage_matrix": [
+    {
+      "feature_id": "FEAT-02-box-create-and-publish",
+      "layer": "portal",
+      "role": "merchant",
+      "state": "Draft",
+      "environment": "documented",
+      "covered": true
+    },
+    {
+      "feature_id": "FEAT-02-box-create-and-publish",
+      "layer": "portal",
+      "role": "merchant",
+      "state": "Active",
+      "environment": "documented",
+      "covered": true
+    },
+    {
+      "feature_id": "FEAT-02-box-create-and-publish",
+      "layer": "storefront",
+      "role": "customer",
+      "state": "Draft",
+      "environment": "documented",
+      "covered": true,
+      "note": "Widget ẩn / chưa bán."
+    },
+    {
+      "feature_id": "FEAT-02-box-create-and-publish",
+      "layer": "storefront",
+      "role": "customer",
+      "state": "Active",
+      "environment": "documented",
+      "covered": true
+    },
+    {
+      "feature_id": "FEAT-02-box-create-and-publish",
+      "layer": "code",
+      "role": "system",
+      "state": "documented",
+      "environment": "documented",
+      "covered": true,
+      "note": "Metafield, sync, tự unpublish (trigger chưa rõ)."
+    },
+    {
+      "feature_id": "FEAT-02-box-create-and-publish",
+      "layer": "api",
+      "role": "merchant",
+      "state": "documented",
+      "environment": "documented",
+      "covered": false,
+      "note": "Có nhắc kiểm tra API và route sửa nhưng không có endpoint."
+    },
+    {
+      "feature_id": "FEAT-02-box-create-and-publish",
+      "layer": "db",
+      "role": "system",
+      "state": "documented",
+      "environment": "documented",
+      "covered": false,
+      "note": "Chỉ có published_at mức nghiệp vụ."
+    },
+    {
+      "feature_id": "FEAT-02-box-create-and-publish",
+      "layer": "portal",
+      "role": "admin-staff",
+      "state": "documented",
+      "environment": "documented",
+      "covered": false,
+      "note": "Publish/Unpublish/Delete ở admin panel chỉ thấy qua unknown_areas."
+    },
+    {
+      "feature_id": "FEAT-02-box-create-and-publish",
+      "layer": "portal",
+      "role": "merchant",
+      "state": "Draft (form mới + sau Deactivate)",
+      "environment": "staging",
+      "covered": true,
+      "kb_refs": [
+        "box-create-and-publish#KB-082",
+        "box-create-and-publish#KB-086",
+        "box-create-and-publish#KB-087",
+        "box-create-and-publish#KB-088",
+        "box-create-and-publish#KB-097",
+        "box-create-and-publish#KB-103",
+        "box-create-and-publish#KB-106"
+      ]
+    },
+    {
+      "feature_id": "FEAT-02-box-create-and-publish",
+      "layer": "portal",
+      "role": "merchant",
+      "state": "Active",
+      "environment": "staging",
+      "covered": true,
+      "kb_refs": [
+        "box-create-and-publish#KB-081",
+        "box-create-and-publish#KB-083",
+        "box-create-and-publish#KB-084",
+        "box-create-and-publish#KB-085",
+        "box-create-and-publish#KB-090",
+        "box-create-and-publish#KB-096",
+        "box-create-and-publish#KB-101",
+        "box-create-and-publish#KB-102"
+      ]
+    },
+    {
+      "feature_id": "FEAT-02-box-create-and-publish",
+      "layer": "api",
+      "role": "merchant",
+      "state": "Draft/Active",
+      "environment": "staging",
+      "covered": true,
+      "kb_refs": [
+        "box-create-and-publish#KB-092",
+        "box-create-and-publish#KB-093",
+        "box-create-and-publish#KB-094",
+        "box-create-and-publish#KB-095",
+        "_object-level.box#KB-020",
+        "_object-level.box#KB-022",
+        "box-create-and-publish#KB-096",
+        "box-create-and-publish#KB-097"
+      ]
+    },
+    {
+      "feature_id": "FEAT-02-box-create-and-publish",
+      "layer": "storefront",
+      "role": "guest buyer",
+      "state": "Active",
+      "environment": "staging",
+      "covered": true,
+      "kb_refs": [
+        "box-create-and-publish#KB-091",
+        "box-create-and-publish#KB-105"
+      ]
+    },
+    {
+      "feature_id": "FEAT-02-box-create-and-publish",
+      "layer": "storefront",
+      "role": "guest buyer",
+      "state": "Draft (sau Deactivate)",
+      "environment": "staging",
+      "covered": false,
+      "note": "NOT_COVERED: widget ẩn sau Deactivate (KB-061) không kiểm. Quan sát staging 2026-10-17 chỉ thấy metafield còn published_at cũ sau ~1 phút (KB-104)."
+    },
+    {
+      "feature_id": "FEAT-02-box-create-and-publish",
+      "layer": "portal",
+      "role": "merchant",
+      "state": "Group (Tier) save/sync, xoá box, Preview, publish thất bại",
+      "environment": "staging",
+      "covered": false,
+      "note": "NOT_COVERED: không có box TIER; xoá/Preview ngoài allowed_reversible/quota; 3/3 publish 200. Quan sát staging 2026-10-17: vẫn không lưu box Group, không xoá, không Preview, không Duplicate, không Activate thủ công."
+    },
+    {
+      "feature_id": "FEAT-02-box-create-and-publish",
+      "layer": "portal",
+      "role": "merchant",
+      "state": "Single \"Sealed box\" (physical) tạo + Deactivate",
+      "environment": "staging",
+      "covered": true,
+      "kb_refs": [
+        "box-create-and-publish#KB-096",
+        "box-create-and-publish#KB-097",
+        "box-create-and-publish#KB-104"
+      ]
+    },
+    {
+      "feature_id": "FEAT-02-box-create-and-publish",
+      "layer": "storefront",
+      "role": "logged-in customer",
+      "state": "Active",
+      "environment": "staging",
+      "covered": false,
+      "note": "NOT_COVERED: không có logged-in customer được bàn giao."
+    },
+    {
+      "feature_id": "FEAT-02-box-create-and-publish",
+      "layer": "portal",
+      "role": "admin-staff",
+      "state": "Draft/Active",
+      "environment": "staging",
+      "covered": false,
+      "note": "NOT_COVERED: admin panel tắt theo config."
+    },
+    {
+      "feature_id": "FEAT-02-box-create-and-publish",
+      "layer": "db",
+      "role": "system",
+      "state": "Draft/Active",
+      "environment": "staging",
+      "covered": false,
+      "note": "NOT_COVERED: db surface tắt."
+    },
+    {
+      "feature_id": "FEAT-02-box-create-and-publish",
+      "layer": "code",
+      "role": "system",
+      "state": "metafield write",
+      "environment": "staging",
+      "covered": false,
+      "note": "NOT_COVERED: code surface tắt; ghi metafield server→Shopify không thấy trong browser."
+    },
+    {
+      "feature_id": "FEAT-02-box-create-and-publish",
+      "layer": "storefront",
+      "role": "guest buyer",
+      "state": "mobile",
+      "environment": "staging",
+      "covered": false,
+      "note": "NOT_COVERED: chỉ desktop."
+    }
+  ],
+  "profile_conflicts": [
+    {
+      "conflict_group": "CONF-box-12",
+      "status": "UNRESOLVED",
+      "topic": "Form box có nút \"Duplicate box\" không? (hai pass cùng ngày ghi trái nhau)",
+      "side_a": {
+        "kb_ref": "box-create-and-publish#KB-100",
+        "statement": "Pass 1: không có control Duplicate ở danh sách và form box."
+      },
+      "side_b": {
+        "kb_ref": "box-create-and-publish#KB-099",
+        "statement": "Pass 2: form box 1025/1026/1027 có nút \"Duplicate box\" ở header."
+      },
+      "related_base_kb_refs": [
+        "box-create-and-publish#KB-016"
+      ],
+      "relates_to_existing_oq": [
+        "OQ-box-013"
+      ],
+      "note": "Giữ cả hai phía; không tự chọn bên."
+    }
+  ],
+  "profile_relationships": [
+    {
+      "from_feature_key": "box-create-and-publish",
+      "to_feature_key": "box-type-and-prize-setup",
+      "relation": "saves_configuration_of",
+      "note": "Form box chứa phần chọn loại box và prize; validation khi Save kiểm cấu hình đó.",
+      "kb_refs": [
+        "box-create-and-publish#KB-032",
+        "box-create-and-publish#KB-034",
+        "box-create-and-publish#KB-035"
+      ]
+    },
+    {
+      "from_feature_key": "box-create-and-publish",
+      "to_feature_key": "box-versioning",
+      "relation": "lifecycle_vs_version",
+      "note": "Sửa box chỉ khi Draft; xoá box giữ version; publish/unpublish không tạo version.",
+      "kb_refs": [
+        "box-create-and-publish#KB-013",
+        "box-versioning#KB-017",
+        "box-versioning#KB-029"
+      ]
+    },
+    {
+      "from_feature_key": "box-create-and-publish",
+      "to_feature_key": "inventory-and-sold-out",
+      "relation": "publish_blocked_by_inventory",
+      "note": "Box Group pool cạn không publish được; xoá box bỏ tồn kho.",
+      "kb_refs": [
+        "box-create-and-publish#KB-063",
+        "box-create-and-publish#KB-066"
+      ]
+    },
+    {
+      "from_feature_key": "box-create-and-publish",
+      "to_feature_key": "purchase-and-prize-draw",
+      "relation": "active_box_purchasable",
+      "note": "Quan sát staging: box vừa tự Active mua được qua checkout (OBSERVED_CURRENT).",
+      "kb_refs": [
+        "box-create-and-publish#KB-091",
+        "box-create-and-publish#KB-105"
+      ]
+    },
+    {
+      "from_feature_key": "box-create-and-publish",
+      "to_feature_key": "physical-sealed-box-fulfilment",
+      "relation": "creates_sealed_box",
+      "note": "Quan sát staging: Save lần đầu box Single \"Sealed box\" cũng tự publish (OBSERVED_CURRENT).",
+      "kb_refs": [
+        "box-create-and-publish#KB-096"
+      ]
+    }
+  ]
+}

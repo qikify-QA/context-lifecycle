@@ -1,0 +1,930 @@
+{
+  "feature_id": "FEAT-02-capacity-limit-enforcement",
+  "feature_key": "capacity-limit-enforcement",
+  "object_id": "plans-billing",
+  "name": "Chạm trần capacity (Free): gỡ xuất bản box và ẩn storefront",
+  "user_goal": "Khi shop plan Free chạm trần capacity của chu kỳ, hệ thống chặn bán box mới: gỡ xuất bản mọi box, khoá nút tạo box, ẩn widget / khối Unbox / danh sách món / nút store credit trên storefront, báo merchant qua thông điệp và email — trong khi đơn đã trả vẫn mở và resell được; quota đủ lại không tự xuất bản lại box. Shop plan Paid chạm quota vẫn bán, box vượt bị tính phí.",
+  "user_goal_kb_refs": [
+    "capacity-limit-enforcement#KB-002",
+    "capacity-limit-enforcement#KB-001",
+    "capacity-limit-enforcement#KB-006",
+    "capacity-limit-enforcement#KB-010",
+    "capacity-limit-enforcement#KB-026",
+    "capacity-limit-enforcement#KB-013",
+    "capacity-limit-enforcement#KB-015",
+    "capacity-limit-enforcement#KB-018",
+    "capacity-limit-enforcement#KB-011"
+  ],
+  "stable_since_version": "1",
+  "actors": [
+    {
+      "role": "merchant",
+      "permission_observed": "Thấy thông điệp chạm trần và nút tạo box bị khoá; nhận email capacity (mẫu Free hoặc Paid); phải tự publish lại từng box sau khi quota đủ lại.",
+      "kb_refs": [
+        "capacity-limit-enforcement#KB-001",
+        "capacity-limit-enforcement#KB-013",
+        "capacity-limit-enforcement#KB-016",
+        "capacity-limit-enforcement#KB-018",
+        "capacity-limit-enforcement#KB-025",
+        "_product-level#KB-PL-002"
+      ]
+    },
+    {
+      "role": "customer",
+      "permission_observed": "Không mua được box mới khi shop Free chạm trần (widget, khối Unbox, danh sách món, nút store credit bị ẩn); đơn đã trả trước đó vẫn mở và resell.",
+      "kb_refs": [
+        "capacity-limit-enforcement#KB-006",
+        "capacity-limit-enforcement#KB-010",
+        "capacity-limit-enforcement#KB-014",
+        "capacity-limit-enforcement#KB-015",
+        "capacity-limit-enforcement#KB-026",
+        "_product-level#KB-PL-004"
+      ],
+      "observed_kb_refs": [
+        "capacity-limit-enforcement#KB-046"
+      ],
+      "refresh_note": "Staging (khách vãng lai, shop trong hạn mức): config storefront over_capacity false, widget render."
+    },
+    {
+      "role": "system",
+      "permission_observed": "Phát hiện capacity used lớn hơn hoặc bằng selling capacity trên plan Free, gỡ publish toàn bộ box trong một lượt, làm mới dữ liệu storefront, gửi email.",
+      "kb_refs": [
+        "capacity-limit-enforcement#KB-002",
+        "capacity-limit-enforcement#KB-003",
+        "capacity-limit-enforcement#KB-012"
+      ]
+    },
+    {
+      "role": "admin-staff",
+      "permission_observed": "Sửa \"capacity used\" trong form Edit shop; nâng tới trần trên plan Free làm unpublish mọi box, hạ xuống không tự publish lại.",
+      "kb_refs": [
+        "capacity-limit-enforcement#KB-021",
+        "capacity-limit-enforcement#KB-023",
+        "_product-level#KB-PL-006"
+      ]
+    }
+  ],
+  "entry_points": [
+    {
+      "path": "Đơn đã thanh toán làm capacity used chạm selling capacity (hệ thống tự kích hoạt)",
+      "precondition": "Shop ở plan Free, trong chu kỳ đang chạy",
+      "kb_refs": [
+        "capacity-limit-enforcement#KB-002",
+        "capacity-limit-enforcement#KB-003"
+      ]
+    },
+    {
+      "path": "Merchant app > form tạo box / nút \"Create new box\" trên Dashboard",
+      "precondition": "Shop Free đã dùng hết quota",
+      "kb_refs": [
+        "capacity-limit-enforcement#KB-001"
+      ]
+    },
+    {
+      "path": "Storefront: trang sản phẩm (widget) và trang cảm ơn / order status (khối Unbox)",
+      "precondition": "Shop bị cờ hết hạn hoặc vượt capacity",
+      "kb_refs": [
+        "capacity-limit-enforcement#KB-008",
+        "capacity-limit-enforcement#KB-010"
+      ],
+      "observed_kb_refs": [
+        "capacity-limit-enforcement#KB-046"
+      ],
+      "refresh_note": "Staging: chỉ quan sát nhánh không bị cờ (over_capacity false)."
+    },
+    {
+      "path": "Admin panel > Shop > Edit (capacity used / selling capacity)",
+      "precondition": "Đăng nhập admin panel; shop plan Free",
+      "kb_refs": [
+        "capacity-limit-enforcement#KB-021"
+      ]
+    },
+    {
+      "path": "Cài lại app",
+      "precondition": "Shop vẫn vượt giới hạn plan Free",
+      "kb_refs": [
+        "capacity-limit-enforcement#KB-019",
+        "capacity-limit-enforcement#KB-020"
+      ]
+    }
+  ],
+  "capabilities": [
+    {
+      "name": "Tự gỡ xuất bản toàn bộ box khi shop Free chạm trần",
+      "description": "Khi capacity used lớn hơn hoặc bằng selling capacity và shop ở plan Free, app gỡ publish toàn bộ box trong một lượt và làm mới dữ liệu storefront; trạng thái capacity \"vượt\" chỉ áp cho gói Free; cài lại app khi vẫn vượt cũng gỡ box.",
+      "kb_refs": [
+        "capacity-limit-enforcement#KB-002",
+        "capacity-limit-enforcement#KB-003",
+        "capacity-limit-enforcement#KB-012",
+        "capacity-limit-enforcement#KB-019",
+        "capacity-limit-enforcement#KB-024"
+      ]
+    },
+    {
+      "name": "Khoá tạo box và thông báo merchant khi chạm trần",
+      "description": "Nút \"Create new box\" bị khoá; merchant thấy \"You have reached the box limit, upgrade plan to sell more.\" và nhận email \"capacity limit\" mẫu Free (gửi lại khi cài lại app lúc vẫn vượt).",
+      "kb_refs": [
+        "capacity-limit-enforcement#KB-001",
+        "capacity-limit-enforcement#KB-013",
+        "capacity-limit-enforcement#KB-020",
+        "capacity-limit-enforcement#KB-025"
+      ]
+    },
+    {
+      "name": "Ngừng bán trên storefront khi shop bị cờ vượt capacity",
+      "description": "Dữ liệu gói/dung lượng trong metafield của shop quyết định ẩn widget; widget ẩn khi đồng thời plan không thuộc hai plan đặc biệt vĩnh viễn, chu kỳ chưa kết thúc và shop bị cờ vượt; khối Unbox, danh sách món, nút store credit bị ẩn; đơn mới sau chạm trần không có block Unbox; khách không mua được box mới.",
+      "kb_refs": [
+        "capacity-limit-enforcement#KB-006",
+        "capacity-limit-enforcement#KB-007",
+        "capacity-limit-enforcement#KB-008",
+        "capacity-limit-enforcement#KB-009",
+        "capacity-limit-enforcement#KB-010",
+        "capacity-limit-enforcement#KB-014",
+        "capacity-limit-enforcement#KB-026",
+        "capacity-limit-enforcement#KB-027"
+      ],
+      "observed_kb_refs": [
+        "capacity-limit-enforcement#KB-046"
+      ],
+      "refresh_note": "Staging: _Mysbox.subscription (Free, slug every-30-days-free) và _Mysbox.capabilities {over_capacity false, capacity_expires_at 2025-07-30 — đã qua} render trong config trang; widget vẫn render. capacity_expires_at lệch merchant (CONF-plans-billing-21)."
+    },
+    {
+      "name": "Giữ quyền lợi đơn đã trả của khách khi shop bị khoá",
+      "description": "Đơn khách đã trả trước khi shop chạm trần vẫn mở (reveal) và resell bình thường.",
+      "kb_refs": [
+        "capacity-limit-enforcement#KB-015"
+      ]
+    },
+    {
+      "name": "Plan Paid chạm quota vẫn bán và báo merchant",
+      "description": "Shop plan Paid chạm quota không bị chặn bán; box vượt bị tính phí; merchant nhận email mẫu Paid khi số đã dùng vượt vạch quota.",
+      "kb_refs": [
+        "capacity-limit-enforcement#KB-011",
+        "capacity-limit-enforcement#KB-016"
+      ]
+    },
+    {
+      "name": "Khôi phục bán hàng sau khi quota đủ lại",
+      "description": "Nâng plan, thêm promote code, sang chu kỳ mới hoặc nâng capacity làm quota đủ lại, nhưng box đã bị gỡ vẫn unpublished — merchant phải publish lại từng box.",
+      "kb_refs": [
+        "capacity-limit-enforcement#KB-017",
+        "capacity-limit-enforcement#KB-018"
+      ]
+    },
+    {
+      "name": "Admin điều chỉnh capacity used của shop Free",
+      "description": "Nâng \"capacity used\" bằng hoặc vượt \"selling capacity\" trên plan Free sẽ unpublish toàn bộ box và gửi email \"capacity reached\"; hạ xuống lại không tự publish lại box.",
+      "kb_refs": [
+        "capacity-limit-enforcement#KB-021",
+        "capacity-limit-enforcement#KB-022",
+        "capacity-limit-enforcement#KB-023"
+      ]
+    }
+  ],
+  "state_transitions": [
+    {
+      "from": "shop Free trong hạn mức, box đang publish",
+      "to": "shop Free vượt (mọi box unpublished, storefront làm mới, nút tạo box khoá, email capacity limit mẫu Free)",
+      "trigger": "Đơn đã thanh toán làm capacity used chạm selling capacity trong chu kỳ đang chạy",
+      "condition": "capacity used lớn hơn hoặc bằng selling capacity và shop ở plan Free",
+      "kb_refs": [
+        "capacity-limit-enforcement#KB-001",
+        "capacity-limit-enforcement#KB-002",
+        "capacity-limit-enforcement#KB-003",
+        "capacity-limit-enforcement#KB-012",
+        "capacity-limit-enforcement#KB-013",
+        "capacity-limit-enforcement#KB-024"
+      ]
+    },
+    {
+      "from": "shop Free vượt, box unpublished",
+      "to": "quota đủ lại, box vẫn unpublished",
+      "trigger": "Nâng plan, thêm promote code, sang chu kỳ mới hoặc nâng capacity",
+      "condition": "Không tự publish lại; merchant publish lại từng box",
+      "kb_refs": [
+        "capacity-limit-enforcement#KB-017",
+        "capacity-limit-enforcement#KB-018"
+      ]
+    },
+    {
+      "from": "shop Free trong hạn mức",
+      "to": "shop Free vượt (unpublish toàn bộ box, email \"capacity reached\")",
+      "trigger": "Admin nâng \"capacity used\" bằng hoặc vượt \"selling capacity\" trong form Edit",
+      "condition": "Plan Free",
+      "kb_refs": [
+        "capacity-limit-enforcement#KB-021",
+        "capacity-limit-enforcement#KB-022"
+      ]
+    },
+    {
+      "from": "box unpublished do chạm trần",
+      "to": "box vẫn unpublished",
+      "trigger": "Admin hạ \"capacity used\" xuống lại",
+      "condition": "",
+      "kb_refs": [
+        "capacity-limit-enforcement#KB-023"
+      ]
+    },
+    {
+      "from": "đã gỡ app",
+      "to": "cài lại, box bị gỡ publish, email capacity gửi lại",
+      "trigger": "Cài lại app",
+      "condition": "Shop vẫn vượt giới hạn plan Free",
+      "kb_refs": [
+        "capacity-limit-enforcement#KB-019",
+        "capacity-limit-enforcement#KB-020"
+      ]
+    },
+    {
+      "from": "shop Paid trong quota",
+      "to": "shop Paid vượt quota (vẫn bán, box vượt tính phí, email mẫu Paid)",
+      "trigger": "Số box đã dùng vượt vạch quota",
+      "condition": "Plan Paid",
+      "kb_refs": [
+        "capacity-limit-enforcement#KB-011",
+        "capacity-limit-enforcement#KB-016"
+      ]
+    }
+  ],
+  "confirmed_rules": [
+    {
+      "rule": "Khi số box đã dùng chạm quota trong chu kỳ đang chạy và shop ở plan Free, app tự gỡ publish toàn bộ box của shop trong một lượt; điều kiện là capacity used lớn hơn hoặc bằng selling capacity.",
+      "kb_refs": [
+        "capacity-limit-enforcement#KB-002",
+        "capacity-limit-enforcement#KB-003"
+      ]
+    },
+    {
+      "rule": "Trạng thái capacity của shop là \"trong hạn mức\" hoặc \"vượt\"; trạng thái vượt chỉ áp cho gói Free.",
+      "kb_refs": [
+        "capacity-limit-enforcement#KB-024"
+      ]
+    },
+    {
+      "rule": "Khi shop Free chạm quota, app làm mới dữ liệu storefront và gửi merchant email \"capacity limit\" theo mẫu Free.",
+      "kb_refs": [
+        "capacity-limit-enforcement#KB-012",
+        "capacity-limit-enforcement#KB-013"
+      ]
+    },
+    {
+      "rule": "Nút \"Create new box\" (form tạo box và nút chính trên Dashboard) bị khoá khi shop Free đã dùng hết quota.",
+      "kb_refs": [
+        "capacity-limit-enforcement#KB-001"
+      ]
+    },
+    {
+      "rule": "Khi shop Free chạm trần, merchant thấy \"You have reached the box limit, upgrade plan to sell more.\".",
+      "kb_refs": [
+        "capacity-limit-enforcement#KB-025"
+      ]
+    },
+    {
+      "rule": "Widget storefront bị ẩn khi shop Free vượt capacity; dữ liệu gói/dung lượng trong metafield của shop quyết định widget có bị ẩn vì hết hạn / vượt dung lượng.",
+      "kb_refs": [
+        "capacity-limit-enforcement#KB-006",
+        "capacity-limit-enforcement#KB-007",
+        "capacity-limit-enforcement#KB-008"
+      ],
+      "refresh_kb_refs": [
+        "capacity-limit-enforcement#KB-046"
+      ],
+      "refresh_note": "Staging: dữ liệu gói/dung lượng thấy ở _Mysbox.subscription / _Mysbox.capabilities; nhánh ẩn chưa quan sát."
+    },
+    {
+      "rule": "Widget bị ẩn khi đồng thời: plan không thuộc hai plan đặc biệt vĩnh viễn, chu kỳ capacity chưa kết thúc, và shop bị cờ vượt capacity.",
+      "kb_refs": [
+        "capacity-limit-enforcement#KB-009"
+      ],
+      "refresh_kb_refs": [
+        "capacity-limit-enforcement#KB-046"
+      ],
+      "refresh_note": "Staging: over_capacity false → widget render (nhất quán với rule, vì điều kiện 'bị cờ' không thoả)."
+    },
+    {
+      "rule": "Khối Unbox ở trang cảm ơn / order status không render khi shop hết hạn hoặc vượt capacity; đơn mới tạo sau khi shop Free chạm trần không có block Unbox.",
+      "kb_refs": [
+        "capacity-limit-enforcement#KB-010",
+        "capacity-limit-enforcement#KB-027"
+      ]
+    },
+    {
+      "rule": "Khi shop Free chạm trần, danh sách món và nút store credit trên storefront bị ẩn và khách không mua được box mới.",
+      "kb_refs": [
+        "capacity-limit-enforcement#KB-026",
+        "capacity-limit-enforcement#KB-014"
+      ]
+    },
+    {
+      "rule": "Sau khi shop Free chạm quota, đơn khách đã trả trước đó vẫn mở (reveal) và resell bình thường.",
+      "kb_refs": [
+        "capacity-limit-enforcement#KB-015"
+      ]
+    },
+    {
+      "rule": "Shop plan Paid chạm quota không bị chặn bán: vẫn bán được box, box vượt quota bị tính phí; merchant nhận email mẫu Paid khi số đã dùng vượt vạch quota.",
+      "kb_refs": [
+        "capacity-limit-enforcement#KB-011",
+        "capacity-limit-enforcement#KB-016"
+      ]
+    },
+    {
+      "rule": "Nâng plan, thêm promote code hoặc sang chu kỳ mới làm quota đủ lại, nhưng box đã bị gỡ do chạm trần vẫn unpublished; merchant phải publish lại từng box.",
+      "kb_refs": [
+        "capacity-limit-enforcement#KB-017",
+        "capacity-limit-enforcement#KB-018"
+      ]
+    },
+    {
+      "rule": "Cài lại app khi shop vẫn vượt giới hạn plan Free thì box bị gỡ publish và email capacity được gửi lại.",
+      "kb_refs": [
+        "capacity-limit-enforcement#KB-019",
+        "capacity-limit-enforcement#KB-020"
+      ]
+    },
+    {
+      "rule": "Trên plan Free, admin nâng \"capacity used\" bằng hoặc vượt \"selling capacity\" trong form Edit shop sẽ unpublish toàn bộ box và hệ thống gửi email \"capacity reached\"; hạ \"capacity used\" xuống lại không tự publish lại box.",
+      "kb_refs": [
+        "capacity-limit-enforcement#KB-021",
+        "capacity-limit-enforcement#KB-022",
+        "capacity-limit-enforcement#KB-023"
+      ]
+    }
+  ],
+  "observed_behavior": [
+    {
+      "behavior": "Trang product box Active (guest, shop Free): script#mysbox-config render _Mysbox.subscription = {plan: {id 1, name \"Free\", slug \"every-30-days-free\"}} và _Mysbox.capabilities = {over_capacity false, capacity_expires_at \"2025-07-30T04:58:05.000000Z\"}, _Mysbox.settings = 0; widget vẫn render (\"Box items\").",
+      "basis": "OBSERVED_CURRENT",
+      "environment": "staging",
+      "observed_count": 1,
+      "confidence": "LOW",
+      "status": "UNRESOLVED",
+      "conflict_group": "CONF-plans-billing-21",
+      "kb_refs": [
+        "capacity-limit-enforcement#KB-046"
+      ]
+    }
+  ],
+  "observed_validations": [],
+  "permissions": [
+    {
+      "permission": "Admin sửa \"capacity used\" / \"selling capacity\" của shop trong form Edit shop.",
+      "role": "admin-staff",
+      "kb_refs": [
+        "capacity-limit-enforcement#KB-021",
+        "capacity-limit-enforcement#KB-023"
+      ]
+    }
+  ],
+  "surface_mapping": {
+    "portal": [
+      {
+        "item": "Nút \"Create new box\" bị khoá; thông điệp chạm trần",
+        "kb_refs": [
+          "capacity-limit-enforcement#KB-001",
+          "capacity-limit-enforcement#KB-025"
+        ]
+      },
+      {
+        "item": "Publish lại từng box sau khi quota đủ lại",
+        "kb_refs": [
+          "capacity-limit-enforcement#KB-018"
+        ]
+      }
+    ],
+    "storefront": [
+      {
+        "item": "Widget trang sản phẩm / theme bị ẩn",
+        "kb_refs": [
+          "capacity-limit-enforcement#KB-006",
+          "capacity-limit-enforcement#KB-008",
+          "capacity-limit-enforcement#KB-009"
+        ],
+        "observed_kb_refs": [
+          "capacity-limit-enforcement#KB-046"
+        ]
+      },
+      {
+        "item": "Khối Unbox ở trang cảm ơn / order status không render; đơn mới không có block Unbox",
+        "kb_refs": [
+          "capacity-limit-enforcement#KB-010",
+          "capacity-limit-enforcement#KB-027"
+        ]
+      },
+      {
+        "item": "Danh sách món và nút store credit bị ẩn; đơn cũ vẫn reveal/resell",
+        "kb_refs": [
+          "capacity-limit-enforcement#KB-026",
+          "capacity-limit-enforcement#KB-015"
+        ]
+      },
+      {
+        "item": "Config trang product: _Mysbox.subscription / _Mysbox.capabilities — staging",
+        "basis": "OBSERVED_CURRENT",
+        "kb_refs": [
+          "capacity-limit-enforcement#KB-046"
+        ]
+      }
+    ],
+    "admin_panel": [
+      {
+        "item": "Form Edit shop: capacity used / selling capacity",
+        "kb_refs": [
+          "capacity-limit-enforcement#KB-021",
+          "capacity-limit-enforcement#KB-023"
+        ]
+      }
+    ],
+    "email": [
+      {
+        "item": "Email \"capacity limit\" mẫu Free, mẫu Paid, \"capacity reached\"",
+        "kb_refs": [
+          "capacity-limit-enforcement#KB-013",
+          "capacity-limit-enforcement#KB-016",
+          "capacity-limit-enforcement#KB-020",
+          "capacity-limit-enforcement#KB-022"
+        ]
+      }
+    ],
+    "api": [],
+    "data": [
+      {
+        "item": "Metafield gói/dung lượng của shop (cờ hết hạn / vượt capacity)",
+        "kb_refs": [
+          "capacity-limit-enforcement#KB-007",
+          "capacity-limit-enforcement#KB-008"
+        ],
+        "observed_kb_refs": [
+          "capacity-limit-enforcement#KB-046"
+        ],
+        "refresh_note": "Staging: tên metafield Liquid nguồn không thấy phía client."
+      },
+      {
+        "item": "Trạng thái capacity của shop (trong hạn mức / vượt)",
+        "kb_refs": [
+          "capacity-limit-enforcement#KB-024"
+        ]
+      }
+    ],
+    "code": [
+      {
+        "item": "Điều kiện tự unpublish: capacity used lớn hơn hoặc bằng selling capacity trên plan Free",
+        "kb_refs": [
+          "capacity-limit-enforcement#KB-003"
+        ]
+      }
+    ]
+  },
+  "dependencies": [
+    {
+      "depends_on": "plan-capacity-and-cycle",
+      "reason": "Capacity used / selling capacity và chu kỳ là điều kiện chạm trần.",
+      "kb_refs": [
+        "capacity-limit-enforcement#KB-003",
+        "capacity-limit-enforcement#KB-009"
+      ],
+      "observed_kb_refs": [
+        "plan-capacity-and-cycle#KB-087"
+      ]
+    },
+    {
+      "depends_on": "storefront-data-sync",
+      "reason": "Ẩn widget dựa vào metafield gói/dung lượng của shop được làm mới khi chạm trần.",
+      "kb_refs": [
+        "capacity-limit-enforcement#KB-007",
+        "capacity-limit-enforcement#KB-012"
+      ]
+    },
+    {
+      "depends_on": "system-emails-and-notifications",
+      "reason": "Email capacity limit / capacity reached.",
+      "kb_refs": [
+        "capacity-limit-enforcement#KB-013",
+        "capacity-limit-enforcement#KB-022"
+      ]
+    },
+    {
+      "depends_on": "box-create-and-publish",
+      "reason": "Khoá tạo box; publish lại từng box sau khi quota đủ lại.",
+      "kb_refs": [
+        "capacity-limit-enforcement#KB-001",
+        "capacity-limit-enforcement#KB-018"
+      ]
+    },
+    {
+      "depends_on": "usage-fee-pricing",
+      "reason": "Plan Paid vượt quota bị tính phí thay vì bị chặn.",
+      "kb_refs": [
+        "capacity-limit-enforcement#KB-011"
+      ]
+    }
+  ],
+  "risks": [
+    {
+      "risk": "Box không tự publish lại sau khi nâng plan — merchant dễ tưởng nâng plan đã khôi phục bán hàng.",
+      "kb_refs": [
+        "capacity-limit-enforcement#KB-018",
+        "capacity-limit-enforcement#KB-023"
+      ]
+    },
+    {
+      "risk": "Vượt capacity có thể là gốc khiến nhiều triệu chứng xuất hiện cùng lúc (box không hiện, đơn không xử lý, dữ liệu cũ) — dễ bị chẩn đoán nhầm.",
+      "kb_refs": [
+        "capacity-limit-enforcement#KB-028"
+      ]
+    },
+    {
+      "risk": "capacity_expires_at trên storefront (2025-07-30, đã qua) khác merchant (2026-10-23) — nếu điều kiện 'chu kỳ chưa kết thúc' dùng giá trị storefront thì widget có thể không bị ẩn khi đáng ẩn (hoặc ngược lại).",
+      "basis": "OBSERVED_CURRENT",
+      "kb_refs": [
+        "capacity-limit-enforcement#KB-046",
+        "capacity-limit-enforcement#KB-009",
+        "plan-capacity-and-cycle#KB-087"
+      ]
+    }
+  ],
+  "limitations": [
+    {
+      "limitation": "Các kịch bản ví dụ (used = 10 trên quota seed 10, gỡ box khi bán box thứ 10, thông điệp kèm nút Upgrade, tab Boxes có ngày publish trống, support publish lại sau đổi plan, gỡ box sau khi kỳ đã trả kết thúc) chỉ là minh hoạ với số seed, không phải cấu hình production; không dùng làm oracle.",
+      "kb_refs": [
+        "capacity-limit-enforcement#KB-030",
+        "capacity-limit-enforcement#KB-031",
+        "capacity-limit-enforcement#KB-032",
+        "capacity-limit-enforcement#KB-033",
+        "capacity-limit-enforcement#KB-034",
+        "capacity-limit-enforcement#KB-035",
+        "capacity-limit-enforcement#KB-036",
+        "capacity-limit-enforcement#KB-037",
+        "capacity-limit-enforcement#KB-038",
+        "capacity-limit-enforcement#KB-039",
+        "capacity-limit-enforcement#KB-040",
+        "capacity-limit-enforcement#KB-041",
+        "capacity-limit-enforcement#KB-042",
+        "capacity-limit-enforcement#KB-043",
+        "capacity-limit-enforcement#KB-044",
+        "capacity-limit-enforcement#KB-045"
+      ]
+    },
+    {
+      "limitation": "Quan sát staging chỉ ở trạng thái 'trong hạn mức' (0/10, over_capacity false); mọi nhánh chạm trần chưa có bằng chứng runtime.",
+      "basis": "OBSERVED_CURRENT",
+      "kb_refs": [
+        "capacity-limit-enforcement#KB-046"
+      ]
+    }
+  ],
+  "freshness": {
+    "observed_at": "2026-10-17",
+    "base_observed_at": null
+  },
+  "unknown_areas": [
+    {
+      "question": "Huỷ gói có làm toàn bộ box biến mất khỏi store kể cả khi không vượt capacity Free, hay chỉ khi shop đang vượt; và thời điểm gỡ là ngay khi huỷ hay sau khi kỳ đã trả kết thúc?",
+      "why_it_matters": "Tài liệu mâu thuẫn; quyết định expected state sau huỷ plan.",
+      "kb_refs": [
+        "capacity-limit-enforcement#KB-004",
+        "capacity-limit-enforcement#KB-005",
+        "capacity-limit-enforcement#KB-045"
+      ],
+      "oq_id": "OQ-plans-billing-005"
+    },
+    {
+      "question": "Thời gian ân hạn sau huỷ plan kéo dài bao lâu, cờ capacity đổi lúc nào, và trong ân hạn shop được tính capacity theo plan nào?",
+      "why_it_matters": "Cần mốc thời gian để kiểm việc gỡ box và ẩn widget sau huỷ plan hoặc gỡ app.",
+      "kb_refs": [
+        "capacity-limit-enforcement#KB-005",
+        "capacity-limit-enforcement#KB-009"
+      ],
+      "oq_id": "OQ-plans-billing-005"
+    },
+    {
+      "question": "Một đơn Free mua nhiều box làm used vượt quota (ví dụ còn 1 nhưng mua 3) có được bán và tạo lượt mở cho phần vượt không?",
+      "why_it_matters": "Tài liệu chỉ nêu điều kiện lớn-hơn-hoặc-bằng, không nêu số phận box vượt trong đơn Free.",
+      "kb_refs": [
+        "capacity-limit-enforcement#KB-002",
+        "capacity-limit-enforcement#KB-003"
+      ],
+      "oq_id": "OQ-plans-billing-024"
+    },
+    {
+      "question": "Hai \"plan đặc biệt vĩnh viễn\" được miễn điều kiện ẩn widget là plan nào?",
+      "why_it_matters": "Cần để kiểm điều kiện ẩn widget / khối Unbox theo plan.",
+      "kb_refs": [
+        "capacity-limit-enforcement#KB-009"
+      ],
+      "oq_id": "OQ-plans-billing-025"
+    },
+    {
+      "question": "Widget dùng metafield trạng thái shop thế nào (ẩn widget, ẩn nút, hiện thông báo), và hạn chế cờ capacity cũ còn tồn tại có mức nghiêm trọng / trạng thái sửa ra sao?",
+      "why_it_matters": "Tài liệu tự khai chưa xác nhận; không kiểm được hành vi widget theo trạng thái shop.",
+      "kb_refs": [
+        "capacity-limit-enforcement#KB-007",
+        "capacity-limit-enforcement#KB-008"
+      ],
+      "oq_id": "OQ-plans-billing-026",
+      "refresh_note": "Staging: config storefront có subscription Free + capabilities {over_capacity false, capacity_expires_at 2025-07-30}; widget render. Hành vi khi over_capacity true / hết hạn không quan sát; giá trị lệch merchant (CONF-plans-billing-21) — có thể là cờ cũ. Không gỡ.",
+      "refresh_kb_refs": [
+        "capacity-limit-enforcement#KB-046"
+      ]
+    },
+    {
+      "question": "Câu chữ, subject của email capacity mẫu Free / Paid; gửi một lần mỗi chu kỳ hay mỗi lần đơn mới vượt; \"vượt vạch\" của mẫu Paid là lúc chạm đúng quota hay box đầu tiên vượt; tên template theo môi trường?",
+      "why_it_matters": "Không có oracle cho nội dung, số lượng và thời điểm email.",
+      "kb_refs": [
+        "capacity-limit-enforcement#KB-013",
+        "capacity-limit-enforcement#KB-016",
+        "capacity-limit-enforcement#KB-020",
+        "capacity-limit-enforcement#KB-022"
+      ],
+      "oq_id": "OQ-plans-billing-027"
+    },
+    {
+      "question": "Merchant (hoặc admin) publish lại box khi shop Free vẫn vượt capacity thì bị chặn với thông báo nào, hay box bị unpublish lại?",
+      "why_it_matters": "Tài liệu chỉ nói box bị gỡ tự động, không nêu hành vi khi cố publish lại.",
+      "kb_refs": [
+        "capacity-limit-enforcement#KB-018"
+      ],
+      "oq_id": "OQ-plans-billing-028"
+    },
+    {
+      "question": "Box bị gỡ do hết Free có được đánh dấu khác box merchant tự gỡ không?",
+      "why_it_matters": "Merchant phải publish lại thủ công nhưng không có cách phân biệt box nào cần publish lại.",
+      "kb_refs": [
+        "capacity-limit-enforcement#KB-018"
+      ],
+      "oq_id": "OQ-plans-billing-028"
+    },
+    {
+      "question": "Khách bấm Unbox khi shop vượt capacity thấy lỗi gì?",
+      "why_it_matters": "Không có text lỗi để làm oracle.",
+      "kb_refs": [
+        "capacity-limit-enforcement#KB-010"
+      ],
+      "oq_id": "OQ-plans-billing-029"
+    },
+    {
+      "question": "Shop trả phí có thấy cảnh báo hạn mức và nút Upgrade không; admin nâng capacity used trên plan trả phí có gây unpublish hay phát sinh phí không?",
+      "why_it_matters": "Tài liệu chỉ nêu hệ quả trên plan Free.",
+      "kb_refs": [
+        "capacity-limit-enforcement#KB-011",
+        "capacity-limit-enforcement#KB-021"
+      ],
+      "oq_id": "OQ-plans-billing-030"
+    },
+    {
+      "question": "Khi cờ \"Exclude Test Order\" ở trạng thái mặc định (bật), đơn test / preview của Shopify có trừ capacity của shop hay không? Một phía tài liệu (feature này) nói đơn test vẫn tính vào capacity, cờ chỉ gắn với việc không tính phí usage; phía kia (feature plan-capacity-and-cycle) nói mặc định đơn test bị loại khỏi hạn mức. Trên staging đơn preview có tính vào capacity không?",
+      "why_it_matters": "Hai phía trái nhau, chưa được dev/PO xác nhận; quyết định thời điểm chạm trần (và gỡ box) khi dùng đơn test làm dữ liệu thử — không dùng phía nào làm oracle.",
+      "kb_refs": [
+        "capacity-limit-enforcement#KB-029",
+        "plan-capacity-and-cycle#KB-007"
+      ],
+      "oq_id": "OQ-plans-billing-010",
+      "refresh_note": "Staging: 1 đơn Bogus test không tăng used (plan-capacity-and-cycle#KB-085, UNRESOLVED); preview order không thử. OQ type CONFLICT — không gỡ.",
+      "refresh_kb_refs": [
+        "plan-capacity-and-cycle#KB-085"
+      ]
+    },
+    {
+      "question": "Cụ thể những hành vi nào bị ảnh hưởng khi shop vượt capacity (box không hiện, đơn không xử lý, dữ liệu cũ)?",
+      "why_it_matters": "Tài liệu support chỉ nói \"thường\"; cần xác nhận phạm vi ảnh hưởng.",
+      "kb_refs": [
+        "capacity-limit-enforcement#KB-028"
+      ],
+      "oq_id": "OQ-plans-billing-094"
+    },
+    {
+      "question": "Khi cài lại app, box được khôi phục \"thường đã unpublish\" — trường hợp nào box không bị unpublish, và dữ liệu nào được khôi phục?",
+      "why_it_matters": "Không viết được expected state sau reinstall.",
+      "kb_refs": [
+        "capacity-limit-enforcement#KB-019",
+        "capacity-limit-enforcement#KB-038"
+      ],
+      "oq_id": "OQ-plans-billing-031"
+    },
+    {
+      "question": "Hạn mức Free trên production là bao nhiêu và chữ thông báo có đổi theo hạn mức đó không?",
+      "why_it_matters": "Ví dụ dùng số seed 10; boundary chạm trần chưa có oracle.",
+      "kb_refs": [
+        "capacity-limit-enforcement#KB-030",
+        "capacity-limit-enforcement#KB-040",
+        "capacity-limit-enforcement#KB-044"
+      ],
+      "oq_id": "OQ-plans-billing-032"
+    },
+    {
+      "question": "Widget dùng capacity_expires_at thế nào khi giá trị đã ở quá khứ nhưng over_capacity false (widget vẫn render)?",
+      "why_it_matters": "KB-046: capacity_expires_at 2025-07-30 đã qua mà widget vẫn hiện; điều kiện 'chu kỳ chưa kết thúc' của KB-009 cần cách đọc giá trị này.",
+      "kb_refs": [
+        "capacity-limit-enforcement#KB-046",
+        "capacity-limit-enforcement#KB-009"
+      ],
+      "oq_id": "OQ-plans-billing-141",
+      "relates_to_existing_oq": [
+        "OQ-plans-billing-026"
+      ],
+      "relates_to_conflict": "CONF-plans-billing-21"
+    }
+  ],
+  "last_updated": {
+    "date": "2026-10-17",
+    "ccr_ref": "bootstrap"
+  },
+  "coverage_matrix": [
+    {
+      "feature_id": "FEAT-02-capacity-limit-enforcement",
+      "layer": "backend",
+      "role": "system",
+      "state": "plan-free-over-quota",
+      "environment": "documented",
+      "covered": true
+    },
+    {
+      "feature_id": "FEAT-02-capacity-limit-enforcement",
+      "layer": "portal",
+      "role": "merchant",
+      "state": "plan-free-over-quota",
+      "environment": "documented",
+      "covered": true
+    },
+    {
+      "feature_id": "FEAT-02-capacity-limit-enforcement",
+      "layer": "portal",
+      "role": "merchant",
+      "state": "quota-restored",
+      "environment": "documented",
+      "covered": true
+    },
+    {
+      "feature_id": "FEAT-02-capacity-limit-enforcement",
+      "layer": "storefront",
+      "role": "customer",
+      "state": "plan-free-over-quota",
+      "environment": "documented",
+      "covered": true
+    },
+    {
+      "feature_id": "FEAT-02-capacity-limit-enforcement",
+      "layer": "email",
+      "role": "merchant",
+      "state": "plan-free-over-quota",
+      "environment": "documented",
+      "covered": true
+    },
+    {
+      "feature_id": "FEAT-02-capacity-limit-enforcement",
+      "layer": "email",
+      "role": "merchant",
+      "state": "plan-paid-over-quota",
+      "environment": "documented",
+      "covered": true
+    },
+    {
+      "feature_id": "FEAT-02-capacity-limit-enforcement",
+      "layer": "admin_panel",
+      "role": "admin-staff",
+      "state": "plan-free",
+      "environment": "documented",
+      "covered": true
+    },
+    {
+      "feature_id": "FEAT-02-capacity-limit-enforcement",
+      "layer": "backend",
+      "role": "system",
+      "state": "reinstalled-over-quota",
+      "environment": "documented",
+      "covered": true
+    },
+    {
+      "feature_id": "FEAT-02-capacity-limit-enforcement",
+      "layer": "backend",
+      "role": "system",
+      "state": "plan-cancelled",
+      "environment": "documented",
+      "covered": false
+    },
+    {
+      "feature_id": "FEAT-02-capacity-limit-enforcement",
+      "layer": "admin_panel",
+      "role": "admin-staff",
+      "state": "plan-paid",
+      "environment": "documented",
+      "covered": false
+    },
+    {
+      "feature_id": "FEAT-02-capacity-limit-enforcement",
+      "layer": "storefront",
+      "role": "guest buyer",
+      "state": "plan-free-within-quota (over_capacity false)",
+      "environment": "staging",
+      "covered": true,
+      "kb_refs": [
+        "capacity-limit-enforcement#KB-046"
+      ]
+    },
+    {
+      "feature_id": "FEAT-02-capacity-limit-enforcement",
+      "layer": "storefront",
+      "role": "guest buyer",
+      "state": "plan-free-over-quota",
+      "environment": "staging",
+      "covered": false,
+      "note": "NOT_COVERED: shop 0/10, không chạm trần (giới hạn 2 đơn test)."
+    },
+    {
+      "feature_id": "FEAT-02-capacity-limit-enforcement",
+      "layer": "portal",
+      "role": "merchant",
+      "state": "plan-free-over-quota / quota-restored",
+      "environment": "staging",
+      "covered": false,
+      "note": "NOT_COVERED."
+    }
+  ],
+  "profile_conflicts": [
+    {
+      "conflict_group": "CONF-plans-billing-20",
+      "summary": "Khi cờ \"Exclude Test Order\" ở mặc định (bật), đơn test của Shopify có trừ capacity không: shard này (KB-029, đã hạ INFERRED/LOW/UNRESOLVED) nói đơn test được tính vào capacity, cờ chỉ gắn với việc không tính phí usage; shard plan-capacity-and-cycle (KB-007, INFERRED/LOW/UNRESOLVED) nói mặc định đơn test bị loại khỏi hạn mức. Không dùng phía nào làm oracle cho tới khi dev/PO xác nhận; OQ CONFLICT đặt ở plan-capacity-and-cycle.",
+      "kb_refs": [
+        "capacity-limit-enforcement#KB-029",
+        "plan-capacity-and-cycle#KB-007"
+      ],
+      "resolution": "UNRESOLVED",
+      "oq_draft_id": null,
+      "observation_notes": [
+        {
+          "kb_ref": "plan-capacity-and-cycle#KB-085",
+          "note": "Staging 1 đơn Bogus test: used không đổi — nghiêng phía KB-007 (trái KB-029 của shard này). Không phân xử."
+        }
+      ]
+    },
+    {
+      "conflict_group": "CONF-plans-billing-06",
+      "summary": "Huỷ gói có làm box biến mất vô điều kiện hay chỉ khi đang vượt capacity Free.",
+      "kb_refs": [
+        "capacity-limit-enforcement#KB-004",
+        "capacity-limit-enforcement#KB-005"
+      ]
+    },
+    {
+      "conflict_group": "CONF-plans-billing-21",
+      "status": "UNRESOLVED",
+      "summary": "capacity_expires_at: storefront _Mysbox.capabilities 2025-07-30 (KB-046, shard này) vs merchant app 2026-10-23 (plan-capacity-and-cycle#KB-087). Entry đầy đủ và OQ của conflict nằm ở plan-capacity-and-cycle — tham chiếu, không đếm trùng.",
+      "kb_refs": [
+        "capacity-limit-enforcement#KB-046",
+        "plan-capacity-and-cycle#KB-087"
+      ],
+      "resolution": "UNRESOLVED",
+      "oq_draft_id": null
+    }
+  ],
+  "profile_relationships": [
+    {
+      "from": "capacity-limit-enforcement",
+      "to": "plan-capacity-and-cycle",
+      "relation": "depends_on",
+      "kb_refs": [
+        "capacity-limit-enforcement#KB-003",
+        "plan-capacity-and-cycle#KB-004"
+      ]
+    },
+    {
+      "from": "capacity-limit-enforcement",
+      "to": "usage-fee-pricing",
+      "relation": "branches_to",
+      "note": "Plan Paid vượt quota: tính phí thay vì chặn bán.",
+      "kb_refs": [
+        "capacity-limit-enforcement#KB-011",
+        "usage-fee-pricing#KB-001"
+      ]
+    },
+    {
+      "from": "capacity-limit-enforcement",
+      "to": "storefront-data-sync",
+      "relation": "depends_on",
+      "kb_refs": [
+        "capacity-limit-enforcement#KB-007",
+        "capacity-limit-enforcement#KB-012"
+      ]
+    },
+    {
+      "from": "capacity-limit-enforcement",
+      "to": "system-emails-and-notifications",
+      "relation": "triggers",
+      "kb_refs": [
+        "capacity-limit-enforcement#KB-013",
+        "capacity-limit-enforcement#KB-022"
+      ]
+    },
+    {
+      "from": "capacity-limit-enforcement",
+      "to": "plan-capacity-and-cycle",
+      "relation": "conflict_shared",
+      "note": "CONF-plans-billing-21 (capacity_expires_at storefront vs merchant).",
+      "basis": "OBSERVED_CURRENT",
+      "kb_refs": [
+        "capacity-limit-enforcement#KB-046",
+        "plan-capacity-and-cycle#KB-087"
+      ]
+    }
+  ]
+}

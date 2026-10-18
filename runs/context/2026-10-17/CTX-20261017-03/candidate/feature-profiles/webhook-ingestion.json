@@ -1,0 +1,225 @@
+{
+  "schema_version": "1.0",
+  "artifact_type": "FeatureProfileCandidate",
+  "artifact_id": "FP-CTX-20261017-03-webhook-ingestion",
+  "workflow_id": "CTX-20261017-03",
+  "producer": "feature-profile-builder",
+  "source_refs": [
+    "candidate/product-kb/webhook-ingestion.json",
+    "knowledge/products/mysbox/integrations/features/webhook-ingestion/profile.json (base v1)"
+  ],
+  "upstream_artifact_ids": ["PKBC-CTX-20261017-03-webhook-ingestion"],
+  "status": "READY",
+  "confidence": "MEDIUM",
+  "observations": [
+    "REFRESH có base: profile = profile base giữ nguyên + 3 item mới KB-043..KB-045 (OBSERVED_CURRENT, staging, một đơn test).",
+    "feature_id lấy từ shard (FEAT-02-webhook-ingestion = id base); FEATURE-ID của run ghi ở payload.run_metadata.",
+    "Webhook là server-to-server nên không thấy trực tiếp; các item mới là hệ quả gián tiếp của orders/paid. Thêm 1 capability quan sát được (đơn test được xử lý như đơn thật) — chỉ OBSERVED_CURRENT.",
+    "Không có conflict mới, không gỡ unknown area nào (OQ-integrations-025 là NEEDS_CONFIRMATION và chưa có phần billing). KB-045 cùng hướng với một conflict ở object plans-billing — không gắn conflict_group của object khác."
+  ],
+  "assumptions": ["Field base copy nguyên văn; phần thêm trace kb_id OBSERVED_CURRENT."],
+  "unknowns": [
+    "Webhook server-to-server, Horizon, uninstall, forge webhook không quan sát.",
+    "Một đơn test duy nhất; ghi usage billing (job 00:00 UTC) chưa quan sát."
+  ],
+  "conflicts": [],
+  "blocking_issues": [],
+  "payload": {
+    "feature_profiles": [
+      {
+        "feature_id": "FEAT-02-webhook-ingestion",
+        "feature_key": "webhook-ingestion",
+        "name": "Nhận webhook Shopify / EventBridge an toàn và đúng một lần",
+        "user_goal": "Webhook Shopify đến Mysbox (HTTP trực tiếp tại /webhook ở staging, qua AWS EventBridge tại /webhook/event-bridge ở production) được xác thực, kiểm hợp lệ, giao đúng bộ xử lý của topic và không bị xử lý hai lần, để các sự kiện như đơn đã thanh toán được Mysbox xử lý đúng một lần; webhook không hợp lệ bị từ chối.",
+        "user_goal_kb_refs": ["webhook-ingestion#KB-001", "webhook-ingestion#KB-008", "webhook-ingestion#KB-010", "webhook-ingestion#KB-011", "webhook-ingestion#KB-014", "webhook-ingestion#KB-017", "webhook-ingestion#KB-020", "webhook-ingestion#KB-023", "webhook-ingestion#KB-037"],
+        "stable_since_version": "1",
+        "actors": [
+          { "role": "system (Shopify)", "permission_observed": "Gửi webhook cho Mysbox; trên đường HTTP trực tiếp gửi kèm chữ ký HMAC tính trên nội dung; webhook bị từ chối 401 thì Shopify coi là thất bại và gửi lại theo lịch của Shopify.", "kb_refs": ["webhook-ingestion#KB-001", "webhook-ingestion#KB-007", "webhook-ingestion#KB-009"], "observed_kb_refs": ["webhook-ingestion#KB-043", "webhook-ingestion#KB-044"], "refresh_note": "Quan sát staging 2026-10-17 (gián tiếp): đơn test Bogus paid → bản ghi đơn Mysbox ~5 giây sau; webhook không thấy trực tiếp trong trình duyệt." },
+          { "role": "system (AWS EventBridge)", "permission_observed": "Ở production, nhận webhook từ Shopify và chuyển tiếp cho Mysbox, gửi kèm khoá bí mật trong header X-Api-Key.", "kb_refs": ["webhook-ingestion#KB-011", "webhook-ingestion#KB-013"] },
+          { "role": "admin-staff", "permission_observed": "Chạy lại thủ công job webhook thất bại (job nằm ở danh sách failed của Horizon).", "kb_refs": ["webhook-ingestion#KB-033", "webhook-ingestion#KB-035", "_product-level#KB-PL-006"] },
+          { "role": "guest buyer + merchant (staging, quan sát hệ quả)", "permission_observed": "OBSERVED_CURRENT staging: khách vãng lai thanh toán đơn test Bogus và mở box; merchant thấy đơn ở Manage orders, Box sales limit và trang đơn Shopify admin.", "basis": "OBSERVED_CURRENT", "kb_refs": ["webhook-ingestion#KB-043", "webhook-ingestion#KB-044", "webhook-ingestion#KB-045"], "act_ids": ["SF-ACT-004", "SF-ACT-005", "SF-ACT-006", "ACT-08-01-001", "ACT-08-01-004"] }
+        ],
+        "entry_points": [
+          { "path": "/webhook — webhook HTTP trực tiếp từ Shopify (staging)", "precondition": "Request kèm chữ ký HMAC hợp lệ tính bằng bí mật app; có header bắt buộc; body không rỗng.", "kb_refs": ["webhook-ingestion#KB-007", "webhook-ingestion#KB-008", "webhook-ingestion#KB-010", "webhook-ingestion#KB-021", "webhook-ingestion#KB-022"], "observed_kb_refs": ["webhook-ingestion#KB-043"], "refresh_note": "Quan sát staging 2026-10-17: chỉ thấy hệ quả của orders/paid (đơn Mysbox được tạo); request webhook không thấy." },
+          { "path": "/webhook/event-bridge — webhook Shopify chuyển tiếp qua AWS EventBridge (production)", "precondition": "Khoá X-Api-Key đã được cấu hình và header X-Api-Key khớp; có header bắt buộc; body không rỗng. HMAC không được kiểm trên đường này.", "kb_refs": ["webhook-ingestion#KB-011", "webhook-ingestion#KB-012", "webhook-ingestion#KB-014", "webhook-ingestion#KB-015", "webhook-ingestion#KB-021", "webhook-ingestion#KB-022"] }
+        ],
+        "capabilities": [
+          { "name": "Xác thực webhook theo đường vào", "description": "Đường HTTP trực tiếp (/webhook): kiểm HMAC bằng bí mật app, sai thì 401 và Shopify gửi lại. Đường EventBridge (/webhook/event-bridge): không kiểm HMAC, kiểm khoá X-Api-Key phải khớp khoá đã cấu hình, khoá sai thì 401, chưa cấu hình khoá thì từ chối tất cả.", "kb_refs": ["webhook-ingestion#KB-007", "webhook-ingestion#KB-008", "webhook-ingestion#KB-009", "webhook-ingestion#KB-012", "webhook-ingestion#KB-013", "webhook-ingestion#KB-014", "webhook-ingestion#KB-015", "webhook-ingestion#KB-016"], "act_ids": [] },
+          { "name": "Kiểm hợp lệ và định tuyến webhook về bộ xử lý của topic", "description": "Cả hai đường vào đi qua cùng một bộ nhận nội bộ: từ chối webhook thiếu header bắt buộc hoặc body rỗng, chuẩn hoá tên topic, gắn event id vào nội dung, giao cho bộ xử lý của đúng topic; topic không có bộ xử lý thì trả 500.", "kb_refs": ["webhook-ingestion#KB-017", "webhook-ingestion#KB-018", "webhook-ingestion#KB-019", "webhook-ingestion#KB-020", "webhook-ingestion#KB-021", "webhook-ingestion#KB-022", "webhook-ingestion#KB-031"], "act_ids": [] },
+          { "name": "Chống xử lý trùng và tuần tự hoá theo đơn", "description": "orders/paid: mỗi cặp (đơn + event id) chỉ xếp hàng xử lý một lần, kèm khoá theo đơn để webhook thật và action Flow cho kênh bán khác không xử lý đồng thời cùng đơn. bulk_operations/finish: chống trùng theo (mã tác vụ + event id). Webhook giao trùng không bị xử lý hai lần nhờ cơ chế này — trừ app/uninstalled và ba topic dữ liệu cá nhân (customers/data_request, customers/redact, shop/redact) không có chống trùng.", "kb_refs": ["webhook-ingestion#KB-023", "webhook-ingestion#KB-024", "webhook-ingestion#KB-025", "webhook-ingestion#KB-029", "webhook-ingestion#KB-030", "webhook-ingestion#KB-037"], "act_ids": [] },
+          { "name": "Xử lý kết quả tác vụ hàng loạt khi nhận bulk_operations/finish", "description": "Khi nhận bulk_operations/finish (một tác vụ hàng loạt của Shopify đã xong), app xử lý kết quả của tác vụ đó; đăng ký topic này nằm trong cấu hình app, không tạo từ code backend. Việc topic có thực sự được đăng ký hay không đang nằm trong conflict tập topic.", "kb_refs": ["webhook-ingestion#KB-006", "webhook-ingestion#KB-027"], "act_ids": [] },
+          { "name": "Khôi phục job webhook thất bại", "description": "Job webhook đã xếp hàng mà thất bại nằm ở danh sách failed của Horizon và phải được nhân viên chạy lại thủ công.", "kb_refs": ["webhook-ingestion#KB-033", "webhook-ingestion#KB-035"], "act_ids": [] },
+          { "name": "Đơn đã thanh toán được Mysbox xử lý sau orders/paid (hệ quả quan sát staging)", "description": "OBSERVED_CURRENT (một đơn test Bogus, cờ Exclude Test Order bật): Mysbox tạo bản ghi đơn (có opening request) ~5 giây sau paid, bốc thăm xong (winning_bundles[].winning_items), block trang cảm ơn hiện link Unbox ≤ 9 giây sau paid, khách mở được box, Manage orders liệt kê \"1/1 boxes opened\" / \"Unfulfilled\", quà được thêm vào đơn Shopify; bộ đếm Box sales limit không tăng. Không suy cho POS/kênh khác.", "basis": "OBSERVED_CURRENT", "kb_refs": ["webhook-ingestion#KB-043", "webhook-ingestion#KB-044", "webhook-ingestion#KB-045", "webhook-ingestion#KB-001", "webhook-ingestion#KB-041"], "act_ids": ["SF-ACT-004", "SF-ACT-005", "SF-ACT-006", "ACT-08-01-001", "ACT-08-01-002", "ACT-08-01-003", "ACT-08-01-004", "ACT-08-01-005"] }
+        ],
+        "state_transitions": [
+          { "from": "Webhook HTTP nhận tại /webhook", "to": "Bị từ chối 401 → Shopify gửi lại theo lịch của Shopify", "trigger": "Kiểm HMAC", "condition": "Chữ ký HMAC sai", "kb_refs": ["webhook-ingestion#KB-008", "webhook-ingestion#KB-009"] },
+          { "from": "Webhook nhận tại /webhook/event-bridge", "to": "Bị từ chối (401 khi khoá sai)", "trigger": "Kiểm khoá X-Api-Key", "condition": "Khoá sai, hoặc khoá chưa được cấu hình (từ chối tất cả)", "kb_refs": ["webhook-ingestion#KB-014", "webhook-ingestion#KB-015", "webhook-ingestion#KB-016"] },
+          { "from": "Webhook đã xác thực", "to": "Giao cho bộ xử lý của topic / trả 500", "trigger": "Bộ nhận chuẩn hoá topic và gắn event id", "condition": "Topic có bộ xử lý thì giao; không có bộ xử lý thì 500", "kb_refs": ["webhook-ingestion#KB-018", "webhook-ingestion#KB-019", "webhook-ingestion#KB-020", "webhook-ingestion#KB-031"] },
+          { "from": "orders/paid (đơn + event id) đã xếp hàng", "to": "Lần giao trùng không được xếp hàng lại", "trigger": "Webhook cùng đơn + event id đến lần nữa", "condition": "Cùng cặp (đơn + event id)", "kb_refs": ["webhook-ingestion#KB-023", "webhook-ingestion#KB-037"] },
+          { "from": "Job webhook đã xếp hàng", "to": "Failed (Horizon) → chạy lại thủ công", "trigger": "Job thất bại", "condition": "Nhân viên chạy lại thủ công", "kb_refs": ["webhook-ingestion#KB-033", "webhook-ingestion#KB-035"] },
+          { "from": "Đơn test Bogus vừa paid (chưa có trong Mysbox)", "to": "Đơn Mysbox được tạo (~5 giây), link Unbox trên trang cảm ơn (≤ 9 giây), đã bốc thăm", "trigger": "Shopify gửi orders/paid (server-to-server, không thấy trực tiếp)", "condition": "OBSERVED_CURRENT staging 2026-10-17, một mẫu; cột Date của Manage orders hiện created_at của bản ghi Mysbox theo giờ máy, không phải giờ paid", "basis": "OBSERVED_CURRENT", "kb_refs": ["webhook-ingestion#KB-043", "webhook-ingestion#KB-044"], "act_ids": ["SF-ACT-004", "SF-ACT-005", "ACT-08-01-001"] }
+        ],
+        "confirmed_rules": [
+          { "rule": "Shopify đóng vai trò gửi webhook cho Mysbox.", "kb_refs": ["webhook-ingestion#KB-001"], "refresh_kb_refs": ["webhook-ingestion#KB-043"] },
+          { "rule": "Đăng ký topic bulk_operations/finish không được tạo từ code backend (nằm trong cấu hình app).", "kb_refs": ["webhook-ingestion#KB-006"] },
+          { "rule": "Với webhook HTTP, Shopify gửi kèm chữ ký HMAC tính trên nội dung.", "kb_refs": ["webhook-ingestion#KB-007"] },
+          { "rule": "Trên đường webhook HTTP trực tiếp (/webhook), Mysbox kiểm chữ ký HMAC bằng bí mật app; HMAC sai thì từ chối 401.", "kb_refs": ["webhook-ingestion#KB-008"] },
+          { "rule": "Webhook bị từ chối 401 thì Shopify coi là thất bại và gửi lại theo lịch của Shopify.", "kb_refs": ["webhook-ingestion#KB-009"] },
+          { "rule": "Ở staging, Shopify gửi webhook trực tiếp qua HTTP tới Mysbox tại /webhook (khác production).", "kb_refs": ["webhook-ingestion#KB-010"] },
+          { "rule": "Ở production, Shopify đẩy webhook vào nguồn sự kiện AWS EventBridge và AWS chuyển tiếp cho Mysbox tại /webhook/event-bridge.", "kb_refs": ["webhook-ingestion#KB-011", "_product-level#KB-PL-022"] },
+          { "rule": "Trên đường EventBridge (/webhook/event-bridge), chữ ký HMAC không được kiểm.", "kb_refs": ["webhook-ingestion#KB-012"] },
+          { "rule": "Trên đường EventBridge, AWS gửi kèm khoá bí mật trong header X-Api-Key.", "kb_refs": ["webhook-ingestion#KB-013"] },
+          { "rule": "Trên đường EventBridge, Mysbox kiểm khoá X-Api-Key và đòi khớp khoá đã cấu hình.", "kb_refs": ["webhook-ingestion#KB-014"] },
+          { "rule": "Nếu khoá X-Api-Key chưa được cấu hình, Mysbox từ chối tất cả webhook qua đường EventBridge.", "kb_refs": ["webhook-ingestion#KB-015"] },
+          { "rule": "Webhook qua EventBridge có khoá sai bị từ chối 401.", "kb_refs": ["webhook-ingestion#KB-016"] },
+          { "rule": "Cả /webhook lẫn /webhook/event-bridge sau bước xác thực đi qua cùng một bộ nhận webhook nội bộ.", "kb_refs": ["webhook-ingestion#KB-017"] },
+          { "rule": "Bộ nhận webhook nội bộ chuẩn hoá tên topic.", "kb_refs": ["webhook-ingestion#KB-018"] },
+          { "rule": "Bộ nhận webhook nội bộ gắn event id vào nội dung trước khi giao cho bộ xử lý.", "kb_refs": ["webhook-ingestion#KB-019"] },
+          { "rule": "Bộ nhận webhook nội bộ giao webhook cho bộ xử lý của đúng topic.", "kb_refs": ["webhook-ingestion#KB-020"] },
+          { "rule": "Webhook thiếu header bắt buộc thì bị từ chối.", "kb_refs": ["webhook-ingestion#KB-021"] },
+          { "rule": "Webhook có body rỗng thì bị từ chối.", "kb_refs": ["webhook-ingestion#KB-022"] },
+          { "rule": "Với orders/paid, mỗi cặp (đơn + event id) chỉ được xếp hàng xử lý một lần.", "kb_refs": ["webhook-ingestion#KB-023"] },
+          { "rule": "Với orders/paid, app dùng thêm một khoá theo đơn để webhook thật và action Flow cho kênh bán khác không xử lý đồng thời cùng một đơn.", "kb_refs": ["webhook-ingestion#KB-024"] },
+          { "rule": "Topic app/uninstalled không có cơ chế chống xử lý trùng.", "kb_refs": ["webhook-ingestion#KB-025"] },
+          { "rule": "Bảng topic ghi shop/update ở cột 'Chống xử lý trùng' là \"Thử lại tối đa 3 lần\" (ý nghĩa chưa rõ — xem unknown_areas, không dùng làm oracle chống trùng).", "kb_refs": ["webhook-ingestion#KB-026"] },
+          { "rule": "Khi nhận bulk_operations/finish, app xử lý kết quả của tác vụ hàng loạt đó.", "kb_refs": ["webhook-ingestion#KB-027"] },
+          { "rule": "Topic bulk_operations/finish có chống xử lý trùng theo cặp (mã tác vụ + event id).", "kb_refs": ["webhook-ingestion#KB-029"] },
+          { "rule": "Các topic customers/data_request, customers/redact và shop/redact không có cơ chế chống xử lý trùng.", "kb_refs": ["webhook-ingestion#KB-030"] },
+          { "rule": "Webhook có topic không có bộ xử lý thì trả lỗi 500.", "kb_refs": ["webhook-ingestion#KB-031"] },
+          { "rule": "Job webhook đã xếp hàng mà thất bại nằm ở danh sách failed của Horizon.", "kb_refs": ["webhook-ingestion#KB-033"] },
+          { "rule": "Job webhook thất bại phải được nhân viên chạy lại thủ công.", "kb_refs": ["webhook-ingestion#KB-035"] },
+          { "rule": "Webhook giao trùng không bị xử lý hai lần nhờ cơ chế chống trùng (không áp cho app/uninstalled và các topic dữ liệu cá nhân).", "kb_refs": ["webhook-ingestion#KB-037"] }
+        ],
+        "observed_behavior": [
+          { "behavior": "Khi bộ xử lý webhook ném lỗi lúc xếp việc, lỗi bị nuốt, Shopify vẫn nhận 204 \"thành công\" và không gửi lại; với thông báo đơn đã trả, đơn có thể không có trong Mysbox.", "note": "KNOWN_DEFECT theo tài liệu dev — hiện trạng, không phải hành vi mong đợi; regression watch, không làm oracle.", "kb_refs": ["webhook-ingestion#KB-032"] },
+          { "behavior": "Job webhook đã xếp hàng mà thất bại không tự thử lại (Shopify đã nhận 204 nên không gửi lại); đơn nằm ở failed jobs cho tới khi được chạy lại.", "note": "KNOWN_DEFECT theo tài liệu dev — hiện trạng, không phải hành vi mong đợi; regression watch, không làm oracle.", "kb_refs": ["webhook-ingestion#KB-034"] },
+          { "behavior": "Đơn từ POS hoặc kênh bán khác không gửi thông báo \"đơn đã trả\" chuẩn, là một nguyên nhân khiến đơn đã trả không có đơn/box trong Mysbox.", "note": "KNOWN_DEFECT theo tài liệu — hiện trạng, không phải hành vi mong đợi; regression watch, không làm oracle.", "kb_refs": ["webhook-ingestion#KB-042"] },
+          { "behavior": "Đơn test thanh toán qua Bogus Gateway (1 box digital, cờ Exclude Test Order bật) được xử lý như đơn thật: Mysbox tạo bản ghi đơn (có opening request), bốc thăm xong (winning_bundles[].winning_items), block trang cảm ơn hiện \"Unbox your mystery box now!\" với link Multi-unbox/Unbox, khách mở được box; Manage orders liệt kê \"1/1 boxes opened\", \"Unfulfilled\"; trang đơn Shopify admin có dòng quà ₫0 \"MYSBOX: -100%\" và timeline \"edited this order\" + \"sent an order edited email\".", "basis": "OBSERVED_CURRENT", "environment": "staging", "observed_count": 1, "confidence": "LOW", "note": "Webhook server-to-server không thấy trực tiếp; ghi usage billing chưa quan sát.", "kb_refs": ["webhook-ingestion#KB-043"], "act_ids": ["SF-ACT-004", "SF-ACT-005", "SF-ACT-006", "ACT-08-01-001", "ACT-08-01-002", "ACT-08-01-003", "ACT-08-01-005"] },
+          { "behavior": "Đơn test paid lúc 11:32:53Z: bản ghi đơn Mysbox created_at 11:32:58Z (~5 giây); endpoint customer của block trang cảm ơn 404 lúc ~11:32:56Z rồi 200 lúc ~11:33:00Z; link Unbox hiện muộn nhất 11:33:01.9Z (≤ 9 giây sau paid); cột Date của Manage orders hiện created_at bản ghi Mysbox theo giờ máy (18:32:58 ở UTC+7).", "basis": "OBSERVED_CURRENT", "environment": "staging", "observed_count": 1, "confidence": "LOW", "note": "Một mẫu, mốc gián tiếp — không dùng làm boundary; endpoint customer ở host chưa xác nhận.", "kb_refs": ["webhook-ingestion#KB-044"], "act_ids": ["SF-ACT-004", "SF-ACT-005", "ACT-08-01-001"] },
+          { "behavior": "Trước và sau một đơn test Bogus 1 box (đã bốc thăm và mở), shop gói Free có exclude_test_order true: Box sales limit giữ \"0 / 10\", dữ liệu nhúng giữ box_sold_in_cycle 0, box_capacity_used 0; tồn pool của món trúng giảm từ 1 về 0.", "basis": "OBSERVED_CURRENT", "environment": "staging", "observed_count": 1, "confidence": "LOW", "note": "Một mẫu; không kết luận quan hệ nhân quả với cờ; usage billing chưa quan sát.", "kb_refs": ["webhook-ingestion#KB-045"], "act_ids": ["ACT-01-01-001", "ACT-08-01-004", "ACT-04-02-002", "ACT-01-03-003"] }
+        ],
+        "observed_validations": [],
+        "limitations": [
+          { "limitation": "Theo tài liệu, staging chỉ dùng đường HTTP trực tiếp (/webhook, kiểm HMAC) còn production dùng đường EventBridge (/webhook/event-bridge, kiểm X-Api-Key). Kiểm thử trên staging không chạm tới đường EventBridge của production và ngược lại.", "kb_refs": ["webhook-ingestion#KB-010", "webhook-ingestion#KB-011"] },
+          { "limitation": "Kết quả tác vụ hàng loạt được xử lý khi nhận bulk_operations/finish chỉ được minh hoạ (danh sách line item / giảm giá), không phải danh sách đầy đủ.", "kb_refs": ["webhook-ingestion#KB-028"] },
+          { "limitation": "Thời gian chờ khoá đơn của orders/paid (15 giây) chỉ xuất hiện trong ví dụ, không phải boundary được quy định.", "kb_refs": ["webhook-ingestion#KB-036"] },
+          { "limitation": "Định dạng khoá job ghép từ số đơn và event id chỉ là minh hoạ, không phải định dạng được quy định.", "kb_refs": ["webhook-ingestion#KB-039"] },
+          { "limitation": "Minh hoạ: lần giao trùng orders/paid thứ hai bị chặn nhờ khoá trùng nên khách không bị rút thăm hai lần — chỉ là ví dụ, không phải rule độc lập (rule nằm ở chống trùng theo đơn + event id).", "kb_refs": ["webhook-ingestion#KB-040", "webhook-ingestion#KB-023"] },
+          { "limitation": "Tình huống Shopify báo đã gửi mà app không phản ứng thường chỉ thấy được ở Horizon hoặc log (tài liệu diễn đạt rào đón).", "kb_refs": ["webhook-ingestion#KB-038"] },
+          { "limitation": "Quan sát staging 2026-10-17 chỉ thấy hệ quả gián tiếp của orders/paid cho một đơn test (webhook server-to-server không thấy); HMAC sai, X-Api-Key, giao trùng, topic khác, Horizon không quan sát.", "basis": "OBSERVED_CURRENT", "kb_refs": ["webhook-ingestion#KB-043", "webhook-ingestion#KB-044"] }
+        ],
+        "permissions": [
+          { "permission": "Đường /webhook: chỉ webhook có chữ ký HMAC đúng (bí mật app) được nhận; sai trả 401.", "kb_refs": ["webhook-ingestion#KB-008"] },
+          { "permission": "Đường /webhook/event-bridge: chỉ webhook có X-Api-Key khớp khoá đã cấu hình được nhận; khoá sai 401; chưa cấu hình khoá thì từ chối tất cả.", "kb_refs": ["webhook-ingestion#KB-014", "webhook-ingestion#KB-015", "webhook-ingestion#KB-016"] },
+          { "permission": "Nhân viên (admin-staff) chạy lại thủ công job webhook thất bại.", "kb_refs": ["webhook-ingestion#KB-035"] }
+        ],
+        "surface_mapping": {
+          "portal": [
+            { "surface": "Manage orders (\"1/1 boxes opened\", \"Unfulfilled\", cột Date = created_at bản ghi Mysbox) và Box sales limit sau đơn test — staging", "basis": "OBSERVED_CURRENT", "kb_refs": ["webhook-ingestion#KB-043", "webhook-ingestion#KB-044", "webhook-ingestion#KB-045"], "act_ids": ["ACT-08-01-001", "ACT-08-01-004"] }
+          ],
+          "storefront": [
+            { "surface": "Block trang cảm ơn hiện \"Unbox your mystery box now!\" + link Multi-unbox/Unbox sau paid — staging", "basis": "OBSERVED_CURRENT", "kb_refs": ["webhook-ingestion#KB-043", "webhook-ingestion#KB-044"], "act_ids": ["SF-ACT-005"] }
+          ],
+          "api": [
+            { "surface": "/webhook — webhook Shopify gửi trực tiếp qua HTTP, kiểm HMAC, staging", "kb_refs": ["webhook-ingestion#KB-008", "webhook-ingestion#KB-010", "webhook-ingestion#KB-017"] },
+            { "surface": "/webhook/event-bridge — webhook Shopify chuyển tiếp qua AWS EventBridge, kiểm X-Api-Key, production", "kb_refs": ["webhook-ingestion#KB-011", "webhook-ingestion#KB-012", "webhook-ingestion#KB-014", "webhook-ingestion#KB-016"] },
+            { "surface": "Webhook thông báo \"đơn đã trả\" Shopify gửi vào Mysbox (định danh topic / route chưa được tài liệu nêu — xem unknown_areas) — hiện trạng lỗi đã biết", "kb_refs": ["webhook-ingestion#KB-032", "webhook-ingestion#KB-042"], "observed_kb_refs": ["webhook-ingestion#KB-043"] },
+            { "surface": "Các topic webhook Shopify app nhận, liệt kê khác nhau theo từng tài liệu — tập topic đang conflict (xem profile_conflicts)", "kb_refs": ["webhook-ingestion#KB-002", "webhook-ingestion#KB-003"] },
+            { "surface": "GET /api/orders, /api/orders/{id} (merchant đọc đơn test: winning_bundles, created_at) — staging", "method": "GET", "route": "/api/orders/{id}", "host": "<MYS_API_BASE>", "basis": "OBSERVED_CURRENT", "apiop_ids": ["APIOP-008", "APIOP-009"], "kb_refs": ["webhook-ingestion#KB-043", "webhook-ingestion#KB-044"], "act_ids": ["ACT-08-01-001", "ACT-08-01-002"] }
+          ],
+          "data": [
+            { "surface": "Bản ghi đơn Mysbox (opening request, winning_bundles, created_at) tạo sau orders/paid; box_sold_in_cycle / box_capacity_used không đổi với đơn test — staging", "basis": "OBSERVED_CURRENT", "kb_refs": ["webhook-ingestion#KB-043", "webhook-ingestion#KB-044", "webhook-ingestion#KB-045"] }
+          ],
+          "code": [],
+          "backend": [
+            { "surface": "Bộ nhận webhook nội bộ (chuẩn hoá topic, gắn event id, giao bộ xử lý topic)", "kb_refs": ["webhook-ingestion#KB-017", "webhook-ingestion#KB-018", "webhook-ingestion#KB-019", "webhook-ingestion#KB-020"] },
+            { "surface": "Horizon (bảng điều khiển hàng đợi) — danh sách failed jobs", "kb_refs": ["webhook-ingestion#KB-033"] }
+          ]
+        },
+        "dependencies": [
+          { "dependency": "Shopify (gửi webhook, ký HMAC, gửi lại theo lịch khi bị 401).", "kb_refs": ["webhook-ingestion#KB-001", "webhook-ingestion#KB-007", "webhook-ingestion#KB-009"] },
+          { "dependency": "AWS EventBridge và khoá X-Api-Key được cấu hình ở production.", "kb_refs": ["webhook-ingestion#KB-011", "webhook-ingestion#KB-013", "webhook-ingestion#KB-015"] },
+          { "dependency": "Cấu hình app (SDK) quyết định topic nào được đăng ký.", "kb_refs": ["webhook-ingestion#KB-004", "webhook-ingestion#KB-006"] },
+          { "dependency": "Hàng đợi job và Horizon để xử lý và khôi phục job webhook.", "kb_refs": ["webhook-ingestion#KB-033", "webhook-ingestion#KB-035"] },
+          { "dependency": "Cờ Exclude Test Order của shop và bộ đếm hạn mức (đơn test không làm tăng Box sales limit — quan sát staging).", "basis": "OBSERVED_CURRENT", "kb_refs": ["webhook-ingestion#KB-045"] }
+        ],
+        "risks": [
+          { "risk": "Lỗi lúc xếp việc bị nuốt, Shopify nhận 204 và không gửi lại — đơn đã trả có thể mất khỏi Mysbox một cách im lặng (KNOWN_DEFECT).", "kb_refs": ["webhook-ingestion#KB-032"] },
+          { "risk": "Job webhook thất bại không tự retry, phụ thuộc nhân viên chạy lại thủ công (KNOWN_DEFECT).", "kb_refs": ["webhook-ingestion#KB-034", "webhook-ingestion#KB-035"] },
+          { "risk": "Đơn từ POS / kênh bán khác không gửi thông báo đơn đã trả chuẩn nên có thể không có đơn/box trong Mysbox (KNOWN_DEFECT).", "kb_refs": ["webhook-ingestion#KB-042"] },
+          { "risk": "app/uninstalled và ba topic dữ liệu cá nhân không có chống xử lý trùng — giao trùng có thể xử lý lặp.", "kb_refs": ["webhook-ingestion#KB-025", "webhook-ingestion#KB-030"] },
+          { "risk": "Đường EventBridge không kiểm HMAC; an toàn phụ thuộc hoàn toàn vào khoá X-Api-Key.", "kb_refs": ["webhook-ingestion#KB-012", "webhook-ingestion#KB-014"] },
+          { "risk": "Đơn test được bốc thăm và trừ tồn pool như đơn thật (quan sát staging) trong khi không tính vào hạn mức — test trên shop có tồn kho thật sẽ tiêu tồn món.", "basis": "OBSERVED_CURRENT", "kb_refs": ["webhook-ingestion#KB-043", "webhook-ingestion#KB-045"] }
+        ],
+        "freshness": { "observed_at": "2026-10-17", "base_observed_at": null },
+        "unknown_areas": [
+          { "question": "App thực sự đăng ký những topic webhook nào: ba sự kiện (orders/paid, app/uninstalled, shop/update), bốn webhook (thêm bulk_operations/finish), hay bốn topic cộng ba topic dữ liệu cá nhân?", "why_it_matters": "Các tài liệu mâu thuẫn; không chốt được tập topic thì không biết topic nào phải được xử lý và topic nào phải trả 500.", "kb_refs": ["webhook-ingestion#KB-002", "webhook-ingestion#KB-003", "webhook-ingestion#KB-004", "webhook-ingestion#KB-005"], "oq_id": "OQ-integrations-002" },
+          { "question": "Định danh topic chính xác và HTTP method / route / payload nhận của từng webhook (đặc biệt orders/paid và thông báo \"đơn đã trả\") là gì?", "why_it_matters": "Tài liệu viết tên webhook bằng lời; cần route + method đúng nguồn để dựng request kiểm 401/500/204.", "kb_refs": ["webhook-ingestion#KB-008", "webhook-ingestion#KB-011", "webhook-ingestion#KB-042"], "oq_id": "OQ-integrations-012" },
+          { "question": "Webhook qua EventBridge có X-Api-Key chưa cấu hình bị từ chối với status code nào?", "why_it_matters": "Tài liệu chỉ nói 'từ chối tất cả', không có mã.", "kb_refs": ["webhook-ingestion#KB-015"], "oq_id": "OQ-integrations-013" },
+          { "question": "Những header nào là 'header bắt buộc', và request thiếu header / body rỗng bị từ chối với status nào?", "why_it_matters": "Tài liệu chỉ nói 'bị từ chối'; thiếu oracle status (401? 400?).", "kb_refs": ["webhook-ingestion#KB-021", "webhook-ingestion#KB-022"], "oq_id": "OQ-integrations-027" },
+          { "question": "Bước 'kiểm hợp lệ' của bộ nhận chung gồm những gì ngoài HMAC / X-Api-Key?", "why_it_matters": "Phạm vi kiểm tra không rõ, không thiết kế được case biên.", "kb_refs": ["webhook-ingestion#KB-017"], "oq_id": "OQ-integrations-014" },
+          { "question": "Quy tắc chuẩn hoá tên topic là gì (vd khác biệt tên topic giữa HTTP và EventBridge)?", "why_it_matters": "Không kiểm được topic nào được nhận dạng sau chuẩn hoá.", "kb_refs": ["webhook-ingestion#KB-018"], "oq_id": "OQ-integrations-015" },
+          { "question": "Khi webhook được xếp hàng / xử lý thành công, app trả status gì?", "why_it_matters": "204 chỉ được nêu trong tình huống lỗi bị nuốt và trong ví dụ; không có phát biểu trực tiếp cho trường hợp thành công.", "kb_refs": ["webhook-ingestion#KB-032"], "oq_id": "OQ-integrations-010" },
+          { "question": "'Dọn dữ liệu liên quan' khi nhận app/uninstalled gồm dữ liệu nào?", "why_it_matters": "Tài liệu chỉ nói box/đơn được giữ lại; không biết dữ liệu nào bị xoá để kiểm.", "kb_refs": ["webhook-ingestion#KB-025"], "oq_id": "OQ-integrations-016" },
+          { "question": "'Thử lại tối đa 3 lần' của shop/update nghĩa là gì (job retry hay chống trùng), và shop/update có chống xử lý trùng không?", "why_it_matters": "Giá trị nằm trong cột chống trùng nhưng mô tả retry; không suy được hành vi khi giao trùng.", "kb_refs": ["webhook-ingestion#KB-026"], "oq_id": "OQ-integrations-017" },
+          { "question": "Khoá chống trùng (đơn + event id) và (mã tác vụ + event id) tồn tại bao lâu?", "why_it_matters": "Giao trùng sau thời hạn khoá có thể bị xử lý lại; tài liệu không nêu thời hạn.", "kb_refs": ["webhook-ingestion#KB-023", "webhook-ingestion#KB-029"], "oq_id": "OQ-integrations-018" },
+          { "question": "Thời gian chờ khoá đơn của orders/paid được quy định là bao nhiêu?", "why_it_matters": "Giá trị duy nhất trong tài liệu chỉ là ví dụ; không dùng được làm boundary.", "kb_refs": ["webhook-ingestion#KB-024", "webhook-ingestion#KB-036"], "oq_id": "OQ-integrations-019" },
+          { "question": "Webhook cho đơn test có được xử lý (tạo yêu cầu mở box, rút thăm, ghi usage) như đơn thật không?", "why_it_matters": "Tài liệu chỉ nói đơn test vẫn được nhận và tự khai chưa xác nhận chi tiết.", "kb_refs": ["webhook-ingestion#KB-041"], "oq_id": "OQ-integrations-025", "refresh_note": "Quan sát staging 2026-10-17 (một đơn test Bogus, cờ Exclude Test Order bật): có đơn Mysbox, opening request, bốc thăm, khách mở được, quà thêm vào đơn Shopify (KB-043); Box sales limit 0/10 → 0/10 (KB-045); ghi usage billing chưa quan sát. OQ NEEDS_CONFIRMATION — không gỡ.", "refresh_kb_refs": ["webhook-ingestion#KB-043", "webhook-ingestion#KB-045"] },
+          { "question": "Lịch gửi lại của Shopify khi nhận 401 (số lần, khoảng cách) là gì?", "why_it_matters": "Thuộc Shopify; tài liệu chỉ nói 'theo lịch của Shopify', cần biết để quan sát retry khi test.", "kb_refs": ["webhook-ingestion#KB-009"], "oq_id": "OQ-integrations-020" },
+          { "question": "Lỗi nuốt 204 và job thất bại không tự retry có kế hoạch sửa không, và hành vi mong đợi là gì (vd trả mã lỗi để Shopify gửi lại, retry tự động)?", "why_it_matters": "Hai item là lỗi đã biết; chưa có oracle hành vi đúng để viết check.", "kb_refs": ["webhook-ingestion#KB-032", "webhook-ingestion#KB-034"], "oq_id": "OQ-integrations-010" },
+          { "question": "Phạm vi kênh bán bị ảnh hưởng bởi việc không có thông báo \"đơn đã trả\" chuẩn, và hành vi mong đợi cho các kênh đó là gì?", "why_it_matters": "Lỗi đã biết; cần biết kênh nào được hỗ trợ để kiểm đơn từ POS / kênh khác.", "kb_refs": ["webhook-ingestion#KB-042", "webhook-ingestion#KB-024"], "oq_id": "OQ-integrations-012" }
+        ],
+        "last_updated": { "date": "2026-10-17", "ccr_ref": "bootstrap" }
+      }
+    ],
+    "run_metadata": [
+      { "feature_key": "webhook-ingestion", "field": "run_feature_id", "value": "FEAT-08-webhook-ingestion" },
+      { "feature_key": "webhook-ingestion", "field": "freshness.run_id", "value": "CTX-20261017-03" }
+    ],
+    "unknown_areas_removed": [],
+    "unknown_area_links": {},
+    "profile_relationships": [
+      { "from": "FEAT-02-webhook-ingestion", "to": "FEAT-01-request-authentication", "relation": "RELATED", "note": "Webhook Shopify là một loại client của cùng backend; mỗi loại client có cơ chế xác thực riêng.", "kb_refs": ["request-authentication#KB-001", "request-authentication#KB-002", "webhook-ingestion#KB-007"] },
+      { "from": "FEAT-02-webhook-ingestion", "to": "shopify-flow-actions", "relation": "SHARES_ORDER_LOCK", "note": "Khoá theo đơn của orders/paid ngăn webhook thật và action Flow cho kênh bán khác xử lý đồng thời cùng một đơn.", "kb_refs": ["webhook-ingestion#KB-024"] },
+      { "from": "FEAT-02-webhook-ingestion", "to": "background-jobs-and-queue-monitoring", "relation": "RECOVERY_VIA", "note": "Job webhook thất bại nằm ở danh sách failed của Horizon và được chạy lại thủ công.", "kb_refs": ["webhook-ingestion#KB-033", "webhook-ingestion#KB-035"] },
+      { "from": "webhook-ingestion", "to": "dashboard-and-analytics", "relation": "RELATED", "note": "Đơn test không làm tăng Box sales limit khi Exclude Test Order bật (quan sát staging).", "kb_refs": ["webhook-ingestion#KB-045"] },
+      { "from": "webhook-ingestion", "to": "purchase-and-prize-draw", "relation": "RELATED", "note": "orders/paid dẫn tới tạo đơn Mysbox và bốc thăm (hệ quả quan sát staging).", "kb_refs": ["webhook-ingestion#KB-043"] }
+    ],
+    "coverage_matrix": [
+      { "feature_id": "FEAT-02-webhook-ingestion", "layer": "api", "role": "system (Shopify)", "state": "/webhook, HMAC đúng", "environment": "documented (đường staging)", "covered": true, "kb_refs": ["webhook-ingestion#KB-008", "webhook-ingestion#KB-010"] },
+      { "feature_id": "FEAT-02-webhook-ingestion", "layer": "api", "role": "system (Shopify)", "state": "/webhook, HMAC sai", "environment": "documented (đường staging)", "covered": true, "kb_refs": ["webhook-ingestion#KB-008", "webhook-ingestion#KB-009"] },
+      { "feature_id": "FEAT-02-webhook-ingestion", "layer": "api", "role": "system (AWS EventBridge)", "state": "/webhook/event-bridge, X-Api-Key khớp", "environment": "documented (đường production)", "covered": true, "kb_refs": ["webhook-ingestion#KB-011", "webhook-ingestion#KB-014"] },
+      { "feature_id": "FEAT-02-webhook-ingestion", "layer": "api", "role": "system (AWS EventBridge)", "state": "/webhook/event-bridge, X-Api-Key sai", "environment": "documented (đường production)", "covered": true, "kb_refs": ["webhook-ingestion#KB-016"] },
+      { "feature_id": "FEAT-02-webhook-ingestion", "layer": "api", "role": "system (AWS EventBridge)", "state": "khoá X-Api-Key chưa cấu hình", "environment": "documented (đường production)", "covered": false, "note": "Rule từ chối có, status code chưa có.", "kb_refs": ["webhook-ingestion#KB-015"] },
+      { "feature_id": "FEAT-02-webhook-ingestion", "layer": "api", "role": "system", "state": "thiếu header bắt buộc / body rỗng", "environment": "documented", "covered": false, "note": "Rule từ chối có, danh sách header và status chưa có.", "kb_refs": ["webhook-ingestion#KB-021", "webhook-ingestion#KB-022"] },
+      { "feature_id": "FEAT-02-webhook-ingestion", "layer": "api", "role": "system", "state": "topic không có bộ xử lý", "environment": "documented", "covered": true, "kb_refs": ["webhook-ingestion#KB-031"] },
+      { "feature_id": "FEAT-02-webhook-ingestion", "layer": "api", "role": "system", "state": "xử lý thành công", "environment": "documented", "covered": false, "note": "Status trả về khi thành công chưa được nêu.", "kb_refs": [] },
+      { "feature_id": "FEAT-02-webhook-ingestion", "layer": "backend", "role": "system", "state": "orders/paid giao trùng (đơn + event id)", "environment": "documented", "covered": true, "kb_refs": ["webhook-ingestion#KB-023", "webhook-ingestion#KB-037"] },
+      { "feature_id": "FEAT-02-webhook-ingestion", "layer": "backend", "role": "system", "state": "bulk_operations/finish giao trùng", "environment": "documented", "covered": true, "kb_refs": ["webhook-ingestion#KB-029"] },
+      { "feature_id": "FEAT-02-webhook-ingestion", "layer": "backend", "role": "system", "state": "shop/update giao trùng", "environment": "documented", "covered": false, "kb_refs": ["webhook-ingestion#KB-026"] },
+      { "feature_id": "FEAT-02-webhook-ingestion", "layer": "backend", "role": "system", "state": "lỗi lúc xếp việc (nuốt 204)", "environment": "documented", "covered": false, "note": "Chỉ có KNOWN_DEFECT, không có oracle hành vi đúng.", "kb_refs": ["webhook-ingestion#KB-032"] },
+      { "feature_id": "FEAT-02-webhook-ingestion", "layer": "backend", "role": "admin-staff", "state": "job failed → chạy lại thủ công", "environment": "documented", "covered": true, "kb_refs": ["webhook-ingestion#KB-033", "webhook-ingestion#KB-035"] },
+      { "feature_id": "FEAT-02-webhook-ingestion", "layer": "data", "role": "n/a", "state": "n/a", "environment": "documented", "covered": false, "kb_refs": [] },
+      { "feature_id": "FEAT-02-webhook-ingestion", "layer": "portal", "role": "merchant", "state": "đơn test Bogus sau orders/paid: Manage orders, Box sales limit", "environment": "staging", "covered": true, "kb_refs": ["webhook-ingestion#KB-043", "webhook-ingestion#KB-045"] },
+      { "feature_id": "FEAT-02-webhook-ingestion", "layer": "storefront", "role": "guest buyer", "state": "trang cảm ơn sau paid: link Unbox, độ trễ", "environment": "staging", "covered": true, "kb_refs": ["webhook-ingestion#KB-043", "webhook-ingestion#KB-044"] },
+      { "feature_id": "FEAT-02-webhook-ingestion", "layer": "api", "role": "system (Shopify)", "state": "request webhook trực tiếp (HMAC, header, body, giao trùng, topic khác)", "environment": "staging", "covered": false, "note": "NOT_COVERED: webhook server-to-server không thấy từ trình duyệt; không forge webhook." },
+      { "feature_id": "FEAT-02-webhook-ingestion", "layer": "backend", "role": "admin-staff", "state": "Horizon failed jobs / usage billing đơn test", "environment": "staging", "covered": false, "note": "NOT_COVERED: admin/backend không bật; job billing 00:00 UTC không quan sát." }
+    ],
+    "unassigned_kb_items": [],
+    "profile_conflicts": [
+      { "conflict_group": "CONF-integrations-01", "topic": "Tập topic webhook Shopify app nhận", "kb_refs": ["webhook-ingestion#KB-002", "webhook-ingestion#KB-003", "webhook-ingestion#KB-004", "webhook-ingestion#KB-005"], "sides": ["Chỉ ba sự kiện: orders/paid, app/uninstalled, shop/update.", "Chỉ bốn webhook: uninstall, shop update, orders paid, bulk finish.", "Bốn topic cộng ba topic dữ liệu cá nhân (compliance); bulk_operations/finish có trong cấu hình staging và production."], "resolution": null, "handling": "Không đưa side nào vào confirmed_rules; chuyển unknown_areas để orchestrator compile OQ CONFLICT." }
+    ],
+    "profile_change_summary": [
+      { "change": "CARRIED_FORWARD", "feature_key": "webhook-ingestion", "note": "Mọi field base giữ nguyên (feature_id FEAT-02, stable_since_version \"1\", 29 confirmed_rules, 3 KNOWN_DEFECT, CONF-integrations-01, 15 unknown_areas với oq_id)." },
+      { "change": "ADDED", "feature_key": "webhook-ingestion", "section": "capabilities / actors / observed_behavior / state_transitions / surface_mapping / coverage_matrix / risks", "note": "1 capability quan sát (đơn test xử lý như đơn thật), actor quan sát, 3 hành vi OBSERVED_CURRENT, 1 transition paid → đơn Mysbox, portal/storefront/API/data item, coverage staging, 1 risk.", "kb_refs": ["webhook-ingestion#KB-043", "webhook-ingestion#KB-044", "webhook-ingestion#KB-045"] },
+      { "change": "UPDATED", "feature_key": "webhook-ingestion", "section": "unknown_areas", "note": "refresh_note OQ-integrations-025; không gỡ; không thêm unknown mới." }
+    ],
+    "kb_trace_complete": true
+  },
+  "gate": {
+    "decision": "CONDITIONAL_PASS",
+    "blocking_findings": [],
+    "conditions": ["Chỉ hệ quả gián tiếp của một đơn test; CONF-integrations-01 chưa resolve; nhánh từ chối webhook vẫn chỉ có oracle tài liệu."],
+    "allowed_next_steps": ["qa-checklist-builder", "knowledge-diff-analyzer"]
+  }
+}

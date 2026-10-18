@@ -1,0 +1,977 @@
+{
+  "feature_id": "FEAT-05-picking-modes",
+  "feature_key": "picking-modes",
+  "object_key": "box",
+  "name": "Picking mode — cách bốc item (mặc định, unique trong đơn, unique giữa các set, Group draw/pool)",
+  "user_goal": "Merchant chọn cách hệ thống bốc item cho mỗi hộp để kiểm soát trùng lặp và phân phối quà: bốc độc lập mặc định, không lặp item trong một đơn, hay với box Group chọn bốc có hoàn lại (draw) hoặc hàng đợi không hoàn lại (pool) cùng hành vi khi một nhóm cạn.",
+  "user_goal_kb_refs": [
+    "picking-modes#KB-016",
+    "picking-modes#KB-018",
+    "picking-modes#KB-024",
+    "picking-modes#KB-034",
+    "picking-modes#KB-036"
+  ],
+  "stable_since_version": "1",
+  "actors": [
+    {
+      "role": "merchant",
+      "permission_observed": "Tài liệu nêu merchant chọn trong portal: Unique in an order (Advanced Settings, chỉ Single/Bundle), Group duplicated/removed after pull, lựa chọn khi nhóm cạn. Mode mặc định không cần chỉnh. Không có quan sát runtime.",
+      "kb_refs": [
+        "picking-modes#KB-017",
+        "picking-modes#KB-024",
+        "picking-modes#KB-025",
+        "picking-modes#KB-029",
+        "picking-modes#KB-034",
+        "picking-modes#KB-036",
+        "picking-modes#KB-037",
+        "_object-level.box#KB-017"
+      ]
+    },
+    {
+      "role": "system",
+      "permission_observed": "Server chạy thuật toán chọn prize theo picking mode; sync pool dời con trỏ và xáo phần còn lại.",
+      "kb_refs": [
+        "picking-modes#KB-016",
+        "picking-modes#KB-020",
+        "picking-modes#KB-021",
+        "picking-modes#KB-049",
+        "picking-modes#KB-050"
+      ]
+    },
+    {
+      "role": "admin",
+      "permission_observed": "Admin panel › Configure Tier Settings: chọn Picking Mode Draw/BasePool và Tier Mode Shared/Independent.",
+      "kb_refs": [
+        "picking-modes#KB-047",
+        "picking-modes#KB-048"
+      ]
+    },
+    {
+      "role": "admin-staff",
+      "permission_observed": "Mysbox team đặt \"Unique across pools\" cho box (qua API, không có màn hình portal) — chỉ có trên staging, chưa lên production.",
+      "kb_refs": [
+        "picking-modes#KB-003",
+        "picking-modes#KB-004"
+      ]
+    },
+    {
+      "role": "merchant (staging, quan sát)",
+      "permission_observed": "OBSERVED_CURRENT staging/gói Free: chỉ thấy checkbox \"Unique in an order\" (Single chế độ single item và Bundle); không có lựa chọn picking mode nào khác trong form.",
+      "basis": "OBSERVED_CURRENT",
+      "kb_refs": [
+        "picking-modes#KB-051",
+        "picking-modes#KB-052"
+      ]
+    }
+  ],
+  "entry_points": [
+    {
+      "path": "Portal › form box › Advanced Settings › \"Unique in an order\" (ô \"Ensure that each item selected within an order is unique and not duplicated.\")",
+      "precondition": "Box Single/Bundle (ẩn với Group box); Advanced Settings mặc định tắt",
+      "kb_refs": [
+        "picking-modes#KB-024",
+        "picking-modes#KB-025",
+        "_object-level.box#KB-017"
+      ],
+      "observed_kb_refs": [
+        "picking-modes#KB-051"
+      ]
+    },
+    {
+      "path": "Portal › form box Group › \"Items in a group can be duplicated after pull\" / \"Items in a group are removed after pull\"",
+      "precondition": "Box Group",
+      "kb_refs": [
+        "picking-modes#KB-034",
+        "picking-modes#KB-036"
+      ]
+    },
+    {
+      "path": "Portal › form box Group pool › \"When one of groups has been all revealed\"",
+      "precondition": "Box Group chế độ pool",
+      "kb_refs": [
+        "picking-modes#KB-037",
+        "picking-modes#KB-038"
+      ]
+    },
+    {
+      "path": "Admin panel › box › Configure Tier Settings › Picking Mode (Draw / BasePool), Tier Mode (Shared / Independent)",
+      "precondition": "Box Tier; Tier Mode chỉ với BasePool",
+      "kb_refs": [
+        "picking-modes#KB-047",
+        "picking-modes#KB-048",
+        "_object-level.box#KB-013"
+      ]
+    },
+    {
+      "path": "API / Mysbox team đặt \"Unique across pools\" (staging-only)",
+      "precondition": "Box Bundle; chỉ có trên staging, chưa lên production; route chưa được tài liệu hoá",
+      "kb_refs": [
+        "picking-modes#KB-001",
+        "picking-modes#KB-003",
+        "picking-modes#KB-004"
+      ]
+    }
+  ],
+  "capabilities": [
+    {
+      "name": "Bốc mặc định (simple/binned) cho box Single/Bundle",
+      "description": "Mỗi hộp bốc độc lập theo số lượng còn lại (tracked) hoặc theo % (untracked); Bundle tung độc lập từng set; nhiều hộp có thể trùng nhau.",
+      "kb_refs": [
+        "picking-modes#KB-016",
+        "picking-modes#KB-017",
+        "picking-modes#KB-018",
+        "picking-modes#KB-019",
+        "picking-modes#KB-020",
+        "picking-modes#KB-021",
+        "picking-modes#KB-022",
+        "picking-modes#KB-029"
+      ],
+      "observed_kb_refs": [
+        "picking-modes#KB-052"
+      ],
+      "refresh_note": "settings.picking_mode null ở mọi box/version quan sát — không chứng minh tên mode mặc định."
+    },
+    {
+      "name": "Không lặp item trong một đơn (Unique in an order)",
+      "description": "Item đã ra bị loại khỏi ứng viên cho tới khi ra hết item của set; chance thay đổi trong phạm vi đơn; chỉ có nghĩa với đơn nhiều hộp cùng variant.",
+      "kb_refs": [
+        "picking-modes#KB-024",
+        "picking-modes#KB-025",
+        "picking-modes#KB-026",
+        "picking-modes#KB-027",
+        "picking-modes#KB-028",
+        "picking-modes#KB-031"
+      ],
+      "observed_kb_refs": [
+        "picking-modes#KB-051"
+      ],
+      "refresh_note": "KB-051 chỉ là quan sát trực tiếp trên form chưa lưu, không gắn thao tác có ghi lại; hành vi bốc khi bật không thử."
+    },
+    {
+      "name": "Group draw — bốc có hoàn lại",
+      "description": "Tung nhóm theo chance rồi chọn đều item trong nhóm; item đã trúng vẫn có thể trúng lại, bốc không giới hạn.",
+      "kb_refs": [
+        "picking-modes#KB-032",
+        "picking-modes#KB-034"
+      ]
+    },
+    {
+      "name": "Group pool — hàng đợi không hoàn lại và hành vi khi nhóm cạn",
+      "description": "Mỗi nhóm có hàng đợi xáo sẵn, item đã bốc rời nhóm; khi nhóm cạn: Refill (independent), Continuously randomize (shared), Automatically deactivate; sync lại pool dời con trỏ và xáo phần còn lại.",
+      "kb_refs": [
+        "picking-modes#KB-035",
+        "picking-modes#KB-036",
+        "picking-modes#KB-037",
+        "picking-modes#KB-038",
+        "picking-modes#KB-039",
+        "picking-modes#KB-040",
+        "picking-modes#KB-041",
+        "picking-modes#KB-042",
+        "picking-modes#KB-044",
+        "picking-modes#KB-045",
+        "picking-modes#KB-049",
+        "picking-modes#KB-050"
+      ]
+    },
+    {
+      "name": "Cấu hình Picking Mode / Tier Mode cho box Tier từ admin panel",
+      "description": "Configure Tier Settings chọn Draw hoặc BasePool; với BasePool chọn Tier Mode Shared (các pool refill cùng nhau) hoặc Independent (mỗi pool tự refill).",
+      "kb_refs": [
+        "picking-modes#KB-047",
+        "picking-modes#KB-048"
+      ]
+    },
+    {
+      "name": "Unique across pools cho Bundle có item trùng giữa các set (chỉ staging)",
+      "description": "Trải đều item trùng giữa các set, một hộp không chứa cùng item hai lần nếu kho cho phép. Chỉ có trên staging, chưa lên production; mọi mô tả là INFERRED, không có expected result production.",
+      "staging_only": true,
+      "kb_refs": [
+        "picking-modes#KB-001",
+        "picking-modes#KB-002",
+        "picking-modes#KB-003",
+        "picking-modes#KB-004",
+        "picking-modes#KB-005",
+        "picking-modes#KB-006",
+        "picking-modes#KB-010",
+        "picking-modes#KB-011",
+        "picking-modes#KB-012",
+        "picking-modes#KB-013",
+        "picking-modes#KB-014",
+        "picking-modes#KB-015"
+      ],
+      "observed_kb_refs": [
+        "picking-modes#KB-052"
+      ],
+      "refresh_note": "Staging: form Bundle không có lựa chọn \"Unique across pools\" (observed-absent, KB-052) — kênh API theo KB-003 không thử."
+    }
+  ],
+  "state_transitions": [
+    {
+      "from": "Item trong hàng đợi nhóm (còn bốc được)",
+      "to": "Item đã bốc (rời nhóm, không trúng lại)",
+      "trigger": "Một lần bốc vào nhóm",
+      "condition": "Box Group chế độ pool (\"Items in a group are removed after pull\")",
+      "kb_refs": [
+        "picking-modes#KB-035",
+        "picking-modes#KB-036"
+      ]
+    },
+    {
+      "from": "Nhóm cạn",
+      "to": "Nhóm được xáo lại",
+      "trigger": "Tung trúng nhóm đã cạn",
+      "condition": "Lựa chọn \"Refill the group\" (cơ chế independent)",
+      "kb_refs": [
+        "picking-modes#KB-039"
+      ]
+    },
+    {
+      "from": "Nhóm cạn",
+      "to": "Nhóm bị bỏ qua; mọi nhóm cạn thì tất cả được xáo lại",
+      "trigger": "Các lần bốc kế tiếp",
+      "condition": "Lựa chọn \"Continuously randomize items in the remaining groups\" (cơ chế shared)",
+      "kb_refs": [
+        "picking-modes#KB-040",
+        "picking-modes#KB-041"
+      ]
+    },
+    {
+      "from": "Box Group pool đang bán",
+      "to": "Box bị tắt",
+      "trigger": "Nhóm đầu tiên cạn",
+      "condition": "Lựa chọn \"Automatically deactivate box\"; dù nhóm khác còn item",
+      "kb_refs": [
+        "picking-modes#KB-042"
+      ]
+    },
+    {
+      "from": "Danh sách ứng viên trong đơn (đã loại item đã ra)",
+      "to": "Danh sách được đặt lại",
+      "trigger": "Đã ra đủ mọi item của set",
+      "condition": "\"Unique in an order\" bật, đơn nhiều hộp",
+      "kb_refs": [
+        "picking-modes#KB-026"
+      ]
+    },
+    {
+      "from": "Hàng đợi pool theo collection",
+      "to": "Con trỏ bốc được dời, phần còn lại được xáo",
+      "trigger": "Sync lại pool",
+      "condition": "Box pool theo collection",
+      "kb_refs": [
+        "picking-modes#KB-049",
+        "picking-modes#KB-050"
+      ]
+    },
+    {
+      "from": "Form Single chế độ single item (có \"Item picking settings\" / \"Unique in an order\")",
+      "to": "Chế độ \"Random by group(s)\" (mục biến mất)",
+      "trigger": "Merchant chuyển Randomization method",
+      "condition": "OBSERVED_CURRENT staging; chuyển về single item thì mục hiện lại",
+      "basis": "OBSERVED_CURRENT",
+      "kb_refs": [
+        "picking-modes#KB-051"
+      ]
+    }
+  ],
+  "confirmed_rules": [
+    {
+      "rule": "Picking mode quyết định thuật toán phía server dùng để chọn prize cho mỗi hộp.",
+      "kb_refs": [
+        "picking-modes#KB-016"
+      ]
+    },
+    {
+      "rule": "Box Single/Bundle mặc định dùng mode Mặc định (tên nội bộ \"simple\"/\"binned\"), merchant không cần chỉnh gì; \"binned\" có cùng xác suất với \"simple\".",
+      "kb_refs": [
+        "picking-modes#KB-017",
+        "picking-modes#KB-019"
+      ]
+    },
+    {
+      "rule": "Ở mode Mặc định mỗi hộp được bốc độc lập: theo số lượng còn lại với item tracked, theo % với item untracked.",
+      "kb_refs": [
+        "picking-modes#KB-018"
+      ]
+    },
+    {
+      "rule": "Item tracked: server bốc một số nguyên từ 1 đến tổng số lượng còn lại và chọn item theo số lượng cộng dồn.",
+      "kb_refs": [
+        "picking-modes#KB-020"
+      ]
+    },
+    {
+      "rule": "Item untracked: server bốc một số thập phân trong khoảng 0-1 và chọn item theo chance cộng dồn.",
+      "kb_refs": [
+        "picking-modes#KB-021"
+      ]
+    },
+    {
+      "rule": "Ở mode mặc định, box Bundle tung độc lập từng set và khách nhận một item từ mỗi set.",
+      "kb_refs": [
+        "picking-modes#KB-022"
+      ]
+    },
+    {
+      "rule": "\"Unique in an order\" nằm trong Advanced Settings; merchant bật bằng ô \"Ensure that each item selected within an order is unique and not duplicated.\".",
+      "kb_refs": [
+        "picking-modes#KB-024",
+        "_object-level.box#KB-017"
+      ]
+    },
+    {
+      "rule": "\"Unique in an order\" chỉ áp dụng cho box Single/Bundle; không có ở box Group và portal ẩn nó với Group box.",
+      "kb_refs": [
+        "picking-modes#KB-025"
+      ]
+    },
+    {
+      "rule": "Với \"Unique in an order\", trong một đơn nhiều hộp item không lặp lại cho tới khi đã ra hết các item của set; khi đã ra đủ thì danh sách được đặt lại.",
+      "kb_refs": [
+        "picking-modes#KB-026"
+      ]
+    },
+    {
+      "rule": "Với item untracked, \"Unique in an order\" bốc các hộp theo chance nhưng bỏ qua item đã ra trong vòng hiện tại.",
+      "kb_refs": [
+        "picking-modes#KB-027"
+      ]
+    },
+    {
+      "rule": "Mode Unique chỉ có ý nghĩa khi một đơn mua nhiều hộp cùng variant.",
+      "kb_refs": [
+        "picking-modes#KB-028"
+      ]
+    },
+    {
+      "rule": "Khi khách mua nhiều hộp, mode mặc định cho phép hộp trùng nhau; merchant bật \"Unique in an order\" nếu muốn tránh.",
+      "kb_refs": [
+        "picking-modes#KB-029"
+      ]
+    },
+    {
+      "rule": "Bật \"Unique in an order\" làm chance thay đổi trong phạm vi một đơn vì item đã ra bị loại tạm thời.",
+      "kb_refs": [
+        "picking-modes#KB-031"
+      ]
+    },
+    {
+      "rule": "Group draw: nhóm được tung theo chance, rồi item được chọn đồng xác suất trong nhóm trúng.",
+      "kb_refs": [
+        "picking-modes#KB-032"
+      ]
+    },
+    {
+      "rule": "\"Items in a group can be duplicated after pull\" là mode draw có hoàn lại: item đã trúng vẫn có thể trúng lại, nhiều khách có thể trúng cùng item, bốc không giới hạn.",
+      "kb_refs": [
+        "picking-modes#KB-034"
+      ]
+    },
+    {
+      "rule": "Group pool: mỗi nhóm có hàng đợi item đã xáo sẵn, mỗi lần bốc lấy item kế tiếp trong hàng.",
+      "kb_refs": [
+        "picking-modes#KB-035"
+      ]
+    },
+    {
+      "rule": "\"Items in a group are removed after pull\" là mode pool: item đã trúng được đánh dấu đã bốc, rời nhóm và không trúng lại.",
+      "kb_refs": [
+        "picking-modes#KB-036"
+      ]
+    },
+    {
+      "rule": "Group pool có thiết lập \"When one of groups has been all revealed\" với các lựa chọn Refill / Redistribute / Deactivate; \"independent\" và \"shared\" là tên cơ chế nội bộ, portal không hiển thị.",
+      "kb_refs": [
+        "picking-modes#KB-037",
+        "picking-modes#KB-038"
+      ]
+    },
+    {
+      "rule": "\"Refill the group\" ứng với cơ chế independent: nhóm đã cạn được xáo lại khi tung trúng nó.",
+      "kb_refs": [
+        "picking-modes#KB-039"
+      ]
+    },
+    {
+      "rule": "\"Continuously randomize items in the remaining groups\" ứng với cơ chế shared: nhóm đã cạn bị bỏ qua; chỉ khi mọi nhóm đều cạn thì tất cả nhóm mới được xáo lại.",
+      "kb_refs": [
+        "picking-modes#KB-040",
+        "picking-modes#KB-041"
+      ]
+    },
+    {
+      "rule": "\"Automatically deactivate box\" ứng với independent kèm tự tắt: nhóm đầu tiên cạn là box bị tắt, dù nhóm khác còn item.",
+      "kb_refs": [
+        "picking-modes#KB-042"
+      ]
+    },
+    {
+      "rule": "\"pick_count\" (số item lấy mỗi lần tung nhóm) mặc định là 1; portal không có ô để merchant chỉnh.",
+      "kb_refs": [
+        "picking-modes#KB-044",
+        "picking-modes#KB-045"
+      ]
+    },
+    {
+      "rule": "Configure Tier Settings: Picking Mode chọn Draw hoặc \"BasePool\"; với BasePool, Tier Mode có Shared (các pool refill cùng nhau) và Independent (mỗi pool tự refill).",
+      "kb_refs": [
+        "picking-modes#KB-047",
+        "picking-modes#KB-048"
+      ]
+    },
+    {
+      "rule": "Sync lại pool theo collection xáo phần món còn lại và dời con trỏ bốc.",
+      "kb_refs": [
+        "picking-modes#KB-049",
+        "picking-modes#KB-050"
+      ]
+    }
+  ],
+  "observed_behavior": [
+    {
+      "behavior": "Advanced Settings trên form Single (chế độ single item) và Bundle mới có \"Item picking settings\" với checkbox \"Unique in an order\" + \"Ensure that each item selected within an order is unique and not duplicated.\" (không tick trên form mới); chuyển Single sang \"Random by group(s)\" thì mục biến mất, chuyển về thì hiện lại.",
+      "basis": "OBSERVED_CURRENT",
+      "environment": "staging",
+      "observed_count": 4,
+      "confidence": "MEDIUM",
+      "note": "Khớp base KB-024/KB-025 và _object-level.box#KB-017.",
+      "kb_refs": [
+        "picking-modes#KB-051"
+      ]
+    },
+    {
+      "behavior": "Form Single (single item và group) và Bundle không có lựa chọn picking mode nào ngoài \"Unique in an order\" (Bundle không có \"Unique across pools\", không có ô pick_count); mọi box/box version quan sát staging 2026-10-16 (1022, 1023, 1024; version 3018–3022) có settings.picking_mode null.",
+      "basis": "OBSERVED_CURRENT",
+      "environment": "staging",
+      "observed_count": 4,
+      "confidence": "MEDIUM",
+      "note": "Observed-absent; null không chứng minh mode là \"simple\"/\"binned\" (KB-017) — không suy.",
+      "kb_refs": [
+        "picking-modes#KB-052"
+      ]
+    }
+  ],
+  "observed_validations": [],
+  "limitations": [
+    {
+      "statement": "Toàn bộ mô tả \"Unique across pools\" (phạm vi Bundle, cách đặt qua API/Mysbox team, chia floor/ceil, kiểm chia được, hộp rỗng khi không chia được, xếp hạng ứng viên untracked, mặc định không dùng) chỉ có trên staging, chưa lên production — không phải expected result production.",
+      "kb_refs": [
+        "picking-modes#KB-001",
+        "picking-modes#KB-002",
+        "picking-modes#KB-003",
+        "picking-modes#KB-004",
+        "picking-modes#KB-005",
+        "picking-modes#KB-006",
+        "picking-modes#KB-010",
+        "picking-modes#KB-011",
+        "picking-modes#KB-012",
+        "picking-modes#KB-013",
+        "picking-modes#KB-014",
+        "picking-modes#KB-015"
+      ]
+    },
+    {
+      "statement": "Các ví dụ phân bổ item của \"Unique across pools\" (tổ hợp không khả thi, mỗi hộp một A một B, phân bổ ví dụ thứ hai) là ví dụ minh hoạ trên staging.",
+      "kb_refs": [
+        "picking-modes#KB-007",
+        "picking-modes#KB-008",
+        "picking-modes#KB-009"
+      ]
+    },
+    {
+      "statement": "Ví dụ không bật Unique có thể ra A, A, A và ví dụ xác suất thực của item trong Group draw (chance nhóm × 1/số item) chỉ là minh hoạ, chưa là rule.",
+      "kb_refs": [
+        "picking-modes#KB-030",
+        "picking-modes#KB-033"
+      ]
+    },
+    {
+      "statement": "Đợt quan sát staging 2026-10-16 chỉ có 4 lần bốc — không đủ để quan sát hay suy thuật toán bốc; mọi quan sát của feature này là form/option.",
+      "basis": "OBSERVED_CURRENT",
+      "kb_refs": [
+        "picking-modes#KB-051",
+        "picking-modes#KB-052"
+      ]
+    }
+  ],
+  "permissions": [
+    {
+      "permission": "Bật Unique in an order, chọn draw/pool và lựa chọn khi nhóm cạn trong portal",
+      "role": "merchant",
+      "kb_refs": [
+        "picking-modes#KB-024",
+        "picking-modes#KB-034",
+        "picking-modes#KB-036",
+        "picking-modes#KB-037"
+      ]
+    },
+    {
+      "permission": "Chọn Picking Mode / Tier Mode trong Configure Tier Settings",
+      "role": "admin",
+      "kb_refs": [
+        "picking-modes#KB-047",
+        "picking-modes#KB-048"
+      ]
+    },
+    {
+      "permission": "Đặt Unique across pools cho box (staging-only)",
+      "role": "admin-staff",
+      "kb_refs": [
+        "picking-modes#KB-003",
+        "picking-modes#KB-004"
+      ]
+    },
+    {
+      "permission": "Đặt pick_count khác 1: portal không có ô chỉnh, bên đặt chưa xác nhận",
+      "role": "unknown",
+      "kb_refs": [
+        "picking-modes#KB-045",
+        "picking-modes#KB-046"
+      ]
+    }
+  ],
+  "surface_mapping": {
+    "portal": [
+      {
+        "element": "Advanced Settings › Unique in an order",
+        "kb_refs": [
+          "picking-modes#KB-024",
+          "picking-modes#KB-025"
+        ]
+      },
+      {
+        "element": "Group: duplicated after pull / removed after pull",
+        "kb_refs": [
+          "picking-modes#KB-034",
+          "picking-modes#KB-036"
+        ]
+      },
+      {
+        "element": "When one of groups has been all revealed",
+        "kb_refs": [
+          "picking-modes#KB-037",
+          "picking-modes#KB-039",
+          "picking-modes#KB-040",
+          "picking-modes#KB-042"
+        ]
+      },
+      {
+        "element": "Advanced Settings › \"Item picking settings\" › \"Unique in an order\" (Single single-item + Bundle; ẩn ở chế độ group) — staging",
+        "basis": "OBSERVED_CURRENT",
+        "kb_refs": [
+          "picking-modes#KB-051"
+        ]
+      }
+    ],
+    "admin_panel": [
+      {
+        "element": "Configure Tier Settings › Picking Mode / Tier Mode",
+        "kb_refs": [
+          "picking-modes#KB-047",
+          "picking-modes#KB-048"
+        ]
+      }
+    ],
+    "storefront": [],
+    "api": [
+      {
+        "element": "Kênh đặt Unique across pools qua API (staging-only, route chưa tài liệu hoá)",
+        "kb_refs": [
+          "picking-modes#KB-003"
+        ]
+      },
+      {
+        "element": "GET /api/boxes/{box_id} — settings.picking_mode (null mọi sample)",
+        "method": "GET",
+        "route": "/api/boxes/{box_id}",
+        "host": "<MYS_API_BASE>",
+        "basis": "OBSERVED_CURRENT",
+        "kb_refs": [
+          "picking-modes#KB-052",
+          "_object-level.box#KB-020"
+        ]
+      },
+      {
+        "element": "GET /api/box-versions/by-ids — settings.picking_mode của version (null)",
+        "method": "GET",
+        "route": "/api/box-versions/by-ids?ids=<box_version_id>",
+        "host": "<MYS_API_BASE>",
+        "basis": "OBSERVED_CURRENT",
+        "kb_refs": [
+          "picking-modes#KB-052"
+        ]
+      },
+      {
+        "element": "box-versions/{id} trên trang khách (app proxy) — settings.picking_mode (null)",
+        "method": "GET",
+        "route": "box-versions/{id} (app proxy)",
+        "basis": "OBSERVED_CURRENT",
+        "kb_refs": [
+          "picking-modes#KB-052"
+        ]
+      }
+    ],
+    "data": [
+      {
+        "element": "pick_count (mặc định 1)",
+        "kb_refs": [
+          "picking-modes#KB-044"
+        ]
+      },
+      {
+        "element": "Hàng đợi item xáo sẵn mỗi nhóm + con trỏ bốc",
+        "kb_refs": [
+          "picking-modes#KB-035",
+          "picking-modes#KB-050"
+        ]
+      },
+      {
+        "element": "box/box version settings.picking_mode = null (1022, 1023, 1024; 3018–3022) — staging",
+        "basis": "OBSERVED_CURRENT",
+        "kb_refs": [
+          "picking-modes#KB-052"
+        ]
+      }
+    ],
+    "code": [
+      {
+        "element": "Thuật toán bốc server (simple/binned, tracked/untracked, independent/shared)",
+        "kb_refs": [
+          "picking-modes#KB-016",
+          "picking-modes#KB-020",
+          "picking-modes#KB-021",
+          "picking-modes#KB-038"
+        ]
+      }
+    ]
+  },
+  "dependencies": [
+    {
+      "feature_key": "box-type-and-prize-setup",
+      "reason": "Loại box (Single/Bundle/Group) và tracked/untracked quyết định mode áp dụng được",
+      "kb_refs": [
+        "picking-modes#KB-017",
+        "picking-modes#KB-025"
+      ]
+    },
+    {
+      "feature_key": "inventory-and-sold-out",
+      "reason": "Pool và hành vi khi nhóm cạn dùng chung với tồn kho/sold-out",
+      "kb_refs": [
+        "picking-modes#KB-036",
+        "picking-modes#KB-037",
+        "picking-modes#KB-042"
+      ]
+    },
+    {
+      "feature_key": "pool-refill",
+      "reason": "Tier Mode Shared/Independent quyết định cách pool refill",
+      "kb_refs": [
+        "picking-modes#KB-048"
+      ]
+    },
+    {
+      "feature_key": "purchase-and-prize-draw",
+      "reason": "Thuật toán bốc chạy khi chốt quà cho đơn",
+      "kb_refs": [
+        "picking-modes#KB-016"
+      ]
+    }
+  ],
+  "risks": [
+    {
+      "risk": "Merchant tưởng mode mặc định không ra trùng; đơn nhiều hộp có thể ra trùng nếu không bật Unique in an order",
+      "kb_refs": [
+        "picking-modes#KB-029"
+      ]
+    },
+    {
+      "risk": "Unique in an order làm chance trong đơn khác chance hiển thị",
+      "kb_refs": [
+        "picking-modes#KB-031"
+      ]
+    },
+    {
+      "risk": "Automatically deactivate tắt box ngay khi nhóm đầu tiên cạn dù còn item ở nhóm khác",
+      "kb_refs": [
+        "picking-modes#KB-042"
+      ]
+    },
+    {
+      "risk": "Unique across pools chỉ có trên staging — check viết từ staging không áp dụng cho production",
+      "kb_refs": [
+        "picking-modes#KB-001"
+      ]
+    }
+  ],
+  "freshness": {
+    "observed_at": "2026-10-16",
+    "base_observed_at": null
+  },
+  "unknown_areas": [
+    {
+      "question": "Khi nào \"Unique across pools\" lên production, kênh đặt mode cho box (route, method, field, quyền gọi) là gì, và hành vi production lúc đó?",
+      "why_it_matters": "Mode chỉ có trên staging, chưa lên production; không lập được check production hay test kênh bật mode.",
+      "kb_refs": [
+        "picking-modes#KB-001",
+        "picking-modes#KB-003",
+        "picking-modes#KB-004"
+      ],
+      "oq_id": "OQ-box-074",
+      "refresh_note": "Staging: form Bundle không có lựa chọn này (KB-052); kênh API không thử.",
+      "refresh_kb_refs": [
+        "picking-modes#KB-052"
+      ]
+    },
+    {
+      "question": "Khi \"Unique across pools\" để một hộp rỗng (mọi phương án không chia được): khách thấy gì, đơn/opening ra sao, tồn kho và usage fee có bị tính không?",
+      "why_it_matters": "Hộp rỗng là kết quả bất thường với khách đã trả tiền; cần expected result trước khi viết check (chỉ staging).",
+      "kb_refs": [
+        "picking-modes#KB-012"
+      ],
+      "oq_id": "OQ-box-074"
+    },
+    {
+      "question": "Ở mode mặc định, một hộp Bundle có nhận được cùng một item từ các set khác nhau không?",
+      "why_it_matters": "Tài liệu nêu khả năng này ở dạng chưa xác nhận; ảnh hưởng expected của Bundle có item trùng giữa các set.",
+      "kb_refs": [
+        "picking-modes#KB-023"
+      ],
+      "oq_id": "OQ-box-047"
+    },
+    {
+      "question": "Với Bundle nhiều set, \"Unique in an order\" tính unique theo từng set hay trên toàn hộp/toàn đơn?",
+      "why_it_matters": "Ví dụ chỉ dùng một set; Bundle nhiều set không được minh hoạ.",
+      "kb_refs": [
+        "picking-modes#KB-026"
+      ],
+      "oq_id": "OQ-box-048"
+    },
+    {
+      "question": "\"Unique in an order\" có áp dụng khi một đơn chứa nhiều hộp thuộc các variant/box khác nhau không?",
+      "why_it_matters": "Tài liệu chỉ nói có ý nghĩa với nhiều hộp cùng variant; hành vi đơn trộn không được nêu.",
+      "kb_refs": [
+        "picking-modes#KB-028"
+      ],
+      "oq_id": "OQ-box-049"
+    },
+    {
+      "question": "Định nghĩa 'vòng hiện tại' / 'lượt' với item untracked trong Unique in an order (và Unique across pools) — khi nào vòng được đặt lại?",
+      "why_it_matters": "Untracked không có số lượng nên điều kiện 'đã ra hết item của set' không hiển nhiên.",
+      "kb_refs": [
+        "picking-modes#KB-027",
+        "picking-modes#KB-013"
+      ],
+      "oq_id": "OQ-box-074"
+    },
+    {
+      "question": "Nhãn bảng \"Refill / Redistribute / Deactivate\" ánh xạ chính xác thế nào với ba lựa chọn UI (đặc biệt Redistribute ↔ \"Continuously randomize items in the remaining groups\")?",
+      "why_it_matters": "Tài liệu không nói thẳng ánh xạ; suy theo thứ tự hàng là phỏng đoán.",
+      "kb_refs": [
+        "picking-modes#KB-037",
+        "picking-modes#KB-040"
+      ],
+      "oq_id": "OQ-box-050"
+    },
+    {
+      "question": "Ai/qua đâu đặt pick_count khác 1, và khi pick_count > 1 các item trong một lần tung có được trùng không, tương tác với draw/pool và với nhóm còn ít item hơn pick_count?",
+      "why_it_matters": "Chỉ nêu mặc định 1 và không có ô chỉnh; bên đặt giá trị tài liệu tự khai chưa xác nhận.",
+      "kb_refs": [
+        "picking-modes#KB-043",
+        "picking-modes#KB-046"
+      ],
+      "oq_id": "OQ-box-075"
+    },
+    {
+      "question": "Đổi picking mode trên box đã publish/đã bán áp dụng cho đơn cũ hay chỉ version mới; mode có nằm trong box version không?",
+      "why_it_matters": "Ảnh hưởng tính bất biến của bốc thăm (prize-draw là topic không được supersede).",
+      "kb_refs": [
+        "picking-modes#KB-016"
+      ],
+      "oq_id": "OQ-box-051",
+      "refresh_note": "Staging: box version object có field settings.picking_mode (null) (KB-052) — gợi ý mode nằm trong version nhưng chưa xác nhận.",
+      "refresh_kb_refs": [
+        "picking-modes#KB-052"
+      ]
+    },
+    {
+      "question": "Đổi qua lại giữa Single và Bundle, hoặc giữa draw và pool, có reset danh sách item không?",
+      "why_it_matters": "Tài liệu chỉ nêu trường hợp đổi single item → group.",
+      "kb_refs": [
+        "picking-modes#KB-034",
+        "picking-modes#KB-036"
+      ],
+      "oq_id": "OQ-box-052"
+    },
+    {
+      "question": "Picking Mode Draw/BasePool và Tier Mode Shared/Independent trong admin panel ánh xạ thế nào với các lựa chọn của merchant trong portal?",
+      "why_it_matters": "Hai surface cùng cấu hình box Tier; không biết surface nào là nguồn sự thật khi lệch.",
+      "kb_refs": [
+        "picking-modes#KB-047",
+        "picking-modes#KB-048",
+        "picking-modes#KB-039",
+        "picking-modes#KB-040"
+      ],
+      "oq_id": "OQ-box-050"
+    },
+    {
+      "question": "settings.picking_mode = null nghĩa là gì (mode mặc định simple/binned, hay chưa cấu hình), và giá trị enum khi bật \"Unique in an order\" là gì?",
+      "why_it_matters": "Không suy được mode từ null; cần để viết check API/data cho picking mode.",
+      "kb_refs": [
+        "picking-modes#KB-052",
+        "picking-modes#KB-017"
+      ],
+      "oq_id": "OQ-box-101"
+    }
+  ],
+  "last_updated": {
+    "date": "2026-10-16",
+    "ccr_ref": "bootstrap"
+  },
+  "coverage_matrix": [
+    {
+      "feature_id": "FEAT-05-picking-modes",
+      "layer": "portal",
+      "role": "merchant",
+      "state": "box Single/Bundle",
+      "environment": "documented",
+      "covered": true
+    },
+    {
+      "feature_id": "FEAT-05-picking-modes",
+      "layer": "portal",
+      "role": "merchant",
+      "state": "box Group draw / pool",
+      "environment": "documented",
+      "covered": true
+    },
+    {
+      "feature_id": "FEAT-05-picking-modes",
+      "layer": "backend",
+      "role": "system",
+      "state": "bốc thăm",
+      "environment": "documented",
+      "covered": true
+    },
+    {
+      "feature_id": "FEAT-05-picking-modes",
+      "layer": "admin_panel",
+      "role": "admin",
+      "state": "box Tier",
+      "environment": "documented",
+      "covered": true
+    },
+    {
+      "feature_id": "FEAT-05-picking-modes",
+      "layer": "api",
+      "role": "admin-staff",
+      "state": "Unique across pools",
+      "environment": "staging-only (chưa lên production)",
+      "covered": false
+    },
+    {
+      "feature_id": "FEAT-05-picking-modes",
+      "layer": "storefront",
+      "role": "customer",
+      "state": "kết quả bốc",
+      "environment": "documented",
+      "covered": false
+    },
+    {
+      "feature_id": "FEAT-05-picking-modes",
+      "layer": "portal",
+      "role": "merchant",
+      "state": "form Single/Bundle (option Unique in an order)",
+      "environment": "staging",
+      "covered": true,
+      "kb_refs": [
+        "picking-modes#KB-051",
+        "picking-modes#KB-052"
+      ]
+    },
+    {
+      "feature_id": "FEAT-05-picking-modes",
+      "layer": "api",
+      "role": "merchant",
+      "state": "settings.picking_mode",
+      "environment": "staging",
+      "covered": true,
+      "kb_refs": [
+        "picking-modes#KB-052"
+      ]
+    },
+    {
+      "feature_id": "FEAT-05-picking-modes",
+      "layer": "code",
+      "role": "system",
+      "state": "thuật toán bốc (default/unique/draw/pool)",
+      "environment": "staging",
+      "covered": false,
+      "note": "NOT_COVERED: 4 lần bốc, không bật Unique, không có box TIER; code surface tắt."
+    },
+    {
+      "feature_id": "FEAT-05-picking-modes",
+      "layer": "admin_panel",
+      "role": "admin",
+      "state": "Configure Tier Settings",
+      "environment": "staging",
+      "covered": false,
+      "note": "NOT_COVERED: admin panel tắt."
+    },
+    {
+      "feature_id": "FEAT-05-picking-modes",
+      "layer": "db",
+      "role": "system",
+      "state": "hàng đợi pool / con trỏ",
+      "environment": "staging",
+      "covered": false,
+      "note": "NOT_COVERED: db surface tắt."
+    },
+    {
+      "feature_id": "FEAT-05-picking-modes",
+      "layer": "storefront",
+      "role": "guest buyer",
+      "state": "kết quả bốc nhiều hộp",
+      "environment": "staging",
+      "covered": false,
+      "note": "NOT_COVERED: không đủ đơn để quan sát trùng/không trùng."
+    }
+  ],
+  "profile_conflicts": [],
+  "profile_relationships": [
+    {
+      "from": "picking-modes",
+      "to": "inventory-and-sold-out",
+      "type": "related",
+      "kb_refs": [
+        "picking-modes#KB-036",
+        "picking-modes#KB-042"
+      ]
+    },
+    {
+      "from": "picking-modes",
+      "to": "pool-refill",
+      "type": "related",
+      "kb_refs": [
+        "picking-modes#KB-048"
+      ]
+    },
+    {
+      "from": "picking-modes",
+      "to": "box-type-and-prize-setup",
+      "type": "depends_on",
+      "kb_refs": [
+        "picking-modes#KB-017",
+        "picking-modes#KB-025"
+      ]
+    },
+    {
+      "from": "picking-modes",
+      "to": "purchase-and-prize-draw",
+      "type": "used_by",
+      "kb_refs": [
+        "picking-modes#KB-016"
+      ]
+    }
+  ]
+}
