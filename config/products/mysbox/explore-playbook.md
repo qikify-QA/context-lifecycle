@@ -82,6 +82,13 @@ Nhóm feature theo user goal của merchant (tạo và bán box, theo dõi đơn
 
 **Được phép (đảo ngược được):** tạo product/variant + box tên `QA-…` — lưu ý **Save lần đầu của box Single/Bundle mới tự publish thành Active** (`POST /api/boxes` rồi `POST /api/boxes/<id>/publish`), dù combobox Status đang hiện Draft; cleanup = "Deactivate box" (về Draft) và đặt product `QA-` về Draft/Archive nếu run cho phép; dùng product sẵn có của store làm **prize item** được (chỉ tham chiếu), nhưng không gắn box vào product không phải `QA-`; sửa General Settings / Style Settings rồi Discard hoặc khôi phục đúng giá trị cũ (ghi giá trị trước khi sửa); Unbox và Resell **trên đơn test của chính run**.
 
+**Được phép (operator duyệt 2026-10-18) — luôn ghi giá trị trước và khôi phục đúng giá trị cũ trong cùng run:**
+- General Settings: tick/bỏ tick "Enable auto-unbox" (và quan sát hệ quả trên đơn test của run), rồi khôi phục.
+- Box `QA-` của run: "Deactivate box" rồi Save khi box đang Draft; **xoá box `QA-` do chính run tạo** (sau khi đã quan sát xong, ghi ACT riêng).
+- Style Settings: bật "Show recent pulls" để quan sát feed và các thiết lập con, rồi tắt lại.
+- Dò quyền trên trang khách / app proxy **chỉ với đơn test của run**: sửa `order_id`, `box_version_id`, `token` hoặc `?parameters=` (vd token sai, order_id của đơn test khác của run) và ghi response. Không dùng order_id/token của đơn không phải của run; chỉ GET/đọc hoặc action open/resell trên đơn của run.
+Lưu ý: các action này từng bị permission classifier của agent chặn dù playbook cho phép — bị chặn lại thì ghi `blocked_by_classifier`, không thử vòng.
+
 **Cấm (`defaults.forbidden_actions`):**
 - `charge`, `plan_change`: "Choose this plan", Upgrade/Downgrade (downgrade gửi usage charge ngay), "Cancel subscription", rời Early-bird (vĩnh viễn).
 - `real_payment`: mọi cổng ngoài Bogus Gateway.
@@ -96,7 +103,7 @@ Action không có trong danh sách được phép và không có đường clean
 
 ## 6. Network / API hints
 
-- Request tới `MYS_API_BASE` và tới `https://<MYS_STORE_DOMAIN>/apps/mysbox/...` (app proxy) là ứng viên `mapped`.
+- Request tới `MYS_API_BASE`, tới các host trong `environments.staging.additional_api_hosts` (`staging-api.mysbox.io` — trang thank-you/khách; `staging-proxy.mysbox.io` — asset/proxy trang khách; operator xác nhận 2026-10-18 là backend staging thật) và tới `https://<MYS_STORE_DOMAIN>/apps/mysbox/...` (app proxy) là ứng viên `mapped`.
 - Proxy API mà trang khách gọi (prefix `https://<MYS_STORE_DOMAIN>/apps/mysbox/api/`): `box-versions/<id>`, `translations/{general-settings,unboxing,buyback-widget,order,share-unboxing}?locale=`, `shopify/product-variants?ids=…`, **`POST unopened-boxes/open?order_id=&box_version_id=&quantity=`** (response có `winning_bundles[].winning_items[].linked_id` = variant prize, `total_opened`, `opened_at`, `resold_at`, `batch_id` — kết quả đã có từ lúc bốc thăm, open chỉ đóng dấu), `orders/<id>?page=&limit=`, `orders/<id>/resellable/exists`. Đối chiếu `linked_id` với `shopify/product-variants` để biết món trúng.
 - Merchant app gọi `MYS_API_BASE/api/...` (`GET /api/boxes`, `POST /api/boxes`, `POST /api/boxes/<id>/publish`, `GET /api/boxes/<id>`).
 - Storefront widget đọc **metafield** (variant `mysbox.box`, `recent_pulls_current`; shop `mysbox.config`, `subscription`, `capabilities`) và Storefront API bằng public token — nhiều hành vi không có request riêng tới backend Mysbox.
@@ -114,7 +121,8 @@ Action không có trong danh sách được phép và không có đường clean
 - Box Active không sửa/xoá được → Deactivate trước. Settings (auto-unbox, cửa sổ resell) chỉ áp cho đơn **mới** — đã đóng băng vào box version của đơn cũ.
 - Shop Free vượt capacity → **mọi box bị unpublish**, nâng gói hay giảm *used* không tự publish lại. Kiểm "Box sales limit" trước khi đặt đơn; đơn test thường không tính vào capacity nhưng vẫn trừ inventory.
 - Storefront có password: nhập `MYS_STOREFRONT_PASSWORD` ở `/password` (session của Shopify admin không bỏ qua được trang này). Product handle = slug của title, vd `/products/qa-…`.
-- Widget render trong **shadow DOM đóng** (custom element `mysbox-inject-list-box-item`, `mysbox-inject-list-recent-pulls`, `mysbox-inject-buy-by-store-credit`): accessibility snapshot và `shadowRoot.textContent` đều rỗng → dùng **screenshot** làm evidence cho nội dung widget, và console log `Mysbox - Listbox - …` để biết widget đã mount. Khối hiện: "Box items", thẻ item kèm "Chance: xx.xx%", "Powered by Mysbox".
+- Widget dùng custom element (`mysbox-inject-list-box-item`, `mysbox-inject-list-recent-pulls`, `mysbox-inject-buy-by-store-credit`) có **shadow root mở nhưng rỗng**; nội dung widget render ở **light DOM** (đọc được bằng accessibility snapshot / DOM thường, quan sát staging 2026-10-17, 1 mẫu — chưa chắc là cấu trúc ổn định). Kèm screenshot làm evidence, và console log `Mysbox - Listbox - …` / `Mysbox - RecentPulls - InjectListRecentPulls Mounted` để biết widget đã mount. Khối hiện: "Box items", thẻ item kèm "Chance: xx.xx%", "Powered by Mysbox". Block không có dữ liệu vẫn mount nhưng cao 0.
+- Biến global trên storefront: `window.mysboxStore` và `window._Mysbox` (config widget, không chứa tên/email/order id của khách). Bản dịch trang khách gọi `translations/<group>?locale=default`; shop chưa có bản dịch tuỳ chỉnh thì trả `{"data": null}`.
 - Dữ liệu widget không gọi `MYS_API_BASE`: config nhúng bằng Liquid (`script#mysbox-config`, `window.mysboxStore` với `mysboxProductPageData.variantMetafields`, `customer.storeCredit`, `mysboxRecentPulls`) + 2 query Storefront GraphQL `/api/<version>/graphql.json`: `getProducts` (variant kèm metafield `mysbox.box`) và `getVariants` (variant của prize item: title, price, image, availableForSale). Ghi nhãn `mapped` cho 2 query này.
 - Add to cart: box vào cart như line item thường, **không có** properties/attributes Mysbox — bốc thăm chỉ xảy ra ở server sau `orders/paid`.
 - Widget không hiện: kiểm theme embed, block, box Active, capacity — theo thứ tự đó — trước khi kết luận lỗi. Text "Your box items will be displayed here." chỉ hiện trong theme editor.
