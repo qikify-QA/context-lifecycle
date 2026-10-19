@@ -1,0 +1,9 @@
+# CHANGELOG — onboarding-dashboard
+
+- 2026-10-05 (`bootstrap`, DOC_BOOTSTRAP) — Bootstrap đầu tiên từ bộ tài liệu QA-authored qik-volume (qa-volume-kb, 20 doc, v1, generated 2026-10-01). 1 feature, 26 KB item, 0 conflict mở, 4 câu hỏi cần PO/Dev xác nhận hoặc test_case PASS.
+- 2026-10-18 (`bootstrap`, REFRESH) — Explore runtime đầu tiên trên store staging hiện tại (portal + storefront guest tới cart): thêm 7 KB item OBSERVED_CURRENT scope staging; không supersede, không nâng CONFIRMED_EXPECTED, không đóng conflict nào.
+- 2026-10-18 (`bootstrap`, REFRESH) — mở conflict CONF-onboarding-dashboard-R1018-02 (open question OQ-onboarding-dashboard-007): quan sát staging khác tài liệu v1; item tài liệu được gắn status UNRESOLVED + conflict_group (statement giữ nguyên), không dùng làm oracle STRONG cho tới khi PO/Dev quyết.
+- 2026-10-18 (`bootstrap`, REFRESH) — mở conflict CONF-onboarding-dashboard-R1018-01 (open question OQ-onboarding-dashboard-008): quan sát staging khác tài liệu v1; item tài liệu được gắn status UNRESOLVED + conflict_group (statement giữ nguyên), không dùng làm oracle STRONG cho tới khi PO/Dev quyết.
+- 2026-10-18 (`bootstrap`, REFRESH) — hạ oracle về NONE/NEEDS_CONFIRMATION cho 4 check do oracle trỏ vào item đang conflict hoặc KNOWN_DEFECT (chuyển thành regression watch): onboarding-dashboard#CHK-002, onboarding-dashboard#CHK-003, onboarding-dashboard#CHK-012, onboarding-dashboard#CHK-026.
+- 2026-10-18 (`bootstrap`, REFRESH) — thêm 9 open question: OQ-onboarding-dashboard-005, OQ-onboarding-dashboard-006, OQ-onboarding-dashboard-007, OQ-onboarding-dashboard-008, OQ-onboarding-dashboard-009, OQ-onboarding-dashboard-010, OQ-onboarding-dashboard-011, OQ-onboarding-dashboard-012, OQ-onboarding-dashboard-013.
+- 2026-10-18 (`bootstrap`, REFRESH) — ghi chú quan sát staging (staging_observation) vào open question đang mở, không resolve: OQ-onboarding-dashboard-003, OQ-onboarding-dashboard-004.
