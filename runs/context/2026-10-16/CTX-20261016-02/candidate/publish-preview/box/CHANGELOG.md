@@ -1,0 +1,22 @@
+# CHANGELOG — box
+
+- 2026-10-16 (`bootstrap`, DOC_BOOTSTRAP) — Bootstrap đầu tiên từ bộ Mysbox Product KB v1 (dev, 57 tài liệu, generated 2026-10-16). 6 feature, 376 KB item, 165 check, 8 known defect, 6 conflict mở, 90 open question.
+- 2026-10-16 (`bootstrap`, REFRESH) — box-type-and-prize-setup: thêm 10 KB item OBSERVED_CURRENT quan sát trên staging (scope.environment staging, không thay item documented): KB-054, KB-055, KB-056, KB-057, KB-058, KB-059, KB-060, KB-061, KB-062, KB-063.
+- 2026-10-16 (`bootstrap`, REFRESH) — box-create-and-publish: thêm 15 KB item OBSERVED_CURRENT quan sát trên staging (scope.environment staging, không thay item documented): KB-081, KB-082, KB-083, KB-084, KB-085, KB-086, KB-087, KB-088, KB-089, KB-090, KB-091, KB-092, KB-093, KB-094, KB-095.
+- 2026-10-16 (`bootstrap`, REFRESH) — box-versioning: thêm 8 KB item OBSERVED_CURRENT quan sát trên staging (scope.environment staging, không thay item documented): KB-044, KB-045, KB-046, KB-047, KB-048, KB-049, KB-050, KB-051.
+- 2026-10-16 (`bootstrap`, REFRESH) — inventory-and-sold-out: thêm 9 KB item OBSERVED_CURRENT quan sát trên staging (scope.environment staging, không thay item documented): KB-081, KB-082, KB-083, KB-084, KB-085, KB-086, KB-087, KB-088, KB-089.
+- 2026-10-16 (`bootstrap`, REFRESH) — picking-modes: thêm 2 KB item OBSERVED_CURRENT quan sát trên staging (scope.environment staging, không thay item documented): KB-051, KB-052.
+- 2026-10-16 (`bootstrap`, REFRESH) — pool-refill: thêm 1 KB item OBSERVED_CURRENT quan sát trên staging (scope.environment staging, không thay item documented): KB-053.
+- 2026-10-16 (`bootstrap`, REFRESH) — object-level: thêm 3 KB item OBSERVED_CURRENT quan sát trên staging (scope.environment staging, không thay item documented): KB-019, KB-020, KB-021.
+- 2026-10-16 (`bootstrap`, REFRESH) — box-type-and-prize-setup:CHK-023 — Oracle upgrade NONE→BASELINE: oracle đổi từ base box-type-and-prize-setup#KB-029 sang quan sát mới #KB-056 (trình sửa nhóm Random by group(s)); applicability/expected_result theo staging.
+- 2026-10-16 (`bootstrap`, REFRESH) — box-type-and-prize-setup:CHK-024 — Oracle upgrade NONE→BASELINE: oracle đổi từ #KB-026 sang quan sát mới #KB-061 (chance = quantity/tổng, bộ đếm All set!).
+- 2026-10-16 (`bootstrap`, REFRESH) — box-versioning:CHK-006 — Dọn oracle: gỡ box-versioning#KB-001/KB-002 (CONF-box-01 UNRESOLVED) khỏi oracle.kb_ids; oracle vẫn NONE, status không đổi — không ảnh hưởng consumer.
+- 2026-10-16 (`bootstrap`, REFRESH) — box-versioning:CHK-012 — Dọn oracle: gỡ #KB-004/KB-005 (CONF-box-02 UNRESOLVED); oracle vẫn NONE.
+- 2026-10-16 (`bootstrap`, REFRESH) — picking-modes:CHK-024 — Oracle upgrade NONE→BASELINE với quan sát mới picking-modes#KB-052 (không có lựa chọn picking mode, picking_mode null).
+- 2026-10-16 (`bootstrap`, REFRESH) — box-type-and-prize-setup: thêm 3 check (oracle BASELINE từ quan sát staging hoặc watch NONE): CHK-025, CHK-026, CHK-027.
+- 2026-10-16 (`bootstrap`, REFRESH) — box-create-and-publish: thêm 6 check (oracle BASELINE từ quan sát staging hoặc watch NONE): CHK-042, CHK-043, CHK-044, CHK-045, CHK-046, CHK-047.
+- 2026-10-16 (`bootstrap`, REFRESH) — box-versioning: thêm 3 check (oracle BASELINE từ quan sát staging hoặc watch NONE): CHK-018, CHK-019, CHK-020.
+- 2026-10-16 (`bootstrap`, REFRESH) — inventory-and-sold-out: thêm 2 check (oracle BASELINE từ quan sát staging hoặc watch NONE): CHK-039, CHK-040.
+- 2026-10-16 (`bootstrap`, REFRESH) — pool-refill: thêm 1 check (oracle BASELINE từ quan sát staging hoặc watch NONE): CHK-022.
+- 2026-10-16 (`bootstrap`, REFRESH) — thêm 24 open question: OQ-box-091, OQ-box-092, OQ-box-093, OQ-box-094, OQ-box-095, OQ-box-096, OQ-box-097, OQ-box-098, OQ-box-099, OQ-box-100, OQ-box-101, OQ-box-102, OQ-box-103, OQ-box-104, OQ-box-105, OQ-box-106, OQ-box-107, OQ-box-108, OQ-box-109, OQ-box-110, OQ-box-111, OQ-box-112, OQ-box-113, OQ-box-114.
+- 2026-10-16 (`bootstrap`, REFRESH) — ghi chú quan sát staging vào conflict đang mở (không resolve): OQ-box-002, OQ-box-003, OQ-box-005, OQ-box-006.

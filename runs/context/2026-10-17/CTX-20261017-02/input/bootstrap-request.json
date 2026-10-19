@@ -1,0 +1,170 @@
+{
+  "mode": "REFRESH",
+  "product_key": "mysbox",
+  "mode_note": "REFRESH theo yêu cầu trực tiếp của operator (DirectOperatorRequest, không Proposal): explore staging để trả lời open question đang mở của 4 object storefront-widget, resell-refund-credit, plans-billing, admin-panel. Base = canonical hiện tại (v1 cả 4 object). Mục tiêu = các OQ bucket a trong input/refresh-targets.json (40 OQ; 321 OQ bucket b giữ nguyên). Ghi OBSERVED_CURRENT; KHÔNG nâng CONFIRMED_EXPECTED, KHÔNG tự đóng conflict, KHÔNG supersede. NEEDS_CONFIRMATION/CONFLICT chỉ nhận staging_observation. Không spawn scope-planner. Run CTX-20261017-01 (box/order-draw/reveal) chạy trước đó trên cùng store — đọc raw/ của nó chỉ để biết state, không dùng làm evidence của run này.",
+  "context": {
+    "environment": "staging",
+    "role": "merchant"
+  },
+  "object_target": {
+    "object_key": "storefront-widget",
+    "object_type": "Widget storefront (theme app embed + block) và cấu hình Style/Content của merchant app",
+    "object_id_or_url": "Storefront https://<MYS_STORE_DOMAIN>/products/<handle box QA-CTX0117-B4>; portal Style Settings / Content & Translation / Dashboard",
+    "initial_state": "Shop gói Free, Box sales limit 0/10; box 1025/1026/1027 Draft (CTX-20261017-01); 1022 Active (operator giữ). Theme embed + block do operator chuẩn bị (không đổi theme)."
+  },
+  "additional_object_targets": [
+    {
+      "object_key": "resell-refund-credit",
+      "object_type": "Resell/buyback, refund, store credit",
+      "object_id_or_url": "Pricing page (chỉ đọc); product page box QA- (block Buy box by store credit nếu có); đơn test của run",
+      "initial_state": "Free plan → buyback khoá; Koin chưa cấu hình (không lưu Koin key)."
+    },
+    {
+      "object_key": "plans-billing",
+      "object_type": "Plan, capacity, Box sales limit",
+      "object_id_or_url": "Portal Pricing (CHỈ ĐỌC, không bấm Choose this plan/Upgrade/Downgrade/Cancel), Dashboard 'Box sales limit'",
+      "initial_state": "Free, 0/10"
+    },
+    {
+      "object_key": "admin-panel",
+      "object_type": "(surface admin panel TẮT) — chỉ 2 OQ quan sát được từ trang khách/network",
+      "object_id_or_url": "https://<MYS_STORE_DOMAIN>/apps/mysbox/orders",
+      "initial_state": "NOT_COVERED cho admin panel"
+    }
+  ],
+  "feature_scope": {
+    "_note": "REFRESH: dùng lại feature_key của base. OQ mục tiêu ở input/refresh-targets.json (bucket=a). Bucket b KHÔNG đụng.",
+    "storefront-widget": [
+      "storefront-data-sync",
+      "widget-custom-code",
+      "widget-theme-embed-setup",
+      "widget-translations"
+    ],
+    "resell-refund-credit": [
+      "buy-box-with-store-credit (chỉ quan sát guest)",
+      "resell-setup-and-eligibility (Pricing chỉ đọc)",
+      "order-cancellation-and-refund-sync (chỉ trạng thái đơn sau multi-unbox, OQ-052)"
+    ],
+    "plans-billing": [
+      "plan-capacity-and-cycle",
+      "capacity-limit-enforcement (chỉ hiển thị)",
+      "billing-discount-codes / promote-codes (chỉ có/không UI)",
+      "usage-fee-pricing (Pricing chỉ đọc)"
+    ],
+    "admin-panel": [
+      "admin-order-inspection-and-retry / portal-release-version-control: chỉ OQ-061, OQ-092 quan sát từ trang khách/network"
+    ]
+  },
+  "test_design": {
+    "_note": "Tên product/box tiền tố QA-CTX0117-B4.",
+    "boxes_to_create": {
+      "B4": "Single, digital, tracked, 2–3 prize item (product sẵn có chỉ tham chiếu; ưu tiên prize 'Inventory not tracked' để không trừ tồn kho product thật), Chance display = 'Show remaining stock' nếu có (widget hiển thị tồn kho cho storefront-widget-002/003/005/031), không buyback (khoá trên Free)."
+    },
+    "orders": {
+      "O1": "B4 × 1 qua Bogus. Trước đơn: screenshot widget chuỗi tồn kho (x/y left). Sau paid: reload widget mỗi ~15s tối đa 5 phút, ghi độ trễ đổi số (widget-002/003). Multi-unbox trên trang khách; (portal pass 2) ghi status đơn Manage orders + timeline (resell-052); Box sales limit trước/sau (plans-010/105)."
+    },
+    "post_order_box_edit": "Portal pass 2: B4 → Deactivate → ghi metafield mysbox.box của variant (Shopify admin chỉ đọc) và widget storefront (storefront-widget-009) → đổi Quantity 1 item → Save → ghi có tự publish lại không (POST /publish), metafield, Chance (storefront-widget-028) → cuối cùng Deactivate về Draft."
+  },
+  "surfaces": {
+    "portal": {
+      "enabled": true,
+      "auth": "operator_session_handover (Shopify admin đã đăng nhập sẵn trong browser Playwright dùng chung, profile ~/.pw-mcp-profile)"
+    },
+    "storefront": {
+      "enabled": true,
+      "entry_url": "https://<MYS_STORE_DOMAIN>/ (qua /password) — trang product của box QA-CTX0117-B4",
+      "buyer_state": "guest + magic link của đơn test do run tạo. KHÔNG có session logged_in_customer — bỏ qua buyer state đó và ghi unknowns.",
+      "buyer_facing_features": [
+        "storefront-widget: widget Box items/Chance/tồn kho, window.mysboxStore / script#mysbox-config / window.Mysbox / MysboxCustomOptions, Storefront GraphQL, bản dịch mặc định, 'Powered by Mysbox'",
+        "storefront-widget/storefront-data-sync: độ trễ cập nhật tồn kho trên widget sau đơn; widget sau khi box Deactivate/sửa",
+        "resell-refund-credit/buy-box-with-store-credit: block Buy box by store credit có mount với guest không, có chặn Add to cart không (OQ-011)",
+        "plans-billing: metafield shop subscription/capabilities/config trong config Liquid (OQ-026)",
+        "admin-panel: trang khách không có ?parameters= (OQ-061), asset Vue app (OQ-092)"
+      ]
+    },
+    "api": {
+      "enabled": true,
+      "variant": "runtime-trace",
+      "base_env": "MYS_API_BASE (== environments.staging.expected_api_base, orchestrator đã kiểm env khớp 2026-10-17)",
+      "host_note": "Host staging-api.mysbox.io đã thấy ở run trước, khác expected_api_base (OQ-reveal-050 đang chờ operator). Giữ xử lý như CTX-20261016-02: api-explorer tag host_not_in_expected_api_base, normalizer ghi OBSERVED_CURRENT/LOW, không oracle. Không sửa config."
+    },
+    "db": {
+      "enabled": false,
+      "reason": "explore.surfaces.db.enabled=false"
+    },
+    "code": {
+      "enabled": false,
+      "reason": "explore.surfaces.code.enabled=false"
+    },
+    "admin_panel": {
+      "enabled": false,
+      "reason": "NOT_COVERED theo config"
+    }
+  },
+  "network_capture": {
+    "enabled": true,
+    "capture_request_body": true,
+    "capture_response_body": true,
+    "redact_headers": [
+      "authorization",
+      "cookie",
+      "set-cookie",
+      "x-api-key",
+      "x-shopify-access-token",
+      "x-csrf-token",
+      "customer-token"
+    ],
+    "redact_also": [
+      "?parameters= của magic link (base64 JSON chứa token) — toàn bộ giá trị trong URL, screenshot thanh địa chỉ, network",
+      "Shopify session token (JWT)",
+      "id_token/hmac/signature trong query app proxy",
+      "email/tên/địa chỉ buyer",
+      "tên staff/store owner trong ảnh Shopify admin"
+    ]
+  },
+  "exploration_policy": {
+    "mutation_policy": "SAFE_REVERSIBLE_ONLY",
+    "extra_authorization": {
+      "checkout_boundary": "bogus_gateway_test_order",
+      "rule": "playbook §5: test order CHỈ qua Shopify Bogus Gateway trên development store đã xác minh; buyer email = MYS_TEST_BUYER_EMAIL, tên/địa chỉ 'QA Test'; chỉ mua box tiền tố QA-.",
+      "max_test_orders_this_run": 2,
+      "max_boxes_per_order": 3,
+      "note": "'Preview by test order' tạo đơn test → TÍNH vào giới hạn 3 đơn."
+    },
+    "allowed_reversible": [
+      "tạo product/variant + box tên QA-CTX0117-B4 (Save lần đầu tự publish Active)",
+      "Deactivate / sửa box QA-CTX0117-B4 do run tạo",
+      "sửa Style Settings / General Settings rồi Discard hoặc khôi phục đúng giá trị cũ (ghi giá trị trước); thử giá trị ngoài biên rồi Discard",
+      "Multi-unbox trên đơn test của chính run",
+      "Content & Translation trên Free: chỉ quan sát; nếu có nút Save đang enabled thì được bấm 1 lần KHÔNG đổi nội dung và ghi phản hồi"
+    ],
+    "not_allowed_this_run": [
+      "Pricing: KHÔNG bấm Choose this plan / Upgrade / Downgrade / Cancel subscription / mở modal xác nhận charge",
+      "URL tampering / sửa token, id trong magic link",
+      "xoá box (kể cả QA-)",
+      "bật Shopify Flow, lưu Koin key, đổi theme/embed/block"
+    ],
+    "do_not_touch": [
+      "box 1022, 1023, 1024, 1025, 1026, 1027 — chỉ đọc",
+      "mọi đơn không phải của run (#1006–#1011 chỉ đọc)",
+      "mọi box/product không phải QA-CTX0117-B4"
+    ],
+    "forbidden_actions": [
+      "delete_non_qa_data",
+      "charge",
+      "plan_change",
+      "real_payment",
+      "uninstall",
+      "theme_change",
+      "save_koin_key",
+      "enable_shopify_flow",
+      "admin_panel_write",
+      "edit_shopify_order",
+      "send_notification_to_real_customer"
+    ],
+    "cleanup_required": true,
+    "cleanup_plan": "Cuối run (portal pass 2): Deactivate B4; product QA-CTX0117-B4 giữ, ghi retention; settings → khôi phục/Discard; đơn test: retention, không archive; cart → xoá."
+  },
+  "execution_order": "TUẦN TỰ (một browser dùng chung): portal pass 1 (account guard; Pricing/Dashboard/Style Settings/Content & Translation/General Settings chỉ đọc + thử biên rồi Discard; tạo B4; ghi baseline Box sales limit) → storefront pass (account guard; widget B4, config Liquid, GraphQL, bản dịch; Buy box by store credit; trang khách không ?parameters= + asset Vue; O1 + đo độ trễ tồn kho + Multi-unbox) → portal pass 2 (Manage orders/timeline O1, Box sales limit sau, post_order_box_edit, cleanup) → api-explorer runtime-trace.",
+  "session_rule": "Không tự login. Account guard (playbook §2: store handle trong URL admin, host storefront == MYS_STORE_DOMAIN, development store) là bước ĐẦU TIÊN của mỗi pass. Session hết hạn / bị đẩy ra login / OAuth re-authorize / sai store → DỪNG ngay, trả BLOCKED kèm lý do để operator bàn giao lại."
+}

@@ -1,0 +1,476 @@
+{
+  "schema_version": "1.0",
+  "artifact_type": "FeatureProfileCandidate",
+  "artifact_id": "FPC-CTX-20261016-01-partner-events-bigquery-sync",
+  "workflow_id": "CTX-20261016-01",
+  "producer": "feature-profile-builder",
+  "source_refs": [
+    "candidate/product-kb/partner-events-bigquery-sync.json",
+    "candidate/product-kb/_object-level.automation-growth.json",
+    "candidate/product-kb/_product-level.json (chỉ tham chiếu vocabulary)",
+    "input/scope-plan.json"
+  ],
+  "upstream_artifact_ids": [
+    "PKBC-CTX-20261016-01-partner-events-bigquery-sync",
+    "PKBC-CTX-20261016-01-_object-level.automation-growth",
+    "PKBC-CTX-20261016-01-_product-level",
+    "SCOPE-PLAN-CTX-20261016-01"
+  ],
+  "status": "READY",
+  "confidence": "MEDIUM",
+  "observations": [
+    "DOC_BOOTSTRAP, không có base: profile dựng mới từ shard 20 KB item (17 CONFIRMED_EXPECTED, 1 OBSERVED_CURRENT/KNOWN_DEFECT, 2 INFERRED ví dụ; 0 conflict_group).",
+    "User goal nháp của scope-plan nói 'không nhân đôi khi nạp bù', nhưng KB ghi nhận ngược lại: chạy lại/nạp bù một ngày đã sync làm nhân đôi dòng (KNOWN_DEFECT). Profile không đưa 'không nhân đôi' vào user goal."
+  ],
+  "assumptions": [
+    "Người dùng hưởng lợi là team nội bộ đọc báo cáo trên BigQuery; người vận hành nạp bù là engineer chạy lệnh."
+  ],
+  "unknowns": [
+    "Hướng xử lý lỗi nhân đôi dòng khi chạy lại/nạp bù.",
+    "Giá trị cột gói/quốc gia/email khi không tìm thấy bản ghi shop.",
+    "Xử lý khi một trang Partner API lỗi giữa chừng."
+  ],
+  "conflicts": [],
+  "blocking_issues": [],
+  "payload": {
+    "feature_profiles": [
+      {
+        "feature_id": "FEAT-08-partner-events-bigquery-sync",
+        "feature_key": "partner-events-bigquery-sync",
+        "object_key": "automation-growth",
+        "priority": "P3",
+        "staging_only": false,
+        "name": "Đồng bộ Shopify Partner events sang BigQuery (báo cáo nội bộ)",
+        "user_goal": "Team nội bộ có các sự kiện Shopify Partner của ngày UTC hôm trước trong bảng BigQuery mỗi ngày lúc 07:00 UTC để làm báo cáo nội bộ; khi cần, engineer nạp bù được theo khoảng ngày bằng lệnh chạy tay.",
+        "user_goal_kb_refs": [
+          "partner-events-bigquery-sync#KB-001",
+          "partner-events-bigquery-sync#KB-002",
+          "partner-events-bigquery-sync#KB-003",
+          "partner-events-bigquery-sync#KB-013",
+          "partner-events-bigquery-sync#KB-014"
+        ],
+        "stable_since_version": "1",
+        "actors": [
+          {
+            "role": "system — job đồng bộ chạy theo lịch hằng ngày",
+            "permission_observed": "Không áp dụng.",
+            "kb_refs": [
+              "partner-events-bigquery-sync#KB-001",
+              "partner-events-bigquery-sync#KB-002"
+            ]
+          },
+          {
+            "role": "engineer — chạy lệnh sync theo khoảng ngày và lệnh backfill",
+            "permission_observed": "Không có quan sát (mode doc); lệnh vận hành cần engineer.",
+            "kb_refs": [
+              "partner-events-bigquery-sync#KB-013",
+              "partner-events-bigquery-sync#KB-014",
+              "partner-events-bigquery-sync#KB-015",
+              "partner-events-bigquery-sync#KB-016"
+            ]
+          },
+          {
+            "role": "team nội bộ — người dùng dữ liệu báo cáo trên BigQuery",
+            "permission_observed": "Không áp dụng.",
+            "kb_refs": [
+              "partner-events-bigquery-sync#KB-003"
+            ]
+          },
+          {
+            "role": "merchant — không bao giờ thấy phần đồng bộ này",
+            "permission_observed": "Không có giao diện nào cho merchant.",
+            "kb_refs": [
+              "partner-events-bigquery-sync#KB-004"
+            ]
+          }
+        ],
+        "entry_points": [
+          {
+            "path": "Lịch: job đồng bộ chạy hằng ngày lúc 07:00 UTC",
+            "precondition": "Scheduler đang chạy (runtime production chưa xác nhận).",
+            "kb_refs": [
+              "partner-events-bigquery-sync#KB-001",
+              "partner-events-bigquery-sync#KB-002",
+              "_product-level#KB-PL-028"
+            ]
+          },
+          {
+            "path": "Lệnh shopify-partner-app:sync-to-google-big-query --from --to",
+            "precondition": "Engineer có quyền chạy lệnh vận hành.",
+            "kb_refs": [
+              "partner-events-bigquery-sync#KB-013"
+            ]
+          },
+          {
+            "path": "Lệnh shopify-partner-app:backfill --from [--to]",
+            "precondition": "Engineer có quyền chạy lệnh vận hành; ngày chưa được sync (chạy lại ngày đã sync làm nhân đôi dòng).",
+            "kb_refs": [
+              "partner-events-bigquery-sync#KB-014",
+              "partner-events-bigquery-sync#KB-016"
+            ]
+          }
+        ],
+        "capabilities": [
+          {
+            "name": "Đồng bộ hằng ngày sự kiện Partner sang BigQuery",
+            "description": "Mỗi ngày lúc 07:00 UTC, job lấy các event của ngày UTC hôm trước từ Shopify Partner API theo trang 100 event, nghỉ 30 giây giữa các trang, giới hạn thời gian chạy 1 giờ; chỉ giữ 9 trên 20 loại event (relationship installed, uninstalled, deactivated, reactivated; subscription charge activated, canceled, frozen, unfrozen; usage charge applied) và nối thêm (append) vào bảng BigQuery. Job của mỗi ngày là duy nhất và chỉ thử một lần (không retry tự động).",
+            "kb_refs": [
+              "partner-events-bigquery-sync#KB-001",
+              "partner-events-bigquery-sync#KB-002",
+              "partner-events-bigquery-sync#KB-005",
+              "partner-events-bigquery-sync#KB-007",
+              "partner-events-bigquery-sync#KB-010",
+              "partner-events-bigquery-sync#KB-011",
+              "partner-events-bigquery-sync#KB-012",
+              "partner-events-bigquery-sync#KB-017",
+              "partner-events-bigquery-sync#KB-018",
+              "partner-events-bigquery-sync#KB-019"
+            ],
+            "act_ids": []
+          },
+          {
+            "name": "Ghi dòng báo cáo có làm giàu dữ liệu shop",
+            "description": "Bảng BigQuery (tên mặc định shopify_history_events) có 18 cột theo thứ tự: shop id, domain my-shopify, tên gói, tên shop, mã quốc gia, tên quốc gia, loại event, thời điểm xảy ra, mô tả, tên subscription, giá, tiền tệ, cờ charge test, email shop, chu kỳ thanh toán, loại giảm giá, giá trị giảm, số chu kỳ giảm; các cột gói, quốc gia, email lấy từ bản ghi shop của Mysbox khi tìm thấy.",
+            "kb_refs": [
+              "partner-events-bigquery-sync#KB-006",
+              "partner-events-bigquery-sync#KB-008",
+              "partner-events-bigquery-sync#KB-009"
+            ],
+            "act_ids": []
+          },
+          {
+            "name": "Nạp bù / chạy lại theo khoảng ngày (engineer)",
+            "description": "Lệnh sync theo khoảng ngày xếp hàng job cho từng ngày; lệnh backfill chạy tuần tự từng ngày, dừng ở ngày lỗi đầu tiên và in ra câu lệnh để chạy tiếp. Chạy lại một ngày đã sync làm nhân đôi dòng (known defect).",
+            "kb_refs": [
+              "partner-events-bigquery-sync#KB-013",
+              "partner-events-bigquery-sync#KB-014",
+              "partner-events-bigquery-sync#KB-015",
+              "partner-events-bigquery-sync#KB-016",
+              "partner-events-bigquery-sync#KB-020"
+            ],
+            "act_ids": []
+          },
+          {
+            "name": "Ranh giới: dữ liệu chỉ phục vụ báo cáo nội bộ",
+            "description": "Dữ liệu sự kiện Partner đẩy sang BigQuery chỉ phục vụ báo cáo nội bộ; merchant không bao giờ thấy phần đồng bộ này.",
+            "kb_refs": [
+              "partner-events-bigquery-sync#KB-003",
+              "partner-events-bigquery-sync#KB-004"
+            ],
+            "act_ids": []
+          }
+        ],
+        "state_transitions": [
+          {
+            "from": "event của ngày D chưa có trong BigQuery",
+            "to": "event của ngày D đã được nối thêm vào bảng",
+            "trigger": "job hằng ngày chạy lúc 07:00 UTC ngày D+1",
+            "condition": "chỉ 9 loại event được giữ; job chạy trong giới hạn 1 giờ",
+            "kb_refs": [
+              "partner-events-bigquery-sync#KB-001",
+              "partner-events-bigquery-sync#KB-002",
+              "partner-events-bigquery-sync#KB-005",
+              "partner-events-bigquery-sync#KB-007",
+              "partner-events-bigquery-sync#KB-012"
+            ]
+          },
+          {
+            "from": "job của ngày D lỗi",
+            "to": "ngày D vẫn chưa được sync (không retry tự động)",
+            "trigger": "job thất bại",
+            "condition": "chỉ thử một lần; cần engineer nạp bù",
+            "kb_refs": [
+              "partner-events-bigquery-sync#KB-018",
+              "partner-events-bigquery-sync#KB-014"
+            ]
+          },
+          {
+            "from": "ngày D đã sync",
+            "to": "ngày D có dòng bị nhân đôi",
+            "trigger": "chạy lại sync/backfill cho ngày D",
+            "condition": "append-only, BigQuery không khử trùng (KNOWN_DEFECT)",
+            "kb_refs": [
+              "partner-events-bigquery-sync#KB-016",
+              "partner-events-bigquery-sync#KB-020"
+            ]
+          },
+          {
+            "from": "backfill đang chạy tuần tự",
+            "to": "backfill dừng ở ngày lỗi đầu tiên, in lệnh chạy tiếp",
+            "trigger": "một ngày trong khoảng bị lỗi",
+            "condition": "",
+            "kb_refs": [
+              "partner-events-bigquery-sync#KB-014",
+              "partner-events-bigquery-sync#KB-015"
+            ]
+          }
+        ],
+        "confirmed_rules": [
+          { "rule": "Job đồng bộ sự kiện Shopify Partner API sang BigQuery chạy hằng ngày lúc 07:00 UTC và ghi các sự kiện thành dòng dữ liệu trong bảng báo cáo nội bộ.", "kb_refs": ["partner-events-bigquery-sync#KB-001"] },
+          { "rule": "Mỗi lần chạy (07:00 UTC), job lấy các event của ngày UTC hôm trước từ Shopify Partner API.", "kb_refs": ["partner-events-bigquery-sync#KB-002"] },
+          { "rule": "Dữ liệu sự kiện Partner đẩy sang BigQuery chỉ phục vụ báo cáo nội bộ.", "kb_refs": ["partner-events-bigquery-sync#KB-003"] },
+          { "rule": "Merchant không bao giờ thấy phần đồng bộ Partner events sang BigQuery.", "kb_refs": ["partner-events-bigquery-sync#KB-004"] },
+          { "rule": "Job sync nối thêm (append) các event lấy được vào bảng BigQuery.", "kb_refs": ["partner-events-bigquery-sync#KB-005"] },
+          { "rule": "Bảng BigQuery nhận event có tên mặc định shopify_history_events.", "kb_refs": ["partner-events-bigquery-sync#KB-006"] },
+          { "rule": "Job chỉ giữ 9 trên 20 loại event của Shopify: relationship installed, uninstalled, deactivated, reactivated; subscription charge activated, canceled, frozen, unfrozen; usage charge applied.", "kb_refs": ["partner-events-bigquery-sync#KB-007"] },
+          { "rule": "Bảng BigQuery có 18 cột theo thứ tự: shop id, domain my-shopify, tên gói, tên shop, mã quốc gia, tên quốc gia, loại event, thời điểm xảy ra, mô tả, tên subscription, giá, tiền tệ, cờ charge test, email shop, chu kỳ thanh toán, loại giảm giá, giá trị giảm, số chu kỳ giảm.", "kb_refs": ["partner-events-bigquery-sync#KB-008"] },
+          { "rule": "Các cột gói, quốc gia và email được lấy từ bản ghi shop của Mysbox khi tìm thấy bản ghi đó.", "kb_refs": ["partner-events-bigquery-sync#KB-009"] },
+          { "rule": "Job lấy event từ Partner API theo trang 100 event.", "kb_refs": ["partner-events-bigquery-sync#KB-010"] },
+          { "rule": "Job nghỉ 30 giây giữa các trang event.", "kb_refs": ["partner-events-bigquery-sync#KB-011"] },
+          { "rule": "Job sync Partner events được giới hạn thời gian chạy 1 giờ.", "kb_refs": ["partner-events-bigquery-sync#KB-012"] },
+          { "rule": "Lệnh chạy tay shopify-partner-app:sync-to-google-big-query --from --to xếp hàng job cho từng ngày trong khoảng.", "kb_refs": ["partner-events-bigquery-sync#KB-013"] },
+          { "rule": "Lệnh shopify-partner-app:backfill --from [--to] chạy tuần tự từng ngày và dừng ở ngày lỗi đầu tiên.", "kb_refs": ["partner-events-bigquery-sync#KB-014"] },
+          { "rule": "Khi lệnh backfill dừng ở ngày lỗi, lệnh in ra câu lệnh để chạy tiếp.", "kb_refs": ["partner-events-bigquery-sync#KB-015"] },
+          { "rule": "Job sync của mỗi ngày là duy nhất.", "kb_refs": ["partner-events-bigquery-sync#KB-017"] },
+          { "rule": "Job sync của mỗi ngày chỉ thử một lần (không retry tự động).", "kb_refs": ["partner-events-bigquery-sync#KB-018"] }
+        ],
+        "observed_behavior": [
+          {
+            "behavior": "Sync chỉ nối thêm (append-only) và BigQuery không khử trùng, nên chạy lại cùng một ngày (kể cả nạp bù bằng lệnh backfill) sẽ nhân đôi dòng trong bảng BigQuery; thao tác này không lặp lại an toàn.",
+            "status": "KNOWN_DEFECT",
+            "note": "Known defect theo tài liệu (OBSERVED_CURRENT, LOW). Chỉ dùng làm regression watch, không làm oracle; chờ dev/PO quyết hướng xử lý (khử trùng, idempotency) và quy trình nạp bù an toàn.",
+            "kb_refs": [
+              "partner-events-bigquery-sync#KB-016"
+            ]
+          }
+        ],
+        "observed_validations": [],
+        "limitations": [
+          {
+            "limitation": "Ví dụ minh hoạ (job chạy 07:00 UTC lấy event ngày hôm trước và thêm 7 dòng; chạy lại ngày đã sync làm bảng có 14 dòng cho 7 event) chỉ là ví dụ, không phải quy tắc.",
+            "kb_refs": [
+              "partner-events-bigquery-sync#KB-019",
+              "partner-events-bigquery-sync#KB-020"
+            ]
+          },
+          {
+            "limitation": "Giờ job là giờ máy chủ, mặc định UTC; runtime production (ai chạy scheduler, múi giờ) chưa xác nhận.",
+            "kb_refs": [
+              "_product-level#KB-PL-028"
+            ]
+          }
+        ],
+        "permissions": [
+          {
+            "permission": "Lệnh sync theo khoảng ngày và backfill là lệnh vận hành của engineer",
+            "role": "engineer",
+            "knowledge_kind": "CONFIRMED_EXPECTED",
+            "kb_refs": [
+              "partner-events-bigquery-sync#KB-013",
+              "partner-events-bigquery-sync#KB-014"
+            ]
+          },
+          {
+            "permission": "Merchant không có quyền/giao diện xem phần đồng bộ",
+            "role": "merchant",
+            "knowledge_kind": "CONFIRMED_EXPECTED",
+            "kb_refs": [
+              "partner-events-bigquery-sync#KB-004"
+            ]
+          }
+        ],
+        "surface_mapping": {
+          "portal": [],
+          "storefront": [],
+          "api": [
+            {
+              "operation": "Shopify Partner API (bên ngoài) — lấy event theo trang 100, nghỉ 30 giây giữa các trang",
+              "kb_refs": [
+                "partner-events-bigquery-sync#KB-002",
+                "partner-events-bigquery-sync#KB-010",
+                "partner-events-bigquery-sync#KB-011"
+              ]
+            }
+          ],
+          "data": [
+            {
+              "entity": "Bảng BigQuery shopify_history_events (18 cột, append-only)",
+              "kb_refs": [
+                "partner-events-bigquery-sync#KB-005",
+                "partner-events-bigquery-sync#KB-006",
+                "partner-events-bigquery-sync#KB-008"
+              ]
+            },
+            {
+              "entity": "Bản ghi shop của Mysbox — nguồn cột gói, quốc gia, email",
+              "kb_refs": [
+                "partner-events-bigquery-sync#KB-009"
+              ]
+            }
+          ],
+          "code": [
+            {
+              "component": "Job sync hằng ngày (duy nhất mỗi ngày, không retry, giới hạn 1 giờ)",
+              "kb_refs": [
+                "partner-events-bigquery-sync#KB-012",
+                "partner-events-bigquery-sync#KB-017",
+                "partner-events-bigquery-sync#KB-018"
+              ]
+            },
+            {
+              "component": "Lệnh shopify-partner-app:sync-to-google-big-query và shopify-partner-app:backfill",
+              "kb_refs": [
+                "partner-events-bigquery-sync#KB-013",
+                "partner-events-bigquery-sync#KB-014",
+                "partner-events-bigquery-sync#KB-015"
+              ]
+            }
+          ]
+        },
+        "dependencies": [
+          {
+            "depends_on": "Shopify Partner API (nguồn event)",
+            "kb_refs": [
+              "partner-events-bigquery-sync#KB-002"
+            ]
+          },
+          {
+            "depends_on": "BigQuery (đích, không khử trùng)",
+            "kb_refs": [
+              "partner-events-bigquery-sync#KB-005",
+              "partner-events-bigquery-sync#KB-016"
+            ]
+          },
+          {
+            "depends_on": "Bản ghi shop của Mysbox (merchant-app) để làm giàu cột gói/quốc gia/email",
+            "kb_refs": [
+              "partner-events-bigquery-sync#KB-009"
+            ]
+          },
+          {
+            "depends_on": "Hạ tầng job nền/queue (plans-billing: background-jobs-and-queue-monitoring)",
+            "kb_refs": [
+              "partner-events-bigquery-sync#KB-013",
+              "partner-events-bigquery-sync#KB-018"
+            ]
+          }
+        ],
+        "risks": [
+          {
+            "risk": "Chạy lại/nạp bù ngày đã sync nhân đôi dòng — báo cáo nội bộ sai số liệu (known defect).",
+            "kb_refs": [
+              "partner-events-bigquery-sync#KB-016"
+            ]
+          },
+          {
+            "risk": "Job không retry tự động: một lần lỗi tạm thời làm thiếu dữ liệu của cả ngày cho tới khi engineer nạp bù.",
+            "kb_refs": [
+              "partner-events-bigquery-sync#KB-018"
+            ]
+          },
+          {
+            "risk": "Giới hạn 1 giờ cộng nghỉ 30 giây giữa các trang: ngày có nhiều event có thể không lấy hết trong thời gian cho phép.",
+            "kb_refs": [
+              "partner-events-bigquery-sync#KB-010",
+              "partner-events-bigquery-sync#KB-011",
+              "partner-events-bigquery-sync#KB-012"
+            ]
+          }
+        ],
+        "freshness": {
+          "observed_at": null,
+          "run_id": "CTX-20261016-01"
+        },
+        "unknown_areas": [
+          {
+            "question": "Hướng xử lý lỗi nhân đôi dòng khi chạy lại/nạp bù (khử trùng, idempotency) là gì, và quy trình nạp bù an toàn hiện tại ra sao?",
+            "why_it_matters": "Known defect; không có oracle cho kết quả nạp bù.",
+            "kb_refs": [
+              "partner-events-bigquery-sync#KB-016"
+            ]
+          },
+          {
+            "question": "'Job sync của mỗi ngày là duy nhất' nghĩa là gì khi chạy lại cùng ngày vẫn tạo dòng trùng — tính duy nhất chỉ ở mức hàng đợi (không xếp hai job cùng lúc) hay ở mức dữ liệu?",
+            "why_it_matters": "Hai phát biểu dễ bị hiểu là mâu thuẫn; cần rõ để viết expected cho việc xếp job trùng ngày.",
+            "kb_refs": [
+              "partner-events-bigquery-sync#KB-016",
+              "partner-events-bigquery-sync#KB-017"
+            ]
+          },
+          {
+            "question": "Khi không tìm thấy bản ghi shop của Mysbox, các cột gói / quốc gia / email trong BigQuery được ghi giá trị gì?",
+            "why_it_matters": "Kỳ vọng dữ liệu cho shop không còn bản ghi.",
+            "kb_refs": [
+              "partner-events-bigquery-sync#KB-009"
+            ]
+          },
+          {
+            "question": "Endpoint cụ thể của Shopify Partner API được gọi là gì, và khi một trang lỗi giữa chừng thì dữ liệu một phần có được ghi không?",
+            "why_it_matters": "Job chỉ thử một lần; cần biết trạng thái dữ liệu sau lỗi giữa chừng.",
+            "kb_refs": [
+              "partner-events-bigquery-sync#KB-002",
+              "partner-events-bigquery-sync#KB-010",
+              "partner-events-bigquery-sync#KB-018"
+            ]
+          },
+          {
+            "question": "Job nào là ngoại lệ của 'job thường chỉ thử một lần' (có retry tự động), và số lần retry?",
+            "why_it_matters": "Quyết kỳ vọng khi job lỗi tạm thời (ví dụ Partner API timeout).",
+            "kb_refs": [
+              "partner-events-bigquery-sync#KB-018"
+            ]
+          },
+          {
+            "question": "'Chạy lệnh sync' của nhân viên admin (nêu ở mức nhóm tính năng) có phải là lệnh sync Partner events sang BigQuery không?",
+            "why_it_matters": "Nếu đúng, có thêm actor admin-staff và entry point ở admin panel cho feature này.",
+            "kb_refs": [
+              "_object-level.automation-growth#KB-001"
+            ]
+          }
+        ]
+      }
+    ],
+    "profile_relationships": [
+      {
+        "from": "partner-events-bigquery-sync",
+        "to": "background-jobs-and-queue-monitoring",
+        "type": "runs_on",
+        "note": "Job theo lịch và lệnh xếp hàng job theo ngày.",
+        "kb_refs": [
+          "partner-events-bigquery-sync#KB-013",
+          "partner-events-bigquery-sync#KB-018"
+        ]
+      },
+      {
+        "from": "partner-events-bigquery-sync",
+        "to": "affiliate-referral-tracking",
+        "type": "same_source_doc",
+        "note": "Cùng nhóm tài liệu với affiliate nhưng khác user goal (báo cáo nội bộ vs ghi nhận đối tác).",
+        "kb_refs": [
+          "partner-events-bigquery-sync#KB-003"
+        ]
+      }
+    ],
+    "coverage_matrix": [
+      { "feature_id": "FEAT-08-partner-events-bigquery-sync", "layer": "code", "role": "system", "state": "job hằng ngày thành công", "environment": "documented", "covered": true, "note": "CE." },
+      { "feature_id": "FEAT-08-partner-events-bigquery-sync", "layer": "code", "role": "system", "state": "job lỗi / trang lỗi giữa chừng", "environment": "documented", "covered": false, "note": "Chỉ có luật không retry; dữ liệu một phần chưa nêu." },
+      { "feature_id": "FEAT-08-partner-events-bigquery-sync", "layer": "code", "role": "engineer", "state": "nạp bù ngày chưa sync", "environment": "documented", "covered": true, "note": "CE." },
+      { "feature_id": "FEAT-08-partner-events-bigquery-sync", "layer": "data", "role": "engineer", "state": "chạy lại ngày đã sync", "environment": "documented", "covered": true, "note": "KNOWN_DEFECT — regression watch, không oracle." },
+      { "feature_id": "FEAT-08-partner-events-bigquery-sync", "layer": "data", "role": "system", "state": "shop không còn bản ghi Mysbox", "environment": "documented", "covered": false, "note": "Giá trị cột làm giàu chưa nêu." },
+      { "feature_id": "FEAT-08-partner-events-bigquery-sync", "layer": "portal", "role": "merchant", "state": "unspecified", "environment": "documented", "covered": true, "note": "CE: merchant không thấy phần này." }
+    ],
+    "unassigned_kb_items": [],
+    "profile_conflicts": [],
+    "profile_change_summary": [
+      {
+        "feature_key": "partner-events-bigquery-sync",
+        "change": "NEW",
+        "note": "Profile đầu tiên (DOC_BOOTSTRAP, không có base)."
+      }
+    ],
+    "kb_trace_complete": true
+  },
+  "gate": {
+    "decision": "CONDITIONAL_PASS",
+    "blocking_findings": [],
+    "conditions": [
+      "KB-016 là KNOWN_DEFECT (nhân đôi dòng khi chạy lại): không dùng làm oracle.",
+      "unknown_areas (6) cần orchestrator compile thành OQ."
+    ],
+    "allowed_next_steps": [
+      "qa-checklist-builder",
+      "knowledge-diff-analyzer"
+    ],
+    "self_check": "C4 doc: identity từ shard; user goal có kb_refs và không chứa phát biểu trái KB; mọi field trace về kb_id; capability theo goal; 17 confirmed_rules = 17 item CONFIRMED_EXPECTED; KNOWN_DEFECT ở observed_behavior; ví dụ ở limitations; observed_validations rỗng; act_ids rỗng."
+  }
+}

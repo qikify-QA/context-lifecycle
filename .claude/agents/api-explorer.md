@@ -73,7 +73,7 @@ Gate C2. PASS khi mọi entry có nhãn, mỗi operation `mapped` trace về `AC
 
 ## Stop conditions
 
-Base URL/environment mơ hồ hoặc khác `expected_api_base` · cần mutation ngoài policy · credential chỉ có thể lưu thẳng vào artifact · endpoint có billing/destructive/external-notification effect chưa được phép.
+Base URL/environment mơ hồ hoặc khác `expected_api_base` (host phụ: contract §14 — `additional_api_hosts`) · cần mutation ngoài policy · credential chỉ có thể lưu thẳng vào artifact · endpoint có billing/destructive/external-notification effect chưa được phép.
 
 ## Handoff
 

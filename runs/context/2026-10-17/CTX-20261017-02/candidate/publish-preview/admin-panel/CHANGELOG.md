@@ -1,0 +1,10 @@
+# CHANGELOG — admin-panel
+
+- 2026-10-16 (`bootstrap`, DOC_BOOTSTRAP) — Bootstrap đầu tiên từ bộ Mysbox Product KB v1 (dev, 57 tài liệu, generated 2026-10-16). 8 feature, 364 KB item, 134 check, 9 known defect, 2 conflict mở, 95 open question.
+- 2026-10-17 (`bootstrap`, REFRESH) — portal-release-version-control: thêm 3 KB item OBSERVED_CURRENT quan sát trên staging (scope.environment staging, không thay item documented): KB-012, KB-013, KB-014.
+- 2026-10-17 (`bootstrap`, REFRESH) — portal-release-version-control:CHK-004 — related_kb_added oracle STRONG→STRONG: Quan sát mới KB-014: trên staging asset trang khách tên cố định, không version — thu hẹp câu hỏi 'tài nguyên nào đổi theo giá trị' nhưng chưa trả lời cho môi trường có version; KB-014 không đủ điều kiện oracle (host ngoài expected_api_base), chỉ thêm related.
+- 2026-10-17 (`bootstrap`, REFRESH) — portal-release-version-control:CHK-006 — related_kb_added oracle NONE→NONE: KB-014: asset trang khách staging cache max-age=86400 — dữ kiện liên quan cache; hiển thị khi cache cũ chưa quan sát nên giữ NONE, chỉ thêm related.
+- 2026-10-17 (`bootstrap`, REFRESH) — portal-release-version-control:CHK-009 — added oracle —→BASELINE: Hành vi mới quan sát KB-012 (OBSERVED_CURRENT, LOW): trang khách không có danh tính chuyển sang đăng nhập Shopify. KB-013 (request do explorer tự dựng) chỉ vào related, không làm oracle.
+- 2026-10-17 (`bootstrap`, REFRESH) — portal-release-version-control:CHK-010 — added oracle —→NONE: Vùng mới từ quan sát KB-014 (asset trang khách staging). KB-014 mang tag host_not_in_expected_api_base nên không đủ điều kiện làm oracle — chỉ vào related_kb_ids; oracle NONE, expected_result để trống, gắn câu hỏi mở về host và cơ chế version.
+- 2026-10-17 (`bootstrap`, REFRESH) — thêm 4 open question: OQ-admin-panel-096, OQ-admin-panel-097, OQ-admin-panel-098, OQ-admin-panel-099.
+- 2026-10-17 (`bootstrap`, REFRESH) — ghi chú quan sát staging (staging_observation) vào open question đang mở, không resolve: OQ-admin-panel-061, OQ-admin-panel-092.

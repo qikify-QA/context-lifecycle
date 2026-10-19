@@ -1,0 +1,12 @@
+# CHANGELOG — resell-refund-credit
+
+- 2026-10-16 (`bootstrap`, DOC_BOOTSTRAP) — Bootstrap đầu tiên từ bộ Mysbox Product KB v1 (dev, 57 tài liệu, generated 2026-10-16). 6 feature, 319 KB item, 133 check, 13 known defect, 4 conflict mở, 95 open question.
+- 2026-10-17 (`bootstrap`, REFRESH) — buy-box-with-store-credit: thêm 1 KB item OBSERVED_CURRENT quan sát trên staging (scope.environment staging, không thay item documented): KB-069.
+- 2026-10-17 (`bootstrap`, REFRESH) — resell-setup-and-eligibility: thêm 2 KB item OBSERVED_CURRENT quan sát trên staging (scope.environment staging, không thay item documented): KB-078, KB-079.
+- 2026-10-17 (`bootstrap`, REFRESH) — buy-box-with-store-credit:CHK-031 — added oracle —→BASELINE: Hành vi mới quan sát KB-069 (OBSERVED_CURRENT, LOW): nhánh khách vãng lai + box không bật store credit, chưa có check base cho nhánh này.
+- 2026-10-17 (`bootstrap`, REFRESH) — resell-setup-and-eligibility:CHK-023 — related_kb_added oracle NONE→NONE: KB-079 (mở hết box không buyback: không có trạng thái Completed hiển thị, resell_expires_at null) liên quan nhưng không phân xử câu hỏi cửa sổ resell khi đơn COMPLETED; chỉ thêm related, giữ NONE.
+- 2026-10-17 (`bootstrap`, REFRESH) — resell-setup-and-eligibility:CHK-025 — related_kb_added oracle STRONG→STRONG: Quan sát mới KB-078 (MEDIUM, 3 màn): shop Free có checkbox buyback disabled và Buyback limit time khoá cùng đúng thông điệp nâng cấp — khớp oracle; chỉ thêm related, check P1 vẫn chờ test_case PASS (nhánh Early-bird không quan sát).
+- 2026-10-17 (`bootstrap`, REFRESH) — resell-setup-and-eligibility:CHK-033 — added oracle —→BASELINE: Hành vi mới quan sát KB-078: gói nào có Buy back function trên Pricing và việc catalog không có Early-bird; phần khoá UI trùng ý với CHK-025 được giữ ngắn để không trùng.
+- 2026-10-17 (`bootstrap`, REFRESH) — resell-setup-and-eligibility:CHK-034 — added oracle —→BASELINE: Hành vi mới quan sát KB-079 (LOW): trạng thái đơn sau khi khách mở hết box không buyback.
+- 2026-10-17 (`bootstrap`, REFRESH) — thêm 7 open question: OQ-resell-refund-credit-096, OQ-resell-refund-credit-097, OQ-resell-refund-credit-098, OQ-resell-refund-credit-099, OQ-resell-refund-credit-100, OQ-resell-refund-credit-101, OQ-resell-refund-credit-102.
+- 2026-10-17 (`bootstrap`, REFRESH) — ghi chú quan sát staging (staging_observation) vào open question đang mở, không resolve: OQ-resell-refund-credit-011, OQ-resell-refund-credit-052, OQ-resell-refund-credit-056.

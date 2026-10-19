@@ -1,0 +1,865 @@
+{
+  "feature_id": "FEAT-01-request-authentication",
+  "feature_key": "request-authentication",
+  "name": "Xác thực request vào Mysbox API theo từng kênh",
+  "user_goal": "Mỗi loại client gọi vào Mysbox API (portal nhúng của merchant trong Shopify admin, Shopify Flow, các extension ở checkout / trang cảm ơn / tài khoản khách / admin Shopify) chứng minh danh tính theo cơ chế riêng của kênh đó; request hợp lệ được đi tiếp, request không hợp lệ bị từ chối.",
+  "user_goal_kb_refs": [
+    "request-authentication#KB-001",
+    "request-authentication#KB-002",
+    "request-authentication#KB-008",
+    "request-authentication#KB-012",
+    "request-authentication#KB-013",
+    "request-authentication#KB-014"
+  ],
+  "stable_since_version": "1",
+  "actors": [
+    {
+      "role": "merchant",
+      "permission_observed": "Truy cập Mysbox API qua portal nhúng trong Shopify admin bằng session token do Shopify cấp; chỉ đi tiếp khi shop đã cài app và đang có quyền truy cập hợp lệ.",
+      "kb_refs": [
+        "request-authentication#KB-003",
+        "request-authentication#KB-004",
+        "request-authentication#KB-005",
+        "request-authentication#KB-008",
+        "_product-level#KB-PL-002"
+      ],
+      "observed_kb_refs": [
+        "request-authentication#KB-016"
+      ],
+      "refresh_note": "Quan sát staging 2026-10-17: request portal mang \"authorization: Bearer <JWT>\" + \"x-requested-with: XMLHttpRequest\", trả 200; không có tham số shop id do client chọn."
+    },
+    {
+      "role": "system (Shopify Flow)",
+      "permission_observed": "Gọi action của Mysbox bằng request có chữ ký HMAC tính từ nội dung gửi cộng bí mật chung của app; HMAC không khớp thì bị trả 400.",
+      "kb_refs": [
+        "request-authentication#KB-010",
+        "request-authentication#KB-011",
+        "request-authentication#KB-012",
+        "_product-level#KB-PL-007"
+      ]
+    },
+    {
+      "role": "system (extension: block checkout, trang cảm ơn / trạng thái đơn, tài khoản khách, admin Shopify)",
+      "permission_observed": "Gọi Mysbox API chỉ kèm tên shop (và mã khách), không có chữ ký; Mysbox xác nhận đơn tồn tại thật ở Shopify trước khi trả dữ liệu.",
+      "kb_refs": [
+        "request-authentication#KB-013",
+        "request-authentication#KB-014"
+      ],
+      "observed_kb_refs": [
+        "request-authentication#KB-018"
+      ],
+      "refresh_note": "Quan sát staging 2026-10-17: block trang cảm ơn gọi endpoint customer của đơn chỉ với query \"shop\", không authorization/session token/chữ ký (host khác expected_api_base — không dùng làm oracle)."
+    },
+    {
+      "role": "unspecified (nguồn ngoài gửi review App Store)",
+      "permission_observed": "Theo tài liệu dev, endpoint nhận review App Store không có xác thực phía trước — lỗi đã biết, không phải hành vi mong đợi.",
+      "kb_refs": [
+        "request-authentication#KB-015"
+      ]
+    },
+    {
+      "role": "guest buyer (trang đơn hàng của khách, staging, quan sát)",
+      "permission_observed": "OBSERVED_CURRENT staging: trang khách qua app proxy (mở bằng magic link) gọi /apps/mysbox/api/* với header customer-token + customer-id, không JWT; cách server kiểm chưa quan sát.",
+      "basis": "OBSERVED_CURRENT",
+      "kb_refs": [
+        "request-authentication#KB-017"
+      ]
+    }
+  ],
+  "entry_points": [
+    {
+      "path": "Portal nhúng của Mysbox mở từ Shopify admin; mọi lời gọi Mysbox API kèm session token",
+      "precondition": "Merchant mở app trong Shopify admin; trình duyệt đã nhận session token ngắn hạn từ Shopify; shop đã cài app và có quyền truy cập hợp lệ.",
+      "kb_refs": [
+        "request-authentication#KB-003",
+        "request-authentication#KB-004",
+        "request-authentication#KB-005",
+        "request-authentication#KB-008"
+      ],
+      "observed_kb_refs": [
+        "request-authentication#KB-016"
+      ],
+      "refresh_note": "Quan sát staging 2026-10-17: URL document iframe mang query admin_theme, embedded, hmac, host, id_token, locale, session, shop, timestamp."
+    },
+    {
+      "path": "Lời gọi action của Mysbox từ Shopify Flow (request có chữ ký HMAC)",
+      "precondition": "Shopify Flow ký request bằng bí mật chung của app.",
+      "kb_refs": [
+        "request-authentication#KB-010",
+        "request-authentication#KB-011"
+      ]
+    },
+    {
+      "path": "Lời gọi Mysbox API từ extension (block checkout, trang cảm ơn / trạng thái đơn để mở box, tài khoản khách, admin Shopify)",
+      "precondition": "Request kèm tên shop (và mã khách); đơn liên quan tồn tại ở Shopify.",
+      "kb_refs": [
+        "request-authentication#KB-013",
+        "request-authentication#KB-014"
+      ],
+      "observed_kb_refs": [
+        "request-authentication#KB-018"
+      ]
+    },
+    {
+      "path": "POST api/shopify-app/review (nhận review App Store từ ngoài)",
+      "precondition": "Không có xác thực phía trước theo tài liệu dev (lỗi đã biết).",
+      "kb_refs": [
+        "request-authentication#KB-015"
+      ]
+    },
+    {
+      "path": "Trang đơn hàng của khách /apps/mysbox (app proxy, mở bằng magic link) gọi /apps/mysbox/api/* — staging",
+      "precondition": "OBSERVED_CURRENT: khách vãng lai, magic link của đơn đã thanh toán; URL mang tham số \"parameters\" (JSON base64, không ký) nhưng tham số này không gửi lại trên request API.",
+      "basis": "OBSERVED_CURRENT",
+      "kb_refs": [
+        "request-authentication#KB-017"
+      ]
+    }
+  ],
+  "capabilities": [
+    {
+      "name": "Xác thực merchant ở portal nhúng bằng session token Shopify",
+      "description": "Portal nhúng gửi session token (ngắn hạn, ký bằng bí mật của app) trong mỗi lời gọi API; Mysbox kiểm chữ ký, xác định shop từ token và chỉ cho đi tiếp nếu shop đã cài app và có quyền truy cập hợp lệ.",
+      "kb_refs": [
+        "request-authentication#KB-004",
+        "request-authentication#KB-005",
+        "request-authentication#KB-006",
+        "request-authentication#KB-007",
+        "request-authentication#KB-008"
+      ],
+      "observed_kb_refs": [
+        "request-authentication#KB-016"
+      ],
+      "refresh_note": "Quan sát staging 2026-10-17 (nhánh hợp lệ): GET /api/boxes, /api/users/config, /api/orders, /api/orders/{id}, /api/box-versions/by-ids mang Bearer JWT, chỉ tham số chức năng, trả 200; response có access-control-allow-origin \"*\" và expose header X-Shopify-API-Request-Failure-Reauthorize-Url. Nhánh token sai/thiếu không thử."
+    },
+    {
+      "name": "Duy trì phiên portal nhúng khi session token hết hạn",
+      "description": "Khi session token hết hạn, trang portal nhúng tự quay về Shopify để lấy token mới.",
+      "kb_refs": [
+        "request-authentication#KB-009"
+      ]
+    },
+    {
+      "name": "Xác thực lời gọi action từ Shopify Flow bằng HMAC",
+      "description": "Shopify Flow tính chữ ký HMAC từ nội dung gửi cộng bí mật chung của app; Mysbox tính lại, khớp thì nhận, không khớp thì trả 400.",
+      "kb_refs": [
+        "request-authentication#KB-010",
+        "request-authentication#KB-011",
+        "request-authentication#KB-012"
+      ]
+    },
+    {
+      "name": "Phục vụ extension không ký bằng tên shop kèm kiểm đơn tồn tại",
+      "description": "Extension chỉ gửi tên shop (và mã khách), không chữ ký; lời gọi mở box từ block trang cảm ơn / trạng thái đơn được xác thực bằng tên shop; Mysbox xác nhận đơn tồn tại thật ở Shopify trước khi trả dữ liệu.",
+      "kb_refs": [
+        "request-authentication#KB-013",
+        "request-authentication#KB-014"
+      ],
+      "observed_kb_refs": [
+        "request-authentication#KB-018"
+      ],
+      "refresh_note": "Quan sát staging 2026-10-17: block trang cảm ơn gọi GET https://staging-api.mysbox.io/api/orders/{shopify_order_id}/customer?shop=<store domain> chỉ với query shop và header thường; lần đầu 404 (trước khi Mysbox có customer của đơn), lần sau 200 {customer_id, token}. Host chưa xác nhận là backend chính thức — LOW, không oracle."
+    },
+    {
+      "name": "Trang đơn hàng của khách gọi API qua app proxy bằng customer-token (quan sát staging)",
+      "description": "OBSERVED_CURRENT: trang khách (app proxy /apps/mysbox) gửi header \"customer-token\" và \"customer-id\" trên mọi request /apps/mysbox/api/* (box-versions, translations, shopify/product-variants, unopened-boxes/open, orders/{id}, orders/{id}/resellable/exists), không authorization/JWT, query chỉ tham số chức năng; HTML trang có window._MCP (customerId, token, orderId, isLoggedIn, boxStatus, variantId, path). Chữ ký app proxy do Shopify thêm phía server nên không thấy từ trình duyệt; cách server kiểm customer-token chưa quan sát.",
+      "basis": "OBSERVED_CURRENT",
+      "kb_refs": [
+        "request-authentication#KB-017",
+        "request-authentication#KB-001"
+      ]
+    }
+  ],
+  "state_transitions": [
+    {
+      "from": "Session token portal nhúng hết hạn",
+      "to": "Session token mới từ Shopify",
+      "trigger": "Portal nhúng phát hiện token hết hạn",
+      "condition": "Trang tự quay về Shopify để lấy token mới",
+      "kb_refs": [
+        "request-authentication#KB-009"
+      ]
+    },
+    {
+      "from": "Request portal nhúng đã qua kiểm chữ ký",
+      "to": "Request được đi tiếp",
+      "trigger": "Mysbox xác định shop từ session token",
+      "condition": "Shop đã cài app và đang có quyền truy cập hợp lệ",
+      "kb_refs": [
+        "request-authentication#KB-006",
+        "request-authentication#KB-007",
+        "request-authentication#KB-008"
+      ],
+      "observed_kb_refs": [
+        "request-authentication#KB-016"
+      ],
+      "refresh_note": "Phía 'to' quan sát staging 2026-10-17 (200 với Bearer hợp lệ)."
+    },
+    {
+      "from": "Request Shopify Flow nhận được",
+      "to": "Được nhận / bị trả 400",
+      "trigger": "Mysbox tính lại HMAC",
+      "condition": "Khớp thì nhận; không khớp thì 400",
+      "kb_refs": [
+        "request-authentication#KB-012"
+      ]
+    },
+    {
+      "from": "Đơn vừa paid, Mysbox chưa có customer của đơn: endpoint customer của block trang cảm ơn trả 404",
+      "to": "Endpoint trả 200 {customer_id, token}",
+      "trigger": "Mysbox xử lý xong đơn (vài giây sau paid)",
+      "condition": "OBSERVED_CURRENT staging 2026-10-17, 2 lần gọi trong 1 đơn test; host khác expected_api_base — không oracle",
+      "basis": "OBSERVED_CURRENT",
+      "kb_refs": [
+        "request-authentication#KB-018"
+      ]
+    }
+  ],
+  "confirmed_rules": [
+    {
+      "rule": "Mysbox là một backend duy nhất phục vụ nhiều loại client: trang admin nhúng trong Shopify, trang đơn hàng của khách, các block ở checkout, Shopify Flow và chính Shopify (webhook).",
+      "kb_refs": [
+        "request-authentication#KB-001"
+      ]
+    },
+    {
+      "rule": "Mỗi loại client gọi vào Mysbox chứng minh danh tính theo một cách xác thực riêng.",
+      "kb_refs": [
+        "request-authentication#KB-002"
+      ],
+      "refresh_kb_refs": [
+        "request-authentication#KB-016",
+        "request-authentication#KB-017",
+        "request-authentication#KB-018"
+      ],
+      "refresh_note": "Staging corroborate: portal dùng Bearer JWT, trang khách dùng customer-token + customer-id, block trang cảm ơn chỉ query shop."
+    },
+    {
+      "rule": "Merchant (từ admin Shopify) đi vào Mysbox API qua portal nhúng.",
+      "kb_refs": [
+        "request-authentication#KB-003"
+      ]
+    },
+    {
+      "rule": "Khi merchant mở app trong Shopify admin, trình duyệt nhận từ Shopify một session token ngắn hạn được ký bằng bí mật của app.",
+      "kb_refs": [
+        "request-authentication#KB-004"
+      ]
+    },
+    {
+      "rule": "Mỗi lần portal nhúng gọi Mysbox API, request kèm session token do Shopify cấp.",
+      "kb_refs": [
+        "request-authentication#KB-005"
+      ],
+      "refresh_kb_refs": [
+        "request-authentication#KB-016"
+      ],
+      "refresh_note": "Staging corroborate: header authorization Bearer <JWT>."
+    },
+    {
+      "rule": "Mysbox kiểm chữ ký của session token đi kèm request từ portal nhúng.",
+      "kb_refs": [
+        "request-authentication#KB-006"
+      ]
+    },
+    {
+      "rule": "Mysbox xác định request từ portal nhúng thuộc shop nào dựa trên session token.",
+      "kb_refs": [
+        "request-authentication#KB-007"
+      ],
+      "refresh_kb_refs": [
+        "request-authentication#KB-016"
+      ],
+      "refresh_note": "Staging corroborate: request không mang shop id do client chọn."
+    },
+    {
+      "rule": "Request từ portal nhúng chỉ được đi tiếp nếu shop đó đã cài app và đang có quyền truy cập hợp lệ.",
+      "kb_refs": [
+        "request-authentication#KB-008"
+      ]
+    },
+    {
+      "rule": "Nếu session token hết hạn, trang portal nhúng tự quay về Shopify để lấy token mới.",
+      "kb_refs": [
+        "request-authentication#KB-009"
+      ]
+    },
+    {
+      "rule": "Shopify Flow gọi action của Mysbox bằng request có chữ ký HMAC.",
+      "kb_refs": [
+        "request-authentication#KB-010"
+      ]
+    },
+    {
+      "rule": "Chữ ký HMAC của request Shopify Flow được tính từ nội dung gửi cộng bí mật chung của app.",
+      "kb_refs": [
+        "request-authentication#KB-011"
+      ]
+    },
+    {
+      "rule": "Mysbox tính lại HMAC của request Shopify Flow: khớp thì nhận, không khớp thì trả lỗi 400.",
+      "kb_refs": [
+        "request-authentication#KB-012"
+      ]
+    },
+    {
+      "rule": "Extension (block checkout, trang cảm ơn / trạng thái đơn, tài khoản khách, admin Shopify) gọi Mysbox API chỉ gửi kèm tên shop (và mã khách), không có chữ ký; lời gọi mở box từ block trang cảm ơn / trạng thái đơn được xác thực bằng tên shop.",
+      "kb_refs": [
+        "request-authentication#KB-013"
+      ],
+      "refresh_kb_refs": [
+        "request-authentication#KB-018"
+      ],
+      "refresh_note": "Staging (host chưa xác nhận, LOW): block trang cảm ơn chỉ gửi query shop, không chữ ký."
+    },
+    {
+      "rule": "Với request từ extension (không ký), Mysbox xác nhận đơn tồn tại thật ở Shopify trước khi trả dữ liệu.",
+      "kb_refs": [
+        "request-authentication#KB-014"
+      ]
+    }
+  ],
+  "observed_behavior": [
+    {
+      "behavior": "Endpoint POST api/shopify-app/review (nhận review App Store từ ngoài) không có xác thực phía trước.",
+      "note": "KNOWN_DEFECT theo tài liệu dev — hiện trạng, không phải hành vi mong đợi; chỉ dùng làm regression watch, không làm oracle. Cần xác nhận là lỗ hổng hay thiết kế có chủ đích.",
+      "kb_refs": [
+        "request-authentication#KB-015"
+      ]
+    },
+    {
+      "behavior": "Merchant app gọi <MYS_API_BASE>/api/* với \"authorization: Bearer <JWT>\" và \"x-requested-with: XMLHttpRequest\", trả 200; URL document iframe có admin_theme, embedded, hmac, host, id_token, locale, session, shop, timestamp; request dashboard/settings/orders chỉ mang tham số chức năng, không có shop id do client chọn; response có \"access-control-allow-origin: *\", \"access-control-allow-header: Authorization\", \"access-control-expose-headers: X-Shopify-API-Request-Failure-Reauthorize-Url\".",
+      "basis": "OBSERVED_CURRENT",
+      "environment": "staging",
+      "observed_count": 4,
+      "confidence": "MEDIUM",
+      "note": "Nhánh token sai/thiếu không thử. Corroborate KB-005/KB-007.",
+      "kb_refs": [
+        "request-authentication#KB-016"
+      ]
+    },
+    {
+      "behavior": "Trang khách (app proxy, magic link) gửi header \"customer-token\" và \"customer-id\" trên mọi request /apps/mysbox/api/*, không authorization/JWT, tất cả 200; tham số URL \"parameters\" (JSON base64 không ký: order_id, customer_id, token, path, box_version_id hoặc openAll) không gửi lại trên request API; HTML có window._MCP với customerId, token, orderId, isLoggedIn, boxStatus, variantId, path.",
+      "basis": "OBSERVED_CURRENT",
+      "environment": "staging",
+      "observed_count": 1,
+      "confidence": "LOW",
+      "note": "Cách server kiểm customer-token và chữ ký app proxy không quan sát được từ trình duyệt.",
+      "kb_refs": [
+        "request-authentication#KB-017"
+      ]
+    },
+    {
+      "behavior": "Block trang cảm ơn gọi GET https://staging-api.mysbox.io/api/orders/{shopify_order_id}/customer?shop=<store domain>: query chỉ \"shop\", header chỉ accept, content-type, referer, user-agent (không authorization, session token, customer-token hay chữ ký); lần đầu 404, lần sau 200 {customer_id, token (chuỗi 64 ký tự)}.",
+      "basis": "OBSERVED_CURRENT",
+      "environment": "staging",
+      "observed_count": 2,
+      "confidence": "LOW",
+      "note": "Host khác expected_api_base, chưa xác nhận là backend chính thức — không dùng làm oracle.",
+      "kb_refs": [
+        "request-authentication#KB-018"
+      ]
+    }
+  ],
+  "observed_validations": [],
+  "limitations": [
+    {
+      "limitation": "Mọi rule đến từ một nguồn tài liệu dev (confidence MEDIUM) trừ rule extension không ký (hai nguồn); chưa có quan sát runtime.",
+      "kb_refs": [
+        "request-authentication#KB-001",
+        "request-authentication#KB-013"
+      ],
+      "observed_kb_refs": [
+        "request-authentication#KB-016",
+        "request-authentication#KB-017",
+        "request-authentication#KB-018"
+      ],
+      "refresh_note": "Quan sát staging 2026-10-17 bổ sung nhánh hợp lệ cho portal, trang khách và block trang cảm ơn (OBSERVED_CURRENT); vẫn chưa có quan sát nhánh từ chối."
+    },
+    {
+      "limitation": "Quan sát staging 2026-10-17 không replay/sửa token, Authorization, order_id hay customer-token; Shopify Flow, uninstall, multi-shop không quan sát. Host staging-api.mysbox.io của block trang cảm ơn chưa được operator xác nhận.",
+      "basis": "OBSERVED_CURRENT",
+      "kb_refs": [
+        "request-authentication#KB-016",
+        "request-authentication#KB-018"
+      ]
+    }
+  ],
+  "permissions": [
+    {
+      "permission": "Portal nhúng: chỉ request mang session token có chữ ký hợp lệ, thuộc shop đã cài app và đang có quyền truy cập hợp lệ mới được đi tiếp.",
+      "kb_refs": [
+        "request-authentication#KB-006",
+        "request-authentication#KB-007",
+        "request-authentication#KB-008"
+      ],
+      "observed_kb_refs": [
+        "request-authentication#KB-016"
+      ]
+    },
+    {
+      "permission": "Shopify Flow: chỉ request có HMAC khớp mới được nhận; không khớp trả 400.",
+      "kb_refs": [
+        "request-authentication#KB-012"
+      ]
+    },
+    {
+      "permission": "Extension: được phục vụ chỉ dựa trên tên shop (và mã khách), với điều kiện đơn tồn tại ở Shopify.",
+      "kb_refs": [
+        "request-authentication#KB-013",
+        "request-authentication#KB-014"
+      ],
+      "observed_kb_refs": [
+        "request-authentication#KB-018"
+      ]
+    },
+    {
+      "permission": "Trang đơn hàng của khách (quan sát staging): request mang customer-token + customer-id; điều kiện chấp nhận phía server chưa biết.",
+      "basis": "OBSERVED_CURRENT",
+      "kb_refs": [
+        "request-authentication#KB-017"
+      ]
+    }
+  ],
+  "surface_mapping": {
+    "portal": [
+      {
+        "surface": "Portal nhúng trong Shopify admin (nhận session token, tự lấy token mới khi hết hạn)",
+        "kb_refs": [
+          "request-authentication#KB-003",
+          "request-authentication#KB-004",
+          "request-authentication#KB-009",
+          "_product-level#KB-PL-024"
+        ],
+        "observed_kb_refs": [
+          "request-authentication#KB-016"
+        ]
+      }
+    ],
+    "storefront": [
+      {
+        "surface": "Extension ở checkout, trang cảm ơn / trạng thái đơn, tài khoản khách (gọi API bằng tên shop)",
+        "kb_refs": [
+          "request-authentication#KB-013"
+        ],
+        "observed_kb_refs": [
+          "request-authentication#KB-018"
+        ]
+      },
+      {
+        "surface": "Trang đơn hàng của khách /apps/mysbox (app proxy): window._MCP, header customer-token / customer-id — staging",
+        "basis": "OBSERVED_CURRENT",
+        "kb_refs": [
+          "request-authentication#KB-017"
+        ]
+      }
+    ],
+    "api": [
+      {
+        "surface": "Mysbox API gọi từ portal nhúng trong Shopify admin (request kèm session token) — kiểm chữ ký session token, xác định shop, kiểm cài app/quyền",
+        "kb_refs": [
+          "request-authentication#KB-005",
+          "request-authentication#KB-006",
+          "request-authentication#KB-007",
+          "request-authentication#KB-008"
+        ],
+        "observed_kb_refs": [
+          "request-authentication#KB-016"
+        ]
+      },
+      {
+        "surface": "Action Mysbox gọi từ Shopify Flow (request có chữ ký HMAC) — kiểm HMAC, sai trả 400",
+        "kb_refs": [
+          "request-authentication#KB-010",
+          "request-authentication#KB-011",
+          "request-authentication#KB-012"
+        ]
+      },
+      {
+        "surface": "Mysbox API gọi từ extension (block checkout, trang cảm ơn / trạng thái đơn, tài khoản khách, admin Shopify; kèm tên shop và mã khách) — xác thực bằng tên shop, kiểm đơn tồn tại ở Shopify",
+        "kb_refs": [
+          "request-authentication#KB-013",
+          "request-authentication#KB-014"
+        ]
+      },
+      {
+        "surface": "POST api/shopify-app/review (hook nhận review App Store từ ngoài) — không xác thực (lỗi đã biết)",
+        "kb_refs": [
+          "request-authentication#KB-015"
+        ]
+      },
+      {
+        "surface": "GET <MYS_API_BASE>/api/boxes, /api/users/config, /api/orders, /api/orders/{id}, /api/box-versions/by-ids với Bearer JWT — staging",
+        "method": "GET",
+        "host": "<MYS_API_BASE>",
+        "basis": "OBSERVED_CURRENT",
+        "kb_refs": [
+          "request-authentication#KB-016"
+        ]
+      },
+      {
+        "surface": "/apps/mysbox/api/* (box-versions, translations, shopify/product-variants, unopened-boxes/open, orders/{id}, orders/{id}/resellable/exists) với customer-token + customer-id — staging",
+        "basis": "OBSERVED_CURRENT",
+        "kb_refs": [
+          "request-authentication#KB-017"
+        ]
+      },
+      {
+        "surface": "GET https://staging-api.mysbox.io/api/orders/{shopify_order_id}/customer?shop=<store domain> (block trang cảm ơn, không xác thực; 404 rồi 200 {customer_id, token}) — staging, host chưa xác nhận",
+        "method": "GET",
+        "route": "/api/orders/{shopify_order_id}/customer",
+        "basis": "OBSERVED_CURRENT",
+        "kb_refs": [
+          "request-authentication#KB-018"
+        ]
+      }
+    ],
+    "data": [],
+    "code": []
+  },
+  "dependencies": [
+    {
+      "dependency": "Shopify cấp session token ngắn hạn cho portal nhúng (hệ thống ngoài).",
+      "kb_refs": [
+        "request-authentication#KB-004"
+      ],
+      "observed_kb_refs": [
+        "request-authentication#KB-016"
+      ]
+    },
+    {
+      "dependency": "Trạng thái cài app và quyền truy cập của shop quyết định request portal có đi tiếp hay không.",
+      "kb_refs": [
+        "request-authentication#KB-008"
+      ]
+    },
+    {
+      "dependency": "Shopify Flow ký request bằng bí mật chung của app.",
+      "kb_refs": [
+        "request-authentication#KB-011"
+      ]
+    },
+    {
+      "dependency": "Dữ liệu đơn ở Shopify dùng để xác nhận request từ extension.",
+      "kb_refs": [
+        "request-authentication#KB-014"
+      ]
+    },
+    {
+      "dependency": "Shopify app proxy (chữ ký thêm phía server) cho trang đơn hàng của khách — quan sát staging.",
+      "basis": "OBSERVED_CURRENT",
+      "kb_refs": [
+        "request-authentication#KB-017"
+      ]
+    }
+  ],
+  "risks": [
+    {
+      "risk": "Endpoint nhận review App Store không có xác thực phía trước (KNOWN_DEFECT) — bề mặt có thể bị lạm dụng.",
+      "kb_refs": [
+        "request-authentication#KB-015"
+      ]
+    },
+    {
+      "risk": "Request từ extension không có chữ ký, chỉ dựa trên tên shop (và mã khách); lớp bảo vệ được tài liệu nêu là kiểm đơn tồn tại ở Shopify — cần test negative với tên shop/đơn không khớp.",
+      "kb_refs": [
+        "request-authentication#KB-013",
+        "request-authentication#KB-014"
+      ]
+    },
+    {
+      "risk": "Endpoint customer của block trang cảm ơn trả customer_id + token chỉ với order id và tên shop, không xác thực (quan sát staging, host chưa xác nhận) — nếu đúng ở backend chính thức, ai biết order id + shop có thể lấy token khách.",
+      "basis": "OBSERVED_CURRENT",
+      "kb_refs": [
+        "request-authentication#KB-018",
+        "request-authentication#KB-013",
+        "request-authentication#KB-014"
+      ]
+    },
+    {
+      "risk": "Response portal có access-control-allow-origin \"*\"; tham số \"parameters\" trên URL trang khách là JSON base64 không ký chứa token — cần kiểm server không tin dữ liệu này.",
+      "basis": "OBSERVED_CURRENT",
+      "kb_refs": [
+        "request-authentication#KB-016",
+        "request-authentication#KB-017"
+      ]
+    }
+  ],
+  "freshness": {
+    "observed_at": "2026-10-17",
+    "base_observed_at": null
+  },
+  "unknown_areas": [
+    {
+      "question": "Session token của portal nhúng có thời hạn bao lâu, và Mysbox trả mã lỗi / redirect gì khi token sai chữ ký, hết hạn, hoặc shop chưa cài app / không có quyền?",
+      "why_it_matters": "Thiếu oracle cho các case negative của portal nhúng (status code, redirect).",
+      "kb_refs": [
+        "request-authentication#KB-006",
+        "request-authentication#KB-008",
+        "request-authentication#KB-009"
+      ],
+      "oq_id": "OQ-integrations-004",
+      "refresh_note": "Quan sát staging 2026-10-17: chỉ nhánh hợp lệ (Bearer → 200); token sai/hết hạn không thử — không gỡ.",
+      "refresh_kb_refs": [
+        "request-authentication#KB-016"
+      ]
+    },
+    {
+      "question": "Request từ extension cho đơn không tồn tại ở Shopify nhận phản hồi gì?",
+      "why_it_matters": "Tài liệu chỉ nói Mysbox xác nhận đơn tồn tại trước khi trả dữ liệu, không nêu phản hồi khi không tồn tại.",
+      "kb_refs": [
+        "request-authentication#KB-014"
+      ],
+      "oq_id": "OQ-integrations-005",
+      "refresh_note": "Quan sát staging 2026-10-17: endpoint customer của block trang cảm ơn trả 404 khi Mysbox chưa có customer của đơn (đơn có tồn tại ở Shopify) — không phải nhánh đơn không tồn tại; host chưa xác nhận — không gỡ.",
+      "refresh_kb_refs": [
+        "request-authentication#KB-018"
+      ]
+    },
+    {
+      "question": "Khi Shopify Flow vượt giới hạn tần suất gọi theo shop, Mysbox phản hồi thế nào (status code, xếp hàng hay bỏ)?",
+      "why_it_matters": "Cần oracle cho case rate limit; giới hạn được mô tả ở feature Shopify Flow actions, phản hồi khi vượt chưa được tài liệu nêu.",
+      "kb_refs": [
+        "request-authentication#KB-010"
+      ],
+      "oq_id": "OQ-integrations-006"
+    },
+    {
+      "question": "Lời gọi API từ banner 'Unbox alert' (lấy số box chưa mở) xác thực bằng cơ chế nào?",
+      "why_it_matters": "Tài liệu chỉ nêu xác thực bằng tên shop cho block trang cảm ơn / trạng thái đơn.",
+      "kb_refs": [
+        "request-authentication#KB-013"
+      ],
+      "oq_id": "OQ-integrations-007"
+    },
+    {
+      "question": "Hook nhận review App Store làm gì, payload gồm field nào (tên shop, số sao), response ra sao, xử lý số sao ngoài 1-5 thế nào, và có cơ chế chống lạm dụng nào (giới hạn, kiểm nguồn) không? Đây là lỗ hổng đã biết hay thiết kế có chủ đích?",
+      "why_it_matters": "Endpoint không xác thực là bề mặt cần kiểm; không biết input hợp lệ thì không test được validation/abuse.",
+      "kb_refs": [
+        "request-authentication#KB-015"
+      ],
+      "oq_id": "OQ-integrations-003"
+    },
+    {
+      "question": "HTTP status, field kỹ thuật và cơ chế xác thực của POST api/affiliate/tracking-id và POST api/affiliate/customers là gì?",
+      "why_it_matters": "Không kiểm được contract API và negative auth của hai endpoint này.",
+      "oq_id": "OQ-integrations-008"
+    },
+    {
+      "question": "Request từ trang đơn hàng của khách được xác thực bằng cơ chế nào?",
+      "why_it_matters": "Đây là một loại client được liệt kê nhưng shard này không có rule xác thực cho nó; có thể thuộc profile khác — cần xác nhận để không bỏ sót coverage.",
+      "kb_refs": [
+        "request-authentication#KB-001"
+      ],
+      "oq_id": "OQ-integrations-009",
+      "refresh_note": "Quan sát staging 2026-10-17: trang khách gửi header customer-token + customer-id qua app proxy (không JWT; tham số \"parameters\" không gửi lại lên API) (KB-017); cách server kiểm và chữ ký app proxy không quan sát được từ trình duyệt — mới trả lời vế client gửi gì, không gỡ.",
+      "refresh_kb_refs": [
+        "request-authentication#KB-017"
+      ]
+    },
+    {
+      "question": "Endpoint customer của block trang cảm ơn (/api/orders/{shopify_order_id}/customer?shop=...) trả customer_id + token chỉ dựa trên order id + tên shop: có kiểm đơn thuộc shop đó và yêu cầu đến từ extension không, gọi với order id của shop khác hoặc order id đoán thì trả gì, và host staging-api có phải backend chính thức của staging không?",
+      "why_it_matters": "Endpoint không xác thực trả token khách; không có oracle cho nhánh negative và host chưa được operator xác nhận.",
+      "kb_refs": [
+        "request-authentication#KB-018",
+        "request-authentication#KB-013",
+        "request-authentication#KB-014"
+      ],
+      "oq_id": "OQ-integrations-032",
+      "relates_to_existing_oq": [
+        "OQ-integrations-005"
+      ]
+    }
+  ],
+  "last_updated": {
+    "date": "2026-10-17",
+    "ccr_ref": "bootstrap"
+  },
+  "coverage_matrix": [
+    {
+      "feature_id": "FEAT-01-request-authentication",
+      "layer": "portal",
+      "role": "merchant",
+      "state": "session token hợp lệ, shop đã cài app, quyền hợp lệ",
+      "environment": "documented",
+      "covered": true,
+      "kb_refs": [
+        "request-authentication#KB-004",
+        "request-authentication#KB-008"
+      ]
+    },
+    {
+      "feature_id": "FEAT-01-request-authentication",
+      "layer": "portal",
+      "role": "merchant",
+      "state": "session token hết hạn",
+      "environment": "documented",
+      "covered": true,
+      "kb_refs": [
+        "request-authentication#KB-009"
+      ]
+    },
+    {
+      "feature_id": "FEAT-01-request-authentication",
+      "layer": "api",
+      "role": "merchant",
+      "state": "token sai chữ ký / shop chưa cài / không có quyền",
+      "environment": "documented",
+      "covered": false,
+      "note": "Rule chặn có, phản hồi (status/redirect) chưa có oracle.",
+      "kb_refs": [
+        "request-authentication#KB-006",
+        "request-authentication#KB-008"
+      ]
+    },
+    {
+      "feature_id": "FEAT-01-request-authentication",
+      "layer": "api",
+      "role": "system (Shopify Flow)",
+      "state": "HMAC khớp",
+      "environment": "documented",
+      "covered": true,
+      "kb_refs": [
+        "request-authentication#KB-012"
+      ]
+    },
+    {
+      "feature_id": "FEAT-01-request-authentication",
+      "layer": "api",
+      "role": "system (Shopify Flow)",
+      "state": "HMAC không khớp",
+      "environment": "documented",
+      "covered": true,
+      "kb_refs": [
+        "request-authentication#KB-012"
+      ]
+    },
+    {
+      "feature_id": "FEAT-01-request-authentication",
+      "layer": "api",
+      "role": "system (Shopify Flow)",
+      "state": "vượt giới hạn tần suất",
+      "environment": "documented",
+      "covered": false,
+      "kb_refs": []
+    },
+    {
+      "feature_id": "FEAT-01-request-authentication",
+      "layer": "storefront",
+      "role": "system (extension)",
+      "state": "đơn tồn tại ở Shopify",
+      "environment": "documented",
+      "covered": true,
+      "kb_refs": [
+        "request-authentication#KB-013",
+        "request-authentication#KB-014"
+      ]
+    },
+    {
+      "feature_id": "FEAT-01-request-authentication",
+      "layer": "storefront",
+      "role": "system (extension)",
+      "state": "đơn không tồn tại ở Shopify",
+      "environment": "documented",
+      "covered": false,
+      "kb_refs": [
+        "request-authentication#KB-014"
+      ]
+    },
+    {
+      "feature_id": "FEAT-01-request-authentication",
+      "layer": "api",
+      "role": "unspecified",
+      "state": "review App Store không xác thực",
+      "environment": "documented",
+      "covered": false,
+      "note": "Chỉ có KNOWN_DEFECT, không có oracle hành vi đúng.",
+      "kb_refs": [
+        "request-authentication#KB-015"
+      ]
+    },
+    {
+      "feature_id": "FEAT-01-request-authentication",
+      "layer": "data",
+      "role": "n/a",
+      "state": "n/a",
+      "environment": "documented",
+      "covered": false,
+      "kb_refs": []
+    },
+    {
+      "feature_id": "FEAT-01-request-authentication",
+      "layer": "api",
+      "role": "merchant",
+      "state": "Bearer session token hợp lệ (portal)",
+      "environment": "staging",
+      "covered": true,
+      "kb_refs": [
+        "request-authentication#KB-016"
+      ]
+    },
+    {
+      "feature_id": "FEAT-01-request-authentication",
+      "layer": "storefront",
+      "role": "guest buyer",
+      "state": "trang khách app proxy, customer-token hợp lệ",
+      "environment": "staging",
+      "covered": true,
+      "kb_refs": [
+        "request-authentication#KB-017"
+      ]
+    },
+    {
+      "feature_id": "FEAT-01-request-authentication",
+      "layer": "checkout",
+      "role": "guest buyer",
+      "state": "block trang cảm ơn, đơn vừa paid (404 → 200)",
+      "environment": "staging",
+      "covered": true,
+      "kb_refs": [
+        "request-authentication#KB-018"
+      ],
+      "note": "Host chưa xác nhận — LOW, không oracle."
+    },
+    {
+      "feature_id": "FEAT-01-request-authentication",
+      "layer": "api",
+      "role": "any",
+      "state": "token sai/thiếu/shop khác, HMAC Flow, uninstall, multi-shop",
+      "environment": "staging",
+      "covered": false,
+      "note": "NOT_COVERED: không được replay/sửa token trong run; Flow tắt."
+    }
+  ],
+  "profile_conflicts": [],
+  "profile_relationships": [
+    {
+      "from": "FEAT-01-request-authentication",
+      "to": "FEAT-02-webhook-ingestion",
+      "relation": "RELATED",
+      "note": "Webhook Shopify là một loại client của cùng backend; cơ chế xác thực webhook nằm ở profile webhook-ingestion.",
+      "kb_refs": [
+        "request-authentication#KB-001"
+      ]
+    },
+    {
+      "from": "request-authentication",
+      "to": "dashboard-and-analytics",
+      "relation": "RELATED",
+      "note": "Request Dashboard/settings/orders của portal mang Bearer session token, không có shop id do client chọn (quan sát staging).",
+      "kb_refs": [
+        "request-authentication#KB-016"
+      ]
+    },
+    {
+      "from": "request-authentication",
+      "to": "customer-portal-access-magic-link",
+      "relation": "RELATED",
+      "note": "Trang khách mở bằng magic link dùng customer-token + customer-id; block trang cảm ơn lấy customer_id + token (quan sát staging).",
+      "kb_refs": [
+        "request-authentication#KB-017",
+        "request-authentication#KB-018"
+      ]
+    }
+  ]
+}

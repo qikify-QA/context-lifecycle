@@ -1,0 +1,101 @@
+{
+  "mode": "REFRESH",
+  "product_key": "mysbox",
+  "mode_note": "REFRESH theo yêu cầu trực tiếp của operator (DirectOperatorRequest, không Proposal): explore staging để trả lời open question đang mở của 3 object box, order-draw, reveal. Base = canonical hiện tại (box v2, order-draw v2, reveal v2 — sau CTX-20261016-02). Mục tiêu = các OQ bucket a trong input/refresh-targets.json (103 OQ). Ghi OBSERVED_CURRENT; KHÔNG nâng lên CONFIRMED_EXPECTED, KHÔNG tự đóng conflict, KHÔNG supersede (REFRESH không có supersede). OQ NEEDS_CONFIRMATION/CONFLICT chỉ nhận staging_observation, giữ mở. Không spawn scope-planner.",
+
+  "context": { "environment": "staging", "role": "merchant" },
+
+  "object_target": {
+    "object_key": "box",
+    "object_type": "Box (variant Shopify được đánh dấu là mystery box)",
+    "object_id_or_url": "Portal: env MYS_SHOPIFY_ADMIN_APP_URL → Manage boxes; box mới do run tạo (QA-CTX0117-*). Box tham chiếu chỉ đọc: 1022 (Active, operator giữ), 1023/1024 (Draft, của CTX-20261016-02).",
+    "initial_state": "Theo CTX-20261016-02 (phải tự quan sát lại): shop gói Free, Box sales limit 0/10, Auto-unbox tắt, Shopify Flow tắt; box 1022 Active; 1023/1024 Draft; đơn test #1006/#1007/#1008 đã mở hết."
+  },
+  "additional_object_targets": [
+    { "object_key": "order-draw", "object_type": "Order có box (đơn paid → bốc thăm)", "object_id_or_url": "Đơn test Bogus do run tạo (tối đa 3); app Manage orders + trang đơn Shopify admin /orders/<id> (chỉ đọc)", "initial_state": "Chưa có đơn của run." },
+    { "object_key": "reveal", "object_type": "Thank-you block + trang khách /apps/mysbox/orders… (app proxy) + trang reveal", "object_id_or_url": "https://<MYS_STORE_DOMAIN>/apps/mysbox/orders (magic link của đơn test do run tạo, buyer guest)", "initial_state": "Chưa có đơn của run." }
+  ],
+
+  "feature_scope": {
+    "_note": "REFRESH: dùng lại feature_key của base (FEATURE-ID của base). Danh sách OQ mục tiêu + planned_observation ở input/refresh-targets.json — lọc bucket=a. Bucket b KHÔNG đụng.",
+    "box": ["box-create-and-publish", "box-type-and-prize-setup", "box-versioning", "inventory-and-sold-out", "picking-modes", "pool-refill (chỉ phần form quan sát được trên Free)"],
+    "order-draw": ["purchase-and-prize-draw", "prizes-added-to-order", "physical-sealed-box-fulfilment"],
+    "reveal": ["reveal-journey", "customer-portal-access-magic-link", "auto-unbox (chỉ setting + field quan sát được; không chờ job)"]
+  },
+
+  "test_design": {
+    "_note": "Thiết kế để một số ít đơn phủ nhiều OQ. Explorer được điều chỉnh chi tiết (giá, số lượng) nếu form chặn, nhưng KHÔNG vượt giới hạn đơn/box. Tên product/box tiền tố QA-CTX0117-.",
+    "boxes_to_create": {
+      "B1": "Single, Instantly opening (digital), tracked, 3 prize item số lượng 2/2/1 (dùng product sẵn có của store làm prize — chỉ tham chiếu), 'Unique in an order' BẬT nếu có, 'Hide winner chance' TẮT, animation Carousel. Phủ: box-038/071/076/099, order-draw-033/038/048/054, reveal-020/021/023/024/029/042/043/054 (phía hide=OFF), box-068 (version change).",
+      "B2": "Bundle, digital, tracked, 3 set (set 1 {A,B} có 'Unique in an order' nếu có), 'Hide winner chance' BẬT, animation Card flip. Trước khi lưu: thử đặt cùng một item ở 2 set với tồn kho 1 và ghi form cho hay chặn (box-047/081 phần form) — rồi chỉnh về cấu hình hợp lệ. Phủ: order-draw-006, box-048/065, reveal-054 (phía hide=ON), reveal-051 (Card flip).",
+      "B3": "Single, Sealed box (physical), 1 prize item. Phủ: order-draw-011/039/040/051, reveal-045."
+    },
+    "orders": {
+      "O1": "B1 × 3 (đơn digital nhiều box). Thank-you block: đo thời gian tới 'Unbox your mystery box now!' (order-draw-052). Storefront pass 1: mở đúng 1 box bằng Unbox lẻ (chance, reload giữa animation, Next unbox/Open more), để 2 box CHƯA mở. Ghi tổng đơn subtotal/shipping/tax trước khi quà vào đơn (order-draw-045/049).",
+      "O2": "B2 × 2 + B3 × 1 (bundle 3 set + box physical trong cùng đơn, reveal-045). TRƯỚC checkout O2 portal bật 'Enable auto-unbox' (ghi giá trị cũ) để quan sát 'Auto-open in' (reveal-012), SAU checkout O2 portal tắt lại đúng giá trị cũ. Đơn O2 sẽ bị job auto-unbox mở sau này — chấp nhận, là đơn của run.",
+      "O3": "B3 × 2 (2 box sealed cùng variant → metafield mysbox_prizes gộp hay tách, order-draw-011). Nếu 'Preview by test order' có trên staging và cho chọn box B3: dùng nó cho O3 để đồng thời quan sát tag mysbox-preview-order (box-014, order-draw-007/029); không thì checkout Bogus thường."
+    },
+    "version_change_test": "box-068/031/039: sau storefront pass 1 (O1 còn 2 box chưa mở), portal pass 2 Deactivate B1 → đổi quantity 1 item → Save (version mới) → Activate lại nếu cần; ghi Remaining/inventory.bundles trước/sau. Storefront pass 2 mở nốt 2 box của O1 (1 bằng Next unbox, 1 bằng Multi-unbox) và đối chiếu box_version_id + linked_id với version cũ.",
+    "manage_orders_unbox": "reveal-044: trên O2 (sau storefront pass 1, O2 chưa mở box nào), portal pass 2 bấm 'Unbox'/'Open all boxes' trong app Manage orders cho đúng đơn O2 và ghi request + cột 'x/y boxes opened'. KHÔNG bấm 'Open mystery box' trên trang đơn Shopify admin."
+  },
+
+  "surfaces": {
+    "portal": { "enabled": true, "auth": "operator_session_handover (Shopify admin đã đăng nhập sẵn trong browser Playwright dùng chung, profile ~/.pw-mcp-profile)" },
+    "storefront": {
+      "enabled": true,
+      "entry_url": "https://<MYS_STORE_DOMAIN>/ (qua /password bằng MYS_STOREFRONT_PASSWORD) — trang product của box QA-CTX0117-*",
+      "buyer_state": "guest + magic link của đơn test do run tạo. KHÔNG có session logged_in_customer — bỏ qua buyer state đó và ghi unknowns.",
+      "buyer_facing_features": [
+        "order-draw/purchase-and-prize-draw: checkout Bogus O1/O2/O3 → đơn paid → bốc thăm; response orders/<id>, unopened-boxes/open",
+        "order-draw/prizes-added-to-order: box không buyback → quà vào đơn Shopify sau khi mở hết (đối chiếu trang đơn admin ở portal pass 2/3)",
+        "order-draw/physical-sealed-box-fulfilment: box B3 sealed — thank-you/trang khách có nút Unbox không; metafield đơn (portal)",
+        "reveal/reveal-journey: thank-you block, Unbox lẻ, Multi-unbox, Next unbox/Open more, reload giữa animation, mở lại link box đã mở, Chance hiển thị (hide ON/OFF), animation Carousel/Card flip",
+        "reveal/customer-portal-access-magic-link: magic link đơn test; vào /apps/mysbox/orders không có ?parameters= và với ?parameters= bị cắt cụt — ghi URL đích/status/nội dung",
+        "reveal/auto-unbox: 'Auto-open in' trên O2 (auto-unbox bật tạm thời)",
+        "box/inventory-and-sold-out + box-type-and-prize-setup: widget 'Box items'/Chance trên trang product sau khi tạo box; Remaining giảm sau đơn"
+      ]
+    },
+    "api": { "enabled": true, "variant": "runtime-trace", "base_env": "MYS_API_BASE (== environments.staging.expected_api_base, orchestrator đã kiểm env khớp 2026-10-17)", "host_note": "Host staging-api.mysbox.io đã thấy ở run trước, khác expected_api_base (OQ-reveal-050 đang chờ operator). Giữ xử lý như CTX-20261016-02: api-explorer tag host_not_in_expected_api_base, normalizer ghi OBSERVED_CURRENT/LOW, không oracle. Không sửa config." },
+    "db": { "enabled": false, "reason": "explore.surfaces.db.enabled=false" },
+    "code": { "enabled": false, "reason": "explore.surfaces.code.enabled=false" },
+    "admin_panel": { "enabled": false, "reason": "NOT_COVERED theo config" }
+  },
+
+  "network_capture": {
+    "enabled": true, "capture_request_body": true, "capture_response_body": true,
+    "redact_headers": ["authorization", "cookie", "set-cookie", "x-api-key", "x-shopify-access-token", "x-csrf-token", "customer-token"],
+    "redact_also": ["?parameters= của magic link (base64 JSON chứa token) — toàn bộ giá trị trong URL, screenshot thanh địa chỉ, network", "Shopify session token (JWT)", "id_token/hmac/signature trong query app proxy", "email/tên/địa chỉ buyer", "tên staff/store owner trong ảnh Shopify admin"]
+  },
+
+  "exploration_policy": {
+    "mutation_policy": "SAFE_REVERSIBLE_ONLY",
+    "extra_authorization": {
+      "checkout_boundary": "bogus_gateway_test_order",
+      "rule": "playbook §5: test order CHỈ qua Shopify Bogus Gateway trên development store đã xác minh; buyer email = MYS_TEST_BUYER_EMAIL, tên/địa chỉ 'QA Test'; chỉ mua box tiền tố QA-.",
+      "max_test_orders_this_run": 3,
+      "max_boxes_per_order": 3,
+      "note": "'Preview by test order' tạo đơn test → TÍNH vào giới hạn 3 đơn."
+    },
+    "allowed_reversible": [
+      "tạo product/variant + box tên QA-CTX0117-… (Save lần đầu tự publish Active)",
+      "Deactivate / sửa box QA-CTX0117-* do run tạo (version change test)",
+      "đổi tồn kho variant của product QA-CTX0117-* do run tạo trên Shopify admin rồi khôi phục (nhánh 'Open more' hết hàng, reveal-024/041) — ghi giá trị trước",
+      "sửa General Settings (Enable auto-unbox) rồi khôi phục đúng giá trị cũ (ghi giá trị trước)",
+      "Unbox / Multi-unbox / Next unbox trên đơn test của chính run; nút Unbox/Open all boxes trong app Manage orders CHỈ cho đơn của run",
+      "mở /apps/mysbox/orders không có ?parameters= và với ?parameters= bị cắt cụt (hành vi khách thường gặp)"
+    ],
+    "not_allowed_this_run": [
+      "sửa token / customer_id / order_id / box_version_id trong magic link hay link Unbox để dò quyền (URL tampering, IDOR) — chờ operator duyệt (OQ-box-098, phần (c)(d) của OQ-reveal-017, CHK-005 của OQ-reveal-036)",
+      "xoá box (kể cả QA-) — chỉ Deactivate (OQ-box-016 chờ operator duyệt)",
+      "sửa product/collection/Track quantity của product không phải QA-CTX0117-*"
+    ],
+    "do_not_touch": ["box 1022, 1023, 1024 — chỉ đọc", "đơn #1006/#1007/#1008 — chỉ đọc", "mọi box/product/đơn không phải của run"],
+    "forbidden_actions": ["delete_non_qa_data", "charge", "plan_change", "real_payment", "uninstall", "theme_change", "save_koin_key", "enable_shopify_flow", "admin_panel_write", "edit_shopify_order", "send_notification_to_real_customer"],
+    "cleanup_required": true,
+    "cleanup_plan": "Cuối run (portal pass 3): Deactivate B1/B2/B3; product QA-CTX0117-* giữ, ghi retention; tồn kho variant đã sửa → khôi phục; General Settings → khôi phục; đơn test không xoá được → ghi retention, không archive; cart → xoá/ghi retention."
+  },
+
+  "execution_order": "TUẦN TỰ vì chỉ có MỘT browser Playwright dùng chung: portal pass 1 (account guard; tạo B1/B2/B3; mọi OQ bucket a surface portal/shopify_admin_readonly không cần đơn; ghi baseline Remaining/inventory/Box sales limit; bật auto-unbox tạm KHÔNG ở pass này) → storefront pass 1 (account guard; widget; O1 + thank-you + mở 1 box; ghi magic link flow) → portal pass 2 (bật auto-unbox, ghi giá trị cũ) → storefront: O2 checkout + O3 (hoặc O3 bằng Preview by test order ở portal) → portal pass 2 tiếp (tắt auto-unbox về giá trị cũ; Manage orders; Unbox O2 trong app; version change B1; trang đơn admin; metafield sealed) → storefront pass 2 (mở nốt O1; mở lại link box đã mở; trang khách sau mở; không ?parameters=/cắt cụt) → portal pass 3 (trang đơn admin sau quà vào đơn, Remaining/inventory sau, Box sales limit, cleanup) → api-explorer runtime-trace trên toàn bộ capture. Orchestrator sẽ dispatch từng pass riêng.",
+
+  "session_rule": "Không tự login. Account guard (playbook §2: store handle trong URL admin, host storefront == MYS_STORE_DOMAIN, development store) là bước ĐẦU TIÊN của mỗi pass. Session hết hạn / bị đẩy ra login / OAuth re-authorize / sai store → DỪNG ngay, trả BLOCKED kèm lý do để operator bàn giao lại."
+}

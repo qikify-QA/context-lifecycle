@@ -295,7 +295,7 @@ Contract chỉ nói luật; các con số dưới đây là trạng thái dữ l
 | 2026-10-06 | 3 file `knowledge/_open-issues/` còn đường `runs/context` | Leak scan chưa quét `_open-issues/` (2.17) |
 | 2026-10-11 | `knowledge/products/teeinblue/font/CHANGELOG.md` nhắc định danh account explore (`sub=…`) | Chờ chủ repo quyết sửa (đụng nội dung `knowledge/`) |
 | 2026-10-11 | 7 `feature-summary.md` của teeinblue (artwork, asset-category, campaign, font, order, sdk, translation) chưa có dòng 2 `**Published context version:** N` | `audit-preview.mjs` coi là BLOCKING cho object được publish lại; sửa khi object đó có run kế tiếp |
-| 2026-10-11 | `teeinblue/global-option` và `teeinblue/product-base` thiếu `publish-meta.json` → `UNPUBLISHED` trong manifest | `generate-manifest --check` FAIL; cần bổ sung khi chủ repo quyết |
+| 2026-10-11 | `teeinblue/global-option` và `teeinblue/product-base` thiếu `publish-meta.json` → `UNPUBLISHED` trong manifest | **Đã xử lý 2026-10-18** (chủ repo quyết): ghi tay `publish-meta.json` — global-option v1 (2026-09-16, ZERO_DOC_BOOTSTRAP, CTX-20260915-01), product-base v3 (2026-09-14, RECONCILE, sau 3 lần publish CTX-20260910-04/20260913-02/20260914-01; version cũ dạng "v2.1" quy về số nguyên). Ngoại lệ có chủ đích với luật "chỉ `publish-apply.mjs` ghi `knowledge/`"; phát hành trong qa-knowledge `ctx-2026-10-18` |
 | 2026-10-11 | 4 run cũ (`CTX-20260909-01`, `CTX-20260910-01/02/03`) không có `run-manifest.json`; 11 manifest dùng `ctx_run_id` thay vì `run_id` | `ops-board` đọc cả hai key; run mới dùng `scripts/ctx/new-run.mjs` |
 
 ## 7. Sự cố đã xảy ra

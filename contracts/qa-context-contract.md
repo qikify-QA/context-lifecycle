@@ -488,7 +488,7 @@ Credential nằm trong `.env` ở project root, gitignored, chỉ đọc qua bi�
 
 - Đọc từ `process.env` / `os.environ`. KHÔNG in `.env` ra output, KHÔNG in giá trị vào log hay tool result.
 - KHÔNG copy giá trị credential vào file nào trong `runs/` hoặc `knowledge/`. Ghi tên biến, không ghi giá trị.
-- **Product có `modes.explore_enabled: true`:** environment mặc định là `environments.default`; biến mà `environments.<env>.api_base_env` chỉ tới phải bằng `environments.<env>.expected_api_base`. Trỏ ra ngoài `environments.allowed` (hoặc vào `environments.forbidden`) là stop condition → `BLOCKED`.
+- **Product có `modes.explore_enabled: true`:** environment mặc định là `environments.default`; biến mà `environments.<env>.api_base_env` chỉ tới phải bằng `environments.<env>.expected_api_base`. Host phụ mà surface gọi tới (vd backend trang khách, proxy asset) chỉ hợp lệ khi nằm trong `environments.<env>.additional_api_hosts` (operator xác nhận, ghi kèm note); host ngoài cả hai → gắn `host_not_in_expected_api_base`, item liên quan không làm oracle, hỏi operator. Trỏ ra ngoài `environments.allowed` (hoặc vào `environments.forbidden`) là stop condition → `BLOCKED`.
 - **Product có `modes.explore_enabled: false`:** không credential, không api base, không environment runtime. `environment` luôn là `documented`; thiếu `.env` cho product này là bình thường.
 - Account phụ (`secondary_account_env`) dùng cho check `PERMISSION`/cross-tenant; token trong `negative_auth_env` là fixture cho negative auth case. Quy tắc chọn và xác minh account khi explore nằm trong playbook của product.
 

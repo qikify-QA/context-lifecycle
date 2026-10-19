@@ -1,0 +1,963 @@
+{
+  "feature_id": "FEAT-04-daily-usage-charge-and-charge-status",
+  "feature_key": "daily-usage-charge-and-charge-status",
+  "name": "Job usage charge hằng ngày và trạng thái Charge",
+  "user_goal": "Mysbox gom phí box vượt quota của mỗi shop trả phí thành một Shopify usage charge mỗi ngày (đánh dấu dòng phí đã tính trước khi gọi Shopify, nên lỗi thì thu thiếu chứ không thu dư); Charge recurring/usage mang trạng thái đối chiếu được (Pending / Accepted / Declined / Failed, Active / Cancelled) để admin, support và merchant đối chiếu phí, trong khi màn Charges của admin panel chỉ đọc.",
+  "user_goal_kb_refs": [
+    "daily-usage-charge-and-charge-status#KB-002",
+    "daily-usage-charge-and-charge-status#KB-025",
+    "daily-usage-charge-and-charge-status#KB-047",
+    "daily-usage-charge-and-charge-status#KB-078",
+    "daily-usage-charge-and-charge-status#KB-003",
+    "daily-usage-charge-and-charge-status#KB-081",
+    "daily-usage-charge-and-charge-status#KB-034"
+  ],
+  "stable_since_version": "1",
+  "actors": [
+    {
+      "role": "system",
+      "permission_observed": "Tạo dòng phí khi đơn paid, chạy job lúc nửa đêm gom phí và gửi usage record lên Shopify, cập nhật trạng thái Charge.",
+      "kb_refs": [
+        "daily-usage-charge-and-charge-status#KB-017",
+        "daily-usage-charge-and-charge-status#KB-019",
+        "daily-usage-charge-and-charge-status#KB-025",
+        "daily-usage-charge-and-charge-status#KB-046"
+      ]
+    },
+    {
+      "role": "merchant",
+      "permission_observed": "Duyệt subscription (có Capped Amount và Terms); xem dòng subscription và các dòng usage ở Shopify admin > Settings > Billing; không tạo hay sửa Charge.",
+      "kb_refs": [
+        "daily-usage-charge-and-charge-status#KB-029",
+        "daily-usage-charge-and-charge-status#KB-030",
+        "daily-usage-charge-and-charge-status#KB-031",
+        "_product-level#KB-PL-002"
+      ]
+    },
+    {
+      "role": "admin-staff",
+      "permission_observed": "Xem Charge ở Payment > Charges và tab Charges của trang Shop (chỉ đọc, không tạo/sửa/xoá); dò phí thiếu; chạy tay usage-charges:create cho một shop (việc của engineer); Mysbox không hoàn hay sửa được charge.",
+      "kb_refs": [
+        "daily-usage-charge-and-charge-status#KB-007",
+        "daily-usage-charge-and-charge-status#KB-032",
+        "daily-usage-charge-and-charge-status#KB-033",
+        "daily-usage-charge-and-charge-status#KB-034",
+        "daily-usage-charge-and-charge-status#KB-071",
+        "daily-usage-charge-and-charge-status#KB-073",
+        "daily-usage-charge-and-charge-status#KB-077",
+        "_product-level#KB-PL-006"
+      ]
+    }
+  ],
+  "entry_points": [
+    {
+      "path": "Đơn ở trạng thái paid (hệ thống tạo dòng phí usage \"chưa gửi\")",
+      "precondition": "Shop plan Paid",
+      "kb_refs": [
+        "daily-usage-charge-and-charge-status#KB-017",
+        "daily-usage-charge-and-charge-status#KB-018"
+      ]
+    },
+    {
+      "path": "Job tạo phí usage theo lịch, mỗi ngày lúc 00:00 giờ server",
+      "precondition": "Shop thoả cả bốn điều kiện: plan Paid, subscription Active, không trong trial, có dòng phí chưa gửi trong 1 tháng gần nhất",
+      "kb_refs": [
+        "daily-usage-charge-and-charge-status#KB-019",
+        "daily-usage-charge-and-charge-status#KB-021",
+        "daily-usage-charge-and-charge-status#KB-022",
+        "daily-usage-charge-and-charge-status#KB-023",
+        "daily-usage-charge-and-charge-status#KB-024"
+      ]
+    },
+    {
+      "path": "Lệnh usage-charges:create --id=<id shop> (chạy tay)",
+      "precondition": "Engineer có quyền chạy lệnh vận hành",
+      "kb_refs": [
+        "daily-usage-charge-and-charge-status#KB-032",
+        "daily-usage-charge-and-charge-status#KB-073"
+      ]
+    },
+    {
+      "path": "Admin panel > Payment > Charges; Shop > tab Charges",
+      "precondition": "Đăng nhập admin panel",
+      "kb_refs": [
+        "daily-usage-charge-and-charge-status#KB-033",
+        "daily-usage-charge-and-charge-status#KB-069",
+        "daily-usage-charge-and-charge-status#KB-071"
+      ]
+    },
+    {
+      "path": "Shopify admin > Settings > Billing (merchant)",
+      "precondition": "Shop đã duyệt subscription",
+      "kb_refs": [
+        "daily-usage-charge-and-charge-status#KB-029",
+        "daily-usage-charge-and-charge-status#KB-030"
+      ]
+    }
+  ],
+  "capabilities": [
+    {
+      "name": "Ghi nhận phí phát sinh từ đơn paid",
+      "description": "Khi đơn ở trạng thái paid, hệ thống tạo dòng phí usage ở trạng thái \"chưa gửi\"; Usage liên kết tới Charge khi đã được gom.",
+      "kb_refs": [
+        "daily-usage-charge-and-charge-status#KB-004",
+        "daily-usage-charge-and-charge-status#KB-017",
+        "daily-usage-charge-and-charge-status#KB-018"
+      ]
+    },
+    {
+      "name": "Gom phí hằng ngày thành một usage record mỗi shop",
+      "description": "Job chạy mỗi ngày lúc nửa đêm, chỉ xử lý shop thoả cả bốn điều kiện; cộng mọi dòng chưa gửi trong 1 tháng gần nhất thành một usage record duy nhất gửi Shopify (tối đa một dòng usage mỗi ngày); tổng dưới $0.005 thì không gọi Shopify mà chỉ đánh dấu xong; Shopify là bên tính tiền và cộng usage vào hoá đơn kế tiếp.",
+      "kb_refs": [
+        "daily-usage-charge-and-charge-status#KB-001",
+        "daily-usage-charge-and-charge-status#KB-002",
+        "daily-usage-charge-and-charge-status#KB-008",
+        "daily-usage-charge-and-charge-status#KB-009",
+        "daily-usage-charge-and-charge-status#KB-013",
+        "daily-usage-charge-and-charge-status#KB-014",
+        "daily-usage-charge-and-charge-status#KB-019",
+        "daily-usage-charge-and-charge-status#KB-021",
+        "daily-usage-charge-and-charge-status#KB-022",
+        "daily-usage-charge-and-charge-status#KB-023",
+        "daily-usage-charge-and-charge-status#KB-024",
+        "daily-usage-charge-and-charge-status#KB-025",
+        "daily-usage-charge-and-charge-status#KB-028"
+      ]
+    },
+    {
+      "name": "Ghi kết quả gửi Shopify vào trạng thái Usage charge",
+      "description": "Usage charge tạo ở Pending trước khi gọi Shopify, các dòng phí được đánh dấu completed ngay khi tạo charge; Accepted khi Shopify chấp nhận (hoặc khi tổng dưới $0.005 không gửi), Declined khi Shopify trả rỗng, Failed khi lỗi gọi Shopify; Shopify từ chối khi chạm capped amount hoặc subscription không hoạt động; log từ chối chỉ ở mức debug; lỗi thì thu thiếu, không thu dư.",
+      "kb_refs": [
+        "daily-usage-charge-and-charge-status#KB-012",
+        "daily-usage-charge-and-charge-status#KB-036",
+        "daily-usage-charge-and-charge-status#KB-039",
+        "daily-usage-charge-and-charge-status#KB-040",
+        "daily-usage-charge-and-charge-status#KB-041",
+        "daily-usage-charge-and-charge-status#KB-042",
+        "daily-usage-charge-and-charge-status#KB-046",
+        "daily-usage-charge-and-charge-status#KB-047",
+        "daily-usage-charge-and-charge-status#KB-048",
+        "daily-usage-charge-and-charge-status#KB-051",
+        "daily-usage-charge-and-charge-status#KB-078",
+        "daily-usage-charge-and-charge-status#KB-081",
+        "daily-usage-charge-and-charge-status#KB-082"
+      ]
+    },
+    {
+      "name": "Recurring charge phản ánh subscription của shop",
+      "description": "Recurring charge đại diện subscription, giữ bản chép quota và quy tắc phí; Active khi subscription đang sống, Cancelled khi merchant huỷ, bị thay bằng plan khác hoặc gỡ app; một Plan có nhiều Charge; không có webhook thay đổi subscription nên trạng thái lệch được sửa ở lần đổi plan/gỡ app kế tiếp.",
+      "kb_refs": [
+        "daily-usage-charge-and-charge-status#KB-003",
+        "daily-usage-charge-and-charge-status#KB-005",
+        "daily-usage-charge-and-charge-status#KB-035",
+        "daily-usage-charge-and-charge-status#KB-038",
+        "daily-usage-charge-and-charge-status#KB-043",
+        "daily-usage-charge-and-charge-status#KB-044",
+        "daily-usage-charge-and-charge-status#KB-063",
+        "daily-usage-charge-and-charge-status#KB-064",
+        "daily-usage-charge-and-charge-status#KB-066"
+      ]
+    },
+    {
+      "name": "Admin/support đối chiếu charge ở màn Charges chỉ đọc",
+      "description": "Màn Payment > Charges (tab All / Recurring / One Time / Usage; cột id, shop id, charge id, cờ test, status, giá, tiền tệ, mô tả, charge tham chiếu, ngày) và tab Charges đã lọc theo shop; chỉ để xem; tab Charges cho tổng usage đã tính; một dòng subscription cộng một hoặc nhiều dòng usage là bình thường.",
+      "kb_refs": [
+        "daily-usage-charge-and-charge-status#KB-007",
+        "daily-usage-charge-and-charge-status#KB-033",
+        "daily-usage-charge-and-charge-status#KB-034",
+        "daily-usage-charge-and-charge-status#KB-069",
+        "daily-usage-charge-and-charge-status#KB-070",
+        "daily-usage-charge-and-charge-status#KB-071",
+        "daily-usage-charge-and-charge-status#KB-076",
+        "daily-usage-charge-and-charge-status#KB-077",
+        "daily-usage-charge-and-charge-status#KB-086"
+      ]
+    },
+    {
+      "name": "Merchant đối chiếu phí trên hoá đơn Shopify",
+      "description": "Kỳ hoá đơn Shopify neo ngày duyệt subscription, thu tiền plan và các dòng usage; ở Shopify admin > Settings > Billing merchant thấy dòng subscription (đã trừ billing discount) và các dòng usage kèm mô tả; trang duyệt subscription có Capped Amount và Terms.",
+      "kb_refs": [
+        "daily-usage-charge-and-charge-status#KB-015",
+        "daily-usage-charge-and-charge-status#KB-016",
+        "daily-usage-charge-and-charge-status#KB-029",
+        "daily-usage-charge-and-charge-status#KB-030",
+        "daily-usage-charge-and-charge-status#KB-031"
+      ]
+    },
+    {
+      "name": "Chạy tay tạo phí usage cho một shop",
+      "description": "Lệnh usage-charges:create --id=<id shop>; chạy lại an toàn vì phần đã tính phí bị loại ra.",
+      "kb_refs": [
+        "daily-usage-charge-and-charge-status#KB-032",
+        "daily-usage-charge-and-charge-status#KB-073"
+      ]
+    },
+    {
+      "name": "Xử lý shop bị Shopify đóng băng",
+      "description": "Khi Shopify plan của shop thành frozen, Mysbox chỉ lưu tên plan, không gỡ box, không đổi plan Mysbox.",
+      "kb_refs": [
+        "daily-usage-charge-and-charge-status#KB-056",
+        "daily-usage-charge-and-charge-status#KB-057",
+        "daily-usage-charge-and-charge-status#KB-058"
+      ]
+    }
+  ],
+  "state_transitions": [
+    {
+      "from": "(chưa có)",
+      "to": "dòng phí usage \"chưa gửi\"",
+      "trigger": "Đơn chứa box ở trạng thái paid",
+      "condition": "",
+      "kb_refs": [
+        "daily-usage-charge-and-charge-status#KB-017",
+        "daily-usage-charge-and-charge-status#KB-018"
+      ]
+    },
+    {
+      "from": "dòng phí \"chưa gửi\"",
+      "to": "dòng phí \"completed\" + Usage charge Pending",
+      "trigger": "Job nửa đêm xử lý shop",
+      "condition": "Đánh dấu completed ngay khi tạo Usage charge, trước khi gọi Shopify",
+      "kb_refs": [
+        "daily-usage-charge-and-charge-status#KB-046",
+        "daily-usage-charge-and-charge-status#KB-047"
+      ]
+    },
+    {
+      "from": "Usage charge Pending",
+      "to": "Accepted",
+      "trigger": "Shopify chấp nhận usage record",
+      "condition": "",
+      "kb_refs": [
+        "daily-usage-charge-and-charge-status#KB-036",
+        "daily-usage-charge-and-charge-status#KB-039"
+      ]
+    },
+    {
+      "from": "Usage charge Pending",
+      "to": "Declined / Failed",
+      "trigger": "Shopify từ chối (trả rỗng) hoặc lỗi khi gọi Shopify (mạng, vượt cap, token chết, shop frozen)",
+      "condition": "Các dòng phí đã completed nên không được nhặt lại (known defect)",
+      "kb_refs": [
+        "daily-usage-charge-and-charge-status#KB-041",
+        "daily-usage-charge-and-charge-status#KB-042",
+        "daily-usage-charge-and-charge-status#KB-048",
+        "daily-usage-charge-and-charge-status#KB-049"
+      ]
+    },
+    {
+      "from": "dòng phí \"chưa gửi\" với tổng dưới $0.005",
+      "to": "dòng phí đánh dấu xong, Usage charge Accepted, không gọi Shopify",
+      "trigger": "Job nửa đêm",
+      "condition": "Tổng phí gom được của shop dưới $0.005",
+      "kb_refs": [
+        "daily-usage-charge-and-charge-status#KB-014",
+        "daily-usage-charge-and-charge-status#KB-040"
+      ]
+    },
+    {
+      "from": "Recurring charge Active",
+      "to": "Cancelled",
+      "trigger": "Merchant huỷ, bị thay bằng plan khác, hoặc gỡ app",
+      "condition": "",
+      "kb_refs": [
+        "daily-usage-charge-and-charge-status#KB-038",
+        "daily-usage-charge-and-charge-status#KB-043"
+      ]
+    },
+    {
+      "from": "subscription Mysbox lệch Shopify",
+      "to": "subscription Mysbox khớp lại",
+      "trigger": "Lần đổi plan hoặc gỡ app kế tiếp",
+      "condition": "Không có webhook thay đổi subscription",
+      "kb_refs": [
+        "daily-usage-charge-and-charge-status#KB-044",
+        "daily-usage-charge-and-charge-status#KB-066"
+      ]
+    }
+  ],
+  "confirmed_rules": [
+    {
+      "rule": "Shopify là bên tính tiền usage của merchant; usage record (cùng dòng subscription) được Shopify cộng vào hoá đơn kế tiếp. Usage record / usage charge là dòng phí phát sinh gửi lên Shopify.",
+      "kb_refs": [
+        "daily-usage-charge-and-charge-status#KB-001",
+        "daily-usage-charge-and-charge-status#KB-008",
+        "daily-usage-charge-and-charge-status#KB-009"
+      ]
+    },
+    {
+      "rule": "Một job chạy mỗi ngày một lần lúc nửa đêm (00:00) gom phí các box vượt hạn mức thành một Shopify usage charge và gửi qua Shopify.",
+      "kb_refs": [
+        "daily-usage-charge-and-charge-status#KB-002",
+        "daily-usage-charge-and-charge-status#KB-019"
+      ]
+    },
+    {
+      "rule": "Job chỉ xử lý shop thoả cả bốn điều kiện: plan Paid, charge subscription Active, không đang trial, có dòng phí \"chưa gửi\" tạo trong 1 tháng gần nhất; usage cũ hơn một tháng không bao giờ được tính phí.",
+      "kb_refs": [
+        "daily-usage-charge-and-charge-status#KB-021",
+        "daily-usage-charge-and-charge-status#KB-022",
+        "daily-usage-charge-and-charge-status#KB-023",
+        "daily-usage-charge-and-charge-status#KB-024"
+      ]
+    },
+    {
+      "rule": "Khi đơn ở trạng thái paid, hệ thống tạo dòng phí usage ở trạng thái \"chưa gửi\"; Usage liên kết tới Charge khi đã được gom.",
+      "kb_refs": [
+        "daily-usage-charge-and-charge-status#KB-017",
+        "daily-usage-charge-and-charge-status#KB-018",
+        "daily-usage-charge-and-charge-status#KB-004"
+      ]
+    },
+    {
+      "rule": "Mỗi lần chạy, với mỗi shop trả phí, job cộng mọi dòng phí chưa gửi thành một số tiền và gửi một usage record duy nhất; mỗi shop có tối đa một dòng usage mỗi ngày trên Shopify.",
+      "kb_refs": [
+        "daily-usage-charge-and-charge-status#KB-025",
+        "daily-usage-charge-and-charge-status#KB-028"
+      ]
+    },
+    {
+      "rule": "Usage record nhỏ nhất gửi Shopify là $0.005; tổng phí gom được dưới $0.005 thì job không gọi Shopify, chỉ đánh dấu dòng phí là xong, và Usage charge vẫn được đánh dấu Accepted.",
+      "kb_refs": [
+        "daily-usage-charge-and-charge-status#KB-013",
+        "daily-usage-charge-and-charge-status#KB-014",
+        "daily-usage-charge-and-charge-status#KB-040"
+      ]
+    },
+    {
+      "rule": "Job tạo Usage charge ở trạng thái Pending trước khi gọi Shopify và đánh dấu các dòng phí usage là \"completed\" ngay khi tạo Usage charge, trước khi gọi Shopify.",
+      "kb_refs": [
+        "daily-usage-charge-and-charge-status#KB-046",
+        "daily-usage-charge-and-charge-status#KB-047"
+      ]
+    },
+    {
+      "rule": "Trạng thái Usage charge: Pending (vừa tạo, Shopify chưa trả lời), Accepted (Shopify đã chấp nhận), Declined (Shopify trả về rỗng), Failed (lỗi khi gọi Shopify: mạng, vượt cap, token chết, shop frozen).",
+      "kb_refs": [
+        "daily-usage-charge-and-charge-status#KB-036",
+        "daily-usage-charge-and-charge-status#KB-039",
+        "daily-usage-charge-and-charge-status#KB-041",
+        "daily-usage-charge-and-charge-status#KB-042",
+        "daily-usage-charge-and-charge-status#KB-081"
+      ]
+    },
+    {
+      "rule": "Khi Shopify từ chối usage record, Usage charge chuyển sang Declined hoặc Failed; Shopify từ chối khi tổng phí usage đã chạm capped amount của plan hoặc khi subscription không còn hoạt động.",
+      "kb_refs": [
+        "daily-usage-charge-and-charge-status#KB-048",
+        "daily-usage-charge-and-charge-status#KB-012",
+        "daily-usage-charge-and-charge-status#KB-082"
+      ]
+    },
+    {
+      "rule": "Khi Shopify từ chối usage record, log chỉ được ghi ở mức debug.",
+      "kb_refs": [
+        "daily-usage-charge-and-charge-status#KB-051"
+      ]
+    },
+    {
+      "rule": "Khi lỗi lúc tính phí usage, Mysbox thu thiếu, không thu dư.",
+      "kb_refs": [
+        "daily-usage-charge-and-charge-status#KB-078"
+      ]
+    },
+    {
+      "rule": "Charge là bản ghi tương ứng một subscription hoặc một usage record trên Shopify: Recurring charge đại diện subscription và giữ bản chép quota và quy tắc phí; mỗi Usage charge tương ứng một usage record. Một Plan có nhiều Charge.",
+      "kb_refs": [
+        "daily-usage-charge-and-charge-status#KB-003",
+        "daily-usage-charge-and-charge-status#KB-035",
+        "daily-usage-charge-and-charge-status#KB-005"
+      ]
+    },
+    {
+      "rule": "Recurring charge Active nghĩa là subscription đang sống; chuyển Cancelled khi merchant huỷ, khi bị thay bằng plan khác, hoặc khi gỡ app.",
+      "kb_refs": [
+        "daily-usage-charge-and-charge-status#KB-038",
+        "daily-usage-charge-and-charge-status#KB-043"
+      ]
+    },
+    {
+      "rule": "Mysbox không nhận webhook nào báo thay đổi subscription từ Shopify; trạng thái subscription lệch được sửa ở lần đổi plan hoặc gỡ app kế tiếp.",
+      "kb_refs": [
+        "daily-usage-charge-and-charge-status#KB-044",
+        "daily-usage-charge-and-charge-status#KB-066"
+      ]
+    },
+    {
+      "rule": "Sau khi Shopify tự huỷ subscription vì không trả tiền, shop vẫn hiện plan Paid trong Mysbox, Mysbox vẫn thử billing phí vượt, bị Shopify từ chối và charge ở trạng thái Failed.",
+      "kb_refs": [
+        "daily-usage-charge-and-charge-status#KB-063",
+        "daily-usage-charge-and-charge-status#KB-064"
+      ],
+      "note": "Mô tả hệ quả của known defect (không có webhook subscription); dùng làm mô tả hành vi hiện tại, không coi là hành vi mong muốn khi known defect được sửa."
+    },
+    {
+      "rule": "Kỳ hoá đơn Shopify neo vào ngày merchant duyệt subscription và dùng để thu tiền plan và các dòng usage.",
+      "kb_refs": [
+        "daily-usage-charge-and-charge-status#KB-015",
+        "daily-usage-charge-and-charge-status#KB-016"
+      ]
+    },
+    {
+      "rule": "Ở Shopify admin > Settings > Billing, merchant thấy dòng subscription theo giá plan (đã trừ billing discount nếu có) và các dòng usage kèm mô tả do job gửi lên; trang duyệt subscription có dòng phí usage kèm Capped Amount và Terms.",
+      "kb_refs": [
+        "daily-usage-charge-and-charge-status#KB-029",
+        "daily-usage-charge-and-charge-status#KB-030",
+        "daily-usage-charge-and-charge-status#KB-031"
+      ]
+    },
+    {
+      "rule": "Trường hợp bình thường của shop trả phí là một dòng subscription cộng một hoặc nhiều dòng usage, không phải tính trùng.",
+      "kb_refs": [
+        "daily-usage-charge-and-charge-status#KB-076"
+      ]
+    },
+    {
+      "rule": "Admin chạy tay tạo phí usage cho một shop bằng lệnh usage-charges:create --id=<id shop>; chạy lại an toàn vì phần đã tính phí bị loại ra.",
+      "kb_refs": [
+        "daily-usage-charge-and-charge-status#KB-032",
+        "daily-usage-charge-and-charge-status#KB-073"
+      ]
+    },
+    {
+      "rule": "Admin xem Charge ở Payment > Charges; màn chỉ để xem: không ai tạo, sửa hay xoá được Charge trên panel và không có nút sửa charge; Mysbox không hoàn tiền hay sửa được charge.",
+      "kb_refs": [
+        "daily-usage-charge-and-charge-status#KB-033",
+        "daily-usage-charge-and-charge-status#KB-034",
+        "daily-usage-charge-and-charge-status#KB-077"
+      ]
+    },
+    {
+      "rule": "Admin/support xem màn Charges để dò phí thiếu; tab Charges cho tổng usage đã tính (khác tổng phí phát sinh ở thẻ \"Usage Charge\").",
+      "kb_refs": [
+        "daily-usage-charge-and-charge-status#KB-007",
+        "daily-usage-charge-and-charge-status#KB-086"
+      ]
+    },
+    {
+      "rule": "Màn Charges có tab All / Recurring / One Time / Usage; danh sách hiển thị cột id, shop id, charge id, cờ test, status, giá, tiền tệ, mô tả, charge tham chiếu, ngày; trang Shop có tab Charges đã lọc sẵn theo shop.",
+      "kb_refs": [
+        "daily-usage-charge-and-charge-status#KB-069",
+        "daily-usage-charge-and-charge-status#KB-070",
+        "daily-usage-charge-and-charge-status#KB-071"
+      ]
+    },
+    {
+      "rule": "Khi Shopify plan của shop thành frozen, Mysbox chỉ lưu tên plan, không gỡ box và không đổi plan Mysbox của shop.",
+      "kb_refs": [
+        "daily-usage-charge-and-charge-status#KB-056",
+        "daily-usage-charge-and-charge-status#KB-057",
+        "daily-usage-charge-and-charge-status#KB-058"
+      ]
+    }
+  ],
+  "observed_behavior": [
+    {
+      "behavior": "Usage charge bị kẹt ở Pending nếu process chết trước khi Shopify trả lời; không nêu cơ chế timeout hay khôi phục.",
+      "status": "KNOWN_DEFECT",
+      "note": "Known defect — không dùng làm oracle.",
+      "kb_refs": [
+        "daily-usage-charge-and-charge-status#KB-037"
+      ]
+    },
+    {
+      "behavior": "Sau khi Shopify từ chối usage record, job đêm sau không nhặt lại dòng phí vì đã ở completed; không có lệnh retry hay cảnh báo — Mysbox mất khoản phí đó.",
+      "status": "KNOWN_DEFECT",
+      "note": "Known defect — không dùng làm oracle.",
+      "kb_refs": [
+        "daily-usage-charge-and-charge-status#KB-049",
+        "daily-usage-charge-and-charge-status#KB-050"
+      ]
+    },
+    {
+      "behavior": "Do không có webhook thay đổi subscription, trạng thái subscription trong Mysbox có thể lệch Shopify: Shopify tự huỷ vì không trả tiền thì Mysbox không được báo; merchant huỷ trong Shopify admin thì Mysbox vẫn có thể hiện Active.",
+      "status": "KNOWN_DEFECT",
+      "note": "Known defect — không dùng làm oracle.",
+      "kb_refs": [
+        "daily-usage-charge-and-charge-status#KB-045",
+        "daily-usage-charge-and-charge-status#KB-062",
+        "daily-usage-charge-and-charge-status#KB-065"
+      ]
+    },
+    {
+      "behavior": "Mysbox không kiểm tra capped amount trước khi gửi khoản usage sang Shopify, nên khoản vượt cap bị Shopify từ chối.",
+      "status": "KNOWN_DEFECT",
+      "note": "Known defect — không dùng làm oracle.",
+      "kb_refs": [
+        "daily-usage-charge-and-charge-status#KB-083"
+      ]
+    }
+  ],
+  "observed_validations": [],
+  "permissions": [
+    {
+      "permission": "Màn Charges chỉ đọc với mọi role: không tạo, sửa, xoá Charge.",
+      "role": "admin-staff",
+      "kb_refs": [
+        "daily-usage-charge-and-charge-status#KB-034"
+      ]
+    },
+    {
+      "permission": "Chạy lệnh usage-charges:create là việc của engineer.",
+      "role": "admin-staff",
+      "kb_refs": [
+        "daily-usage-charge-and-charge-status#KB-032",
+        "daily-usage-charge-and-charge-status#KB-073"
+      ]
+    }
+  ],
+  "surface_mapping": {
+    "portal": [],
+    "admin_panel": [
+      {
+        "item": "Payment > Charges (tab, cột, chỉ đọc); Shop > tab Charges",
+        "kb_refs": [
+          "daily-usage-charge-and-charge-status#KB-033",
+          "daily-usage-charge-and-charge-status#KB-034",
+          "daily-usage-charge-and-charge-status#KB-069",
+          "daily-usage-charge-and-charge-status#KB-070",
+          "daily-usage-charge-and-charge-status#KB-071"
+        ]
+      }
+    ],
+    "shopify_admin": [
+      {
+        "item": "Settings > Billing: dòng subscription và dòng usage; trang duyệt subscription có Capped Amount và Terms",
+        "kb_refs": [
+          "daily-usage-charge-and-charge-status#KB-028",
+          "daily-usage-charge-and-charge-status#KB-029",
+          "daily-usage-charge-and-charge-status#KB-030",
+          "daily-usage-charge-and-charge-status#KB-031"
+        ]
+      }
+    ],
+    "storefront": [],
+    "api": [
+      {
+        "item": "Gửi usage record lên Shopify (một record mỗi shop mỗi lần chạy) và nhận phản hồi chấp nhận / rỗng / lỗi",
+        "kb_refs": [
+          "daily-usage-charge-and-charge-status#KB-025",
+          "daily-usage-charge-and-charge-status#KB-041",
+          "daily-usage-charge-and-charge-status#KB-048"
+        ]
+      },
+      {
+        "item": "Webhook cập nhật shop mang Shopify plan frozen; không có webhook thay đổi subscription",
+        "kb_refs": [
+          "daily-usage-charge-and-charge-status#KB-056",
+          "daily-usage-charge-and-charge-status#KB-044"
+        ]
+      }
+    ],
+    "data": [
+      {
+        "item": "Charge (Recurring / Usage, trạng thái), dòng phí usage (chưa gửi / completed), quan hệ Plan 1-N Charge, Usage liên kết Charge",
+        "kb_refs": [
+          "daily-usage-charge-and-charge-status#KB-003",
+          "daily-usage-charge-and-charge-status#KB-004",
+          "daily-usage-charge-and-charge-status#KB-005",
+          "daily-usage-charge-and-charge-status#KB-018",
+          "daily-usage-charge-and-charge-status#KB-035"
+        ]
+      }
+    ],
+    "code": [
+      {
+        "item": "Job tạo phí usage theo lịch 00:00; log từ chối mức debug; lệnh usage-charges:create",
+        "kb_refs": [
+          "daily-usage-charge-and-charge-status#KB-019",
+          "daily-usage-charge-and-charge-status#KB-051",
+          "daily-usage-charge-and-charge-status#KB-032"
+        ]
+      }
+    ]
+  },
+  "dependencies": [
+    {
+      "depends_on": "usage-fee-pricing",
+      "reason": "Dòng phí usage và số tiền từng dòng là đầu vào của job.",
+      "kb_refs": [
+        "daily-usage-charge-and-charge-status#KB-017",
+        "daily-usage-charge-and-charge-status#KB-025"
+      ]
+    },
+    {
+      "depends_on": "background-jobs-and-queue-monitoring",
+      "reason": "Job chạy theo lịch nửa đêm và lệnh vận hành chạy tay.",
+      "kb_refs": [
+        "daily-usage-charge-and-charge-status#KB-019",
+        "daily-usage-charge-and-charge-status#KB-073"
+      ]
+    },
+    {
+      "depends_on": "plan-upgrade-downgrade-cancel",
+      "reason": "Recurring charge Cancelled khi huỷ/đổi plan; trạng thái lệch được sửa ở lần đổi plan kế tiếp.",
+      "kb_refs": [
+        "daily-usage-charge-and-charge-status#KB-043",
+        "daily-usage-charge-and-charge-status#KB-066"
+      ]
+    },
+    {
+      "depends_on": "billing-discount-codes",
+      "reason": "Dòng subscription trên Shopify đã trừ billing discount.",
+      "kb_refs": [
+        "daily-usage-charge-and-charge-status#KB-029"
+      ]
+    }
+  ],
+  "risks": [
+    {
+      "risk": "Dòng phí được đánh dấu completed trước khi gọi Shopify: mọi từ chối/lỗi đều làm mất phí vĩnh viễn, không retry, không cảnh báo (log chỉ debug).",
+      "kb_refs": [
+        "daily-usage-charge-and-charge-status#KB-047",
+        "daily-usage-charge-and-charge-status#KB-049",
+        "daily-usage-charge-and-charge-status#KB-050",
+        "daily-usage-charge-and-charge-status#KB-051"
+      ]
+    },
+    {
+      "risk": "Không kiểm capped amount trước khi gửi: shop nhiều box vượt dễ bị DECLINED và thất thu.",
+      "kb_refs": [
+        "daily-usage-charge-and-charge-status#KB-083",
+        "daily-usage-charge-and-charge-status#KB-012"
+      ]
+    },
+    {
+      "risk": "Trạng thái subscription lệch Shopify khiến job vẫn thử billing shop đã bị huỷ.",
+      "kb_refs": [
+        "daily-usage-charge-and-charge-status#KB-045",
+        "daily-usage-charge-and-charge-status#KB-064"
+      ]
+    },
+    {
+      "risk": "Usage cũ hơn một tháng không bao giờ được tính phí: job lỡ nhiều ngày gây thất thu.",
+      "kb_refs": [
+        "daily-usage-charge-and-charge-status#KB-024"
+      ]
+    }
+  ],
+  "limitations": [
+    {
+      "limitation": "Các ví dụ minh hoạ (job nửa đêm gửi $1.25 / gom $7.50, mẫu mô tả \"Usage fee for <n> orders (#.. to #..)\", từ chối do chạm Capped Amount, Mysbox mất khoản bị từ chối, lọc Declined/Failed, shop frozen và billing lỗi tới khi kết nối lại, sau trial phần vượt tính hằng đêm, box bán 00:05 chờ lần chạy kế, vượt cap thì DECLINED, khoản bị từ chối không tự thử lại, subscription và usage cùng ngày) không phải đặc tả định dạng hay cấu hình production.",
+      "kb_refs": [
+        "daily-usage-charge-and-charge-status#KB-010",
+        "daily-usage-charge-and-charge-status#KB-011",
+        "daily-usage-charge-and-charge-status#KB-026",
+        "daily-usage-charge-and-charge-status#KB-027",
+        "daily-usage-charge-and-charge-status#KB-052",
+        "daily-usage-charge-and-charge-status#KB-053",
+        "daily-usage-charge-and-charge-status#KB-054",
+        "daily-usage-charge-and-charge-status#KB-055",
+        "daily-usage-charge-and-charge-status#KB-061",
+        "daily-usage-charge-and-charge-status#KB-067",
+        "daily-usage-charge-and-charge-status#KB-072",
+        "daily-usage-charge-and-charge-status#KB-075",
+        "daily-usage-charge-and-charge-status#KB-080",
+        "daily-usage-charge-and-charge-status#KB-084",
+        "daily-usage-charge-and-charge-status#KB-085"
+      ]
+    }
+  ],
+  "freshness": {
+    "observed_at": null
+  },
+  "unknown_areas": [
+    {
+      "question": "\"Nửa đêm giờ server\" của job tạo phí usage là múi giờ nào trên production, và ai/nơi nào chạy scheduler?",
+      "why_it_matters": "Quyết định đơn paid sát nửa đêm rơi vào lần chạy nào và ranh giới ngày khi kiểm phí.",
+      "kb_refs": [
+        "daily-usage-charge-and-charge-status#KB-020",
+        "daily-usage-charge-and-charge-status#KB-019",
+        "_product-level#KB-PL-028"
+      ],
+      "oq_id": "OQ-plans-billing-098"
+    },
+    {
+      "question": "\"1 tháng gần nhất\" là tháng lịch hay 30 ngày, tính từ thời điểm chạy job, có bao gồm biên không; dòng phí chưa gửi cũ hơn 1 tháng bị bỏ vĩnh viễn, đổi trạng thái hay hiện ở đâu?",
+      "why_it_matters": "Boundary cho dòng phí sát mốc và rủi ro mất phí âm thầm khi job lỡ nhiều ngày.",
+      "kb_refs": [
+        "daily-usage-charge-and-charge-status#KB-024"
+      ],
+      "oq_id": "OQ-plans-billing-037"
+    },
+    {
+      "question": "Dòng phí phát sinh khi shop đang trial có được gửi sau khi trial kết thúc không?",
+      "why_it_matters": "Điều kiện \"không đang trial\" kết hợp cửa sổ 1 tháng quyết định phí trong trial có bị thu không.",
+      "kb_refs": [
+        "daily-usage-charge-and-charge-status#KB-023",
+        "daily-usage-charge-and-charge-status#KB-024"
+      ],
+      "oq_id": "OQ-plans-billing-037"
+    },
+    {
+      "question": "Charge kẹt Pending có cơ chế timeout hay khôi phục không, và các dòng phí liên quan đã completed chưa?",
+      "why_it_matters": "Xác định phạm vi mất phí khi process chết.",
+      "kb_refs": [
+        "daily-usage-charge-and-charge-status#KB-037",
+        "daily-usage-charge-and-charge-status#KB-047"
+      ],
+      "oq_id": "OQ-plans-billing-033"
+    },
+    {
+      "question": "Chạy tay usage-charges:create có nhặt lại dòng phí đã completed của charge Declined/Failed không?",
+      "why_it_matters": "Tài liệu nói không có retry nhưng có lệnh chạy tay; quan hệ hai việc chưa rõ.",
+      "kb_refs": [
+        "daily-usage-charge-and-charge-status#KB-032",
+        "daily-usage-charge-and-charge-status#KB-049",
+        "daily-usage-charge-and-charge-status#KB-073"
+      ],
+      "oq_id": "OQ-plans-billing-034"
+    },
+    {
+      "question": "Ngưỡng $0.005 tính theo tiền tệ nào và số tiền usage được làm tròn ra sao?",
+      "why_it_matters": "Ngưỡng đánh dấu Accepted không gọi Shopify là boundary cần test chính xác.",
+      "kb_refs": [
+        "daily-usage-charge-and-charge-status#KB-013",
+        "daily-usage-charge-and-charge-status#KB-014",
+        "daily-usage-charge-and-charge-status#KB-040"
+      ],
+      "oq_id": "OQ-plans-billing-038"
+    },
+    {
+      "question": "Giá trị Capped Amount / Terms của từng plan; khi tổng trong ngày vượt phần cap còn lại thì gửi một phần hay bị từ chối cả; khoản bị từ chối có được cộng dồn/gửi lại không?",
+      "why_it_matters": "Ca biên vượt cap dẫn tới Declined/Failed; cần giá trị để dựng ca.",
+      "kb_refs": [
+        "daily-usage-charge-and-charge-status#KB-012",
+        "daily-usage-charge-and-charge-status#KB-083"
+      ],
+      "oq_id": "OQ-plans-billing-036"
+    },
+    {
+      "question": "Charge có hai loại (Recurring, Usage) hay ba loại (thêm One-time), và One-time phát sinh khi nào?",
+      "why_it_matters": "Tài liệu mâu thuẫn; màn Charges có tab One Time nhưng không có mô tả hành vi.",
+      "kb_refs": [
+        "daily-usage-charge-and-charge-status#KB-006",
+        "daily-usage-charge-and-charge-status#KB-074",
+        "daily-usage-charge-and-charge-status#KB-069"
+      ],
+      "oq_id": "OQ-plans-billing-006"
+    },
+    {
+      "question": "Danh sách đầy đủ trạng thái của Recurring charge (ngoài Active / Pending / Declined / Cancelled), ví dụ khi Shopify đóng băng shop?",
+      "why_it_matters": "Cần enum đầy đủ để kiểm hiển thị và logic kích hoạt.",
+      "kb_refs": [
+        "daily-usage-charge-and-charge-status#KB-038",
+        "daily-usage-charge-and-charge-status#KB-043"
+      ],
+      "oq_id": "OQ-plans-billing-039"
+    },
+    {
+      "question": "\"Merchant huỷ\" trong định nghĩa Cancelled là huỷ trong app Mysbox hay cả trong Shopify admin?",
+      "why_it_matters": "Huỷ trong Shopify admin thì Mysbox vẫn có thể hiện Active; cần phân biệt để test chuyển trạng thái.",
+      "kb_refs": [
+        "daily-usage-charge-and-charge-status#KB-043",
+        "daily-usage-charge-and-charge-status#KB-065"
+      ],
+      "oq_id": "OQ-plans-billing-039"
+    },
+    {
+      "question": "Những luồng nào của Mysbox chạm tới shop làm trạng thái subscription được cập nhật lại?",
+      "why_it_matters": "Quyết định điều kiện tái hiện và kiểm hạn chế không có webhook subscription.",
+      "kb_refs": [
+        "daily-usage-charge-and-charge-status#KB-045",
+        "daily-usage-charge-and-charge-status#KB-066"
+      ],
+      "oq_id": "OQ-plans-billing-035"
+    },
+    {
+      "question": "Shop bị Shopify đóng băng có thực sự không phát sinh phí usage, và nếu còn phí chưa gửi thì Shopify trả phản hồi gì (Failed hay Declined)?",
+      "why_it_matters": "Tài liệu chỉ suy đoán; quyết định trạng thái charge mong đợi.",
+      "kb_refs": [
+        "daily-usage-charge-and-charge-status#KB-059",
+        "daily-usage-charge-and-charge-status#KB-060"
+      ],
+      "oq_id": "OQ-plans-billing-099"
+    },
+    {
+      "question": "Dòng phí chưa gửi tạo trong thời gian ân hạn sau khi huỷ plan có được job nhặt khi merchant đăng ký lại không?",
+      "why_it_matters": "Tài liệu chỉ có suy luận.",
+      "kb_refs": [
+        "daily-usage-charge-and-charge-status#KB-068"
+      ],
+      "oq_id": "OQ-plans-billing-100"
+    },
+    {
+      "question": "Có trường hợp nào Mysbox tính trùng usage (ví dụ chạy tay lệnh tạo phí song song với job) không?",
+      "why_it_matters": "Tài liệu chỉ nói \"gần như không xảy ra\".",
+      "kb_refs": [
+        "daily-usage-charge-and-charge-status#KB-079",
+        "daily-usage-charge-and-charge-status#KB-073"
+      ],
+      "oq_id": "OQ-plans-billing-101"
+    },
+    {
+      "question": "Shop ở gói Free có sinh Charge không, và Recurring charge có tồn tại với gói giá 0 không?",
+      "why_it_matters": "Không có quy tắc tổng quát; ảnh hưởng dữ liệu kỳ vọng trên màn Charges.",
+      "kb_refs": [
+        "daily-usage-charge-and-charge-status#KB-021",
+        "daily-usage-charge-and-charge-status#KB-005"
+      ],
+      "oq_id": "OQ-plans-billing-040"
+    },
+    {
+      "question": "Màn Payment > Charges có những bộ lọc và màn chi tiết nào (ví dụ lọc theo Declined/Failed)?",
+      "why_it_matters": "Chỉ có cột và tab; bộ lọc chỉ được ngụ ý trong ví dụ.",
+      "kb_refs": [
+        "daily-usage-charge-and-charge-status#KB-070",
+        "daily-usage-charge-and-charge-status#KB-054"
+      ],
+      "oq_id": "OQ-plans-billing-041"
+    }
+  ],
+  "last_updated": {
+    "date": "2026-10-16",
+    "ccr_ref": "bootstrap"
+  },
+  "coverage_matrix": [
+    {
+      "feature_id": "FEAT-04-daily-usage-charge-and-charge-status",
+      "layer": "code",
+      "role": "system",
+      "state": "plan-paid-with-unsent-usage",
+      "environment": "documented",
+      "covered": true
+    },
+    {
+      "feature_id": "FEAT-04-daily-usage-charge-and-charge-status",
+      "layer": "code",
+      "role": "system",
+      "state": "trial",
+      "environment": "documented",
+      "covered": true
+    },
+    {
+      "feature_id": "FEAT-04-daily-usage-charge-and-charge-status",
+      "layer": "code",
+      "role": "system",
+      "state": "below-0.005",
+      "environment": "documented",
+      "covered": true
+    },
+    {
+      "feature_id": "FEAT-04-daily-usage-charge-and-charge-status",
+      "layer": "api",
+      "role": "system",
+      "state": "shopify-accepted",
+      "environment": "documented",
+      "covered": true
+    },
+    {
+      "feature_id": "FEAT-04-daily-usage-charge-and-charge-status",
+      "layer": "api",
+      "role": "system",
+      "state": "shopify-declined-or-failed",
+      "environment": "documented",
+      "covered": true
+    },
+    {
+      "feature_id": "FEAT-04-daily-usage-charge-and-charge-status",
+      "layer": "api",
+      "role": "system",
+      "state": "shop-frozen",
+      "environment": "documented",
+      "covered": true
+    },
+    {
+      "feature_id": "FEAT-04-daily-usage-charge-and-charge-status",
+      "layer": "api",
+      "role": "system",
+      "state": "subscription-cancelled-in-shopify",
+      "environment": "documented",
+      "covered": true
+    },
+    {
+      "feature_id": "FEAT-04-daily-usage-charge-and-charge-status",
+      "layer": "admin_panel",
+      "role": "admin-staff",
+      "state": "any",
+      "environment": "documented",
+      "covered": true
+    },
+    {
+      "feature_id": "FEAT-04-daily-usage-charge-and-charge-status",
+      "layer": "shopify_admin",
+      "role": "merchant",
+      "state": "plan-paid",
+      "environment": "documented",
+      "covered": true
+    },
+    {
+      "feature_id": "FEAT-04-daily-usage-charge-and-charge-status",
+      "layer": "code",
+      "role": "system",
+      "state": "process-crash-pending",
+      "environment": "documented",
+      "covered": true
+    },
+    {
+      "feature_id": "FEAT-04-daily-usage-charge-and-charge-status",
+      "layer": "data",
+      "role": "system",
+      "state": "plan-free",
+      "environment": "documented",
+      "covered": false
+    },
+    {
+      "feature_id": "FEAT-04-daily-usage-charge-and-charge-status",
+      "layer": "portal",
+      "role": "merchant",
+      "state": "any",
+      "environment": "documented",
+      "covered": false
+    }
+  ],
+  "profile_conflicts": [
+    {
+      "conflict_group": "CONF-plans-billing-09",
+      "summary": "Charge có hai loại (Recurring, Usage) hay ba loại (thêm One-time).",
+      "kb_refs": [
+        "daily-usage-charge-and-charge-status#KB-006",
+        "daily-usage-charge-and-charge-status#KB-074"
+      ]
+    }
+  ],
+  "profile_relationships": [
+    {
+      "from": "daily-usage-charge-and-charge-status",
+      "to": "usage-fee-pricing",
+      "relation": "depends_on",
+      "kb_refs": [
+        "daily-usage-charge-and-charge-status#KB-017",
+        "usage-fee-pricing#KB-010"
+      ]
+    },
+    {
+      "from": "daily-usage-charge-and-charge-status",
+      "to": "plan-capacity-and-cycle",
+      "relation": "related",
+      "note": "Kỳ hoá đơn Shopify neo ngày duyệt subscription, khác chu kỳ quota neo ngày cài app.",
+      "kb_refs": [
+        "daily-usage-charge-and-charge-status#KB-015",
+        "plan-capacity-and-cycle#KB-016"
+      ]
+    },
+    {
+      "from": "daily-usage-charge-and-charge-status",
+      "to": "plan-upgrade-downgrade-cancel",
+      "relation": "depends_on",
+      "kb_refs": [
+        "daily-usage-charge-and-charge-status#KB-043",
+        "daily-usage-charge-and-charge-status#KB-066"
+      ]
+    },
+    {
+      "from": "daily-usage-charge-and-charge-status",
+      "to": "background-jobs-and-queue-monitoring",
+      "relation": "depends_on",
+      "kb_refs": [
+        "daily-usage-charge-and-charge-status#KB-019",
+        "daily-usage-charge-and-charge-status#KB-073"
+      ]
+    }
+  ]
+}

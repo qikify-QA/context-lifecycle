@@ -1,0 +1,917 @@
+{
+  "feature_id": "FEAT-04-daily-usage-charge-and-charge-status",
+  "feature_key": "daily-usage-charge-and-charge-status",
+  "object_id": "plans-billing",
+  "checklist_version": "2",
+  "checks": [
+    {
+      "check_id": "CHK-001",
+      "dimension": "CORE",
+      "layer": "code",
+      "title": "Job nửa đêm gom mọi dòng phí chưa gửi của shop Paid thành một usage record duy nhất; dòng phí chuyển completed, Usage charge Accepted, Usage liên kết Charge",
+      "applicability": {
+        "role": "system",
+        "state": "plan Paid, subscription Active, hết trial, có dòng phí chưa gửi",
+        "environment": "documented",
+        "surface_or_device": "admin panel Charges + Shopify Billing"
+      },
+      "precondition": "Shop plan Paid, subscription Active, không trong trial, quota đã hết, phí còn xa Capped Amount. Trong cùng một ngày bán 3 đơn thật có box vượt quota (tổng phí S ≥ 0,01 USD).",
+      "steps": [
+        "Trước nửa đêm, xem các dòng phí usage của 3 đơn ở admin panel (trạng thái chưa gửi).",
+        "Sau lần chạy job lúc 00:00 giờ server, mở admin panel Payment > Charges, tab Usage, lọc theo shop.",
+        "Xem lại trạng thái các dòng phí và liên kết tới Charge.",
+        "Mở Shopify admin > Settings > Billing của shop."
+      ],
+      "observation_point": "Usage charge mới (số lượng, số tiền, status); trạng thái dòng phí; dòng usage trên Shopify Billing",
+      "expected_result": "Trước job: 3 dòng phí ở trạng thái chưa gửi. Sau job: đúng 1 Usage charge mới cho shop với số tiền = S, status Accepted; 3 dòng phí chuyển completed và liên kết tới Usage charge đó; Shopify Billing có đúng 1 dòng usage mới cho ngày đó.",
+      "oracle": {
+        "kb_ids": [
+          "daily-usage-charge-and-charge-status#KB-002",
+          "daily-usage-charge-and-charge-status#KB-004",
+          "daily-usage-charge-and-charge-status#KB-017",
+          "daily-usage-charge-and-charge-status#KB-018",
+          "daily-usage-charge-and-charge-status#KB-019",
+          "daily-usage-charge-and-charge-status#KB-025",
+          "daily-usage-charge-and-charge-status#KB-028",
+          "daily-usage-charge-and-charge-status#KB-036",
+          "daily-usage-charge-and-charge-status#KB-039",
+          "daily-usage-charge-and-charge-status#KB-047"
+        ],
+        "oracle_strength": "STRONG"
+      },
+      "status": "NEEDS_CONFIRMATION",
+      "open_question_draft": "Cần test case đã chạy PASS xác nhận job nửa đêm gom mọi dòng phí chưa gửi của shop thành một usage record duy nhất, đánh dấu completed và Usage charge Accepted; \"nửa đêm giờ server\" là múi giờ nào trên production?",
+      "related_kb_ids": [
+        "daily-usage-charge-and-charge-status#KB-001",
+        "daily-usage-charge-and-charge-status#KB-003",
+        "daily-usage-charge-and-charge-status#KB-008",
+        "daily-usage-charge-and-charge-status#KB-020",
+        "daily-usage-charge-and-charge-status#KB-026",
+        "daily-usage-charge-and-charge-status#KB-027"
+      ],
+      "regression_watch_kb_ids": [],
+      "risk_refs": [
+        "Thu thiếu/thu dư phí usage"
+      ],
+      "priority": "P1",
+      "automation_suitability": "HYBRID",
+      "oq_id": "OQ-plans-billing-102"
+    },
+    {
+      "check_id": "CHK-002",
+      "dimension": "NEGATIVE",
+      "layer": "code",
+      "title": "Job bỏ qua shop không thoả đủ bốn điều kiện: plan Free, subscription không Active, đang trial, không có dòng phí chưa gửi",
+      "applicability": {
+        "role": "system",
+        "state": "bốn shop, mỗi shop thiếu đúng một điều kiện",
+        "environment": "documented",
+        "surface_or_device": "admin panel Charges"
+      },
+      "precondition": "Bốn shop test: (a) plan Free có đơn bán; (b) plan Paid có dòng phí chưa gửi nhưng subscription không Active; (c) plan Paid đang trial có đơn bán; (d) plan Paid Active, hết trial, không có dòng phí chưa gửi.",
+      "steps": [
+        "Chờ qua một lần chạy job nửa đêm.",
+        "Ở admin panel Payment > Charges tab Usage, lọc theo từng shop."
+      ],
+      "observation_point": "Usage charge mới của từng shop",
+      "expected_result": "Không shop nào trong bốn shop có Usage charge mới từ lần chạy đó.",
+      "oracle": {
+        "kb_ids": [
+          "daily-usage-charge-and-charge-status#KB-021",
+          "daily-usage-charge-and-charge-status#KB-022",
+          "daily-usage-charge-and-charge-status#KB-023"
+        ],
+        "oracle_strength": "STRONG"
+      },
+      "status": "NEEDS_CONFIRMATION",
+      "open_question_draft": "Cần test case đã chạy PASS xác nhận job chỉ xử lý shop thoả cả bốn điều kiện (Paid, subscription Active, không trial, có dòng phí chưa gửi); shop Free có sinh Charge nào không?",
+      "related_kb_ids": [
+        "daily-usage-charge-and-charge-status#KB-024",
+        "daily-usage-charge-and-charge-status#KB-087"
+      ],
+      "regression_watch_kb_ids": [],
+      "risk_refs": [
+        "Thu thiếu/thu dư phí usage"
+      ],
+      "priority": "P1",
+      "automation_suitability": "HYBRID",
+      "oq_id": "OQ-plans-billing-102"
+    },
+    {
+      "check_id": "CHK-003",
+      "dimension": "BOUNDARY",
+      "layer": "code",
+      "title": "Dòng phí chưa gửi cũ hơn một tháng không bao giờ được tính phí",
+      "applicability": {
+        "role": "system",
+        "state": "plan Paid Active, có dòng phí chưa gửi tạo hơn 45 ngày trước và một dòng tạo hôm qua",
+        "environment": "documented",
+        "surface_or_device": "admin panel Charges"
+      },
+      "precondition": "Shop plan Paid Active, hết trial; có một dòng phí chưa gửi tạo cách đây hơn 45 ngày (phí P_old) và một dòng tạo hôm qua (phí P_new).",
+      "steps": [
+        "Chờ qua lần chạy job nửa đêm kế tiếp (hoặc engineer chạy tay lệnh tạo phí usage cho shop).",
+        "Xem Usage charge mới và trạng thái hai dòng phí."
+      ],
+      "observation_point": "Số tiền Usage charge mới; trạng thái dòng phí cũ",
+      "expected_result": "Usage charge mới chỉ gồm P_new (không gồm P_old); dòng phí cũ không được tính phí.",
+      "oracle": {
+        "kb_ids": [
+          "daily-usage-charge-and-charge-status#KB-024"
+        ],
+        "oracle_strength": "STRONG"
+      },
+      "status": "NEEDS_CONFIRMATION",
+      "open_question_draft": "Cần test case đã chạy PASS xác nhận dòng phí chưa gửi cũ hơn một tháng không được tính phí; \"1 tháng gần nhất\" là tháng lịch hay 30 ngày, tính từ lúc chạy job, có gồm biên không, và dòng bị bỏ có đổi trạng thái hay hiện ở đâu không?",
+      "related_kb_ids": [],
+      "regression_watch_kb_ids": [],
+      "risk_refs": [
+        "Usage cũ hơn một tháng bị bỏ khi job lỡ nhiều ngày"
+      ],
+      "priority": "P1",
+      "automation_suitability": "NOT_SUITABLE",
+      "oq_id": "OQ-plans-billing-102"
+    },
+    {
+      "check_id": "CHK-004",
+      "dimension": "BOUNDARY",
+      "layer": "code",
+      "title": "Tổng phí gom được dưới $0.005: không gọi Shopify, dòng phí đánh dấu xong, Usage charge vẫn Accepted; từ $0.005 trở lên thì gửi",
+      "applicability": {
+        "role": "system",
+        "state": "hai shop Paid Active: tổng phí chưa gửi 0,004 USD và 0,01 USD",
+        "environment": "documented",
+        "surface_or_device": "admin panel Charges + Shopify Billing"
+      },
+      "precondition": "Hai shop plan Paid Active, hết trial, tiền tệ USD: shop A có tổng phí chưa gửi 0,004 USD, shop B có 0,01 USD (dựng bằng plan test phí thấp).",
+      "steps": [
+        "Chờ qua lần chạy job nửa đêm.",
+        "Xem Usage charge mới và dòng phí của từng shop ở admin panel; xem Shopify Billing của từng shop."
+      ],
+      "observation_point": "Status Usage charge; dòng usage trên Shopify Billing",
+      "expected_result": "Shop A: Usage charge Accepted, dòng phí đánh dấu xong, không có dòng usage mới trên Shopify. Shop B: có dòng usage 0,01 USD trên Shopify và Usage charge Accepted.",
+      "oracle": {
+        "kb_ids": [
+          "daily-usage-charge-and-charge-status#KB-013",
+          "daily-usage-charge-and-charge-status#KB-014",
+          "daily-usage-charge-and-charge-status#KB-040"
+        ],
+        "oracle_strength": "STRONG"
+      },
+      "status": "NEEDS_CONFIRMATION",
+      "open_question_draft": "Cần test case đã chạy PASS xác nhận ngưỡng $0.005 (dưới ngưỡng không gửi Shopify nhưng vẫn Accepted); ngưỡng tính theo tiền tệ nào và số tiền usage được làm tròn trước hay sau khi so ngưỡng?",
+      "related_kb_ids": [],
+      "regression_watch_kb_ids": [],
+      "risk_refs": [
+        "Thu thiếu/thu dư phí usage"
+      ],
+      "priority": "P1",
+      "automation_suitability": "HYBRID",
+      "oq_id": "OQ-plans-billing-102"
+    },
+    {
+      "check_id": "CHK-005",
+      "dimension": "BOUNDARY",
+      "layer": "code",
+      "title": "Đơn paid sát nửa đêm rơi vào lần chạy nào — múi giờ job chưa có oracle",
+      "applicability": {
+        "role": "system",
+        "state": "plan Paid Active, đơn vượt quota thanh toán trong khoảng 23:55–00:05 giờ server",
+        "environment": "documented",
+        "surface_or_device": "admin panel Charges"
+      },
+      "precondition": "Shop plan Paid Active, hết trial, quota đã hết.",
+      "steps": [
+        "Bán một đơn vượt quota lúc 23:58 và một đơn lúc 00:02 (giờ server theo giả định của tester).",
+        "Xem Usage charge của hai đêm liên tiếp chứa dòng phí nào."
+      ],
+      "observation_point": "Dòng phí được gom vào Usage charge của từng đêm",
+      "expected_result": "",
+      "oracle": {
+        "kb_ids": [
+          "daily-usage-charge-and-charge-status#KB-020"
+        ],
+        "oracle_strength": "NONE"
+      },
+      "status": "NEEDS_CONFIRMATION",
+      "open_question_draft": "\"Nửa đêm giờ server\" của job tạo phí usage là múi giờ nào trên production, và đơn thanh toán sát nửa đêm được gom vào lần chạy nào?",
+      "related_kb_ids": [
+        "daily-usage-charge-and-charge-status#KB-019",
+        "daily-usage-charge-and-charge-status#KB-075"
+      ],
+      "regression_watch_kb_ids": [],
+      "risk_refs": [
+        "Thu thiếu/thu dư phí usage"
+      ],
+      "priority": "P2",
+      "automation_suitability": "UNKNOWN",
+      "oq_id": "OQ-plans-billing-098"
+    },
+    {
+      "check_id": "CHK-006",
+      "dimension": "INTEGRATION",
+      "layer": "api",
+      "title": "Shopify từ chối usage record (chạm Capped Amount): Usage charge Declined hoặc Failed, dòng phí đã completed trước khi gọi Shopify (thu thiếu, không thu dư), log mức debug",
+      "applicability": {
+        "role": "system",
+        "state": "plan Paid Active với Capped Amount nhỏ, tổng usage trong kỳ đã gần cap",
+        "environment": "documented",
+        "surface_or_device": "admin panel Charges + log ứng dụng + Shopify Billing"
+      },
+      "precondition": "Plan test có Capped Amount nhỏ (ví dụ 1 USD) và terms. Shop đăng ký plan, hết trial, usage trong kỳ đã gần cap. Bán đơn vượt quota sao cho tổng phí ngày vượt phần cap còn lại.",
+      "steps": [
+        "Chờ qua lần chạy job nửa đêm.",
+        "Xem status Usage charge mới và trạng thái các dòng phí liên quan ở admin panel.",
+        "Xem Shopify Billing của shop.",
+        "Engineer kiểm log ứng dụng của lần chạy."
+      ],
+      "observation_point": "Status Usage charge; trạng thái dòng phí; Shopify Billing; mức log",
+      "expected_result": "Usage charge chuyển Declined (Shopify trả rỗng) hoặc Failed (lỗi khi gọi), không Accepted; các dòng phí đã ở completed (được đánh dấu trước khi gọi Shopify); Shopify Billing không có khoản đó (không thu dư); lời từ chối chỉ được ghi log ở mức debug.",
+      "oracle": {
+        "kb_ids": [
+          "daily-usage-charge-and-charge-status#KB-012",
+          "daily-usage-charge-and-charge-status#KB-041",
+          "daily-usage-charge-and-charge-status#KB-042",
+          "daily-usage-charge-and-charge-status#KB-046",
+          "daily-usage-charge-and-charge-status#KB-047",
+          "daily-usage-charge-and-charge-status#KB-048",
+          "daily-usage-charge-and-charge-status#KB-051",
+          "daily-usage-charge-and-charge-status#KB-078",
+          "daily-usage-charge-and-charge-status#KB-081"
+        ],
+        "oracle_strength": "STRONG"
+      },
+      "status": "NEEDS_CONFIRMATION",
+      "open_question_draft": "Cần test case đã chạy PASS xác nhận khi Shopify từ chối usage record (chạm cap hoặc subscription không hoạt động), Usage charge thành Declined/Failed và dòng phí đã completed; khi tổng trong ngày vượt phần cap còn lại thì Shopify từ chối toàn bộ hay nhận một phần?",
+      "related_kb_ids": [
+        "daily-usage-charge-and-charge-status#KB-052",
+        "daily-usage-charge-and-charge-status#KB-082",
+        "daily-usage-charge-and-charge-status#KB-084",
+        "usage-fee-pricing#KB-034"
+      ],
+      "regression_watch_kb_ids": [],
+      "risk_refs": [
+        "Dòng phí completed trước khi gọi Shopify: từ chối làm mất phí vĩnh viễn"
+      ],
+      "priority": "P1",
+      "automation_suitability": "NOT_SUITABLE",
+      "oq_id": "OQ-plans-billing-102"
+    },
+    {
+      "check_id": "CHK-007",
+      "dimension": "STATE_DATA",
+      "layer": "code",
+      "title": "Chạy tay lệnh tạo phí usage cho một shop rồi chạy lại: lần sau không tính lại phần đã tính phí",
+      "applicability": {
+        "role": "admin-staff",
+        "state": "plan Paid Active, có dòng phí chưa gửi; người chạy là engineer",
+        "environment": "documented",
+        "surface_or_device": "lệnh vận hành usage-charges:create + admin panel Charges"
+      },
+      "precondition": "Shop plan Paid Active, hết trial, có dòng phí chưa gửi tổng S ≥ 0,01 USD.",
+      "steps": [
+        "Engineer chạy usage-charges:create --id=<id shop>.",
+        "Xem Usage charge mới.",
+        "Chạy lại đúng lệnh đó lần nữa ngay sau.",
+        "Xem lại danh sách Usage charge của shop."
+      ],
+      "observation_point": "Số Usage charge và số tiền sau mỗi lần chạy",
+      "expected_result": "Lần chạy đầu tạo 1 Usage charge số tiền S; lần chạy lại không tạo thêm khoản phí nào cho phần đã tính.",
+      "oracle": {
+        "kb_ids": [
+          "daily-usage-charge-and-charge-status#KB-032",
+          "daily-usage-charge-and-charge-status#KB-073"
+        ],
+        "oracle_strength": "STRONG"
+      },
+      "status": "NEEDS_CONFIRMATION",
+      "open_question_draft": "Cần test case đã chạy PASS xác nhận chạy lại lệnh tạo phí usage cho một shop là an toàn (không tính trùng); chạy tay song song với job nửa đêm có thể tính trùng không?",
+      "related_kb_ids": [
+        "daily-usage-charge-and-charge-status#KB-079"
+      ],
+      "regression_watch_kb_ids": [],
+      "risk_refs": [
+        "Thu thiếu/thu dư phí usage"
+      ],
+      "priority": "P1",
+      "automation_suitability": "NOT_SUITABLE",
+      "oq_id": "OQ-plans-billing-102"
+    },
+    {
+      "check_id": "CHK-008",
+      "dimension": "STATE_DATA",
+      "layer": "portal",
+      "title": "Recurring charge Active chuyển Cancelled khi merchant huỷ trong app, khi bị thay bằng plan khác, khi gỡ app",
+      "applicability": {
+        "role": "merchant",
+        "state": "ba shop Paid với Recurring charge Active",
+        "environment": "documented",
+        "surface_or_device": "merchant app + admin panel Charges"
+      },
+      "precondition": "Ba shop plan Paid, Recurring charge Active.",
+      "steps": [
+        "Shop A: merchant huỷ plan trong app Mysbox.",
+        "Shop B: merchant đổi sang plan Paid khác và duyệt subscription mới.",
+        "Shop C: gỡ app Mysbox.",
+        "Ở admin panel Payment > Charges tab Recurring, xem status Recurring charge cũ của từng shop."
+      ],
+      "observation_point": "Status Recurring charge của từng shop",
+      "expected_result": "Recurring charge cũ của cả ba shop chuyển Cancelled; shop B có Recurring charge mới Active.",
+      "oracle": {
+        "kb_ids": [
+          "daily-usage-charge-and-charge-status#KB-003",
+          "daily-usage-charge-and-charge-status#KB-035",
+          "daily-usage-charge-and-charge-status#KB-038",
+          "daily-usage-charge-and-charge-status#KB-043"
+        ],
+        "oracle_strength": "STRONG"
+      },
+      "status": "NEEDS_CONFIRMATION",
+      "open_question_draft": "Cần test case đã chạy PASS xác nhận Recurring charge chuyển Cancelled khi merchant huỷ, đổi plan hoặc gỡ app; \"merchant huỷ\" chỉ là huỷ trong app Mysbox hay gồm cả huỷ trong Shopify admin, và danh sách đầy đủ trạng thái Recurring charge là gì?",
+      "related_kb_ids": [
+        "daily-usage-charge-and-charge-status#KB-005"
+      ],
+      "regression_watch_kb_ids": [],
+      "risk_refs": [
+        "Trạng thái subscription lệch Shopify"
+      ],
+      "priority": "P1",
+      "automation_suitability": "HYBRID",
+      "oq_id": "OQ-plans-billing-102"
+    },
+    {
+      "check_id": "CHK-009",
+      "dimension": "STATE_DATA",
+      "layer": "portal",
+      "title": "Trạng thái subscription lệch Shopify được sửa ở lần đổi plan hoặc gỡ app kế tiếp",
+      "applicability": {
+        "role": "merchant",
+        "state": "subscription đã bị huỷ trong Shopify admin nhưng Mysbox vẫn hiện Active",
+        "environment": "documented",
+        "surface_or_device": "Shopify admin + merchant app + admin panel Charges"
+      },
+      "precondition": "Shop plan Paid; merchant huỷ subscription trực tiếp trong Shopify admin; xác nhận Recurring charge ở Mysbox vẫn Active (trạng thái lệch).",
+      "steps": [
+        "Merchant đổi plan trong app Mysbox (chọn plan khác và duyệt).",
+        "Xem Recurring charge cũ và mới ở admin panel; so với Shopify."
+      ],
+      "observation_point": "Status Recurring charge ở Mysbox so với subscription trên Shopify",
+      "expected_result": "Sau lần đổi plan, trạng thái subscription trong Mysbox khớp lại với Shopify (charge cũ không còn Active).",
+      "oracle": {
+        "kb_ids": [
+          "daily-usage-charge-and-charge-status#KB-044",
+          "daily-usage-charge-and-charge-status#KB-066"
+        ],
+        "oracle_strength": "STRONG"
+      },
+      "status": "NEEDS_CONFIRMATION",
+      "open_question_draft": "Cần test case đã chạy PASS xác nhận trạng thái subscription lệch được sửa ở lần đổi plan hoặc gỡ app kế tiếp; ngoài hai luồng này còn luồng nào làm Mysbox cập nhật lại trạng thái subscription?",
+      "related_kb_ids": [
+        "daily-usage-charge-and-charge-status#KB-065"
+      ],
+      "regression_watch_kb_ids": [],
+      "risk_refs": [
+        "Trạng thái subscription lệch Shopify"
+      ],
+      "priority": "P1",
+      "automation_suitability": "NOT_SUITABLE",
+      "oq_id": "OQ-plans-billing-102"
+    },
+    {
+      "check_id": "CHK-010",
+      "dimension": "PERMISSION",
+      "layer": "portal",
+      "title": "Màn Payment > Charges và tab Charges của Shop chỉ đọc: không có thao tác tạo, sửa, xoá hay hoàn charge",
+      "applicability": {
+        "role": "admin-staff",
+        "state": "đăng nhập admin panel với role cao nhất có sẵn",
+        "environment": "documented",
+        "surface_or_device": "admin panel"
+      },
+      "precondition": "Đăng nhập admin panel bằng role có quyền rộng nhất; có ít nhất một Recurring và một Usage charge.",
+      "steps": [
+        "Mở Payment > Charges, duyệt các tab và mở một charge.",
+        "Mở trang Shop > tab Charges.",
+        "Tìm nút tạo, sửa, xoá, hoàn tiền."
+      ],
+      "observation_point": "Các nút/thao tác trên màn Charges và tab Charges của Shop",
+      "expected_result": "Không có nút hay thao tác tạo, sửa, xoá hoặc hoàn tiền charge ở cả hai nơi.",
+      "oracle": {
+        "kb_ids": [
+          "daily-usage-charge-and-charge-status#KB-033",
+          "daily-usage-charge-and-charge-status#KB-034",
+          "daily-usage-charge-and-charge-status#KB-077"
+        ],
+        "oracle_strength": "STRONG"
+      },
+      "status": "NEEDS_CONFIRMATION",
+      "open_question_draft": "Cần test case đã chạy PASS xác nhận màn Charges chỉ đọc với mọi role của admin panel (không tạo, sửa, xoá hay hoàn charge)?",
+      "related_kb_ids": [
+        "_object-level.plans-billing#KB-020",
+        "_object-level.plans-billing#KB-021"
+      ],
+      "regression_watch_kb_ids": [],
+      "risk_refs": [
+        "Sửa tay dữ liệu tiền"
+      ],
+      "priority": "P1",
+      "automation_suitability": "SUITABLE",
+      "oq_id": "OQ-plans-billing-102"
+    },
+    {
+      "check_id": "CHK-011",
+      "dimension": "CORE",
+      "layer": "portal",
+      "title": "Màn Charges có tab All / Recurring / One Time / Usage, đủ cột; tab Charges của Shop lọc sẵn theo shop và cho tổng usage đã tính",
+      "applicability": {
+        "role": "admin-staff",
+        "state": "shop Paid có Recurring và Usage charge",
+        "environment": "documented",
+        "surface_or_device": "admin panel"
+      },
+      "precondition": "Shop Paid đã có Recurring charge và ít nhất 2 Usage charge Accepted.",
+      "steps": [
+        "Mở Payment > Charges, đọc tên các tab và tiêu đề cột.",
+        "Mở trang Shop > tab Charges của shop đó."
+      ],
+      "observation_point": "Tab, cột của màn Charges; nội dung tab Charges của Shop",
+      "expected_result": "Màn Charges có tab All, Recurring, One Time, Usage; cột gồm id, shop id, charge id, cờ test, status, giá, tiền tệ, mô tả, charge tham chiếu, ngày. Tab Charges của Shop chỉ chứa charge của shop đó và cho tổng usage đã tính.",
+      "oracle": {
+        "kb_ids": [
+          "daily-usage-charge-and-charge-status#KB-069",
+          "daily-usage-charge-and-charge-status#KB-070",
+          "daily-usage-charge-and-charge-status#KB-071",
+          "daily-usage-charge-and-charge-status#KB-086"
+        ],
+        "oracle_strength": "STRONG"
+      },
+      "status": "READY",
+      "open_question_draft": null,
+      "related_kb_ids": [
+        "daily-usage-charge-and-charge-status#KB-007",
+        "daily-usage-charge-and-charge-status#KB-054"
+      ],
+      "regression_watch_kb_ids": [],
+      "risk_refs": [],
+      "priority": "P2",
+      "automation_suitability": "SUITABLE"
+    },
+    {
+      "check_id": "CHK-012",
+      "dimension": "INTEGRATION",
+      "layer": "api",
+      "title": "Merchant đối chiếu trên Shopify: kỳ hoá đơn neo ngày duyệt subscription; một dòng subscription (đã trừ billing discount) cộng một hoặc nhiều dòng usage kèm mô tả",
+      "applicability": {
+        "role": "merchant",
+        "state": "shop Paid có billing discount, đã có Usage charge Accepted",
+        "environment": "documented",
+        "surface_or_device": "Shopify admin > Settings > Billing + trang duyệt subscription"
+      },
+      "precondition": "Shop đăng ký plan Paid có áp billing discount; ghi lại ngày duyệt subscription D; đã qua ít nhất một lần job gửi usage Accepted.",
+      "steps": [
+        "Khi duyệt subscription, đọc dòng phí usage, Capped Amount và Terms trên trang duyệt.",
+        "Mở Shopify admin > Settings > Billing, đọc ngày hoá đơn kế tiếp và các dòng phí Mysbox."
+      ],
+      "observation_point": "Trang duyệt subscription; Shopify Billing",
+      "expected_result": "Trang duyệt có dòng phí usage kèm Capped Amount và Terms; kỳ hoá đơn neo theo ngày D; Billing có một dòng subscription theo giá plan đã trừ billing discount và các dòng usage có mô tả do job gửi lên.",
+      "oracle": {
+        "kb_ids": [
+          "daily-usage-charge-and-charge-status#KB-015",
+          "daily-usage-charge-and-charge-status#KB-016",
+          "daily-usage-charge-and-charge-status#KB-029",
+          "daily-usage-charge-and-charge-status#KB-030",
+          "daily-usage-charge-and-charge-status#KB-031",
+          "daily-usage-charge-and-charge-status#KB-076"
+        ],
+        "oracle_strength": "STRONG"
+      },
+      "status": "READY",
+      "open_question_draft": null,
+      "related_kb_ids": [
+        "daily-usage-charge-and-charge-status#KB-072",
+        "daily-usage-charge-and-charge-status#KB-080",
+        "_object-level.plans-billing#KB-010",
+        "plan-capacity-and-cycle#KB-016"
+      ],
+      "regression_watch_kb_ids": [],
+      "risk_refs": [],
+      "priority": "P2",
+      "automation_suitability": "NOT_SUITABLE"
+    },
+    {
+      "check_id": "CHK-013",
+      "dimension": "INTEGRATION",
+      "layer": "api",
+      "title": "Shopify đóng băng shop (plan frozen): Mysbox chỉ lưu tên plan, không gỡ box, không đổi plan Mysbox",
+      "applicability": {
+        "role": "system",
+        "state": "Shopify plan của shop chuyển frozen",
+        "environment": "documented",
+        "surface_or_device": "admin panel Shop + merchant app"
+      },
+      "precondition": "Shop plan Paid có box đang publish; Shopify đóng băng shop (webhook cập nhật shop mang Shopify plan frozen).",
+      "steps": [
+        "Sau khi webhook cập nhật shop được xử lý, mở admin panel Shop đó.",
+        "Xem Shopify plan, plan Mysbox và trạng thái publish các box."
+      ],
+      "observation_point": "Shopify plan name, plan Mysbox, trạng thái publish box",
+      "expected_result": "Shopify plan của shop được lưu là frozen; plan Mysbox không đổi; box không bị gỡ.",
+      "oracle": {
+        "kb_ids": [
+          "daily-usage-charge-and-charge-status#KB-056",
+          "daily-usage-charge-and-charge-status#KB-057",
+          "daily-usage-charge-and-charge-status#KB-058"
+        ],
+        "oracle_strength": "STRONG"
+      },
+      "status": "READY",
+      "open_question_draft": null,
+      "related_kb_ids": [
+        "daily-usage-charge-and-charge-status#KB-059",
+        "daily-usage-charge-and-charge-status#KB-060",
+        "daily-usage-charge-and-charge-status#KB-061",
+        "_object-level.plans-billing#KB-017"
+      ],
+      "regression_watch_kb_ids": [],
+      "risk_refs": [],
+      "priority": "P2",
+      "automation_suitability": "NOT_SUITABLE"
+    },
+    {
+      "check_id": "CHK-014",
+      "dimension": "REGRESSION",
+      "layer": "code",
+      "title": "Watch known defect: sau khi Shopify từ chối usage record, job đêm sau không nhặt lại dòng phí (đã completed), không retry, không cảnh báo — Mysbox mất khoản phí",
+      "applicability": {
+        "role": "system",
+        "state": "có Usage charge Declined/Failed từ CHK-006",
+        "environment": "documented",
+        "surface_or_device": "admin panel Charges + Shopify Billing"
+      },
+      "precondition": "Shop có Usage charge Declined hoặc Failed và các dòng phí liên quan đã completed (dựng như CHK-006); sau đó nâng Capped Amount hoặc khôi phục subscription để Shopify có thể nhận lại.",
+      "steps": [
+        "Chờ qua lần chạy job nửa đêm kế tiếp.",
+        "Xem có Usage charge mới nào chứa các dòng phí đã bị từ chối không; xem có cảnh báo nào không.",
+        "Kiểm Shopify Billing."
+      ],
+      "observation_point": "Usage charge của đêm sau; trạng thái dòng phí bị từ chối; cảnh báo",
+      "expected_result": "",
+      "oracle": {
+        "kb_ids": [],
+        "oracle_strength": "NONE"
+      },
+      "status": "NEEDS_CONFIRMATION",
+      "open_question_draft": "Known defect đang được theo dõi: dòng phí đã bị Shopify từ chối không được job đêm sau nhặt lại và không có retry hay cảnh báo. Hành vi mong muốn khi sửa là gì (tự retry, cảnh báo, hay lệnh chạy tay nhặt lại), và lệnh chạy tay tạo phí usage hiện có nhặt lại được các dòng này không?",
+      "related_kb_ids": [
+        "daily-usage-charge-and-charge-status#KB-047",
+        "daily-usage-charge-and-charge-status#KB-053",
+        "daily-usage-charge-and-charge-status#KB-085",
+        "daily-usage-charge-and-charge-status#KB-032"
+      ],
+      "regression_watch_kb_ids": [
+        "daily-usage-charge-and-charge-status#KB-049",
+        "daily-usage-charge-and-charge-status#KB-050"
+      ],
+      "risk_refs": [
+        "Dòng phí completed trước khi gọi Shopify: từ chối làm mất phí vĩnh viễn"
+      ],
+      "priority": "P1",
+      "automation_suitability": "NOT_SUITABLE",
+      "oq_id": "OQ-plans-billing-034"
+    },
+    {
+      "check_id": "CHK-015",
+      "dimension": "REGRESSION",
+      "layer": "api",
+      "title": "Watch known defect: không có webhook thay đổi subscription — Shopify huỷ subscription (không trả tiền / merchant huỷ trong Shopify admin) thì Mysbox vẫn hiện Paid/Active và vẫn thử billing phí vượt, bị từ chối, charge Failed",
+      "applicability": {
+        "role": "system",
+        "state": "subscription bị huỷ phía Shopify, không qua app",
+        "environment": "documented",
+        "surface_or_device": "Shopify admin + merchant app + admin panel Charges"
+      },
+      "precondition": "Shop plan Paid Active, hết trial, quota đã hết. Huỷ subscription phía Shopify (merchant huỷ trong Shopify admin, hoặc Shopify tự huỷ do không thanh toán).",
+      "steps": [
+        "Xem plan của shop trong merchant app và Recurring charge ở admin panel.",
+        "Bán một đơn vượt quota; chờ qua lần chạy job nửa đêm.",
+        "Xem Usage charge mới và status."
+      ],
+      "observation_point": "Plan/Recurring charge trong Mysbox; Usage charge của đêm sau",
+      "expected_result": "",
+      "oracle": {
+        "kb_ids": [],
+        "oracle_strength": "NONE"
+      },
+      "status": "NEEDS_CONFIRMATION",
+      "open_question_draft": "Known defect đang được theo dõi: Mysbox không được báo khi subscription bị huỷ phía Shopify nên vẫn hiện plan trả phí và vẫn thử thu phí vượt rồi bị từ chối. Khi sửa, Mysbox cần phản ứng thế nào (chuyển về Free, gỡ box, dừng thu phí) và sau bao lâu?",
+      "related_kb_ids": [
+        "daily-usage-charge-and-charge-status#KB-044",
+        "daily-usage-charge-and-charge-status#KB-066"
+      ],
+      "regression_watch_kb_ids": [
+        "daily-usage-charge-and-charge-status#KB-045",
+        "daily-usage-charge-and-charge-status#KB-062",
+        "daily-usage-charge-and-charge-status#KB-065",
+        "daily-usage-charge-and-charge-status#KB-063",
+        "daily-usage-charge-and-charge-status#KB-064"
+      ],
+      "risk_refs": [
+        "Trạng thái subscription lệch Shopify"
+      ],
+      "priority": "P1",
+      "automation_suitability": "NOT_SUITABLE",
+      "oq_id": "OQ-plans-billing-035"
+    },
+    {
+      "check_id": "CHK-016",
+      "dimension": "REGRESSION",
+      "layer": "code",
+      "title": "Watch known defect: Mysbox không kiểm Capped Amount trước khi gửi usage, khoản vượt cap bị Shopify từ chối",
+      "applicability": {
+        "role": "system",
+        "state": "plan Paid với Capped Amount nhỏ, tổng phí ngày vượt phần cap còn lại",
+        "environment": "documented",
+        "surface_or_device": "admin panel Charges + log ứng dụng"
+      },
+      "precondition": "Như CHK-006 (cap nhỏ, tổng phí ngày vượt phần cap còn lại).",
+      "steps": [
+        "Chờ qua lần chạy job nửa đêm.",
+        "Engineer kiểm log xem job có so tổng phí với phần cap còn lại trước khi gọi Shopify không; xem status Usage charge."
+      ],
+      "observation_point": "Log của job; status Usage charge",
+      "expected_result": "",
+      "oracle": {
+        "kb_ids": [],
+        "oracle_strength": "NONE"
+      },
+      "status": "NEEDS_CONFIRMATION",
+      "open_question_draft": "Known defect đang được theo dõi: Mysbox gửi khoản usage sang Shopify mà không kiểm phần Capped Amount còn lại. Khi sửa, khoản vượt cap cần được xử lý thế nào (gửi phần còn lại, giữ lại cho kỳ sau, cảnh báo merchant)?",
+      "related_kb_ids": [
+        "daily-usage-charge-and-charge-status#KB-012",
+        "daily-usage-charge-and-charge-status#KB-084"
+      ],
+      "regression_watch_kb_ids": [
+        "daily-usage-charge-and-charge-status#KB-083"
+      ],
+      "risk_refs": [
+        "Không kiểm capped amount trước khi gửi"
+      ],
+      "priority": "P1",
+      "automation_suitability": "NOT_SUITABLE",
+      "oq_id": "OQ-plans-billing-036"
+    },
+    {
+      "check_id": "CHK-017",
+      "dimension": "REGRESSION",
+      "layer": "code",
+      "title": "Watch known defect: Usage charge kẹt Pending nếu process chết trước khi Shopify trả lời",
+      "applicability": {
+        "role": "system",
+        "state": "job bị dừng giữa lúc gọi Shopify",
+        "environment": "documented",
+        "surface_or_device": "admin panel Charges"
+      },
+      "precondition": "Môi trường cho phép engineer dừng process job giữa chừng; shop Paid Active có dòng phí chưa gửi.",
+      "steps": [
+        "Engineer chạy lệnh tạo phí usage cho shop và dừng process ngay sau khi Usage charge được tạo, trước khi Shopify trả lời.",
+        "Xem status Usage charge và trạng thái dòng phí; chờ qua lần chạy job kế tiếp và xem lại."
+      ],
+      "observation_point": "Status Usage charge; trạng thái dòng phí qua các lần chạy",
+      "expected_result": "",
+      "oracle": {
+        "kb_ids": [],
+        "oracle_strength": "NONE"
+      },
+      "status": "NEEDS_CONFIRMATION",
+      "open_question_draft": "Known defect đang được theo dõi: Usage charge có thể kẹt ở Pending khi process chết trước khi Shopify trả lời. Có cơ chế timeout hay khôi phục nào không, các dòng phí liên quan khi đó đã completed chưa, và hành vi mong muốn khi sửa là gì?",
+      "related_kb_ids": [
+        "daily-usage-charge-and-charge-status#KB-036",
+        "daily-usage-charge-and-charge-status#KB-046",
+        "daily-usage-charge-and-charge-status#KB-047"
+      ],
+      "regression_watch_kb_ids": [
+        "daily-usage-charge-and-charge-status#KB-037"
+      ],
+      "risk_refs": [
+        "Dòng phí completed trước khi gọi Shopify: từ chối làm mất phí vĩnh viễn"
+      ],
+      "priority": "P1",
+      "automation_suitability": "NOT_SUITABLE",
+      "oq_id": "OQ-plans-billing-033"
+    },
+    {
+      "check_id": "CHK-018",
+      "dimension": "CORE",
+      "layer": "portal",
+      "title": "Loại Charge One-time phát sinh khi nào — chưa có oracle (hai hay ba loại Charge)",
+      "applicability": {
+        "role": "admin-staff",
+        "state": "bất kỳ",
+        "environment": "documented",
+        "surface_or_device": "admin panel Charges"
+      },
+      "precondition": "Đăng nhập admin panel.",
+      "steps": [
+        "Mở Payment > Charges tab One Time; ghi lại có bản ghi nào và mô tả của chúng."
+      ],
+      "observation_point": "Tab One Time của màn Charges",
+      "expected_result": "",
+      "oracle": {
+        "kb_ids": [
+          "daily-usage-charge-and-charge-status#KB-006",
+          "daily-usage-charge-and-charge-status#KB-074"
+        ],
+        "oracle_strength": "NONE"
+      },
+      "status": "NEEDS_CONFIRMATION",
+      "open_question_draft": "Charge có hai loại (Recurring, Usage) hay ba loại (thêm One-time)? Nếu có One-time thì luồng nào tạo ra nó?",
+      "related_kb_ids": [
+        "daily-usage-charge-and-charge-status#KB-069"
+      ],
+      "regression_watch_kb_ids": [],
+      "risk_refs": [],
+      "priority": "P3",
+      "automation_suitability": "UNKNOWN",
+      "oq_id": "OQ-plans-billing-006"
+    },
+    {
+      "check_id": "CHK-019",
+      "dimension": "STATE_DATA",
+      "layer": "portal",
+      "title": "Shop Free: merchant app không gọi API charge/subscription và dữ liệu nhúng không có charge/recurring",
+      "applicability": {
+        "role": "merchant",
+        "state": "shop gói Free",
+        "environment": "staging",
+        "surface_or_device": "portal merchant → Pricing, Dashboard + network"
+      },
+      "precondition": "Đăng nhập portal bằng merchant shop gói Free; mở network capture.",
+      "steps": [
+        "Mở Pricing rồi Dashboard; liệt kê request API trong network.",
+        "Đọc dữ liệu nhúng user: subscription_plan_name, plan_id, plan.price, plan.shopify_paid, plan.capped_amount, plan.test, is_extend_trial; tìm key nào tên charge hay recurring."
+      ],
+      "observation_point": "Request network; dữ liệu nhúng user.",
+      "expected_result": "(baseline staging, lệch = cần điều tra) Không có request API nào về charge/subscription/recurring; dữ liệu nhúng user có subscription_plan_name \"Free\", plan_id 1, plan.price 0, plan.shopify_paid false, plan.capped_amount null, plan.test false, is_extend_trial true và không có key nào tên charge hay recurring.",
+      "oracle": {
+        "kb_ids": [
+          "daily-usage-charge-and-charge-status#KB-087"
+        ],
+        "oracle_strength": "BASELINE"
+      },
+      "status": "NEEDS_CONFIRMATION",
+      "open_question_draft": "Staging: shop Free không có dữ liệu charge/recurring phía client. Phía server, shop Free có bản ghi Charge/Recurring giá 0 nào không, và merchant có màn hình nào trong app để xem lịch sử charge không?",
+      "related_kb_ids": [
+        "daily-usage-charge-and-charge-status#KB-005",
+        "daily-usage-charge-and-charge-status#KB-021"
+      ],
+      "regression_watch_kb_ids": [],
+      "risk_refs": [],
+      "priority": "P3",
+      "automation_suitability": "SUITABLE",
+      "oq_id": "OQ-plans-billing-134"
+    }
+  ],
+  "coverage_by_feature_and_risk": [
+    {
+      "feature_id": "FEAT-04-daily-usage-charge-and-charge-status",
+      "item": "Capability: Ghi nhận phí phát sinh từ đơn paid",
+      "kind": "capability",
+      "check_ids": [
+        "CHK-001"
+      ],
+      "coverage": "COVERED"
+    },
+    {
+      "feature_id": "FEAT-04-daily-usage-charge-and-charge-status",
+      "item": "Capability: Gom phí hằng ngày thành một usage record mỗi shop",
+      "kind": "capability",
+      "check_ids": [
+        "CHK-001",
+        "CHK-002",
+        "CHK-003",
+        "CHK-004",
+        "CHK-005"
+      ],
+      "coverage": "PARTIAL",
+      "note": "Múi giờ job và định nghĩa 1 tháng chưa có oracle."
+    },
+    {
+      "feature_id": "FEAT-04-daily-usage-charge-and-charge-status",
+      "item": "Capability: Ghi kết quả gửi Shopify vào trạng thái Usage charge",
+      "kind": "capability",
+      "check_ids": [
+        "CHK-001",
+        "CHK-004",
+        "CHK-006"
+      ],
+      "coverage": "COVERED"
+    },
+    {
+      "feature_id": "FEAT-04-daily-usage-charge-and-charge-status",
+      "item": "Capability: Recurring charge phản ánh subscription",
+      "kind": "capability",
+      "check_ids": [
+        "CHK-008",
+        "CHK-009"
+      ],
+      "coverage": "COVERED"
+    },
+    {
+      "feature_id": "FEAT-04-daily-usage-charge-and-charge-status",
+      "item": "Capability: Màn Charges chỉ đọc",
+      "kind": "capability",
+      "check_ids": [
+        "CHK-010",
+        "CHK-011",
+        "CHK-018"
+      ],
+      "coverage": "PARTIAL",
+      "note": "Loại One-time chưa rõ (CONF-plans-billing-09)."
+    },
+    {
+      "feature_id": "FEAT-04-daily-usage-charge-and-charge-status",
+      "item": "Capability: Merchant đối chiếu trên hoá đơn Shopify",
+      "kind": "capability",
+      "check_ids": [
+        "CHK-012"
+      ],
+      "coverage": "COVERED"
+    },
+    {
+      "feature_id": "FEAT-04-daily-usage-charge-and-charge-status",
+      "item": "Capability: Chạy tay tạo phí usage cho một shop",
+      "kind": "capability",
+      "check_ids": [
+        "CHK-007"
+      ],
+      "coverage": "COVERED"
+    },
+    {
+      "feature_id": "FEAT-04-daily-usage-charge-and-charge-status",
+      "item": "Capability: Xử lý shop bị Shopify đóng băng",
+      "kind": "capability",
+      "check_ids": [
+        "CHK-013"
+      ],
+      "coverage": "PARTIAL",
+      "note": "Phản hồi Shopify cho phí của shop frozen chỉ là suy đoán."
+    },
+    {
+      "feature_id": "FEAT-04-daily-usage-charge-and-charge-status",
+      "item": "Risk P1: Dòng phí completed trước khi gọi Shopify, từ chối làm mất phí",
+      "kind": "risk",
+      "check_ids": [
+        "CHK-006",
+        "CHK-014",
+        "CHK-017"
+      ],
+      "coverage": "COVERED"
+    },
+    {
+      "feature_id": "FEAT-04-daily-usage-charge-and-charge-status",
+      "item": "Risk P1: Không kiểm capped amount trước khi gửi",
+      "kind": "risk",
+      "check_ids": [
+        "CHK-006",
+        "CHK-016"
+      ],
+      "coverage": "COVERED"
+    },
+    {
+      "feature_id": "FEAT-04-daily-usage-charge-and-charge-status",
+      "item": "Risk P1: Trạng thái subscription lệch Shopify",
+      "kind": "risk",
+      "check_ids": [
+        "CHK-008",
+        "CHK-009",
+        "CHK-015"
+      ],
+      "coverage": "COVERED"
+    },
+    {
+      "feature_id": "FEAT-04-daily-usage-charge-and-charge-status",
+      "item": "Risk P1: Usage cũ hơn một tháng không được tính",
+      "kind": "risk",
+      "check_ids": [
+        "CHK-003"
+      ],
+      "coverage": "PARTIAL",
+      "note": "Biên chính xác của cửa sổ 1 tháng chưa có oracle."
+    },
+    {
+      "feature_id": "FEAT-04-daily-usage-charge-and-charge-status",
+      "item": "Layer portal merchant app (coverage_matrix covered=false)",
+      "kind": "layer",
+      "check_ids": [
+        "CHK-019"
+      ],
+      "coverage": "PARTIAL",
+      "note": "KB không mô tả màn merchant app nào cho Charge; staging chỉ xác nhận shop Free không có dữ liệu charge phía client (CHK-019 BASELINE); merchant đối chiếu qua Shopify Billing (CHK-012)."
+    }
+  ],
+  "excluded_dimensions": [],
+  "last_updated": {
+    "date": "2026-10-16",
+    "ccr_ref": "bootstrap"
+  }
+}

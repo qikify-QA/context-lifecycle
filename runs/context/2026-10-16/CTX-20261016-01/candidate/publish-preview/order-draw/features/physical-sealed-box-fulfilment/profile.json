@@ -1,0 +1,895 @@
+{
+  "feature_id": "FEAT-03-physical-sealed-box-fulfilment",
+  "feature_key": "physical-sealed-box-fulfilment",
+  "name": "Box physical (Sealed box): quà giấu kín, metafield/tag/note, trừ kho",
+  "user_goal": "Merchant bán box vật lý (Sealed box) mà khách không biết trước quà: sau khi bốc thăm, hệ thống tự đánh dấu box đã mở và chạy hậu xử lý một lần — ghi quà lên đơn Shopify bằng metafield (và tag/note nếu bật, không bao giờ thành dòng sản phẩm) và trừ tồn kho Shopify của variant quà — để kho đọc đơn, đóng hộp kín và fulfil đúng; đơn lẫn digital và physical xử lý đúng từng phần; hậu xử lý lỗi có thể retry.",
+  "user_goal_kb_refs": [
+    "physical-sealed-box-fulfilment#KB-001",
+    "physical-sealed-box-fulfilment#KB-003",
+    "physical-sealed-box-fulfilment#KB-009",
+    "physical-sealed-box-fulfilment#KB-011",
+    "physical-sealed-box-fulfilment#KB-013",
+    "physical-sealed-box-fulfilment#KB-014",
+    "physical-sealed-box-fulfilment#KB-015",
+    "physical-sealed-box-fulfilment#KB-021",
+    "physical-sealed-box-fulfilment#KB-055"
+  ],
+  "stable_since_version": "1",
+  "actors": [
+    {
+      "role": "customer",
+      "permission_observed": "Mua box physical; không mở được online, không thấy giao diện mở box hay kết quả; chỉ biết quà khi mở hộp nhận được.",
+      "kb_refs": [
+        "physical-sealed-box-fulfilment#KB-001",
+        "physical-sealed-box-fulfilment#KB-004",
+        "physical-sealed-box-fulfilment#KB-005",
+        "physical-sealed-box-fulfilment#KB-006"
+      ]
+    },
+    {
+      "role": "system",
+      "permission_observed": "Bốc thăm, tự đánh dấu đã mở, chạy hậu xử lý theo sự kiện: trừ tồn kho, tag, note, metafield quà, prize ids.",
+      "kb_refs": [
+        "physical-sealed-box-fulfilment#KB-003",
+        "physical-sealed-box-fulfilment#KB-015",
+        "physical-sealed-box-fulfilment#KB-017",
+        "physical-sealed-box-fulfilment#KB-021"
+      ]
+    },
+    {
+      "role": "merchant",
+      "permission_observed": "Đọc quà từ thông tin trên đơn rồi đóng hộp kín để fulfil; xem khối \"Mysbox prizes\" trên trang đơn Shopify admin; chọn khoá metafield ở portal; tải mẫu Shopify Flow.",
+      "kb_refs": [
+        "physical-sealed-box-fulfilment#KB-012",
+        "physical-sealed-box-fulfilment#KB-013",
+        "physical-sealed-box-fulfilment#KB-046",
+        "physical-sealed-box-fulfilment#KB-048",
+        "physical-sealed-box-fulfilment#KB-052"
+      ]
+    },
+    {
+      "role": "support",
+      "permission_observed": "Xem các bước và trạng thái hậu xử lý trên trang đơn trong admin nội bộ; chạy \"Retry Physical Box Post-Processing\".",
+      "kb_refs": [
+        "physical-sealed-box-fulfilment#KB-018",
+        "physical-sealed-box-fulfilment#KB-054",
+        "physical-sealed-box-fulfilment#KB-055"
+      ]
+    },
+    {
+      "role": "admin",
+      "permission_observed": "Nhân viên Mysbox đổi setting ẩn trong back-office (vd dạng metafield `physical_metafield_output_mode`); việc các công tắc trừ kho/tag/note có phải setting ẩn hay không đang mâu thuẫn.",
+      "kb_refs": [
+        "physical-sealed-box-fulfilment#KB-044",
+        "physical-sealed-box-fulfilment#KB-020"
+      ]
+    }
+  ],
+  "entry_points": [
+    {
+      "path": "Checkout Shopify mua box physical → bốc thăm khi đơn paid",
+      "precondition": "Box có category \"Sealed box\".",
+      "kb_refs": [
+        "physical-sealed-box-fulfilment#KB-001",
+        "physical-sealed-box-fulfilment#KB-003"
+      ]
+    },
+    {
+      "path": "Portal — General settings > Order prize information (khoá metafield)",
+      "precondition": "Merchant đăng nhập portal.",
+      "kb_refs": [
+        "physical-sealed-box-fulfilment#KB-048",
+        "physical-sealed-box-fulfilment#KB-019"
+      ]
+    },
+    {
+      "path": "Shopify admin — trang đơn: khối \"Mysbox prizes\" (\"View all\"), tag/note/metafield của đơn",
+      "precondition": "Hậu xử lý đã chạy.",
+      "kb_refs": [
+        "physical-sealed-box-fulfilment#KB-009",
+        "physical-sealed-box-fulfilment#KB-052"
+      ]
+    },
+    {
+      "path": "Admin nội bộ — trang một đơn: bước hậu xử lý, \"Retry Physical Box Post-Processing\"",
+      "precondition": "Nhân viên support; có bước failed.",
+      "kb_refs": [
+        "physical-sealed-box-fulfilment#KB-018",
+        "physical-sealed-box-fulfilment#KB-055"
+      ]
+    }
+  ],
+  "capabilities": [
+    {
+      "name": "Giấu kín quà với khách",
+      "description": "Box physical là box vật lý: quà giấu kín, ship sau, không animation, không buyback; không ai mở online; khách không thấy giao diện mở hay kết quả và chỉ biết quà khi mở hộp; khối Mysbox trên trang cảm ơn bỏ qua box physical; mô tả cho merchant là \"Prizes remain hidden until the order is delivered.\".",
+      "kb_refs": [
+        "physical-sealed-box-fulfilment#KB-001",
+        "physical-sealed-box-fulfilment#KB-002",
+        "physical-sealed-box-fulfilment#KB-004",
+        "physical-sealed-box-fulfilment#KB-005",
+        "physical-sealed-box-fulfilment#KB-006",
+        "physical-sealed-box-fulfilment#KB-007",
+        "physical-sealed-box-fulfilment#KB-008"
+      ]
+    },
+    {
+      "name": "Tự đánh dấu đã mở và chạy hậu xử lý một lần",
+      "description": "Box physical được bốc như digital rồi tự đánh dấu \"đã mở\" ngay sau khi bốc; chỉ khi mọi box physical của đơn đã bốc xong, app chạy hậu xử lý (trừ tồn kho, tag, note, metafield quà, prize ids) một lần, theo sự kiện, kể cả khi một box rỗng vì hết hàng.",
+      "kb_refs": [
+        "physical-sealed-box-fulfilment#KB-003",
+        "physical-sealed-box-fulfilment#KB-015",
+        "physical-sealed-box-fulfilment#KB-016",
+        "physical-sealed-box-fulfilment#KB-017",
+        "physical-sealed-box-fulfilment#KB-018"
+      ]
+    },
+    {
+      "name": "Ghi quà lên đơn mà không thêm dòng sản phẩm",
+      "description": "Quà box physical chỉ được ghi lên đơn Shopify dưới dạng tag, note hoặc metafield của đơn (chỉ dành cho box physical) và không bao giờ thành dòng sản phẩm; box physical không đi qua bước thêm quà vào đơn.",
+      "kb_refs": [
+        "physical-sealed-box-fulfilment#KB-009",
+        "physical-sealed-box-fulfilment#KB-010",
+        "physical-sealed-box-fulfilment#KB-011"
+      ]
+    },
+    {
+      "name": "Trừ tồn kho variant quà trúng",
+      "description": "App trừ tồn kho Shopify của variant quà trúng (mặc định bật) với lý do \"correction\", chỉ ở location đầu tiên có fulfillment order, bỏ qua variant không theo dõi tồn kho; không có location thì lỗi \"inventory location not found\" và retry được; có khoá chống trừ đôi.",
+      "kb_refs": [
+        "physical-sealed-box-fulfilment#KB-021",
+        "physical-sealed-box-fulfilment#KB-022",
+        "physical-sealed-box-fulfilment#KB-023",
+        "physical-sealed-box-fulfilment#KB-024",
+        "physical-sealed-box-fulfilment#KB-025",
+        "physical-sealed-box-fulfilment#KB-026",
+        "physical-sealed-box-fulfilment#KB-027",
+        "physical-sealed-box-fulfilment#KB-028"
+      ]
+    },
+    {
+      "name": "Gắn tag và note đơn theo mẫu",
+      "description": "Tag đơn và note đơn mặc định tắt; khi bật, mỗi quà sinh một tag theo mẫu (mặc định `{{variant_title}}`, tối đa 40 ký tự) và note thêm một dòng (mẫu mặc định `{{id}}: {{quantity}}`, các mục nối bằng ` | `); placeholder hỗ trợ chỉ gồm `{{id}}`, `{{quantity}}`, `{{sku}}`, `{{variant_title}}`, `{{product_title}}`, không hỗ trợ `{{title}}`.",
+      "kb_refs": [
+        "physical-sealed-box-fulfilment#KB-030",
+        "physical-sealed-box-fulfilment#KB-031",
+        "physical-sealed-box-fulfilment#KB-032",
+        "physical-sealed-box-fulfilment#KB-033",
+        "physical-sealed-box-fulfilment#KB-034",
+        "physical-sealed-box-fulfilment#KB-035",
+        "physical-sealed-box-fulfilment#KB-036",
+        "physical-sealed-box-fulfilment#KB-037",
+        "physical-sealed-box-fulfilment#KB-038",
+        "physical-sealed-box-fulfilment#KB-039",
+        "physical-sealed-box-fulfilment#KB-040",
+        "physical-sealed-box-fulfilment#KB-041"
+      ]
+    },
+    {
+      "name": "Ghi metafield quà và mã quà cho đơn",
+      "description": "Metafield quà `mysbox_prizes` (thuộc app, mặc định bật) có dạng danh sách (mặc định hai cột `sku`, `quantity`) hoặc map tuỳ setting ẩn `physical_metafield_output_mode`, khoá theo thuộc tính variant chọn ở \"Khoá metafield\" (mặc định \"Variant SKU\"); metafield mã quà `mysbox_prize_ids` dạng `{id variant: số lượng}` luôn bật, hiển thị qua khối \"Mysbox prizes\"; portal có mẫu Shopify Flow dùng với metafield quà.",
+      "kb_refs": [
+        "physical-sealed-box-fulfilment#KB-042",
+        "physical-sealed-box-fulfilment#KB-043",
+        "physical-sealed-box-fulfilment#KB-044",
+        "physical-sealed-box-fulfilment#KB-045",
+        "physical-sealed-box-fulfilment#KB-046",
+        "physical-sealed-box-fulfilment#KB-047",
+        "physical-sealed-box-fulfilment#KB-048",
+        "physical-sealed-box-fulfilment#KB-050",
+        "physical-sealed-box-fulfilment#KB-051",
+        "physical-sealed-box-fulfilment#KB-052",
+        "physical-sealed-box-fulfilment#KB-053"
+      ]
+    },
+    {
+      "name": "Merchant fulfil bằng hộp kín",
+      "description": "Merchant/kho đọc quà cần đóng gói từ thông tin ghi trên đơn rồi gửi hộp kín.",
+      "kb_refs": [
+        "physical-sealed-box-fulfilment#KB-012",
+        "physical-sealed-box-fulfilment#KB-013"
+      ]
+    },
+    {
+      "name": "Theo dõi và retry hậu xử lý",
+      "description": "Mỗi hành động hậu xử lý có trạng thái riêng (pending, processing, succeeded, failed); \"Retry Physical Box Post-Processing\" trong admin nội bộ chỉ chạy lại bước failed, không lặp bước succeeded; nếu kho đã chỉnh tay trước khi retry thì bị trừ hai lần.",
+      "kb_refs": [
+        "physical-sealed-box-fulfilment#KB-054",
+        "physical-sealed-box-fulfilment#KB-055",
+        "physical-sealed-box-fulfilment#KB-029",
+        "physical-sealed-box-fulfilment#KB-056"
+      ]
+    },
+    {
+      "name": "Xử lý đơn lẫn digital và physical",
+      "description": "Đơn chứa cả hai loại thì mỗi loại đi đường riêng trong cùng một đơn.",
+      "kb_refs": [
+        "physical-sealed-box-fulfilment#KB-014"
+      ]
+    }
+  ],
+  "state_transitions": [
+    {
+      "from": "box physical chưa bốc",
+      "to": "box \"đã mở\" (lộ kết quả)",
+      "trigger": "Bốc thăm xong sau khi đơn paid",
+      "condition": "Box category Sealed box",
+      "kb_refs": [
+        "physical-sealed-box-fulfilment#KB-003"
+      ]
+    },
+    {
+      "from": "mọi box physical của đơn đã bốc",
+      "to": "hậu xử lý chạy (một lần)",
+      "trigger": "Sự kiện bốc xong box physical cuối của đơn",
+      "condition": "Chạy kể cả khi một box rỗng vì hết hàng",
+      "kb_refs": [
+        "physical-sealed-box-fulfilment#KB-015",
+        "physical-sealed-box-fulfilment#KB-016",
+        "physical-sealed-box-fulfilment#KB-017"
+      ]
+    },
+    {
+      "from": "pending / processing",
+      "to": "succeeded / failed",
+      "trigger": "Từng hành động hậu xử lý chạy",
+      "condition": "Vd trừ kho failed khi shop chưa có location cho fulfillment; tag failed khi dài hơn 40 ký tự",
+      "kb_refs": [
+        "physical-sealed-box-fulfilment#KB-054",
+        "physical-sealed-box-fulfilment#KB-027",
+        "physical-sealed-box-fulfilment#KB-035"
+      ]
+    },
+    {
+      "from": "failed",
+      "to": "chạy lại (succeeded / failed)",
+      "trigger": "Support bấm \"Retry Physical Box Post-Processing\"",
+      "condition": "Chỉ bước failed được chạy lại; bước succeeded không lặp",
+      "kb_refs": [
+        "physical-sealed-box-fulfilment#KB-055",
+        "physical-sealed-box-fulfilment#KB-027"
+      ]
+    }
+  ],
+  "confirmed_rules": [
+    {
+      "rule": "Box Physical (category \"Sealed box\") là box vật lý: quà giấu kín, ship sau, không animation, không buyback.",
+      "kb_refs": [
+        "physical-sealed-box-fulfilment#KB-001"
+      ]
+    },
+    {
+      "rule": "Mô tả box physical hiển thị cho merchant là \"Prizes remain hidden until the order is delivered.\".",
+      "kb_refs": [
+        "physical-sealed-box-fulfilment#KB-002"
+      ]
+    },
+    {
+      "rule": "Box physical được bốc như box digital, rồi hệ thống tự đánh dấu box là \"đã mở\" ngay sau khi bốc.",
+      "kb_refs": [
+        "physical-sealed-box-fulfilment#KB-003"
+      ]
+    },
+    {
+      "rule": "Box physical không được ai mở online; khách không tự mở được, không thấy giao diện mở box, kết quả hay việc mở tự động; khách chỉ biết quà khi mở hộp nhận được.",
+      "kb_refs": [
+        "physical-sealed-box-fulfilment#KB-004",
+        "physical-sealed-box-fulfilment#KB-005",
+        "physical-sealed-box-fulfilment#KB-006"
+      ]
+    },
+    {
+      "rule": "Khối Mysbox trên trang cảm ơn bỏ qua box physical.",
+      "kb_refs": [
+        "physical-sealed-box-fulfilment#KB-007"
+      ]
+    },
+    {
+      "rule": "Quà box physical chỉ được ghi lên đơn Shopify dạng tag, note hoặc metafield của đơn; tag/note/metafield quà trên đơn chỉ dành cho box physical.",
+      "kb_refs": [
+        "physical-sealed-box-fulfilment#KB-009",
+        "physical-sealed-box-fulfilment#KB-010"
+      ]
+    },
+    {
+      "rule": "Quà box physical không bao giờ được thêm thành dòng sản phẩm trong đơn Shopify; box physical không đi qua bước thêm quà vào đơn.",
+      "kb_refs": [
+        "physical-sealed-box-fulfilment#KB-011"
+      ]
+    },
+    {
+      "rule": "Merchant fulfil box physical bằng cách gửi hộp kín; merchant/kho đọc quà cần đóng gói từ thông tin trên đơn.",
+      "kb_refs": [
+        "physical-sealed-box-fulfilment#KB-012",
+        "physical-sealed-box-fulfilment#KB-013"
+      ]
+    },
+    {
+      "rule": "Đơn chứa cả box digital và physical thì mỗi loại xử lý theo đường riêng trong cùng đơn.",
+      "kb_refs": [
+        "physical-sealed-box-fulfilment#KB-014"
+      ]
+    },
+    {
+      "rule": "Chỉ khi mọi box physical của đơn đã bốc xong, app chạy hậu xử lý, một lần; vẫn chạy kể cả khi một box rỗng vì hết hàng; hậu xử lý không chạy theo lịch mà theo sự kiện.",
+      "kb_refs": [
+        "physical-sealed-box-fulfilment#KB-015",
+        "physical-sealed-box-fulfilment#KB-016",
+        "physical-sealed-box-fulfilment#KB-017"
+      ]
+    },
+    {
+      "rule": "Các bước hậu xử lý box vật lý gồm trừ tồn kho, gắn tag đơn, ghi note đơn, metafield quà và prize ids.",
+      "kb_refs": [
+        "physical-sealed-box-fulfilment#KB-018"
+      ]
+    },
+    {
+      "rule": "App trừ tồn kho Shopify của variant quà trúng (mặc định bật) với lý do \"correction\".",
+      "kb_refs": [
+        "physical-sealed-box-fulfilment#KB-021",
+        "physical-sealed-box-fulfilment#KB-022",
+        "physical-sealed-box-fulfilment#KB-023"
+      ]
+    },
+    {
+      "rule": "App chỉ trừ tồn kho ở location đầu tiên có fulfillment order, kể cả shop nhiều location; bỏ qua có chủ ý variant quà không theo dõi tồn kho.",
+      "kb_refs": [
+        "physical-sealed-box-fulfilment#KB-024",
+        "physical-sealed-box-fulfilment#KB-026"
+      ]
+    },
+    {
+      "rule": "Shop chưa có location cho fulfillment thì trừ tồn kho lỗi (\"inventory location not found\") và có thể retry; bước trừ kho có khoá chống trừ đôi.",
+      "kb_refs": [
+        "physical-sealed-box-fulfilment#KB-027",
+        "physical-sealed-box-fulfilment#KB-028"
+      ]
+    },
+    {
+      "rule": "Nếu kho đã được chỉnh tay trước khi retry hậu xử lý thì kho bị trừ hai lần.",
+      "kb_refs": [
+        "physical-sealed-box-fulfilment#KB-029"
+      ]
+    },
+    {
+      "rule": "\"Tag đơn\" và \"Note đơn\" mặc định Tắt (đơn physical mặc định không có tag).",
+      "kb_refs": [
+        "physical-sealed-box-fulfilment#KB-030",
+        "physical-sealed-box-fulfilment#KB-031"
+      ]
+    },
+    {
+      "rule": "Khi bật Tag đơn, mỗi quà sinh một tag theo mẫu; mẫu tag mặc định `{{variant_title}}`; mỗi tag tối đa 40 ký tự; tag dài hơn 40 ký tự là một nguyên nhân bước gắn tag không thành công.",
+      "kb_refs": [
+        "physical-sealed-box-fulfilment#KB-032",
+        "physical-sealed-box-fulfilment#KB-033",
+        "physical-sealed-box-fulfilment#KB-034",
+        "physical-sealed-box-fulfilment#KB-035"
+      ]
+    },
+    {
+      "rule": "Khi bật Note đơn, app thêm một dòng vào note của đơn; mẫu note mặc định `{{id}}: {{quantity}}`; các mục quà nối bằng ` | `.",
+      "kb_refs": [
+        "physical-sealed-box-fulfilment#KB-036",
+        "physical-sealed-box-fulfilment#KB-037",
+        "physical-sealed-box-fulfilment#KB-038"
+      ]
+    },
+    {
+      "rule": "Placeholder hỗ trợ trong mẫu chỉ gồm `{{id}}`, `{{quantity}}`, `{{sku}}`, `{{variant_title}}`, `{{product_title}}`; `{{title}}` không được hỗ trợ.",
+      "kb_refs": [
+        "physical-sealed-box-fulfilment#KB-039",
+        "physical-sealed-box-fulfilment#KB-040"
+      ]
+    },
+    {
+      "rule": "\"Metafield quà của đơn\" mặc định Bật; metafield tên `mysbox_prizes`, thuộc app, dạng danh sách dòng hoặc map khoá → giá trị do setting ẩn `physical_metafield_output_mode` quyết định; dạng danh sách mặc định hai cột `sku`, `quantity`.",
+      "kb_refs": [
+        "physical-sealed-box-fulfilment#KB-042",
+        "physical-sealed-box-fulfilment#KB-043",
+        "physical-sealed-box-fulfilment#KB-044",
+        "physical-sealed-box-fulfilment#KB-045"
+      ]
+    },
+    {
+      "rule": "Thuộc tính variant chọn ở setting \"Khoá metafield\" (Order prize information) dùng làm khoá trong metafield quà; định dạng mặc định là \"Variant SKU\".",
+      "kb_refs": [
+        "physical-sealed-box-fulfilment#KB-047",
+        "physical-sealed-box-fulfilment#KB-048"
+      ]
+    },
+    {
+      "rule": "Portal có mẫu Shopify Flow để merchant tải về dùng với metafield quà của đơn.",
+      "kb_refs": [
+        "physical-sealed-box-fulfilment#KB-046"
+      ]
+    },
+    {
+      "rule": "\"Metafield mã quà\" luôn bật; tên `mysbox_prize_ids`, dạng `{id variant: số lượng}`; hiển thị ở trang đơn Shopify admin qua khối \"Mysbox prizes\" có nút \"View all\".",
+      "kb_refs": [
+        "physical-sealed-box-fulfilment#KB-050",
+        "physical-sealed-box-fulfilment#KB-051",
+        "physical-sealed-box-fulfilment#KB-052"
+      ]
+    },
+    {
+      "rule": "Mỗi hành động hậu xử lý có trạng thái riêng thuộc tập pending, processing, succeeded, failed.",
+      "kb_refs": [
+        "physical-sealed-box-fulfilment#KB-054"
+      ]
+    },
+    {
+      "rule": "\"Retry Physical Box Post-Processing\" trong admin nội bộ chỉ chạy lại các bước failed; bước succeeded không bị lặp và retry không ảnh hưởng hành động khác.",
+      "kb_refs": [
+        "physical-sealed-box-fulfilment#KB-055"
+      ]
+    }
+  ],
+  "observed_behavior": [
+    {
+      "behavior": "Store nhiều kho: vì chỉ trừ tồn kho ở một location, kho có thể bị trừ sai chỗ.",
+      "status": "KNOWN_DEFECT",
+      "note": "Known defect / hạn chế đã biết — không dùng làm oracle.",
+      "kb_refs": [
+        "physical-sealed-box-fulfilment#KB-025"
+      ]
+    },
+    {
+      "behavior": "Đơn box vật lý cũ tạo trước khi có bước prize ids thì thiếu prize ids (khối \"Mysbox prizes\" không có dữ liệu) cho tới khi được backfill.",
+      "status": "KNOWN_DEFECT",
+      "note": "Known defect / hạn chế đã biết — không dùng làm oracle.",
+      "kb_refs": [
+        "physical-sealed-box-fulfilment#KB-053"
+      ]
+    }
+  ],
+  "observed_validations": [],
+  "permissions": [
+    {
+      "rule": "Retry hậu xử lý do support chạy trong admin nội bộ (quyền cụ thể chưa nêu).",
+      "kb_refs": [
+        "physical-sealed-box-fulfilment#KB-055"
+      ]
+    },
+    {
+      "rule": "Setting ẩn dạng metafield do nhân viên Mysbox đổi trong back-office; nơi bật/tắt trừ kho/tag/note đang mâu thuẫn.",
+      "kb_refs": [
+        "physical-sealed-box-fulfilment#KB-044",
+        "physical-sealed-box-fulfilment#KB-019",
+        "physical-sealed-box-fulfilment#KB-020"
+      ]
+    }
+  ],
+  "surface_mapping": {
+    "portal": [
+      {
+        "item": "Mô tả box physical cho merchant",
+        "kb_refs": [
+          "physical-sealed-box-fulfilment#KB-002"
+        ]
+      },
+      {
+        "item": "General settings > Order prize information: khoá metafield (mặc định Variant SKU); mẫu Shopify Flow tải về",
+        "kb_refs": [
+          "physical-sealed-box-fulfilment#KB-046",
+          "physical-sealed-box-fulfilment#KB-047",
+          "physical-sealed-box-fulfilment#KB-048"
+        ]
+      }
+    ],
+    "storefront": [
+      {
+        "item": "Không có giao diện mở/kết quả cho box physical; khối trang cảm ơn bỏ qua box physical",
+        "kb_refs": [
+          "physical-sealed-box-fulfilment#KB-004",
+          "physical-sealed-box-fulfilment#KB-005",
+          "physical-sealed-box-fulfilment#KB-007"
+        ]
+      }
+    ],
+    "api": [
+      {
+        "item": "Shopify inventory adjust (lý do \"correction\", location đầu tiên có fulfillment order)",
+        "kb_refs": [
+          "physical-sealed-box-fulfilment#KB-023",
+          "physical-sealed-box-fulfilment#KB-024"
+        ]
+      },
+      {
+        "item": "Shopify order tag / note / metafield",
+        "kb_refs": [
+          "physical-sealed-box-fulfilment#KB-009",
+          "physical-sealed-box-fulfilment#KB-032",
+          "physical-sealed-box-fulfilment#KB-036"
+        ]
+      }
+    ],
+    "data": [
+      {
+        "item": "Metafield đơn `mysbox_prizes` (list/map) và `mysbox_prize_ids`",
+        "kb_refs": [
+          "physical-sealed-box-fulfilment#KB-043",
+          "physical-sealed-box-fulfilment#KB-044",
+          "physical-sealed-box-fulfilment#KB-051"
+        ]
+      },
+      {
+        "item": "Setting ẩn `physical_metafield_output_mode`, `physical_inventory_enabled`, `physical_tag_enabled`, `physical_note_enabled`",
+        "kb_refs": [
+          "physical-sealed-box-fulfilment#KB-044",
+          "physical-sealed-box-fulfilment#KB-020"
+        ]
+      },
+      {
+        "item": "Trạng thái từng hành động hậu xử lý",
+        "kb_refs": [
+          "physical-sealed-box-fulfilment#KB-054"
+        ]
+      }
+    ],
+    "code": [
+      {
+        "item": "Hậu xử lý theo sự kiện, một lần, khoá chống trừ đôi",
+        "kb_refs": [
+          "physical-sealed-box-fulfilment#KB-015",
+          "physical-sealed-box-fulfilment#KB-017",
+          "physical-sealed-box-fulfilment#KB-028"
+        ]
+      }
+    ]
+  },
+  "dependencies": [
+    {
+      "dependency": "Bốc thăm khi đơn paid (feature mua box)",
+      "kb_refs": [
+        "physical-sealed-box-fulfilment#KB-003"
+      ]
+    },
+    {
+      "dependency": "Location fulfillment và tồn kho Shopify của variant quà",
+      "kb_refs": [
+        "physical-sealed-box-fulfilment#KB-024",
+        "physical-sealed-box-fulfilment#KB-026",
+        "physical-sealed-box-fulfilment#KB-027"
+      ]
+    },
+    {
+      "dependency": "Cấu hình Order prize information / setting ẩn",
+      "kb_refs": [
+        "physical-sealed-box-fulfilment#KB-044",
+        "physical-sealed-box-fulfilment#KB-048"
+      ]
+    }
+  ],
+  "risks": [
+    {
+      "risk": "Trừ kho sai: trừ hai lần khi kho chỉnh tay trước retry; trừ sai location ở store nhiều kho.",
+      "kb_refs": [
+        "physical-sealed-box-fulfilment#KB-029",
+        "physical-sealed-box-fulfilment#KB-025"
+      ]
+    },
+    {
+      "risk": "Lộ quà với khách nếu box physical bị hiển thị như digital (trang cảm ơn, nút Unbox).",
+      "kb_refs": [
+        "physical-sealed-box-fulfilment#KB-005",
+        "physical-sealed-box-fulfilment#KB-007"
+      ]
+    },
+    {
+      "risk": "Kho không có thông tin đóng gói khi tag lỗi (quá 40 ký tự) hoặc đơn cũ thiếu prize ids.",
+      "kb_refs": [
+        "physical-sealed-box-fulfilment#KB-035",
+        "physical-sealed-box-fulfilment#KB-053"
+      ]
+    }
+  ],
+  "limitations": [
+    {
+      "limitation": "Các ví dụ minh hoạ (hệ thống tự mở box physical lúc mua, tồn kho mỗi SKU giảm 1, giá trị `mysbox_prizes` với cài đặt mặc định, đơn physical không có dòng quà giá 0, bật Tag với mẫu `{{sku}}`, phần tử metafield theo khoá Variant SKU, đơn lẫn: physical hậu xử lý ngay / digital chờ khách mở / chỉ quà digital thành dòng giá 0) chỉ minh hoạ; không đủ để suy schema đầy đủ hay trường bắt buộc.",
+      "kb_refs": [
+        "physical-sealed-box-fulfilment#KB-049",
+        "physical-sealed-box-fulfilment#KB-057",
+        "physical-sealed-box-fulfilment#KB-058",
+        "physical-sealed-box-fulfilment#KB-059",
+        "physical-sealed-box-fulfilment#KB-060",
+        "physical-sealed-box-fulfilment#KB-061",
+        "physical-sealed-box-fulfilment#KB-062",
+        "physical-sealed-box-fulfilment#KB-063",
+        "physical-sealed-box-fulfilment#KB-064"
+      ]
+    }
+  ],
+  "freshness": {
+    "observed_at": null
+  },
+  "unknown_areas": [
+    {
+      "question": "Các công tắc hậu xử lý (trừ tồn kho, tag đơn, note đơn) là cài đặt merchant đổi được ở portal (General settings > Order prize information) hay setting ẩn chỉ nhân viên Mysbox đổi trong back-office? Role nào được đổi?",
+      "why_it_matters": "Hai tài liệu nói khác nhau; quyết định tiền đề và role khi test bật/tắt hậu xử lý.",
+      "kb_refs": [
+        "physical-sealed-box-fulfilment#KB-019",
+        "physical-sealed-box-fulfilment#KB-020"
+      ],
+      "oq_id": "OQ-order-draw-002"
+    },
+    {
+      "question": "Mẫu tag/note hiện chỉ đổi được bằng cấu hình (portal chưa có ô sửa) có còn đúng không?",
+      "why_it_matters": "Phát biểu có rào đón theo thời điểm.",
+      "kb_refs": [
+        "physical-sealed-box-fulfilment#KB-041"
+      ],
+      "oq_id": "OQ-order-draw-039"
+    },
+    {
+      "question": "Box physical có đúng là một nguyên nhân khách đã trả tiền mà không thấy nút Unbox không; box physical có xuất hiện trong danh sách đơn của khách / bộ đếm \"N / M unboxed\" không?",
+      "why_it_matters": "Phát biểu có rào đón; tài liệu chỉ nói khối trang cảm ơn bỏ qua box physical.",
+      "kb_refs": [
+        "physical-sealed-box-fulfilment#KB-008",
+        "physical-sealed-box-fulfilment#KB-005"
+      ],
+      "oq_id": "OQ-order-draw-039"
+    },
+    {
+      "question": "Retry hậu xử lý có ghi đè note/tag đã sửa tay trong Shopify không?",
+      "why_it_matters": "Tài liệu viết \"có thể\"; rủi ro mất dữ liệu merchant nhập tay.",
+      "kb_refs": [
+        "physical-sealed-box-fulfilment#KB-056"
+      ],
+      "oq_id": "OQ-order-draw-039"
+    },
+    {
+      "question": "Khi mẫu tag sinh chuỗi dài hơn 40 ký tự thì app cắt bớt, bỏ tag hay báo lỗi?",
+      "why_it_matters": "Boundary đã nêu nhưng hành vi khi vượt chưa rõ.",
+      "kb_refs": [
+        "physical-sealed-box-fulfilment#KB-034",
+        "physical-sealed-box-fulfilment#KB-035"
+      ],
+      "oq_id": "OQ-order-draw-010"
+    },
+    {
+      "question": "Dạng map của `mysbox_prizes` dùng khoá/giá trị nào; khi đơn trúng trùng variant thì note và `mysbox_prizes` gộp theo variant hay mỗi box một phần tử?",
+      "why_it_matters": "Chỉ dạng danh sách có cột mặc định được nêu; ví dụ chỉ có quà khác SKU số lượng 1.",
+      "kb_refs": [
+        "physical-sealed-box-fulfilment#KB-044",
+        "physical-sealed-box-fulfilment#KB-045"
+      ],
+      "oq_id": "OQ-order-draw-011"
+    },
+    {
+      "question": "Khi merchant tắt Metafield quà của đơn, khối \"Mysbox prizes\" còn hiển thị từ `mysbox_prize_ids` không?",
+      "why_it_matters": "Hai metafield độc lập; tổ hợp bật/tắt không được mô tả.",
+      "kb_refs": [
+        "physical-sealed-box-fulfilment#KB-042",
+        "physical-sealed-box-fulfilment#KB-052"
+      ],
+      "oq_id": "OQ-order-draw-012"
+    },
+    {
+      "question": "Đơn có box physical bị huỷ/hoàn tiền thì tồn kho đã trừ có được cộng lại và tag/note/metafield có bị gỡ không?",
+      "why_it_matters": "Hậu xử lý có side effect lên tồn kho Shopify; tài liệu không nói về đảo ngược.",
+      "kb_refs": [
+        "physical-sealed-box-fulfilment#KB-021"
+      ],
+      "oq_id": "OQ-order-draw-013"
+    },
+    {
+      "question": "Hành động hậu xử lý failed có được retry tự động không, có giới hạn số lần retry không; tập trạng thái huy hiệu hậu xử lý đầy đủ là gì?",
+      "why_it_matters": "Tài liệu chỉ nêu support retry thủ công và các trạng thái rải rác.",
+      "kb_refs": [
+        "physical-sealed-box-fulfilment#KB-054",
+        "physical-sealed-box-fulfilment#KB-055"
+      ],
+      "oq_id": "OQ-order-draw-014"
+    },
+    {
+      "question": "Role admin nào giữ quyền retry physical; action này bị ẩn, vô hiệu hay báo lỗi với đơn chỉ có box digital, và với đơn trộn hai loại?",
+      "why_it_matters": "Không có điều kiện hiển thị/quyền để viết expected result.",
+      "kb_refs": [
+        "physical-sealed-box-fulfilment#KB-055"
+      ],
+      "oq_id": "OQ-order-draw-014"
+    },
+    {
+      "question": "Box physical có tính usage/phí, có tham gia auto-unbox hay Shopify Flow trigger như box digital không; đơn trộn physical + digital được auto-unbox thế nào?",
+      "why_it_matters": "Bảng so sánh không có dòng billing/usage và Flow trigger cho box physical.",
+      "kb_refs": [
+        "physical-sealed-box-fulfilment#KB-014"
+      ],
+      "oq_id": "OQ-order-draw-015"
+    },
+    {
+      "question": "App trừ tồn kho thế nào khi quyền Inventory/fulfillment orders được ghi là quyền đọc?",
+      "why_it_matters": "Tester cần cơ chế thật để kiểm side effect trừ kho.",
+      "kb_refs": [
+        "physical-sealed-box-fulfilment#KB-021"
+      ],
+      "oq_id": "OQ-order-draw-013"
+    },
+    {
+      "question": "Lựa chọn Physical ở bước tạo box tương ứng chính thức với thẻ \"Sealed box\" (và Digital với \"Instantly opening box\") không?",
+      "why_it_matters": "Tài liệu đặt hai cặp tên cạnh nhau nhưng không phát biểu ánh xạ.",
+      "kb_refs": [
+        "physical-sealed-box-fulfilment#KB-001"
+      ],
+      "oq_id": "OQ-order-draw-016"
+    }
+  ],
+  "last_updated": {
+    "date": "2026-10-16",
+    "ccr_ref": "bootstrap"
+  },
+  "coverage_matrix": [
+    {
+      "feature_id": "FEAT-03-physical-sealed-box-fulfilment",
+      "layer": "storefront",
+      "role": "customer",
+      "state": "sau mua box physical",
+      "environment": "documented",
+      "covered": true
+    },
+    {
+      "feature_id": "FEAT-03-physical-sealed-box-fulfilment",
+      "layer": "code",
+      "role": "system",
+      "state": "mọi box physical đã bốc → hậu xử lý",
+      "environment": "documented",
+      "covered": true
+    },
+    {
+      "feature_id": "FEAT-03-physical-sealed-box-fulfilment",
+      "layer": "api",
+      "role": "system",
+      "state": "trừ tồn kho (1 location / không location / không theo dõi tồn kho)",
+      "environment": "documented",
+      "covered": true
+    },
+    {
+      "feature_id": "FEAT-03-physical-sealed-box-fulfilment",
+      "layer": "api",
+      "role": "system",
+      "state": "store nhiều location",
+      "environment": "documented",
+      "covered": false
+    },
+    {
+      "feature_id": "FEAT-03-physical-sealed-box-fulfilment",
+      "layer": "shopify_admin",
+      "role": "merchant",
+      "state": "tag/note bật, mẫu mặc định",
+      "environment": "documented",
+      "covered": true
+    },
+    {
+      "feature_id": "FEAT-03-physical-sealed-box-fulfilment",
+      "layer": "shopify_admin",
+      "role": "merchant",
+      "state": "tag > 40 ký tự",
+      "environment": "documented",
+      "covered": false
+    },
+    {
+      "feature_id": "FEAT-03-physical-sealed-box-fulfilment",
+      "layer": "db",
+      "role": "system",
+      "state": "metafield mysbox_prizes (list) / mysbox_prize_ids",
+      "environment": "documented",
+      "covered": true
+    },
+    {
+      "feature_id": "FEAT-03-physical-sealed-box-fulfilment",
+      "layer": "db",
+      "role": "system",
+      "state": "metafield mysbox_prizes (map)",
+      "environment": "documented",
+      "covered": false
+    },
+    {
+      "feature_id": "FEAT-03-physical-sealed-box-fulfilment",
+      "layer": "portal",
+      "role": "merchant",
+      "state": "Order prize information / bật tắt hậu xử lý",
+      "environment": "documented",
+      "covered": false
+    },
+    {
+      "feature_id": "FEAT-03-physical-sealed-box-fulfilment",
+      "layer": "admin_panel",
+      "role": "support",
+      "state": "bước failed → retry",
+      "environment": "documented",
+      "covered": true
+    },
+    {
+      "feature_id": "FEAT-03-physical-sealed-box-fulfilment",
+      "layer": "code",
+      "role": "system",
+      "state": "đơn lẫn digital + physical",
+      "environment": "documented",
+      "covered": true
+    },
+    {
+      "feature_id": "FEAT-03-physical-sealed-box-fulfilment",
+      "layer": "api",
+      "role": "system",
+      "state": "đơn physical bị huỷ / hoàn tiền",
+      "environment": "documented",
+      "covered": false
+    }
+  ],
+  "profile_conflicts": [
+    {
+      "conflict_group": "CONF-order-draw-03",
+      "topic": "Công tắc hậu xử lý box physical nằm ở portal hay là setting ẩn back-office",
+      "kb_refs": [
+        "physical-sealed-box-fulfilment#KB-019",
+        "physical-sealed-box-fulfilment#KB-020"
+      ],
+      "resolution": "UNRESOLVED"
+    }
+  ],
+  "profile_relationships": [
+    {
+      "from": "physical-sealed-box-fulfilment",
+      "to": "purchase-and-prize-draw",
+      "relation": "box physical được bốc như digital khi đơn paid rồi mới hậu xử lý",
+      "kb_refs": [
+        "physical-sealed-box-fulfilment#KB-003"
+      ]
+    },
+    {
+      "from": "physical-sealed-box-fulfilment",
+      "to": "prizes-added-to-order",
+      "relation": "box physical không đi qua bước thêm dòng quà; đơn lẫn thì phần digital đi bước đó",
+      "kb_refs": [
+        "physical-sealed-box-fulfilment#KB-011",
+        "physical-sealed-box-fulfilment#KB-014"
+      ]
+    },
+    {
+      "from": "physical-sealed-box-fulfilment",
+      "to": "general-settings",
+      "relation": "khoá metafield, setting ẩn dạng metafield và công tắc trừ kho/tag/note",
+      "kb_refs": [
+        "physical-sealed-box-fulfilment#KB-044",
+        "physical-sealed-box-fulfilment#KB-048",
+        "physical-sealed-box-fulfilment#KB-020"
+      ]
+    },
+    {
+      "from": "physical-sealed-box-fulfilment",
+      "to": "install-and-onboarding",
+      "relation": "wizard onboarding đặt định dạng khoá metafield mặc định Variant SKU",
+      "kb_refs": [
+        "physical-sealed-box-fulfilment#KB-047"
+      ]
+    },
+    {
+      "from": "physical-sealed-box-fulfilment",
+      "to": "admin-order-inspection-and-retry",
+      "relation": "support xem bước hậu xử lý và retry physical",
+      "kb_refs": [
+        "physical-sealed-box-fulfilment#KB-018",
+        "physical-sealed-box-fulfilment#KB-055"
+      ]
+    },
+    {
+      "from": "physical-sealed-box-fulfilment",
+      "to": "box-type-and-prize-setup",
+      "relation": "loại box Physical / category Sealed box",
+      "kb_refs": [
+        "physical-sealed-box-fulfilment#KB-001"
+      ]
+    },
+    {
+      "from": "physical-sealed-box-fulfilment",
+      "to": "reveal-journey",
+      "relation": "khách không có hành trình mở box online với box physical",
+      "kb_refs": [
+        "physical-sealed-box-fulfilment#KB-004",
+        "physical-sealed-box-fulfilment#KB-005"
+      ]
+    }
+  ]
+}

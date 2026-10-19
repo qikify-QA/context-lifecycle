@@ -1,0 +1,112 @@
+{
+  "mode": "REFRESH",
+  "product_key": "mysbox",
+  "mode_note": "REFRESH theo yêu cầu trực tiếp của operator (không Proposal). Base: published_context_version 1 (DOC_BOOTSTRAP 2026-10-16, knowledge/products/mysbox/). Mục tiêu: xác minh trên staging các KB item/check của 3 object box, order-draw, reveal — ưu tiên check P1 NEEDS_CONFIRMATION chỉ dựa trên dev doc và các conflict_group của 3 object. Ghi OBSERVED_CURRENT; KHÔNG tự đóng conflict, KHÔNG supersede (REFRESH không có supersede, contracts/supersede.md). Không spawn scope-planner.",
+
+  "context": {
+    "environment": "staging",
+    "role": "merchant"
+  },
+
+  "object_target": {
+    "object_key": "box",
+    "object_type": "Box (variant Shopify được đánh dấu là mystery box)",
+    "object_id_or_url": "Portal: env MYS_SHOPIFY_ADMIN_APP_URL → Manage boxes; box id 1022 (/boxes/box-settings/1022)",
+    "initial_state": "Box 1022: Single, Instantly opening (digital), Active, product 'QA-Explore Single Box', prize 'Forest - Vileplume' qty 7 / 'Forest - Sprigatito' qty 3, box_version 3018 (do operator smoke test tạo 2026-10-16). Shop đang gói Free."
+  },
+  "additional_object_targets": [
+    {
+      "object_key": "order-draw",
+      "object_type": "Order có box (đơn paid → bốc thăm)",
+      "object_id_or_url": "Đơn test #1006 (order id 6628571545755, Bogus gateway) — Shopify admin /orders/6628571545755 và app Manage orders",
+      "initial_state": "Đơn #1006: 1/1 box opened, prize Vileplume đã được thêm vào đơn Shopify (theo operator smoke test 2026-10-16 — phải tự quan sát lại)."
+    },
+    {
+      "object_key": "reveal",
+      "object_type": "Trang khách / reveal dưới /apps/mysbox/ (app proxy) + thank-you block",
+      "object_id_or_url": "https://<MYS_STORE_DOMAIN>/apps/mysbox/orders (magic link của đơn test do run tạo)",
+      "initial_state": "Như order-draw; đơn #1006 đã mở hết."
+    }
+  ],
+
+  "feature_scope": {
+    "_note": "REFRESH: chỉ feature được giao; dùng lại feature_key + FEATURE-ID của base. Danh sách check P1 NEEDS_CONFIRMATION và conflict_group (kèm statement base) nằm ở input/refresh-targets.json — đó là MỤC TIÊU xác minh, không phải evidence. Check layer db/code: surface không bật → chỉ ghi hệ quả quan sát được qua UI/network, còn lại NOT_COVERED.",
+    "box": ["FEAT-02-box-create-and-publish", "FEAT-01-box-type-and-prize-setup", "FEAT-03-box-versioning", "FEAT-04-inventory-and-sold-out", "FEAT-05-picking-modes (chỉ quan sát form/option, không suy thuật toán từ 1 mẫu)", "FEAT-06-pool-refill (chỉ quan sát form; resell bị khoá trên gói Free → phần refill-từ-resell NOT_COVERED)"],
+    "order-draw": ["FEAT-01-purchase-and-prize-draw", "FEAT-02-prizes-added-to-order", "FEAT-03-physical-sealed-box-fulfilment (chỉ quan sát form/setting; không tạo đơn sealed trừ khi còn quota đơn)"],
+    "reveal": ["FEAT-01-reveal-journey", "FEAT-02-customer-portal-access-magic-link", "FEAT-03-auto-unbox (chỉ quan sát setting + box version; không chờ job)"]
+  },
+
+  "operator_hints_to_verify": {
+    "_note": "Gợi ý của operator từ smoke test — KHÔNG phải evidence. Mỗi gợi ý phải được xác nhận hoặc bác bỏ bằng observation của chính run này (ghi rõ OBSERVED / NOT_OBSERVED / CONTRADICTED).",
+    "a": "Save lần đầu box Single mới tự publish Active (POST /api/boxes rồi POST /api/boxes/<id>/publish) dù combobox Status hiện Draft.",
+    "b": "Box không buyback → quà vào đơn Shopify ngay sau unbox (line ₫0, discount 'MYSBOX: -100%', timeline 'order edited' + email). Đối chiếu KB prizes-added-to-order (nói phải hết cửa sổ resell) — CONF-reveal-01 / KB-017.",
+    "c": "Thank-you block 'Please wait while we fetch your box data' → 'Unbox your mystery box now!' trong ≤30s.",
+    "d": "POST /apps/mysbox/api/unopened-boxes/open trả winning_bundles có sẵn (kết quả đã chốt từ lúc bốc thăm).",
+    "e": "Đơn test không làm tăng Box sales limit.",
+    "f": "Trang Manage boxes chỉ có thẻ Single/Bundle; group là Randomization method bên trong form."
+  },
+
+  "surfaces": {
+    "portal": { "enabled": true, "auth": "operator_session_handover (Shopify admin đã đăng nhập sẵn trong browser Playwright dùng chung)" },
+    "storefront": {
+      "enabled": true,
+      "entry_url": "https://<MYS_STORE_DOMAIN>/ (password đã qua) — trang product của box QA-",
+      "buyer_state": "guest (magic link qua đơn test); logged_in_customer chỉ khi operator bàn giao — mặc định không có",
+      "buyer_facing_features": [
+        "order-draw/purchase-and-prize-draw: mua box QA- qua Bogus Gateway → đơn paid → bốc thăm (thank-you block, trang khách)",
+        "order-draw/prizes-added-to-order: sau unbox, quà có vào đơn Shopify không, khi nào (đối chiếu trang đơn admin — do portal pass 2)",
+        "reveal/reveal-journey: thank-you block, link Unbox/Multi-unbox, trang reveal, 'Your orders'",
+        "reveal/customer-portal-access-magic-link: magic link của đơn test, phạm vi một đơn hay mọi đơn",
+        "box/box-create-and-publish + box-type-and-prize-setup + inventory-and-sold-out: widget 'Box items' và Chance hiển thị trên trang product sau khi portal tạo/publish box; tồn kho prize giảm sau đơn"
+      ]
+    },
+    "api": { "enabled": true, "variant": "runtime-trace", "base_env": "MYS_API_BASE (== environments.staging.expected_api_base, orchestrator đã kiểm env khớp)" },
+    "db": { "enabled": false, "access_mode": "READ_ONLY", "reason": "explore.surfaces.db.enabled=false" },
+    "code": { "enabled": false, "questions": [], "reason": "explore.surfaces.code.enabled=false" },
+    "admin_panel": { "enabled": false, "reason": "NOT_COVERED theo config" }
+  },
+
+  "network_capture": {
+    "enabled": true,
+    "capture_request_body": true,
+    "capture_response_body": true,
+    "redact_headers": ["authorization", "cookie", "set-cookie", "x-api-key", "x-shopify-access-token"],
+    "redact_also": ["?parameters= của magic link (base64 JSON chứa token) — toàn bộ giá trị", "Shopify session token (JWT)", "id_token/hmac/signature trong query app proxy", "email/tên/địa chỉ buyer"]
+  },
+
+  "exploration_policy": {
+    "mutation_policy": "SAFE_REVERSIBLE_ONLY",
+    "extra_authorization": {
+      "checkout_boundary": "bogus_gateway_test_order",
+      "rule": "playbook §5: test order CHỈ qua Shopify Bogus Gateway trên development store đã xác minh; buyer email = MYS_TEST_BUYER_EMAIL, tên/địa chỉ 'QA Test'; chỉ mua box tiền tố QA-.",
+      "max_test_orders_this_run": 2,
+      "max_boxes_per_order": 3
+    },
+    "allowed_reversible": [
+      "tạo product/variant + box tên QA-… (Save lần đầu có thể tự publish Active)",
+      "Deactivate box QA- do run tạo (cleanup cuối run)",
+      "sửa General Settings / Style Settings rồi Discard hoặc khôi phục đúng giá trị cũ (ghi giá trị trước)",
+      "Unbox / Multi-unbox trên đơn test của chính run"
+    ],
+    "do_not_touch": ["box 1022 — KHÔNG deactivate/xoá/sửa (operator giữ); chỉ đọc", "đơn #1006 — KHÔNG sửa/archive (operator giữ); chỉ đọc"],
+    "forbidden_actions": [
+      "delete_non_qa_data",
+      "charge",
+      "plan_change",
+      "real_payment",
+      "uninstall",
+      "theme_change",
+      "save_koin_key",
+      "enable_shopify_flow",
+      "admin_panel_write",
+      "edit_shopify_order",
+      "send_notification_to_real_customer"
+    ],
+    "cleanup_required": true,
+    "cleanup_plan": "Box QA- do run tạo → Deactivate box ở cuối run (sau storefront). Product QA- do run tạo: giữ nguyên (không có chỉ thị archive) và ghi retention. Đơn test: không xoá được → ghi retention; không archive. Settings bị sửa → khôi phục. Cart → xoá/ghi retention."
+  },
+
+  "execution_order": "TUẦN TỰ vì browser dùng chung: portal pass 1 → storefront (test order, thank-you, reveal, trang khách) → portal pass 2 (Manage orders, trang đơn Shopify admin chỉ quan sát, Box sales limit, tồn kho sau đơn, cleanup Deactivate box QA- mới) → api-explorer runtime-trace trên toàn bộ capture.",
+
+  "session_rule": "Không tự login. Session hết hạn / bị đẩy ra login / OAuth re-authorize → DỪNG, BLOCKED, báo orchestrator để operator bàn giao lại."
+}

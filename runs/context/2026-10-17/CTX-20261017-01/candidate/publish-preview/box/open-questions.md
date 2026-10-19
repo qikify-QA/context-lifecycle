@@ -1,0 +1,2411 @@
+# Open Questions — box
+
+Tổng: 130 mục (CONFLICT 9 · OPEN_ISSUE 61 · NEEDS_CONFIRMATION 60). Version 1 sinh từ bootstrap DOC_BOOTSTRAP (bộ Product KB v1 do dev viết từ source code, 2026-10-16); version 2 thêm mục từ REFRESH trên staging 2026-10-16 (quan sát OBSERVED_CURRENT); REFRESH trên staging 2026-10-17 thêm mục mới, ghi `staging_observation` (OBSERVED_CURRENT, không resolve NEEDS_CONFIRMATION/CONFLICT) và gỡ OPEN_ISSUE đã được quan sát trả lời (xem CHANGELOG). Mỗi mục là một khối json; `kb_ids` dạng `<feature_key>#KB-xxx` (hoặc `_object-level.<object>#KB-xxx` cho tầng object), `check_ids` dạng `<feature_key>:CHK-xxx`.
+
+## OQ-box-001 — NEEDS_CONFIRMATION
+
+```json
+{
+  "oq_id": "OQ-box-001",
+  "type": "NEEDS_CONFIRMATION",
+  "feature_id": null,
+  "summary": "Bộ tài liệu nguồn không chỉ định role mặc định cho object này (bootstrap-request để role null): các KB item mang scope.role theo vai trò tài liệu nêu cho từng hành vi, hoặc \"unspecified\" khi tài liệu không nêu. Cần PO/Dev xác nhận ma trận role → quyền thực tế trên production (merchant owner/staff, khách, admin Mysbox theo từng role) trước khi dùng các check PERMISSION làm oracle."
+}
+```
+
+## OQ-box-002 — CONFLICT
+
+```json
+{
+  "oq_id": "OQ-box-002",
+  "type": "CONFLICT",
+  "feature_id": "box-versioning",
+  "summary": "Box version được tạo ở mọi lần lưu box, hay chỉ khi lưu mà có ít nhất một thay đổi cấu hình (variant link, loại box, category, item, cài đặt, cờ tracked)? Hai tài liệu phát biểu khác nhau; một mục khác chỉ nói \"có thể\" tạo version. Cần xác nhận hành vi khi lưu box mà không đổi gì.",
+  "side_a": "Tài liệu \"Overview\" (§Key vocabulary) và \"Domain entities\" (§Các đối tượng): một box version được tạo mỗi lần lưu box.",
+  "side_b": "Tài liệu \"Box version — bản chụp cấu hình\" (§Bước 2 — Thay đổi nào tạo version mới): version mới sinh ra khi lưu và ít nhất một trong danh sách thuộc tính cấu hình thay đổi.",
+  "conflict_group": "CONF-box-01",
+  "kb_ids": [
+    "box-versioning#KB-001",
+    "box-versioning#KB-002",
+    "box-versioning#KB-003"
+  ],
+  "check_ids": [
+    "box-versioning:CHK-006"
+  ],
+  "staging_observation": "Ghi chú quan sát staging cho OQ-box-002 / CONF-box-01: Đổi animation và đổi quantity đều tạo version mới (khớp cả KB-001 và KB-002). Save bị disabled khi form không đổi nên không có mẫu 'lưu không thay đổi' để phân biệt hai phía. Không phía nào được xác nhận riêng.",
+  "staging_observation_kb_ids": [
+    "box-versioning#KB-045",
+    "box-versioning#KB-001",
+    "box-versioning#KB-002"
+  ],
+  "status_note": "Quan sát staging chỉ là OBSERVED_CURRENT; conflict vẫn mở, chưa resolve."
+}
+```
+
+## OQ-box-003 — CONFLICT
+
+```json
+{
+  "oq_id": "OQ-box-003",
+  "type": "CONFLICT",
+  "feature_id": "box-versioning",
+  "summary": "Đơn hàng được gắn với box version tại thời điểm mua (thanh toán) hay tại thời điểm bốc thăm? Nếu bốc thăm có thể bị trễ/xếp hàng so với lúc thanh toán thì hai mốc cho ra version khác nhau khi merchant sửa box ở giữa; tài liệu cũng nêu một khoảng hẹp với đơn thanh toán ngay trước lúc pause sales.",
+  "side_a": "Tài liệu \"Overview\" (§Key vocabulary), \"Domain entities\" (§Các đối tượng) và \"Trang Box (Publish, Versions, Inventory, Recent pulls)\" (§3. Hệ quả cần nhớ): đơn nhớ box version tại thời điểm mua.",
+  "side_b": "Tài liệu \"Box version — bản chụp cấu hình\" (§phần mở đầu, §Bước 3 — Ai dùng version nào) và \"Nhóm 02 — Boxes (hộp bí ẩn)\" (§Từ vựng nhóm): đơn nhớ version lúc được bốc thăm, gắn với version đang hiệu lực đúng lúc server bốc thăm.",
+  "conflict_group": "CONF-box-02",
+  "kb_ids": [
+    "box-versioning#KB-004",
+    "box-versioning#KB-005",
+    "box-versioning#KB-034"
+  ],
+  "check_ids": [
+    "box-versioning:CHK-012"
+  ],
+  "staging_observation": "Ghi chú quan sát staging cho OQ-box-003 / CONF-box-02: Đơn #1007/#1008 gắn box_version_id = version hiện hành cả lúc mua lẫn lúc bốc (box không bị sửa giữa paid và bốc) — không phân biệt được KB-004 (lúc mua) và KB-005 (lúc bốc).",
+  "staging_observation_kb_ids": [
+    "box-versioning#KB-047",
+    "box-versioning#KB-004",
+    "box-versioning#KB-005"
+  ],
+  "status_note": "Quan sát staging chỉ là OBSERVED_CURRENT; conflict vẫn mở, chưa resolve."
+}
+```
+
+## OQ-box-004 — CONFLICT
+
+```json
+{
+  "oq_id": "OQ-box-004",
+  "type": "CONFLICT",
+  "feature_id": "pool-refill",
+  "summary": "Mâu thuẫn nội bộ trong tài liệu pool refill: bảng \"Item nào được trả\" nói các chỉnh sửa box (box vẫn ở pool) giữa lúc mua và lúc resell vẫn trả item về pool, trong khi mục khác biệt production/staging nói trên production mọi chỉnh sửa sinh version mới đều làm lượt trả bị bỏ qua âm thầm (một known defect). Cần dev xác nhận bảng chỉ đúng cho staging (khớp queue token) hay không, và trên production các chỉnh sửa đó có sinh version mới và làm mất lượt trả không.",
+  "side_a": "Tài liệu \"Pool refill — trả item đã resell về pool\" §Item nào được trả, item nào không: đổi cài đặt hiển thị/animation, đổi chế độ nhóm, thêm/bớt item khác, đổi deactivate/draft (box vẫn ở pool), hoặc item bị bỏ rồi thêm lại trước khi resell — item vẫn được trả lại (bảng không ghi môi trường).",
+  "side_b": "Cùng tài liệu §Khác biệt production / staging (đồng thuận với Playbook 2 §Món đã bán lại không về pool , \"Box version — bản chụp cấu hình\" §Version và pool refill và \"Job chạy định kỳ và lệnh vận hành\" §3. Lệnh artisan — cần engineer): trên production chỉ cần box được sửa (sinh version mới) giữa lúc khách mua và lúc resell là lượt trả item bị bỏ qua âm thầm.",
+  "conflict_group": "CONF-box-03",
+  "kb_ids": [
+    "pool-refill#KB-038",
+    "pool-refill#KB-039",
+    "pool-refill#KB-040",
+    "pool-refill#KB-041",
+    "pool-refill#KB-042",
+    "pool-refill#KB-043",
+    "pool-refill#KB-044"
+  ],
+  "check_ids": [
+    "pool-refill:CHK-017"
+  ]
+}
+```
+
+## OQ-box-005 — CONFLICT
+
+```json
+{
+  "oq_id": "OQ-box-005",
+  "type": "CONFLICT",
+  "feature_id": "pool-refill",
+  "summary": "Hai tài liệu nêu khác nhau về điều kiện dừng-khi-cạn để pool refill áp dụng: một bên bắt buộc chọn \"Automatically deactivate box\", bên kia chấp nhận tick \"Draft product when empty\" hoặc \"Deactivate box when empty\". Cần dev xác nhận box chỉ bật draft-when-empty (không deactivate) có được refill không.",
+  "side_a": "Tài liệu \"Pool refill — trả item đã resell về pool\" §Khi nào refill áp dụng: refill cần đủ ba điều kiện cùng lúc, trong đó box phải chọn \"Automatically deactivate box\".",
+  "side_b": "Tài liệu \"Playbook 2: resell, số tiền hoàn, pool refill, store credit\" §Món đã bán lại không về pool (refill): box Tier picking mode Pool phải được tick \"Draft product when empty\" HOẶC \"Deactivate box when empty\".",
+  "conflict_group": "CONF-box-04",
+  "kb_ids": [
+    "pool-refill#KB-011",
+    "pool-refill#KB-012",
+    "pool-refill#KB-013"
+  ],
+  "check_ids": [
+    "pool-refill:CHK-016"
+  ],
+  "staging_observation": "Ghi chú quan sát staging cho OQ-box-005 / CONF-box-04: Shop gói Free: form không hiện option refill, deactivate/draft-when-empty hay pool; buyback khoá. Không có evidence cho phía nào.",
+  "staging_observation_kb_ids": [
+    "pool-refill#KB-053",
+    "pool-refill#KB-011",
+    "pool-refill#KB-012",
+    "pool-refill#KB-013"
+  ],
+  "status_note": "Quan sát staging chỉ là OBSERVED_CURRENT; conflict vẫn mở, chưa resolve."
+}
+```
+
+## OQ-box-006 — CONFLICT
+
+```json
+{
+  "oq_id": "OQ-box-006",
+  "type": "CONFLICT",
+  "feature_id": "pool-refill",
+  "summary": "Hai tài liệu nêu khác nhau về bên áp dụng bộ đệm refill kiểu MANUAL: một bên nói merchant áp dụng, bên kia nói người vận hành gọi API (không có màn hình portal). Cần dev xác nhận merchant có cách nào tự áp dụng bộ đệm không, hay chỉ Mysbox team/support qua API.",
+  "side_a": "Tài liệu \"Playbook 2: resell, số tiền hoàn, pool refill, store credit\" §Món đã bán lại không về pool (refill): ở chế độ Manual, món bán lại nằm trong bộ đệm chờ merchant áp dụng (box vẫn hết hàng cho đến khi merchant áp dụng).",
+  "side_b": "Tài liệu \"Pool refill — trả item đã resell về pool\" §AUTO và MANUAL: ở kiểu MANUAL người vận hành gọi API áp dụng bộ đệm (chọn được từng item/số lượng); kiểu MANUAL không có màn hình portal, đặt bởi API/Mysbox team.",
+  "conflict_group": "CONF-box-05",
+  "kb_ids": [
+    "pool-refill#KB-021",
+    "pool-refill#KB-022"
+  ],
+  "check_ids": [
+    "pool-refill:CHK-009"
+  ],
+  "staging_observation": "Ghi chú quan sát staging cho OQ-box-006 / CONF-box-05: Không thấy lựa chọn refill AUTO/MANUAL hay thao tác áp dụng bộ đệm trong portal merchant (gói Free). Không có evidence cho phía nào.",
+  "staging_observation_kb_ids": [
+    "pool-refill#KB-053",
+    "pool-refill#KB-021",
+    "pool-refill#KB-022"
+  ],
+  "status_note": "Quan sát staging chỉ là OBSERVED_CURRENT; conflict vẫn mở, chưa resolve."
+}
+```
+
+## OQ-box-007 — CONFLICT
+
+```json
+{
+  "oq_id": "OQ-box-007",
+  "type": "CONFLICT",
+  "feature_id": "pool-refill",
+  "summary": "Có bao nhiêu lệnh vận hành chỉ có trên nhánh build-staging? Mâu thuẫn nội bộ trong tài liệu job nền: câu hỏi thường gặp nói \"hai lệnh\", bảng lệnh chỉ gắn thẻ chỉ-có-trên-staging cho một lệnh (backfill token hàng đợi của pool refill). Cần dev xác nhận lệnh thứ hai, hoặc \"hai lệnh\" có tính lượt --dry-run và lượt chạy thật của cùng một lệnh hay không.",
+  "side_a": "Tài liệu \"Job chạy định kỳ và lệnh vận hành\" §Câu hỏi thường gặp: hai lệnh chỉ có trên staging và dòng lịch kiểm tra nguồn đơn.",
+  "side_b": "Tài liệu \"Job chạy định kỳ và lệnh vận hành\" §3. Lệnh artisan: chỉ dòng lệnh backfill token hàng đợi của pool refill mang thẻ chỉ có trên staging.",
+  "conflict_group": "CONF-admin-panel-01",
+  "kb_ids": [
+    "pool-refill#KB-050"
+  ]
+}
+```
+
+## OQ-box-008 — OPEN_ISSUE
+
+```json
+{
+  "oq_id": "OQ-box-008",
+  "type": "OPEN_ISSUE",
+  "feature_id": "box-create-and-publish",
+  "summary": "Hạn chế đã biết: lỗi tạm thời của Shopify khi lưu box có thể hiện thành thông báo \"thiếu tài nguyên ở Shopify\" dù tài nguyên không thiếu (tài liệu diễn đạt là \"có thể\"). Cần xác nhận hành vi đúng và cách merchant/support phân biệt.",
+  "kb_ids": [
+    "box-create-and-publish#KB-044"
+  ],
+  "check_ids": [
+    "box-create-and-publish:CHK-024"
+  ]
+}
+```
+
+## OQ-box-009 — OPEN_ISSUE
+
+```json
+{
+  "oq_id": "OQ-box-009",
+  "type": "OPEN_ISSUE",
+  "feature_id": "box-create-and-publish",
+  "summary": "Hạn chế đã biết: khi merchant nhập thêm hàng hoặc sửa product/collection ở Shopify, bản sao dữ liệu trong Mysbox không tự cập nhật cho tới khi deactivate, lưu lại (hoặc Sync data với box Group) và activate. Cần xác nhận đây là hành vi chủ ý hay lỗi cần theo dõi.",
+  "kb_ids": [
+    "box-create-and-publish#KB-054",
+    "box-create-and-publish#KB-055"
+  ],
+  "check_ids": [
+    "box-create-and-publish:CHK-025"
+  ]
+}
+```
+
+## OQ-box-010 — OPEN_ISSUE
+
+```json
+{
+  "oq_id": "OQ-box-010",
+  "type": "OPEN_ISSUE",
+  "feature_id": "box-create-and-publish",
+  "summary": "Khi Save box Group gặp \"Sync failed. Please contact support for assistance.\" thì box ở trạng thái nào và có retry được không? — Quyết định expected result của luồng lưu box Group khi sync lỗi.",
+  "kb_ids": [
+    "box-create-and-publish#KB-045",
+    "box-create-and-publish#KB-048"
+  ]
+}
+```
+
+## OQ-box-011 — OPEN_ISSUE
+
+```json
+{
+  "oq_id": "OQ-box-011",
+  "type": "OPEN_ISSUE",
+  "feature_id": "box-create-and-publish",
+  "summary": "Metafield nào (namespace/key) được ghi lên variant khi publish, và deactivate/unpublish có xoá metafield không hay chỉ xoá khi delete? — Kiểm side effect trên Shopify và hành vi widget khi box về Draft.",
+  "kb_ids": [
+    "box-create-and-publish#KB-009",
+    "box-create-and-publish#KB-052",
+    "box-create-and-publish#KB-061"
+  ],
+  "staging_observation": "Ghi chú quan sát staging cho OQ-box-011: 2026-10-17: Khi box Active, variant có metafield \"mysbox.box\" (unstructured) và trang product nhúng bản sao trong window.mysboxStore; ~1 phút sau Deactivate metafield vẫn còn với published_at cũ (API trả null). Widget sau Deactivate chưa xem.",
+  "staging_observation_kb_ids": [
+    "box-create-and-publish#KB-104",
+    "box-create-and-publish#KB-105"
+  ],
+  "status_note": "Quan sát staging chỉ là OBSERVED_CURRENT; mục vẫn mở (câu hỏi chưa được trả lời đủ, hoặc cần nguồn thẩm quyền)."
+}
+```
+
+## OQ-box-013 — OPEN_ISSUE
+
+```json
+{
+  "oq_id": "OQ-box-013",
+  "type": "OPEN_ISSUE",
+  "feature_id": "box-create-and-publish",
+  "summary": "\"Duplicate box\" dùng được với mọi loại box và box Active không; box duplicate có giữ liên kết variant (vốn chỉ thuộc một box) không? — Luật một variant thuộc một box có thể làm box duplicate lỗi khi Save.",
+  "kb_ids": [
+    "box-create-and-publish#KB-016",
+    "box-create-and-publish#KB-021",
+    "box-create-and-publish#KB-036"
+  ],
+  "staging_observation": "Ghi chú quan sát staging cho OQ-box-013: 2026-10-17: Pass 1 không thấy control Duplicate; pass 2 thấy nút \"Duplicate box\" ở header form box (Active và Draft) — hai ghi nhận trái nhau. Không bấm nên chưa biết trường nào được copy.",
+  "staging_observation_kb_ids": [
+    "box-create-and-publish#KB-099",
+    "box-create-and-publish#KB-100"
+  ],
+  "status_note": "Quan sát staging chỉ là OBSERVED_CURRENT; mục vẫn mở (câu hỏi chưa được trả lời đủ, hoặc cần nguồn thẩm quyền)."
+}
+```
+
+## OQ-box-014 — OPEN_ISSUE
+
+```json
+{
+  "oq_id": "OQ-box-014",
+  "type": "OPEN_ISSUE",
+  "feature_id": "box-create-and-publish",
+  "summary": "Đơn test tạo từ \"Preview\" có bốc thăm thật và có tính vào quota/usage không? — Ảnh hưởng đếm capacity và dữ liệu thử nghiệm.",
+  "kb_ids": [
+    "box-create-and-publish#KB-024"
+  ]
+}
+```
+
+## OQ-box-015 — OPEN_ISSUE
+
+```json
+{
+  "oq_id": "OQ-box-015",
+  "type": "OPEN_ISSUE",
+  "feature_id": "box-create-and-publish",
+  "summary": "\"Pause sales\", \"deactivate\" và \"unpublish\" có phải cùng một thao tác/nút UI đưa box về Draft không? — Precondition sửa box được nêu bằng nhiều thuật ngữ khác nhau; cần đúng nút UI để viết bước test.",
+  "kb_ids": [
+    "box-create-and-publish#KB-058",
+    "box-create-and-publish#KB-060",
+    "box-create-and-publish#KB-067",
+    "box-create-and-publish#KB-068"
+  ],
+  "staging_observation": "Ghi chú quan sát staging cho OQ-box-015: 2026-10-17: Nút \"Deactivate box\" trên banner gọi POST /api/boxes/{id}/unpublish (body rỗng, 200), không hỏi xác nhận; danh sách có tooltip \"Deactivate\" và combobox \"Status\" bật khi Active. Endpoint của combobox Status và Actions ở danh sách chưa bấm.",
+  "staging_observation_kb_ids": [
+    "box-create-and-publish#KB-097",
+    "box-create-and-publish#KB-098"
+  ],
+  "status_note": "Quan sát staging chỉ là OBSERVED_CURRENT; mục vẫn mở (câu hỏi chưa được trả lời đủ, hoặc cần nguồn thẩm quyền)."
+}
+```
+
+## OQ-box-016 — OPEN_ISSUE
+
+```json
+{
+  "oq_id": "OQ-box-016",
+  "type": "OPEN_ISSUE",
+  "feature_id": "box-create-and-publish",
+  "summary": "Có điều kiện nào (ngoài trạng thái Draft) chặn xoá box khi box đã có đơn không? — Tài liệu tự khai chưa xác nhận; không viết được expected result cho xoá box có đơn.",
+  "kb_ids": [
+    "box-create-and-publish#KB-059",
+    "box-create-and-publish#KB-066"
+  ]
+}
+```
+
+## OQ-box-017 — OPEN_ISSUE
+
+```json
+{
+  "oq_id": "OQ-box-017",
+  "type": "OPEN_ISSUE",
+  "feature_id": "box-create-and-publish",
+  "summary": "Khi Shopify lỗi và publish bị huỷ, người dùng thấy thông báo gì và sync status có đổi không? — Nhánh lỗi metafield không có thông điệp cụ thể.",
+  "kb_ids": [
+    "box-create-and-publish#KB-064",
+    "box-create-and-publish#KB-072"
+  ]
+}
+```
+
+## OQ-box-018 — OPEN_ISSUE
+
+```json
+{
+  "oq_id": "OQ-box-018",
+  "type": "OPEN_ISSUE",
+  "feature_id": "box-create-and-publish",
+  "summary": "Route sửa box đã publish là route nào, và 'not found' là HTTP 404 hay thông báo UI? — Cần cho check API; tài liệu không nêu route.",
+  "kb_ids": [
+    "box-create-and-publish#KB-080"
+  ],
+  "staging_observation": "Ghi chú quan sát staging cho OQ-box-018: 2026-10-17: Mở form box Active chỉ gọi document 200 + GET /api/boxes/{id} 200, hiện banner \"The box is on sale and cannot be edited. Pause sales to make changes.\"; không có request 4xx/\"not found\" nào.",
+  "staging_observation_kb_ids": [
+    "box-create-and-publish#KB-101"
+  ],
+  "status_note": "Quan sát staging chỉ là OBSERVED_CURRENT; mục vẫn mở (câu hỏi chưa được trả lời đủ, hoặc cần nguồn thẩm quyền)."
+}
+```
+
+## OQ-box-019 — OPEN_ISSUE
+
+```json
+{
+  "oq_id": "OQ-box-019",
+  "type": "OPEN_ISSUE",
+  "feature_id": "box-create-and-publish",
+  "summary": "'bundles' của box (điều kiện để widget hiện) cụ thể là gì? — Không kiểm được điều kiện hiển thị widget nếu không biết đối tượng.",
+  "kb_ids": [
+    "box-create-and-publish#KB-076"
+  ],
+  "staging_observation": "Ghi chú quan sát staging cho OQ-box-019: 2026-10-17: GET /api/boxes/{id} trả bundles[]{source_type, resources, items[]{linked_id, quantity, rate, position, settings{chance, chance_color, title, image, price}}, position, settings{title \"Prize #n\"}} (Single 1 set, Bundle 3 set); box-versions không có quantity/linked_id; bản nhúng storefront cùng shape với /api/boxes và widget hiện một nhóm cho mỗi bundle.",
+  "staging_observation_kb_ids": [
+    "_object-level.box#KB-022",
+    "box-versioning#KB-054"
+  ],
+  "status_note": "Quan sát staging chỉ là OBSERVED_CURRENT; mục vẫn mở (câu hỏi chưa được trả lời đủ, hoặc cần nguồn thẩm quyền)."
+}
+```
+
+## OQ-box-020 — OPEN_ISSUE
+
+```json
+{
+  "oq_id": "OQ-box-020",
+  "type": "OPEN_ISSUE",
+  "feature_id": "box-create-and-publish",
+  "summary": "Hai thông báo \"Box sync is not complete.\" và \"Box must finish syncing before it can be published.\" (và \"Cannot publish: inventory pools are exhausted.\") hiện ở portal hay admin panel, và trong tình huống nào mỗi cái? — Hai text khác nhau cho cùng điều kiện sync chưa xong; check cần biết surface và text mong đợi.",
+  "kb_ids": [
+    "box-create-and-publish#KB-062",
+    "box-create-and-publish#KB-063",
+    "box-create-and-publish#KB-078"
+  ]
+}
+```
+
+## OQ-box-021 — OPEN_ISSUE
+
+```json
+{
+  "oq_id": "OQ-box-021",
+  "type": "OPEN_ISSUE",
+  "feature_id": "box-create-and-publish",
+  "summary": "Hệ thống tự unpublish box trong điều kiện nào? — KB chỉ nêu hệ quả (ngày publish trống), không nêu trigger; cần để test vòng đời và widget.",
+  "kb_ids": [
+    "box-create-and-publish#KB-073"
+  ]
+}
+```
+
+## OQ-box-022 — OPEN_ISSUE
+
+```json
+{
+  "oq_id": "OQ-box-022",
+  "type": "OPEN_ISSUE",
+  "feature_id": "box-type-and-prize-setup",
+  "summary": "Đội Mysbox bật tuỳ chọn Group cho shop ở đâu (admin panel, cờ shop) và bởi vai trò nào? — Cần để chuẩn bị dữ liệu test và viết check permission cho trường hợp shop chưa được bật.",
+  "kb_ids": [
+    "box-type-and-prize-setup#KB-007"
+  ]
+}
+```
+
+## OQ-box-023 — OPEN_ISSUE
+
+```json
+{
+  "oq_id": "OQ-box-023",
+  "type": "OPEN_ISSUE",
+  "feature_id": "box-type-and-prize-setup",
+  "summary": "Giới hạn Bundle 2-20 set được chặn ở portal, ở server, hay cả hai? — Quyết định test qua UI hay qua API.",
+  "kb_ids": [
+    "box-type-and-prize-setup#KB-016"
+  ],
+  "staging_observation": "Ghi chú quan sát staging cho OQ-box-023: 2026-10-17: Với 2 set nút xoá set bị disabled (bật khi từ 3 set); bấm \"Add prize set\" tới 21 set nút vẫn bật, không có thông báo. Không lưu nên phía server không kiểm.",
+  "staging_observation_kb_ids": [
+    "box-type-and-prize-setup#KB-068",
+    "box-type-and-prize-setup#KB-069"
+  ],
+  "status_note": "Quan sát staging chỉ là OBSERVED_CURRENT; mục vẫn mở (câu hỏi chưa được trả lời đủ, hoặc cần nguồn thẩm quyền)."
+}
+```
+
+## OQ-box-024 — OPEN_ISSUE
+
+```json
+{
+  "oq_id": "OQ-box-024",
+  "type": "OPEN_ISSUE",
+  "feature_id": "box-type-and-prize-setup",
+  "summary": "Box Group chế độ pool khi một nhóm hết item thì xảy ra gì? — Tài liệu loại box chỉ chuyển hướng sang phần tồn kho/pool; feature này không có khẳng định.",
+  "kb_ids": [
+    "box-type-and-prize-setup#KB-021",
+    "box-type-and-prize-setup#KB-023"
+  ]
+}
+```
+
+## OQ-box-025 — OPEN_ISSUE
+
+```json
+{
+  "oq_id": "OQ-box-025",
+  "type": "OPEN_ISSUE",
+  "feature_id": "box-type-and-prize-setup",
+  "summary": "Đổi qua lại giữa Single và Bundle, hoặc giữa draw và pool, có reset danh sách item không? — Tài liệu chỉ nêu trường hợp đổi single item sang group.",
+  "kb_ids": [
+    "box-type-and-prize-setup#KB-031"
+  ],
+  "staging_observation": "Ghi chú quan sát staging cho OQ-box-025: 2026-10-17: Đổi \"Random by single item(s)\" ↔ \"Random by group(s)\" reset danh sách item cả hai chiều; form không có control đổi Single ↔ Bundle (loại box cố định theo URL). Draw ↔ pool không có trên gói Free.",
+  "staging_observation_kb_ids": [
+    "box-type-and-prize-setup#KB-065"
+  ],
+  "status_note": "Quan sát staging chỉ là OBSERVED_CURRENT; mục vẫn mở (câu hỏi chưa được trả lời đủ, hoặc cần nguồn thẩm quyền)."
+}
+```
+
+## OQ-box-027 — OPEN_ISSUE
+
+```json
+{
+  "oq_id": "OQ-box-027",
+  "type": "OPEN_ISSUE",
+  "feature_id": "box-versioning",
+  "summary": "Hạn chế đã biết: đơn vừa thanh toán ngay trước lúc merchant pause sales để sửa box rơi vào một khoảng hẹp; tài liệu không nêu đơn đó gắn với version nào và hệ quả (sai item, sai điều khoản buyback hay lỗi). Cần xác nhận mức độ và hướng xử lý.",
+  "kb_ids": [
+    "box-versioning#KB-034"
+  ],
+  "check_ids": [
+    "box-versioning:CHK-013"
+  ]
+}
+```
+
+## OQ-box-029 — OPEN_ISSUE
+
+```json
+{
+  "oq_id": "OQ-box-029",
+  "type": "OPEN_ISSUE",
+  "feature_id": "box-versioning",
+  "summary": "Khi collection trên Shopify đổi variant sau khi version đã bung, version mới chỉ đổi cài đặt có cập nhật danh sách variant không? — Version mới dùng lại danh sách đã bung và không hỏi lại Shopify; có thể lệch với collection hiện tại.",
+  "kb_ids": [
+    "box-versioning#KB-022",
+    "box-versioning#KB-030",
+    "box-versioning#KB-031"
+  ]
+}
+```
+
+## OQ-box-030 — OPEN_ISSUE
+
+```json
+{
+  "oq_id": "OQ-box-030",
+  "type": "OPEN_ISSUE",
+  "feature_id": "box-versioning",
+  "summary": "'Trạng thái đồng bộ' (thay đổi không tạo version) cụ thể là trạng thái gì? — Cần biết thao tác nào thuộc nhóm không tạo version để test.",
+  "kb_ids": [
+    "box-versioning#KB-029"
+  ],
+  "staging_observation": "Ghi chú quan sát staging cho OQ-box-030: 2026-10-17: sync_status là \"completed\" ở mọi response box (POST, publish, GET, unpublish) của box single/bundle/sealed; current_version_id không đổi qua các bước. Box group (\"Syncing inventory...\") không lưu.",
+  "staging_observation_kb_ids": [
+    "box-versioning#KB-052"
+  ],
+  "status_note": "Quan sát staging chỉ là OBSERVED_CURRENT; mục vẫn mở (câu hỏi chưa được trả lời đủ, hoặc cần nguồn thẩm quyền)."
+}
+```
+
+## OQ-box-031 — OPEN_ISSUE
+
+```json
+{
+  "oq_id": "OQ-box-031",
+  "type": "OPEN_ISSUE",
+  "feature_id": "box-versioning",
+  "summary": "Việc dựng lại tồn kho khi tạo version ảnh hưởng thế nào tới pool/tồn kho đã trừ của đơn đang mở dở? — Side effect trên inventory khi sửa box còn đơn chưa mở; KB không có item nào trả lời."
+}
+```
+
+## OQ-box-032 — OPEN_ISSUE
+
+```json
+{
+  "oq_id": "OQ-box-032",
+  "type": "OPEN_ISSUE",
+  "feature_id": "box-versioning",
+  "summary": "Edit (sửa JSON settings/bundles) ở admin panel có tạo box version mới không, và JSON không hợp lệ bị chặn thế nào? — Configure Tier Settings được nêu rõ là tạo version, còn Edit chỉ nói ảnh hưởng đơn mua sau.",
+  "kb_ids": [
+    "box-versioning#KB-041",
+    "box-versioning#KB-042"
+  ]
+}
+```
+
+## OQ-box-033 — OPEN_ISSUE
+
+```json
+{
+  "oq_id": "OQ-box-033",
+  "type": "OPEN_ISSUE",
+  "feature_id": "inventory-and-sold-out",
+  "summary": "Tài liệu mô tả một hạn chế đã biết: nếu shop cho phép \"continue selling when out of stock\", đơn bán vượt tồn kho có thể nhận ít prize hơn số hộp đã mua (hộp thừa không có gì để reveal). Cần dev xác nhận đây là lỗi hay thiết kế chủ đích, mức độ ảnh hưởng và trạng thái sửa; item này không dùng làm expected result.",
+  "kb_ids": [
+    "inventory-and-sold-out#KB-038"
+  ],
+  "check_ids": [
+    "inventory-and-sold-out:CHK-035"
+  ]
+}
+```
+
+## OQ-box-034 — OPEN_ISSUE
+
+```json
+{
+  "oq_id": "OQ-box-034",
+  "type": "OPEN_ISSUE",
+  "feature_id": "inventory-and-sold-out",
+  "summary": "Tài liệu mô tả một hạn chế đã biết: đơn nhiều hộp mà một nhóm cạn giữa chừng có thể có hộp \"rỗng\". Cần dev xác nhận đây là lỗi hay thiết kế chủ đích, mức độ ảnh hưởng và trạng thái sửa; item này không dùng làm expected result.",
+  "kb_ids": [
+    "inventory-and-sold-out#KB-049"
+  ],
+  "check_ids": [
+    "inventory-and-sold-out:CHK-036"
+  ]
+}
+```
+
+## OQ-box-035 — OPEN_ISSUE
+
+```json
+{
+  "oq_id": "OQ-box-035",
+  "type": "OPEN_ISSUE",
+  "feature_id": "inventory-and-sold-out",
+  "summary": "Tài liệu mô tả một hạn chế đã biết: đồng bộ và bốc thăm không dùng chung khoá, nên sync giữa lúc đang bán có thể chạy đua nhẹ với bốc thăm; mức độ ảnh hưởng thực tế được tài liệu tự khai là chưa xác nhận. Cần dev xác nhận đây là lỗi hay thiết kế chủ đích, mức độ ảnh hưởng và trạng thái sửa; item này không dùng làm expected result.",
+  "kb_ids": [
+    "inventory-and-sold-out#KB-059"
+  ],
+  "check_ids": [
+    "inventory-and-sold-out:CHK-037"
+  ]
+}
+```
+
+## OQ-box-036 — OPEN_ISSUE
+
+```json
+{
+  "oq_id": "OQ-box-036",
+  "type": "OPEN_ISSUE",
+  "feature_id": "inventory-and-sold-out",
+  "summary": "Tài liệu mô tả một hạn chế đã biết: triệu chứng đã biết là box Tier có thể rút không ra quà vì mất inventory. Cần dev xác nhận đây là lỗi hay thiết kế chủ đích, mức độ ảnh hưởng và trạng thái sửa; item này không dùng làm expected result.",
+  "kb_ids": [
+    "inventory-and-sold-out#KB-073"
+  ],
+  "check_ids": [
+    "inventory-and-sold-out:CHK-038"
+  ]
+}
+```
+
+## OQ-box-037 — OPEN_ISSUE
+
+```json
+{
+  "oq_id": "OQ-box-037",
+  "type": "OPEN_ISSUE",
+  "feature_id": "inventory-and-sold-out",
+  "summary": "Khi box tracked/pool hết tồn kho, điều kiện nào dẫn tới sold-out, tự deactivate, hay refill? — Sơ đồ chỉ liệt kê ba kết cục, không có điều kiện cho từng kết cục — không viết được expected result tổng quát.",
+  "kb_ids": [
+    "inventory-and-sold-out#KB-006"
+  ]
+}
+```
+
+## OQ-box-038 — OPEN_ISSUE
+
+```json
+{
+  "oq_id": "OQ-box-038",
+  "type": "OPEN_ISSUE",
+  "feature_id": "inventory-and-sold-out",
+  "summary": "Tồn kho box giảm tại thời điểm nào (đơn paid, lúc bốc, hay lúc reveal) và giảm bao nhiêu mỗi đơn? — Kiểm tồn kho sau mua cần mốc thời gian và lượng giảm.",
+  "kb_ids": [
+    "inventory-and-sold-out#KB-001"
+  ],
+  "staging_observation": "Ghi chú quan sát staging cho OQ-box-038: 2026-10-17: inventory.bundles/Remaining giảm đúng item trúng: B1 2/2/1 → 1/1/0 sau đơn 3 box, B2 mỗi set giảm 1, B3 4 → 1 sau 3 box sealed. Không có mốc \"ngay sau paid, trước khi mở\" cho box digital.",
+  "staging_observation_kb_ids": [
+    "inventory-and-sold-out#KB-090"
+  ],
+  "status_note": "Quan sát staging chỉ là OBSERVED_CURRENT; mục vẫn mở (câu hỏi chưa được trả lời đủ, hoặc cần nguồn thẩm quyền)."
+}
+```
+
+## OQ-box-039 — OPEN_ISSUE
+
+```json
+{
+  "oq_id": "OQ-box-039",
+  "type": "OPEN_ISSUE",
+  "feature_id": "inventory-and-sold-out",
+  "summary": "Dựng lại tồn kho khi tạo version mới ảnh hưởng thế nào tới pool/tồn kho đã trừ của đơn chưa mở? — Side effect trên inventory khi sửa box đang có đơn chưa mở.",
+  "kb_ids": [
+    "inventory-and-sold-out#KB-024",
+    "inventory-and-sold-out#KB-026"
+  ]
+}
+```
+
+## OQ-box-040 — OPEN_ISSUE
+
+```json
+{
+  "oq_id": "OQ-box-040",
+  "type": "OPEN_ISSUE",
+  "feature_id": "inventory-and-sold-out",
+  "summary": "Giới hạn số lần ghi Shopify mỗi giây mỗi shop và độ trễ tối đa của hiển thị tồn kho trên widget là bao nhiêu, cơ chế cập nhật thế nào? — 'vài giây' không đủ làm boundary để kiểm độ trễ.",
+  "kb_ids": [
+    "inventory-and-sold-out#KB-070"
+  ]
+}
+```
+
+## OQ-box-041 — OPEN_ISSUE
+
+```json
+{
+  "oq_id": "OQ-box-041",
+  "type": "OPEN_ISSUE",
+  "feature_id": "inventory-and-sold-out",
+  "summary": "Công thức chia lại chance cho các nhóm còn lại khi chọn \"Continuously randomize items in the remaining groups\" với hơn hai nhóm? — Tài liệu chỉ có ví dụ hai nhóm; không đủ làm oracle cho trường hợp tổng quát.",
+  "kb_ids": [
+    "inventory-and-sold-out#KB-045",
+    "inventory-and-sold-out#KB-048"
+  ]
+}
+```
+
+## OQ-box-042 — OPEN_ISSUE
+
+```json
+{
+  "oq_id": "OQ-box-042",
+  "type": "OPEN_ISSUE",
+  "feature_id": "inventory-and-sold-out",
+  "summary": "Toàn văn thông báo lỗi \"Box tracking settings do not match...\" là gì? — Tài liệu cắt bằng '...'; không kiểm khớp nguyên văn được.",
+  "kb_ids": [
+    "inventory-and-sold-out#KB-033"
+  ]
+}
+```
+
+## OQ-box-043 — OPEN_ISSUE
+
+```json
+{
+  "oq_id": "OQ-box-043",
+  "type": "OPEN_ISSUE",
+  "feature_id": "inventory-and-sold-out",
+  "summary": "Box Bundle tracked có dùng được \"Show remaining stock\" hoặc availability không? — Tài liệu chỉ nêu Single tracked, Group pool và Bundle untracked; thiếu expected cho Bundle tracked.",
+  "kb_ids": [
+    "inventory-and-sold-out#KB-065",
+    "inventory-and-sold-out#KB-069"
+  ],
+  "staging_observation": "Ghi chú quan sát staging cho OQ-box-043: 2026-10-17: Tuỳ chọn là radio \"Show remaining stock\" trong mục \"Chance display\" của form box (Single, Sealed và cả Bundle), không bị disable, mặc định \"Show original chance\"; không hiện ở group mode. Card \"Item list\" của Style Settings chưa mở.",
+  "staging_observation_kb_ids": [
+    "inventory-and-sold-out#KB-093",
+    "inventory-and-sold-out#KB-094"
+  ],
+  "status_note": "Quan sát staging chỉ là OBSERVED_CURRENT; mục vẫn mở (câu hỏi chưa được trả lời đủ, hoặc cần nguồn thẩm quyền)."
+}
+```
+
+## OQ-box-044 — OPEN_ISSUE
+
+```json
+{
+  "oq_id": "OQ-box-044",
+  "type": "OPEN_ISSUE",
+  "feature_id": "inventory-and-sold-out",
+  "summary": "\"Draft product when empty\" và \"Deactivate box when empty\" trong Configure Tier Settings chỉ áp dụng cho Picking Mode BasePool hay cả Draw? — Phạm vi không rõ, ảnh hưởng ma trận test Configure Tier Settings.",
+  "kb_ids": [
+    "inventory-and-sold-out#KB-019"
+  ]
+}
+```
+
+## OQ-box-045 — OPEN_ISSUE
+
+```json
+{
+  "oq_id": "OQ-box-045",
+  "type": "OPEN_ISSUE",
+  "feature_id": "inventory-and-sold-out",
+  "summary": "Toast \"Cannot publish: inventory pools are exhausted.\" (và toast yêu cầu sync xong mới publish) hiện ở portal hay admin panel? — Surface của check publish chưa rõ.",
+  "kb_ids": [
+    "inventory-and-sold-out#KB-053"
+  ]
+}
+```
+
+## OQ-box-046 — OPEN_ISSUE
+
+```json
+{
+  "oq_id": "OQ-box-046",
+  "type": "OPEN_ISSUE",
+  "feature_id": "inventory-and-sold-out",
+  "summary": "Khi sync lại pool theo collection, con trỏ bốc được dời tới đâu và món bị gỡ khỏi collection được xử lý thế nào? — Cần để kiểm hành vi giữ item đã bốc và xáo phần còn lại.",
+  "kb_ids": [
+    "inventory-and-sold-out#KB-057",
+    "inventory-and-sold-out#KB-058"
+  ]
+}
+```
+
+## OQ-box-047 — OPEN_ISSUE
+
+```json
+{
+  "oq_id": "OQ-box-047",
+  "type": "OPEN_ISSUE",
+  "feature_id": "picking-modes",
+  "summary": "Ở mode mặc định, một hộp Bundle có nhận được cùng một item từ các set khác nhau không? — Tài liệu nêu khả năng này ở dạng chưa xác nhận; ảnh hưởng expected của Bundle có item trùng giữa các set.",
+  "kb_ids": [
+    "picking-modes#KB-023"
+  ],
+  "staging_observation": "Ghi chú quan sát staging cho OQ-box-047: 2026-10-17: Form Bundle không chặn cùng một item ở 2 set khi tồn kho box 1 (không cảnh báo, Save bật); run không lưu cấu hình này nên không có đơn để xem A+A hay lỗi.",
+  "staging_observation_kb_ids": [
+    "picking-modes#KB-056"
+  ],
+  "status_note": "Quan sát staging chỉ là OBSERVED_CURRENT; mục vẫn mở (câu hỏi chưa được trả lời đủ, hoặc cần nguồn thẩm quyền)."
+}
+```
+
+## OQ-box-048 — OPEN_ISSUE
+
+```json
+{
+  "oq_id": "OQ-box-048",
+  "type": "OPEN_ISSUE",
+  "feature_id": "picking-modes",
+  "summary": "Với Bundle nhiều set, \"Unique in an order\" tính unique theo từng set hay trên toàn hộp/toàn đơn? — Ví dụ chỉ dùng một set; Bundle nhiều set không được minh hoạ.",
+  "kb_ids": [
+    "picking-modes#KB-026"
+  ],
+  "staging_observation": "Ghi chú quan sát staging cho OQ-box-048: 2026-10-17: Bundle 3 set bật Unique, đơn 2 box: trong từng set hai hộp nhận item khác nhau, mỗi hộp 1 item/set; các set không có item chung và đơn chỉ 2 box nên chưa phân biệt unique theo set hay theo hộp.",
+  "staging_observation_kb_ids": [
+    "picking-modes#KB-055"
+  ],
+  "status_note": "Quan sát staging chỉ là OBSERVED_CURRENT; mục vẫn mở (câu hỏi chưa được trả lời đủ, hoặc cần nguồn thẩm quyền)."
+}
+```
+
+## OQ-box-049 — OPEN_ISSUE
+
+```json
+{
+  "oq_id": "OQ-box-049",
+  "type": "OPEN_ISSUE",
+  "feature_id": "picking-modes",
+  "summary": "\"Unique in an order\" có áp dụng khi một đơn chứa nhiều hộp thuộc các variant/box khác nhau không? — Tài liệu chỉ nói có ý nghĩa với nhiều hộp cùng variant; hành vi đơn trộn không được nêu.",
+  "kb_ids": [
+    "picking-modes#KB-028"
+  ]
+}
+```
+
+## OQ-box-050 — OPEN_ISSUE
+
+```json
+{
+  "oq_id": "OQ-box-050",
+  "type": "OPEN_ISSUE",
+  "feature_id": "picking-modes",
+  "summary": "Nhãn bảng \"Refill / Redistribute / Deactivate\" ánh xạ chính xác thế nào với ba lựa chọn UI (đặc biệt Redistribute ↔ \"Continuously randomize items in the remaining groups\")? — Tài liệu không nói thẳng ánh xạ; suy theo thứ tự hàng là phỏng đoán.",
+  "kb_ids": [
+    "picking-modes#KB-037",
+    "picking-modes#KB-040"
+  ]
+}
+```
+
+## OQ-box-051 — OPEN_ISSUE
+
+```json
+{
+  "oq_id": "OQ-box-051",
+  "type": "OPEN_ISSUE",
+  "feature_id": "picking-modes",
+  "summary": "Đổi picking mode trên box đã publish/đã bán áp dụng cho đơn cũ hay chỉ version mới; mode có nằm trong box version không? — Ảnh hưởng tính bất biến của bốc thăm (prize-draw là topic không được supersede).",
+  "kb_ids": [
+    "picking-modes#KB-016"
+  ],
+  "staging_observation": "Ghi chú quan sát staging cho OQ-box-051: 2026-10-17: picking_mode \"unique\" khi bật, null khi tắt — thấy ở POST/GET và box version lúc tạo; bật/tắt rồi Save (PUT) và so version mới/cũ không làm.",
+  "staging_observation_kb_ids": [
+    "picking-modes#KB-053"
+  ],
+  "status_note": "Quan sát staging chỉ là OBSERVED_CURRENT; mục vẫn mở (câu hỏi chưa được trả lời đủ, hoặc cần nguồn thẩm quyền)."
+}
+```
+
+## OQ-box-052 — OPEN_ISSUE
+
+```json
+{
+  "oq_id": "OQ-box-052",
+  "type": "OPEN_ISSUE",
+  "feature_id": "picking-modes",
+  "summary": "Đổi qua lại giữa Single và Bundle, hoặc giữa draw và pool, có reset danh sách item không? — Tài liệu chỉ nêu trường hợp đổi single item → group.",
+  "kb_ids": [
+    "picking-modes#KB-034",
+    "picking-modes#KB-036"
+  ],
+  "staging_observation": "Ghi chú quan sát staging cho OQ-box-052: 2026-10-17: Đổi Single item ↔ group reset item cả hai chiều; draw ↔ pool không có trên form gói Free.",
+  "staging_observation_kb_ids": [
+    "box-type-and-prize-setup#KB-065"
+  ],
+  "status_note": "Quan sát staging chỉ là OBSERVED_CURRENT; mục vẫn mở (câu hỏi chưa được trả lời đủ, hoặc cần nguồn thẩm quyền)."
+}
+```
+
+## OQ-box-053 — OPEN_ISSUE
+
+```json
+{
+  "oq_id": "OQ-box-053",
+  "type": "OPEN_ISSUE",
+  "feature_id": "pool-refill",
+  "summary": "Tài liệu mô tả một hạn chế đã biết: box được lưu trước khi có tuỳ chọn refill có thể hiển thị \"Automatically refill\" trên giao diện trong khi server coi refill là tắt cho tới khi form được lưu lại (giao diện và server lệch nhau). Cần dev xác nhận đây là lỗi hay thiết kế chủ đích, mức độ ảnh hưởng và trạng thái sửa; item này không dùng làm expected result.",
+  "kb_ids": [
+    "pool-refill#KB-017"
+  ],
+  "check_ids": [
+    "pool-refill:CHK-020"
+  ]
+}
+```
+
+## OQ-box-054 — OPEN_ISSUE
+
+```json
+{
+  "oq_id": "OQ-box-054",
+  "type": "OPEN_ISSUE",
+  "feature_id": "pool-refill",
+  "summary": "Support bật kiểu MANUAL ở đâu (admin panel hay cách khác), và đổi AUTO ↔ MANUAL ảnh hưởng thế nào tới bộ đệm đang chờ? — Chuyển cấu hình có thể làm mất hoặc tự áp dụng item đang chờ; check permission cần biết surface.",
+  "kb_ids": [
+    "pool-refill#KB-007",
+    "pool-refill#KB-020"
+  ]
+}
+```
+
+## OQ-box-055 — OPEN_ISSUE
+
+```json
+{
+  "oq_id": "OQ-box-055",
+  "type": "OPEN_ISSUE",
+  "feature_id": "pool-refill",
+  "summary": "Nhãn đầy đủ của lựa chọn \"Not refill...\" là gì? — Tài liệu cắt bằng '...'; không có oracle cho nhãn UI nguyên văn.",
+  "kb_ids": [
+    "pool-refill#KB-008"
+  ]
+}
+```
+
+## OQ-box-056 — OPEN_ISSUE
+
+```json
+{
+  "oq_id": "OQ-box-056",
+  "type": "OPEN_ISSUE",
+  "feature_id": "pool-refill",
+  "summary": "Sau refill, box đã deactivate có tự Activate lại không hay merchant phải bấm Activate? — Tài liệu chỉ nói 'có thể được Activate lại'; ví dụ cho thấy merchant Activate.",
+  "kb_ids": [
+    "pool-refill#KB-031"
+  ]
+}
+```
+
+## OQ-box-057 — OPEN_ISSUE
+
+```json
+{
+  "oq_id": "OQ-box-057",
+  "type": "OPEN_ISSUE",
+  "feature_id": "pool-refill",
+  "summary": "Job AUTO áp dụng bộ đệm chạy với độ trễ bao lâu, retry/thất bại thì sao? — 'ngay' không định lượng; ảnh hưởng thời điểm kiểm tra pool sau resell.",
+  "kb_ids": [
+    "pool-refill#KB-019"
+  ]
+}
+```
+
+## OQ-box-058 — NEEDS_CONFIRMATION
+
+```json
+{
+  "oq_id": "OQ-box-058",
+  "type": "NEEDS_CONFIRMATION",
+  "feature_id": "box-create-and-publish",
+  "summary": "Thời gian chờ tối đa của màn hình \"Syncing inventory...\" khi lưu box Group được tài liệu nêu xấp xỉ (\"khoảng 60 giây\"); cần xác nhận giá trị chính xác và hành vi khi quá thời gian.",
+  "kb_ids": [
+    "box-create-and-publish#KB-049"
+  ],
+  "check_ids": [
+    "box-create-and-publish:CHK-039"
+  ]
+}
+```
+
+## OQ-box-059 — NEEDS_CONFIRMATION
+
+```json
+{
+  "oq_id": "OQ-box-059",
+  "type": "NEEDS_CONFIRMATION",
+  "feature_id": "box-create-and-publish",
+  "summary": "Bộ tài liệu không nêu role nào (chủ shop hay nhân viên shop) được tạo, publish, unpublish và xoá box; các item liên quan chỉ ghi role merchant chung. Cần xác nhận ma trận quyền.",
+  "kb_ids": [
+    "box-create-and-publish#KB-001",
+    "box-create-and-publish#KB-003",
+    "box-create-and-publish#KB-006",
+    "box-create-and-publish#KB-057"
+  ]
+}
+```
+
+## OQ-box-060 — NEEDS_CONFIRMATION
+
+```json
+{
+  "oq_id": "OQ-box-060",
+  "type": "NEEDS_CONFIRMATION",
+  "feature_id": "box-create-and-publish",
+  "summary": "Các check P1 (tiền / billing / bốc thăm / refund / store credit / permission / xoá dữ liệu) của feature này có oracle STRONG nhưng chỉ dựa trên tài liệu dev (dev_doc). Theo luật oracle, chúng giữ NEEDS_CONFIRMATION cho tới khi có test_case PASS (hoặc PO/Dev xác nhận trực tiếp) cho đúng hành vi. Danh sách check ở check_ids.",
+  "check_ids": [
+    "box-create-and-publish:CHK-030",
+    "box-create-and-publish:CHK-031",
+    "box-create-and-publish:CHK-037"
+  ]
+}
+```
+
+## OQ-box-061 — NEEDS_CONFIRMATION
+
+```json
+{
+  "oq_id": "OQ-box-061",
+  "type": "NEEDS_CONFIRMATION",
+  "feature_id": "box-create-and-publish",
+  "summary": "Vai trò nào trong shop (chủ shop hay nhân viên shop) được tạo, publish, unpublish và xoá box trong app merchant?",
+  "check_ids": [
+    "box-create-and-publish:CHK-040"
+  ]
+}
+```
+
+## OQ-box-062 — NEEDS_CONFIRMATION
+
+```json
+{
+  "oq_id": "OQ-box-062",
+  "type": "NEEDS_CONFIRMATION",
+  "feature_id": "box-create-and-publish",
+  "summary": "Box ở trạng thái Draft có đúng là khi ngày publish (published_at) để trống không, và deactivate box có xoá ngày publish không?",
+  "kb_ids": [
+    "box-create-and-publish#KB-056"
+  ],
+  "check_ids": [
+    "box-create-and-publish:CHK-041"
+  ],
+  "staging_observation": "Ghi chú quan sát staging cho OQ-box-062: 2026-10-17: POST /api/boxes trả published_at null, /publish gán published_at (Active), /unpublish trả published_at null (Draft) — 3/3 gồm Bundle và Single physical. Activate lại sau Deactivate không làm.",
+  "staging_observation_kb_ids": [
+    "box-create-and-publish#KB-096",
+    "box-create-and-publish#KB-097"
+  ],
+  "status_note": "Quan sát staging chỉ là OBSERVED_CURRENT; vẫn cần PO/Dev xác nhận, chưa resolve."
+}
+```
+
+## OQ-box-063 — NEEDS_CONFIRMATION
+
+```json
+{
+  "oq_id": "OQ-box-063",
+  "type": "NEEDS_CONFIRMATION",
+  "feature_id": "box-type-and-prize-setup",
+  "summary": "Với box Group chế độ pool, tài liệu chỉ khuyến nghị bật \"Track quantity\" ở Shopify; cần xác nhận đây có phải điều kiện bắt buộc (portal chặn) hay chỉ khuyến nghị, và hành vi khi tắt.",
+  "kb_ids": [
+    "box-type-and-prize-setup#KB-022"
+  ],
+  "check_ids": [
+    "box-type-and-prize-setup:CHK-016"
+  ]
+}
+```
+
+## OQ-box-064 — NEEDS_CONFIRMATION
+
+```json
+{
+  "oq_id": "OQ-box-064",
+  "type": "NEEDS_CONFIRMATION",
+  "feature_id": "box-type-and-prize-setup",
+  "summary": "Tài liệu tự ghi chú chưa xác nhận rằng server không đặt trần cho số item mỗi set và số nhóm của box Group; cần xác nhận giới hạn thật (portal và server).",
+  "kb_ids": [
+    "box-type-and-prize-setup#KB-032",
+    "box-type-and-prize-setup#KB-033"
+  ],
+  "check_ids": [
+    "box-type-and-prize-setup:CHK-022"
+  ],
+  "staging_observation": "Ghi chú quan sát staging cho OQ-box-064: 2026-10-17: Group mode thêm tới 10 nhóm, \"Add tier\" vẫn bật, không có thông báo; số item mỗi set chưa thử tới trần.",
+  "staging_observation_kb_ids": [
+    "box-type-and-prize-setup#KB-066"
+  ],
+  "status_note": "Quan sát staging chỉ là OBSERVED_CURRENT; vẫn cần PO/Dev xác nhận, chưa resolve."
+}
+```
+
+## OQ-box-065 — NEEDS_CONFIRMATION
+
+```json
+{
+  "oq_id": "OQ-box-065",
+  "type": "NEEDS_CONFIRMATION",
+  "feature_id": "box-type-and-prize-setup",
+  "summary": "Các check P1 (tiền / billing / bốc thăm / refund / store credit / permission / xoá dữ liệu) của feature này có oracle STRONG nhưng chỉ dựa trên tài liệu dev (dev_doc). Theo luật oracle, chúng giữ NEEDS_CONFIRMATION cho tới khi có test_case PASS (hoặc PO/Dev xác nhận trực tiếp) cho đúng hành vi. Danh sách check ở check_ids.",
+  "check_ids": [
+    "box-type-and-prize-setup:CHK-003",
+    "box-type-and-prize-setup:CHK-010",
+    "box-type-and-prize-setup:CHK-013",
+    "box-type-and-prize-setup:CHK-014",
+    "box-type-and-prize-setup:CHK-015",
+    "box-type-and-prize-setup:CHK-018",
+    "box-type-and-prize-setup:CHK-021"
+  ],
+  "staging_observation": "Ghi chú quan sát staging cho OQ-box-065: 2026-10-17: CHK-018: đổi single item → group reset item. CHK-010: Bundle 3 set, mỗi hộp 1 item/set. CHK-021: tiền trả = giá variant × số lượng. Group draw (CHK-014) không lưu.",
+  "staging_observation_kb_ids": [
+    "box-type-and-prize-setup#KB-065",
+    "box-type-and-prize-setup#KB-072",
+    "picking-modes#KB-055"
+  ],
+  "status_note": "Quan sát staging chỉ là OBSERVED_CURRENT; vẫn cần PO/Dev xác nhận, chưa resolve."
+}
+```
+
+## OQ-box-066 — NEEDS_CONFIRMATION
+
+```json
+{
+  "oq_id": "OQ-box-066",
+  "type": "NEEDS_CONFIRMATION",
+  "feature_id": "box-type-and-prize-setup",
+  "summary": "Các nhóm mặc định của box Group có tên và chance được điền sẵn không (bộ Common 50% / Rare 30% / Epic 15% / Legendary 5% là preset thật hay chỉ là số minh hoạ), tên nhóm cố định hay merchant tự đặt, và merchant sửa/xoá được không?",
+  "kb_ids": [
+    "box-type-and-prize-setup#KB-029"
+  ],
+  "check_ids": [
+    "box-type-and-prize-setup:CHK-023"
+  ],
+  "staging_observation": "Ghi chú quan sát staging cho OQ-box-066: 2026-10-17: Nhóm mặc định \"Common\" 50, \"Rare\" 30, \"Epic\" 15, \"Legendary\" 5; \"Group name\" và \"Chance %\" sửa được; xoá nhóm ngay không hỏi; \"Add tier\" thêm \"Group #n\" chance 0.",
+  "staging_observation_kb_ids": [
+    "box-type-and-prize-setup#KB-066"
+  ],
+  "status_note": "Quan sát staging chỉ là OBSERVED_CURRENT; vẫn cần PO/Dev xác nhận, chưa resolve."
+}
+```
+
+## OQ-box-067 — NEEDS_CONFIRMATION
+
+```json
+{
+  "oq_id": "OQ-box-067",
+  "type": "NEEDS_CONFIRMATION",
+  "feature_id": "box-type-and-prize-setup",
+  "summary": "Ở box Single tracked, chance hiển thị của mỗi item có đúng bằng số lượng item chia tổng số lượng không, và được làm tròn theo quy tắc nào (vd 5/9)?",
+  "kb_ids": [
+    "box-type-and-prize-setup#KB-026"
+  ],
+  "check_ids": [
+    "box-type-and-prize-setup:CHK-024"
+  ],
+  "staging_observation": "Ghi chú quan sát staging cho OQ-box-067: 2026-10-17: Quantity 5 và 4 hiện Chance \"55.56%\" / \"44.44%\" (bộ đếm \"9/5\"); 2/2/1 → 40.00/40.00/20.00; 2/1 → 66.67/33.33; 1 item → 100.00%.",
+  "staging_observation_kb_ids": [
+    "box-type-and-prize-setup#KB-064"
+  ],
+  "status_note": "Quan sát staging chỉ là OBSERVED_CURRENT; vẫn cần PO/Dev xác nhận, chưa resolve."
+}
+```
+
+## OQ-box-068 — NEEDS_CONFIRMATION
+
+```json
+{
+  "oq_id": "OQ-box-068",
+  "type": "NEEDS_CONFIRMATION",
+  "feature_id": "box-versioning",
+  "summary": "Các check P1 (tiền / billing / bốc thăm / refund / store credit / permission / xoá dữ liệu) của feature này có oracle STRONG nhưng chỉ dựa trên tài liệu dev (dev_doc). Theo luật oracle, chúng giữ NEEDS_CONFIRMATION cho tới khi có test_case PASS (hoặc PO/Dev xác nhận trực tiếp) cho đúng hành vi. Danh sách check ở check_ids.",
+  "check_ids": [
+    "box-versioning:CHK-007",
+    "box-versioning:CHK-008",
+    "box-versioning:CHK-010",
+    "box-versioning:CHK-011",
+    "box-versioning:CHK-015",
+    "box-versioning:CHK-017"
+  ]
+}
+```
+
+## OQ-box-069 — NEEDS_CONFIRMATION
+
+```json
+{
+  "oq_id": "OQ-box-069",
+  "type": "NEEDS_CONFIRMATION",
+  "feature_id": "inventory-and-sold-out",
+  "summary": "Tài liệu tồn kho nêu một mẹo chuyển box pool → draw → pool để tạo hàng đợi mới cho box đã cạn nhưng tự khai chưa xác nhận đây có phải quy trình support chính thức. Cần dev/support xác nhận mẹo này có được dùng chính thức không và hàng đợi sau khi chuyển hoạt động thế nào.",
+  "kb_ids": [
+    "inventory-and-sold-out#KB-054"
+  ]
+}
+```
+
+## OQ-box-070 — NEEDS_CONFIRMATION
+
+```json
+{
+  "oq_id": "OQ-box-070",
+  "type": "NEEDS_CONFIRMATION",
+  "feature_id": "inventory-and-sold-out",
+  "summary": "Không thấy ô chỉnh cờ show_item_availability trong portal; tài liệu tự khai chưa xác nhận ai bật cờ (có thể là Mysbox team). Cần dev xác nhận ai bật cờ này và bật ở đâu.",
+  "kb_ids": [
+    "inventory-and-sold-out#KB-068"
+  ]
+}
+```
+
+## OQ-box-071 — NEEDS_CONFIRMATION
+
+```json
+{
+  "oq_id": "OQ-box-071",
+  "type": "NEEDS_CONFIRMATION",
+  "feature_id": "inventory-and-sold-out",
+  "summary": "Các check P1 (tiền / billing / bốc thăm / refund / store credit / permission / xoá dữ liệu) của feature này có oracle STRONG nhưng chỉ dựa trên tài liệu dev (dev_doc). Theo luật oracle, chúng giữ NEEDS_CONFIRMATION cho tới khi có test_case PASS (hoặc PO/Dev xác nhận trực tiếp) cho đúng hành vi. Danh sách check ở check_ids.",
+  "check_ids": [
+    "inventory-and-sold-out:CHK-001",
+    "inventory-and-sold-out:CHK-002",
+    "inventory-and-sold-out:CHK-003",
+    "inventory-and-sold-out:CHK-004",
+    "inventory-and-sold-out:CHK-005",
+    "inventory-and-sold-out:CHK-006",
+    "inventory-and-sold-out:CHK-007",
+    "inventory-and-sold-out:CHK-010",
+    "inventory-and-sold-out:CHK-011",
+    "inventory-and-sold-out:CHK-012",
+    "inventory-and-sold-out:CHK-013",
+    "inventory-and-sold-out:CHK-015",
+    "inventory-and-sold-out:CHK-022",
+    "inventory-and-sold-out:CHK-023",
+    "inventory-and-sold-out:CHK-030",
+    "inventory-and-sold-out:CHK-033"
+  ],
+  "staging_observation": "Ghi chú quan sát staging cho OQ-box-071: 2026-10-17: Remaining giảm đúng item trúng (Single và Bundle tracked); item về 0 hiện Chance 0%, item khác giữ chance gốc; sau bán product vẫn available và widget không đổi. Box untracked và Sold out không quan sát.",
+  "staging_observation_kb_ids": [
+    "inventory-and-sold-out#KB-090",
+    "inventory-and-sold-out#KB-091"
+  ],
+  "status_note": "Quan sát staging chỉ là OBSERVED_CURRENT; vẫn cần PO/Dev xác nhận, chưa resolve."
+}
+```
+
+## OQ-box-072 — NEEDS_CONFIRMATION
+
+```json
+{
+  "oq_id": "OQ-box-072",
+  "type": "NEEDS_CONFIRMATION",
+  "feature_id": "inventory-and-sold-out",
+  "summary": "Mẹo chuyển box Group đã cạn từ pool sang draw rồi về pool để tạo hàng đợi mới có phải quy trình support chính thức không? Sau khi chuyển, hàng đợi các nhóm có đầy đủ lại item không và box có Activate được không?",
+  "check_ids": [
+    "inventory-and-sold-out:CHK-018"
+  ]
+}
+```
+
+## OQ-box-073 — NEEDS_CONFIRMATION
+
+```json
+{
+  "oq_id": "OQ-box-073",
+  "type": "NEEDS_CONFIRMATION",
+  "feature_id": "inventory-and-sold-out",
+  "summary": "Ai bật cờ show_item_availability cho box và bật ở đâu (portal không có ô chỉnh)? Cần biết để dựng được precondition kiểm nhãn \"Pulled\" và \"N of M pulled\".",
+  "kb_ids": [
+    "inventory-and-sold-out#KB-066",
+    "inventory-and-sold-out#KB-067"
+  ],
+  "check_ids": [
+    "inventory-and-sold-out:CHK-028"
+  ]
+}
+```
+
+## OQ-box-074 — NEEDS_CONFIRMATION
+
+```json
+{
+  "oq_id": "OQ-box-074",
+  "type": "NEEDS_CONFIRMATION",
+  "feature_id": "picking-modes",
+  "summary": "Picking mode \"Unique across pools\" (box Bundle có cùng item ở nhiều set) chỉ có trên nhánh build-staging, chưa lên production; mọi mô tả hành vi của mode này chưa dùng được làm expected result production. Cần dev xác nhận khi nào mode lên production, cách đặt mode cho box (API/Mysbox team) và hành vi production lúc đó.",
+  "kb_ids": [
+    "picking-modes#KB-001",
+    "picking-modes#KB-002",
+    "picking-modes#KB-003",
+    "picking-modes#KB-004",
+    "picking-modes#KB-005",
+    "picking-modes#KB-006",
+    "picking-modes#KB-007",
+    "picking-modes#KB-008",
+    "picking-modes#KB-009",
+    "picking-modes#KB-010",
+    "picking-modes#KB-011",
+    "picking-modes#KB-012",
+    "picking-modes#KB-013",
+    "picking-modes#KB-014",
+    "picking-modes#KB-015"
+  ]
+}
+```
+
+## OQ-box-075 — NEEDS_CONFIRMATION
+
+```json
+{
+  "oq_id": "OQ-box-075",
+  "type": "NEEDS_CONFIRMATION",
+  "feature_id": "picking-modes",
+  "summary": "Tài liệu tự khai chưa xác nhận bên nào đặt pick_count khác 1 (portal không có ô chỉnh). Cần dev xác nhận ai/qua đâu đặt pick_count và hành vi khi pick_count > 1.",
+  "kb_ids": [
+    "picking-modes#KB-046"
+  ]
+}
+```
+
+## OQ-box-076 — NEEDS_CONFIRMATION
+
+```json
+{
+  "oq_id": "OQ-box-076",
+  "type": "NEEDS_CONFIRMATION",
+  "feature_id": "picking-modes",
+  "summary": "Các check P1 (tiền / billing / bốc thăm / refund / store credit / permission / xoá dữ liệu) của feature này có oracle STRONG nhưng chỉ dựa trên tài liệu dev (dev_doc). Theo luật oracle, chúng giữ NEEDS_CONFIRMATION cho tới khi có test_case PASS (hoặc PO/Dev xác nhận trực tiếp) cho đúng hành vi. Danh sách check ở check_ids.",
+  "check_ids": [
+    "picking-modes:CHK-002",
+    "picking-modes:CHK-003",
+    "picking-modes:CHK-004",
+    "picking-modes:CHK-005",
+    "picking-modes:CHK-006",
+    "picking-modes:CHK-007",
+    "picking-modes:CHK-010",
+    "picking-modes:CHK-011",
+    "picking-modes:CHK-013"
+  ],
+  "staging_observation": "Ghi chú quan sát staging cho OQ-box-076: 2026-10-17: B1 Single tracked bật Unique, đơn 3 box: 3 item khác nhau, Remaining 2/2/1 → 1/1/0; B2 mỗi set giảm 1 ở item trúng. Cấu hình {A,B} đặt lại khi hết và pool chưa quan sát.",
+  "staging_observation_kb_ids": [
+    "inventory-and-sold-out#KB-090",
+    "picking-modes#KB-054",
+    "picking-modes#KB-055"
+  ],
+  "status_note": "Quan sát staging chỉ là OBSERVED_CURRENT; vẫn cần PO/Dev xác nhận, chưa resolve."
+}
+```
+
+## OQ-box-077 — NEEDS_CONFIRMATION
+
+```json
+{
+  "oq_id": "OQ-box-077",
+  "type": "NEEDS_CONFIRMATION",
+  "feature_id": "picking-modes",
+  "summary": "\"Unique in an order\" có áp dụng khi một đơn chứa nhiều hộp thuộc các variant/box khác nhau không, hay chỉ trong phạm vi các hộp cùng variant?",
+  "check_ids": [
+    "picking-modes:CHK-009"
+  ]
+}
+```
+
+## OQ-box-078 — NEEDS_CONFIRMATION
+
+```json
+{
+  "oq_id": "OQ-box-078",
+  "type": "NEEDS_CONFIRMATION",
+  "feature_id": "picking-modes",
+  "summary": "Ai và qua kênh nào đặt pick_count khác 1? Khi pick_count lớn hơn 1, các item trong một lần tung có được trùng nhau không, tương tác với draw/pool thế nào, và nếu nhóm còn ít item hơn pick_count thì sao?",
+  "check_ids": [
+    "picking-modes:CHK-015"
+  ]
+}
+```
+
+## OQ-box-079 — NEEDS_CONFIRMATION
+
+```json
+{
+  "oq_id": "OQ-box-079",
+  "type": "NEEDS_CONFIRMATION",
+  "feature_id": "picking-modes",
+  "summary": "Picking Mode Draw/BasePool và Tier Mode Shared/Independent ở admin panel ánh xạ chính xác thế nào với các lựa chọn của merchant trong portal (draw/pool và ba lựa chọn khi nhóm cạn, kể cả nhãn Refill / Redistribute / Deactivate)? Khi hai surface lệch nhau thì surface nào là nguồn sự thật?",
+  "check_ids": [
+    "picking-modes:CHK-017"
+  ]
+}
+```
+
+## OQ-box-080 — NEEDS_CONFIRMATION
+
+```json
+{
+  "oq_id": "OQ-box-080",
+  "type": "NEEDS_CONFIRMATION",
+  "feature_id": "picking-modes",
+  "summary": "Đổi picking mode trên box đã publish/đã bán có ảnh hưởng tới các đơn đã có quà hay chỉ áp dụng cho đơn mới? Picking mode có nằm trong bản chụp version của box không?",
+  "check_ids": [
+    "picking-modes:CHK-018"
+  ]
+}
+```
+
+## OQ-box-081 — NEEDS_CONFIRMATION
+
+```json
+{
+  "oq_id": "OQ-box-081",
+  "type": "NEEDS_CONFIRMATION",
+  "feature_id": "picking-modes",
+  "summary": "Ở mode Mặc định, một hộp Bundle có thể nhận cùng một item từ các set khác nhau không (ví dụ A ở set 1 và A ở set 2)?",
+  "check_ids": [
+    "picking-modes:CHK-019"
+  ],
+  "staging_observation": "Ghi chú quan sát staging cho OQ-box-081: 2026-10-17: Như OQ-box-047: form không chặn item trùng giữa 2 set; không lưu, không đặt đơn.",
+  "staging_observation_kb_ids": [
+    "picking-modes#KB-056"
+  ],
+  "status_note": "Quan sát staging chỉ là OBSERVED_CURRENT; vẫn cần PO/Dev xác nhận, chưa resolve."
+}
+```
+
+## OQ-box-082 — NEEDS_CONFIRMATION
+
+```json
+{
+  "oq_id": "OQ-box-082",
+  "type": "NEEDS_CONFIRMATION",
+  "feature_id": "picking-modes",
+  "summary": "Khi nào picking mode \"Unique across pools\" lên production? Trên production, với box Bundle có cùng item ở nhiều set, mode này có đảm bảo một hộp không chứa cùng item hai lần (với cấu hình ví dụ thì cả 3 hộp đều là một A và một B) không?",
+  "check_ids": [
+    "picking-modes:CHK-020"
+  ]
+}
+```
+
+## OQ-box-083 — NEEDS_CONFIRMATION
+
+```json
+{
+  "oq_id": "OQ-box-083",
+  "type": "NEEDS_CONFIRMATION",
+  "feature_id": "picking-modes",
+  "summary": "Với \"Unique across pools\", số hộp chứa một item có luôn bằng floor hoặc ceil của tổng số đơn vị item đó chia cho số hộp còn lại không (với cấu hình ví dụ: C ở cả 3 hộp, A ở 2 hộp, B ở 1 hộp), và hành vi này có giữ nguyên khi lên production không?",
+  "check_ids": [
+    "picking-modes:CHK-021"
+  ]
+}
+```
+
+## OQ-box-084 — NEEDS_CONFIRMATION
+
+```json
+{
+  "oq_id": "OQ-box-084",
+  "type": "NEEDS_CONFIRMATION",
+  "feature_id": "picking-modes",
+  "summary": "Khi \"Unique across pools\" để một hộp rỗng vì mọi phương án đều không chia được: khách thấy gì, đơn và yêu cầu mở hộp xử lý ra sao, tồn kho và phí sử dụng có bị tính không? Cấu hình nào tái hiện được tình huống này?",
+  "check_ids": [
+    "picking-modes:CHK-022"
+  ]
+}
+```
+
+## OQ-box-085 — NEEDS_CONFIRMATION
+
+```json
+{
+  "oq_id": "OQ-box-085",
+  "type": "NEEDS_CONFIRMATION",
+  "feature_id": "picking-modes",
+  "summary": "Với \"Unique across pools\" và item untracked, ứng viên có được xếp hạng theo số lần đã ra trong lượt rồi mới ngẫu nhiên theo chance không, \"lượt\" được đặt lại khi nào, và khi hết cách tránh trùng thì ứng viên tốt nhất được chọn theo tiêu chí gì?",
+  "check_ids": [
+    "picking-modes:CHK-023"
+  ]
+}
+```
+
+## OQ-box-086 — NEEDS_CONFIRMATION
+
+```json
+{
+  "oq_id": "OQ-box-086",
+  "type": "NEEDS_CONFIRMATION",
+  "feature_id": "picking-modes",
+  "summary": "Kênh đặt \"Unique across pools\" cho một box là gì (route, method, field, vai trò được gọi)? Có đúng merchant không có màn hình bật mode này trong portal và box mới mặc định không dùng mode này không, kể cả khi lên production?",
+  "check_ids": [
+    "picking-modes:CHK-024"
+  ]
+}
+```
+
+## OQ-box-087 — NEEDS_CONFIRMATION
+
+```json
+{
+  "oq_id": "OQ-box-087",
+  "type": "NEEDS_CONFIRMATION",
+  "feature_id": "pool-refill",
+  "summary": "Cơ chế khớp refill theo queue token (refill gắn với hàng đợi, không gắn version) và bản sửa cho lượt refill bị mất chỉ có trên nhánh build-staging, chưa lên production. Cần dev xác nhận khi nào thay đổi này lên production và hành vi refill trên production sau khi lên (box đổi version giữa lúc mua và resell có còn mất lượt trả không).",
+  "kb_ids": [
+    "pool-refill#KB-046",
+    "pool-refill#KB-047",
+    "pool-refill#KB-048",
+    "pool-refill#KB-049"
+  ]
+}
+```
+
+## OQ-box-088 — NEEDS_CONFIRMATION
+
+```json
+{
+  "oq_id": "OQ-box-088",
+  "type": "NEEDS_CONFIRMATION",
+  "feature_id": "pool-refill",
+  "summary": "Các check P1 (tiền / billing / bốc thăm / refund / store credit / permission / xoá dữ liệu) của feature này có oracle STRONG nhưng chỉ dựa trên tài liệu dev (dev_doc). Theo luật oracle, chúng giữ NEEDS_CONFIRMATION cho tới khi có test_case PASS (hoặc PO/Dev xác nhận trực tiếp) cho đúng hành vi. Danh sách check ở check_ids.",
+  "check_ids": [
+    "pool-refill:CHK-003",
+    "pool-refill:CHK-004",
+    "pool-refill:CHK-005",
+    "pool-refill:CHK-007",
+    "pool-refill:CHK-008",
+    "pool-refill:CHK-010",
+    "pool-refill:CHK-011",
+    "pool-refill:CHK-012",
+    "pool-refill:CHK-013",
+    "pool-refill:CHK-014",
+    "pool-refill:CHK-015"
+  ]
+}
+```
+
+## OQ-box-089 — NEEDS_CONFIRMATION
+
+```json
+{
+  "oq_id": "OQ-box-089",
+  "type": "NEEDS_CONFIRMATION",
+  "feature_id": "pool-refill",
+  "summary": "Sau khi refill trả item về nhóm đã cạn, box đang bị deactivate có tự Activate lại không hay merchant phải bấm Activate? Khi Activate, kiểm tra pool cạn có cho qua và khách kế tiếp có thể trúng item vừa được trả không?",
+  "check_ids": [
+    "pool-refill:CHK-006"
+  ]
+}
+```
+
+## OQ-box-090 — NEEDS_CONFIRMATION
+
+```json
+{
+  "oq_id": "OQ-box-090",
+  "type": "NEEDS_CONFIRMATION",
+  "feature_id": "pool-refill",
+  "summary": "Cơ chế khớp refill theo hàng đợi (mỗi hàng đợi pool có mã nhận dạng, item được trả nếu mã khớp hàng đợi hiện tại) và bản sửa cho lượt refill bị mất hiện chỉ có trên build-staging. Khi nào thay đổi này lên production, và trên production sau khi lên, box đổi version giữa lúc mua và resell có còn làm mất lượt trả không?",
+  "check_ids": [
+    "pool-refill:CHK-021"
+  ]
+}
+```
+
+## OQ-box-091 — OPEN_ISSUE
+
+```json
+{
+  "oq_id": "OQ-box-091",
+  "type": "OPEN_ISSUE",
+  "feature_id": null,
+  "summary": "access-control-allow-origin: * trên API merchant (<MYS_API_BASE>/api/*, kèm Allow-Header Authorization), app proxy /apps/mysbox/api/* và staging-api. Cần xác nhận cấu hình CORS này là chủ ý.",
+  "kb_ids": [
+    "_object-level.box#KB-021"
+  ],
+  "tags": [
+    "security-observation"
+  ],
+  "check_ids": [
+    "box-create-and-publish:CHK-047"
+  ]
+}
+```
+
+## OQ-box-092 — NEEDS_CONFIRMATION
+
+```json
+{
+  "oq_id": "OQ-box-092",
+  "type": "NEEDS_CONFIRMATION",
+  "feature_id": "box-type-and-prize-setup",
+  "summary": "Form box chế độ group (shop gói Free, chưa lưu) không hiện lựa chọn draw/pool, 'When one of groups has been all revealed' hay refill. Các mục này chỉ hiện ở điều kiện nào (gói trả phí, shop được bật Group, sau khi lưu, hay qua Configure Tier Settings của admin)?",
+  "kb_ids": [
+    "box-type-and-prize-setup#KB-057",
+    "box-type-and-prize-setup#KB-038",
+    "box-type-and-prize-setup#KB-039",
+    "box-type-and-prize-setup#KB-018",
+    "box-type-and-prize-setup#KB-021",
+    "inventory-and-sold-out#KB-013",
+    "inventory-and-sold-out#KB-014",
+    "picking-modes#KB-037"
+  ],
+  "check_ids": [
+    "box-type-and-prize-setup:CHK-025"
+  ],
+  "staging_observation": "Ghi chú quan sát staging cho OQ-box-092: 2026-10-17: Không lưu box group; trên form group chưa lưu ở gói Free không có lựa chọn draw/pool, \"When one of groups has been all revealed\" hay refill.",
+  "staging_observation_kb_ids": [
+    "box-type-and-prize-setup#KB-067"
+  ],
+  "status_note": "Quan sát staging chỉ là OBSERVED_CURRENT; vẫn cần PO/Dev xác nhận, chưa resolve."
+}
+```
+
+## OQ-box-093 — NEEDS_CONFIRMATION
+
+```json
+{
+  "oq_id": "OQ-box-093",
+  "type": "NEEDS_CONFIRMATION",
+  "feature_id": "inventory-and-sold-out",
+  "summary": "Sau khi quà box digital được thêm vào đơn, inventory_quantity Shopify của variant quà về 0/-1 (variant không track). Đây là hiệu ứng order edit của Shopify hay Mysbox có trừ tồn kho Shopify với box digital (KB-072 nói không trừ)?",
+  "kb_ids": [
+    "inventory-and-sold-out#KB-089",
+    "inventory-and-sold-out#KB-072",
+    "inventory-and-sold-out#KB-002"
+  ],
+  "check_ids": [
+    "inventory-and-sold-out:CHK-039"
+  ],
+  "staging_observation": "Ghi chú quan sát staging cho OQ-box-093: 2026-10-17: Prize của #1007/#1008 là \"Inventory not tracked\" nên không có lịch sử tồn kho; với prize tracked của đơn sealed trong run, thay đổi tồn kho ghi \"Inventory correction\" do \"Staging Mysbox\" tạo (-1, -2), không phải order edit.",
+  "staging_observation_kb_ids": [
+    "physical-sealed-box-fulfilment#KB-071",
+    "inventory-and-sold-out#KB-092"
+  ],
+  "status_note": "Quan sát staging chỉ là OBSERVED_CURRENT; vẫn cần PO/Dev xác nhận, chưa resolve."
+}
+```
+
+## OQ-box-094 — NEEDS_CONFIRMATION
+
+```json
+{
+  "oq_id": "OQ-box-094",
+  "type": "NEEDS_CONFIRMATION",
+  "feature_id": null,
+  "summary": "Item mới quan sát trên staging (OBSERVED_CURRENT) chạm tiền/permission/token, được gắn cờ rủi ro khi diff: cần owner (PO) xác nhận hành vi quan sát là ý định sản phẩm trước khi dùng làm kỳ vọng. Item vẫn publish dạng OBSERVED_CURRENT; không phải xác nhận hành vi production.",
+  "owner_role": "PO",
+  "kb_ids": [
+    "_object-level.box#KB-021",
+    "box-type-and-prize-setup#KB-063"
+  ]
+}
+```
+
+## OQ-box-095 — OPEN_ISSUE
+
+```json
+{
+  "oq_id": "OQ-box-095",
+  "type": "OPEN_ISSUE",
+  "feature_id": "box-create-and-publish",
+  "summary": "\"Bấm nút Activate\" (KB-057) là combobox Status trên sidebar hay một nút khác? Staging chỉ thấy combobox Status gọi /publish. — Bước test publish box Draft cần đúng control UI; quan sát mới 1 mẫu.",
+  "kb_ids": [
+    "box-create-and-publish#KB-083",
+    "box-create-and-publish#KB-057"
+  ],
+  "staging_observation": "Ghi chú quan sát staging cho OQ-box-095: 2026-10-17: Control kích hoạt thấy được: tooltip \"Activate\" ở hàng Draft của danh sách và combobox \"Status\"; form Draft không có nút \"Activate\" riêng. Endpoint chỉ thấy /publish tự động sau Save lần đầu; không kích hoạt thủ công.",
+  "staging_observation_kb_ids": [
+    "box-create-and-publish#KB-097",
+    "box-create-and-publish#KB-098"
+  ],
+  "status_note": "Quan sát staging chỉ là OBSERVED_CURRENT; mục vẫn mở (câu hỏi chưa được trả lời đủ, hoặc cần nguồn thẩm quyền)."
+}
+```
+
+## OQ-box-096 — OPEN_ISSUE
+
+```json
+{
+  "oq_id": "OQ-box-096",
+  "type": "OPEN_ISSUE",
+  "feature_id": "box-create-and-publish",
+  "summary": "Request body của POST /api/boxes, PUT /api/boxes/{id}, POST /publish, /unpublish gồm field nào, field nào bắt buộc, và lỗi 4xx/422 trả gì? — Body không capture được; không viết được check API contract/validation phía server.",
+  "kb_ids": [
+    "box-create-and-publish#KB-092",
+    "box-create-and-publish#KB-093",
+    "box-create-and-publish#KB-094",
+    "box-create-and-publish#KB-082"
+  ],
+  "staging_observation": "Ghi chú quan sát staging cho OQ-box-096: 2026-10-17: Chuỗi endpoint: POST /api/boxes (201) → POST /publish (200) → GET; /unpublish body rỗng. Body của POST /api/boxes và /publish không lấy được (giới hạn công cụ capture); không có PUT.",
+  "staging_observation_kb_ids": [
+    "box-create-and-publish#KB-096",
+    "box-create-and-publish#KB-097"
+  ],
+  "status_note": "Quan sát staging chỉ là OBSERVED_CURRENT; mục vẫn mở (câu hỏi chưa được trả lời đủ, hoặc cần nguồn thẩm quyền)."
+}
+```
+
+## OQ-box-097 — OPEN_ISSUE
+
+```json
+{
+  "oq_id": "OQ-box-097",
+  "type": "OPEN_ISSUE",
+  "feature_id": "box-create-and-publish",
+  "summary": "Vì sao Storefront getProducts trả metafield(namespace mysbox, key box) = null ở mọi variant node trong khi widget đọc dữ liệu từ window.mysboxStore? — Quyết định nguồn dữ liệu widget và oracle cho check 'publish ghi metafield' (KB-009).",
+  "kb_ids": [
+    "box-create-and-publish#KB-091",
+    "box-create-and-publish#KB-009"
+  ],
+  "staging_observation": "Ghi chú quan sát staging cho OQ-box-097: 2026-10-17: Metafield \"mysbox.box\" của variant box có giá trị (unstructured, không definition), nhưng Storefront getProducts trả null 3/3; quyền Storefront access không hiện. Lý do gốc vẫn cần Dev.",
+  "staging_observation_kb_ids": [
+    "box-create-and-publish#KB-104",
+    "box-create-and-publish#KB-105"
+  ],
+  "status_note": "Quan sát staging chỉ là OBSERVED_CURRENT; mục vẫn mở (câu hỏi chưa được trả lời đủ, hoặc cần nguồn thẩm quyền)."
+}
+```
+
+## OQ-box-098 — OPEN_ISSUE
+
+```json
+{
+  "oq_id": "OQ-box-098",
+  "type": "OPEN_ISSUE",
+  "feature_id": "box-versioning",
+  "summary": "Server có kiểm box_version_id trong URL/query lệnh mở khớp với version gắn với đơn không, hay dùng giá trị client gửi? — box_version_id do trang khách gửi (KB-047); nếu server tin client, khách có thể mở theo version khác — cần cho check toàn vẹn kết quả.",
+  "kb_ids": [
+    "box-versioning#KB-047"
+  ]
+}
+```
+
+## OQ-box-099 — OPEN_ISSUE
+
+```json
+{
+  "oq_id": "OQ-box-099",
+  "type": "OPEN_ISSUE",
+  "feature_id": "inventory-and-sold-out",
+  "summary": "Cột Chance trên form portal sau khi box đã bán được tính thế nào (theo Original, theo Remaining, hay giữ giá trị lúc lưu) — vì sao Bundle hiện 0% cho item hết nhưng không chuẩn hoá phần còn lại? — Không có expected cho hiển thị chance sau bán trên portal (KB-087).",
+  "kb_ids": [
+    "inventory-and-sold-out#KB-087"
+  ],
+  "staging_observation": "Ghi chú quan sát staging cho OQ-box-099: 2026-10-17: Trước đơn B1 Chance 40.00/40.00/20.00 (Remaining 2/2/1); sau đơn 40.00/40.00/0% (Remaining 1/1/0); B2 mỗi set 66.67%/0%. Item còn hàng giữ chance gốc, item hết hiện 0%, API chance không đổi.",
+  "staging_observation_kb_ids": [
+    "inventory-and-sold-out#KB-091"
+  ],
+  "status_note": "Quan sát staging chỉ là OBSERVED_CURRENT; mục vẫn mở (câu hỏi chưa được trả lời đủ, hoặc cần nguồn thẩm quyền)."
+}
+```
+
+## OQ-box-101 — OPEN_ISSUE
+
+```json
+{
+  "oq_id": "OQ-box-101",
+  "type": "OPEN_ISSUE",
+  "feature_id": "picking-modes",
+  "summary": "settings.picking_mode = null nghĩa là gì (mode mặc định simple/binned, hay chưa cấu hình), và giá trị enum khi bật \"Unique in an order\" là gì? — Không suy được mode từ null; cần để viết check API/data cho picking mode.",
+  "kb_ids": [
+    "picking-modes#KB-052",
+    "picking-modes#KB-017"
+  ],
+  "staging_observation": "Ghi chú quan sát staging cho OQ-box-101: 2026-10-17: settings.picking_mode = \"unique\" khi bật \"Unique in an order\", null khi tắt (thấy ở POST/GET lúc tạo box, không phải PUT).",
+  "staging_observation_kb_ids": [
+    "picking-modes#KB-053"
+  ],
+  "status_note": "Quan sát staging chỉ là OBSERVED_CURRENT; mục vẫn mở (câu hỏi chưa được trả lời đủ, hoặc cần nguồn thẩm quyền)."
+}
+```
+
+## OQ-box-102 — OPEN_ISSUE
+
+```json
+{
+  "oq_id": "OQ-box-102",
+  "type": "OPEN_ISSUE",
+  "feature_id": "pool-refill",
+  "summary": "Mục refill (\"When items are resold by customers:\") hiện ở gói nào / điều kiện nào; shop test nào (gói trả phí, có box Group pool, bật buyback) dùng được để kiểm refill? — Gói Free khoá buyback và không hiện mục refill (KB-053); không có môi trường để lập bằng chứng runtime cho feature.",
+  "kb_ids": [
+    "pool-refill#KB-053"
+  ]
+}
+```
+
+## OQ-box-103 — NEEDS_CONFIRMATION
+
+```json
+{
+  "oq_id": "OQ-box-103",
+  "type": "NEEDS_CONFIRMATION",
+  "feature_id": "box-create-and-publish",
+  "summary": "Check box-create-and-publish:CHK-042 \"Save lần đầu box Single/Bundle mới gọi POST /api/boxes rồi POST /api/boxes/{id}/publish\" có oracle BASELINE (chỉ dựa trên quan sát staging OBSERVED_CURRENT — lệch là cần điều tra, chưa phải bug). Cần PO/Dev xác nhận hành vi mong đợi.",
+  "kb_ids": [
+    "box-create-and-publish#KB-081",
+    "box-create-and-publish#KB-093"
+  ],
+  "check_ids": [
+    "box-create-and-publish:CHK-042"
+  ]
+}
+```
+
+## OQ-box-104 — NEEDS_CONFIRMATION
+
+```json
+{
+  "oq_id": "OQ-box-104",
+  "type": "NEEDS_CONFIRMATION",
+  "feature_id": "box-create-and-publish",
+  "summary": "Check box-create-and-publish:CHK-043 \"Deactivate box gọi POST /api/boxes/{id}/unpublish, không hỏi xác nhận, box về Draft giữ nguyên version và inventory\" có oracle BASELINE (chỉ dựa trên quan sát staging OBSERVED_CURRENT — lệch là cần điều tra, chưa phải bug). Cần PO/Dev xác nhận hành vi mong đợi.",
+  "kb_ids": [
+    "box-create-and-publish#KB-084",
+    "box-create-and-publish#KB-094"
+  ],
+  "check_ids": [
+    "box-create-and-publish:CHK-043"
+  ],
+  "staging_observation": "Ghi chú quan sát staging cho OQ-box-104: 2026-10-17: Deactivate trên Single digital/Bundle/Single physical: không có hộp xác nhận, /unpublish 200, version và inventory.bundles giữ nguyên. Box group không có.",
+  "staging_observation_kb_ids": [
+    "box-create-and-publish#KB-097"
+  ],
+  "status_note": "Quan sát staging chỉ là OBSERVED_CURRENT; vẫn cần PO/Dev xác nhận, chưa resolve."
+}
+```
+
+## OQ-box-105 — NEEDS_CONFIRMATION
+
+```json
+{
+  "oq_id": "OQ-box-105",
+  "type": "NEEDS_CONFIRMATION",
+  "feature_id": "box-create-and-publish",
+  "summary": "Check box-create-and-publish:CHK-044 \"Save box Draft đã tồn tại chỉ gọi PUT /api/boxes/{id}, không gọi /publish\" có oracle BASELINE (chỉ dựa trên quan sát staging OBSERVED_CURRENT — lệch là cần điều tra, chưa phải bug). Cần PO/Dev xác nhận hành vi mong đợi.",
+  "kb_ids": [
+    "box-create-and-publish#KB-082"
+  ],
+  "check_ids": [
+    "box-create-and-publish:CHK-044"
+  ]
+}
+```
+
+## OQ-box-106 — NEEDS_CONFIRMATION
+
+```json
+{
+  "oq_id": "OQ-box-106",
+  "type": "NEEDS_CONFIRMATION",
+  "feature_id": "box-create-and-publish",
+  "summary": "Check box-create-and-publish:CHK-045 \"Tạo product mystery mới từ form box qua modal Add product của Shopify\" có oracle BASELINE (chỉ dựa trên quan sát staging OBSERVED_CURRENT — lệch là cần điều tra, chưa phải bug). Cần PO/Dev xác nhận hành vi mong đợi.",
+  "kb_ids": [
+    "box-create-and-publish#KB-088"
+  ],
+  "check_ids": [
+    "box-create-and-publish:CHK-045"
+  ],
+  "staging_observation": "Ghi chú quan sát staging cho OQ-box-106: 2026-10-17: \"create a new product\" mở modal Shopify \"Add product\" ngoài iframe; Save gọi ProductCreateSet + ProductCreatePublish và form gắn product, hiện \"<n> boxes in stock\" (3/3 gồm form Bundle).",
+  "staging_observation_kb_ids": [
+    "box-create-and-publish#KB-106"
+  ],
+  "status_note": "Quan sát staging chỉ là OBSERVED_CURRENT; vẫn cần PO/Dev xác nhận, chưa resolve."
+}
+```
+
+## OQ-box-107 — NEEDS_CONFIRMATION
+
+```json
+{
+  "oq_id": "OQ-box-107",
+  "type": "NEEDS_CONFIRMATION",
+  "feature_id": "box-create-and-publish",
+  "summary": "Check box-create-and-publish:CHK-046 \"Danh sách box: GET /api/boxes lọc theo loại thẻ, có phân trang và meta.total\" có oracle BASELINE (chỉ dựa trên quan sát staging OBSERVED_CURRENT — lệch là cần điều tra, chưa phải bug). Cần PO/Dev xác nhận hành vi mong đợi.",
+  "kb_ids": [
+    "box-create-and-publish#KB-095",
+    "box-create-and-publish#KB-090"
+  ],
+  "check_ids": [
+    "box-create-and-publish:CHK-046"
+  ]
+}
+```
+
+## OQ-box-108 — NEEDS_CONFIRMATION
+
+```json
+{
+  "oq_id": "OQ-box-108",
+  "type": "NEEDS_CONFIRMATION",
+  "feature_id": "box-type-and-prize-setup",
+  "summary": "Check box-type-and-prize-setup:CHK-026 \"Prize picker: Browse mở dialog chọn sản phẩm trong app, Close không đổi form\" có oracle BASELINE (chỉ dựa trên quan sát staging OBSERVED_CURRENT — lệch là cần điều tra, chưa phải bug). Cần PO/Dev xác nhận hành vi mong đợi.",
+  "kb_ids": [
+    "box-type-and-prize-setup#KB-058"
+  ],
+  "check_ids": [
+    "box-type-and-prize-setup:CHK-026"
+  ]
+}
+```
+
+## OQ-box-109 — NEEDS_CONFIRMATION
+
+```json
+{
+  "oq_id": "OQ-box-109",
+  "type": "NEEDS_CONFIRMATION",
+  "feature_id": "box-type-and-prize-setup",
+  "summary": "Check box-type-and-prize-setup:CHK-027 \"Widget trang product hiện item và chance của box Single / Bundle khớp form portal\" có oracle BASELINE (chỉ dựa trên quan sát staging OBSERVED_CURRENT — lệch là cần điều tra, chưa phải bug). Cần PO/Dev xác nhận hành vi mong đợi.",
+  "kb_ids": [
+    "box-type-and-prize-setup#KB-062"
+  ],
+  "check_ids": [
+    "box-type-and-prize-setup:CHK-027"
+  ],
+  "staging_observation": "Ghi chú quan sát staging cho OQ-box-109: 2026-10-17: Widget khớp form portal: B1 40.00/40.00/20.00, B2 66.67/33.33 theo set, B3 100.00; Bundle thêm \"You will receive a box of 3 premium products\", \"Get 1 out of 2 items\".",
+  "staging_observation_kb_ids": [
+    "box-type-and-prize-setup#KB-071"
+  ],
+  "status_note": "Quan sát staging chỉ là OBSERVED_CURRENT; vẫn cần PO/Dev xác nhận, chưa resolve."
+}
+```
+
+## OQ-box-110 — NEEDS_CONFIRMATION
+
+```json
+{
+  "oq_id": "OQ-box-110",
+  "type": "NEEDS_CONFIRMATION",
+  "feature_id": "box-versioning",
+  "summary": "Staging thấy mỗi lần Save có thay đổi (animation, quantity) đều sinh current_version_id mới qua PUT /api/boxes/{id} (mỗi loại 1 mẫu). Đây có phải hành vi mong đợi cho mọi loại thay đổi không, và có cách nào lưu box mà không có thay đổi (API trực tiếp) để phân xử CONF-box-01?",
+  "kb_ids": [
+    "box-versioning#KB-051",
+    "box-versioning#KB-045"
+  ],
+  "check_ids": [
+    "box-versioning:CHK-018"
+  ]
+}
+```
+
+## OQ-box-111 — NEEDS_CONFIRMATION
+
+```json
+{
+  "oq_id": "OQ-box-111",
+  "type": "NEEDS_CONFIRMATION",
+  "feature_id": "box-versioning",
+  "summary": "Check box-versioning:CHK-019 \"Đơn có box mang box_version_id ở API merchant, trang khách và link Unbox\" có oracle BASELINE (chỉ dựa trên quan sát staging OBSERVED_CURRENT — lệch là cần điều tra, chưa phải bug). Cần PO/Dev xác nhận hành vi mong đợi.",
+  "kb_ids": [
+    "box-versioning#KB-047"
+  ],
+  "check_ids": [
+    "box-versioning:CHK-019"
+  ],
+  "staging_observation": "Ghi chú quan sát staging cho OQ-box-111: 2026-10-17: box_version_id nhất quán ở GET /api/orders/{id} của merchant, GET /apps/mysbox/api/orders/{id}, path và ?parameters= của link Unbox, query POST open (3023, 3024, 3025).",
+  "staging_observation_kb_ids": [
+    "box-versioning#KB-053"
+  ],
+  "status_note": "Quan sát staging chỉ là OBSERVED_CURRENT; vẫn cần PO/Dev xác nhận, chưa resolve."
+}
+```
+
+## OQ-box-112 — NEEDS_CONFIRMATION
+
+```json
+{
+  "oq_id": "OQ-box-112",
+  "type": "NEEDS_CONFIRMATION",
+  "feature_id": "box-versioning",
+  "summary": "Check box-versioning:CHK-020 \"GET /api/box-versions/by-ids trả cấu hình bản chụp của version\" có oracle BASELINE (chỉ dựa trên quan sát staging OBSERVED_CURRENT — lệch là cần điều tra, chưa phải bug). Cần PO/Dev xác nhận hành vi mong đợi.",
+  "kb_ids": [
+    "box-versioning#KB-050"
+  ],
+  "check_ids": [
+    "box-versioning:CHK-020"
+  ],
+  "staging_observation": "Ghi chú quan sát staging cho OQ-box-112: 2026-10-17: Chi tiết đơn merchant gọi GET /api/box-versions/by-ids?ids=<version của đơn>; settings gồm picking_mode, animation, bundles_animation, show_item_stock, buyback_enabled, randomization_method (vắng ở BUNDLES); trang khách gửi ids rỗng → 422.",
+  "staging_observation_kb_ids": [
+    "box-versioning#KB-054"
+  ],
+  "status_note": "Quan sát staging chỉ là OBSERVED_CURRENT; vẫn cần PO/Dev xác nhận, chưa resolve."
+}
+```
+
+## OQ-box-113 — NEEDS_CONFIRMATION
+
+```json
+{
+  "oq_id": "OQ-box-113",
+  "type": "NEEDS_CONFIRMATION",
+  "feature_id": "inventory-and-sold-out",
+  "summary": "Sau khi bán, cột Chance trên form box tracked giữ chance gốc (Single) nhưng hiện 0% cho item hết (Bundle) mà không chuẩn hoá phần còn lại về 100%. Cột này nên hiển thị chance gốc hay chance hiện hành, và cách hiển thị không nhất quán giữa Single/Bundle có chủ ý không?",
+  "kb_ids": [
+    "inventory-and-sold-out#KB-087"
+  ],
+  "check_ids": [
+    "inventory-and-sold-out:CHK-040"
+  ]
+}
+```
+
+## OQ-box-114 — NEEDS_CONFIRMATION
+
+```json
+{
+  "oq_id": "OQ-box-114",
+  "type": "NEEDS_CONFIRMATION",
+  "feature_id": "pool-refill",
+  "summary": "Trên gói Free, buyback bị khoá và form box không có mục refill. Mục \"When items are resold by customers:\" chỉ hiện trên gói nào / điều kiện nào (gói trả phí, box Group pool, sau khi lưu)?",
+  "kb_ids": [
+    "pool-refill#KB-053"
+  ],
+  "check_ids": [
+    "pool-refill:CHK-022"
+  ]
+}
+```
+
+## OQ-box-115 — CONFLICT
+
+```json
+{
+  "oq_id": "OQ-box-115",
+  "type": "CONFLICT",
+  "feature_id": "box-create-and-publish",
+  "summary": "Hai pass portal cùng ngày ghi trái nhau về nút \"Duplicate box\" trên form box (pass 1 không thấy, pass 2 thấy ở header). Cần quan sát lại (và nếu có, bấm thử trên box QA- để biết trường nào được copy, đặc biệt variant link).",
+  "side_a": "Quan sát pass 1 KB-100: không có control Duplicate ở danh sách và form box.",
+  "side_b": "Quan sát pass 2 KB-099: form box 1025/1026/1027 có nút \"Duplicate box\" ở header.",
+  "conflict_group": "CONF-box-12",
+  "kb_ids": [
+    "box-create-and-publish#KB-099",
+    "box-create-and-publish#KB-100",
+    "box-create-and-publish#KB-016"
+  ],
+  "related_oq_ids": [
+    "OQ-box-013"
+  ],
+  "tags": [
+    "staging-observed"
+  ],
+  "check_ids": [
+    "box-create-and-publish:CHK-051"
+  ]
+}
+```
+
+## OQ-box-116 — CONFLICT
+
+```json
+{
+  "oq_id": "OQ-box-116",
+  "type": "CONFLICT",
+  "feature_id": "box-type-and-prize-setup",
+  "summary": "Tài liệu nói portal bắt box Bundle tối đa 20 prize set; trên staging form cho thêm tới 21 set, nút \"Add prize set\" vẫn bật, không có thông báo (chưa thử Save). Giới hạn 20 set được kiểm ở đâu (lúc thêm, lúc lưu, server) và báo gì?",
+  "side_a": "Base KB-016 (CE, dev_doc): box Bundle có từ 2 đến 20 prize set (portal bắt ít nhất 2 set, tối đa 20 set).",
+  "side_b": "Quan sát staging KB-069: form Bundle mới cho thêm tới 21 set, không chặn, không thông báo; Save không thử.",
+  "conflict_group": "CONF-box-10",
+  "kb_ids": [
+    "box-type-and-prize-setup#KB-016",
+    "box-type-and-prize-setup#KB-069"
+  ],
+  "related_oq_ids": [
+    "OQ-box-023"
+  ],
+  "tags": [
+    "staging-observed"
+  ],
+  "check_ids": [
+    "box-type-and-prize-setup:CHK-009"
+  ]
+}
+```
+
+## OQ-box-117 — CONFLICT
+
+```json
+{
+  "oq_id": "OQ-box-117",
+  "type": "CONFLICT",
+  "feature_id": "inventory-and-sold-out",
+  "summary": "Form Bundle tracked trên staging cho chọn \"Show remaining stock\" (radio không disable) trong khi tài liệu nói chế độ này chỉ dùng được cho Single tracked hoặc Group pool. Lưu Bundle với \"Show remaining stock\" có hợp lệ không và storefront hiển thị gì?",
+  "side_a": "Base KB-065 (CE, dev_doc): chế độ \"Show remaining stock\" chỉ dùng được cho box Single tracked hoặc Group pool.",
+  "side_b": "Quan sát staging KB-094: form Bundle tracked hiện radio \"Show remaining stock\" bật được (chưa lưu).",
+  "conflict_group": "CONF-box-11",
+  "kb_ids": [
+    "inventory-and-sold-out#KB-065",
+    "inventory-and-sold-out#KB-094"
+  ],
+  "related_oq_ids": [
+    "OQ-box-043"
+  ],
+  "tags": [
+    "staging-observed"
+  ],
+  "check_ids": [
+    "inventory-and-sold-out:CHK-041"
+  ]
+}
+```
+
+## OQ-box-118 — NEEDS_CONFIRMATION
+
+```json
+{
+  "oq_id": "OQ-box-118",
+  "type": "NEEDS_CONFIRMATION",
+  "feature_id": "box-create-and-publish",
+  "summary": "Staging (1 mẫu): cột Actions ở danh sách Single box có Deactivate/Edit/Analytics/Delete cho box Active và chỉ Activate/Edit cho box Draft. Đây có phải bộ thao tác đúng theo trạng thái không — đặc biệt box Draft không có \"Delete\" ở danh sách trong khi tài liệu nói chỉ xoá được box Draft (KB-059/KB-065)?",
+  "kb_ids": [
+    "box-create-and-publish#KB-098"
+  ],
+  "check_ids": [
+    "box-create-and-publish:CHK-048"
+  ],
+  "tags": [
+    "staging-observed"
+  ]
+}
+```
+
+## OQ-box-119 — NEEDS_CONFIRMATION
+
+```json
+{
+  "oq_id": "OQ-box-119",
+  "type": "NEEDS_CONFIRMATION",
+  "feature_id": "box-create-and-publish",
+  "summary": "Sau Deactivate, metafield \"mysbox.box\" trên variant vẫn còn và giữ published_at cũ (staging, ~1 phút, 1 box). Metafield có được cập nhật/xoá muộn hơn không, và trong lúc đó widget có còn hiện/bán box đã về Draft không (tài liệu KB-061/KB-075: box Draft ẩn widget, widget chỉ hiện khi có ngày publish)?",
+  "kb_ids": [
+    "box-create-and-publish#KB-104"
+  ],
+  "check_ids": [
+    "box-create-and-publish:CHK-049"
+  ],
+  "tags": [
+    "staging-observed"
+  ]
+}
+```
+
+## OQ-box-120 — NEEDS_CONFIRMATION
+
+```json
+{
+  "oq_id": "OQ-box-120",
+  "type": "NEEDS_CONFIRMATION",
+  "feature_id": "box-create-and-publish",
+  "summary": "Storefront API trả null cho metafield mysbox.box (3/3 box) trong khi widget dùng bản nhúng Liquid window.mysboxStore. Đây có phải thiết kế (metafield không bật Storefront access) không, và có luồng nào của widget phụ thuộc vào metafield qua Storefront API không?",
+  "kb_ids": [
+    "box-create-and-publish#KB-105"
+  ],
+  "check_ids": [
+    "box-create-and-publish:CHK-050"
+  ],
+  "tags": [
+    "staging-observed"
+  ]
+}
+```
+
+## OQ-box-121 — NEEDS_CONFIRMATION
+
+```json
+{
+  "oq_id": "OQ-box-121",
+  "type": "NEEDS_CONFIRMATION",
+  "feature_id": "box-type-and-prize-setup",
+  "summary": "Mức tối thiểu prize set của box Bundle là 2 (portal chặn bằng nút xoá disabled khi còn 2 set, staging) — nguồn tài liệu nêu con số này (KB-016) đang conflict ở phía tối đa 20 set (CONF-box-10). Cần PO/Dev xác nhận lại cả giới hạn tối thiểu và tối đa của prize set.",
+  "kb_ids": [
+    "box-type-and-prize-setup#KB-043",
+    "box-type-and-prize-setup#KB-068"
+  ],
+  "check_ids": [
+    "box-type-and-prize-setup:CHK-008"
+  ],
+  "tags": [
+    "staging-observed"
+  ]
+}
+```
+
+## OQ-box-122 — NEEDS_CONFIRMATION
+
+```json
+{
+  "oq_id": "OQ-box-122",
+  "type": "NEEDS_CONFIRMATION",
+  "feature_id": "box-type-and-prize-setup",
+  "summary": "Staging (1 mẫu): form Bundle mới không có \"Randomization method\" (box Bundle không có chế độ group) và Animation chỉ có Drawing / Card flip / None. Đây có phải bộ lựa chọn đúng cho box Bundle không?",
+  "kb_ids": [
+    "box-type-and-prize-setup#KB-068"
+  ],
+  "check_ids": [
+    "box-type-and-prize-setup:CHK-028"
+  ],
+  "tags": [
+    "staging-observed"
+  ]
+}
+```
+
+## OQ-box-123 — NEEDS_CONFIRMATION
+
+```json
+{
+  "oq_id": "OQ-box-123",
+  "type": "NEEDS_CONFIRMATION",
+  "feature_id": "box-versioning",
+  "summary": "Staging (3 box): current_version_id có ngay khi POST /api/boxes và không đổi qua publish/unpublish — khớp tài liệu (KB-023, KB-029). Cần xác nhận thêm với box chế độ group (sync_status đổi) và với Save sửa box (PUT) trong cùng chuỗi.",
+  "kb_ids": [
+    "box-versioning#KB-052"
+  ],
+  "check_ids": [
+    "box-versioning:CHK-021"
+  ],
+  "tags": [
+    "staging-observed"
+  ]
+}
+```
+
+## OQ-box-124 — NEEDS_CONFIRMATION
+
+```json
+{
+  "oq_id": "OQ-box-124",
+  "type": "NEEDS_CONFIRMATION",
+  "feature_id": "box-versioning",
+  "summary": "Trên staging, mở chi tiết đơn chỉ có box Sealed làm frontend gọi box-versions/by-ids với ids rỗng và nhận 422 \"The ids field is required.\". Đây là lỗi (frontend không nên gọi khi không có version digital) hay chủ ý, và trang chi tiết đơn phải hiển thị gì cho đơn chỉ có box Sealed?",
+  "kb_ids": [
+    "box-versioning#KB-054"
+  ],
+  "check_ids": [
+    "box-versioning:CHK-022"
+  ],
+  "tags": [
+    "staging-observed"
+  ]
+}
+```
+
+## OQ-box-125 — NEEDS_CONFIRMATION
+
+```json
+{
+  "oq_id": "OQ-box-125",
+  "type": "NEEDS_CONFIRMATION",
+  "feature_id": "inventory-and-sold-out",
+  "summary": "Staging: box Sealed tracked trừ tồn kho box ngay sau đơn (4 → 1 sau 3 box, không có bước mở). Với box digital tracked, tồn kho box bị trừ lúc đơn paid hay lúc khách mở box? (Mẫu box digital chỉ đo sau khi đã mở hết.)",
+  "kb_ids": [
+    "inventory-and-sold-out#KB-090"
+  ],
+  "check_ids": [
+    "inventory-and-sold-out:CHK-042"
+  ],
+  "tags": [
+    "staging-observed"
+  ]
+}
+```
+
+## OQ-box-126 — NEEDS_CONFIRMATION
+
+```json
+{
+  "oq_id": "OQ-box-126",
+  "type": "NEEDS_CONFIRMATION",
+  "feature_id": "picking-modes",
+  "summary": "Staging: ô \"Unique in an order\" lưu thành settings.picking_mode \"unique\", tắt thì null (quan sát lúc tạo box, chưa thử bật/tắt rồi Save). Bật/tắt ô này trên box đã có rồi lưu có sinh version mới với picking_mode tương ứng không?",
+  "kb_ids": [
+    "picking-modes#KB-053"
+  ],
+  "check_ids": [
+    "picking-modes:CHK-025"
+  ],
+  "tags": [
+    "staging-observed"
+  ]
+}
+```
+
+## OQ-box-127 — NEEDS_CONFIRMATION
+
+```json
+{
+  "oq_id": "OQ-box-127",
+  "type": "NEEDS_CONFIRMATION",
+  "feature_id": "picking-modes",
+  "summary": "Form Bundle cho chọn cùng một item ở hai set khi tồn kho box chỉ 1 (staging, không chặn, không cảnh báo). Cấu hình này có hợp lệ không; nếu lưu được thì hộp nhận A+A hay lỗi lúc bốc?",
+  "kb_ids": [
+    "picking-modes#KB-056"
+  ],
+  "check_ids": [
+    "picking-modes:CHK-026"
+  ],
+  "tags": [
+    "staging-observed"
+  ]
+}
+```
+
+## OQ-box-128 — OPEN_ISSUE
+
+```json
+{
+  "oq_id": "OQ-box-128",
+  "type": "OPEN_ISSUE",
+  "feature_id": "box-create-and-publish",
+  "summary": "Server có kiểm lại \"The random set is empty\" (set rỗng) khi request đi thẳng tới POST /api/boxes không, hay chỉ chặn phía client? — Staging chỉ thấy chặn phía client (0 request); thiếu kiểm phía server là rủi ro dữ liệu box hỏng — cần cho check API validation.",
+  "kb_ids": [
+    "box-create-and-publish#KB-103",
+    "box-create-and-publish#KB-030"
+  ],
+  "tags": [
+    "staging-observed"
+  ]
+}
+```
+
+## OQ-box-129 — OPEN_ISSUE
+
+```json
+{
+  "oq_id": "OQ-box-129",
+  "type": "OPEN_ISSUE",
+  "feature_id": "box-create-and-publish",
+  "summary": "Icon Actions \"Analytics\" ở hàng box Active và các icon \"Deactivate\"/\"Activate\"/\"Delete\" ở danh sách gọi endpoint nào và có hộp xác nhận không? — Danh sách là điểm vào thứ hai để đổi trạng thái/xoá box; chưa bấm nên chưa viết được bước test và expected cho các icon này.",
+  "kb_ids": [
+    "box-create-and-publish#KB-098"
+  ],
+  "tags": [
+    "staging-observed"
+  ]
+}
+```
+
+## OQ-box-130 — OPEN_ISSUE
+
+```json
+{
+  "oq_id": "OQ-box-130",
+  "type": "OPEN_ISSUE",
+  "feature_id": "box-type-and-prize-setup",
+  "summary": "Save form box khi tổng quantity vượt tồn kho box (vd \"9/5\") — portal/server chặn với thông báo nào? — Form không chặn lúc nhập (KB-064); cần biết chặn ở bước lưu để viết check validation quantity (đối chiếu box-create-and-publish#KB-032).",
+  "kb_ids": [
+    "box-type-and-prize-setup#KB-064",
+    "box-create-and-publish#KB-032"
+  ],
+  "tags": [
+    "staging-observed"
+  ]
+}
+```
+
+## OQ-box-131 — OPEN_ISSUE
+
+```json
+{
+  "oq_id": "OQ-box-131",
+  "type": "OPEN_ISSUE",
+  "feature_id": "box-versioning",
+  "summary": "Trang khách gọi /apps/mysbox/api/box-versions/by-ids với ids rỗng cho đơn chỉ có box sealed và nhận 422 — đây là hành vi chủ ý hay lỗi, và có ảnh hưởng hiển thị trang khách không? — Lỗi 422 ẩn trên trang khách; cần owner xác nhận trước khi viết check (regression watch hay expected).",
+  "kb_ids": [
+    "box-versioning#KB-054"
+  ],
+  "tags": [
+    "staging-observed"
+  ]
+}
+```
+
+## OQ-box-132 — OPEN_ISSUE
+
+```json
+{
+  "oq_id": "OQ-box-132",
+  "type": "OPEN_ISSUE",
+  "feature_id": "inventory-and-sold-out",
+  "summary": "Storefront ở \"Show original chance\" có nên tiếp tục hiện chance gốc cho item đã hết (Remaining 0) không, trong khi form portal hiện 0% cho item đó? — Hai surface lệch nhau sau khi item hết (KB-091); cần expected để viết check hiển thị cho khách và tránh khách thấy món không còn trúng được.",
+  "kb_ids": [
+    "inventory-and-sold-out#KB-091",
+    "inventory-and-sold-out#KB-061"
+  ],
+  "tags": [
+    "staging-observed"
+  ]
+}
+```
+
+## OQ-box-133 — OPEN_ISSUE
+
+```json
+{
+  "oq_id": "OQ-box-133",
+  "type": "OPEN_ISSUE",
+  "feature_id": "picking-modes",
+  "summary": "Lưu box Bundle có cùng một item ở nhiều set khi tồn kho item chỉ đủ cho một (vd quantity 1) có bị chặn ở bước Save/server không, và thông báo gì? — Form không cảnh báo (KB-056); nếu Save chấp nhận, kết quả bốc có thể đòi nhiều đơn vị hơn tồn kho — cần expected cho check validation.",
+  "kb_ids": [
+    "picking-modes#KB-056",
+    "picking-modes#KB-023"
+  ],
+  "tags": [
+    "staging-observed"
+  ]
+}
+```
+
+## OQ-box-134 — NEEDS_CONFIRMATION
+
+```json
+{
+  "oq_id": "OQ-box-134",
+  "type": "NEEDS_CONFIRMATION",
+  "feature_id": "box-type-and-prize-setup",
+  "summary": "Quan sát staging mới chạm vùng rủi ro cao (quyền truy cập / tiền / billing): Tiền khách trả = giá variant mystery × số lượng (+ thuế, ship Free). Item là OBSERVED_CURRENT; cần PO xác nhận đây là hành vi dự kiến trước khi dùng làm expected result.",
+  "kb_ids": [
+    "box-type-and-prize-setup#KB-072"
+  ],
+  "tags": [
+    "staging-observed",
+    "risk-flag"
+  ]
+}
+```

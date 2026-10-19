@@ -1,0 +1,892 @@
+{
+  "feature_id": "FEAT-06-promote-codes",
+  "feature_key": "promote-codes",
+  "object_key": "plans-billing",
+  "name": "Promote code — mã cộng thêm capacity",
+  "user_goal": "Admin nội bộ tạo promote code (loại Immediate hoặc First upgrade, giới hạn lượt, thời gian, store và plan) để shop đổi mã và được thêm số box miễn phí (quota) mỗi chu kỳ trong một số chu kỳ — chỉ đổi quota, không đổi giá; mỗi shop đổi một mã một lần trọn đời và mỗi lúc chỉ có một mã Active.",
+  "user_goal_kb_refs": [
+    "promote-codes#KB-001",
+    "promote-codes#KB-002",
+    "promote-codes#KB-004",
+    "promote-codes#KB-017",
+    "promote-codes#KB-049",
+    "promote-codes#KB-051",
+    "promote-codes#KB-056"
+  ],
+  "stable_since_version": "1",
+  "priority": "P1",
+  "staging_only": false,
+  "actors": [
+    {
+      "role": "admin-staff",
+      "permission_observed": "Chỉ admin nội bộ (đội billing/partnership) tạo promote code tại admin panel, Marketing tools > Promote codes; quyền gồm xem list, xem chi tiết, tạo, sửa, xoá; tab Redemptions chỉ đọc.",
+      "kb_refs": [
+        "promote-codes#KB-004",
+        "promote-codes#KB-005",
+        "promote-codes#KB-028",
+        "_object-level.plans-billing#KB-001",
+        "_object-level.plans-billing#KB-023"
+      ]
+    },
+    {
+      "role": "merchant (shop)",
+      "permission_observed": "Shop là bên đổi mã và nhận quota thêm; kênh/UI mà merchant dùng để đổi mã chưa xác nhận.",
+      "kb_refs": [
+        "promote-codes#KB-031",
+        "promote-codes#KB-034",
+        "promote-codes#KB-036",
+        "promote-codes#KB-075",
+        "promote-codes#KB-076"
+      ]
+    },
+    {
+      "role": "system",
+      "permission_observed": "Server có lời gọi tra cứu mã và đổi mã, kiểm tra điều kiện theo 7 bước cố định; tự cộng lại quota thêm mỗi chu kỳ mới; áp hết hạn redemption theo kiểu 'lười' khi đổi plan hoặc khi đọc số liệu.",
+      "kb_refs": [
+        "promote-codes#KB-039",
+        "promote-codes#KB-042",
+        "promote-codes#KB-057",
+        "promote-codes#KB-061"
+      ]
+    }
+  ],
+  "entry_points": [
+    {
+      "path": "Admin panel > Marketing tools > Promote codes (list, chi tiết với tab Plans / Applicable Stores / Redemptions)",
+      "precondition": "Admin nội bộ có quyền trên màn Promote codes.",
+      "kb_refs": [
+        "promote-codes#KB-004",
+        "promote-codes#KB-005",
+        "promote-codes#KB-027",
+        "_object-level.plans-billing#KB-023"
+      ]
+    },
+    {
+      "path": "Lời gọi server tra cứu mã và đổi mã",
+      "precondition": "Mã tồn tại (tra cứu phân biệt hoa/thường); đổi mã phải qua 7 bước kiểm tra.",
+      "kb_refs": [
+        "promote-codes#KB-010",
+        "promote-codes#KB-039",
+        "promote-codes#KB-040",
+        "promote-codes#KB-042"
+      ]
+    },
+    {
+      "path": "Kênh merchant đổi mã (chưa xác nhận: không thấy màn hình portal; có thể do support làm)",
+      "precondition": "Chưa rõ.",
+      "kb_refs": [
+        "promote-codes#KB-075",
+        "promote-codes#KB-076"
+      ]
+    }
+  ],
+  "capabilities": [
+    {
+      "name": "Cấu hình promote code",
+      "description": "Admin tạo/sửa/xoá mã với Code duy nhất, Description, Free Boxes Per Cycle (>= 1), Valid Cycles (-1 = vĩnh viễn, mặc định -1), Applicable Plans, Type (Immediate / First upgrade), Max Uses (-1 = không giới hạn, mặc định -1), Application type (All Stores / Specific Stores theo domain), Starts At / Ends At, công tắc Active.",
+      "kb_refs": [
+        "promote-codes#KB-004",
+        "promote-codes#KB-005",
+        "promote-codes#KB-006",
+        "promote-codes#KB-007",
+        "promote-codes#KB-009",
+        "promote-codes#KB-011",
+        "promote-codes#KB-012",
+        "promote-codes#KB-013",
+        "promote-codes#KB-014",
+        "promote-codes#KB-015",
+        "promote-codes#KB-016",
+        "promote-codes#KB-017",
+        "promote-codes#KB-018",
+        "promote-codes#KB-019",
+        "promote-codes#KB-020",
+        "promote-codes#KB-021",
+        "promote-codes#KB-022",
+        "promote-codes#KB-023",
+        "promote-codes#KB-024",
+        "promote-codes#KB-025",
+        "promote-codes#KB-026"
+      ]
+    },
+    {
+      "name": "Theo dõi lượt đổi mã",
+      "description": "Mỗi mã có tab Plans, Applicable Stores, Redemptions; Redemptions chỉ đọc, hiển thị shop, trạng thái (Pending / Active / Expired), số chu kỳ, quota thêm, ngày kích hoạt, ngày hết hạn, ngày đổi.",
+      "kb_refs": [
+        "promote-codes#KB-027",
+        "promote-codes#KB-028",
+        "promote-codes#KB-029",
+        "promote-codes#KB-030",
+        "promote-codes#KB-003"
+      ]
+    },
+    {
+      "name": "Tra cứu và đổi mã",
+      "description": "Tra cứu trả mô tả, loại, số box, số chu kỳ, plan; đổi mã kiểm tra theo thứ tự: hết lượt, trạng thái/cửa sổ thời gian, store áp dụng, đã đổi trước đó, đang có mã Active khác, plan hiện tại (Immediate), chưa từng có charge (First upgrade); lỗi trả \"forbidden\" kèm thông điệp.",
+      "kb_refs": [
+        "promote-codes#KB-008",
+        "promote-codes#KB-010",
+        "promote-codes#KB-039",
+        "promote-codes#KB-040",
+        "promote-codes#KB-041",
+        "promote-codes#KB-042",
+        "promote-codes#KB-043",
+        "promote-codes#KB-044",
+        "promote-codes#KB-045",
+        "promote-codes#KB-046",
+        "promote-codes#KB-047",
+        "promote-codes#KB-048",
+        "promote-codes#KB-049",
+        "promote-codes#KB-050",
+        "promote-codes#KB-051",
+        "promote-codes#KB-052",
+        "promote-codes#KB-053",
+        "promote-codes#KB-054",
+        "promote-codes#KB-055",
+        "promote-codes#KB-075",
+        "promote-codes#KB-076"
+      ]
+    },
+    {
+      "name": "Nhận quota ngay với mã Immediate",
+      "description": "Redemption Active ngay khi đổi; quota tăng ngay, đổi giữa chu kỳ thì số box thêm cộng vào quota hiện tại.",
+      "kb_refs": [
+        "promote-codes#KB-031",
+        "promote-codes#KB-032",
+        "promote-codes#KB-033"
+      ]
+    },
+    {
+      "name": "Nhận quota khi nâng plan lần đầu với mã First upgrade",
+      "description": "Redemption Pending, chưa cộng quota, cho tới khi shop lần đầu đăng ký một plan trong danh sách của mã (chưa từng có charge); khi nâng plan, redemption chuyển Active và quota được cộng.",
+      "kb_refs": [
+        "promote-codes#KB-034",
+        "promote-codes#KB-035",
+        "promote-codes#KB-036",
+        "promote-codes#KB-037",
+        "promote-codes#KB-038"
+      ]
+    },
+    {
+      "name": "Duy trì và hết hạn quota thêm theo chu kỳ",
+      "description": "Quota mỗi chu kỳ = quota plan + box thêm của mã còn hiệu lực, tự cộng lại mỗi chu kỳ mới; redemption hết hạn cuối chu kỳ thứ N (hoặc không bao giờ với -1); hết hạn áp 'lười' khi đổi plan/đọc số liệu, kể cả khi plan không còn trong danh sách, mã bị xoá hoặc bị tắt.",
+      "kb_refs": [
+        "promote-codes#KB-056",
+        "promote-codes#KB-057",
+        "promote-codes#KB-058",
+        "promote-codes#KB-059",
+        "promote-codes#KB-060",
+        "promote-codes#KB-061",
+        "promote-codes#KB-062",
+        "promote-codes#KB-063",
+        "promote-codes#KB-064",
+        "promote-codes#KB-065",
+        "promote-codes#KB-066",
+        "promote-codes#KB-067"
+      ]
+    }
+  ],
+  "state_transitions": [
+    {
+      "from": "(chưa đổi)",
+      "to": "Redemption Active, quota tăng ngay",
+      "trigger": "Shop đổi mã loại Immediate",
+      "condition": "Qua đủ 7 bước kiểm tra; plan hiện tại nằm trong danh sách plan của mã (Free hợp lệ nếu được liệt kê)",
+      "kb_refs": [
+        "promote-codes#KB-031",
+        "promote-codes#KB-032",
+        "promote-codes#KB-052",
+        "promote-codes#KB-053"
+      ]
+    },
+    {
+      "from": "(chưa đổi)",
+      "to": "Redemption Pending (chưa cộng quota)",
+      "trigger": "Shop đổi mã loại First upgrade",
+      "condition": "Shop chưa từng có bản ghi charge nào",
+      "kb_refs": [
+        "promote-codes#KB-034",
+        "promote-codes#KB-035",
+        "promote-codes#KB-054"
+      ]
+    },
+    {
+      "from": "Redemption Pending",
+      "to": "Redemption Active, quota cộng thêm",
+      "trigger": "Shop đăng ký (nâng lên) một plan nằm trong danh sách plan của mã",
+      "condition": "Lần đầu subscribe, chưa từng có charge",
+      "kb_refs": [
+        "promote-codes#KB-036",
+        "promote-codes#KB-037",
+        "promote-codes#KB-038"
+      ]
+    },
+    {
+      "from": "Redemption Active",
+      "to": "Redemption Expired, quota thêm biến mất",
+      "trigger": "Hết chu kỳ thứ N; hoặc ở lần đổi plan kế tiếp khi plan không còn trong danh sách, mã bị xoá hoặc mã bị tắt",
+      "condition": "Valid Cycles khác -1 (với -1 không bao giờ hết hạn theo chu kỳ); hết hạn chỉ được áp khi đổi plan hoặc khi đọc số liệu",
+      "kb_refs": [
+        "promote-codes#KB-058",
+        "promote-codes#KB-059",
+        "promote-codes#KB-060",
+        "promote-codes#KB-061",
+        "promote-codes#KB-062",
+        "promote-codes#KB-063",
+        "promote-codes#KB-064",
+        "promote-codes#KB-066",
+        "promote-codes#KB-067"
+      ]
+    },
+    {
+      "from": "Mã Active",
+      "to": "Mã \"deactivated\"",
+      "trigger": "Admin tắt công tắc Active",
+      "condition": "Có hiệu lực ngay",
+      "kb_refs": [
+        "promote-codes#KB-026"
+      ]
+    }
+  ],
+  "confirmed_rules": [
+    {
+      "rule": "Promote code là mã cho shop thêm số box miễn phí (quota/capacity) mỗi chu kỳ trong một số chu kỳ; phần thêm chỉ là quota (số box miễn phí trước khi tính phí box vượt) và khác với billing discount.",
+      "kb_refs": [
+        "promote-codes#KB-001",
+        "_object-level.plans-billing#KB-018"
+      ]
+    },
+    {
+      "rule": "Promote code chỉ đổi quota, không bao giờ đổi giá subscription và không giảm hoá đơn của merchant.",
+      "kb_refs": [
+        "promote-codes#KB-002"
+      ]
+    },
+    {
+      "rule": "Shop và Promote code có quan hệ N-N thông qua lượt đổi mã (redemption) của shop.",
+      "kb_refs": [
+        "promote-codes#KB-003"
+      ]
+    },
+    {
+      "rule": "Chỉ admin nội bộ (đội billing/partnership) tạo promote code, tại admin panel, nhóm menu \"Marketing tools\" > \"Promote codes\"; quyền trên màn gồm xem list, xem chi tiết, tạo, sửa, xoá; thao tác ở đây có tác động tặng capacity.",
+      "kb_refs": [
+        "promote-codes#KB-004",
+        "promote-codes#KB-005",
+        "_object-level.plans-billing#KB-022",
+        "_object-level.plans-billing#KB-023"
+      ]
+    },
+    {
+      "rule": "Code của promote code là duy nhất; tra cứu phân biệt hoa/thường — nhập sai hoa/thường thì không tìm thấy mã và bị từ chối.",
+      "kb_refs": [
+        "promote-codes#KB-006",
+        "promote-codes#KB-010"
+      ]
+    },
+    {
+      "rule": "Description là ghi chú; Free Boxes Per Cycle là quota thêm mỗi chu kỳ và phải là số nguyên >= 1.",
+      "kb_refs": [
+        "promote-codes#KB-011",
+        "promote-codes#KB-012",
+        "promote-codes#KB-013"
+      ]
+    },
+    {
+      "rule": "Valid Cycles là số chu kỳ mã còn hiệu lực; -1 nghĩa là không giới hạn (vĩnh viễn); mặc định -1.",
+      "kb_refs": [
+        "promote-codes#KB-014",
+        "promote-codes#KB-015"
+      ]
+    },
+    {
+      "rule": "Applicable Plans là các plan mà mã hợp lệ và còn sống.",
+      "kb_refs": [
+        "promote-codes#KB-016"
+      ]
+    },
+    {
+      "rule": "Type của promote code là một trong hai giá trị `Immediate` hoặc `First upgrade`.",
+      "kb_refs": [
+        "promote-codes#KB-017"
+      ]
+    },
+    {
+      "rule": "Total Amount (Max Uses) là số lượt đổi tối đa; -1 nghĩa là không giới hạn; mặc định -1.",
+      "kb_refs": [
+        "promote-codes#KB-018",
+        "promote-codes#KB-019",
+        "promote-codes#KB-020"
+      ]
+    },
+    {
+      "rule": "Application type là \"All Stores\" hoặc \"Specific Stores\"; Specific Stores đi kèm danh sách store (theo domain shop), và Applicable Stores bắt buộc khi chọn Specific Stores.",
+      "kb_refs": [
+        "promote-codes#KB-021",
+        "promote-codes#KB-022",
+        "promote-codes#KB-023"
+      ]
+    },
+    {
+      "rule": "Starts At / Ends At xác định cửa sổ đổi mã; Ends At phải sau Starts At.",
+      "kb_refs": [
+        "promote-codes#KB-024",
+        "promote-codes#KB-025"
+      ]
+    },
+    {
+      "rule": "Active là công tắc có hiệu lực ngay; tắt thì mã được ghi \"deactivated\" ngay.",
+      "kb_refs": [
+        "promote-codes#KB-026"
+      ]
+    },
+    {
+      "rule": "Mỗi mã có tab Plans, Applicable Stores, Redemptions; tab Redemptions chỉ đọc và hiển thị cho từng lượt đổi: shop, trạng thái, số chu kỳ, quota thêm, ngày kích hoạt, ngày hết hạn, ngày đổi.",
+      "kb_refs": [
+        "promote-codes#KB-027",
+        "promote-codes#KB-028",
+        "promote-codes#KB-029"
+      ]
+    },
+    {
+      "rule": "Trạng thái redemption là Pending, Active hoặc Expired.",
+      "kb_refs": [
+        "promote-codes#KB-030"
+      ]
+    },
+    {
+      "rule": "Mã Immediate: redemption Active ngay, quota của shop tăng ngay khi đổi; đổi giữa chu kỳ thì số box thêm cộng vào quota hiện tại.",
+      "kb_refs": [
+        "promote-codes#KB-031",
+        "promote-codes#KB-032",
+        "promote-codes#KB-033"
+      ]
+    },
+    {
+      "rule": "Mã First upgrade: redemption Pending, chưa có hiệu lực, cho tới khi shop đăng ký một plan trong danh sách plan của mã — chỉ khi lần đầu subscribe và chưa từng có charge; khi đó redemption chuyển Active và quota được cộng; nâng plan kích hoạt mã First upgrade.",
+      "kb_refs": [
+        "promote-codes#KB-034",
+        "promote-codes#KB-035",
+        "promote-codes#KB-036",
+        "promote-codes#KB-037",
+        "promote-codes#KB-038"
+      ]
+    },
+    {
+      "rule": "Server có hai lời gọi cho promote code: tra cứu mã (trả mô tả, loại, số box, số chu kỳ, plan của mã) và đổi mã.",
+      "kb_refs": [
+        "promote-codes#KB-039",
+        "promote-codes#KB-040"
+      ]
+    },
+    {
+      "rule": "Mỗi lỗi khi đổi mã được báo \"forbidden\" kèm thông điệp nêu lý do; các điều kiện được kiểm tra theo thứ tự cố định 7 bước (hết lượt; trạng thái/cửa sổ thời gian; store áp dụng; đã đổi trước đó; đang có mã Active khác; plan hiện tại với Immediate; chưa từng có charge với First upgrade).",
+      "kb_refs": [
+        "promote-codes#KB-041",
+        "promote-codes#KB-042"
+      ]
+    },
+    {
+      "rule": "Bước đầu tiên: mã đã hết lượt (Max Uses) thì bị từ chối, thông báo chứa \"reached its maximum usage limit\".",
+      "kb_refs": [
+        "promote-codes#KB-043"
+      ]
+    },
+    {
+      "rule": "Đổi mã bị từ chối khi mã không Active, chưa tới Starts At hoặc đã quá Ends At; thông báo chứa \"currently not active\" / \"not yet active\" / \"has expired\" tương ứng công tắc hoặc khoảng ngày.",
+      "kb_refs": [
+        "promote-codes#KB-044",
+        "promote-codes#KB-045",
+        "promote-codes#KB-046",
+        "promote-codes#KB-047"
+      ]
+    },
+    {
+      "rule": "Mã \"Specific Stores\" mà shop không nằm trong danh sách: bị từ chối với \"not available for your store\".",
+      "kb_refs": [
+        "promote-codes#KB-048"
+      ]
+    },
+    {
+      "rule": "Mỗi shop chỉ được đổi một promote code một lần trọn đời; redemption trước đó ở Active hoặc Expired đều tính là đã đổi; đổi lại bị từ chối, thông báo chứa \"already redeemed\".",
+      "kb_refs": [
+        "promote-codes#KB-049",
+        "promote-codes#KB-050"
+      ]
+    },
+    {
+      "rule": "Mỗi lúc shop chỉ có một promote code Active; đang có mã Active khác thì bị từ chối với \"already has an active promote code\".",
+      "kb_refs": [
+        "promote-codes#KB-051"
+      ]
+    },
+    {
+      "rule": "Mã Immediate: plan hiện tại của shop phải nằm trong danh sách plan áp dụng (Free hợp lệ nếu được liệt kê); không thì bị từ chối với \"Current plan is not eligible\".",
+      "kb_refs": [
+        "promote-codes#KB-052",
+        "promote-codes#KB-053"
+      ]
+    },
+    {
+      "rule": "Mã First upgrade: shop phải chưa từng có bản ghi charge; đã có thì bị từ chối với \"only available for first-time upgrades\".",
+      "kb_refs": [
+        "promote-codes#KB-054"
+      ]
+    },
+    {
+      "rule": "Redemption Pending vẫn được tính vào Max Uses.",
+      "kb_refs": [
+        "promote-codes#KB-055"
+      ]
+    },
+    {
+      "rule": "Quota mỗi chu kỳ của shop = quota plan + số box thêm của mã còn hiệu lực (Box Selling Capacity = capacity plan + box tặng); mỗi chu kỳ mới số box thêm được tự cộng lại.",
+      "kb_refs": [
+        "promote-codes#KB-056",
+        "promote-codes#KB-057"
+      ]
+    },
+    {
+      "rule": "Redemption với số chu kỳ -1 không bao giờ hết hạn; với N thì hết hạn cuối chu kỳ thứ N; `valid_cycles = 1` hết hạn cuối chu kỳ hiện tại.",
+      "kb_refs": [
+        "promote-codes#KB-058",
+        "promote-codes#KB-059",
+        "promote-codes#KB-060"
+      ]
+    },
+    {
+      "rule": "Hết hạn redemption là 'lười': không có job, chỉ áp khi đổi plan hoặc khi đọc số liệu; plan không còn trong danh sách, mã bị xoá hoặc bị tắt thì redemption bị đánh dấu hết hạn ở lần đổi plan kế tiếp; mỗi lần đổi plan chỉ xét một redemption.",
+      "kb_refs": [
+        "promote-codes#KB-061",
+        "promote-codes#KB-062",
+        "promote-codes#KB-063",
+        "promote-codes#KB-064",
+        "promote-codes#KB-065"
+      ]
+    },
+    {
+      "rule": "Quota thêm biến mất khi redemption hết hạn hoặc khi shop đổi sang plan không nằm trong danh sách plan của mã.",
+      "kb_refs": [
+        "promote-codes#KB-066",
+        "promote-codes#KB-067"
+      ]
+    },
+    {
+      "rule": "Admin Mysbox nội bộ có nhiệm vụ quản lý mã.",
+      "kb_refs": [
+        "_object-level.plans-billing#KB-001"
+      ]
+    }
+  ],
+  "observed_behavior": [],
+  "observed_validations": [],
+  "permissions": [
+    {
+      "permission": "Màn Promote codes: xem list, xem chi tiết, tạo, sửa, xoá (admin nội bộ); tab Redemptions chỉ đọc.",
+      "kb_refs": [
+        "promote-codes#KB-005",
+        "promote-codes#KB-028"
+      ]
+    },
+    {
+      "permission": "Chỉ admin nội bộ tạo promote code.",
+      "kb_refs": [
+        "promote-codes#KB-004"
+      ]
+    }
+  ],
+  "surface_mapping": {
+    "portal": [
+      {
+        "item": "Thẻ quota hiển thị used / quota (chỉ có trong ví dụ); chưa tìm thấy màn để merchant tự nhập mã",
+        "kb_refs": [
+          "promote-codes#KB-074",
+          "promote-codes#KB-075"
+        ]
+      },
+      {
+        "item": "Thông điệp từ chối hiển thị cho merchant",
+        "kb_refs": [
+          "promote-codes#KB-047"
+        ]
+      }
+    ],
+    "storefront": [],
+    "api": [
+      {
+        "item": "Lời gọi tra cứu mã và đổi mã; lỗi \"forbidden\" kèm thông điệp",
+        "kb_refs": [
+          "promote-codes#KB-039",
+          "promote-codes#KB-040",
+          "promote-codes#KB-041"
+        ]
+      }
+    ],
+    "data": [
+      {
+        "item": "Promote code (Code, Free Boxes Per Cycle, Valid Cycles, Type, Max Uses, Application type, Starts/Ends At, Active)",
+        "kb_refs": [
+          "promote-codes#KB-006",
+          "promote-codes#KB-012",
+          "promote-codes#KB-014",
+          "promote-codes#KB-017",
+          "promote-codes#KB-018",
+          "promote-codes#KB-021",
+          "promote-codes#KB-024",
+          "promote-codes#KB-026"
+        ]
+      },
+      {
+        "item": "Redemption (shop N-N promote code; Pending / Active / Expired)",
+        "kb_refs": [
+          "promote-codes#KB-003",
+          "promote-codes#KB-030"
+        ]
+      },
+      {
+        "item": "Box Selling Capacity của shop = capacity plan + box tặng",
+        "kb_refs": [
+          "promote-codes#KB-056"
+        ]
+      }
+    ],
+    "code": [],
+    "admin_panel": [
+      {
+        "item": "Marketing tools > Promote codes; tab Plans / Applicable Stores / Redemptions",
+        "kb_refs": [
+          "promote-codes#KB-004",
+          "promote-codes#KB-027",
+          "promote-codes#KB-029",
+          "_object-level.plans-billing#KB-023"
+        ]
+      }
+    ]
+  },
+  "dependencies": [
+    {
+      "depends_on": "plan-upgrade-downgrade-cancel (nâng plan kích hoạt First upgrade; đổi plan là lúc áp hết hạn)",
+      "kb_refs": [
+        "promote-codes#KB-038",
+        "promote-codes#KB-061",
+        "promote-codes#KB-062"
+      ]
+    },
+    {
+      "depends_on": "plan-capacity-and-cycle (chu kỳ và quota plan làm nền cho quota thêm)",
+      "kb_refs": [
+        "promote-codes#KB-056",
+        "promote-codes#KB-057"
+      ]
+    },
+    {
+      "depends_on": "Charge của shop (điều kiện chưa từng có charge cho First upgrade)",
+      "kb_refs": [
+        "promote-codes#KB-037",
+        "promote-codes#KB-054"
+      ]
+    }
+  ],
+  "risks": [
+    {
+      "risk": "Hết hạn 'lười': shop có thể còn giữ quota thêm sau khi admin tắt/xoá mã cho tới lần đổi plan kế tiếp.",
+      "kb_refs": [
+        "promote-codes#KB-061",
+        "promote-codes#KB-063",
+        "promote-codes#KB-064"
+      ]
+    },
+    {
+      "risk": "Cách lưu Code chưa thống nhất; tra cứu phân biệt hoa/thường nên merchant có thể bị từ chối vì sai hoa/thường.",
+      "kb_refs": [
+        "promote-codes#KB-007",
+        "promote-codes#KB-009",
+        "promote-codes#KB-010"
+      ]
+    },
+    {
+      "risk": "Mỗi shop chỉ đổi một lần trọn đời: đổi nhầm mã không làm lại được.",
+      "kb_refs": [
+        "promote-codes#KB-049",
+        "promote-codes#KB-050"
+      ]
+    }
+  ],
+  "limitations": [
+    {
+      "limitation": "Các số trong ví dụ (mã +50 trên plan 100 box, 3 chu kỳ, 150 / 160 box, mã First upgrade +100 trên plan \"Growth\", thẻ `60 / 150`) chỉ minh hoạ, không phải oracle.",
+      "kb_refs": [
+        "promote-codes#KB-068",
+        "promote-codes#KB-069",
+        "promote-codes#KB-070",
+        "promote-codes#KB-071",
+        "promote-codes#KB-072",
+        "promote-codes#KB-073",
+        "promote-codes#KB-074"
+      ]
+    }
+  ],
+  "freshness": {
+    "observed_at": null
+  },
+  "unknown_areas": [
+    {
+      "question": "Code của promote code được tự viết HOA khi lưu (merchant phải nhập chữ HOA) hay được lưu đúng như admin gõ?",
+      "why_it_matters": "Hai tài liệu nói khác nhau; quyết định case nhập mã khác hoa/thường.",
+      "kb_refs": [
+        "promote-codes#KB-007",
+        "promote-codes#KB-008",
+        "promote-codes#KB-009"
+      ],
+      "conflict_group": "CONF-plans-billing-12",
+      "oq_id": "OQ-plans-billing-014"
+    },
+    {
+      "question": "Merchant đổi promote code qua kênh/UI nào — merchant tự nhập trong portal, hay support đổi giúp qua giao diện khác? (Vai trò thực hiện đổi mã chưa rõ.)",
+      "why_it_matters": "Quyết định surface và role cho test end-to-end; tài liệu tự khai chưa xác nhận.",
+      "kb_refs": [
+        "promote-codes#KB-075",
+        "promote-codes#KB-076"
+      ],
+      "oq_id": "OQ-plans-billing-119"
+    },
+    {
+      "question": "Route, method, payload và mã HTTP của lời gọi tra cứu và đổi mã (\"forbidden\" là status 403 hay một field)?",
+      "why_it_matters": "Tester API cần endpoint và status thật.",
+      "kb_refs": [
+        "promote-codes#KB-039",
+        "promote-codes#KB-041"
+      ],
+      "oq_id": "OQ-plans-billing-121"
+    },
+    {
+      "question": "Thông điệp lỗi nguyên văn đầy đủ cho từng bước kiểm tra là gì (tài liệu chỉ nêu chuỗi con của thông điệp)?",
+      "why_it_matters": "Expected message cho từng negative case.",
+      "kb_refs": [
+        "promote-codes#KB-043",
+        "promote-codes#KB-047",
+        "promote-codes#KB-049"
+      ],
+      "oq_id": "OQ-plans-billing-122"
+    },
+    {
+      "question": "Redemption Pending có được tính là 'đã đổi mã này' hoặc 'đang có mã Active khác' không?",
+      "why_it_matters": "Biên khi đổi mã thứ hai lúc đang có redemption Pending.",
+      "kb_refs": [
+        "promote-codes#KB-050",
+        "promote-codes#KB-051",
+        "promote-codes#KB-055"
+      ],
+      "oq_id": "OQ-plans-billing-070"
+    },
+    {
+      "question": "Redemption Pending có hết hạn không, và khi First upgrade chuyển Active thì số chu kỳ được đếm từ thời điểm nào?",
+      "why_it_matters": "Biên thời gian của mã First upgrade có Valid Cycles hữu hạn.",
+      "kb_refs": [
+        "promote-codes#KB-036",
+        "promote-codes#KB-059"
+      ],
+      "oq_id": "OQ-plans-billing-071"
+    },
+    {
+      "question": "Khi mã bị tắt hoặc xoá, quota thêm có còn được cộng ở chu kỳ mới trước lần đổi plan kế tiếp không?",
+      "why_it_matters": "Hết hạn 'lười' có thể để shop giữ quota thêm; cần expected rõ.",
+      "kb_refs": [
+        "promote-codes#KB-057",
+        "promote-codes#KB-061",
+        "promote-codes#KB-063",
+        "promote-codes#KB-064"
+      ],
+      "oq_id": "OQ-plans-billing-072"
+    },
+    {
+      "question": "Validation của Code (độ dài, ký tự cho phép) và hành vi khi tạo trùng mã?",
+      "why_it_matters": "Thiếu biên nhập liệu cho form admin.",
+      "kb_refs": [
+        "promote-codes#KB-006"
+      ],
+      "oq_id": "OQ-plans-billing-073"
+    },
+    {
+      "question": "Sửa/xoá mã đã có redemption (sửa Free Boxes Per Cycle, Valid Cycles) có áp lại cho redemption hiện có không?",
+      "why_it_matters": "Admin có quyền sửa/xoá; ảnh hưởng quota của shop đang dùng mã.",
+      "kb_refs": [
+        "promote-codes#KB-005",
+        "promote-codes#KB-063"
+      ],
+      "oq_id": "OQ-plans-billing-072"
+    },
+    {
+      "question": "Ràng buộc biên của Valid Cycles và Max Uses ngoài -1 (có cho 0 hay số âm khác không)?",
+      "why_it_matters": "Chỉ Free Boxes Per Cycle có biên '>= 1'.",
+      "kb_refs": [
+        "promote-codes#KB-014",
+        "promote-codes#KB-019"
+      ],
+      "oq_id": "OQ-plans-billing-074"
+    },
+    {
+      "question": "Starts At / Ends At áp theo múi giờ nào?",
+      "why_it_matters": "Biên cửa sổ đổi mã.",
+      "kb_refs": [
+        "promote-codes#KB-024"
+      ],
+      "oq_id": "OQ-plans-billing-075"
+    },
+    {
+      "question": "Công tắc Active của promote code 'có hiệu lực ngay' có áp cả khi chưa bấm Save không (như billing discount)?",
+      "why_it_matters": "Tài liệu chỉ ghi 'có hiệu lực ngay' cho promote code.",
+      "kb_refs": [
+        "promote-codes#KB-026",
+        "billing-discount-codes#KB-011"
+      ],
+      "oq_id": "OQ-plans-billing-076"
+    },
+    {
+      "question": "Promote code và billing discount có áp đồng thời cho cùng một shop/plan được không?",
+      "why_it_matters": "Quy tắc kết hợp không được nêu.",
+      "kb_refs": [
+        "promote-codes#KB-002",
+        "billing-discount-codes#KB-002"
+      ],
+      "oq_id": "OQ-plans-billing-016"
+    },
+    {
+      "question": "Quyền trên màn Promote codes tách riêng xem/tạo/sửa/xoá hay một quyền cho cả nhóm?",
+      "why_it_matters": "Quyết định số tổ hợp permission cần kiểm.",
+      "kb_refs": [
+        "promote-codes#KB-005"
+      ],
+      "oq_id": "OQ-plans-billing-077"
+    },
+    {
+      "question": "'Chu kỳ' dùng để cộng và hết hạn quota thêm có phải chu kỳ billing của plan không?",
+      "why_it_matters": "Định nghĩa chu kỳ không nêu trong tài liệu của feature này.",
+      "kb_refs": [
+        "promote-codes#KB-057",
+        "promote-codes#KB-059"
+      ],
+      "oq_id": "OQ-plans-billing-072"
+    }
+  ],
+  "last_updated": {
+    "date": "2026-10-16",
+    "ccr_ref": "bootstrap"
+  },
+  "coverage_matrix": [
+    {
+      "feature_id": "FEAT-06-promote-codes",
+      "layer": "admin_panel",
+      "role": "admin-staff",
+      "state": "tạo/sửa mã",
+      "environment": "documented",
+      "covered": true
+    },
+    {
+      "feature_id": "FEAT-06-promote-codes",
+      "layer": "admin_panel",
+      "role": "admin-staff",
+      "state": "xem Redemptions",
+      "environment": "documented",
+      "covered": true
+    },
+    {
+      "feature_id": "FEAT-06-promote-codes",
+      "layer": "admin_panel",
+      "role": "admin-staff",
+      "state": "sửa/xoá mã đã có redemption",
+      "environment": "documented",
+      "covered": false
+    },
+    {
+      "feature_id": "FEAT-06-promote-codes",
+      "layer": "api",
+      "role": "system",
+      "state": "đổi mã Immediate hợp lệ",
+      "environment": "documented",
+      "covered": true
+    },
+    {
+      "feature_id": "FEAT-06-promote-codes",
+      "layer": "api",
+      "role": "system",
+      "state": "đổi mã First upgrade (Pending → Active)",
+      "environment": "documented",
+      "covered": true
+    },
+    {
+      "feature_id": "FEAT-06-promote-codes",
+      "layer": "api",
+      "role": "system",
+      "state": "7 điều kiện từ chối",
+      "environment": "documented",
+      "covered": true
+    },
+    {
+      "feature_id": "FEAT-06-promote-codes",
+      "layer": "api",
+      "role": "system",
+      "state": "contract route/status",
+      "environment": "documented",
+      "covered": false
+    },
+    {
+      "feature_id": "FEAT-06-promote-codes",
+      "layer": "portal",
+      "role": "merchant",
+      "state": "nhập mã trong portal",
+      "environment": "documented",
+      "covered": false
+    },
+    {
+      "feature_id": "FEAT-06-promote-codes",
+      "layer": "data",
+      "role": "system",
+      "state": "hết hạn redemption (chu kỳ / đổi plan / tắt / xoá)",
+      "environment": "documented",
+      "covered": true
+    }
+  ],
+  "profile_conflicts": [
+    {
+      "conflict_group": "CONF-plans-billing-12",
+      "kb_refs": [
+        "promote-codes#KB-007",
+        "promote-codes#KB-008",
+        "promote-codes#KB-009"
+      ],
+      "resolution": "UNRESOLVED"
+    }
+  ],
+  "profile_relationships": [
+    {
+      "from": "promote-codes",
+      "to": "plan-upgrade-downgrade-cancel",
+      "type": "triggered_by",
+      "note": "Nâng plan kích hoạt First upgrade; đổi plan áp hết hạn redemption.",
+      "kb_refs": [
+        "promote-codes#KB-038",
+        "promote-codes#KB-062"
+      ]
+    },
+    {
+      "from": "promote-codes",
+      "to": "billing-discount-codes",
+      "type": "distinct_from",
+      "note": "Promote code chỉ đổi quota; đổi giá là việc của billing discount.",
+      "kb_refs": [
+        "promote-codes#KB-001",
+        "promote-codes#KB-002",
+        "_object-level.plans-billing#KB-018"
+      ]
+    },
+    {
+      "from": "promote-codes",
+      "to": "plan-capacity-and-cycle",
+      "type": "extends",
+      "kb_refs": [
+        "promote-codes#KB-056",
+        "promote-codes#KB-057"
+      ]
+    }
+  ]
+}

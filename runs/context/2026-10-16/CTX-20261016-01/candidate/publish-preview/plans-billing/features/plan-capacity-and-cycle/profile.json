@@ -1,0 +1,966 @@
+{
+  "feature_id": "FEAT-01-plan-capacity-and-cycle",
+  "feature_key": "plan-capacity-and-cycle",
+  "name": "Plan, capacity box miễn phí theo chu kỳ 30 ngày và trial",
+  "user_goal": "Mỗi shop có một plan (Free, trả phí, trial, Early-bird) với hạn mức box miễn phí theo chu kỳ 30 ngày neo vào ngày cài app lần đầu; hệ thống đếm đúng số box đã dùng (Used khác Total sold in cycle), cho merchant và admin thấy mức dùng hạn mức, và box bán trong trial không bị tính phí usage.",
+  "user_goal_kb_refs": [
+    "plan-capacity-and-cycle#KB-001",
+    "plan-capacity-and-cycle#KB-016",
+    "plan-capacity-and-cycle#KB-004",
+    "plan-capacity-and-cycle#KB-006",
+    "plan-capacity-and-cycle#KB-010",
+    "plan-capacity-and-cycle#KB-041",
+    "plan-capacity-and-cycle#KB-071"
+  ],
+  "stable_since_version": "1",
+  "actors": [
+    {
+      "role": "merchant",
+      "permission_observed": "Xem thẻ \"Box sales limit\" (used / quota, cảnh báo 80% và 100%), xem số ngày trial còn lại, đăng ký plan và nhận trial; không có thao tác chỉnh quota được tài liệu nêu cho merchant.",
+      "kb_refs": [
+        "plan-capacity-and-cycle#KB-010",
+        "plan-capacity-and-cycle#KB-021",
+        "plan-capacity-and-cycle#KB-072",
+        "plan-capacity-and-cycle#KB-044",
+        "_product-level#KB-PL-002"
+      ]
+    },
+    {
+      "role": "system",
+      "permission_observed": "Tạo bộ đếm hạn mức lúc cài app, ghi usage khi nhận đơn đã thanh toán, đặt lại quota kiểu lười khi qua mốc chu kỳ, ghi đè capacity sửa tay khi reset chu kỳ hoặc đổi plan.",
+      "kb_refs": [
+        "plan-capacity-and-cycle#KB-062",
+        "plan-capacity-and-cycle#KB-004",
+        "plan-capacity-and-cycle#KB-019",
+        "plan-capacity-and-cycle#KB-060",
+        "plan-capacity-and-cycle#KB-078"
+      ]
+    },
+    {
+      "role": "admin-staff",
+      "permission_observed": "Xem Box Selling Capacity / Box Capacity Used / Box Sold in Cycle của shop; nâng selling capacity trong form Edit shop (tặng thiện chí); là bên duy nhất tắt được \"Exclude Test Order\".",
+      "kb_refs": [
+        "plan-capacity-and-cycle#KB-023",
+        "plan-capacity-and-cycle#KB-024",
+        "plan-capacity-and-cycle#KB-027",
+        "plan-capacity-and-cycle#KB-031",
+        "plan-capacity-and-cycle#KB-077",
+        "_product-level#KB-PL-006"
+      ]
+    }
+  ],
+  "entry_points": [
+    {
+      "path": "Cài app Mysbox lần đầu (hệ thống tự gán plan Free và tạo bộ đếm hạn mức)",
+      "precondition": "Shop chưa từng cài app",
+      "kb_refs": [
+        "plan-capacity-and-cycle#KB-002",
+        "plan-capacity-and-cycle#KB-062",
+        "plan-capacity-and-cycle#KB-063"
+      ]
+    },
+    {
+      "path": "Merchant app > thẻ \"Box sales limit\"",
+      "precondition": "Shop đã cài app; merchant đã đăng nhập app",
+      "kb_refs": [
+        "plan-capacity-and-cycle#KB-010",
+        "plan-capacity-and-cycle#KB-020",
+        "plan-capacity-and-cycle#KB-065"
+      ]
+    },
+    {
+      "path": "Webhook đơn đã thanh toán từ Shopify (\"orders/paid\") — điểm hệ thống ghi usage",
+      "precondition": "Đơn thật chứa box đang publish",
+      "kb_refs": [
+        "plan-capacity-and-cycle#KB-004",
+        "plan-capacity-and-cycle#KB-028"
+      ]
+    },
+    {
+      "path": "Admin panel > Shop > Edit > section Plan",
+      "precondition": "Đăng nhập admin panel với quyền sửa shop",
+      "kb_refs": [
+        "plan-capacity-and-cycle#KB-076",
+        "plan-capacity-and-cycle#KB-077",
+        "plan-capacity-and-cycle#KB-023"
+      ]
+    }
+  ],
+  "capabilities": [
+    {
+      "name": "Gán plan Free mặc định và khởi tạo bộ đếm hạn mức khi cài app",
+      "description": "Shop mới cài vào plan Free (giá 0, không tính phí); hệ thống tạo bộ đếm hạn mức có hạn mức bằng gói mặc định và số đã dùng bằng 0.",
+      "kb_refs": [
+        "plan-capacity-and-cycle#KB-002",
+        "plan-capacity-and-cycle#KB-011",
+        "plan-capacity-and-cycle#KB-012",
+        "plan-capacity-and-cycle#KB-062",
+        "plan-capacity-and-cycle#KB-063",
+        "_object-level.plans-billing#KB-005"
+      ]
+    },
+    {
+      "name": "Chu kỳ quota 30 ngày neo ngày cài đầu, đặt lại kiểu lười",
+      "description": "Quota được đếm trong cửa sổ 30 ngày neo vào ngày cài app lần đầu; không có job reset hằng đêm — sau mốc chu kỳ số đã dùng tự đọc về 0 và chỉ được ghi lại khi có đơn trả tiền đầu tiên của chu kỳ mới; gỡ rồi cài lại không reset bộ đếm trong cùng chu kỳ.",
+      "kb_refs": [
+        "plan-capacity-and-cycle#KB-001",
+        "plan-capacity-and-cycle#KB-013",
+        "plan-capacity-and-cycle#KB-016",
+        "plan-capacity-and-cycle#KB-018",
+        "plan-capacity-and-cycle#KB-019",
+        "plan-capacity-and-cycle#KB-070"
+      ]
+    },
+    {
+      "name": "Đếm box đã dùng vào quota",
+      "description": "Box được đếm khi Shopify báo đơn đã thanh toán, theo số lượng từng variant box; box chưa publish không tính; đơn sửa thêm box chỉ tính phần thêm; refund/huỷ, resell, xoá box không trả lại quota; reveal không liên quan; đơn nhiều variant trừ hạn mức lần lượt.",
+      "kb_refs": [
+        "plan-capacity-and-cycle#KB-004",
+        "plan-capacity-and-cycle#KB-009",
+        "plan-capacity-and-cycle#KB-028",
+        "plan-capacity-and-cycle#KB-029",
+        "plan-capacity-and-cycle#KB-034",
+        "plan-capacity-and-cycle#KB-035",
+        "plan-capacity-and-cycle#KB-036",
+        "plan-capacity-and-cycle#KB-037",
+        "plan-capacity-and-cycle#KB-038",
+        "plan-capacity-and-cycle#KB-042",
+        "plan-capacity-and-cycle#KB-069"
+      ]
+    },
+    {
+      "name": "Cờ \"Exclude Test Order\" và xử lý đơn test / preview order đối với hạn mức",
+      "description": "Cài đặt \"Exclude Test Order\" bật mặc định; khi admin tắt cờ, đơn test được ghi như đơn thật và trừ hạn mức; preview order là đơn test gắn tag mysbox-preview-order. Đơn test (kể cả preview order) có trừ hạn mức khi cờ ở mặc định (bật) hay không đang mâu thuẫn — xem unknown_areas / profile_conflicts.",
+      "kb_refs": [
+        "plan-capacity-and-cycle#KB-030",
+        "plan-capacity-and-cycle#KB-031",
+        "plan-capacity-and-cycle#KB-032",
+        "plan-capacity-and-cycle#KB-033",
+        "plan-capacity-and-cycle#KB-067",
+        "plan-capacity-and-cycle#KB-076"
+      ]
+    },
+    {
+      "name": "Merchant theo dõi mức dùng hạn mức",
+      "description": "Thẻ \"Box sales limit\" hiển thị thanh tiến độ và used / quota (quota gồm phần promote code); Used dừng tăng sau khi vượt; plan Paid hiển thị thêm Total sold in cycle và Extra fee khi đã vượt; cảnh báo từ 80% và thông điệp khi đủ 100%.",
+      "kb_refs": [
+        "plan-capacity-and-cycle#KB-005",
+        "plan-capacity-and-cycle#KB-006",
+        "plan-capacity-and-cycle#KB-010",
+        "plan-capacity-and-cycle#KB-020",
+        "plan-capacity-and-cycle#KB-021",
+        "plan-capacity-and-cycle#KB-022",
+        "plan-capacity-and-cycle#KB-065",
+        "plan-capacity-and-cycle#KB-066"
+      ]
+    },
+    {
+      "name": "Admin xem và điều chỉnh capacity của shop",
+      "description": "Admin thấy Box Selling Capacity (gồm promote code), Box Capacity Used (dừng tăng sau vượt) và Box Sold in Cycle (luôn tăng); nâng selling capacity tay là tặng thiện chí nhưng bị ghi đè ở lần reset chu kỳ kế tiếp hoặc khi đổi plan.",
+      "kb_refs": [
+        "plan-capacity-and-cycle#KB-023",
+        "plan-capacity-and-cycle#KB-024",
+        "plan-capacity-and-cycle#KB-027",
+        "plan-capacity-and-cycle#KB-060",
+        "plan-capacity-and-cycle#KB-077",
+        "plan-capacity-and-cycle#KB-078"
+      ]
+    },
+    {
+      "name": "Trial của plan trả phí",
+      "description": "Số ngày trial lấy từ plan; lần đăng ký đầu được đủ ngày; đăng ký lại plan từng có chỉ còn số ngày chưa dùng; trong trial box bán làm tăng sold in cycle và không bao giờ bị tính phí usage; merchant thấy dòng \"N - trial days left\".",
+      "kb_refs": [
+        "plan-capacity-and-cycle#KB-039",
+        "plan-capacity-and-cycle#KB-041",
+        "plan-capacity-and-cycle#KB-043",
+        "plan-capacity-and-cycle#KB-044",
+        "plan-capacity-and-cycle#KB-045",
+        "plan-capacity-and-cycle#KB-072"
+      ]
+    },
+    {
+      "name": "Nhận biết loại plan của shop và quyền lợi đi kèm",
+      "description": "Trạng thái gói gồm Free, trả phí, trial, đã huỷ còn grace; plan Paid có giá tháng cố định qua subscription Shopify và quota theo từng plan; Early-bird là gói cũ miễn phí 50 box, không hết hạn, giữ cho shop đang dùng; development store / Plus Trial nhận subscription thử không thu tiền thật.",
+      "kb_refs": [
+        "plan-capacity-and-cycle#KB-014",
+        "plan-capacity-and-cycle#KB-015",
+        "plan-capacity-and-cycle#KB-061",
+        "plan-capacity-and-cycle#KB-071",
+        "plan-capacity-and-cycle#KB-074",
+        "plan-capacity-and-cycle#KB-075",
+        "plan-capacity-and-cycle#KB-081",
+        "_object-level.plans-billing#KB-019"
+      ]
+    }
+  ],
+  "state_transitions": [
+    {
+      "from": "chưa cài app",
+      "to": "plan Free, bộ đếm used = 0, chu kỳ kết thúc sau 30 ngày kể từ ngày cài",
+      "trigger": "Merchant cài app lần đầu",
+      "condition": "Hạn mức bộ đếm bằng hạn mức của gói mặc định",
+      "kb_refs": [
+        "plan-capacity-and-cycle#KB-002",
+        "plan-capacity-and-cycle#KB-016",
+        "plan-capacity-and-cycle#KB-062",
+        "plan-capacity-and-cycle#KB-063"
+      ]
+    },
+    {
+      "from": "chu kỳ N (used > 0)",
+      "to": "chu kỳ N+1 (used đọc về 0)",
+      "trigger": "Thời gian qua mốc chu kỳ 30 ngày neo ngày cài đầu",
+      "condition": "Không có job reset hằng đêm; bộ đếm chỉ được ghi giá trị mới khi có đơn trả tiền đầu tiên của chu kỳ mới",
+      "kb_refs": [
+        "plan-capacity-and-cycle#KB-013",
+        "plan-capacity-and-cycle#KB-016",
+        "plan-capacity-and-cycle#KB-018",
+        "plan-capacity-and-cycle#KB-019"
+      ]
+    },
+    {
+      "from": "used dưới 80% quota",
+      "to": "used từ 80% quota (cảnh báo \"You almost reach the box limit, upgrade plan to sell more.\")",
+      "trigger": "Đơn đã thanh toán làm tăng used",
+      "condition": "Đơn thật, box đang publish (đơn test khi cờ Exclude Test Order ở mặc định: chưa xác định, xem profile_conflicts)",
+      "kb_refs": [
+        "plan-capacity-and-cycle#KB-004",
+        "plan-capacity-and-cycle#KB-021"
+      ]
+    },
+    {
+      "from": "used dưới quota",
+      "to": "used đạt/vượt quota (thông điệp \"You have reached the box limit, upgrade plan to sell more.\"; Used dừng tăng)",
+      "trigger": "Đơn đã thanh toán làm used chạm quota",
+      "condition": "Đơn gây vượt có thể làm used vượt nhẹ quota rồi dừng",
+      "kb_refs": [
+        "plan-capacity-and-cycle#KB-005",
+        "plan-capacity-and-cycle#KB-022",
+        "plan-capacity-and-cycle#KB-024"
+      ]
+    },
+    {
+      "from": "selling capacity đã được admin nâng tay",
+      "to": "selling capacity theo plan",
+      "trigger": "Reset chu kỳ kế tiếp hoặc shop đổi plan",
+      "condition": "",
+      "kb_refs": [
+        "plan-capacity-and-cycle#KB-060",
+        "plan-capacity-and-cycle#KB-078"
+      ]
+    },
+    {
+      "from": "chưa từng đăng ký plan trả phí",
+      "to": "trial với đủ số ngày trial của plan",
+      "trigger": "Merchant đăng ký plan lần đầu",
+      "condition": "Số ngày trial lấy từ plan",
+      "kb_refs": [
+        "plan-capacity-and-cycle#KB-043",
+        "plan-capacity-and-cycle#KB-044"
+      ]
+    },
+    {
+      "from": "đã huỷ plan từng có trial",
+      "to": "trial với số ngày trial chưa dùng",
+      "trigger": "Merchant đăng ký lại plan đó",
+      "condition": "Trial không bắt đầu lại",
+      "kb_refs": [
+        "plan-capacity-and-cycle#KB-045"
+      ]
+    },
+    {
+      "from": "đã gỡ app giữa chu kỳ",
+      "to": "cài lại, bộ đếm vẫn gồm box đã bán trước khi cài lại",
+      "trigger": "Merchant cài lại app trong cùng chu kỳ",
+      "condition": "Cùng chu kỳ",
+      "kb_refs": [
+        "plan-capacity-and-cycle#KB-070"
+      ]
+    }
+  ],
+  "confirmed_rules": [
+    {
+      "rule": "Chu kỳ đếm quota là một cửa sổ 30 ngày; quota được đặt lại khi hết mỗi chu kỳ.",
+      "kb_refs": [
+        "plan-capacity-and-cycle#KB-001",
+        "plan-capacity-and-cycle#KB-013"
+      ]
+    },
+    {
+      "rule": "Chu kỳ quota neo vào ngày shop cài app lần đầu, không phải ngày đăng ký plan hay ngày Shopify tính tiền; bộ đếm tạo lúc cài có chu kỳ kết thúc sau 30 ngày kể từ ngày cài.",
+      "kb_refs": [
+        "plan-capacity-and-cycle#KB-016"
+      ]
+    },
+    {
+      "rule": "Không có job reset quota hằng đêm; sau mốc chu kỳ số đã dùng tự đọc về 0 và bộ đếm chỉ được ghi lại khi có đơn trả tiền đầu tiên của chu kỳ mới.",
+      "kb_refs": [
+        "plan-capacity-and-cycle#KB-018",
+        "plan-capacity-and-cycle#KB-019"
+      ]
+    },
+    {
+      "rule": "Shop mới cài app được đưa vào plan Free (plan mặc định); plan Free có giá 0 và merchant ở plan Free không bị tính phí.",
+      "kb_refs": [
+        "plan-capacity-and-cycle#KB-002",
+        "plan-capacity-and-cycle#KB-011",
+        "_object-level.plans-billing#KB-005"
+      ]
+    },
+    {
+      "rule": "Khi cài xong, hệ thống tạo bộ đếm hạn mức với hạn mức bằng hạn mức của gói mặc định và số đã dùng bằng 0.",
+      "kb_refs": [
+        "plan-capacity-and-cycle#KB-062",
+        "plan-capacity-and-cycle#KB-063"
+      ]
+    },
+    {
+      "rule": "Quota / capacity là số box bán miễn phí trong một chu kỳ của plan; quota của plan Paid do từng plan quy định.",
+      "kb_refs": [
+        "plan-capacity-and-cycle#KB-012",
+        "plan-capacity-and-cycle#KB-015"
+      ]
+    },
+    {
+      "rule": "Plan Paid có giá tháng cố định, thu qua subscription Shopify.",
+      "kb_refs": [
+        "plan-capacity-and-cycle#KB-014"
+      ]
+    },
+    {
+      "rule": "Box được đếm là đã dùng khi Shopify báo đơn đã thanh toán (Mysbox ghi usage khi nhận webhook orders/paid); quota được đếm lúc thanh toán, không liên quan việc reveal.",
+      "kb_refs": [
+        "plan-capacity-and-cycle#KB-004",
+        "plan-capacity-and-cycle#KB-038"
+      ]
+    },
+    {
+      "rule": "Đơn thật chứa box đang publish được tính theo số lượng của từng variant box, mỗi đơn vị là 1 box; đơn nhiều variant trừ hạn mức lần lượt.",
+      "kb_refs": [
+        "plan-capacity-and-cycle#KB-028",
+        "plan-capacity-and-cycle#KB-009"
+      ]
+    },
+    {
+      "rule": "Box chưa publish lúc đơn trả tiền (nháp, đã gỡ, hoặc tự gỡ do hết quota Free) không được tính vào quota.",
+      "kb_refs": [
+        "plan-capacity-and-cycle#KB-029"
+      ]
+    },
+    {
+      "rule": "Đơn được sửa để thêm box chỉ tính thêm phần box thêm.",
+      "kb_refs": [
+        "plan-capacity-and-cycle#KB-034"
+      ]
+    },
+    {
+      "rule": "Đơn bị refund hoặc huỷ, box bị resell, box bị xoá về sau vẫn được tính vào quota; huỷ đơn không trả lại quota.",
+      "kb_refs": [
+        "plan-capacity-and-cycle#KB-035",
+        "plan-capacity-and-cycle#KB-036",
+        "plan-capacity-and-cycle#KB-037"
+      ]
+    },
+    {
+      "rule": "Merchant test bằng đơn thật sẽ tiêu tốn quota.",
+      "kb_refs": [
+        "plan-capacity-and-cycle#KB-042"
+      ]
+    },
+    {
+      "rule": "Bộ đếm hạn mức gồm cả box đã bán trước khi shop nâng gói trong cùng chu kỳ.",
+      "kb_refs": [
+        "plan-capacity-and-cycle#KB-069"
+      ]
+    },
+    {
+      "rule": "Gỡ rồi cài lại app không reset bộ đếm capacity: trong cùng chu kỳ bộ đếm vẫn gồm box đã bán trước khi cài lại.",
+      "kb_refs": [
+        "plan-capacity-and-cycle#KB-070"
+      ]
+    },
+    {
+      "rule": "Cài đặt \"Exclude Test Order\" bật mặc định; cờ này ở section Plan của form Edit shop nghĩa là đơn test không tính phí.",
+      "kb_refs": [
+        "plan-capacity-and-cycle#KB-030",
+        "plan-capacity-and-cycle#KB-076"
+      ]
+    },
+    {
+      "rule": "Chỉ admin tắt được \"Exclude Test Order\"; khi cờ tắt, đơn test được ghi như đơn thật và trừ hạn mức box của chu kỳ.",
+      "kb_refs": [
+        "plan-capacity-and-cycle#KB-031",
+        "plan-capacity-and-cycle#KB-067"
+      ]
+    },
+    {
+      "rule": "Preview order là đơn test gắn tag mysbox-preview-order, sinh từ tính năng xem trước box.",
+      "kb_refs": [
+        "plan-capacity-and-cycle#KB-032"
+      ]
+    },
+    {
+      "rule": "Merchant xem thẻ \"Box sales limit\" gồm thanh tiến độ và used / quota; Used là số box đã tính vào hạn mức chu kỳ hiện tại; quota bằng hạn mức gói cộng phần promote code.",
+      "kb_refs": [
+        "plan-capacity-and-cycle#KB-010",
+        "plan-capacity-and-cycle#KB-065",
+        "plan-capacity-and-cycle#KB-066"
+      ]
+    },
+    {
+      "rule": "Used dừng tăng khi đã vượt capacity; đơn gây vượt có thể làm Used vượt nhẹ quota rồi dừng, đó là hành vi bình thường. Total sold in cycle đếm mọi box đã bán, khác Used.",
+      "kb_refs": [
+        "plan-capacity-and-cycle#KB-005",
+        "plan-capacity-and-cycle#KB-006"
+      ]
+    },
+    {
+      "rule": "Với plan Paid, thẻ \"Box sales limit\" hiển thị thêm \"Total sold in cycle: N boxes\" và khi đã vượt quota hiển thị \"Extra fee: $X\".",
+      "kb_refs": [
+        "plan-capacity-and-cycle#KB-020"
+      ]
+    },
+    {
+      "rule": "Từ 80% quota thẻ hiện \"You almost reach the box limit, upgrade plan to sell more.\"; khi đủ 100% quota hiện \"You have reached the box limit, upgrade plan to sell more.\".",
+      "kb_refs": [
+        "plan-capacity-and-cycle#KB-021",
+        "plan-capacity-and-cycle#KB-022"
+      ]
+    },
+    {
+      "rule": "Ở admin: Box Selling Capacity là quota của shop đã gồm phần promote code; Box Capacity Used là quota đã dùng và dừng tăng sau khi vượt; Box Sold in Cycle là tổng box bán trong chu kỳ và luôn tăng.",
+      "kb_refs": [
+        "plan-capacity-and-cycle#KB-023",
+        "plan-capacity-and-cycle#KB-024",
+        "plan-capacity-and-cycle#KB-027"
+      ]
+    },
+    {
+      "rule": "Nâng selling capacity trong form Edit tương đương tặng capacity thiện chí; giá trị sửa/nâng tay bị ghi đè ở lần reset chu kỳ kế tiếp và khi shop đổi plan.",
+      "kb_refs": [
+        "plan-capacity-and-cycle#KB-077",
+        "plan-capacity-and-cycle#KB-060",
+        "plan-capacity-and-cycle#KB-078"
+      ]
+    },
+    {
+      "rule": "Số ngày trial lấy từ plan; lần đăng ký plan đầu tiên shop được đủ số ngày trial; đăng ký lại plan từng có thì trial không bắt đầu lại, chỉ còn số ngày trial chưa dùng.",
+      "kb_refs": [
+        "plan-capacity-and-cycle#KB-043",
+        "plan-capacity-and-cycle#KB-044",
+        "plan-capacity-and-cycle#KB-045"
+      ]
+    },
+    {
+      "rule": "Trong trial không tính phí usage; box bán trong trial không bao giờ bị tính phí, kể cả tính ngược về sau; đơn trong trial làm tăng \"sold in cycle\".",
+      "kb_refs": [
+        "plan-capacity-and-cycle#KB-041",
+        "plan-capacity-and-cycle#KB-039"
+      ]
+    },
+    {
+      "rule": "Shop đang trial thấy dòng \"N - trial days left\".",
+      "kb_refs": [
+        "plan-capacity-and-cycle#KB-072"
+      ]
+    },
+    {
+      "rule": "Trạng thái gói Mysbox của shop gồm Free, trả phí, trial và đã huỷ còn grace.",
+      "kb_refs": [
+        "plan-capacity-and-cycle#KB-071"
+      ]
+    },
+    {
+      "rule": "Early-bird (\"Founding member\") là gói cũ miễn phí 50 box, được giữ nguyên cho shop đang dùng, không hết hạn; shop Early-bird thấy \"You're staying in the Early-bird plan.\".",
+      "kb_refs": [
+        "plan-capacity-and-cycle#KB-061",
+        "plan-capacity-and-cycle#KB-074",
+        "plan-capacity-and-cycle#KB-075"
+      ]
+    },
+    {
+      "rule": "Development store hoặc store Plus Trial nhận subscription thử, không thu tiền thật.",
+      "kb_refs": [
+        "plan-capacity-and-cycle#KB-081",
+        "_object-level.plans-billing#KB-019"
+      ]
+    }
+  ],
+  "observed_behavior": [],
+  "observed_validations": [],
+  "permissions": [
+    {
+      "permission": "Chỉ admin tắt được cài đặt \"Exclude Test Order\".",
+      "role": "admin-staff",
+      "kb_refs": [
+        "plan-capacity-and-cycle#KB-031"
+      ]
+    },
+    {
+      "permission": "Admin nâng selling capacity của shop trong form Edit shop.",
+      "role": "admin-staff",
+      "kb_refs": [
+        "plan-capacity-and-cycle#KB-077"
+      ]
+    }
+  ],
+  "surface_mapping": {
+    "portal": [
+      {
+        "item": "Thẻ \"Box sales limit\" (thanh tiến độ, used / quota, Total sold in cycle, Extra fee, cảnh báo 80% / 100%)",
+        "kb_refs": [
+          "plan-capacity-and-cycle#KB-010",
+          "plan-capacity-and-cycle#KB-020",
+          "plan-capacity-and-cycle#KB-021",
+          "plan-capacity-and-cycle#KB-022"
+        ]
+      },
+      {
+        "item": "Dòng \"N - trial days left\" và thông điệp Early-bird",
+        "kb_refs": [
+          "plan-capacity-and-cycle#KB-072",
+          "plan-capacity-and-cycle#KB-074"
+        ]
+      }
+    ],
+    "admin_panel": [
+      {
+        "item": "Chỉ số Box Selling Capacity / Box Capacity Used / Box Sold in Cycle",
+        "kb_refs": [
+          "plan-capacity-and-cycle#KB-023",
+          "plan-capacity-and-cycle#KB-024",
+          "plan-capacity-and-cycle#KB-027"
+        ]
+      },
+      {
+        "item": "Form Edit shop, section Plan: cờ Exclude test order, selling capacity",
+        "kb_refs": [
+          "plan-capacity-and-cycle#KB-076",
+          "plan-capacity-and-cycle#KB-077"
+        ]
+      }
+    ],
+    "storefront": [],
+    "api": [
+      {
+        "item": "Webhook Shopify orders/paid — thời điểm ghi usage vào quota",
+        "kb_refs": [
+          "plan-capacity-and-cycle#KB-004"
+        ]
+      },
+      {
+        "item": "Subscription Shopify cho plan Paid",
+        "kb_refs": [
+          "plan-capacity-and-cycle#KB-014"
+        ]
+      }
+    ],
+    "data": [
+      {
+        "item": "Bộ đếm hạn mức của shop (hạn mức, đã dùng, mốc chu kỳ)",
+        "kb_refs": [
+          "plan-capacity-and-cycle#KB-016",
+          "plan-capacity-and-cycle#KB-062",
+          "plan-capacity-and-cycle#KB-063",
+          "plan-capacity-and-cycle#KB-064"
+        ]
+      },
+      {
+        "item": "Trạng thái gói của shop",
+        "kb_refs": [
+          "plan-capacity-and-cycle#KB-071",
+          "plan-capacity-and-cycle#KB-075"
+        ]
+      }
+    ],
+    "code": [
+      {
+        "item": "Reset quota kiểu lười, không có job reset hằng đêm",
+        "kb_refs": [
+          "plan-capacity-and-cycle#KB-018",
+          "plan-capacity-and-cycle#KB-019"
+        ]
+      }
+    ]
+  },
+  "dependencies": [
+    {
+      "depends_on": "install-and-onboarding",
+      "reason": "Plan Free và bộ đếm hạn mức được tạo ở bước cài app.",
+      "kb_refs": [
+        "plan-capacity-and-cycle#KB-062"
+      ]
+    },
+    {
+      "depends_on": "promote-codes",
+      "reason": "Quota hiển thị gồm phần promote code cộng thêm.",
+      "kb_refs": [
+        "plan-capacity-and-cycle#KB-023",
+        "plan-capacity-and-cycle#KB-066"
+      ]
+    },
+    {
+      "depends_on": "plan-upgrade-downgrade-cancel",
+      "reason": "Đổi plan ghi đè capacity sửa tay; trial khi đăng ký lại.",
+      "kb_refs": [
+        "plan-capacity-and-cycle#KB-078",
+        "plan-capacity-and-cycle#KB-045"
+      ]
+    }
+  ],
+  "risks": [
+    {
+      "risk": "Reset kiểu lười: số đã dùng chỉ được ghi lại ở đơn trả tiền đầu tiên của chu kỳ mới — kiểm biên chu kỳ dễ đọc sai nếu chỉ nhìn dữ liệu lưu trữ.",
+      "kb_refs": [
+        "plan-capacity-and-cycle#KB-019"
+      ]
+    },
+    {
+      "risk": "Capacity tặng tay bị ghi đè âm thầm ở lần reset chu kỳ hoặc đổi plan.",
+      "kb_refs": [
+        "plan-capacity-and-cycle#KB-060",
+        "plan-capacity-and-cycle#KB-078"
+      ]
+    },
+    {
+      "risk": "Hạn mức Free production chưa xác nhận: mọi expected result dùng số 10 là không có oracle.",
+      "kb_refs": [
+        "plan-capacity-and-cycle#KB-003",
+        "plan-capacity-and-cycle#KB-064"
+      ]
+    }
+  ],
+  "limitations": [
+    {
+      "limitation": "Các con số minh hoạ trong tài liệu (quota Free 10, plan Growth/Pro, mốc ngày ví dụ, 7 / 10, 105 / 100, ngưỡng box thứ 8, cài lại giữ neo chu kỳ) là ví dụ hoặc giá trị seed, không phải cấu hình production; không dùng làm oracle.",
+      "kb_refs": [
+        "plan-capacity-and-cycle#KB-017",
+        "plan-capacity-and-cycle#KB-026",
+        "plan-capacity-and-cycle#KB-046",
+        "plan-capacity-and-cycle#KB-047",
+        "plan-capacity-and-cycle#KB-048",
+        "plan-capacity-and-cycle#KB-049",
+        "plan-capacity-and-cycle#KB-056",
+        "plan-capacity-and-cycle#KB-058",
+        "plan-capacity-and-cycle#KB-068",
+        "plan-capacity-and-cycle#KB-079"
+      ]
+    },
+    {
+      "limitation": "Ví dụ nâng plan minh hoạ trial chỉ tăng sold in cycle, không phát sinh phí, và sau trial box bắt đầu dùng quota — chỉ là ví dụ, phần \"không trừ quota trong trial\" đang mâu thuẫn.",
+      "kb_refs": [
+        "plan-capacity-and-cycle#KB-053",
+        "plan-capacity-and-cycle#KB-054",
+        "plan-capacity-and-cycle#KB-055"
+      ]
+    }
+  ],
+  "freshness": {
+    "observed_at": null
+  },
+  "unknown_areas": [
+    {
+      "question": "Hạn mức box miễn phí mỗi chu kỳ của plan Free trên production là bao nhiêu (10 chỉ là giá trị seed), và quota/giá thật của các plan trả phí?",
+      "why_it_matters": "Boundary chạm trần, ngưỡng cảnh báo 80% / 100% và chữ thông báo đều phụ thuộc con số này; hiện không có oracle.",
+      "kb_refs": [
+        "plan-capacity-and-cycle#KB-003",
+        "plan-capacity-and-cycle#KB-008",
+        "plan-capacity-and-cycle#KB-064",
+        "plan-capacity-and-cycle#KB-015"
+      ],
+      "oq_id": "OQ-plans-billing-103"
+    },
+    {
+      "question": "Box bán trong thời gian trial có trừ quota (capacity) hay chỉ tăng sold in cycle?",
+      "why_it_matters": "Tài liệu mâu thuẫn; quyết định used sau trial và thời điểm chạm trần.",
+      "kb_refs": [
+        "plan-capacity-and-cycle#KB-040",
+        "plan-capacity-and-cycle#KB-073",
+        "plan-capacity-and-cycle#KB-080"
+      ],
+      "oq_id": "OQ-plans-billing-007"
+    },
+    {
+      "question": "Khi trial kết thúc giữa chu kỳ, box bán sau trial trừ quota từ 0 hay tính cả phần đã bán lúc trial?",
+      "why_it_matters": "Ranh giới chuyển trial sang trả phí chưa được nêu.",
+      "kb_refs": [
+        "plan-capacity-and-cycle#KB-039",
+        "plan-capacity-and-cycle#KB-041"
+      ],
+      "oq_id": "OQ-plans-billing-042"
+    },
+    {
+      "question": "Mốc chu kỳ 30 ngày tính theo múi giờ nào, giờ nào trong ngày, có bao gồm ngày cuối không?",
+      "why_it_matters": "Cần để kiểm thời điểm used đọc về 0 quanh ranh giới chu kỳ.",
+      "kb_refs": [
+        "plan-capacity-and-cycle#KB-016",
+        "plan-capacity-and-cycle#KB-019"
+      ],
+      "oq_id": "OQ-plans-billing-043"
+    },
+    {
+      "question": "Ngưỡng 80% được làm tròn thế nào khi quota không chia hết và so sánh là lớn-hơn-hoặc-bằng hay lớn-hơn; màu thanh tiến độ ở từng mốc?",
+      "why_it_matters": "Boundary test cho cảnh báo \"You almost reach the box limit\".",
+      "kb_refs": [
+        "plan-capacity-and-cycle#KB-021"
+      ],
+      "oq_id": "OQ-plans-billing-044"
+    },
+    {
+      "question": "Đơn nhiều variant box trừ hạn mức theo thứ tự nào (thứ tự dòng, giá, thời điểm tạo)?",
+      "why_it_matters": "Quyết định dòng nào bị tính phí vượt khi đơn chạm trần giữa chừng.",
+      "kb_refs": [
+        "plan-capacity-and-cycle#KB-009"
+      ],
+      "oq_id": "OQ-plans-billing-045"
+    },
+    {
+      "question": "Cài đặt \"Exclude Test Order\" nằm ở màn nào, merchant có thấy không, và tiêu chí nhận biết đơn test là gì?",
+      "why_it_matters": "Không rõ surface và dữ liệu để kiểm việc loại trừ.",
+      "kb_refs": [
+        "plan-capacity-and-cycle#KB-030",
+        "plan-capacity-and-cycle#KB-031"
+      ],
+      "oq_id": "OQ-plans-billing-046"
+    },
+    {
+      "question": "Khi cờ \"Exclude Test Order\" ở trạng thái mặc định (bật), đơn test của Shopify — kể cả preview order (tag mysbox-preview-order) — có trừ quota/capacity của shop hay không? Một phía tài liệu nói mặc định đơn test bị loại khỏi hạn mức (và khỏi billing, analytics), và preview order được xử lý như đơn test nên không tính vào quota khi cờ bật; phía kia (feature capacity-limit-enforcement) nói đơn test / preview vẫn tính vào capacity, cờ chỉ gắn với việc không tính phí usage.",
+      "why_it_matters": "Hai phía trái nhau, chưa được dev/PO xác nhận; quyết định used / thời điểm chạm trần khi dùng đơn test hoặc preview order làm dữ liệu thử — không dùng phía nào làm oracle.",
+      "kb_refs": [
+        "plan-capacity-and-cycle#KB-007",
+        "plan-capacity-and-cycle#KB-033",
+        "capacity-limit-enforcement#KB-029",
+        "plan-capacity-and-cycle#KB-030",
+        "plan-capacity-and-cycle#KB-032"
+      ],
+      "oq_id": "OQ-plans-billing-010"
+    },
+    {
+      "question": "Used / Box Capacity Used vượt nhẹ quota đúng bằng phần của đơn gây vượt, và thẻ dừng ở giá trị nào theo quy tắc nào?",
+      "why_it_matters": "Phát biểu có rào đón; cần quy tắc tổng quát cho expected result khi vượt.",
+      "kb_refs": [
+        "plan-capacity-and-cycle#KB-025",
+        "plan-capacity-and-cycle#KB-005"
+      ],
+      "oq_id": "OQ-plans-billing-104"
+    },
+    {
+      "question": "\"Tháng\" quota có thực sự thường lệch ngày hoá đơn Shopify không?",
+      "why_it_matters": "Phát biểu có rào đón; ảnh hưởng cách đối chiếu quota với hoá đơn.",
+      "kb_refs": [
+        "plan-capacity-and-cycle#KB-051"
+      ],
+      "oq_id": "OQ-plans-billing-104"
+    },
+    {
+      "question": "Sau khi gỡ và cài lại app, mốc chu kỳ có giữ theo ngày cài đầu và số đếm có giữ giá trị cũ giữa chu kỳ không?",
+      "why_it_matters": "Chỉ có ví dụ có rào đón; ảnh hưởng expected state sau reinstall.",
+      "kb_refs": [
+        "plan-capacity-and-cycle#KB-059",
+        "plan-capacity-and-cycle#KB-070"
+      ],
+      "oq_id": "OQ-plans-billing-104"
+    },
+    {
+      "question": "Chỉ số \"Total sold in cycle\" trong ví dụ hoá đơn theo số lượng là 145 hay 135?",
+      "why_it_matters": "Số liệu ví dụ mâu thuẫn trong cùng tài liệu; không dùng làm oracle.",
+      "kb_refs": [
+        "plan-capacity-and-cycle#KB-050",
+        "usage-fee-pricing#KB-045",
+        "usage-fee-pricing#KB-048",
+        "usage-fee-pricing#KB-049"
+      ],
+      "oq_id": "OQ-plans-billing-008"
+    },
+    {
+      "question": "Quota của plan minh hoạ \"Growth\" là 100 hay 50?",
+      "why_it_matters": "Hai kịch bản ví dụ dùng hai giá trị; cần catalog plan thật nếu muốn làm test data.",
+      "kb_refs": [
+        "plan-capacity-and-cycle#KB-052",
+        "plan-capacity-and-cycle#KB-057"
+      ],
+      "oq_id": "OQ-plans-billing-009"
+    },
+    {
+      "question": "Early-bird: điều kiện để shop là Founding member, \"giữ nguyên\" nghĩa là gì, 50 box tính theo chu kỳ hay tổng?",
+      "why_it_matters": "Không xác định được phạm vi và boundary của gói.",
+      "kb_refs": [
+        "plan-capacity-and-cycle#KB-061",
+        "plan-capacity-and-cycle#KB-074"
+      ],
+      "oq_id": "OQ-plans-billing-047"
+    },
+    {
+      "question": "Badge \"7 - days free trial\" là số cố định hay lấy từ số ngày trial của plan?",
+      "why_it_matters": "Kiểm hiển thị badge với plan có số ngày trial khác 7.",
+      "kb_refs": [
+        "plan-capacity-and-cycle#KB-043"
+      ],
+      "oq_id": "OQ-plans-billing-048"
+    }
+  ],
+  "last_updated": {
+    "date": "2026-10-16",
+    "ccr_ref": "bootstrap"
+  },
+  "coverage_matrix": [
+    {
+      "feature_id": "FEAT-01-plan-capacity-and-cycle",
+      "layer": "portal",
+      "role": "merchant",
+      "state": "plan-free",
+      "environment": "documented",
+      "covered": true
+    },
+    {
+      "feature_id": "FEAT-01-plan-capacity-and-cycle",
+      "layer": "portal",
+      "role": "merchant",
+      "state": "plan-paid",
+      "environment": "documented",
+      "covered": true
+    },
+    {
+      "feature_id": "FEAT-01-plan-capacity-and-cycle",
+      "layer": "portal",
+      "role": "merchant",
+      "state": "trial",
+      "environment": "documented",
+      "covered": true
+    },
+    {
+      "feature_id": "FEAT-01-plan-capacity-and-cycle",
+      "layer": "portal",
+      "role": "merchant",
+      "state": "early-bird",
+      "environment": "documented",
+      "covered": true
+    },
+    {
+      "feature_id": "FEAT-01-plan-capacity-and-cycle",
+      "layer": "admin_panel",
+      "role": "admin-staff",
+      "state": "any",
+      "environment": "documented",
+      "covered": true
+    },
+    {
+      "feature_id": "FEAT-01-plan-capacity-and-cycle",
+      "layer": "backend",
+      "role": "system",
+      "state": "cycle-boundary",
+      "environment": "documented",
+      "covered": true
+    },
+    {
+      "feature_id": "FEAT-01-plan-capacity-and-cycle",
+      "layer": "backend",
+      "role": "system",
+      "state": "over-quota",
+      "environment": "documented",
+      "covered": true
+    },
+    {
+      "feature_id": "FEAT-01-plan-capacity-and-cycle",
+      "layer": "backend",
+      "role": "system",
+      "state": "reinstalled",
+      "environment": "documented",
+      "covered": true
+    },
+    {
+      "feature_id": "FEAT-01-plan-capacity-and-cycle",
+      "layer": "api",
+      "role": "system",
+      "state": "order-paid",
+      "environment": "documented",
+      "covered": true
+    },
+    {
+      "feature_id": "FEAT-01-plan-capacity-and-cycle",
+      "layer": "storefront",
+      "role": "customer",
+      "state": "any",
+      "environment": "documented",
+      "covered": false
+    }
+  ],
+  "profile_conflicts": [
+    {
+      "conflict_group": "CONF-plans-billing-20",
+      "summary": "Khi cờ \"Exclude Test Order\" ở mặc định (bật), đơn test của Shopify (kể cả preview order) có trừ quota/capacity không: shard này (KB-007, KB-033, đều đã hạ INFERRED/LOW/UNRESOLVED) nói đơn test mặc định bị loại khỏi hạn mức và preview order được xử lý như đơn test, không tính vào quota khi cờ bật; shard capacity-limit-enforcement (KB-029, INFERRED/LOW/UNRESOLVED) nói đơn test / preview được tính vào capacity, cờ chỉ gắn với việc không tính phí usage. Việc cờ bật mặc định (KB-030) và preview order là đơn test gắn tag mysbox-preview-order (KB-032) không bị tranh chấp. Không dùng phía nào làm oracle cho tới khi dev/PO xác nhận.",
+      "kb_refs": [
+        "plan-capacity-and-cycle#KB-007",
+        "plan-capacity-and-cycle#KB-033",
+        "capacity-limit-enforcement#KB-029"
+      ],
+      "resolution": "UNRESOLVED",
+      "oq_draft_id": null
+    },
+    {
+      "conflict_group": "CONF-plans-billing-07",
+      "summary": "Trial có trừ quota hay không.",
+      "kb_refs": [
+        "plan-capacity-and-cycle#KB-040",
+        "plan-capacity-and-cycle#KB-073",
+        "plan-capacity-and-cycle#KB-080"
+      ]
+    },
+    {
+      "conflict_group": "CONF-plans-billing-03",
+      "summary": "Số liệu Total sold in cycle trong ví dụ hoá đơn không khớp.",
+      "kb_refs": [
+        "plan-capacity-and-cycle#KB-050"
+      ]
+    },
+    {
+      "conflict_group": "CONF-plans-billing-08",
+      "summary": "Quota plan minh hoạ Growth 100 vs 50.",
+      "kb_refs": [
+        "plan-capacity-and-cycle#KB-052",
+        "plan-capacity-and-cycle#KB-057"
+      ]
+    }
+  ],
+  "profile_relationships": [
+    {
+      "from": "plan-capacity-and-cycle",
+      "to": "capacity-limit-enforcement",
+      "relation": "provides_counter",
+      "note": "Used / quota của chu kỳ là điều kiện chạm trần.",
+      "kb_refs": [
+        "plan-capacity-and-cycle#KB-004",
+        "plan-capacity-and-cycle#KB-029",
+        "capacity-limit-enforcement#KB-003"
+      ]
+    },
+    {
+      "from": "plan-capacity-and-cycle",
+      "to": "usage-fee-pricing",
+      "relation": "provides_counter",
+      "note": "Box vượt quota của plan Paid bị tính phí; trial không tính phí.",
+      "kb_refs": [
+        "plan-capacity-and-cycle#KB-041",
+        "plan-capacity-and-cycle#KB-020",
+        "usage-fee-pricing#KB-001"
+      ]
+    },
+    {
+      "from": "plan-capacity-and-cycle",
+      "to": "promote-codes",
+      "relation": "depends_on",
+      "kb_refs": [
+        "plan-capacity-and-cycle#KB-066"
+      ]
+    },
+    {
+      "from": "plan-capacity-and-cycle",
+      "to": "plan-upgrade-downgrade-cancel",
+      "relation": "depends_on",
+      "kb_refs": [
+        "plan-capacity-and-cycle#KB-078",
+        "plan-capacity-and-cycle#KB-045"
+      ]
+    }
+  ]
+}

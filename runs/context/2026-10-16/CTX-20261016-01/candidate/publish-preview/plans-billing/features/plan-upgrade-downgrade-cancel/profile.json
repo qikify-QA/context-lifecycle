@@ -1,0 +1,1393 @@
+{
+  "feature_id": "FEAT-05-plan-upgrade-downgrade-cancel",
+  "feature_key": "plan-upgrade-downgrade-cancel",
+  "object_key": "plans-billing",
+  "name": "Nâng, hạ, huỷ plan và trang xem trước thay đổi",
+  "user_goal": "Merchant chọn và đổi plan Mysbox phù hợp với loại store của mình (nâng, hạ, hoặc huỷ về Free) qua màn Pricing hoặc link thanh toán, duyệt subscription trên Shopify, và được xử lý đúng quota, phí usage cuối, phí tính lại khi hạ và thời gian ân hạn khi huỷ.",
+  "user_goal_kb_refs": [
+    "plan-upgrade-downgrade-cancel#KB-001",
+    "plan-upgrade-downgrade-cancel#KB-016",
+    "plan-upgrade-downgrade-cancel#KB-019",
+    "plan-upgrade-downgrade-cancel#KB-037",
+    "plan-upgrade-downgrade-cancel#KB-055",
+    "plan-upgrade-downgrade-cancel#KB-069",
+    "plan-upgrade-downgrade-cancel#KB-079",
+    "plan-upgrade-downgrade-cancel#KB-082",
+    "plan-upgrade-downgrade-cancel#KB-104"
+  ],
+  "stable_since_version": "1",
+  "priority": "P1",
+  "staging_only": false,
+  "actors": [
+    {
+      "role": "merchant",
+      "permission_observed": "Chọn và đổi plan trên màn Pricing (\"Choose this plan\"), duyệt subscription trên trang duyệt của Shopify, xác nhận nâng/hạ/huỷ trong hộp thoại; duyệt link thanh toán do admin gửi.",
+      "kb_refs": [
+        "plan-upgrade-downgrade-cancel#KB-001",
+        "plan-upgrade-downgrade-cancel#KB-019",
+        "plan-upgrade-downgrade-cancel#KB-018",
+        "plan-upgrade-downgrade-cancel#KB-043"
+      ]
+    },
+    {
+      "role": "system",
+      "permission_observed": "Server Mysbox kiểm tra điều kiện chọn plan, trả đường dẫn duyệt, kiểm tra subscription ACTIVE khi merchant quay về, đổi trạng thái charge, chuyển plan, tính lại quota, gửi usage cuối/phí tính lại lên Shopify, làm mới dữ liệu storefront.",
+      "kb_refs": [
+        "plan-upgrade-downgrade-cancel#KB-016",
+        "plan-upgrade-downgrade-cancel#KB-027",
+        "plan-upgrade-downgrade-cancel#KB-032",
+        "plan-upgrade-downgrade-cancel#KB-033",
+        "plan-upgrade-downgrade-cancel#KB-034",
+        "plan-upgrade-downgrade-cancel#KB-036",
+        "plan-upgrade-downgrade-cancel#KB-037",
+        "plan-upgrade-downgrade-cancel#KB-038",
+        "plan-upgrade-downgrade-cancel#KB-069",
+        "plan-upgrade-downgrade-cancel#KB-079"
+      ]
+    },
+    {
+      "role": "admin",
+      "permission_observed": "Không đổi trực tiếp được plan của shop; chỉ gửi \"Generate recurring payment link\" (nút ở dòng shop trong admin panel) để merchant tự duyệt. Admin-staff có thể tắt cờ development store trong form Edit của shop, làm shop thành cửa hàng thật.",
+      "kb_refs": [
+        "plan-upgrade-downgrade-cancel#KB-042",
+        "plan-upgrade-downgrade-cancel#KB-043",
+        "plan-upgrade-downgrade-cancel#KB-109",
+        "_object-level.plans-billing#KB-007"
+      ]
+    },
+    {
+      "role": "support",
+      "permission_observed": "Tra trạng thái dòng Recurring để biết merchant đã duyệt subscription hay chưa.",
+      "kb_refs": [
+        "plan-upgrade-downgrade-cancel#KB-107"
+      ]
+    },
+    {
+      "role": "shopify (bên ngoài)",
+      "permission_observed": "Giữ subscription và hoá đơn, thu tiền subscription, huỷ subscription cũ khi hạ/huỷ, tự thử lại thanh toán.",
+      "kb_refs": [
+        "_object-level.plans-billing#KB-002",
+        "_object-level.plans-billing#KB-008",
+        "_object-level.plans-billing#KB-025",
+        "plan-upgrade-downgrade-cancel#KB-056",
+        "plan-upgrade-downgrade-cancel#KB-080"
+      ]
+    }
+  ],
+  "entry_points": [
+    {
+      "path": "Merchant app > Pricing > thẻ plan > \"Choose this plan\"",
+      "precondition": "Plan đang Visible và hợp với loại store (Plus / Shopify Paid; development store thấy mọi plan); thẻ plan hiện tại bị khoá \"Selected\".",
+      "kb_refs": [
+        "plan-upgrade-downgrade-cancel#KB-001",
+        "plan-upgrade-downgrade-cancel#KB-003",
+        "plan-upgrade-downgrade-cancel#KB-004",
+        "plan-upgrade-downgrade-cancel#KB-010",
+        "plan-upgrade-downgrade-cancel#KB-012",
+        "plan-upgrade-downgrade-cancel#KB-013",
+        "plan-upgrade-downgrade-cancel#KB-014"
+      ]
+    },
+    {
+      "path": "Link thanh toán do admin/support gửi (\"Generate recurring payment link\" ở dòng shop trong admin panel)",
+      "precondition": "Plan trong link đủ điều kiện với loại store của shop, nếu không bị từ chối \"Plan is not supported\".",
+      "kb_refs": [
+        "plan-upgrade-downgrade-cancel#KB-017",
+        "plan-upgrade-downgrade-cancel#KB-018",
+        "plan-upgrade-downgrade-cancel#KB-043"
+      ]
+    },
+    {
+      "path": "Trang duyệt subscription của Shopify, rồi link có chữ ký quay về Mysbox",
+      "precondition": "Server đã trả đường dẫn duyệt; link có chữ ký còn hiệu lực (7 ngày). Development store bỏ qua trang duyệt.",
+      "kb_refs": [
+        "plan-upgrade-downgrade-cancel#KB-027",
+        "plan-upgrade-downgrade-cancel#KB-029",
+        "plan-upgrade-downgrade-cancel#KB-030",
+        "plan-upgrade-downgrade-cancel#KB-031"
+      ]
+    },
+    {
+      "path": "Endpoint xem trước thay đổi plan (server)",
+      "precondition": "Gọi cho một plan đích hoặc cho việc huỷ; màn Pricing hiện tại không dùng endpoint này.",
+      "kb_refs": [
+        "plan-upgrade-downgrade-cancel#KB-095",
+        "plan-upgrade-downgrade-cancel#KB-098",
+        "plan-upgrade-downgrade-cancel#KB-101"
+      ]
+    },
+    {
+      "path": "Admin panel > Shops > form Edit > tắt \"development store\" (hoặc đổi tên plan khỏi \"Plus Trial\")",
+      "precondition": "Shop đang là development store / Plus trial.",
+      "kb_refs": [
+        "plan-upgrade-downgrade-cancel#KB-108",
+        "plan-upgrade-downgrade-cancel#KB-109"
+      ]
+    }
+  ],
+  "capabilities": [
+    {
+      "name": "Xem các plan khả dụng trên màn Pricing",
+      "description": "Merchant thấy thẻ Free đầu tiên rồi các plan Paid đang Visible, lọc theo loại store; mỗi thẻ có tên, badge trial, giá \"/ month\", mô tả quota, nút \"Choose this plan\" (plan hiện tại khoá \"Selected\"); tab Monthly/Annually khi có plan năm.",
+      "kb_refs": [
+        "plan-upgrade-downgrade-cancel#KB-002",
+        "plan-upgrade-downgrade-cancel#KB-003",
+        "plan-upgrade-downgrade-cancel#KB-004",
+        "plan-upgrade-downgrade-cancel#KB-005",
+        "plan-upgrade-downgrade-cancel#KB-006",
+        "plan-upgrade-downgrade-cancel#KB-007",
+        "plan-upgrade-downgrade-cancel#KB-008",
+        "plan-upgrade-downgrade-cancel#KB-009",
+        "plan-upgrade-downgrade-cancel#KB-010",
+        "plan-upgrade-downgrade-cancel#KB-011",
+        "plan-upgrade-downgrade-cancel#KB-012",
+        "plan-upgrade-downgrade-cancel#KB-013",
+        "plan-upgrade-downgrade-cancel#KB-014"
+      ]
+    },
+    {
+      "name": "Kích hoạt plan mới qua duyệt subscription trên Shopify",
+      "description": "Sau khi merchant xác nhận, server kiểm tra điều kiện, trả đường dẫn duyệt của Shopify; merchant duyệt rồi quay về qua link có chữ ký 7 ngày; Mysbox kiểm tra subscription ACTIVE, huỷ charge cũ, tạo charge Active mới, chuyển shop sang plan mới, tính lại quota, làm mới storefront và đưa merchant về app.",
+      "kb_refs": [
+        "plan-upgrade-downgrade-cancel#KB-001",
+        "plan-upgrade-downgrade-cancel#KB-016",
+        "plan-upgrade-downgrade-cancel#KB-017",
+        "plan-upgrade-downgrade-cancel#KB-019",
+        "plan-upgrade-downgrade-cancel#KB-020",
+        "plan-upgrade-downgrade-cancel#KB-027",
+        "plan-upgrade-downgrade-cancel#KB-028",
+        "plan-upgrade-downgrade-cancel#KB-030",
+        "plan-upgrade-downgrade-cancel#KB-031",
+        "plan-upgrade-downgrade-cancel#KB-032",
+        "plan-upgrade-downgrade-cancel#KB-033",
+        "plan-upgrade-downgrade-cancel#KB-034",
+        "plan-upgrade-downgrade-cancel#KB-035",
+        "plan-upgrade-downgrade-cancel#KB-036",
+        "plan-upgrade-downgrade-cancel#KB-037",
+        "plan-upgrade-downgrade-cancel#KB-038",
+        "plan-upgrade-downgrade-cancel#KB-039",
+        "plan-upgrade-downgrade-cancel#KB-040",
+        "plan-upgrade-downgrade-cancel#KB-041"
+      ]
+    },
+    {
+      "name": "Rời plan Early-bird",
+      "description": "Shop còn ở plan Early-bird thấy hộp thoại \"Are you sure to leave the Early-bird plan?\" (nút \"Stay on Early-bird\" / \"Upgrade now\") trước khi đổi; rời là mất vĩnh viễn trạng thái Early-bird.",
+      "kb_refs": [
+        "plan-upgrade-downgrade-cancel#KB-021",
+        "plan-upgrade-downgrade-cancel#KB-022",
+        "plan-upgrade-downgrade-cancel#KB-023"
+      ]
+    },
+    {
+      "name": "Nâng plan (quota lớn hơn)",
+      "description": "Hộp thoại nâng mô tả quota mới và phí box vượt; used giữ nguyên, box bán ở Free không bị tính ngược; nâng không tự publish lại box đã bị gỡ.",
+      "kb_refs": [
+        "plan-upgrade-downgrade-cancel#KB-018",
+        "plan-upgrade-downgrade-cancel#KB-025",
+        "plan-upgrade-downgrade-cancel#KB-044",
+        "plan-upgrade-downgrade-cancel#KB-045",
+        "plan-upgrade-downgrade-cancel#KB-046",
+        "plan-upgrade-downgrade-cancel#KB-047",
+        "plan-upgrade-downgrade-cancel#KB-048",
+        "plan-upgrade-downgrade-cancel#KB-052",
+        "plan-upgrade-downgrade-cancel#KB-061",
+        "plan-upgrade-downgrade-cancel#KB-062",
+        "plan-upgrade-downgrade-cancel#KB-063"
+      ]
+    },
+    {
+      "name": "Hạ plan (quota nhỏ hơn) với tính lại phí phần dư",
+      "description": "Hộp thoại hạ có khối Over capacity fee và nút \"Confirm & Downgrade\" / \"Contact us\"; plan mới hiệu lực ngay khi duyệt, Shopify huỷ subscription cũ, không hoàn tiền theo tỷ lệ; used bị kẹp về quota mới và phần dư được tính lại phí, gửi ngay thành usage record.",
+      "kb_refs": [
+        "plan-upgrade-downgrade-cancel#KB-026",
+        "plan-upgrade-downgrade-cancel#KB-053",
+        "plan-upgrade-downgrade-cancel#KB-054",
+        "plan-upgrade-downgrade-cancel#KB-055",
+        "plan-upgrade-downgrade-cancel#KB-056",
+        "plan-upgrade-downgrade-cancel#KB-057",
+        "plan-upgrade-downgrade-cancel#KB-058",
+        "plan-upgrade-downgrade-cancel#KB-059",
+        "plan-upgrade-downgrade-cancel#KB-060",
+        "plan-upgrade-downgrade-cancel#KB-064",
+        "plan-upgrade-downgrade-cancel#KB-065",
+        "plan-upgrade-downgrade-cancel#KB-066",
+        "plan-upgrade-downgrade-cancel#KB-067",
+        "plan-upgrade-downgrade-cancel#KB-068",
+        "plan-upgrade-downgrade-cancel#KB-069"
+      ]
+    },
+    {
+      "name": "Huỷ plan trả phí về Free với thời gian ân hạn",
+      "description": "Chọn Free hiện hộp thoại huỷ; khi huỷ, usage chưa gửi được gửi ngay, subscription bị huỷ trên Shopify, charge chuyển Cancelled và hết hạn cuối kỳ đã trả; shop chuyển Free, quota Free áp khi hết ân hạn; storefront vẫn hiện plan trả phí trong ân hạn.",
+      "kb_refs": [
+        "plan-upgrade-downgrade-cancel#KB-024",
+        "plan-upgrade-downgrade-cancel#KB-076",
+        "plan-upgrade-downgrade-cancel#KB-077",
+        "plan-upgrade-downgrade-cancel#KB-078",
+        "plan-upgrade-downgrade-cancel#KB-079",
+        "plan-upgrade-downgrade-cancel#KB-080",
+        "plan-upgrade-downgrade-cancel#KB-081",
+        "plan-upgrade-downgrade-cancel#KB-082",
+        "plan-upgrade-downgrade-cancel#KB-083",
+        "plan-upgrade-downgrade-cancel#KB-084",
+        "plan-upgrade-downgrade-cancel#KB-085",
+        "plan-upgrade-downgrade-cancel#KB-086",
+        "plan-upgrade-downgrade-cancel#KB-087",
+        "plan-upgrade-downgrade-cancel#KB-088",
+        "plan-upgrade-downgrade-cancel#KB-089",
+        "plan-upgrade-downgrade-cancel#KB-090",
+        "plan-upgrade-downgrade-cancel#KB-091",
+        "plan-upgrade-downgrade-cancel#KB-092"
+      ]
+    },
+    {
+      "name": "Xem trước tác động của thay đổi plan",
+      "description": "Endpoint xem trước (cho plan đích hoặc huỷ) trả will_recalculate, recalculated_boxes, recalculated_amount_usd; số box tính lại dựa trên used − quota đích. Hộp thoại trên Pricing hiện không dùng endpoint này.",
+      "kb_refs": [
+        "plan-upgrade-downgrade-cancel#KB-095",
+        "plan-upgrade-downgrade-cancel#KB-096",
+        "plan-upgrade-downgrade-cancel#KB-097",
+        "plan-upgrade-downgrade-cancel#KB-098",
+        "plan-upgrade-downgrade-cancel#KB-099",
+        "plan-upgrade-downgrade-cancel#KB-100",
+        "plan-upgrade-downgrade-cancel#KB-101",
+        "plan-upgrade-downgrade-cancel#KB-102",
+        "plan-upgrade-downgrade-cancel#KB-103"
+      ]
+    },
+    {
+      "name": "Đổi plan có hỗ trợ của admin/support",
+      "description": "Admin không đổi trực tiếp plan, mà gửi link thanh toán để merchant tự duyệt; duyệt hai link (link support và link tự nâng) dẫn tới hai subscription; support đọc trạng thái Recurring để biết merchant đã duyệt chưa.",
+      "kb_refs": [
+        "plan-upgrade-downgrade-cancel#KB-042",
+        "plan-upgrade-downgrade-cancel#KB-043",
+        "plan-upgrade-downgrade-cancel#KB-106",
+        "plan-upgrade-downgrade-cancel#KB-107",
+        "_object-level.plans-billing#KB-007"
+      ]
+    },
+    {
+      "name": "Billing của development store và khi chuyển thành store thật",
+      "description": "Development store đăng ký dạng test subscription, bỏ qua trang duyệt; khi thành store thật (Shopify cập nhật hoặc admin tắt cờ trong form Edit), Mysbox huỷ subscription và đưa shop về plan mặc định, merchant phải đăng ký lại.",
+      "kb_refs": [
+        "plan-upgrade-downgrade-cancel#KB-015",
+        "plan-upgrade-downgrade-cancel#KB-029",
+        "plan-upgrade-downgrade-cancel#KB-108",
+        "plan-upgrade-downgrade-cancel#KB-109",
+        "plan-upgrade-downgrade-cancel#KB-110",
+        "_object-level.plans-billing#KB-019",
+        "_object-level.plans-billing#KB-026"
+      ]
+    },
+    {
+      "name": "Giữ trạng thái subscription nhất quán với Shopify",
+      "description": "Đổi plan gửi ngay usage cuối của plan cũ; đăng ký lại trong cùng chu kỳ tạo subscription mới và huỷ cái cũ; app không có webhook thay đổi subscription nên trạng thái chỉ cập nhật qua luồng do app khởi tạo.",
+      "kb_refs": [
+        "plan-upgrade-downgrade-cancel#KB-104",
+        "plan-upgrade-downgrade-cancel#KB-105",
+        "plan-upgrade-downgrade-cancel#KB-111",
+        "plan-upgrade-downgrade-cancel#KB-112",
+        "plan-upgrade-downgrade-cancel#KB-113"
+      ]
+    }
+  ],
+  "state_transitions": [
+    {
+      "from": "Shop ở plan hiện tại (charge Active)",
+      "to": "Shop ở plan mới (charge mới Active; charge cũ Cancelled)",
+      "trigger": "Merchant duyệt subscription trên Shopify và quay về qua link có chữ ký",
+      "condition": "Subscription trên Shopify ở trạng thái ACTIVE; nếu không, báo \"Shopify subscription is not active\" và không chuyển",
+      "kb_refs": [
+        "plan-upgrade-downgrade-cancel#KB-032",
+        "plan-upgrade-downgrade-cancel#KB-033",
+        "plan-upgrade-downgrade-cancel#KB-034",
+        "plan-upgrade-downgrade-cancel#KB-036"
+      ]
+    },
+    {
+      "from": "Charge mới vừa tạo",
+      "to": "Charge Active với thời điểm hết trial = lúc kích hoạt + số ngày trial",
+      "trigger": "Kích hoạt plan mới",
+      "condition": "Plan có trial",
+      "kb_refs": [
+        "plan-upgrade-downgrade-cancel#KB-034",
+        "plan-upgrade-downgrade-cancel#KB-035"
+      ]
+    },
+    {
+      "from": "used (plan cũ)",
+      "to": "used giữ nguyên (nâng, Free→Paid) hoặc used = quota mới (hạ khi used >= quota mới)",
+      "trigger": "Đổi plan được duyệt",
+      "condition": "So sánh used với quota plan mới",
+      "kb_refs": [
+        "plan-upgrade-downgrade-cancel#KB-047",
+        "plan-upgrade-downgrade-cancel#KB-058",
+        "plan-upgrade-downgrade-cancel#KB-059",
+        "plan-upgrade-downgrade-cancel#KB-061",
+        "plan-upgrade-downgrade-cancel#KB-062"
+      ]
+    },
+    {
+      "from": "Plan trả phí (charge Active)",
+      "to": "Charge Cancelled kèm ngày huỷ, hết hạn cuối kỳ 30 ngày đã trả; shop chuyển plan Free",
+      "trigger": "Merchant bấm \"Cancel subscription\" trong hộp thoại huỷ",
+      "condition": "Usage chưa gửi được gửi lên Shopify trước khi huỷ",
+      "kb_refs": [
+        "plan-upgrade-downgrade-cancel#KB-078",
+        "plan-upgrade-downgrade-cancel#KB-079",
+        "plan-upgrade-downgrade-cancel#KB-080",
+        "plan-upgrade-downgrade-cancel#KB-082",
+        "plan-upgrade-downgrade-cancel#KB-083"
+      ]
+    },
+    {
+      "from": "Ân hạn sau huỷ",
+      "to": "Áp quota Free",
+      "trigger": "Hết thời gian ân hạn (hết kỳ đã trả)",
+      "condition": "Đã huỷ plan trả phí",
+      "kb_refs": [
+        "plan-upgrade-downgrade-cancel#KB-077",
+        "plan-upgrade-downgrade-cancel#KB-088"
+      ]
+    },
+    {
+      "from": "Shop ở plan Early-bird",
+      "to": "Shop ở plan khác, mất vĩnh viễn trạng thái Early-bird",
+      "trigger": "Merchant xác nhận rời Early-bird",
+      "condition": "Shop còn ở plan Early-bird",
+      "kb_refs": [
+        "plan-upgrade-downgrade-cancel#KB-021",
+        "plan-upgrade-downgrade-cancel#KB-022"
+      ]
+    },
+    {
+      "from": "Development store / Plus trial có subscription thử",
+      "to": "Store thật, subscription bị huỷ, shop về plan mặc định",
+      "trigger": "Shopify cập nhật shop hoặc admin tắt cờ development store trong form Edit",
+      "condition": "Shop không còn là dev/Plus trial",
+      "kb_refs": [
+        "plan-upgrade-downgrade-cancel#KB-108",
+        "plan-upgrade-downgrade-cancel#KB-109",
+        "plan-upgrade-downgrade-cancel#KB-110"
+      ]
+    }
+  ],
+  "confirmed_rules": [
+    {
+      "rule": "Merchant là bên chọn và đổi plan: mở màn \"Pricing\" và bấm \"Choose this plan\" trên thẻ plan muốn chọn; màn Pricing hiển thị các thẻ gói.",
+      "kb_refs": [
+        "plan-upgrade-downgrade-cancel#KB-001",
+        "plan-upgrade-downgrade-cancel#KB-002",
+        "plan-upgrade-downgrade-cancel#KB-009"
+      ]
+    },
+    {
+      "rule": "Trên Pricing, thẻ Free hiện đầu tiên rồi tới các plan Paid đang Visible; plan tắt Visible bị ẩn với merchant.",
+      "kb_refs": [
+        "plan-upgrade-downgrade-cancel#KB-003",
+        "plan-upgrade-downgrade-cancel#KB-004"
+      ]
+    },
+    {
+      "rule": "Mỗi thẻ plan hiển thị tên plan, badge trial (\"7 - days free trial\" hoặc \"N - trial days left\" khi đang trial), giá kèm \"/ month\" và mô tả \"Free N boxes sales/month\".",
+      "kb_refs": [
+        "plan-upgrade-downgrade-cancel#KB-005",
+        "plan-upgrade-downgrade-cancel#KB-006",
+        "plan-upgrade-downgrade-cancel#KB-007",
+        "plan-upgrade-downgrade-cancel#KB-008"
+      ]
+    },
+    {
+      "rule": "Thẻ của plan hiện tại có nút bị khoá với chữ \"Selected\"; sau khi đổi thành công, thẻ plan mới hiển thị \"Selected\".",
+      "kb_refs": [
+        "plan-upgrade-downgrade-cancel#KB-010",
+        "plan-upgrade-downgrade-cancel#KB-040"
+      ]
+    },
+    {
+      "rule": "Pricing có tab Monthly / Annually khi admin đã tạo plan năm.",
+      "kb_refs": [
+        "plan-upgrade-downgrade-cancel#KB-011"
+      ]
+    },
+    {
+      "rule": "Plan được lọc theo loại store: plan cờ \"Plus\" cho store Shopify Plus, plan cờ \"Shopify Paid\" cho store Shopify trả phí thường; development store chọn được mọi plan.",
+      "kb_refs": [
+        "plan-upgrade-downgrade-cancel#KB-012",
+        "plan-upgrade-downgrade-cancel#KB-013",
+        "plan-upgrade-downgrade-cancel#KB-014"
+      ]
+    },
+    {
+      "rule": "Sau khi merchant xác nhận, server kiểm tra shop đủ điều kiện chọn plan; plan không hợp loại store (kể cả plan từ link thanh toán) bị từ chối với thông báo \"Plan is not supported\".",
+      "kb_refs": [
+        "plan-upgrade-downgrade-cancel#KB-016",
+        "plan-upgrade-downgrade-cancel#KB-017"
+      ]
+    },
+    {
+      "rule": "Merchant có thể nâng plan qua trang Pricing hoặc qua link thanh toán để có thêm capacity.",
+      "kb_refs": [
+        "plan-upgrade-downgrade-cancel#KB-018"
+      ]
+    },
+    {
+      "rule": "Merchant duyệt subscription trên trang duyệt của Shopify (không phải trong app); sau khi duyệt, subscription chuyển Active.",
+      "kb_refs": [
+        "plan-upgrade-downgrade-cancel#KB-019",
+        "plan-upgrade-downgrade-cancel#KB-020"
+      ]
+    },
+    {
+      "rule": "Shop ở plan Early-bird bấm \"Choose this plan\" thấy hộp thoại \"Are you sure to leave the Early-bird plan?\" với nút \"Stay on Early-bird\" và \"Upgrade now\"; rời Early-bird là mất vĩnh viễn.",
+      "kb_refs": [
+        "plan-upgrade-downgrade-cancel#KB-021",
+        "plan-upgrade-downgrade-cancel#KB-022",
+        "plan-upgrade-downgrade-cancel#KB-023"
+      ]
+    },
+    {
+      "rule": "Loại hộp thoại xác nhận: plan đích là Free → hộp thoại huỷ; plan đích có quota lớn hơn → hộp thoại nâng; mọi trường hợp còn lại → hộp thoại hạ.",
+      "kb_refs": [
+        "plan-upgrade-downgrade-cancel#KB-024",
+        "plan-upgrade-downgrade-cancel#KB-025",
+        "plan-upgrade-downgrade-cancel#KB-026"
+      ]
+    },
+    {
+      "rule": "Sau các bước kiểm tra, server trả đường dẫn duyệt của Shopify; trang duyệt hiển thị giá, trial, dòng usage kèm Capped Amount và Terms.",
+      "kb_refs": [
+        "plan-upgrade-downgrade-cancel#KB-027",
+        "plan-upgrade-downgrade-cancel#KB-028"
+      ]
+    },
+    {
+      "rule": "Development store đăng ký plan dưới dạng test subscription không mất tiền, bỏ qua trang duyệt của Shopify và đi thẳng vào link xác nhận nội bộ.",
+      "kb_refs": [
+        "plan-upgrade-downgrade-cancel#KB-015",
+        "plan-upgrade-downgrade-cancel#KB-029"
+      ]
+    },
+    {
+      "rule": "Sau khi duyệt, Shopify đưa merchant về Mysbox qua link có chữ ký; link này có hiệu lực 7 ngày.",
+      "kb_refs": [
+        "plan-upgrade-downgrade-cancel#KB-030",
+        "plan-upgrade-downgrade-cancel#KB-031"
+      ]
+    },
+    {
+      "rule": "Khi merchant quay về, Mysbox kiểm tra subscription trên Shopify ở trạng thái ACTIVE; nếu không, báo \"Shopify subscription is not active\".",
+      "kb_refs": [
+        "plan-upgrade-downgrade-cancel#KB-032"
+      ]
+    },
+    {
+      "rule": "Khi subscription ACTIVE: charge plan cũ chuyển Cancelled, tạo charge Active cho plan mới (hết trial = lúc kích hoạt + số ngày trial), chuyển shop sang plan mới, tính lại quota theo plan mới, làm mới dữ liệu storefront và đưa merchant về app.",
+      "kb_refs": [
+        "plan-upgrade-downgrade-cancel#KB-033",
+        "plan-upgrade-downgrade-cancel#KB-034",
+        "plan-upgrade-downgrade-cancel#KB-035",
+        "plan-upgrade-downgrade-cancel#KB-036",
+        "plan-upgrade-downgrade-cancel#KB-037",
+        "plan-upgrade-downgrade-cancel#KB-038",
+        "plan-upgrade-downgrade-cancel#KB-039"
+      ]
+    },
+    {
+      "rule": "Capacity, điều khoản usage và cờ của shop đều phụ thuộc luồng kích hoạt plan.",
+      "kb_refs": [
+        "plan-upgrade-downgrade-cancel#KB-041"
+      ]
+    },
+    {
+      "rule": "Admin Mysbox không đổi trực tiếp được plan của shop; muốn đổi phải gửi \"Generate recurring payment link\" (nút ở dòng shop trong admin panel) để merchant tự duyệt.",
+      "kb_refs": [
+        "plan-upgrade-downgrade-cancel#KB-042",
+        "plan-upgrade-downgrade-cancel#KB-043",
+        "_object-level.plans-billing#KB-007"
+      ]
+    },
+    {
+      "rule": "Hộp thoại nâng có tiêu đề \"Are you sure to upgrade your plan?\" và mô tả quota mới cùng phí box vượt; số tiền trong khối \"Over capacity fee\" được tính trong trình duyệt.",
+      "kb_refs": [
+        "plan-upgrade-downgrade-cancel#KB-044",
+        "plan-upgrade-downgrade-cancel#KB-046"
+      ]
+    },
+    {
+      "rule": "Khi nâng plan, used được giữ nguyên (kể cả khi used đã >= quota mới), box đã bán ở plan Free không bị tính phí ngược; đổi từ Free sang Paid giữ used.",
+      "kb_refs": [
+        "plan-upgrade-downgrade-cancel#KB-047",
+        "plan-upgrade-downgrade-cancel#KB-048",
+        "plan-upgrade-downgrade-cancel#KB-061",
+        "plan-upgrade-downgrade-cancel#KB-062"
+      ]
+    },
+    {
+      "rule": "Nâng plan không tự publish lại box đã bị gỡ publish; merchant phải tự publish lại.",
+      "kb_refs": [
+        "plan-upgrade-downgrade-cancel#KB-052"
+      ]
+    },
+    {
+      "rule": "Hộp thoại \"Are you sure to downgrade your plan?\" có khối \"Over capacity fee {X} * $0.25/box sale = ${fee}\" và hai nút \"Confirm & Downgrade\" và \"Contact us\" (mở live chat).",
+      "kb_refs": [
+        "plan-upgrade-downgrade-cancel#KB-053",
+        "plan-upgrade-downgrade-cancel#KB-054"
+      ]
+    },
+    {
+      "rule": "Hạ plan có hiệu lực ngay khi merchant duyệt; Shopify huỷ subscription cũ; Mysbox không hoàn tiền theo tỷ lệ phần còn lại của plan cũ.",
+      "kb_refs": [
+        "plan-upgrade-downgrade-cancel#KB-055",
+        "plan-upgrade-downgrade-cancel#KB-056",
+        "plan-upgrade-downgrade-cancel#KB-057"
+      ]
+    },
+    {
+      "rule": "Khi hạ plan: used nhỏ hơn quota mới thì giữ nguyên; used >= quota mới thì used được đặt bằng quota mới.",
+      "kb_refs": [
+        "plan-upgrade-downgrade-cancel#KB-058",
+        "plan-upgrade-downgrade-cancel#KB-059"
+      ]
+    },
+    {
+      "rule": "Tính lại phí khi hạ plan lấy các dòng phí mới nhất, lấy nguyên dòng (không cắt lẻ), tổng số box không vượt phần dư, theo mức phí đã ghi lúc bán, và gửi ngay thành một usage record lên Shopify (không đợi nửa đêm).",
+      "kb_refs": [
+        "plan-upgrade-downgrade-cancel#KB-064",
+        "plan-upgrade-downgrade-cancel#KB-065",
+        "plan-upgrade-downgrade-cancel#KB-066",
+        "plan-upgrade-downgrade-cancel#KB-067",
+        "plan-upgrade-downgrade-cancel#KB-069"
+      ]
+    },
+    {
+      "rule": "Hộp thoại huỷ \"Are you sure?\" cho biết tính năng plan hiện tại còn dùng tới ngày hết hạn, plan Free bắt đầu sau ngày hết hạn; có hai nút \"Continue subscription\" và \"Cancel subscription\".",
+      "kb_refs": [
+        "plan-upgrade-downgrade-cancel#KB-076",
+        "plan-upgrade-downgrade-cancel#KB-077",
+        "plan-upgrade-downgrade-cancel#KB-078"
+      ]
+    },
+    {
+      "rule": "Khi merchant huỷ plan: phí usage chưa gửi được gửi lên Shopify ngay trước khi huỷ; subscription bị huỷ trên Shopify và có hiệu lực với billing ngay; không hoàn tiền theo tỷ lệ.",
+      "kb_refs": [
+        "plan-upgrade-downgrade-cancel#KB-079",
+        "plan-upgrade-downgrade-cancel#KB-080",
+        "plan-upgrade-downgrade-cancel#KB-081"
+      ]
+    },
+    {
+      "rule": "Khi huỷ, charge recurring nội bộ chuyển Cancelled kèm ngày huỷ và hết hạn vào cuối 30 ngày đã trả (expires on ở tương lai); shop chuyển sang plan Free.",
+      "kb_refs": [
+        "plan-upgrade-downgrade-cancel#KB-082",
+        "plan-upgrade-downgrade-cancel#KB-083"
+      ]
+    },
+    {
+      "rule": "Hết thời gian ân hạn sau huỷ thì quota Free được áp dụng.",
+      "kb_refs": [
+        "plan-upgrade-downgrade-cancel#KB-088"
+      ]
+    },
+    {
+      "rule": "Sau khi huỷ, nhãn plan hiển thị Free sớm hơn thời điểm shop thực sự về capacity Free.",
+      "kb_refs": [
+        "plan-upgrade-downgrade-cancel#KB-090"
+      ]
+    },
+    {
+      "rule": "Plan đã huỷ nhưng còn ân hạn: storefront vẫn hiện plan trả phí đến hết kỳ đã trả rồi mới đổi.",
+      "kb_refs": [
+        "plan-upgrade-downgrade-cancel#KB-092"
+      ]
+    },
+    {
+      "rule": "Endpoint xem trước thay đổi plan tính cho một plan đích hoặc cho việc huỷ, trả will_recalculate, recalculated_boxes và recalculated_amount_usd (số tiền sẽ gửi ngay); số box tính lại dựa trên used − quota đích.",
+      "kb_refs": [
+        "plan-upgrade-downgrade-cancel#KB-095",
+        "plan-upgrade-downgrade-cancel#KB-096",
+        "plan-upgrade-downgrade-cancel#KB-097",
+        "plan-upgrade-downgrade-cancel#KB-098",
+        "plan-upgrade-downgrade-cancel#KB-099"
+      ]
+    },
+    {
+      "rule": "Khi merchant đổi plan, usage cuối của plan cũ được gửi ngay.",
+      "kb_refs": [
+        "plan-upgrade-downgrade-cancel#KB-104"
+      ]
+    },
+    {
+      "rule": "Đăng ký lại hoặc cài lại app trong cùng chu kỳ tạo subscription mới, subscription cũ bị huỷ ở Shopify; duyệt hai link thanh toán (link support và link tự nâng ở Pricing) dẫn tới hai khoản subscription.",
+      "kb_refs": [
+        "plan-upgrade-downgrade-cancel#KB-105",
+        "plan-upgrade-downgrade-cancel#KB-106"
+      ]
+    },
+    {
+      "rule": "Dòng Recurring chỉ ở PENDING/DECLINED hoặc không có nghĩa là merchant chưa duyệt subscription.",
+      "kb_refs": [
+        "plan-upgrade-downgrade-cancel#KB-107"
+      ]
+    },
+    {
+      "rule": "Khi development store thành store thật (Shopify cập nhật hoặc admin tắt cờ development store / đổi tên plan khỏi \"Plus Trial\" trong form Edit), Mysbox huỷ subscription và đưa shop về plan mặc định — đây là hành vi chủ ý; merchant phải đăng ký lại plan.",
+      "kb_refs": [
+        "plan-upgrade-downgrade-cancel#KB-108",
+        "plan-upgrade-downgrade-cancel#KB-109",
+        "plan-upgrade-downgrade-cancel#KB-110"
+      ]
+    },
+    {
+      "rule": "App không đăng ký topic thay đổi subscription (app_subscriptions/update); trạng thái gói chỉ được cập nhật qua luồng do chính app khởi tạo.",
+      "kb_refs": [
+        "plan-upgrade-downgrade-cancel#KB-111",
+        "plan-upgrade-downgrade-cancel#KB-112"
+      ]
+    },
+    {
+      "rule": "Shopify giữ subscription và hoá đơn, tự thu tiền subscription (Mysbox không tự trừ thẻ); Mysbox chỉ gửi yêu cầu tạo subscription và usage record; hoá đơn Shopify = giá plan (đã giảm nếu có) + các dòng usage, và mọi khoản phí Mysbox nằm trên hoá đơn Shopify.",
+      "kb_refs": [
+        "_object-level.plans-billing#KB-002",
+        "_object-level.plans-billing#KB-008",
+        "_object-level.plans-billing#KB-009",
+        "_object-level.plans-billing#KB-010",
+        "_object-level.plans-billing#KB-024"
+      ]
+    },
+    {
+      "rule": "Gói mặc định của shop là Free; development store không bị tính phí; subscription thử của dev store / Plus-trial không vào báo cáo thật.",
+      "kb_refs": [
+        "_object-level.plans-billing#KB-005",
+        "_object-level.plans-billing#KB-019",
+        "_object-level.plans-billing#KB-026"
+      ]
+    },
+    {
+      "rule": "Shopify tự thử lại thanh toán, là một nguyên nhân merchant thấy khoản phí lặp lại.",
+      "kb_refs": [
+        "_object-level.plans-billing#KB-025"
+      ]
+    }
+  ],
+  "observed_behavior": [
+    {
+      "behavior": "Các hộp thoại nâng/hạ plan trên Pricing luôn tự tính phí theo $0.25/box trong trình duyệt, nên với plan có phí khác $0.25 hoặc khi dòng phí không chia đều thì số tiền hiển thị lệch phí thật.",
+      "status": "KNOWN_DEFECT",
+      "note": "Hạn chế đã biết theo tài liệu; không dùng số trong hộp thoại làm expected result.",
+      "kb_refs": [
+        "plan-upgrade-downgrade-cancel#KB-103"
+      ]
+    },
+    {
+      "behavior": "Mysbox không được báo khi subscription đổi trạng thái bên Shopify; huỷ, đóng băng hoặc lỗi thanh toán trong Shopify admin chưa phản ánh trong Mysbox (vẫn hiện Active) cho đến khi một luồng của Mysbox chạm tới shop.",
+      "status": "KNOWN_DEFECT",
+      "note": "Hạn chế đã biết theo tài liệu; không phải oracle.",
+      "kb_refs": [
+        "plan-upgrade-downgrade-cancel#KB-113"
+      ]
+    }
+  ],
+  "observed_validations": [],
+  "permissions": [
+    {
+      "permission": "Merchant tự đổi plan (Pricing hoặc link thanh toán) và phải tự duyệt trên Shopify.",
+      "kb_refs": [
+        "plan-upgrade-downgrade-cancel#KB-001",
+        "plan-upgrade-downgrade-cancel#KB-019"
+      ]
+    },
+    {
+      "permission": "Admin không đổi trực tiếp plan; chỉ gửi link thanh toán.",
+      "kb_refs": [
+        "plan-upgrade-downgrade-cancel#KB-042",
+        "plan-upgrade-downgrade-cancel#KB-043"
+      ]
+    },
+    {
+      "permission": "Admin-staff sửa cờ development store trong form Edit của shop.",
+      "kb_refs": [
+        "plan-upgrade-downgrade-cancel#KB-109"
+      ]
+    }
+  ],
+  "surface_mapping": {
+    "portal": [
+      {
+        "item": "Màn Pricing: thẻ plan, tab Monthly/Annually, nút Choose this plan / Selected",
+        "kb_refs": [
+          "plan-upgrade-downgrade-cancel#KB-002",
+          "plan-upgrade-downgrade-cancel#KB-009",
+          "plan-upgrade-downgrade-cancel#KB-010",
+          "plan-upgrade-downgrade-cancel#KB-011"
+        ]
+      },
+      {
+        "item": "Hộp thoại rời Early-bird / nâng / hạ / huỷ",
+        "kb_refs": [
+          "plan-upgrade-downgrade-cancel#KB-021",
+          "plan-upgrade-downgrade-cancel#KB-044",
+          "plan-upgrade-downgrade-cancel#KB-053",
+          "plan-upgrade-downgrade-cancel#KB-076"
+        ]
+      },
+      {
+        "item": "Nhãn plan sau khi huỷ",
+        "kb_refs": [
+          "plan-upgrade-downgrade-cancel#KB-090"
+        ]
+      }
+    ],
+    "storefront": [
+      {
+        "item": "Dữ liệu storefront làm mới sau đổi plan; hiện plan trả phí trong ân hạn",
+        "kb_refs": [
+          "plan-upgrade-downgrade-cancel#KB-038",
+          "plan-upgrade-downgrade-cancel#KB-092",
+          "plan-upgrade-downgrade-cancel#KB-087"
+        ]
+      }
+    ],
+    "api": [
+      {
+        "item": "Server trả đường dẫn duyệt subscription của Shopify; link có chữ ký quay về (7 ngày)",
+        "kb_refs": [
+          "plan-upgrade-downgrade-cancel#KB-027",
+          "plan-upgrade-downgrade-cancel#KB-030",
+          "plan-upgrade-downgrade-cancel#KB-031"
+        ]
+      },
+      {
+        "item": "Endpoint xem trước thay đổi plan (will_recalculate, recalculated_boxes, recalculated_amount_usd)",
+        "kb_refs": [
+          "plan-upgrade-downgrade-cancel#KB-095",
+          "plan-upgrade-downgrade-cancel#KB-096",
+          "plan-upgrade-downgrade-cancel#KB-097"
+        ]
+      },
+      {
+        "item": "Usage record gửi Shopify (usage cuối, phí tính lại)",
+        "kb_refs": [
+          "plan-upgrade-downgrade-cancel#KB-069",
+          "plan-upgrade-downgrade-cancel#KB-079",
+          "plan-upgrade-downgrade-cancel#KB-104",
+          "_object-level.plans-billing#KB-009"
+        ]
+      },
+      {
+        "item": "Không có webhook app_subscriptions/update",
+        "kb_refs": [
+          "plan-upgrade-downgrade-cancel#KB-111"
+        ]
+      }
+    ],
+    "data": [
+      {
+        "item": "Charge (Active / Cancelled, ngày huỷ, expires on, trial end); dòng Recurring",
+        "kb_refs": [
+          "plan-upgrade-downgrade-cancel#KB-033",
+          "plan-upgrade-downgrade-cancel#KB-034",
+          "plan-upgrade-downgrade-cancel#KB-035",
+          "plan-upgrade-downgrade-cancel#KB-082",
+          "plan-upgrade-downgrade-cancel#KB-107"
+        ]
+      },
+      {
+        "item": "Plan và quota/used của shop (Shop N-1 Plan)",
+        "kb_refs": [
+          "plan-upgrade-downgrade-cancel#KB-036",
+          "plan-upgrade-downgrade-cancel#KB-037",
+          "plan-upgrade-downgrade-cancel#KB-058",
+          "plan-upgrade-downgrade-cancel#KB-059",
+          "_object-level.plans-billing#KB-004"
+        ]
+      },
+      {
+        "item": "Dòng phí usage (mức phí lúc bán) dùng khi tính lại",
+        "kb_refs": [
+          "plan-upgrade-downgrade-cancel#KB-064",
+          "plan-upgrade-downgrade-cancel#KB-067"
+        ]
+      }
+    ],
+    "code": [],
+    "admin_panel": [
+      {
+        "item": "Nút \"Generate recurring payment link\" ở dòng shop; form Edit cờ development store",
+        "kb_refs": [
+          "plan-upgrade-downgrade-cancel#KB-043",
+          "plan-upgrade-downgrade-cancel#KB-109"
+        ]
+      }
+    ]
+  },
+  "dependencies": [
+    {
+      "depends_on": "Shopify Billing (subscription, trang duyệt, usage record)",
+      "kb_refs": [
+        "_object-level.plans-billing#KB-008",
+        "_object-level.plans-billing#KB-009",
+        "plan-upgrade-downgrade-cancel#KB-019"
+      ]
+    },
+    {
+      "depends_on": "plan-catalog-administration (Visible, Plus, Shopify Paid, trial, quota của plan)",
+      "kb_refs": [
+        "plan-upgrade-downgrade-cancel#KB-003",
+        "plan-upgrade-downgrade-cancel#KB-004",
+        "plan-upgrade-downgrade-cancel#KB-012",
+        "plan-upgrade-downgrade-cancel#KB-013"
+      ]
+    },
+    {
+      "depends_on": "usage-fee-pricing (mức phí lúc bán, phí 'nếu không có quota' dùng khi tính lại)",
+      "kb_refs": [
+        "plan-upgrade-downgrade-cancel#KB-067",
+        "plan-upgrade-downgrade-cancel#KB-068",
+        "usage-fee-pricing#KB-009"
+      ]
+    },
+    {
+      "depends_on": "capacity-limit-enforcement / vòng đời box (gỡ publish khi vượt quota)",
+      "kb_refs": [
+        "plan-upgrade-downgrade-cancel#KB-052",
+        "plan-upgrade-downgrade-cancel#KB-085",
+        "plan-upgrade-downgrade-cancel#KB-086"
+      ]
+    },
+    {
+      "depends_on": "storefront-data-sync (làm mới dữ liệu storefront)",
+      "kb_refs": [
+        "plan-upgrade-downgrade-cancel#KB-038",
+        "plan-upgrade-downgrade-cancel#KB-087"
+      ]
+    },
+    {
+      "depends_on": "shop-uninstall-reinstall-lifecycle (gói hiệu lực sau gỡ/cài lại app)",
+      "kb_refs": [
+        "plan-upgrade-downgrade-cancel#KB-091",
+        "shop-uninstall-reinstall-lifecycle#KB-001",
+        "shop-uninstall-reinstall-lifecycle#KB-003"
+      ]
+    }
+  ],
+  "risks": [
+    {
+      "risk": "Tiền: thu hai lần do duyệt hai link hoặc đăng ký lại trong cùng chu kỳ; Shopify tự thử lại thanh toán.",
+      "kb_refs": [
+        "plan-upgrade-downgrade-cancel#KB-105",
+        "plan-upgrade-downgrade-cancel#KB-106",
+        "_object-level.plans-billing#KB-025"
+      ]
+    },
+    {
+      "risk": "Tiền: phí tính lại khi hạ và usage cuối khi đổi/huỷ gửi ngay lên Shopify; sai sót không tự hoàn tác.",
+      "kb_refs": [
+        "plan-upgrade-downgrade-cancel#KB-069",
+        "plan-upgrade-downgrade-cancel#KB-079",
+        "plan-upgrade-downgrade-cancel#KB-104"
+      ]
+    },
+    {
+      "risk": "Số tiền hiển thị trong hộp thoại nâng/hạ lệch phí thật (known defect).",
+      "kb_refs": [
+        "plan-upgrade-downgrade-cancel#KB-103"
+      ]
+    },
+    {
+      "risk": "Trạng thái subscription trong Mysbox có thể lệch Shopify (vẫn Active sau khi Shopify huỷ/đóng băng).",
+      "kb_refs": [
+        "plan-upgrade-downgrade-cancel#KB-113"
+      ]
+    },
+    {
+      "risk": "Box bị gỡ publish sau huỷ: ngưỡng chưa thống nhất giữa các tài liệu.",
+      "kb_refs": [
+        "plan-upgrade-downgrade-cancel#KB-084",
+        "plan-upgrade-downgrade-cancel#KB-085",
+        "plan-upgrade-downgrade-cancel#KB-086"
+      ]
+    }
+  ],
+  "limitations": [
+    {
+      "limitation": "Các số trong ví dụ minh hoạ (used 10 / quota 100, trial 7 ngày, hạ 100→50 với $12.50, hoá đơn $29.00 + $12.50, charge cũ Cancelled / mới Active) chỉ là ví dụ, không dùng làm oracle.",
+      "kb_refs": [
+        "plan-upgrade-downgrade-cancel#KB-049",
+        "plan-upgrade-downgrade-cancel#KB-050",
+        "plan-upgrade-downgrade-cancel#KB-051",
+        "plan-upgrade-downgrade-cancel#KB-070",
+        "plan-upgrade-downgrade-cancel#KB-071",
+        "plan-upgrade-downgrade-cancel#KB-072",
+        "plan-upgrade-downgrade-cancel#KB-073",
+        "plan-upgrade-downgrade-cancel#KB-075"
+      ]
+    },
+    {
+      "limitation": "Làm mới dữ liệu storefront đúng lúc hết hạn sau huỷ chỉ có trên staging, chưa lên production.",
+      "kb_refs": [
+        "plan-upgrade-downgrade-cancel#KB-087"
+      ]
+    },
+    {
+      "limitation": "Hộp thoại trên Pricing không dùng endpoint xem trước mà tự tính \"box vượt × $0.25\"; số box tính lại có thể nhỏ hơn hiệu thuần used − quota đích do chỉ lấy nguyên dòng phí.",
+      "kb_refs": [
+        "plan-upgrade-downgrade-cancel#KB-100",
+        "plan-upgrade-downgrade-cancel#KB-101",
+        "plan-upgrade-downgrade-cancel#KB-102"
+      ]
+    }
+  ],
+  "freshness": {
+    "observed_at": null
+  },
+  "unknown_areas": [
+    {
+      "question": "Khi nâng từ Free trong thời gian ân hạn mà used vượt quota plan mới, có thực sự phát sinh phí vượt hay khối \"Over capacity fee\" chỉ là số hiển thị (tài liệu đồng thời nói Free sang Paid không tính lại gì)?",
+      "why_it_matters": "Hai phát biểu mâu thuẫn trong cùng tài liệu; quyết định expected tiền khi nâng từ Free.",
+      "kb_refs": [
+        "plan-upgrade-downgrade-cancel#KB-045",
+        "plan-upgrade-downgrade-cancel#KB-063"
+      ],
+      "conflict_group": "CONF-plans-billing-10",
+      "oq_id": "OQ-plans-billing-011"
+    },
+    {
+      "question": "Sau khi huỷ gói trả phí, shop giữ quota Paid tới hết kỳ, hay box bị gỡ publish ngay khi đã vượt quota Free, hay mọi box bị tự unpublish?",
+      "why_it_matters": "Ba phát biểu không thống nhất; quyết định trạng thái box trên storefront ngay sau huỷ.",
+      "kb_refs": [
+        "plan-upgrade-downgrade-cancel#KB-084",
+        "plan-upgrade-downgrade-cancel#KB-085",
+        "plan-upgrade-downgrade-cancel#KB-086"
+      ],
+      "conflict_group": "CONF-plans-billing-11",
+      "oq_id": "OQ-plans-billing-012"
+    },
+    {
+      "question": "Shop đã huỷ gói trả phí (hoặc gỡ app) còn tính năng/usage trả phí tới hết kỳ đã trả, hay về Free ngay; và sau cài lại trong grace thì hạn mức nào áp dụng?",
+      "why_it_matters": "Mâu thuẫn chưa giải quyết; ảnh hưởng quota và phí usage trong grace.",
+      "kb_refs": [
+        "plan-upgrade-downgrade-cancel#KB-091",
+        "shop-uninstall-reinstall-lifecycle#KB-001",
+        "shop-uninstall-reinstall-lifecycle#KB-003"
+      ],
+      "conflict_group": "CONF-plans-billing-01",
+      "oq_id": "OQ-plans-billing-013"
+    },
+    {
+      "question": "Đổi plan sau khi đã bán có tính lại phí usage của box đã bán hay không (recalculation phần dư khi hạ, phí 'nếu không có quota' trên dòng phí)?",
+      "why_it_matters": "Mâu thuẫn giữa các tài liệu; quyết định số tiền gửi Shopify khi hạ plan.",
+      "kb_refs": [
+        "plan-upgrade-downgrade-cancel#KB-060",
+        "plan-upgrade-downgrade-cancel#KB-068",
+        "usage-fee-pricing#KB-009"
+      ],
+      "conflict_group": "CONF-plans-billing-13",
+      "oq_id": "OQ-plans-billing-015"
+    },
+    {
+      "question": "Trên production hiện tại, storefront đổi hiển thị plan vào lúc nào sau khi huỷ (hành vi làm mới đúng lúc hết hạn mới chỉ có trên staging)? Khi nào hành vi này lên production?",
+      "why_it_matters": "Phần staging-only, chưa lên production; không được dùng làm expected trên production.",
+      "kb_refs": [
+        "plan-upgrade-downgrade-cancel#KB-087"
+      ],
+      "oq_id": "OQ-plans-billing-111"
+    },
+    {
+      "question": "Hết kỳ đã trả, shop bị áp capacity Free và có thể vượt capacity — capacity Free ở production là bao nhiêu và chính xác khi nào toàn bộ box bị gỡ?",
+      "why_it_matters": "Phát biểu chưa được xác nhận; số trong ví dụ không dùng làm oracle.",
+      "kb_refs": [
+        "plan-upgrade-downgrade-cancel#KB-089"
+      ],
+      "oq_id": "OQ-plans-billing-055"
+    },
+    {
+      "question": "Hành vi đúng của hộp thoại nâng/hạ là gì (hiển thị phí của plan đích?), và trạng thái sửa của lỗi tính $0.25/box cố định?",
+      "why_it_matters": "Tài liệu chỉ nêu lỗi, không nêu kỳ vọng đúng để viết case đối chiếu.",
+      "kb_refs": [
+        "plan-upgrade-downgrade-cancel#KB-101",
+        "plan-upgrade-downgrade-cancel#KB-102",
+        "plan-upgrade-downgrade-cancel#KB-103"
+      ],
+      "oq_id": "OQ-plans-billing-053"
+    },
+    {
+      "question": "Khi chọn lại plan trả phí sau khi huỷ/cài lại, trial có bắt đầu lại không hay chỉ còn số ngày trial chưa dùng (feature này chỉ có ví dụ)?",
+      "why_it_matters": "Expected trial khi đăng ký lại; ví dụ không phải oracle.",
+      "kb_refs": [
+        "plan-upgrade-downgrade-cancel#KB-093",
+        "plan-upgrade-downgrade-cancel#KB-094",
+        "billing-discount-codes#KB-043"
+      ],
+      "oq_id": "OQ-plans-billing-056"
+    },
+    {
+      "question": "Shopify xử lý phần chưa dùng của subscription cũ thế nào khi hạ plan?",
+      "why_it_matters": "Quyết định hoá đơn kế tiếp sau khi hạ; tài liệu tự khai chưa xác nhận.",
+      "kb_refs": [
+        "plan-upgrade-downgrade-cancel#KB-056",
+        "plan-upgrade-downgrade-cancel#KB-057"
+      ],
+      "oq_id": "OQ-plans-billing-057"
+    },
+    {
+      "question": "Phí usage tạo trong thời gian ân hạn có bị tính nếu merchant đăng ký lại trong vòng một tháng?",
+      "why_it_matters": "Rủi ro thu dư/thu thiếu khi huỷ rồi đăng ký lại; tài liệu chỉ có suy luận.",
+      "kb_refs": [
+        "plan-upgrade-downgrade-cancel#KB-088",
+        "plan-upgrade-downgrade-cancel#KB-105"
+      ],
+      "oq_id": "OQ-plans-billing-058"
+    },
+    {
+      "question": "Route, method, tham số request, kiểu dữ liệu và status/lỗi của endpoint xem trước thay đổi plan là gì?",
+      "why_it_matters": "Không có contract để kiểm API trực tiếp.",
+      "kb_refs": [
+        "plan-upgrade-downgrade-cancel#KB-095",
+        "plan-upgrade-downgrade-cancel#KB-098"
+      ],
+      "oq_id": "OQ-plans-billing-117"
+    },
+    {
+      "question": "Điều gì xảy ra khi merchant từ chối (decline) hoặc đóng trang duyệt của Shopify — plan/charge có bị đổi dở dang không?",
+      "why_it_matters": "Nhánh negative phổ biến, tài liệu không nêu.",
+      "kb_refs": [
+        "plan-upgrade-downgrade-cancel#KB-019",
+        "plan-upgrade-downgrade-cancel#KB-107"
+      ],
+      "oq_id": "OQ-plans-billing-059"
+    },
+    {
+      "question": "Khi link có chữ ký quá hạn 7 ngày hoặc bị dùng lại thì hệ thống phản hồi thế nào (thông báo lỗi)?",
+      "why_it_matters": "Boundary của link xác nhận.",
+      "kb_refs": [
+        "plan-upgrade-downgrade-cancel#KB-031"
+      ],
+      "oq_id": "OQ-plans-billing-060"
+    },
+    {
+      "question": "Đổi sang plan cùng quota (đi vào nhánh hộp thoại hạ) có tính lại phí không?",
+      "why_it_matters": "Quy tắc 'còn lại = hạ' gộp ca bằng quota; bảng quota không có dòng cho ca bằng.",
+      "kb_refs": [
+        "plan-upgrade-downgrade-cancel#KB-026",
+        "plan-upgrade-downgrade-cancel#KB-059"
+      ],
+      "oq_id": "OQ-plans-billing-061"
+    },
+    {
+      "question": "Nâng plan có làm đổi/reset chu kỳ billing không (chỉ có ví dụ hạ plan nói chu kỳ không đổi)?",
+      "why_it_matters": "Ảnh hưởng used và thời điểm hoá đơn sau nâng.",
+      "kb_refs": [
+        "plan-upgrade-downgrade-cancel#KB-074",
+        "plan-upgrade-downgrade-cancel#KB-047"
+      ],
+      "oq_id": "OQ-plans-billing-062"
+    },
+    {
+      "question": "Ngoài loại store, tiêu chí 'đủ điều kiện chọn plan' gồm những gì và thông báo lỗi cho từng tiêu chí?",
+      "why_it_matters": "Chỉ có thông báo \"Plan is not supported\" cho lọc loại store.",
+      "kb_refs": [
+        "plan-upgrade-downgrade-cancel#KB-016"
+      ],
+      "oq_id": "OQ-plans-billing-063"
+    },
+    {
+      "question": "Hạ plan hoặc huỷ trong lúc đang trial thì phí tính lại và khoản usage cuối được xử lý thế nào?",
+      "why_it_matters": "Tương tác giữa trial và recalculation không được nêu.",
+      "kb_refs": [
+        "plan-upgrade-downgrade-cancel#KB-035",
+        "plan-upgrade-downgrade-cancel#KB-069",
+        "plan-upgrade-downgrade-cancel#KB-079"
+      ],
+      "oq_id": "OQ-plans-billing-064"
+    },
+    {
+      "question": "Sau khi chọn \"Upgrade now\" ở hộp thoại rời Early-bird thì luồng tiếp theo là gì; Early-bird 'giữ nguyên' nghĩa là gì và hạn mức của gói tính theo kỳ hay tổng?",
+      "why_it_matters": "Nhánh UI riêng cho shop Early-bird; phạm vi và boundary của gói chưa rõ.",
+      "kb_refs": [
+        "plan-upgrade-downgrade-cancel#KB-021",
+        "plan-upgrade-downgrade-cancel#KB-023"
+      ],
+      "oq_id": "OQ-plans-billing-065"
+    },
+    {
+      "question": "Khi dev store thành store thật, subscription bị huỷ tự động hay cần thao tác thủ công, và 'plan mặc định' là plan nào?",
+      "why_it_matters": "Không xác định được trigger và trạng thái cuối để viết case.",
+      "kb_refs": [
+        "plan-upgrade-downgrade-cancel#KB-108",
+        "plan-upgrade-downgrade-cancel#KB-110"
+      ],
+      "oq_id": "OQ-plans-billing-066"
+    },
+    {
+      "question": "Thời gian ân hạn sau huỷ kéo dài bao lâu ngoài 'đến hết kỳ đã trả', và cờ capacity đổi lúc nào?",
+      "why_it_matters": "Cần mốc thời gian để kiểm việc áp quota Free và nhãn plan.",
+      "kb_refs": [
+        "plan-upgrade-downgrade-cancel#KB-088",
+        "plan-upgrade-downgrade-cancel#KB-090"
+      ],
+      "oq_id": "OQ-plans-billing-058"
+    },
+    {
+      "question": "Khi nâng plan (không phải hạ), box đang vượt có được tính lại phí không?",
+      "why_it_matters": "Tài liệu chỉ nêu recalculation khi hạ.",
+      "kb_refs": [
+        "plan-upgrade-downgrade-cancel#KB-061"
+      ],
+      "oq_id": "OQ-plans-billing-067"
+    },
+    {
+      "question": "Danh sách đầy đủ trạng thái của dòng Recurring (ngoài ACTIVE/PENDING/DECLINED/CANCELLED), ví dụ khi Shopify đóng băng?",
+      "why_it_matters": "Cần enum đầy đủ để kiểm hiển thị và logic kích hoạt.",
+      "kb_refs": [
+        "plan-upgrade-downgrade-cancel#KB-107",
+        "plan-upgrade-downgrade-cancel#KB-032"
+      ],
+      "oq_id": "OQ-plans-billing-059"
+    },
+    {
+      "question": "Những luồng nào của Mysbox (job, webhook đơn, mở app...) cập nhật lại trạng thái subscription khi Shopify đã đổi?",
+      "why_it_matters": "Quyết định điều kiện tái hiện và kiểm hạn chế không có webhook subscription.",
+      "kb_refs": [
+        "plan-upgrade-downgrade-cancel#KB-112",
+        "plan-upgrade-downgrade-cancel#KB-113"
+      ],
+      "oq_id": "OQ-plans-billing-054"
+    },
+    {
+      "question": "Badge \"7 - days free trial\" là số cố định hay lấy từ số ngày trial của plan?",
+      "why_it_matters": "Kiểm hiển thị badge với plan có số ngày trial khác 7.",
+      "kb_refs": [
+        "plan-upgrade-downgrade-cancel#KB-006"
+      ],
+      "oq_id": "OQ-plans-billing-068"
+    },
+    {
+      "question": "Link thanh toán do admin/support gửi dẫn tới đâu và dùng trong trường hợp nào?",
+      "why_it_matters": "Tài liệu chỉ nêu admin gửi được link, không mô tả luồng.",
+      "kb_refs": [
+        "plan-upgrade-downgrade-cancel#KB-043",
+        "_object-level.plans-billing#KB-007"
+      ],
+      "oq_id": "OQ-plans-billing-069"
+    }
+  ],
+  "last_updated": {
+    "date": "2026-10-16",
+    "ccr_ref": "bootstrap"
+  },
+  "coverage_matrix": [
+    {
+      "feature_id": "FEAT-05-plan-upgrade-downgrade-cancel",
+      "layer": "portal",
+      "role": "merchant",
+      "state": "chọn plan trên Pricing",
+      "environment": "documented",
+      "covered": true
+    },
+    {
+      "feature_id": "FEAT-05-plan-upgrade-downgrade-cancel",
+      "layer": "portal",
+      "role": "merchant",
+      "state": "nâng plan",
+      "environment": "documented",
+      "covered": true
+    },
+    {
+      "feature_id": "FEAT-05-plan-upgrade-downgrade-cancel",
+      "layer": "portal",
+      "role": "merchant",
+      "state": "hạ plan (used >= quota mới)",
+      "environment": "documented",
+      "covered": true
+    },
+    {
+      "feature_id": "FEAT-05-plan-upgrade-downgrade-cancel",
+      "layer": "portal",
+      "role": "merchant",
+      "state": "huỷ về Free / ân hạn",
+      "environment": "documented",
+      "covered": true
+    },
+    {
+      "feature_id": "FEAT-05-plan-upgrade-downgrade-cancel",
+      "layer": "portal",
+      "role": "merchant",
+      "state": "rời Early-bird",
+      "environment": "documented",
+      "covered": true
+    },
+    {
+      "feature_id": "FEAT-05-plan-upgrade-downgrade-cancel",
+      "layer": "portal",
+      "role": "merchant",
+      "state": "đổi sang plan cùng quota",
+      "environment": "documented",
+      "covered": false
+    },
+    {
+      "feature_id": "FEAT-05-plan-upgrade-downgrade-cancel",
+      "layer": "portal",
+      "role": "merchant",
+      "state": "decline / đóng trang duyệt Shopify",
+      "environment": "documented",
+      "covered": false
+    },
+    {
+      "feature_id": "FEAT-05-plan-upgrade-downgrade-cancel",
+      "layer": "portal",
+      "role": "merchant",
+      "state": "hạ/huỷ trong trial",
+      "environment": "documented",
+      "covered": false
+    },
+    {
+      "feature_id": "FEAT-05-plan-upgrade-downgrade-cancel",
+      "layer": "api",
+      "role": "system",
+      "state": "xem trước thay đổi plan",
+      "environment": "documented",
+      "covered": true
+    },
+    {
+      "feature_id": "FEAT-05-plan-upgrade-downgrade-cancel",
+      "layer": "api",
+      "role": "system",
+      "state": "contract endpoint xem trước (route/status)",
+      "environment": "documented",
+      "covered": false
+    },
+    {
+      "feature_id": "FEAT-05-plan-upgrade-downgrade-cancel",
+      "layer": "data",
+      "role": "system",
+      "state": "charge Active/Cancelled khi đổi/huỷ",
+      "environment": "documented",
+      "covered": true
+    },
+    {
+      "feature_id": "FEAT-05-plan-upgrade-downgrade-cancel",
+      "layer": "storefront",
+      "role": "system",
+      "state": "làm mới sau đổi plan; ân hạn sau huỷ",
+      "environment": "documented",
+      "covered": true
+    },
+    {
+      "feature_id": "FEAT-05-plan-upgrade-downgrade-cancel",
+      "layer": "storefront",
+      "role": "system",
+      "state": "làm mới lúc hết hạn sau huỷ (chỉ staging)",
+      "environment": "staging",
+      "covered": false
+    },
+    {
+      "feature_id": "FEAT-05-plan-upgrade-downgrade-cancel",
+      "layer": "admin_panel",
+      "role": "admin",
+      "state": "gửi link thanh toán; tắt development store",
+      "environment": "documented",
+      "covered": true
+    },
+    {
+      "feature_id": "FEAT-05-plan-upgrade-downgrade-cancel",
+      "layer": "integration",
+      "role": "system",
+      "state": "Shopify huỷ/đóng băng subscription bên ngoài app",
+      "environment": "documented",
+      "covered": true
+    }
+  ],
+  "profile_conflicts": [
+    {
+      "conflict_group": "CONF-plans-billing-10",
+      "kb_refs": [
+        "plan-upgrade-downgrade-cancel#KB-045",
+        "plan-upgrade-downgrade-cancel#KB-063"
+      ],
+      "resolution": "UNRESOLVED"
+    },
+    {
+      "conflict_group": "CONF-plans-billing-11",
+      "kb_refs": [
+        "plan-upgrade-downgrade-cancel#KB-084",
+        "plan-upgrade-downgrade-cancel#KB-085",
+        "plan-upgrade-downgrade-cancel#KB-086"
+      ],
+      "resolution": "UNRESOLVED"
+    },
+    {
+      "conflict_group": "CONF-plans-billing-01",
+      "kb_refs": [
+        "plan-upgrade-downgrade-cancel#KB-091",
+        "shop-uninstall-reinstall-lifecycle#KB-001",
+        "shop-uninstall-reinstall-lifecycle#KB-003"
+      ],
+      "resolution": "UNRESOLVED"
+    },
+    {
+      "conflict_group": "CONF-plans-billing-13",
+      "kb_refs": [
+        "plan-upgrade-downgrade-cancel#KB-060",
+        "plan-upgrade-downgrade-cancel#KB-068",
+        "usage-fee-pricing#KB-009"
+      ],
+      "resolution": "UNRESOLVED"
+    }
+  ],
+  "profile_relationships": [
+    {
+      "from": "plan-upgrade-downgrade-cancel",
+      "to": "plan-catalog-administration",
+      "type": "consumes",
+      "note": "Pricing hiển thị plan theo cờ Visible / Plus / Shopify Paid do admin cấu hình.",
+      "kb_refs": [
+        "plan-upgrade-downgrade-cancel#KB-003",
+        "plan-upgrade-downgrade-cancel#KB-004",
+        "plan-upgrade-downgrade-cancel#KB-012",
+        "plan-upgrade-downgrade-cancel#KB-013"
+      ]
+    },
+    {
+      "from": "plan-upgrade-downgrade-cancel",
+      "to": "promote-codes",
+      "type": "triggers",
+      "note": "Nâng plan kích hoạt redemption First upgrade; đổi plan là lúc redemption hết hạn được áp.",
+      "kb_refs": [
+        "promote-codes#KB-038",
+        "promote-codes#KB-062"
+      ]
+    },
+    {
+      "from": "plan-upgrade-downgrade-cancel",
+      "to": "billing-discount-codes",
+      "type": "integrates",
+      "note": "Server kiểm tra billing discount trước khi trả đường dẫn duyệt và ghi nhận sau duyệt.",
+      "kb_refs": [
+        "billing-discount-codes#KB-005",
+        "billing-discount-codes#KB-006"
+      ]
+    },
+    {
+      "from": "plan-upgrade-downgrade-cancel",
+      "to": "usage-fee-pricing",
+      "type": "depends_on",
+      "kb_refs": [
+        "plan-upgrade-downgrade-cancel#KB-067",
+        "plan-upgrade-downgrade-cancel#KB-068",
+        "usage-fee-pricing#KB-009"
+      ]
+    },
+    {
+      "from": "plan-upgrade-downgrade-cancel",
+      "to": "shop-uninstall-reinstall-lifecycle",
+      "type": "conflict_shared",
+      "kb_refs": [
+        "plan-upgrade-downgrade-cancel#KB-091",
+        "shop-uninstall-reinstall-lifecycle#KB-001"
+      ]
+    }
+  ]
+}

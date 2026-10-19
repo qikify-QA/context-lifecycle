@@ -1,0 +1,1034 @@
+{
+  "feature_id": "FEAT-01-plan-capacity-and-cycle",
+  "feature_key": "plan-capacity-and-cycle",
+  "object_id": "plans-billing",
+  "checklist_version": "1",
+  "checks": [
+    {
+      "check_id": "CHK-001",
+      "dimension": "CORE",
+      "layer": "portal",
+      "title": "Cài app lần đầu: shop vào plan Free giá 0, bộ đếm hạn mức used = 0, quota bằng hạn mức gói mặc định, chu kỳ kết thúc sau 30 ngày kể từ ngày cài",
+      "applicability": {
+        "role": "merchant",
+        "state": "shop chưa từng cài app",
+        "environment": "documented",
+        "surface_or_device": "merchant app + admin panel"
+      },
+      "precondition": "Một Shopify store chưa từng cài Mysbox. Ghi lại ngày giờ cài.",
+      "steps": [
+        "Cài app Mysbox lên store và hoàn tất onboarding tới Dashboard.",
+        "Mở thẻ \"Box sales limit\" trong merchant app, đọc used / quota.",
+        "Đăng nhập admin panel, mở Shop của store đó, đọc plan hiện tại, Box Selling Capacity, Box Capacity Used và mốc kết thúc chu kỳ.",
+        "Kiểm Shopify admin > Settings > Billing của store xem có subscription/khoản phí Mysbox nào không."
+      ],
+      "observation_point": "Thẻ \"Box sales limit\"; admin panel Shop (plan, Box Selling Capacity, Box Capacity Used, mốc chu kỳ); Shopify Billing",
+      "expected_result": "Plan của shop là Free; used = 0; quota bằng hạn mức của gói mặc định (cộng promote code nếu có — shop mới thì không có); mốc kết thúc chu kỳ = ngày cài + 30 ngày; không có subscription hay khoản phí Mysbox nào trên Shopify.",
+      "oracle": {
+        "kb_ids": [
+          "plan-capacity-and-cycle#KB-002",
+          "plan-capacity-and-cycle#KB-011",
+          "plan-capacity-and-cycle#KB-016",
+          "plan-capacity-and-cycle#KB-062",
+          "plan-capacity-and-cycle#KB-063",
+          "_object-level.plans-billing#KB-005"
+        ],
+        "oracle_strength": "STRONG"
+      },
+      "status": "NEEDS_CONFIRMATION",
+      "open_question_draft": "Cần test case đã chạy PASS xác nhận shop mới cài vào plan Free không phát sinh phí, bộ đếm hạn mức bắt đầu ở 0 với chu kỳ kết thúc sau 30 ngày kể từ ngày cài; đồng thời hạn mức box của gói Free trên production là bao nhiêu?",
+      "related_kb_ids": [
+        "plan-capacity-and-cycle#KB-003",
+        "plan-capacity-and-cycle#KB-012",
+        "plan-capacity-and-cycle#KB-046",
+        "plan-capacity-and-cycle#KB-064"
+      ],
+      "regression_watch_kb_ids": [],
+      "risk_refs": [
+        "Hạn mức Free production chưa xác nhận"
+      ],
+      "priority": "P1",
+      "automation_suitability": "HYBRID",
+      "oq_id": "OQ-plans-billing-105"
+    },
+    {
+      "check_id": "CHK-002",
+      "dimension": "CORE",
+      "layer": "api",
+      "title": "Đơn thật đã thanh toán chứa box đang publish được tính vào used theo số lượng từng variant, ở thời điểm thanh toán (không phải lúc reveal)",
+      "applicability": {
+        "role": "system",
+        "state": "shop có box đang publish, còn quota, cờ Exclude Test Order bất kỳ",
+        "environment": "documented",
+        "surface_or_device": "storefront + merchant app"
+      },
+      "precondition": "Shop có một box đang publish với 2 variant A và B; ghi lại used hiện tại U0 trên thẻ \"Box sales limit\". Quota còn lại ≥ 3.",
+      "steps": [
+        "Khách đặt một đơn thật (không phải đơn test) gồm 2 đơn vị variant A và 1 đơn vị variant B, thanh toán xong.",
+        "Không mở (reveal) box; đọc lại used trên thẻ \"Box sales limit\" sau khi Shopify báo đơn đã thanh toán.",
+        "Khách mở (reveal) các box của đơn; đọc lại used."
+      ],
+      "observation_point": "Giá trị used trên thẻ \"Box sales limit\" và Box Capacity Used ở admin panel",
+      "expected_result": "Sau khi đơn được báo thanh toán, used = U0 + 3 (mỗi đơn vị variant là 1 box, đơn nhiều variant trừ hạn mức lần lượt đủ cả 3); việc reveal không làm used thay đổi thêm.",
+      "oracle": {
+        "kb_ids": [
+          "plan-capacity-and-cycle#KB-004",
+          "plan-capacity-and-cycle#KB-009",
+          "plan-capacity-and-cycle#KB-028",
+          "plan-capacity-and-cycle#KB-038",
+          "plan-capacity-and-cycle#KB-042"
+        ],
+        "oracle_strength": "STRONG"
+      },
+      "status": "NEEDS_CONFIRMATION",
+      "open_question_draft": "Cần test case đã chạy PASS xác nhận box được tính vào hạn mức đúng lúc đơn thanh toán theo số lượng từng variant, và reveal không ảnh hưởng bộ đếm; thứ tự trừ hạn mức giữa các variant trong cùng đơn là gì?",
+      "related_kb_ids": [
+        "plan-capacity-and-cycle#KB-065"
+      ],
+      "regression_watch_kb_ids": [],
+      "risk_refs": [
+        "Đếm sai box đã dùng làm sai thời điểm chạm trần / phí vượt"
+      ],
+      "priority": "P1",
+      "automation_suitability": "SUITABLE",
+      "oq_id": "OQ-plans-billing-105"
+    },
+    {
+      "check_id": "CHK-003",
+      "dimension": "NEGATIVE",
+      "layer": "api",
+      "title": "Box chưa publish lúc đơn trả tiền (nháp hoặc đã gỡ) không được tính vào quota",
+      "applicability": {
+        "role": "system",
+        "state": "box ở trạng thái nháp hoặc đã unpublish",
+        "environment": "documented",
+        "surface_or_device": "Shopify admin + merchant app"
+      },
+      "precondition": "Shop có một box đã bị gỡ publish (hoặc box nháp) nhưng sản phẩm box vẫn mua được qua Shopify (ví dụ đơn tạo tay trong Shopify admin chứa sản phẩm đó). Ghi lại used U0.",
+      "steps": [
+        "Tạo một đơn thật chứa 1 đơn vị sản phẩm của box chưa publish và đánh dấu đã thanh toán.",
+        "Đọc lại used trên thẻ \"Box sales limit\"."
+      ],
+      "observation_point": "Giá trị used trên thẻ \"Box sales limit\"",
+      "expected_result": "used vẫn = U0.",
+      "oracle": {
+        "kb_ids": [
+          "plan-capacity-and-cycle#KB-029"
+        ],
+        "oracle_strength": "STRONG"
+      },
+      "status": "NEEDS_CONFIRMATION",
+      "open_question_draft": "Cần test case đã chạy PASS xác nhận đơn đã thanh toán chứa box nháp hoặc đã gỡ publish không làm tăng bộ đếm hạn mức?",
+      "related_kb_ids": [],
+      "regression_watch_kb_ids": [],
+      "risk_refs": [
+        "Đếm sai box đã dùng làm sai thời điểm chạm trần / phí vượt"
+      ],
+      "priority": "P1",
+      "automation_suitability": "HYBRID",
+      "oq_id": "OQ-plans-billing-105"
+    },
+    {
+      "check_id": "CHK-004",
+      "dimension": "STATE_DATA",
+      "layer": "portal",
+      "title": "Refund/huỷ đơn, resell box, xoá box sau khi đã tính không trả lại quota",
+      "applicability": {
+        "role": "merchant",
+        "state": "đơn đã được tính vào used trong chu kỳ hiện tại",
+        "environment": "documented",
+        "surface_or_device": "Shopify admin + storefront + merchant app"
+      },
+      "precondition": "Ba đơn thật đã thanh toán trong chu kỳ hiện tại, mỗi đơn 1 box và đã được tính vào used. Ghi lại used U0.",
+      "steps": [
+        "Huỷ và refund đơn thứ nhất trong Shopify admin; đọc used.",
+        "Khách resell box của đơn thứ hai trên storefront; đọc used.",
+        "Merchant xoá box của đơn thứ ba trong merchant app; đọc used."
+      ],
+      "observation_point": "Giá trị used trên thẻ \"Box sales limit\" sau từng bước",
+      "expected_result": "used giữ nguyên U0 sau cả ba thao tác (không giảm).",
+      "oracle": {
+        "kb_ids": [
+          "plan-capacity-and-cycle#KB-035",
+          "plan-capacity-and-cycle#KB-036",
+          "plan-capacity-and-cycle#KB-037"
+        ],
+        "oracle_strength": "STRONG"
+      },
+      "status": "NEEDS_CONFIRMATION",
+      "open_question_draft": "Cần test case đã chạy PASS xác nhận refund/huỷ đơn, resell box và xoá box đều không trả lại hạn mức đã dùng?",
+      "related_kb_ids": [],
+      "regression_watch_kb_ids": [],
+      "risk_refs": [
+        "Đếm sai box đã dùng làm sai thời điểm chạm trần / phí vượt"
+      ],
+      "priority": "P1",
+      "automation_suitability": "HYBRID",
+      "oq_id": "OQ-plans-billing-105"
+    },
+    {
+      "check_id": "CHK-005",
+      "dimension": "STATE_DATA",
+      "layer": "api",
+      "title": "Đơn được sửa để thêm box chỉ tính thêm phần box thêm",
+      "applicability": {
+        "role": "system",
+        "state": "đơn đã thanh toán và đã được tính vào used",
+        "environment": "documented",
+        "surface_or_device": "Shopify admin + merchant app"
+      },
+      "precondition": "Một đơn thật đã thanh toán gồm 1 box đang publish, đã được tính vào used. Ghi lại used U0.",
+      "steps": [
+        "Trong Shopify admin, sửa đơn (Edit order) thêm 2 đơn vị box đó và thu tiền phần thêm.",
+        "Đọc lại used trên thẻ \"Box sales limit\"."
+      ],
+      "observation_point": "Giá trị used trên thẻ \"Box sales limit\"",
+      "expected_result": "used = U0 + 2 (box ban đầu không bị tính lại).",
+      "oracle": {
+        "kb_ids": [
+          "plan-capacity-and-cycle#KB-034"
+        ],
+        "oracle_strength": "STRONG"
+      },
+      "status": "NEEDS_CONFIRMATION",
+      "open_question_draft": "Cần test case đã chạy PASS xác nhận đơn được sửa thêm box chỉ tính thêm phần box thêm vào hạn mức?",
+      "related_kb_ids": [
+        "plan-capacity-and-cycle#KB-028"
+      ],
+      "regression_watch_kb_ids": [],
+      "risk_refs": [
+        "Đếm sai box đã dùng làm sai thời điểm chạm trần / phí vượt"
+      ],
+      "priority": "P1",
+      "automation_suitability": "HYBRID",
+      "oq_id": "OQ-plans-billing-105"
+    },
+    {
+      "check_id": "CHK-006",
+      "dimension": "STATE_DATA",
+      "layer": "portal",
+      "title": "Admin tắt \"Exclude Test Order\": đơn test được ghi như đơn thật và trừ hạn mức",
+      "applicability": {
+        "role": "admin-staff",
+        "state": "cờ Exclude Test Order đã bị admin tắt",
+        "environment": "documented",
+        "surface_or_device": "admin panel + Shopify (đơn test) + merchant app"
+      },
+      "precondition": "Shop có box đang publish; admin mở Shop > Edit > section Plan và tắt \"Exclude test order\". Ghi lại used U0.",
+      "steps": [
+        "Đặt một đơn test của Shopify (bogus gateway / test mode) gồm 1 box, thanh toán.",
+        "Đọc lại used trên thẻ \"Box sales limit\" và Box Capacity Used ở admin."
+      ],
+      "observation_point": "used trên thẻ \"Box sales limit\"; Box Capacity Used ở admin panel",
+      "expected_result": "used = U0 + 1 (đơn test được ghi như đơn thật).",
+      "oracle": {
+        "kb_ids": [
+          "plan-capacity-and-cycle#KB-031",
+          "plan-capacity-and-cycle#KB-067",
+          "plan-capacity-and-cycle#KB-076"
+        ],
+        "oracle_strength": "STRONG"
+      },
+      "status": "NEEDS_CONFIRMATION",
+      "open_question_draft": "Cần test case đã chạy PASS xác nhận khi admin tắt \"Exclude test order\", đơn test của Shopify trừ hạn mức box của chu kỳ như đơn thật?",
+      "related_kb_ids": [
+        "plan-capacity-and-cycle#KB-030"
+      ],
+      "regression_watch_kb_ids": [],
+      "risk_refs": [
+        "Đơn test làm sai bộ đếm hạn mức"
+      ],
+      "priority": "P1",
+      "automation_suitability": "HYBRID",
+      "oq_id": "OQ-plans-billing-105"
+    },
+    {
+      "check_id": "CHK-007",
+      "dimension": "PERMISSION",
+      "layer": "portal",
+      "title": "Chỉ admin tắt được \"Exclude Test Order\": merchant không có điều khiển nào để tắt cờ",
+      "applicability": {
+        "role": "merchant",
+        "state": "shop có cờ Exclude Test Order ở mặc định",
+        "environment": "documented",
+        "surface_or_device": "merchant app + admin panel"
+      },
+      "precondition": "Shop mới cài, chưa ai sửa cờ \"Exclude test order\".",
+      "steps": [
+        "Đăng nhập merchant app bằng tài khoản merchant, duyệt Settings, Pricing và Dashboard tìm điều khiển bật/tắt đơn test.",
+        "Đăng nhập admin panel, mở Shop > Edit > section Plan, đọc trạng thái cờ \"Exclude test order\"."
+      ],
+      "observation_point": "Merchant app (mọi màn cài đặt) và form Edit shop ở admin panel",
+      "expected_result": "Merchant app không có điều khiển tắt \"Exclude Test Order\"; ở admin panel cờ \"Exclude test order\" hiện ở section Plan và đang bật (mặc định).",
+      "oracle": {
+        "kb_ids": [
+          "plan-capacity-and-cycle#KB-030",
+          "plan-capacity-and-cycle#KB-031",
+          "plan-capacity-and-cycle#KB-076"
+        ],
+        "oracle_strength": "STRONG"
+      },
+      "status": "NEEDS_CONFIRMATION",
+      "open_question_draft": "Cần test case đã chạy PASS xác nhận chỉ admin tắt được \"Exclude test order\" và cờ bật mặc định; merchant có nhìn thấy trạng thái cờ này ở đâu không?",
+      "related_kb_ids": [],
+      "regression_watch_kb_ids": [],
+      "risk_refs": [
+        "Đơn test làm sai bộ đếm hạn mức"
+      ],
+      "priority": "P1",
+      "automation_suitability": "NOT_SUITABLE",
+      "oq_id": "OQ-plans-billing-105"
+    },
+    {
+      "check_id": "CHK-008",
+      "dimension": "NEGATIVE",
+      "layer": "api",
+      "title": "Cờ \"Exclude Test Order\" ở mặc định (bật): đơn test và preview order có trừ hạn mức không — chưa có oracle",
+      "applicability": {
+        "role": "system",
+        "state": "cờ Exclude Test Order bật (mặc định)",
+        "environment": "documented",
+        "surface_or_device": "Shopify (đơn test, preview order) + merchant app"
+      },
+      "precondition": "Shop có box đang publish, cờ \"Exclude test order\" giữ mặc định. Ghi lại used U0.",
+      "steps": [
+        "Đặt một đơn test của Shopify gồm 1 box, thanh toán; đọc used.",
+        "Dùng tính năng xem trước box để sinh một preview order (tag mysbox-preview-order); đọc used."
+      ],
+      "observation_point": "used trên thẻ \"Box sales limit\" sau từng đơn",
+      "expected_result": "",
+      "oracle": {
+        "kb_ids": [
+          "plan-capacity-and-cycle#KB-007",
+          "capacity-limit-enforcement#KB-029",
+          "plan-capacity-and-cycle#KB-033"
+        ],
+        "oracle_strength": "NONE"
+      },
+      "status": "NEEDS_CONFIRMATION",
+      "open_question_draft": "Khi cờ \"Exclude test order\" ở mặc định (bật), đơn test của Shopify và preview order có làm tăng bộ đếm hạn mức của shop không? Một phần tài liệu nói đơn test mặc định bị loại khỏi hạn mức, phần khác nói đơn test vẫn tính vào capacity và cờ chỉ quyết việc không tính phí usage.",
+      "related_kb_ids": [
+        "plan-capacity-and-cycle#KB-030",
+        "plan-capacity-and-cycle#KB-032",
+        "plan-capacity-and-cycle#KB-068"
+      ],
+      "regression_watch_kb_ids": [],
+      "risk_refs": [
+        "Đơn test làm sai bộ đếm hạn mức"
+      ],
+      "priority": "P1",
+      "automation_suitability": "UNKNOWN",
+      "oq_id": "OQ-plans-billing-010"
+    },
+    {
+      "check_id": "CHK-009",
+      "dimension": "CORE",
+      "layer": "portal",
+      "title": "Thẻ \"Box sales limit\" hiển thị thanh tiến độ và used / quota, quota = hạn mức gói + phần promote code",
+      "applicability": {
+        "role": "merchant",
+        "state": "shop có promote code đang chạy",
+        "environment": "documented",
+        "surface_or_device": "merchant app"
+      },
+      "precondition": "Shop đã đổi một promote code cộng thêm P box/chu kỳ; biết hạn mức gói H (đọc ở admin). Ghi lại số box đã tính U trong chu kỳ.",
+      "steps": [
+        "Mở merchant app, xem thẻ \"Box sales limit\".",
+        "Mở admin panel, Shop đó, đọc Box Selling Capacity."
+      ],
+      "observation_point": "Thẻ \"Box sales limit\" (thanh tiến độ, used / quota); Box Selling Capacity ở admin panel",
+      "expected_result": "Thẻ có thanh tiến độ và hiển thị U / (H + P); Box Selling Capacity ở admin = H + P.",
+      "oracle": {
+        "kb_ids": [
+          "plan-capacity-and-cycle#KB-010",
+          "plan-capacity-and-cycle#KB-065",
+          "plan-capacity-and-cycle#KB-066",
+          "plan-capacity-and-cycle#KB-023"
+        ],
+        "oracle_strength": "STRONG"
+      },
+      "status": "READY",
+      "open_question_draft": null,
+      "related_kb_ids": [],
+      "regression_watch_kb_ids": [],
+      "risk_refs": [],
+      "priority": "P2",
+      "automation_suitability": "SUITABLE"
+    },
+    {
+      "check_id": "CHK-010",
+      "dimension": "BOUNDARY",
+      "layer": "portal",
+      "title": "Ngưỡng cảnh báo 80% và thông điệp 100% trên thẻ \"Box sales limit\"",
+      "applicability": {
+        "role": "merchant",
+        "state": "shop có quota Q chia hết cho 5",
+        "environment": "documented",
+        "surface_or_device": "merchant app"
+      },
+      "precondition": "Shop có quota Q chia hết cho 5 (ví dụ admin đặt selling capacity = 10 cho shop test). used bắt đầu từ 0 trong chu kỳ.",
+      "steps": [
+        "Bán đơn thật cho tới used = 0,8×Q − 1; xem thẻ.",
+        "Bán thêm 1 box (used = 0,8×Q); xem thẻ.",
+        "Bán tiếp tới used = Q; xem thẻ."
+      ],
+      "observation_point": "Dòng thông báo trên thẻ \"Box sales limit\"",
+      "expected_result": "Ở used = 0,8×Q − 1 không có cảnh báo; ở used = 0,8×Q thẻ hiện \"You almost reach the box limit, upgrade plan to sell more.\"; ở used = Q thẻ hiện \"You have reached the box limit, upgrade plan to sell more.\".",
+      "oracle": {
+        "kb_ids": [
+          "plan-capacity-and-cycle#KB-021",
+          "plan-capacity-and-cycle#KB-022"
+        ],
+        "oracle_strength": "STRONG"
+      },
+      "status": "READY",
+      "open_question_draft": null,
+      "related_kb_ids": [
+        "plan-capacity-and-cycle#KB-048",
+        "plan-capacity-and-cycle#KB-077"
+      ],
+      "regression_watch_kb_ids": [],
+      "risk_refs": [
+        "Hạn mức Free production chưa xác nhận"
+      ],
+      "priority": "P2",
+      "automation_suitability": "HYBRID"
+    },
+    {
+      "check_id": "CHK-011",
+      "dimension": "CORE",
+      "layer": "portal",
+      "title": "Plan Paid vượt quota: Used dừng tăng, \"Total sold in cycle\" tiếp tục tăng, \"Extra fee\" xuất hiện",
+      "applicability": {
+        "role": "merchant",
+        "state": "plan Paid (hết trial), used đã chạm quota",
+        "environment": "documented",
+        "surface_or_device": "merchant app"
+      },
+      "precondition": "Shop plan Paid, không trong trial, quota Q; đã bán đủ để used ≥ Q. Ghi lại Used U1 và Total sold in cycle S1.",
+      "steps": [
+        "Bán thêm một đơn thật 2 box.",
+        "Xem thẻ \"Box sales limit\"."
+      ],
+      "observation_point": "Thẻ \"Box sales limit\": Used, \"Total sold in cycle: N boxes\", \"Extra fee: $X\"",
+      "expected_result": "Used vẫn = U1 (không tăng); \"Total sold in cycle\" = S1 + 2; thẻ hiển thị dòng \"Extra fee: $X\".",
+      "oracle": {
+        "kb_ids": [
+          "plan-capacity-and-cycle#KB-005",
+          "plan-capacity-and-cycle#KB-006",
+          "plan-capacity-and-cycle#KB-020"
+        ],
+        "oracle_strength": "STRONG"
+      },
+      "status": "READY",
+      "open_question_draft": null,
+      "related_kb_ids": [
+        "plan-capacity-and-cycle#KB-025",
+        "plan-capacity-and-cycle#KB-026",
+        "plan-capacity-and-cycle#KB-049"
+      ],
+      "regression_watch_kb_ids": [],
+      "risk_refs": [],
+      "priority": "P2",
+      "automation_suitability": "HYBRID"
+    },
+    {
+      "check_id": "CHK-012",
+      "dimension": "CORE",
+      "layer": "portal",
+      "title": "Admin panel: Box Selling Capacity, Box Capacity Used (dừng sau vượt), Box Sold in Cycle (luôn tăng)",
+      "applicability": {
+        "role": "admin-staff",
+        "state": "shop Paid đã vượt quota",
+        "environment": "documented",
+        "surface_or_device": "admin panel"
+      },
+      "precondition": "Shop như CHK-011 (Paid, đã vượt quota). Ghi lại Box Capacity Used C1 và Box Sold in Cycle B1 ở admin.",
+      "steps": [
+        "Bán thêm một đơn thật 1 box.",
+        "Mở admin panel, Shop đó, đọc ba chỉ số."
+      ],
+      "observation_point": "Admin panel Shop: Box Selling Capacity, Box Capacity Used, Box Sold in Cycle",
+      "expected_result": "Box Capacity Used vẫn = C1; Box Sold in Cycle = B1 + 1; Box Selling Capacity bằng quota của shop (đã gồm promote code nếu có).",
+      "oracle": {
+        "kb_ids": [
+          "plan-capacity-and-cycle#KB-023",
+          "plan-capacity-and-cycle#KB-024",
+          "plan-capacity-and-cycle#KB-027"
+        ],
+        "oracle_strength": "STRONG"
+      },
+      "status": "READY",
+      "open_question_draft": null,
+      "related_kb_ids": [
+        "plan-capacity-and-cycle#KB-025"
+      ],
+      "regression_watch_kb_ids": [],
+      "risk_refs": [],
+      "priority": "P2",
+      "automation_suitability": "HYBRID"
+    },
+    {
+      "check_id": "CHK-013",
+      "dimension": "STATE_DATA",
+      "layer": "portal",
+      "title": "Qua mốc chu kỳ 30 ngày: used tự đọc về 0 (không có job reset đêm), đơn đầu của chu kỳ mới ghi lại bộ đếm",
+      "applicability": {
+        "role": "system",
+        "state": "shop vừa qua mốc chu kỳ, chưa có đơn nào trong chu kỳ mới",
+        "environment": "documented",
+        "surface_or_device": "merchant app + admin panel"
+      },
+      "precondition": "Shop có used = U > 0 trong chu kỳ N; thời gian hiện tại đã qua mốc kết thúc chu kỳ N ít nhất 1 ngày (tránh vùng múi giờ chưa rõ); chưa có đơn đã thanh toán nào sau mốc.",
+      "steps": [
+        "Mở thẻ \"Box sales limit\", đọc used.",
+        "Đặt một đơn thật 2 box, thanh toán.",
+        "Đọc lại used trên thẻ và Box Capacity Used ở admin."
+      ],
+      "observation_point": "used trên thẻ \"Box sales limit\"; Box Capacity Used ở admin panel",
+      "expected_result": "Trước đơn mới used đọc là 0 dù không có job reset hằng đêm; sau đơn mới used = 2 (không cộng dồn U của chu kỳ trước).",
+      "oracle": {
+        "kb_ids": [
+          "plan-capacity-and-cycle#KB-001",
+          "plan-capacity-and-cycle#KB-013",
+          "plan-capacity-and-cycle#KB-018",
+          "plan-capacity-and-cycle#KB-019"
+        ],
+        "oracle_strength": "STRONG"
+      },
+      "status": "NEEDS_CONFIRMATION",
+      "open_question_draft": "Cần test case đã chạy PASS xác nhận quota đặt lại kiểu lười khi qua mốc chu kỳ; mốc 30 ngày tính theo múi giờ nào, giờ nào trong ngày và có gồm ngày cuối không?",
+      "related_kb_ids": [
+        "plan-capacity-and-cycle#KB-016",
+        "plan-capacity-and-cycle#KB-017"
+      ],
+      "regression_watch_kb_ids": [],
+      "risk_refs": [
+        "Reset kiểu lười: số đã dùng chỉ được ghi lại ở đơn trả tiền đầu tiên của chu kỳ mới"
+      ],
+      "priority": "P1",
+      "automation_suitability": "NOT_SUITABLE",
+      "oq_id": "OQ-plans-billing-105"
+    },
+    {
+      "check_id": "CHK-014",
+      "dimension": "BOUNDARY",
+      "layer": "portal",
+      "title": "Chu kỳ quota neo ngày cài app lần đầu, không theo ngày đăng ký plan hay ngày Shopify tính tiền",
+      "applicability": {
+        "role": "merchant",
+        "state": "shop đăng ký plan Paid vào ngày khác ngày cài app",
+        "environment": "documented",
+        "surface_or_device": "admin panel + Shopify Billing"
+      },
+      "precondition": "Shop cài app ngày D0, sau đó (ngày D0 + k, 0 < k < 30) duyệt subscription một plan Paid.",
+      "steps": [
+        "Ở admin panel, đọc mốc kết thúc chu kỳ quota của shop.",
+        "Ở Shopify admin > Settings > Billing, đọc ngày hoá đơn kế tiếp.",
+        "Sau mốc D0 + 30 (qua ít nhất 1 ngày), bán 1 đơn thật và đọc used."
+      ],
+      "observation_point": "Mốc chu kỳ quota ở admin panel; used trên thẻ \"Box sales limit\"",
+      "expected_result": "Mốc kết thúc chu kỳ quota là D0 + 30 (không phải D0 + k + 30); sau mốc D0 + 30 used bắt đầu lại từ đơn mới, bất kể ngày hoá đơn Shopify.",
+      "oracle": {
+        "kb_ids": [
+          "plan-capacity-and-cycle#KB-016",
+          "plan-capacity-and-cycle#KB-019"
+        ],
+        "oracle_strength": "STRONG"
+      },
+      "status": "NEEDS_CONFIRMATION",
+      "open_question_draft": "Cần test case đã chạy PASS xác nhận chu kỳ quota neo vào ngày cài app lần đầu, độc lập với ngày duyệt subscription và ngày hoá đơn Shopify?",
+      "related_kb_ids": [
+        "plan-capacity-and-cycle#KB-051",
+        "daily-usage-charge-and-charge-status#KB-015"
+      ],
+      "regression_watch_kb_ids": [],
+      "risk_refs": [
+        "Reset kiểu lười: số đã dùng chỉ được ghi lại ở đơn trả tiền đầu tiên của chu kỳ mới"
+      ],
+      "priority": "P1",
+      "automation_suitability": "NOT_SUITABLE",
+      "oq_id": "OQ-plans-billing-105"
+    },
+    {
+      "check_id": "CHK-015",
+      "dimension": "STATE_DATA",
+      "layer": "portal",
+      "title": "Gỡ rồi cài lại app trong cùng chu kỳ không reset bộ đếm capacity",
+      "applicability": {
+        "role": "merchant",
+        "state": "shop có used = U > 0, gỡ và cài lại trong cùng chu kỳ",
+        "environment": "documented",
+        "surface_or_device": "Shopify admin + merchant app"
+      },
+      "precondition": "Shop có used = U > 0 trong chu kỳ hiện tại, còn xa mốc kết thúc chu kỳ.",
+      "steps": [
+        "Gỡ app Mysbox khỏi store.",
+        "Cài lại app trong cùng chu kỳ.",
+        "Mở thẻ \"Box sales limit\", đọc used."
+      ],
+      "observation_point": "used trên thẻ \"Box sales limit\" sau khi cài lại",
+      "expected_result": "used vẫn gồm U box đã bán trước khi cài lại (không về 0).",
+      "oracle": {
+        "kb_ids": [
+          "plan-capacity-and-cycle#KB-070"
+        ],
+        "oracle_strength": "STRONG"
+      },
+      "status": "NEEDS_CONFIRMATION",
+      "open_question_draft": "Cần test case đã chạy PASS xác nhận cài lại app trong cùng chu kỳ giữ nguyên bộ đếm; sau khi cài lại, mốc chu kỳ có vẫn neo theo ngày cài đầu tiên không?",
+      "related_kb_ids": [
+        "plan-capacity-and-cycle#KB-058",
+        "plan-capacity-and-cycle#KB-059"
+      ],
+      "regression_watch_kb_ids": [],
+      "risk_refs": [
+        "Reinstall dùng để né hạn mức"
+      ],
+      "priority": "P1",
+      "automation_suitability": "NOT_SUITABLE",
+      "oq_id": "OQ-plans-billing-105"
+    },
+    {
+      "check_id": "CHK-016",
+      "dimension": "STATE_DATA",
+      "layer": "portal",
+      "title": "Nâng gói giữa chu kỳ: bộ đếm hạn mức vẫn gồm box đã bán trước khi nâng",
+      "applicability": {
+        "role": "merchant",
+        "state": "shop Free có used = U > 0, nâng lên plan Paid giữa chu kỳ",
+        "environment": "documented",
+        "surface_or_device": "merchant app"
+      },
+      "precondition": "Shop Free có used = U > 0 trong chu kỳ hiện tại.",
+      "steps": [
+        "Merchant nâng lên một plan Paid và duyệt subscription trên Shopify.",
+        "Mở thẻ \"Box sales limit\", đọc used / quota."
+      ],
+      "observation_point": "used trên thẻ \"Box sales limit\" sau khi nâng gói",
+      "expected_result": "used vẫn = U (gồm box bán trước khi nâng); quota đổi theo plan mới.",
+      "oracle": {
+        "kb_ids": [
+          "plan-capacity-and-cycle#KB-069",
+          "plan-capacity-and-cycle#KB-015"
+        ],
+        "oracle_strength": "STRONG"
+      },
+      "status": "NEEDS_CONFIRMATION",
+      "open_question_draft": "Cần test case đã chạy PASS xác nhận nâng gói giữa chu kỳ giữ box đã bán trước đó trong bộ đếm hạn mức; nếu plan mới có trial thì box bán trước khi nâng có ảnh hưởng gì tới trial không?",
+      "related_kb_ids": [],
+      "regression_watch_kb_ids": [],
+      "risk_refs": [],
+      "priority": "P1",
+      "automation_suitability": "HYBRID",
+      "oq_id": "OQ-plans-billing-105"
+    },
+    {
+      "check_id": "CHK-017",
+      "dimension": "STATE_DATA",
+      "layer": "portal",
+      "title": "Selling capacity admin nâng tay bị ghi đè ở lần reset chu kỳ kế tiếp và khi shop đổi plan",
+      "applicability": {
+        "role": "admin-staff",
+        "state": "admin đã nâng selling capacity tay",
+        "environment": "documented",
+        "surface_or_device": "admin panel"
+      },
+      "precondition": "Hai shop test A và B; admin nâng Box Selling Capacity của cả hai lên giá trị M lớn hơn quota plan.",
+      "steps": [
+        "Với shop A: chờ qua mốc chu kỳ kế tiếp, bán 1 đơn thật, đọc Box Selling Capacity.",
+        "Với shop B: đổi plan (nâng hoặc hạ) trong cùng chu kỳ, đọc Box Selling Capacity."
+      ],
+      "observation_point": "Box Selling Capacity ở admin panel Shop",
+      "expected_result": "Cả hai shop không còn giữ giá trị M nâng tay sau sự kiện tương ứng (giá trị bị ghi đè).",
+      "oracle": {
+        "kb_ids": [
+          "plan-capacity-and-cycle#KB-060",
+          "plan-capacity-and-cycle#KB-077",
+          "plan-capacity-and-cycle#KB-078"
+        ],
+        "oracle_strength": "STRONG"
+      },
+      "status": "READY",
+      "open_question_draft": null,
+      "related_kb_ids": [
+        "plan-capacity-and-cycle#KB-079"
+      ],
+      "regression_watch_kb_ids": [],
+      "risk_refs": [
+        "Capacity tặng tay bị ghi đè âm thầm ở lần reset chu kỳ hoặc đổi plan"
+      ],
+      "priority": "P2",
+      "automation_suitability": "NOT_SUITABLE"
+    },
+    {
+      "check_id": "CHK-018",
+      "dimension": "CORE",
+      "layer": "portal",
+      "title": "Đăng ký plan trả phí lần đầu: đủ số ngày trial của plan và dòng \"N - trial days left\"",
+      "applicability": {
+        "role": "merchant",
+        "state": "shop chưa từng đăng ký plan trả phí đó",
+        "environment": "documented",
+        "surface_or_device": "merchant app"
+      },
+      "precondition": "Biết số ngày trial T của plan đích (đọc ở admin panel Payment > Plan). Shop chưa từng đăng ký plan đó.",
+      "steps": [
+        "Merchant chọn plan và duyệt subscription trên Shopify.",
+        "Quay lại merchant app, đọc dòng trial."
+      ],
+      "observation_point": "Dòng \"N - trial days left\" trong merchant app",
+      "expected_result": "Shop vào trial và thấy \"T - trial days left\" (N = T, đủ số ngày trial lấy từ plan).",
+      "oracle": {
+        "kb_ids": [
+          "plan-capacity-and-cycle#KB-043",
+          "plan-capacity-and-cycle#KB-044",
+          "plan-capacity-and-cycle#KB-072"
+        ],
+        "oracle_strength": "STRONG"
+      },
+      "status": "READY",
+      "open_question_draft": null,
+      "related_kb_ids": [],
+      "regression_watch_kb_ids": [],
+      "risk_refs": [],
+      "priority": "P2",
+      "automation_suitability": "HYBRID"
+    },
+    {
+      "check_id": "CHK-019",
+      "dimension": "STATE_DATA",
+      "layer": "portal",
+      "title": "Đăng ký lại plan từng có: trial không bắt đầu lại, chỉ còn số ngày trial chưa dùng",
+      "applicability": {
+        "role": "merchant",
+        "state": "shop đã dùng d ngày trial của plan rồi huỷ",
+        "environment": "documented",
+        "surface_or_device": "merchant app + Shopify"
+      },
+      "precondition": "Plan có T ngày trial. Shop đăng ký plan, dùng d ngày (0 < d < T) rồi huỷ về Free.",
+      "steps": [
+        "Merchant đăng ký lại đúng plan đó và duyệt subscription.",
+        "Đọc dòng trial trong merchant app và ngày bắt đầu tính tiền trên trang duyệt subscription Shopify."
+      ],
+      "observation_point": "Dòng \"N - trial days left\"; số ngày trial trên trang duyệt subscription",
+      "expected_result": "N = T − d (không phải T).",
+      "oracle": {
+        "kb_ids": [
+          "plan-capacity-and-cycle#KB-045",
+          "plan-capacity-and-cycle#KB-043",
+          "plan-capacity-and-cycle#KB-072"
+        ],
+        "oracle_strength": "STRONG"
+      },
+      "status": "NEEDS_CONFIRMATION",
+      "open_question_draft": "Cần test case đã chạy PASS xác nhận đăng ký lại một plan từng có chỉ còn số ngày trial chưa dùng (T − d) chứ không bắt đầu lại trial?",
+      "related_kb_ids": [],
+      "regression_watch_kb_ids": [],
+      "risk_refs": [],
+      "priority": "P1",
+      "automation_suitability": "NOT_SUITABLE",
+      "oq_id": "OQ-plans-billing-105"
+    },
+    {
+      "check_id": "CHK-020",
+      "dimension": "INTEGRATION",
+      "layer": "code",
+      "title": "Box bán trong trial tăng \"sold in cycle\" và không bao giờ bị tính phí usage, kể cả sau khi trial kết thúc",
+      "applicability": {
+        "role": "system",
+        "state": "shop đang trial của plan Paid",
+        "environment": "documented",
+        "surface_or_device": "merchant app + admin panel Charges + Shopify Billing"
+      },
+      "precondition": "Shop đang trial của một plan Paid. Ghi lại Total sold in cycle S0.",
+      "steps": [
+        "Bán 3 đơn thật, mỗi đơn 1 box, trong thời gian trial.",
+        "Đọc Total sold in cycle / Box Sold in Cycle.",
+        "Chờ trial kết thúc và qua ít nhất một lần chạy job tạo phí usage hằng đêm.",
+        "Kiểm tab Charges của shop ở admin panel và Shopify admin > Settings > Billing."
+      ],
+      "observation_point": "Total sold in cycle; dòng phí usage / Usage charge của 3 box bán trong trial",
+      "expected_result": "Total sold in cycle = S0 + 3; không có khoản phí usage nào cho 3 box bán trong trial, kể cả sau khi trial kết thúc.",
+      "oracle": {
+        "kb_ids": [
+          "plan-capacity-and-cycle#KB-039",
+          "plan-capacity-and-cycle#KB-041"
+        ],
+        "oracle_strength": "STRONG"
+      },
+      "status": "NEEDS_CONFIRMATION",
+      "open_question_draft": "Cần test case đã chạy PASS xác nhận box bán trong trial chỉ làm tăng \"sold in cycle\" và không bị tính phí usage, kể cả tính ngược sau khi trial kết thúc?",
+      "related_kb_ids": [
+        "plan-capacity-and-cycle#KB-054",
+        "usage-fee-pricing#KB-014",
+        "usage-fee-pricing#KB-018"
+      ],
+      "regression_watch_kb_ids": [],
+      "risk_refs": [
+        "Tính phí sai cho box bán trong trial"
+      ],
+      "priority": "P1",
+      "automation_suitability": "NOT_SUITABLE",
+      "oq_id": "OQ-plans-billing-105"
+    },
+    {
+      "check_id": "CHK-021",
+      "dimension": "STATE_DATA",
+      "layer": "portal",
+      "title": "Box bán trong trial có trừ quota (used) hay không — chưa có oracle",
+      "applicability": {
+        "role": "system",
+        "state": "shop đang trial của plan Paid",
+        "environment": "documented",
+        "surface_or_device": "merchant app + admin panel"
+      },
+      "precondition": "Shop đang trial của plan Paid; ghi lại used U0 và Box Capacity Used C0.",
+      "steps": [
+        "Bán 2 đơn thật, mỗi đơn 1 box, trong thời gian trial.",
+        "Đọc used trên thẻ \"Box sales limit\" và Box Capacity Used ở admin.",
+        "Sau khi trial kết thúc giữa chu kỳ, bán thêm 1 box và đọc lại used."
+      ],
+      "observation_point": "used / Box Capacity Used trong và sau trial",
+      "expected_result": "",
+      "oracle": {
+        "kb_ids": [
+          "plan-capacity-and-cycle#KB-040",
+          "plan-capacity-and-cycle#KB-073",
+          "plan-capacity-and-cycle#KB-080"
+        ],
+        "oracle_strength": "NONE"
+      },
+      "status": "NEEDS_CONFIRMATION",
+      "open_question_draft": "Box bán trong thời gian trial có trừ hạn mức (used) hay chỉ làm tăng \"sold in cycle\"? Tài liệu nói cả hai chiều. Và khi trial kết thúc giữa chu kỳ, box bán sau đó trừ hạn mức từ 0 hay cộng tiếp phần đã bán trong trial?",
+      "related_kb_ids": [
+        "plan-capacity-and-cycle#KB-039",
+        "plan-capacity-and-cycle#KB-053",
+        "plan-capacity-and-cycle#KB-055"
+      ],
+      "regression_watch_kb_ids": [],
+      "risk_refs": [
+        "Tính phí sai cho box bán trong trial"
+      ],
+      "priority": "P1",
+      "automation_suitability": "UNKNOWN",
+      "oq_id": "OQ-plans-billing-007"
+    },
+    {
+      "check_id": "CHK-022",
+      "dimension": "CORE",
+      "layer": "portal",
+      "title": "Shop Early-bird thấy \"You're staying in the Early-bird plan.\" và gói không hết hạn qua các chu kỳ",
+      "applicability": {
+        "role": "merchant",
+        "state": "shop đang ở gói Early-bird (Founding member)",
+        "environment": "documented",
+        "surface_or_device": "merchant app + admin panel"
+      },
+      "precondition": "Một shop đang ở gói Early-bird.",
+      "steps": [
+        "Mở merchant app, xem phần plan / Pricing.",
+        "Sau khi qua ít nhất một mốc chu kỳ 30 ngày, mở lại admin panel Shop và merchant app."
+      ],
+      "observation_point": "Thông điệp plan trong merchant app; plan của shop ở admin panel",
+      "expected_result": "Merchant thấy \"You're staying in the Early-bird plan.\"; sau mốc chu kỳ shop vẫn ở gói Early-bird (không hết hạn, không bị chuyển plan).",
+      "oracle": {
+        "kb_ids": [
+          "plan-capacity-and-cycle#KB-061",
+          "plan-capacity-and-cycle#KB-074",
+          "plan-capacity-and-cycle#KB-075"
+        ],
+        "oracle_strength": "STRONG"
+      },
+      "status": "READY",
+      "open_question_draft": null,
+      "related_kb_ids": [],
+      "regression_watch_kb_ids": [],
+      "risk_refs": [],
+      "priority": "P3",
+      "automation_suitability": "NOT_SUITABLE"
+    },
+    {
+      "check_id": "CHK-023",
+      "dimension": "INTEGRATION",
+      "layer": "api",
+      "title": "Development store / Plus Trial nhận subscription thử, không thu tiền thật và không vào báo cáo thật",
+      "applicability": {
+        "role": "merchant",
+        "state": "store là development store hoặc Shopify Plus Trial",
+        "environment": "documented",
+        "surface_or_device": "Shopify Billing + admin panel Charges"
+      },
+      "precondition": "Một development store đã cài Mysbox.",
+      "steps": [
+        "Merchant đăng ký một plan Paid và duyệt subscription.",
+        "Ở admin panel Payment > Charges, đọc cờ test của Recurring charge mới.",
+        "Ở Shopify admin > Settings > Billing, kiểm có khoản thu thật không."
+      ],
+      "observation_point": "Cờ test của charge ở admin panel; Shopify Billing",
+      "expected_result": "Subscription là subscription thử (charge mang cờ test), không có khoản thu tiền thật; shop không được tính vào báo cáo doanh thu thật.",
+      "oracle": {
+        "kb_ids": [
+          "plan-capacity-and-cycle#KB-081",
+          "_object-level.plans-billing#KB-019",
+          "_object-level.plans-billing#KB-026"
+        ],
+        "oracle_strength": "STRONG"
+      },
+      "status": "NEEDS_CONFIRMATION",
+      "open_question_draft": "Cần test case đã chạy PASS xác nhận development store và store Plus Trial nhận subscription thử, không bị thu tiền thật và bị loại khỏi báo cáo thật; khi dev store chuyển thành store thật thì subscription xử lý thế nào?",
+      "related_kb_ids": [
+        "daily-usage-charge-and-charge-status#KB-070"
+      ],
+      "regression_watch_kb_ids": [],
+      "risk_refs": [
+        "Thu tiền nhầm store thử"
+      ],
+      "priority": "P1",
+      "automation_suitability": "NOT_SUITABLE",
+      "oq_id": "OQ-plans-billing-105"
+    }
+  ],
+  "coverage_by_feature_and_risk": [
+    {
+      "feature_id": "FEAT-01-plan-capacity-and-cycle",
+      "item": "Capability: Gán plan Free mặc định và khởi tạo bộ đếm khi cài app",
+      "kind": "capability",
+      "check_ids": [
+        "CHK-001"
+      ],
+      "coverage": "COVERED"
+    },
+    {
+      "feature_id": "FEAT-01-plan-capacity-and-cycle",
+      "item": "Capability: Chu kỳ quota 30 ngày neo ngày cài đầu, đặt lại kiểu lười",
+      "kind": "capability",
+      "check_ids": [
+        "CHK-013",
+        "CHK-014",
+        "CHK-015"
+      ],
+      "coverage": "PARTIAL",
+      "note": "Múi giờ/giờ mốc chu kỳ chưa có oracle."
+    },
+    {
+      "feature_id": "FEAT-01-plan-capacity-and-cycle",
+      "item": "Capability: Đếm box đã dùng vào quota",
+      "kind": "capability",
+      "check_ids": [
+        "CHK-002",
+        "CHK-003",
+        "CHK-004",
+        "CHK-005",
+        "CHK-016"
+      ],
+      "coverage": "COVERED"
+    },
+    {
+      "feature_id": "FEAT-01-plan-capacity-and-cycle",
+      "item": "Capability: Cờ Exclude Test Order và đơn test / preview order",
+      "kind": "capability",
+      "check_ids": [
+        "CHK-006",
+        "CHK-007",
+        "CHK-008"
+      ],
+      "coverage": "PARTIAL",
+      "note": "Hành vi ở cờ mặc định đang mâu thuẫn (CHK-008)."
+    },
+    {
+      "feature_id": "FEAT-01-plan-capacity-and-cycle",
+      "item": "Capability: Merchant theo dõi mức dùng hạn mức",
+      "kind": "capability",
+      "check_ids": [
+        "CHK-009",
+        "CHK-010",
+        "CHK-011"
+      ],
+      "coverage": "COVERED"
+    },
+    {
+      "feature_id": "FEAT-01-plan-capacity-and-cycle",
+      "item": "Capability: Admin xem và điều chỉnh capacity",
+      "kind": "capability",
+      "check_ids": [
+        "CHK-012",
+        "CHK-017"
+      ],
+      "coverage": "COVERED"
+    },
+    {
+      "feature_id": "FEAT-01-plan-capacity-and-cycle",
+      "item": "Capability: Trial của plan trả phí",
+      "kind": "capability",
+      "check_ids": [
+        "CHK-018",
+        "CHK-019",
+        "CHK-020",
+        "CHK-021"
+      ],
+      "coverage": "PARTIAL",
+      "note": "Trial có trừ quota hay không đang mâu thuẫn (CHK-021)."
+    },
+    {
+      "feature_id": "FEAT-01-plan-capacity-and-cycle",
+      "item": "Capability: Loại plan và quyền lợi (Free, Paid, Early-bird, dev store)",
+      "kind": "capability",
+      "check_ids": [
+        "CHK-001",
+        "CHK-022",
+        "CHK-023"
+      ],
+      "coverage": "COVERED"
+    },
+    {
+      "feature_id": "FEAT-01-plan-capacity-and-cycle",
+      "item": "Risk P1: Reset kiểu lười dễ đọc sai biên chu kỳ",
+      "kind": "risk",
+      "check_ids": [
+        "CHK-013",
+        "CHK-014"
+      ],
+      "coverage": "PARTIAL",
+      "note": "Múi giờ chưa xác nhận."
+    },
+    {
+      "feature_id": "FEAT-01-plan-capacity-and-cycle",
+      "item": "Risk: Capacity tặng tay bị ghi đè âm thầm",
+      "kind": "risk",
+      "check_ids": [
+        "CHK-017"
+      ],
+      "coverage": "COVERED"
+    },
+    {
+      "feature_id": "FEAT-01-plan-capacity-and-cycle",
+      "item": "Risk P1: Hạn mức Free production chưa xác nhận",
+      "kind": "risk",
+      "check_ids": [
+        "CHK-001",
+        "CHK-010"
+      ],
+      "coverage": "GAP",
+      "note": "Không có oracle cho con số; check dùng quota của shop test."
+    },
+    {
+      "feature_id": "FEAT-01-plan-capacity-and-cycle",
+      "item": "Layer storefront",
+      "kind": "layer",
+      "check_ids": [],
+      "coverage": "GAP",
+      "note": "Feature không có hành vi storefront riêng (profile coverage_matrix storefront covered=false); ẩn storefront khi chạm trần thuộc capacity-limit-enforcement."
+    }
+  ],
+  "excluded_dimensions": [
+    {
+      "dimension": "REGRESSION",
+      "reason": "Run không có base nên không có hành vi khác base; shard không có item KNOWN_DEFECT."
+    }
+  ],
+  "last_updated": {
+    "date": "2026-10-16",
+    "ccr_ref": "bootstrap"
+  }
+}

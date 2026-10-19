@@ -83,7 +83,7 @@ Chạy ngay sau C0 và **sau khi đã khoá lock** (§16), trước khi dispatch
 
 Explore chỉ chạy khi operator yêu cầu tường minh cho một claim — khi đó run thành `INCREMENTAL_UPDATE` (§10a, mode settling).
 
-`authored_by` của nguồn `S3` không được trùng người gửi CCR — người gửi không tự làm authority cho chính mình.
+`authored_by` của nguồn `S3` loại `spec_doc` / `dev_doc` / `po_dev_confirm` không được trùng người gửi CCR — người gửi không tự làm authority cho chính mình. `test_case` là ngoại lệ: nó là record chạy thật trên hệ thống quản lý test (Testlane), không phải ý kiến người viết, nên test case PASS do chính người gửi chạy vẫn là `S3` khi có đủ id test case + kết quả PASS + ngày chạy + build/bản đã test (chủ repo chốt 2026-10-11).
 
 **Kiểm trùng:** sau khi ghi plan, chạy `node scripts/ctx/dedup.mjs --run <id>`. Claim trùng (cùng object, chung `target_kb_ids` hoặc cùng `confirmation_source`) với CCR đang `IN_PROGRESS`/`PUBLISHED` → bỏ claim đó khỏi run và nêu trong `results`; mọi claim đều trùng → `REJECTED` + `reason: duplicate_of`. `covered_by_open_question` chỉ là thông tin, không loại claim.
 
