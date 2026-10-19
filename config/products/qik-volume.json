@@ -12,7 +12,7 @@
     "qvd"
   ],
   "status": "ACTIVE",
-  "status_note": "Tạo config 2026-10-05: project có sẵn trên QA Hub (list_projects) nhưng chưa có config/products/qik-volume.json và chưa có knowledge/products/qik-volume/ nào. Đây là lần bootstrap đầu tiên, chưa có published_context_version.",
+  "status_note": "Tạo config 2026-10-05: project có sẵn trên QA Hub (list_projects) nhưng chưa có config/products/qik-volume.json và chưa có knowledge/products/qik-volume/ nào. Đây là lần bootstrap đầu tiên, chưa có published_context_version. Cập nhật 2026-10-18: bật explore (portal/storefront/api) trên store staging do operator cấp qua QVL_*; playbook ở config/products/qik-volume/explore-playbook.md.",
   "product_note": "Qikify Volume Discounts (QVL trên Testlane, QVD trên Jira) là Shopify app giảm giá theo số lượng — 3 offer type chính hay stack/conflict nhau: Quantity Break (3 template: same-product breaks, Buy X Get Y, subscription), Multibuy Mix & Match Combo, Wholesale Pricing. Bộ context trên QA Hub (8 nhóm, 21 file, upload 2026-10-01) là KB do chính QA tự biên soạn từ repo `qa-volume-kb` (NGUỒN KHÁC qikfiliate: không phải tài liệu dev-gen từ source code) — nhiều mục trong feature-map.md và các file 01-10 là live-confirmed finding từ Playwright MCP test thật trên store `test-vl-1` (ngày 2026-09-03 tới 2026-09-11), kèm trích dẫn cụ thể (offer id, số liệu cart, câu warning nguyên văn). Một số file khác (product-overview.md, product-glossary.md, testing-environments.md, testing-test-data.md, testing-regression-checklist.md) còn ở trạng thái skeleton/TODO — doc-ingest-explorer sẽ phải đẩy phần lớn nội dung các file này vào not_documented thay vì bịa claim. feature-map.md tự ghi nhận ít nhất 1 open question nghiệp vụ chưa có lời giải (thứ tự ưu tiên khi 2 offer cùng qualify một cart) — cần giữ nguyên dạng NEEDS_CONFIRMATION, không tự suy luận thêm.",
   "qa_hub": {
     "project_id": "proj-da2fa9cc-9e7b-42b9-9f4a-7c35a530e462",
@@ -22,15 +22,24 @@
     "project_id_note": "Xác minh 2026-10-05 bằng list_projects trên qa-hub-production."
   },
   "modes": {
-    "explore_enabled": false,
+    "explore_enabled": true,
     "default_mode_bootstrap": "DOC_BOOTSTRAP",
     "default_mode_update": "CCR_INGEST",
     "allowed_modes": [
       "DOC_BOOTSTRAP",
       "CCR_INGEST",
-      "REFRESH"
+      "REFRESH",
+      "RECONCILE",
+      "INCREMENTAL_UPDATE",
+      "BROAD_BOOTSTRAP",
+      "ZERO_DOC_BOOTSTRAP"
     ],
-    "allowed_explorers": []
+    "allowed_explorers": [
+      "portal-explorer",
+      "storefront-explorer",
+      "api-explorer"
+    ],
+    "_note": "Bật explore 2026-10-18. Đã có base v1 từ DOC_BOOTSTRAP (CTX-20261005-01) — KB QA live-test trên store cũ test-vl-1. Explore dùng chủ yếu cho REFRESH (xác minh lại trên store staging hiện tại) và RECONCILE (open question như overlap priority). DOC_BOOTSTRAP/CCR_INGEST giữ nguyên."
   },
   "doc_input": {
     "enabled": true,
@@ -46,35 +55,115 @@
     "allow_supersede_from_changelog": true
   },
   "environments": {
-    "default": "documented",
+    "default": "staging",
     "allowed": [
+      "staging",
       "documented"
     ],
     "forbidden": [
-      "production",
-      "staging"
+      "production"
     ],
+    "staging": {
+      "api_base_env": "QVL_API_BASE",
+      "openapi_base_env": null,
+      "portal_base_env": "QVL_SHOPIFY_ADMIN_APP_URL",
+      "expected_api_base": "https://staging-bkv-api.qikify.com",
+      "additional_api_hosts": [
+        "https://staging-bkv-embedded.qikify.com"
+      ],
+      "additional_api_hosts_note": "Operator xác nhận 2026-10-19 (trả lời PC-1 / OQ-discount-offers-067 của CTX-20261018-01): staging-bkv-embedded.qikify.com là host staging thật — document của iframe merchant app tải từ đây. Request tới host này không còn gắn host_not_in_expected_api_base.",
+      "_note": "expected_api_base do operator cung cấp 2026-10-18 (không kèm /api — endpoint là /api/...). Run explore đầu tiên phải xác nhận qua network capture rằng portal thực sự gọi host này; khác → ghi unknowns và báo operator, không tự sửa."
+    },
     "documented": {
       "api_base_env": null,
       "openapi_base_env": null,
       "portal_base_env": null,
-      "expected_api_base": null
+      "expected_api_base": null,
+      "_note": "Giữ cho DOC_BOOTSTRAP (scope.environment phải là documented)."
+    }
+  },
+  "explore": {
+    "playbook": "config/products/qik-volume/explore-playbook.md",
+    "surfaces": {
+      "portal": {
+        "enabled": true,
+        "base_env": "QVL_SHOPIFY_ADMIN_APP_URL",
+        "auth": "operator_session_handover",
+        "session": "shopify_admin_cookie + app session token (iframe)",
+        "embedded": true,
+        "note": "App staging 'Staging BK Volume' (handle staging-bk-volume) chạy trong iframe Shopify admin. Operator tự login Shopify admin (2FA) trong browser Playwright rồi bàn giao; explorer không tự login."
+      },
+      "storefront": {
+        "enabled": true,
+        "base_env": "QVL_STORE_DOMAIN",
+        "password_env": "QVL_STOREFRONT_PASSWORD",
+        "checkout_boundary": "cart",
+        "buyer_states": [
+          "guest"
+        ],
+        "note": "Dừng ở cart, không checkout. Luôn vào domain thật qua /password, không dùng link Preview on Online Store."
+      },
+      "api": {
+        "enabled": true,
+        "base_env": "QVL_API_BASE",
+        "spec_env": null,
+        "note": "Không có OpenAPI; api-explorer chỉ chạy runtime-trace trên network capture của portal/storefront."
+      },
+      "db": {
+        "enabled": false,
+        "note": "Chưa có read-only DB access staging."
+      },
+      "code": {
+        "enabled": false,
+        "note": "Chưa cấp repo/revision."
+      },
+      "admin_panel": {
+        "enabled": false,
+        "note": "Admin page/Config của Ownego (ai_prompt_limit, custom config SDK) chưa bật; khi bật chỉ đọc."
+      }
+    },
+    "account_guard": {
+      "verify": "Shopify admin URL chứa /store/<QVL_STORE_HANDLE>/ + app là /apps/staging-bk-volume + storefront host == QVL_STORE_DOMAIN + store là development store",
+      "expected_store_handle_env": "QVL_STORE_HANDLE",
+      "expected_store_domain_env": "QVL_STORE_DOMAIN",
+      "expected_app_handle": "staging-bk-volume",
+      "note": "Xác minh là bước đầu tiên và sau mỗi lần operator bàn giao session lại. Sai store, app không phải bản staging, hoặc store không phải development store là stop condition. Chi tiết ở playbook §2."
     }
   },
   "credentials": {
-    "env_prefix": null,
-    "required_env": [],
+    "env_prefix": "QVL_",
+    "required_env": [
+      "QVL_STORE_HANDLE",
+      "QVL_STORE_DOMAIN",
+      "QVL_SHOPIFY_ADMIN_APP_URL",
+      "QVL_STOREFRONT_PASSWORD",
+      "QVL_API_BASE"
+    ],
     "secondary_account_env": [],
-    "negative_auth_env": []
+    "negative_auth_env": [],
+    "_note": "Thêm 2026-10-18. Không có email/password Shopify admin trong .env — session do operator bàn giao như mysbox. Tiền tố QVL_ của repo này độc lập với QVL_BASE_URL của repo automation QVL-Staging."
   },
   "defaults": {
     "object_key_fallback": null,
-    "role": null,
-    "mutation_policy": "NO_MUTATION",
+    "role": "merchant",
+    "mutation_policy": "SAFE_REVERSIBLE_ONLY",
     "forbidden_actions": [
-      "*"
+      "theme_change",
+      "checkout",
+      "real_payment",
+      "plan_change",
+      "charge",
+      "uninstall",
+      "delete_non_qa_data",
+      "edit_non_qa_offer",
+      "store_settings_change",
+      "admin_config_write",
+      "contact_support",
+      "submit_feedback",
+      "install_third_party_app"
     ],
-    "cleanup_required": false
+    "cleanup_required": true,
+    "_note": "Không có ngoại lệ checkout: storefront dừng ở cart (discount Function đã áp trong cart). Phạm vi được phép và cách cleanup ở playbook §5."
   },
   "risk_tier": "UNKNOWN",
   "supersede_policy": {
