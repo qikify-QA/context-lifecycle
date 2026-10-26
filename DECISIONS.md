@@ -239,6 +239,12 @@ Phát hiện kèm theo: `scripts/lib/changelog.mjs` đếm chữ thường trong
 
 ---
 
+### 2.21 Item `ADDED` có `requires_human_decision` vẫn publish, kèm OQ hỏi owner (2026-10-11)
+
+Ba run CCR đầu tiên sau tái cấu trúc (CBS-001/002/004) đều có item mới chạm permission hoặc mất dữ liệu, có test case PASS, và là oracle STRONG duy nhất của một check P1. Luật cũ chỉ định nghĩa "chưa có quyết định → không publish" cho `CONFLICTED`/`SUPERSEDE`, nên reviewer xếp mức khác nhau giữa các run (MINOR ở CBS-002, MAJOR ở CBS-001/004). Operator chọn: cờ trên `ADDED` là cờ rủi ro, item vẫn publish theo `knowledge_kind` đã gán, câu hỏi cho owner nằm ở một OQ mở. Giữ item lại sẽ bỏ mất kiến thức đã có test PASS chỉ để chờ một xác nhận ý định. Luật nằm ở `contracts/supersede.md` mục "Quyết định của người".
+
+Cùng đợt: id nháp `OQ-DRAFT-*` của normalizer lọt vào profile/checklist ở cả ba run mà audit không bắt; đã thêm pattern vào `contracts/forbidden-fields.json`.
+
 ## 3. Phát hiện làm đổi thiết kế
 
 | Phát hiện | Hệ quả |
@@ -296,6 +302,7 @@ Contract chỉ nói luật; các con số dưới đây là trạng thái dữ l
 | 2026-10-11 | `knowledge/products/teeinblue/font/CHANGELOG.md` nhắc định danh account explore (`sub=…`) | Chờ chủ repo quyết sửa (đụng nội dung `knowledge/`) |
 | 2026-10-11 | 7 `feature-summary.md` của teeinblue (artwork, asset-category, campaign, font, order, sdk, translation) chưa có dòng 2 `**Published context version:** N` | `audit-preview.mjs` coi là BLOCKING cho object được publish lại; sửa khi object đó có run kế tiếp |
 | 2026-10-11 | `teeinblue/global-option` và `teeinblue/product-base` thiếu `publish-meta.json` → `UNPUBLISHED` trong manifest | **Đã xử lý 2026-10-18** (chủ repo quyết): ghi tay `publish-meta.json` — global-option v1 (2026-09-16, ZERO_DOC_BOOTSTRAP, CTX-20260915-01), product-base v3 (2026-09-14, RECONCILE, sau 3 lần publish CTX-20260910-04/20260913-02/20260914-01; version cũ dạng "v2.1" quy về số nguyên). Ngoại lệ có chủ đích với luật "chỉ `publish-apply.mjs` ghi `knowledge/`"; phát hành trong qa-knowledge `ctx-2026-10-18` |
+| 2026-10-18 | `teeinblue/global-option` checklist base (reviewer CTX-20261018-02): CHK-02-004 STRONG P1 có oracle là item `OBSERVED_CURRENT`/`UNRESOLVED` và KB-029 legacy không có `confirmation_source`; CHK-02-001/003/010/018 và CHK-01-012 lấy item `UNRESOLVED` làm oracle | Chủ repo quyết ghi nợ (2026-10-19); sửa khi object có run kế tiếp chạm các check này |
 | 2026-10-11 | 4 run cũ (`CTX-20260909-01`, `CTX-20260910-01/02/03`) không có `run-manifest.json`; 11 manifest dùng `ctx_run_id` thay vì `run_id` | `ops-board` đọc cả hai key; run mới dùng `scripts/ctx/new-run.mjs` |
 
 ## 7. Sự cố đã xảy ra

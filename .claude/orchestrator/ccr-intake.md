@@ -33,7 +33,7 @@ Trình tự của orchestrator cho run xuất phát từ Context Change Request.
 
 ## 4. Quyết định của owner
 
-Diff có entry `requires_human_decision: true` → hỏi đúng vai trò trong `owners` (qua operator hoặc note trên Proposal), không tự quyết. Có quyết định → ghi `input/approvals.json` (vai trò + link, không tên/email) rồi chạy lại diff analyzer. Chưa có → item đó không publish; nếu không còn gì publish được thì `DEFERRED` + `reason: awaiting_decision` + `approval_needed`. Chi tiết: `contracts/supersede.md` mục "Quyết định của người".
+Diff có entry `CONFLICTED`/`SUPERSEDE` với `requires_human_decision: true` → hỏi đúng vai trò trong `owners` (qua operator hoặc note trên Proposal), không tự quyết. Có quyết định → ghi `input/approvals.json` (vai trò + link, không tên/email) rồi chạy lại diff analyzer. Chưa có → item đó không publish; nếu không còn gì publish được thì `DEFERRED` + `reason: awaiting_decision` + `approval_needed`. Entry `ADDED` có cờ này vẫn publish, kèm OQ hỏi owner. Chi tiết: `contracts/supersede.md` mục "Quyết định của người".
 
 ## 4b. Trong lúc chạy
 

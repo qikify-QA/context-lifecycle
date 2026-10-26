@@ -130,6 +130,8 @@ Blocker (a), (b), (c), (d), (f) và STEP 0 `shipped: UNKNOWN` không tự giải
    - `KEEP_BOTH` → giữ `CONFLICTED`, OQ `CONFLICT` vẫn mở.
 4. Chưa có quyết định → item đó không publish; phần sạch vẫn publish (§12.4 rule 3); Proposal nhận `DEFERRED` + `reason: awaiting_decision` + `approval_needed: [{kb_id, blocker, owner_role}]` nếu không còn phần nào publish được.
 
+Các bước 1–4 chỉ áp cho entry `CONFLICTED`/`SUPERSEDE`. Entry `ADDED` cũng có thể mang `requires_human_decision: true` (item mới chạm permission, mất dữ liệu, P1) — đó là **cờ rủi ro**, không phải điều kiện publish: item vẫn publish theo `knowledge_kind` normalizer đã gán (vd `CONFIRMED_EXPECTED` từ test case PASS) và vẫn được làm oracle; orchestrator mở một OQ `NEEDS_CONFIRMATION` hỏi owner xác nhận ý định, ghi `kb_ids` của item. Owner trả lời ngược với item → xử lý như CCR mới (item đã publish là base).
+
 `validate-run.mjs` chặn mọi `SUPERSEDE` có `requires_human_decision` mà thiếu approval `ACCEPT_CANDIDATE`.
 
 ## Ba luật kèm theo

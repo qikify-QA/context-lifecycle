@@ -40,6 +40,16 @@ test("lock: hết TTL thì run khác claim lại được, kèm cảnh báo", as
   assert.equal((await verifyAll([obj("a")], { ctxRunId: "CTX-1", dir, now: t0 + 62_000 })).ok, false);
 });
 
+test("lock: cùng run claim lại thì gia hạn TTL, giữ proposal_id", async () => {
+  const dir = await tmp();
+  const t0 = Date.parse("2026-10-01T00:00:00Z");
+  await acquireAll([obj("a")], { ctxRunId: "CTX-1", proposalId: "CBS-1", dir, ttlSeconds: 60, now: t0 });
+  await acquireAll([obj("a")], { ctxRunId: "CTX-1", dir, ttlSeconds: 60, now: t0 + 50_000 });
+  assert.equal((await verifyAll([obj("a")], { ctxRunId: "CTX-1", dir, now: t0 + 90_000 })).ok, true);
+  const held = JSON.parse(await readFile(path.join(dir, "p__a.lock"), "utf8"));
+  assert.equal(held.proposal_id, "CBS-1");
+});
+
 test("lock: verify/release chỉ đụng lock của chính run", async () => {
   const dir = await tmp();
   await acquireAll([obj("a")], { ctxRunId: "CTX-1", dir });

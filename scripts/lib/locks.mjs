@@ -1,7 +1,7 @@
 // Lock theo object (contract §16). Exclusive-create nguyên tử; claim hết hoặc
 // không claim gì; lock hết TTL coi như free.
 
-import { open, readFile, unlink, mkdir, rename } from "node:fs/promises";
+import { open, readFile, writeFile, unlink, mkdir, rename } from "node:fs/promises";
 import path from "node:path";
 import { lockFile, locksDir as defaultLocksDir } from "./run-layout.mjs";
 
@@ -51,6 +51,8 @@ export async function acquireAll(keys, { ctxRunId, proposalId = null, ttlSeconds
     }
     const held = await readLock(file);
     if (held?.ctx_run_id === ctxRunId) {
+      // Cùng run claim lại = gia hạn TTL; giữ proposal_id cũ nếu lần này không truyền.
+      await writeFile(file, JSON.stringify({ ...body, proposal_id: proposalId ?? held.proposal_id ?? null }, null, 2) + "\n");
       claimed.push(file);
       continue;
     }
