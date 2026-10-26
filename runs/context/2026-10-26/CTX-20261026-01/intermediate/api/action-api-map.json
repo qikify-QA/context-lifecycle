@@ -1,0 +1,5785 @@
+{
+ "schema_version": "1.0",
+ "artifact_type": "APICapabilityArtifact",
+ "artifact_id": "APICAP-CTX-20261026-01",
+ "workflow_id": "CTX-20261026-01",
+ "producer": "api-explorer",
+ "source_refs": [
+  "raw/network/ACT-*.json (42 file)",
+  "raw/portal/portal-evidence.json",
+  "config/products/teeinblue.json",
+  "config/products/teeinblue/explore-playbook.md §6",
+  "knowledge/products/teeinblue/product-base/features/mockup-attachment/kb.json (read-only, conflict check)",
+  "knowledge/products/teeinblue/artwork/features/layer-config-image/profile.json (read-only, conflict check)"
+ ],
+ "upstream_artifact_ids": [
+  "FDA-CTX-20261026-01-portal"
+ ],
+ "status": "READY",
+ "confidence": "MEDIUM",
+ "observations": [
+  "Base host: all 151 API entries go to https://staging-api.teeinblue.com == expected_api_base (TIB_API_BASE). 20 PUTs go to oe-cdn.sgp1.digitaloceanspaces.com (host_not_in_expected_api_base, APIOP-011).",
+  "158 entries in 42 captures labeled: mapped 136, polling 15, unrelated 7, unknown 0; 28 APIOPs, every one traces to >= 1 ACT-ID.",
+  "Upload flow (both libraries, 20 chains): POST /api/users/{user_id}/temporary-files/upload-url -> PUT presigned Spaces URL -> POST /api/layer-images/by-temporary-file | /api/mockup-layers/by-temporary-file -> GraphQL get(ids) status poll every 2.0 s until url set -> list reload. Chain links verified by data (path, temporary_file_id) in 20/20.",
+  "Image-layer library is GraphQL-backed for reads/rename (layer_images_connection cursor 20/page, update_layer_images) and REST for categories, move, delete, in-use; mockup-layer library is REST throughout except the status poll (mockup_layers get).",
+  "Category endpoints differ: image categories POST {name, type:'clipart'} and GET ?type=clipart; mockup categories have no type. Deleting a category (204) leaves its images uncategorized in both libraries (1 sample each).",
+  "Non-image content (33 B text named .png) is rejected at by-temporary-file with 422 errors.temporary_file_id in BOTH libraries (1 sample each).",
+  "Presigned URL: X-Amz-Expires=300 (20/20), bucket prefix teeinblue-staging/temporary-files/<date>/ - this was 'not observable' in published KB-050 (response was fully redacted then).",
+  "DELETE /api/layer-images/{id} carries the full current artwork JSON as body; 400 'This image has already been added to the current artwork.' when the posted (unsaved) artwork references the image. DELETE /api/mockup-layers/{id} has no body."
+ ],
+ "assumptions": [
+  "GraphQL get(ids) calls are labeled 'polling' (client-initiated status poll inside the action window, fixed 2.0 s cadence, stops on completion) and still mapped to APIOP-013/025 and their ACT-IDs.",
+  "staging-sdk star-maps JSON in ACT-01-09-001 labeled unrelated: static editor data, explorer note says no library API on select.",
+  "'Daily' quota for by-temporary-file is inferred from x-ratelimit-reset starting at 86400."
+ ],
+ "unknowns": [
+  "host_not_in_expected_api_base: oe-cdn.sgp1.digitaloceanspaces.com (APIOP-011) - config has no environments.staging.additional_api_hosts; operator must confirm before items depending on it are oracle_eligible. Not edited config.",
+  "Single-sample rules (confidence LOW, no required/enum/boundary inferred): whitespace category name 422 (APIOP-006, APIOP-019: 1 each); GET/PUT/DELETE category by id (1 each per library); category delete -> images uncategorized (1 per library); empty image name accepted (APIOP-014, 1); move with category_id null accepted (APIOP-015, 1); DELETE image 400 in-use (APIOP-016, 1); in-use returns [] (APIOP-017/028, 1 each, non-empty never seen); by-temporary-file 422 non-image (APIOP-012/024, 1 each); 27 MB accepted (1 per library, upper bound unknown); relay search _ilike and after-cursor (1 each); mockup s= search (1); 422 not consuming rate-limit quota (1).",
+  "Whether DELETE /api/layer-images/{id} also checks saved artworks other than the posted one.",
+  "Whether the temp file in storage is cleaned after a 422.",
+  "Last DELETE in ACT-01-10-004 (11163): no status captured; deletion confirmed only by portal final-leftover-check, not by network.",
+  "Server-side enforcement of x-acting-user-id / tenant isolation for library ids (not tested)."
+ ],
+ "conflicts": [
+  {
+   "conflict_id": "APICONF-CTX20261026-01-01",
+   "topic": "Mockup upload of non-image file disguised as .png",
+   "side_a": {
+    "source": "knowledge/products/teeinblue/product-base/features/mockup-attachment/kb.json KB-081 (published, observed 2026-09-13)",
+    "claim": "backend accepts the fake png, creates mockup_layers row (width 0, height 0, urls ''), card stuck 'Rendering' forever, no error"
+   },
+   "side_b": {
+    "source": "raw/network/ACT-02-05-001.json#2 (APIOP-024)",
+    "claim": "POST /api/mockup-layers/by-temporary-file -> 422 {message/errors.temporary_file_id: 'This file type is not supported. Please upload a PNG, JPEG, GIF or WebP image.'}; no row created (GET list unchanged)",
+    "observed_count": 1
+   },
+   "note": "Same behaviour in image library (ACT-01-05-001). Old rows 4502/4503 from KB-081 still present. Not resolved by api-explorer (§8)."
+  },
+  {
+   "conflict_id": "APICONF-CTX20261026-01-02",
+   "topic": "Automatic polling for mockup render status",
+   "side_a": {
+    "source": "KB-084 / KB-051 (mockup-attachment)",
+    "claim": "no automatic polling after mockup shows 'Rendering' (0 entries in 8.2 s); user must click Refresh (.la-sync) which re-queries GraphQL 'mockups'"
+   },
+   "side_b": {
+    "source": "raw/network/ACT-02-04-001.json#3-4, ACT-02-04-002.json#12, ACT-02-05-003.json#3-7 (APIOP-025)",
+    "claim": "media library modal polls GraphQL mockup_layers(ids) every 2.0 s after upload until url is set, then reloads list",
+    "observed_count": 8
+   },
+   "note": "Scope may differ: KB-084 is the product-base mockup card after assignment (resource 'mockups'); side_b is the media library modal after upload (resource 'mockup_layers'). Recorded so orchestrator/reviewer can decide whether this is a conflict or two distinct mechanisms."
+  },
+  {
+   "conflict_id": "APICONF-CTX20261026-01-03",
+   "topic": "Concurrency ~3 files on multi-upload (KB-083)",
+   "side_a": {
+    "source": "KB-083 (mockup-attachment)",
+    "claim": "selecting 5 files at once -> only 3 upload-url requests, 2 files silently dropped"
+   },
+   "side_b": {
+    "source": "raw/network/ACT-02-04-002.json (4 upload-url, 4 by-temporary-file 201 for 4 raster files) and ACT-01-04-003.json (6/6 in image library)",
+    "claim": "no drop observed",
+    "observed_count": 2
+   },
+   "note": "Not the same input: mockup sample had 4 raster files (svg rejected client-side), so 5 raster files were not re-tested in the mockup library. Partial evidence only; not a resolution."
+  },
+  {
+   "conflict_id": "APICONF-CTX20261026-01-04",
+   "topic": "New evidence for existing CONF-API-CTX20260921-03-01 (GET /api/layer-image-categories?type=clipart [] vs GraphQL clipart_categories 10 rows)",
+   "side_a": {
+    "source": "knowledge/products/teeinblue/artwork/features/layer-config-image/profile.json (CONF-API-CTX20260921-03-01, UNRESOLVED)",
+    "claim": "REST returns [] while GraphQL returns 10 rows 'for the same category'"
+   },
+   "side_b": {
+    "source": "raw/network/ACT-01-03-002.json#0-1, ACT-01-09-002.json#0,#2 (APIOP-005/006 vs APIOP-003)",
+    "claim": "In one session: REST list returned exactly the row created via POST /api/layer-image-categories (id 37, type clipart) while GraphQL clipart_categories returned ids 5987-6029 without 37; the two id sets never overlap",
+    "observed_count": 2
+   },
+   "note": "Inferred reading (not asserted): the two calls read different collections (image-library categories vs Clipart Categories), which would explain [] vs 10 rows without a data/cache defect. Resolution belongs to orchestrator/reviewer."
+  }
+ ],
+ "blocking_issues": [],
+ "payload": {
+  "api_context": {
+   "environment": "staging",
+   "auth_role": "merchant-owner (account id 266 'Linh explorer', store linh-explorer-2.myshopify.com per portal evidence)",
+   "base_url_env": "TIB_API_BASE",
+   "expected_api_base": "https://staging-api.teeinblue.com",
+   "observed_api_base": "https://staging-api.teeinblue.com",
+   "base_matches_expected": true,
+   "additional_api_hosts_configured": [],
+   "hosts_seen": {
+    "staging-api.teeinblue.com": {
+     "entries": 131,
+     "check": "matches_expected_api_base"
+    },
+    "oe-cdn.sgp1.digitaloceanspaces.com": {
+     "entries": 20,
+     "check": "host_not_in_expected_api_base"
+    },
+    "staging-sdk.teeinblue.com": {
+     "entries": 6,
+     "check": "host_not_in_expected_api_base"
+    },
+    "cloudflareinsights.com": {
+     "entries": 1,
+     "check": "host_not_in_expected_api_base"
+    }
+   },
+   "mode_variant": "runtime-trace (no request issued by api-explorer; spec env TIB_OPENAPI_BASE not consulted)"
+  },
+  "label_counts": {
+   "mapped": 136,
+   "polling": 15,
+   "unrelated": 7,
+   "total": 158,
+   "captures": 42,
+   "captures_with_zero_entries": [
+    "raw/network/ACT-01-05-002.json",
+    "raw/network/ACT-02-05-002.json",
+    "raw/network/ACT-02-06-001.json"
+   ]
+  },
+  "label_reason_legend": {
+   "R-API-ACTION": "request to expected_api_base in the action window whose body/ids/route correspond to the action described in portal evidence",
+   "R-UPLOAD-CDN": "presigned PUT to object storage; linked to the action by path equality with upload-url response meta.signed_url/data.path (data link, not timing)",
+   "R-STATUS-POLL": "repeated get(ids) status query at fixed ~2.0 s cadence after the previous response, stops once url/thumbnail filled; counted as polling (action-initiated), still mapped to an APIOP and ACT",
+   "R-SDK-STATIC": "static data file from staging-sdk host, editor re-render side effect, not part of library API",
+   "R-ANALYTICS": "analytics beacon"
+  },
+  "network_labels": [
+   {
+    "capture": "raw/network/ACT-00-01-001.json",
+    "entry_index": 0,
+    "seq": 1,
+    "method": "GET",
+    "host": "staging-api.teeinblue.com",
+    "label": "mapped",
+    "apiop_id": "APIOP-001",
+    "reason": "R-API-ACTION: request to expected_api_base inside action window, payload/ids match the action"
+   },
+   {
+    "capture": "raw/network/ACT-00-01-001.json",
+    "entry_index": 1,
+    "seq": 2,
+    "method": "GET",
+    "host": "staging-api.teeinblue.com",
+    "label": "mapped",
+    "apiop_id": "APIOP-002",
+    "reason": "R-API-ACTION: request to expected_api_base inside action window, payload/ids match the action"
+   },
+   {
+    "capture": "raw/network/ACT-01-01-001.json",
+    "entry_index": 0,
+    "seq": 1,
+    "method": "POST",
+    "host": "staging-api.teeinblue.com",
+    "label": "mapped",
+    "apiop_id": "APIOP-003",
+    "reason": "R-API-ACTION: request to expected_api_base inside action window, payload/ids match the action"
+   },
+   {
+    "capture": "raw/network/ACT-01-01-001.json",
+    "entry_index": 1,
+    "seq": 2,
+    "method": "POST",
+    "host": "staging-api.teeinblue.com",
+    "label": "mapped",
+    "apiop_id": "APIOP-004",
+    "reason": "R-API-ACTION: request to expected_api_base inside action window, payload/ids match the action"
+   },
+   {
+    "capture": "raw/network/ACT-01-01-001.json",
+    "entry_index": 2,
+    "seq": 3,
+    "method": "GET",
+    "host": "staging-api.teeinblue.com",
+    "label": "mapped",
+    "apiop_id": "APIOP-005",
+    "reason": "R-API-ACTION: request to expected_api_base inside action window, payload/ids match the action"
+   },
+   {
+    "capture": "raw/network/ACT-01-02-001.json",
+    "entry_index": 0,
+    "seq": 1,
+    "method": "POST",
+    "host": "staging-api.teeinblue.com",
+    "label": "mapped",
+    "apiop_id": "APIOP-004",
+    "reason": "R-API-ACTION: request to expected_api_base inside action window, payload/ids match the action"
+   },
+   {
+    "capture": "raw/network/ACT-01-02-002.json",
+    "entry_index": 0,
+    "seq": 1,
+    "method": "POST",
+    "host": "staging-api.teeinblue.com",
+    "label": "mapped",
+    "apiop_id": "APIOP-004",
+    "reason": "R-API-ACTION: request to expected_api_base inside action window, payload/ids match the action"
+   },
+   {
+    "capture": "raw/network/ACT-01-03-001.json",
+    "entry_index": 0,
+    "seq": 1,
+    "method": "POST",
+    "host": "staging-api.teeinblue.com",
+    "label": "mapped",
+    "apiop_id": "APIOP-006",
+    "reason": "R-API-ACTION: request to expected_api_base inside action window, payload/ids match the action"
+   },
+   {
+    "capture": "raw/network/ACT-01-03-002.json",
+    "entry_index": 0,
+    "seq": 1,
+    "method": "POST",
+    "host": "staging-api.teeinblue.com",
+    "label": "mapped",
+    "apiop_id": "APIOP-006",
+    "reason": "R-API-ACTION: request to expected_api_base inside action window, payload/ids match the action"
+   },
+   {
+    "capture": "raw/network/ACT-01-03-002.json",
+    "entry_index": 1,
+    "seq": 2,
+    "method": "GET",
+    "host": "staging-api.teeinblue.com",
+    "label": "mapped",
+    "apiop_id": "APIOP-005",
+    "reason": "R-API-ACTION: request to expected_api_base inside action window, payload/ids match the action"
+   },
+   {
+    "capture": "raw/network/ACT-01-03-003.json",
+    "entry_index": 0,
+    "seq": 1,
+    "method": "GET",
+    "host": "staging-api.teeinblue.com",
+    "label": "mapped",
+    "apiop_id": "APIOP-007",
+    "reason": "R-API-ACTION: request to expected_api_base inside action window, payload/ids match the action"
+   },
+   {
+    "capture": "raw/network/ACT-01-03-003.json",
+    "entry_index": 1,
+    "seq": 2,
+    "method": "PUT",
+    "host": "staging-api.teeinblue.com",
+    "label": "mapped",
+    "apiop_id": "APIOP-008",
+    "reason": "R-API-ACTION: request to expected_api_base inside action window, payload/ids match the action"
+   },
+   {
+    "capture": "raw/network/ACT-01-03-003.json",
+    "entry_index": 2,
+    "seq": 3,
+    "method": "GET",
+    "host": "staging-api.teeinblue.com",
+    "label": "mapped",
+    "apiop_id": "APIOP-005",
+    "reason": "R-API-ACTION: request to expected_api_base inside action window, payload/ids match the action"
+   },
+   {
+    "capture": "raw/network/ACT-01-04-001.json",
+    "entry_index": 0,
+    "seq": 1,
+    "method": "POST",
+    "host": "staging-api.teeinblue.com",
+    "label": "mapped",
+    "apiop_id": "APIOP-010",
+    "reason": "R-API-ACTION: request to expected_api_base inside action window, payload/ids match the action"
+   },
+   {
+    "capture": "raw/network/ACT-01-04-001.json",
+    "entry_index": 1,
+    "seq": 2,
+    "method": "PUT",
+    "host": "oe-cdn.sgp1.digitaloceanspaces.com",
+    "label": "mapped",
+    "apiop_id": "APIOP-011",
+    "reason": "R-UPLOAD-CDN: presigned PUT whose path equals meta.signed_url path returned by upload-url in same action"
+   },
+   {
+    "capture": "raw/network/ACT-01-04-001.json",
+    "entry_index": 2,
+    "seq": 3,
+    "method": "POST",
+    "host": "staging-api.teeinblue.com",
+    "label": "mapped",
+    "apiop_id": "APIOP-012",
+    "reason": "R-API-ACTION: request to expected_api_base inside action window, payload/ids match the action"
+   },
+   {
+    "capture": "raw/network/ACT-01-04-001.json",
+    "entry_index": 3,
+    "seq": 4,
+    "method": "POST",
+    "host": "staging-api.teeinblue.com",
+    "label": "polling",
+    "apiop_id": "APIOP-013",
+    "reason": "R-STATUS-POLL: client re-issues get(ids) every ~2.0 s after previous response until url/thumbnail non-empty, then stops (action-initiated status poll after by-temporary-file)"
+   },
+   {
+    "capture": "raw/network/ACT-01-04-001.json",
+    "entry_index": 4,
+    "seq": 5,
+    "method": "POST",
+    "host": "staging-api.teeinblue.com",
+    "label": "mapped",
+    "apiop_id": "APIOP-004",
+    "reason": "R-API-ACTION: request to expected_api_base inside action window, payload/ids match the action"
+   },
+   {
+    "capture": "raw/network/ACT-01-04-002.json",
+    "entry_index": 0,
+    "seq": 1,
+    "method": "POST",
+    "host": "staging-api.teeinblue.com",
+    "label": "mapped",
+    "apiop_id": "APIOP-010",
+    "reason": "R-API-ACTION: request to expected_api_base inside action window, payload/ids match the action"
+   },
+   {
+    "capture": "raw/network/ACT-01-04-002.json",
+    "entry_index": 1,
+    "seq": 2,
+    "method": "PUT",
+    "host": "oe-cdn.sgp1.digitaloceanspaces.com",
+    "label": "mapped",
+    "apiop_id": "APIOP-011",
+    "reason": "R-UPLOAD-CDN: presigned PUT whose path equals meta.signed_url path returned by upload-url in same action"
+   },
+   {
+    "capture": "raw/network/ACT-01-04-002.json",
+    "entry_index": 2,
+    "seq": 3,
+    "method": "POST",
+    "host": "staging-api.teeinblue.com",
+    "label": "mapped",
+    "apiop_id": "APIOP-010",
+    "reason": "R-API-ACTION: request to expected_api_base inside action window, payload/ids match the action"
+   },
+   {
+    "capture": "raw/network/ACT-01-04-002.json",
+    "entry_index": 3,
+    "seq": 4,
+    "method": "POST",
+    "host": "staging-api.teeinblue.com",
+    "label": "mapped",
+    "apiop_id": "APIOP-012",
+    "reason": "R-API-ACTION: request to expected_api_base inside action window, payload/ids match the action"
+   },
+   {
+    "capture": "raw/network/ACT-01-04-002.json",
+    "entry_index": 4,
+    "seq": 5,
+    "method": "PUT",
+    "host": "oe-cdn.sgp1.digitaloceanspaces.com",
+    "label": "mapped",
+    "apiop_id": "APIOP-011",
+    "reason": "R-UPLOAD-CDN: presigned PUT whose path equals meta.signed_url path returned by upload-url in same action"
+   },
+   {
+    "capture": "raw/network/ACT-01-04-002.json",
+    "entry_index": 5,
+    "seq": 6,
+    "method": "POST",
+    "host": "staging-api.teeinblue.com",
+    "label": "mapped",
+    "apiop_id": "APIOP-010",
+    "reason": "R-API-ACTION: request to expected_api_base inside action window, payload/ids match the action"
+   },
+   {
+    "capture": "raw/network/ACT-01-04-002.json",
+    "entry_index": 6,
+    "seq": 7,
+    "method": "POST",
+    "host": "staging-api.teeinblue.com",
+    "label": "mapped",
+    "apiop_id": "APIOP-012",
+    "reason": "R-API-ACTION: request to expected_api_base inside action window, payload/ids match the action"
+   },
+   {
+    "capture": "raw/network/ACT-01-04-002.json",
+    "entry_index": 7,
+    "seq": 8,
+    "method": "PUT",
+    "host": "oe-cdn.sgp1.digitaloceanspaces.com",
+    "label": "mapped",
+    "apiop_id": "APIOP-011",
+    "reason": "R-UPLOAD-CDN: presigned PUT whose path equals meta.signed_url path returned by upload-url in same action"
+   },
+   {
+    "capture": "raw/network/ACT-01-04-002.json",
+    "entry_index": 8,
+    "seq": 9,
+    "method": "POST",
+    "host": "staging-api.teeinblue.com",
+    "label": "mapped",
+    "apiop_id": "APIOP-010",
+    "reason": "R-API-ACTION: request to expected_api_base inside action window, payload/ids match the action"
+   },
+   {
+    "capture": "raw/network/ACT-01-04-002.json",
+    "entry_index": 9,
+    "seq": 10,
+    "method": "POST",
+    "host": "staging-api.teeinblue.com",
+    "label": "mapped",
+    "apiop_id": "APIOP-012",
+    "reason": "R-API-ACTION: request to expected_api_base inside action window, payload/ids match the action"
+   },
+   {
+    "capture": "raw/network/ACT-01-04-002.json",
+    "entry_index": 10,
+    "seq": 11,
+    "method": "PUT",
+    "host": "oe-cdn.sgp1.digitaloceanspaces.com",
+    "label": "mapped",
+    "apiop_id": "APIOP-011",
+    "reason": "R-UPLOAD-CDN: presigned PUT whose path equals meta.signed_url path returned by upload-url in same action"
+   },
+   {
+    "capture": "raw/network/ACT-01-04-002.json",
+    "entry_index": 11,
+    "seq": 12,
+    "method": "POST",
+    "host": "staging-api.teeinblue.com",
+    "label": "mapped",
+    "apiop_id": "APIOP-012",
+    "reason": "R-API-ACTION: request to expected_api_base inside action window, payload/ids match the action"
+   },
+   {
+    "capture": "raw/network/ACT-01-04-002.json",
+    "entry_index": 12,
+    "seq": 13,
+    "method": "POST",
+    "host": "staging-api.teeinblue.com",
+    "label": "polling",
+    "apiop_id": "APIOP-013",
+    "reason": "R-STATUS-POLL: client re-issues get(ids) every ~2.0 s after previous response until url/thumbnail non-empty, then stops (action-initiated status poll after by-temporary-file)"
+   },
+   {
+    "capture": "raw/network/ACT-01-04-002.json",
+    "entry_index": 13,
+    "seq": 14,
+    "method": "POST",
+    "host": "staging-api.teeinblue.com",
+    "label": "mapped",
+    "apiop_id": "APIOP-004",
+    "reason": "R-API-ACTION: request to expected_api_base inside action window, payload/ids match the action"
+   },
+   {
+    "capture": "raw/network/ACT-01-04-003.json",
+    "entry_index": 0,
+    "seq": 1,
+    "method": "POST",
+    "host": "staging-api.teeinblue.com",
+    "label": "mapped",
+    "apiop_id": "APIOP-010",
+    "reason": "R-API-ACTION: request to expected_api_base inside action window, payload/ids match the action"
+   },
+   {
+    "capture": "raw/network/ACT-01-04-003.json",
+    "entry_index": 1,
+    "seq": 2,
+    "method": "PUT",
+    "host": "oe-cdn.sgp1.digitaloceanspaces.com",
+    "label": "mapped",
+    "apiop_id": "APIOP-011",
+    "reason": "R-UPLOAD-CDN: presigned PUT whose path equals meta.signed_url path returned by upload-url in same action"
+   },
+   {
+    "capture": "raw/network/ACT-01-04-003.json",
+    "entry_index": 2,
+    "seq": 3,
+    "method": "POST",
+    "host": "staging-api.teeinblue.com",
+    "label": "mapped",
+    "apiop_id": "APIOP-010",
+    "reason": "R-API-ACTION: request to expected_api_base inside action window, payload/ids match the action"
+   },
+   {
+    "capture": "raw/network/ACT-01-04-003.json",
+    "entry_index": 3,
+    "seq": 4,
+    "method": "PUT",
+    "host": "oe-cdn.sgp1.digitaloceanspaces.com",
+    "label": "mapped",
+    "apiop_id": "APIOP-011",
+    "reason": "R-UPLOAD-CDN: presigned PUT whose path equals meta.signed_url path returned by upload-url in same action"
+   },
+   {
+    "capture": "raw/network/ACT-01-04-003.json",
+    "entry_index": 4,
+    "seq": 5,
+    "method": "POST",
+    "host": "staging-api.teeinblue.com",
+    "label": "mapped",
+    "apiop_id": "APIOP-010",
+    "reason": "R-API-ACTION: request to expected_api_base inside action window, payload/ids match the action"
+   },
+   {
+    "capture": "raw/network/ACT-01-04-003.json",
+    "entry_index": 5,
+    "seq": 6,
+    "method": "POST",
+    "host": "staging-api.teeinblue.com",
+    "label": "mapped",
+    "apiop_id": "APIOP-012",
+    "reason": "R-API-ACTION: request to expected_api_base inside action window, payload/ids match the action"
+   },
+   {
+    "capture": "raw/network/ACT-01-04-003.json",
+    "entry_index": 6,
+    "seq": 7,
+    "method": "POST",
+    "host": "staging-api.teeinblue.com",
+    "label": "mapped",
+    "apiop_id": "APIOP-012",
+    "reason": "R-API-ACTION: request to expected_api_base inside action window, payload/ids match the action"
+   },
+   {
+    "capture": "raw/network/ACT-01-04-003.json",
+    "entry_index": 7,
+    "seq": 8,
+    "method": "PUT",
+    "host": "oe-cdn.sgp1.digitaloceanspaces.com",
+    "label": "mapped",
+    "apiop_id": "APIOP-011",
+    "reason": "R-UPLOAD-CDN: presigned PUT whose path equals meta.signed_url path returned by upload-url in same action"
+   },
+   {
+    "capture": "raw/network/ACT-01-04-003.json",
+    "entry_index": 8,
+    "seq": 9,
+    "method": "POST",
+    "host": "staging-api.teeinblue.com",
+    "label": "mapped",
+    "apiop_id": "APIOP-010",
+    "reason": "R-API-ACTION: request to expected_api_base inside action window, payload/ids match the action"
+   },
+   {
+    "capture": "raw/network/ACT-01-04-003.json",
+    "entry_index": 9,
+    "seq": 10,
+    "method": "POST",
+    "host": "staging-api.teeinblue.com",
+    "label": "mapped",
+    "apiop_id": "APIOP-012",
+    "reason": "R-API-ACTION: request to expected_api_base inside action window, payload/ids match the action"
+   },
+   {
+    "capture": "raw/network/ACT-01-04-003.json",
+    "entry_index": 10,
+    "seq": 11,
+    "method": "PUT",
+    "host": "oe-cdn.sgp1.digitaloceanspaces.com",
+    "label": "mapped",
+    "apiop_id": "APIOP-011",
+    "reason": "R-UPLOAD-CDN: presigned PUT whose path equals meta.signed_url path returned by upload-url in same action"
+   },
+   {
+    "capture": "raw/network/ACT-01-04-003.json",
+    "entry_index": 11,
+    "seq": 12,
+    "method": "POST",
+    "host": "staging-api.teeinblue.com",
+    "label": "mapped",
+    "apiop_id": "APIOP-010",
+    "reason": "R-API-ACTION: request to expected_api_base inside action window, payload/ids match the action"
+   },
+   {
+    "capture": "raw/network/ACT-01-04-003.json",
+    "entry_index": 12,
+    "seq": 13,
+    "method": "POST",
+    "host": "staging-api.teeinblue.com",
+    "label": "mapped",
+    "apiop_id": "APIOP-012",
+    "reason": "R-API-ACTION: request to expected_api_base inside action window, payload/ids match the action"
+   },
+   {
+    "capture": "raw/network/ACT-01-04-003.json",
+    "entry_index": 13,
+    "seq": 14,
+    "method": "PUT",
+    "host": "oe-cdn.sgp1.digitaloceanspaces.com",
+    "label": "mapped",
+    "apiop_id": "APIOP-011",
+    "reason": "R-UPLOAD-CDN: presigned PUT whose path equals meta.signed_url path returned by upload-url in same action"
+   },
+   {
+    "capture": "raw/network/ACT-01-04-003.json",
+    "entry_index": 14,
+    "seq": 15,
+    "method": "POST",
+    "host": "staging-api.teeinblue.com",
+    "label": "mapped",
+    "apiop_id": "APIOP-010",
+    "reason": "R-API-ACTION: request to expected_api_base inside action window, payload/ids match the action"
+   },
+   {
+    "capture": "raw/network/ACT-01-04-003.json",
+    "entry_index": 15,
+    "seq": 16,
+    "method": "POST",
+    "host": "staging-api.teeinblue.com",
+    "label": "mapped",
+    "apiop_id": "APIOP-012",
+    "reason": "R-API-ACTION: request to expected_api_base inside action window, payload/ids match the action"
+   },
+   {
+    "capture": "raw/network/ACT-01-04-003.json",
+    "entry_index": 16,
+    "seq": 17,
+    "method": "PUT",
+    "host": "oe-cdn.sgp1.digitaloceanspaces.com",
+    "label": "mapped",
+    "apiop_id": "APIOP-011",
+    "reason": "R-UPLOAD-CDN: presigned PUT whose path equals meta.signed_url path returned by upload-url in same action"
+   },
+   {
+    "capture": "raw/network/ACT-01-04-003.json",
+    "entry_index": 17,
+    "seq": 18,
+    "method": "POST",
+    "host": "staging-api.teeinblue.com",
+    "label": "mapped",
+    "apiop_id": "APIOP-012",
+    "reason": "R-API-ACTION: request to expected_api_base inside action window, payload/ids match the action"
+   },
+   {
+    "capture": "raw/network/ACT-01-04-003.json",
+    "entry_index": 18,
+    "seq": 19,
+    "method": "POST",
+    "host": "staging-api.teeinblue.com",
+    "label": "polling",
+    "apiop_id": "APIOP-013",
+    "reason": "R-STATUS-POLL: client re-issues get(ids) every ~2.0 s after previous response until url/thumbnail non-empty, then stops (action-initiated status poll after by-temporary-file)"
+   },
+   {
+    "capture": "raw/network/ACT-01-04-003.json",
+    "entry_index": 19,
+    "seq": 20,
+    "method": "POST",
+    "host": "staging-api.teeinblue.com",
+    "label": "mapped",
+    "apiop_id": "APIOP-004",
+    "reason": "R-API-ACTION: request to expected_api_base inside action window, payload/ids match the action"
+   },
+   {
+    "capture": "raw/network/ACT-01-05-001.json",
+    "entry_index": 0,
+    "seq": 1,
+    "method": "POST",
+    "host": "staging-api.teeinblue.com",
+    "label": "mapped",
+    "apiop_id": "APIOP-010",
+    "reason": "R-API-ACTION: request to expected_api_base inside action window, payload/ids match the action"
+   },
+   {
+    "capture": "raw/network/ACT-01-05-001.json",
+    "entry_index": 1,
+    "seq": 2,
+    "method": "PUT",
+    "host": "oe-cdn.sgp1.digitaloceanspaces.com",
+    "label": "mapped",
+    "apiop_id": "APIOP-011",
+    "reason": "R-UPLOAD-CDN: presigned PUT whose path equals meta.signed_url path returned by upload-url in same action"
+   },
+   {
+    "capture": "raw/network/ACT-01-05-001.json",
+    "entry_index": 2,
+    "seq": 3,
+    "method": "POST",
+    "host": "staging-api.teeinblue.com",
+    "label": "mapped",
+    "apiop_id": "APIOP-012",
+    "reason": "R-API-ACTION: request to expected_api_base inside action window, payload/ids match the action"
+   },
+   {
+    "capture": "raw/network/ACT-01-05-003.json",
+    "entry_index": 0,
+    "seq": 1,
+    "method": "POST",
+    "host": "staging-api.teeinblue.com",
+    "label": "mapped",
+    "apiop_id": "APIOP-010",
+    "reason": "R-API-ACTION: request to expected_api_base inside action window, payload/ids match the action"
+   },
+   {
+    "capture": "raw/network/ACT-01-05-003.json",
+    "entry_index": 1,
+    "seq": 2,
+    "method": "PUT",
+    "host": "oe-cdn.sgp1.digitaloceanspaces.com",
+    "label": "mapped",
+    "apiop_id": "APIOP-011",
+    "reason": "R-UPLOAD-CDN: presigned PUT whose path equals meta.signed_url path returned by upload-url in same action"
+   },
+   {
+    "capture": "raw/network/ACT-01-05-003.json",
+    "entry_index": 2,
+    "seq": 3,
+    "method": "POST",
+    "host": "staging-api.teeinblue.com",
+    "label": "mapped",
+    "apiop_id": "APIOP-012",
+    "reason": "R-API-ACTION: request to expected_api_base inside action window, payload/ids match the action"
+   },
+   {
+    "capture": "raw/network/ACT-01-05-003.json",
+    "entry_index": 3,
+    "seq": 4,
+    "method": "POST",
+    "host": "staging-api.teeinblue.com",
+    "label": "polling",
+    "apiop_id": "APIOP-013",
+    "reason": "R-STATUS-POLL: client re-issues get(ids) every ~2.0 s after previous response until url/thumbnail non-empty, then stops (action-initiated status poll after by-temporary-file)"
+   },
+   {
+    "capture": "raw/network/ACT-01-05-003.json",
+    "entry_index": 4,
+    "seq": 5,
+    "method": "POST",
+    "host": "staging-api.teeinblue.com",
+    "label": "polling",
+    "apiop_id": "APIOP-013",
+    "reason": "R-STATUS-POLL: client re-issues get(ids) every ~2.0 s after previous response until url/thumbnail non-empty, then stops (action-initiated status poll after by-temporary-file)"
+   },
+   {
+    "capture": "raw/network/ACT-01-05-003.json",
+    "entry_index": 5,
+    "seq": 6,
+    "method": "POST",
+    "host": "staging-api.teeinblue.com",
+    "label": "polling",
+    "apiop_id": "APIOP-013",
+    "reason": "R-STATUS-POLL: client re-issues get(ids) every ~2.0 s after previous response until url/thumbnail non-empty, then stops (action-initiated status poll after by-temporary-file)"
+   },
+   {
+    "capture": "raw/network/ACT-01-05-003.json",
+    "entry_index": 6,
+    "seq": 7,
+    "method": "POST",
+    "host": "staging-api.teeinblue.com",
+    "label": "polling",
+    "apiop_id": "APIOP-013",
+    "reason": "R-STATUS-POLL: client re-issues get(ids) every ~2.0 s after previous response until url/thumbnail non-empty, then stops (action-initiated status poll after by-temporary-file)"
+   },
+   {
+    "capture": "raw/network/ACT-01-05-003.json",
+    "entry_index": 7,
+    "seq": 8,
+    "method": "POST",
+    "host": "staging-api.teeinblue.com",
+    "label": "mapped",
+    "apiop_id": "APIOP-004",
+    "reason": "R-API-ACTION: request to expected_api_base inside action window, payload/ids match the action"
+   },
+   {
+    "capture": "raw/network/ACT-01-06-001.json",
+    "entry_index": 0,
+    "seq": 1,
+    "method": "POST",
+    "host": "staging-api.teeinblue.com",
+    "label": "mapped",
+    "apiop_id": "APIOP-014",
+    "reason": "R-API-ACTION: request to expected_api_base inside action window, payload/ids match the action"
+   },
+   {
+    "capture": "raw/network/ACT-01-06-002.json",
+    "entry_index": 0,
+    "seq": 1,
+    "method": "POST",
+    "host": "staging-api.teeinblue.com",
+    "label": "mapped",
+    "apiop_id": "APIOP-014",
+    "reason": "R-API-ACTION: request to expected_api_base inside action window, payload/ids match the action"
+   },
+   {
+    "capture": "raw/network/ACT-01-07-001.json",
+    "entry_index": 0,
+    "seq": 1,
+    "method": "GET",
+    "host": "staging-api.teeinblue.com",
+    "label": "mapped",
+    "apiop_id": "APIOP-005",
+    "reason": "R-API-ACTION: request to expected_api_base inside action window, payload/ids match the action"
+   },
+   {
+    "capture": "raw/network/ACT-01-07-001.json",
+    "entry_index": 1,
+    "seq": 2,
+    "method": "PUT",
+    "host": "staging-api.teeinblue.com",
+    "label": "mapped",
+    "apiop_id": "APIOP-015",
+    "reason": "R-API-ACTION: request to expected_api_base inside action window, payload/ids match the action"
+   },
+   {
+    "capture": "raw/network/ACT-01-07-001.json",
+    "entry_index": 2,
+    "seq": 3,
+    "method": "POST",
+    "host": "staging-api.teeinblue.com",
+    "label": "mapped",
+    "apiop_id": "APIOP-004",
+    "reason": "R-API-ACTION: request to expected_api_base inside action window, payload/ids match the action"
+   },
+   {
+    "capture": "raw/network/ACT-01-07-002.json",
+    "entry_index": 0,
+    "seq": 1,
+    "method": "GET",
+    "host": "staging-api.teeinblue.com",
+    "label": "mapped",
+    "apiop_id": "APIOP-005",
+    "reason": "R-API-ACTION: request to expected_api_base inside action window, payload/ids match the action"
+   },
+   {
+    "capture": "raw/network/ACT-01-07-002.json",
+    "entry_index": 1,
+    "seq": 2,
+    "method": "PUT",
+    "host": "staging-api.teeinblue.com",
+    "label": "mapped",
+    "apiop_id": "APIOP-015",
+    "reason": "R-API-ACTION: request to expected_api_base inside action window, payload/ids match the action"
+   },
+   {
+    "capture": "raw/network/ACT-01-07-002.json",
+    "entry_index": 2,
+    "seq": 3,
+    "method": "POST",
+    "host": "staging-api.teeinblue.com",
+    "label": "mapped",
+    "apiop_id": "APIOP-004",
+    "reason": "R-API-ACTION: request to expected_api_base inside action window, payload/ids match the action"
+   },
+   {
+    "capture": "raw/network/ACT-01-08-001.json",
+    "entry_index": 0,
+    "seq": 1,
+    "method": "POST",
+    "host": "staging-api.teeinblue.com",
+    "label": "mapped",
+    "apiop_id": "APIOP-004",
+    "reason": "R-API-ACTION: request to expected_api_base inside action window, payload/ids match the action"
+   },
+   {
+    "capture": "raw/network/ACT-01-09-001.json",
+    "entry_index": 0,
+    "seq": 1,
+    "method": "GET",
+    "host": "staging-sdk.teeinblue.com",
+    "label": "unrelated",
+    "apiop_id": null,
+    "reason": "R-SDK-STATIC: static star-maps GeoJSON from staging-sdk.teeinblue.com (editor re-render data, not an API of the image library; explorer note confirms no library call on select)"
+   },
+   {
+    "capture": "raw/network/ACT-01-09-001.json",
+    "entry_index": 1,
+    "seq": 2,
+    "method": "GET",
+    "host": "staging-sdk.teeinblue.com",
+    "label": "unrelated",
+    "apiop_id": null,
+    "reason": "R-SDK-STATIC: static star-maps GeoJSON from staging-sdk.teeinblue.com (editor re-render data, not an API of the image library; explorer note confirms no library call on select)"
+   },
+   {
+    "capture": "raw/network/ACT-01-09-001.json",
+    "entry_index": 2,
+    "seq": 3,
+    "method": "GET",
+    "host": "staging-sdk.teeinblue.com",
+    "label": "unrelated",
+    "apiop_id": null,
+    "reason": "R-SDK-STATIC: static star-maps GeoJSON from staging-sdk.teeinblue.com (editor re-render data, not an API of the image library; explorer note confirms no library call on select)"
+   },
+   {
+    "capture": "raw/network/ACT-01-09-001.json",
+    "entry_index": 3,
+    "seq": 4,
+    "method": "GET",
+    "host": "staging-sdk.teeinblue.com",
+    "label": "unrelated",
+    "apiop_id": null,
+    "reason": "R-SDK-STATIC: static star-maps GeoJSON from staging-sdk.teeinblue.com (editor re-render data, not an API of the image library; explorer note confirms no library call on select)"
+   },
+   {
+    "capture": "raw/network/ACT-01-09-001.json",
+    "entry_index": 4,
+    "seq": 5,
+    "method": "GET",
+    "host": "staging-sdk.teeinblue.com",
+    "label": "unrelated",
+    "apiop_id": null,
+    "reason": "R-SDK-STATIC: static star-maps GeoJSON from staging-sdk.teeinblue.com (editor re-render data, not an API of the image library; explorer note confirms no library call on select)"
+   },
+   {
+    "capture": "raw/network/ACT-01-09-001.json",
+    "entry_index": 5,
+    "seq": 6,
+    "method": "GET",
+    "host": "staging-sdk.teeinblue.com",
+    "label": "unrelated",
+    "apiop_id": null,
+    "reason": "R-SDK-STATIC: static star-maps GeoJSON from staging-sdk.teeinblue.com (editor re-render data, not an API of the image library; explorer note confirms no library call on select)"
+   },
+   {
+    "capture": "raw/network/ACT-01-09-002.json",
+    "entry_index": 0,
+    "seq": 1,
+    "method": "POST",
+    "host": "staging-api.teeinblue.com",
+    "label": "mapped",
+    "apiop_id": "APIOP-003",
+    "reason": "R-API-ACTION: request to expected_api_base inside action window, payload/ids match the action"
+   },
+   {
+    "capture": "raw/network/ACT-01-09-002.json",
+    "entry_index": 1,
+    "seq": 2,
+    "method": "POST",
+    "host": "staging-api.teeinblue.com",
+    "label": "mapped",
+    "apiop_id": "APIOP-004",
+    "reason": "R-API-ACTION: request to expected_api_base inside action window, payload/ids match the action"
+   },
+   {
+    "capture": "raw/network/ACT-01-09-002.json",
+    "entry_index": 2,
+    "seq": 3,
+    "method": "GET",
+    "host": "staging-api.teeinblue.com",
+    "label": "mapped",
+    "apiop_id": "APIOP-005",
+    "reason": "R-API-ACTION: request to expected_api_base inside action window, payload/ids match the action"
+   },
+   {
+    "capture": "raw/network/ACT-01-10-001.json",
+    "entry_index": 0,
+    "seq": 1,
+    "method": "DELETE",
+    "host": "staging-api.teeinblue.com",
+    "label": "mapped",
+    "apiop_id": "APIOP-016",
+    "reason": "R-API-ACTION: request to expected_api_base inside action window, payload/ids match the action"
+   },
+   {
+    "capture": "raw/network/ACT-01-10-002.json",
+    "entry_index": 0,
+    "seq": 1,
+    "method": "DELETE",
+    "host": "staging-api.teeinblue.com",
+    "label": "mapped",
+    "apiop_id": "APIOP-016",
+    "reason": "R-API-ACTION: request to expected_api_base inside action window, payload/ids match the action"
+   },
+   {
+    "capture": "raw/network/ACT-01-10-002.json",
+    "entry_index": 1,
+    "seq": 2,
+    "method": "POST",
+    "host": "staging-api.teeinblue.com",
+    "label": "mapped",
+    "apiop_id": "APIOP-004",
+    "reason": "R-API-ACTION: request to expected_api_base inside action window, payload/ids match the action"
+   },
+   {
+    "capture": "raw/network/ACT-01-10-003.json",
+    "entry_index": 0,
+    "seq": 1,
+    "method": "DELETE",
+    "host": "staging-api.teeinblue.com",
+    "label": "mapped",
+    "apiop_id": "APIOP-009",
+    "reason": "R-API-ACTION: request to expected_api_base inside action window, payload/ids match the action"
+   },
+   {
+    "capture": "raw/network/ACT-01-10-003.json",
+    "entry_index": 1,
+    "seq": 2,
+    "method": "POST",
+    "host": "staging-api.teeinblue.com",
+    "label": "mapped",
+    "apiop_id": "APIOP-004",
+    "reason": "R-API-ACTION: request to expected_api_base inside action window, payload/ids match the action"
+   },
+   {
+    "capture": "raw/network/ACT-01-10-003.json",
+    "entry_index": 2,
+    "seq": 3,
+    "method": "GET",
+    "host": "staging-api.teeinblue.com",
+    "label": "mapped",
+    "apiop_id": "APIOP-005",
+    "reason": "R-API-ACTION: request to expected_api_base inside action window, payload/ids match the action"
+   },
+   {
+    "capture": "raw/network/ACT-01-10-004.json",
+    "entry_index": 0,
+    "seq": 1,
+    "method": "POST",
+    "host": "staging-api.teeinblue.com",
+    "label": "mapped",
+    "apiop_id": "APIOP-017",
+    "reason": "R-API-ACTION: request to expected_api_base inside action window, payload/ids match the action"
+   },
+   {
+    "capture": "raw/network/ACT-01-10-004.json",
+    "entry_index": 1,
+    "seq": 2,
+    "method": "DELETE",
+    "host": "staging-api.teeinblue.com",
+    "label": "mapped",
+    "apiop_id": "APIOP-016",
+    "reason": "R-API-ACTION: request to expected_api_base inside action window, payload/ids match the action"
+   },
+   {
+    "capture": "raw/network/ACT-01-10-004.json",
+    "entry_index": 2,
+    "seq": 3,
+    "method": "DELETE",
+    "host": "staging-api.teeinblue.com",
+    "label": "mapped",
+    "apiop_id": "APIOP-016",
+    "reason": "R-API-ACTION: request to expected_api_base inside action window, payload/ids match the action"
+   },
+   {
+    "capture": "raw/network/ACT-01-10-004.json",
+    "entry_index": 3,
+    "seq": 4,
+    "method": "DELETE",
+    "host": "staging-api.teeinblue.com",
+    "label": "mapped",
+    "apiop_id": "APIOP-016",
+    "reason": "R-API-ACTION: request to expected_api_base inside action window, payload/ids match the action"
+   },
+   {
+    "capture": "raw/network/ACT-01-10-004.json",
+    "entry_index": 4,
+    "seq": 5,
+    "method": "DELETE",
+    "host": "staging-api.teeinblue.com",
+    "label": "mapped",
+    "apiop_id": "APIOP-016",
+    "reason": "R-API-ACTION: request to expected_api_base inside action window, payload/ids match the action"
+   },
+   {
+    "capture": "raw/network/ACT-01-10-004.json",
+    "entry_index": 5,
+    "seq": 6,
+    "method": "DELETE",
+    "host": "staging-api.teeinblue.com",
+    "label": "mapped",
+    "apiop_id": "APIOP-016",
+    "reason": "R-API-ACTION: request to expected_api_base inside action window, payload/ids match the action"
+   },
+   {
+    "capture": "raw/network/ACT-01-10-004.json",
+    "entry_index": 6,
+    "seq": 7,
+    "method": "DELETE",
+    "host": "staging-api.teeinblue.com",
+    "label": "mapped",
+    "apiop_id": "APIOP-016",
+    "reason": "R-API-ACTION: request to expected_api_base inside action window, payload/ids match the action"
+   },
+   {
+    "capture": "raw/network/ACT-01-10-004.json",
+    "entry_index": 7,
+    "seq": 8,
+    "method": "DELETE",
+    "host": "staging-api.teeinblue.com",
+    "label": "mapped",
+    "apiop_id": "APIOP-016",
+    "reason": "R-API-ACTION: request to expected_api_base inside action window, payload/ids match the action"
+   },
+   {
+    "capture": "raw/network/ACT-01-10-004.json",
+    "entry_index": 8,
+    "seq": 9,
+    "method": "DELETE",
+    "host": "staging-api.teeinblue.com",
+    "label": "mapped",
+    "apiop_id": "APIOP-016",
+    "reason": "R-API-ACTION: request to expected_api_base inside action window, payload/ids match the action"
+   },
+   {
+    "capture": "raw/network/ACT-01-10-004.json",
+    "entry_index": 9,
+    "seq": 10,
+    "method": "DELETE",
+    "host": "staging-api.teeinblue.com",
+    "label": "mapped",
+    "apiop_id": "APIOP-016",
+    "reason": "R-API-ACTION: request to expected_api_base inside action window, payload/ids match the action"
+   },
+   {
+    "capture": "raw/network/ACT-01-10-004.json",
+    "entry_index": 10,
+    "seq": 11,
+    "method": "DELETE",
+    "host": "staging-api.teeinblue.com",
+    "label": "mapped",
+    "apiop_id": "APIOP-016",
+    "reason": "R-API-ACTION: request to expected_api_base inside action window, payload/ids match the action"
+   },
+   {
+    "capture": "raw/network/ACT-01-10-004.json",
+    "entry_index": 11,
+    "seq": 12,
+    "method": "DELETE",
+    "host": "staging-api.teeinblue.com",
+    "label": "mapped",
+    "apiop_id": "APIOP-016",
+    "reason": "R-API-ACTION: request to expected_api_base inside action window, payload/ids match the action",
+    "status_note": "no status captured (request still pending at capture end)"
+   },
+   {
+    "capture": "raw/network/ACT-01-11-001.json",
+    "entry_index": 0,
+    "seq": 1,
+    "method": "POST",
+    "host": "cloudflareinsights.com",
+    "label": "unrelated",
+    "apiop_id": null,
+    "reason": "R-ANALYTICS: Cloudflare RUM beacon (cloudflareinsights.com /cdn-cgi/rum) - analytics, playbook §6"
+   },
+   {
+    "capture": "raw/network/ACT-02-01-001.json",
+    "entry_index": 0,
+    "seq": 1,
+    "method": "GET",
+    "host": "staging-api.teeinblue.com",
+    "label": "mapped",
+    "apiop_id": "APIOP-018",
+    "reason": "R-API-ACTION: request to expected_api_base inside action window, payload/ids match the action"
+   },
+   {
+    "capture": "raw/network/ACT-02-01-001.json",
+    "entry_index": 1,
+    "seq": 2,
+    "method": "GET",
+    "host": "staging-api.teeinblue.com",
+    "label": "mapped",
+    "apiop_id": "APIOP-023",
+    "reason": "R-API-ACTION: request to expected_api_base inside action window, payload/ids match the action"
+   },
+   {
+    "capture": "raw/network/ACT-02-02-001.json",
+    "entry_index": 0,
+    "seq": 1,
+    "method": "GET",
+    "host": "staging-api.teeinblue.com",
+    "label": "mapped",
+    "apiop_id": "APIOP-023",
+    "reason": "R-API-ACTION: request to expected_api_base inside action window, payload/ids match the action"
+   },
+   {
+    "capture": "raw/network/ACT-02-02-002.json",
+    "entry_index": 0,
+    "seq": 1,
+    "method": "GET",
+    "host": "staging-api.teeinblue.com",
+    "label": "mapped",
+    "apiop_id": "APIOP-023",
+    "reason": "R-API-ACTION: request to expected_api_base inside action window, payload/ids match the action"
+   },
+   {
+    "capture": "raw/network/ACT-02-02-003.json",
+    "entry_index": 0,
+    "seq": 1,
+    "method": "GET",
+    "host": "staging-api.teeinblue.com",
+    "label": "mapped",
+    "apiop_id": "APIOP-023",
+    "reason": "R-API-ACTION: request to expected_api_base inside action window, payload/ids match the action"
+   },
+   {
+    "capture": "raw/network/ACT-02-03-001.json",
+    "entry_index": 0,
+    "seq": 1,
+    "method": "POST",
+    "host": "staging-api.teeinblue.com",
+    "label": "mapped",
+    "apiop_id": "APIOP-019",
+    "reason": "R-API-ACTION: request to expected_api_base inside action window, payload/ids match the action"
+   },
+   {
+    "capture": "raw/network/ACT-02-03-002.json",
+    "entry_index": 0,
+    "seq": 1,
+    "method": "POST",
+    "host": "staging-api.teeinblue.com",
+    "label": "mapped",
+    "apiop_id": "APIOP-019",
+    "reason": "R-API-ACTION: request to expected_api_base inside action window, payload/ids match the action"
+   },
+   {
+    "capture": "raw/network/ACT-02-03-002.json",
+    "entry_index": 1,
+    "seq": 2,
+    "method": "GET",
+    "host": "staging-api.teeinblue.com",
+    "label": "mapped",
+    "apiop_id": "APIOP-018",
+    "reason": "R-API-ACTION: request to expected_api_base inside action window, payload/ids match the action"
+   },
+   {
+    "capture": "raw/network/ACT-02-03-003.json",
+    "entry_index": 0,
+    "seq": 1,
+    "method": "GET",
+    "host": "staging-api.teeinblue.com",
+    "label": "mapped",
+    "apiop_id": "APIOP-020",
+    "reason": "R-API-ACTION: request to expected_api_base inside action window, payload/ids match the action"
+   },
+   {
+    "capture": "raw/network/ACT-02-03-003.json",
+    "entry_index": 1,
+    "seq": 2,
+    "method": "PUT",
+    "host": "staging-api.teeinblue.com",
+    "label": "mapped",
+    "apiop_id": "APIOP-021",
+    "reason": "R-API-ACTION: request to expected_api_base inside action window, payload/ids match the action"
+   },
+   {
+    "capture": "raw/network/ACT-02-03-003.json",
+    "entry_index": 2,
+    "seq": 3,
+    "method": "GET",
+    "host": "staging-api.teeinblue.com",
+    "label": "mapped",
+    "apiop_id": "APIOP-018",
+    "reason": "R-API-ACTION: request to expected_api_base inside action window, payload/ids match the action"
+   },
+   {
+    "capture": "raw/network/ACT-02-04-001.json",
+    "entry_index": 0,
+    "seq": 1,
+    "method": "POST",
+    "host": "staging-api.teeinblue.com",
+    "label": "mapped",
+    "apiop_id": "APIOP-010",
+    "reason": "R-API-ACTION: request to expected_api_base inside action window, payload/ids match the action"
+   },
+   {
+    "capture": "raw/network/ACT-02-04-001.json",
+    "entry_index": 1,
+    "seq": 2,
+    "method": "PUT",
+    "host": "oe-cdn.sgp1.digitaloceanspaces.com",
+    "label": "mapped",
+    "apiop_id": "APIOP-011",
+    "reason": "R-UPLOAD-CDN: presigned PUT whose path equals meta.signed_url path returned by upload-url in same action"
+   },
+   {
+    "capture": "raw/network/ACT-02-04-001.json",
+    "entry_index": 2,
+    "seq": 3,
+    "method": "POST",
+    "host": "staging-api.teeinblue.com",
+    "label": "mapped",
+    "apiop_id": "APIOP-024",
+    "reason": "R-API-ACTION: request to expected_api_base inside action window, payload/ids match the action"
+   },
+   {
+    "capture": "raw/network/ACT-02-04-001.json",
+    "entry_index": 3,
+    "seq": 4,
+    "method": "POST",
+    "host": "staging-api.teeinblue.com",
+    "label": "polling",
+    "apiop_id": "APIOP-025",
+    "reason": "R-STATUS-POLL: client re-issues get(ids) every ~2.0 s after previous response until url/thumbnail non-empty, then stops (action-initiated status poll after by-temporary-file)"
+   },
+   {
+    "capture": "raw/network/ACT-02-04-001.json",
+    "entry_index": 4,
+    "seq": 5,
+    "method": "POST",
+    "host": "staging-api.teeinblue.com",
+    "label": "polling",
+    "apiop_id": "APIOP-025",
+    "reason": "R-STATUS-POLL: client re-issues get(ids) every ~2.0 s after previous response until url/thumbnail non-empty, then stops (action-initiated status poll after by-temporary-file)"
+   },
+   {
+    "capture": "raw/network/ACT-02-04-001.json",
+    "entry_index": 5,
+    "seq": 6,
+    "method": "GET",
+    "host": "staging-api.teeinblue.com",
+    "label": "mapped",
+    "apiop_id": "APIOP-023",
+    "reason": "R-API-ACTION: request to expected_api_base inside action window, payload/ids match the action"
+   },
+   {
+    "capture": "raw/network/ACT-02-04-002.json",
+    "entry_index": 0,
+    "seq": 1,
+    "method": "POST",
+    "host": "staging-api.teeinblue.com",
+    "label": "mapped",
+    "apiop_id": "APIOP-010",
+    "reason": "R-API-ACTION: request to expected_api_base inside action window, payload/ids match the action"
+   },
+   {
+    "capture": "raw/network/ACT-02-04-002.json",
+    "entry_index": 1,
+    "seq": 2,
+    "method": "PUT",
+    "host": "oe-cdn.sgp1.digitaloceanspaces.com",
+    "label": "mapped",
+    "apiop_id": "APIOP-011",
+    "reason": "R-UPLOAD-CDN: presigned PUT whose path equals meta.signed_url path returned by upload-url in same action"
+   },
+   {
+    "capture": "raw/network/ACT-02-04-002.json",
+    "entry_index": 2,
+    "seq": 3,
+    "method": "POST",
+    "host": "staging-api.teeinblue.com",
+    "label": "mapped",
+    "apiop_id": "APIOP-010",
+    "reason": "R-API-ACTION: request to expected_api_base inside action window, payload/ids match the action"
+   },
+   {
+    "capture": "raw/network/ACT-02-04-002.json",
+    "entry_index": 3,
+    "seq": 4,
+    "method": "POST",
+    "host": "staging-api.teeinblue.com",
+    "label": "mapped",
+    "apiop_id": "APIOP-024",
+    "reason": "R-API-ACTION: request to expected_api_base inside action window, payload/ids match the action"
+   },
+   {
+    "capture": "raw/network/ACT-02-04-002.json",
+    "entry_index": 4,
+    "seq": 5,
+    "method": "PUT",
+    "host": "oe-cdn.sgp1.digitaloceanspaces.com",
+    "label": "mapped",
+    "apiop_id": "APIOP-011",
+    "reason": "R-UPLOAD-CDN: presigned PUT whose path equals meta.signed_url path returned by upload-url in same action"
+   },
+   {
+    "capture": "raw/network/ACT-02-04-002.json",
+    "entry_index": 5,
+    "seq": 6,
+    "method": "POST",
+    "host": "staging-api.teeinblue.com",
+    "label": "mapped",
+    "apiop_id": "APIOP-010",
+    "reason": "R-API-ACTION: request to expected_api_base inside action window, payload/ids match the action"
+   },
+   {
+    "capture": "raw/network/ACT-02-04-002.json",
+    "entry_index": 6,
+    "seq": 7,
+    "method": "POST",
+    "host": "staging-api.teeinblue.com",
+    "label": "mapped",
+    "apiop_id": "APIOP-024",
+    "reason": "R-API-ACTION: request to expected_api_base inside action window, payload/ids match the action"
+   },
+   {
+    "capture": "raw/network/ACT-02-04-002.json",
+    "entry_index": 7,
+    "seq": 8,
+    "method": "PUT",
+    "host": "oe-cdn.sgp1.digitaloceanspaces.com",
+    "label": "mapped",
+    "apiop_id": "APIOP-011",
+    "reason": "R-UPLOAD-CDN: presigned PUT whose path equals meta.signed_url path returned by upload-url in same action"
+   },
+   {
+    "capture": "raw/network/ACT-02-04-002.json",
+    "entry_index": 8,
+    "seq": 9,
+    "method": "POST",
+    "host": "staging-api.teeinblue.com",
+    "label": "mapped",
+    "apiop_id": "APIOP-010",
+    "reason": "R-API-ACTION: request to expected_api_base inside action window, payload/ids match the action"
+   },
+   {
+    "capture": "raw/network/ACT-02-04-002.json",
+    "entry_index": 9,
+    "seq": 10,
+    "method": "POST",
+    "host": "staging-api.teeinblue.com",
+    "label": "mapped",
+    "apiop_id": "APIOP-024",
+    "reason": "R-API-ACTION: request to expected_api_base inside action window, payload/ids match the action"
+   },
+   {
+    "capture": "raw/network/ACT-02-04-002.json",
+    "entry_index": 10,
+    "seq": 11,
+    "method": "PUT",
+    "host": "oe-cdn.sgp1.digitaloceanspaces.com",
+    "label": "mapped",
+    "apiop_id": "APIOP-011",
+    "reason": "R-UPLOAD-CDN: presigned PUT whose path equals meta.signed_url path returned by upload-url in same action"
+   },
+   {
+    "capture": "raw/network/ACT-02-04-002.json",
+    "entry_index": 11,
+    "seq": 12,
+    "method": "POST",
+    "host": "staging-api.teeinblue.com",
+    "label": "mapped",
+    "apiop_id": "APIOP-024",
+    "reason": "R-API-ACTION: request to expected_api_base inside action window, payload/ids match the action"
+   },
+   {
+    "capture": "raw/network/ACT-02-04-002.json",
+    "entry_index": 12,
+    "seq": 13,
+    "method": "POST",
+    "host": "staging-api.teeinblue.com",
+    "label": "polling",
+    "apiop_id": "APIOP-025",
+    "reason": "R-STATUS-POLL: client re-issues get(ids) every ~2.0 s after previous response until url/thumbnail non-empty, then stops (action-initiated status poll after by-temporary-file)"
+   },
+   {
+    "capture": "raw/network/ACT-02-04-002.json",
+    "entry_index": 13,
+    "seq": 14,
+    "method": "GET",
+    "host": "staging-api.teeinblue.com",
+    "label": "mapped",
+    "apiop_id": "APIOP-023",
+    "reason": "R-API-ACTION: request to expected_api_base inside action window, payload/ids match the action"
+   },
+   {
+    "capture": "raw/network/ACT-02-05-001.json",
+    "entry_index": 0,
+    "seq": 1,
+    "method": "POST",
+    "host": "staging-api.teeinblue.com",
+    "label": "mapped",
+    "apiop_id": "APIOP-010",
+    "reason": "R-API-ACTION: request to expected_api_base inside action window, payload/ids match the action"
+   },
+   {
+    "capture": "raw/network/ACT-02-05-001.json",
+    "entry_index": 1,
+    "seq": 2,
+    "method": "PUT",
+    "host": "oe-cdn.sgp1.digitaloceanspaces.com",
+    "label": "mapped",
+    "apiop_id": "APIOP-011",
+    "reason": "R-UPLOAD-CDN: presigned PUT whose path equals meta.signed_url path returned by upload-url in same action"
+   },
+   {
+    "capture": "raw/network/ACT-02-05-001.json",
+    "entry_index": 2,
+    "seq": 3,
+    "method": "POST",
+    "host": "staging-api.teeinblue.com",
+    "label": "mapped",
+    "apiop_id": "APIOP-024",
+    "reason": "R-API-ACTION: request to expected_api_base inside action window, payload/ids match the action"
+   },
+   {
+    "capture": "raw/network/ACT-02-05-003.json",
+    "entry_index": 0,
+    "seq": 1,
+    "method": "POST",
+    "host": "staging-api.teeinblue.com",
+    "label": "mapped",
+    "apiop_id": "APIOP-010",
+    "reason": "R-API-ACTION: request to expected_api_base inside action window, payload/ids match the action"
+   },
+   {
+    "capture": "raw/network/ACT-02-05-003.json",
+    "entry_index": 1,
+    "seq": 2,
+    "method": "PUT",
+    "host": "oe-cdn.sgp1.digitaloceanspaces.com",
+    "label": "mapped",
+    "apiop_id": "APIOP-011",
+    "reason": "R-UPLOAD-CDN: presigned PUT whose path equals meta.signed_url path returned by upload-url in same action"
+   },
+   {
+    "capture": "raw/network/ACT-02-05-003.json",
+    "entry_index": 2,
+    "seq": 3,
+    "method": "POST",
+    "host": "staging-api.teeinblue.com",
+    "label": "mapped",
+    "apiop_id": "APIOP-024",
+    "reason": "R-API-ACTION: request to expected_api_base inside action window, payload/ids match the action"
+   },
+   {
+    "capture": "raw/network/ACT-02-05-003.json",
+    "entry_index": 3,
+    "seq": 4,
+    "method": "POST",
+    "host": "staging-api.teeinblue.com",
+    "label": "polling",
+    "apiop_id": "APIOP-025",
+    "reason": "R-STATUS-POLL: client re-issues get(ids) every ~2.0 s after previous response until url/thumbnail non-empty, then stops (action-initiated status poll after by-temporary-file)"
+   },
+   {
+    "capture": "raw/network/ACT-02-05-003.json",
+    "entry_index": 4,
+    "seq": 5,
+    "method": "POST",
+    "host": "staging-api.teeinblue.com",
+    "label": "polling",
+    "apiop_id": "APIOP-025",
+    "reason": "R-STATUS-POLL: client re-issues get(ids) every ~2.0 s after previous response until url/thumbnail non-empty, then stops (action-initiated status poll after by-temporary-file)"
+   },
+   {
+    "capture": "raw/network/ACT-02-05-003.json",
+    "entry_index": 5,
+    "seq": 6,
+    "method": "POST",
+    "host": "staging-api.teeinblue.com",
+    "label": "polling",
+    "apiop_id": "APIOP-025",
+    "reason": "R-STATUS-POLL: client re-issues get(ids) every ~2.0 s after previous response until url/thumbnail non-empty, then stops (action-initiated status poll after by-temporary-file)"
+   },
+   {
+    "capture": "raw/network/ACT-02-05-003.json",
+    "entry_index": 6,
+    "seq": 7,
+    "method": "POST",
+    "host": "staging-api.teeinblue.com",
+    "label": "polling",
+    "apiop_id": "APIOP-025",
+    "reason": "R-STATUS-POLL: client re-issues get(ids) every ~2.0 s after previous response until url/thumbnail non-empty, then stops (action-initiated status poll after by-temporary-file)"
+   },
+   {
+    "capture": "raw/network/ACT-02-05-003.json",
+    "entry_index": 7,
+    "seq": 8,
+    "method": "POST",
+    "host": "staging-api.teeinblue.com",
+    "label": "polling",
+    "apiop_id": "APIOP-025",
+    "reason": "R-STATUS-POLL: client re-issues get(ids) every ~2.0 s after previous response until url/thumbnail non-empty, then stops (action-initiated status poll after by-temporary-file)"
+   },
+   {
+    "capture": "raw/network/ACT-02-05-003.json",
+    "entry_index": 8,
+    "seq": 9,
+    "method": "GET",
+    "host": "staging-api.teeinblue.com",
+    "label": "mapped",
+    "apiop_id": "APIOP-023",
+    "reason": "R-API-ACTION: request to expected_api_base inside action window, payload/ids match the action"
+   },
+   {
+    "capture": "raw/network/ACT-02-07-001.json",
+    "entry_index": 0,
+    "seq": 1,
+    "method": "GET",
+    "host": "staging-api.teeinblue.com",
+    "label": "mapped",
+    "apiop_id": "APIOP-018",
+    "reason": "R-API-ACTION: request to expected_api_base inside action window, payload/ids match the action"
+   },
+   {
+    "capture": "raw/network/ACT-02-07-001.json",
+    "entry_index": 1,
+    "seq": 2,
+    "method": "PUT",
+    "host": "staging-api.teeinblue.com",
+    "label": "mapped",
+    "apiop_id": "APIOP-026",
+    "reason": "R-API-ACTION: request to expected_api_base inside action window, payload/ids match the action"
+   },
+   {
+    "capture": "raw/network/ACT-02-07-001.json",
+    "entry_index": 2,
+    "seq": 3,
+    "method": "GET",
+    "host": "staging-api.teeinblue.com",
+    "label": "mapped",
+    "apiop_id": "APIOP-023",
+    "reason": "R-API-ACTION: request to expected_api_base inside action window, payload/ids match the action"
+   },
+   {
+    "capture": "raw/network/ACT-02-08-001.json",
+    "entry_index": 0,
+    "seq": 1,
+    "method": "DELETE",
+    "host": "staging-api.teeinblue.com",
+    "label": "mapped",
+    "apiop_id": "APIOP-027",
+    "reason": "R-API-ACTION: request to expected_api_base inside action window, payload/ids match the action"
+   },
+   {
+    "capture": "raw/network/ACT-02-08-001.json",
+    "entry_index": 1,
+    "seq": 2,
+    "method": "GET",
+    "host": "staging-api.teeinblue.com",
+    "label": "mapped",
+    "apiop_id": "APIOP-023",
+    "reason": "R-API-ACTION: request to expected_api_base inside action window, payload/ids match the action"
+   },
+   {
+    "capture": "raw/network/ACT-02-08-002.json",
+    "entry_index": 0,
+    "seq": 1,
+    "method": "DELETE",
+    "host": "staging-api.teeinblue.com",
+    "label": "mapped",
+    "apiop_id": "APIOP-022",
+    "reason": "R-API-ACTION: request to expected_api_base inside action window, payload/ids match the action"
+   },
+   {
+    "capture": "raw/network/ACT-02-08-002.json",
+    "entry_index": 1,
+    "seq": 2,
+    "method": "GET",
+    "host": "staging-api.teeinblue.com",
+    "label": "mapped",
+    "apiop_id": "APIOP-018",
+    "reason": "R-API-ACTION: request to expected_api_base inside action window, payload/ids match the action"
+   },
+   {
+    "capture": "raw/network/ACT-02-08-002.json",
+    "entry_index": 2,
+    "seq": 3,
+    "method": "GET",
+    "host": "staging-api.teeinblue.com",
+    "label": "mapped",
+    "apiop_id": "APIOP-023",
+    "reason": "R-API-ACTION: request to expected_api_base inside action window, payload/ids match the action"
+   },
+   {
+    "capture": "raw/network/ACT-02-08-003.json",
+    "entry_index": 0,
+    "seq": 1,
+    "method": "POST",
+    "host": "staging-api.teeinblue.com",
+    "label": "mapped",
+    "apiop_id": "APIOP-028",
+    "reason": "R-API-ACTION: request to expected_api_base inside action window, payload/ids match the action"
+   },
+   {
+    "capture": "raw/network/ACT-02-08-003.json",
+    "entry_index": 1,
+    "seq": 2,
+    "method": "DELETE",
+    "host": "staging-api.teeinblue.com",
+    "label": "mapped",
+    "apiop_id": "APIOP-027",
+    "reason": "R-API-ACTION: request to expected_api_base inside action window, payload/ids match the action"
+   },
+   {
+    "capture": "raw/network/ACT-02-08-003.json",
+    "entry_index": 2,
+    "seq": 3,
+    "method": "DELETE",
+    "host": "staging-api.teeinblue.com",
+    "label": "mapped",
+    "apiop_id": "APIOP-027",
+    "reason": "R-API-ACTION: request to expected_api_base inside action window, payload/ids match the action"
+   },
+   {
+    "capture": "raw/network/ACT-02-08-003.json",
+    "entry_index": 3,
+    "seq": 4,
+    "method": "DELETE",
+    "host": "staging-api.teeinblue.com",
+    "label": "mapped",
+    "apiop_id": "APIOP-027",
+    "reason": "R-API-ACTION: request to expected_api_base inside action window, payload/ids match the action"
+   },
+   {
+    "capture": "raw/network/ACT-02-08-003.json",
+    "entry_index": 4,
+    "seq": 5,
+    "method": "DELETE",
+    "host": "staging-api.teeinblue.com",
+    "label": "mapped",
+    "apiop_id": "APIOP-027",
+    "reason": "R-API-ACTION: request to expected_api_base inside action window, payload/ids match the action"
+   },
+   {
+    "capture": "raw/network/ACT-02-08-003.json",
+    "entry_index": 5,
+    "seq": 6,
+    "method": "DELETE",
+    "host": "staging-api.teeinblue.com",
+    "label": "mapped",
+    "apiop_id": "APIOP-027",
+    "reason": "R-API-ACTION: request to expected_api_base inside action window, payload/ids match the action"
+   },
+   {
+    "capture": "raw/network/ACT-02-08-003.json",
+    "entry_index": 6,
+    "seq": 7,
+    "method": "GET",
+    "host": "staging-api.teeinblue.com",
+    "label": "mapped",
+    "apiop_id": "APIOP-023",
+    "reason": "R-API-ACTION: request to expected_api_base inside action window, payload/ids match the action"
+   }
+  ],
+  "upload_chain_linkage": [
+   {
+    "capture": "raw/network/ACT-01-04-001.json",
+    "upload_url": 1,
+    "put_linked_by_path": 1,
+    "by_temporary_file_linked_by_id": 1
+   },
+   {
+    "capture": "raw/network/ACT-01-04-002.json",
+    "upload_url": 4,
+    "put_linked_by_path": 4,
+    "by_temporary_file_linked_by_id": 4
+   },
+   {
+    "capture": "raw/network/ACT-01-04-003.json",
+    "upload_url": 6,
+    "put_linked_by_path": 6,
+    "by_temporary_file_linked_by_id": 6
+   },
+   {
+    "capture": "raw/network/ACT-01-05-001.json",
+    "upload_url": 1,
+    "put_linked_by_path": 1,
+    "by_temporary_file_linked_by_id": 1
+   },
+   {
+    "capture": "raw/network/ACT-01-05-003.json",
+    "upload_url": 1,
+    "put_linked_by_path": 1,
+    "by_temporary_file_linked_by_id": 1
+   },
+   {
+    "capture": "raw/network/ACT-02-04-001.json",
+    "upload_url": 1,
+    "put_linked_by_path": 1,
+    "by_temporary_file_linked_by_id": 1
+   },
+   {
+    "capture": "raw/network/ACT-02-04-002.json",
+    "upload_url": 4,
+    "put_linked_by_path": 4,
+    "by_temporary_file_linked_by_id": 4
+   },
+   {
+    "capture": "raw/network/ACT-02-05-001.json",
+    "upload_url": 1,
+    "put_linked_by_path": 1,
+    "by_temporary_file_linked_by_id": 1
+   },
+   {
+    "capture": "raw/network/ACT-02-05-003.json",
+    "upload_url": 1,
+    "put_linked_by_path": 1,
+    "by_temporary_file_linked_by_id": 1
+   }
+  ],
+  "operations": [
+   {
+    "apiop_id": "APIOP-001",
+    "protocol": "REST",
+    "method_or_type": "GET",
+    "host": "https://staging-api.teeinblue.com",
+    "host_check": "matches_expected_api_base",
+    "oracle_eligible": true,
+    "normalized_route": "/api/artwork-categories",
+    "observed_paths": [
+     "/api/artwork-categories"
+    ],
+    "observed_query_variants": [
+     {
+      "query_param_names": "public&sort_type",
+      "count": 1,
+      "act_ids": [
+       "ACT-00-01-001"
+      ]
+     }
+    ],
+    "act_ids": [
+     "ACT-00-01-001"
+    ],
+    "scn_ids": [
+     "SCN-00-01"
+    ],
+    "feature_ids": [
+     "FEAT-00-library-entry-discovery"
+    ],
+    "network_label": "mapped",
+    "auth": {
+     "mechanism": "portal session (cookie, not visible to in-page hook) + header x-xsrf-token [REDACTED] + header x-acting-user-id (value equals verified account id 266 in every sample)",
+     "request_headers_seen": {
+      "sec-ch-ua-platform": "1/1",
+      "x-xsrf-token": "1/1",
+      "referer": "1/1",
+      "sec-ch-ua": "1/1",
+      "sec-ch-ua-mobile": "1/1",
+      "user-agent": "1/1",
+      "accept": "1/1",
+      "x-acting-user-id": "1/1"
+     },
+     "role": "merchant-owner",
+     "basis": "observed (header presence); cookie mechanism per playbook §2/explore.surfaces.portal.session = inferred for this capture"
+    },
+    "request_shape": {
+     "body": "none"
+    },
+    "response_shape": {
+     "_sample_count": 1,
+     "_root_type": "array",
+     "fields": {
+      "[].id": {
+       "type": "number",
+       "seen_in": "1/1",
+       "always_present": false
+      },
+      "[].parent_id": {
+       "type": "null",
+       "seen_in": "1/1",
+       "always_present": false
+      },
+      "[].name": {
+       "type": "string",
+       "seen_in": "1/1",
+       "always_present": false
+      },
+      "[].description": {
+       "type": "null",
+       "seen_in": "1/1",
+       "always_present": false
+      },
+      "[].children": {
+       "type": "array",
+       "seen_in": "1/1",
+       "always_present": false
+      },
+      "[].children[].id": {
+       "type": "number",
+       "seen_in": "1/1",
+       "always_present": false
+      },
+      "[].children[].parent_id": {
+       "type": "number",
+       "seen_in": "1/1",
+       "always_present": false
+      },
+      "[].children[].name": {
+       "type": "string",
+       "seen_in": "1/1",
+       "always_present": false
+      },
+      "[].children[].description": {
+       "type": "null",
+       "seen_in": "1/1",
+       "always_present": false
+      }
+     }
+    },
+    "error_shapes": [],
+    "observed_status": [
+     200
+    ],
+    "observed_status_counts": {
+     "200": 1
+    },
+    "observed_count": 1,
+    "confidence": "LOW",
+    "state_delta": [],
+    "spec_ref": null,
+    "basis": "observed",
+    "object_scope": "artwork template library ('TIB Library' modal on /artworks) - NOT the image-library object; kept because it is the observed API behind FEAT-00 discovery action",
+    "notes": "Query param 'public' sent as bare flag (no value). Response root is array of categories with nested children[]. Capture recovered from Playwright network log (hook dump lost).",
+    "unknowns_single_sample": [
+     "1 sample: no rule on ordering/nesting depth inferred"
+    ]
+   },
+   {
+    "apiop_id": "APIOP-002",
+    "protocol": "REST",
+    "method_or_type": "GET",
+    "host": "https://staging-api.teeinblue.com",
+    "host_check": "matches_expected_api_base",
+    "oracle_eligible": true,
+    "normalized_route": "/api/artworks",
+    "observed_paths": [
+     "/api/artworks"
+    ],
+    "observed_query_variants": [
+     {
+      "query_param_names": "public&page&per_page&sort&sort_type",
+      "count": 1,
+      "act_ids": [
+       "ACT-00-01-001"
+      ]
+     }
+    ],
+    "act_ids": [
+     "ACT-00-01-001"
+    ],
+    "scn_ids": [
+     "SCN-00-01"
+    ],
+    "feature_ids": [
+     "FEAT-00-library-entry-discovery"
+    ],
+    "network_label": "mapped",
+    "auth": {
+     "mechanism": "portal session (cookie, not visible to in-page hook) + header x-xsrf-token [REDACTED] + header x-acting-user-id (value equals verified account id 266 in every sample)",
+     "request_headers_seen": {
+      "sec-ch-ua-platform": "1/1",
+      "x-xsrf-token": "1/1",
+      "referer": "1/1",
+      "sec-ch-ua": "1/1",
+      "sec-ch-ua-mobile": "1/1",
+      "user-agent": "1/1",
+      "accept": "1/1",
+      "x-acting-user-id": "1/1"
+     },
+     "role": "merchant-owner",
+     "basis": "observed (header presence); cookie mechanism per playbook §2/explore.surfaces.portal.session = inferred for this capture"
+    },
+    "request_shape": {
+     "body": "none"
+    },
+    "response_shape": {
+     "_sample_count": 1,
+     "_root_type": "object",
+     "fields": {
+      "data": {
+       "type": "array",
+       "seen_in": "1/1",
+       "always_present": false
+      },
+      "data[].id": {
+       "type": "number",
+       "seen_in": "1/1",
+       "always_present": false
+      },
+      "data[].name": {
+       "type": "string",
+       "seen_in": "1/1",
+       "always_present": false
+      },
+      "data[].description": {
+       "type": "null",
+       "seen_in": "1/1",
+       "always_present": false
+      },
+      "data[].width": {
+       "type": "number",
+       "seen_in": "1/1",
+       "always_present": false
+      },
+      "data[].height": {
+       "type": "number",
+       "seen_in": "1/1",
+       "always_present": false
+      },
+      "data[].thumbnail": {
+       "type": "string",
+       "seen_in": "1/1",
+       "always_present": false
+      },
+      "data[].is_locked": {
+       "type": "null",
+       "seen_in": "1/1",
+       "always_present": false
+      },
+      "data[].template_settings": {
+       "type": "null|object",
+       "seen_in": "1/1",
+       "always_present": false
+      },
+      "data[].current_version_id": {
+       "type": "null|number",
+       "seen_in": "1/1",
+       "always_present": false
+      },
+      "data[].design_format": {
+       "type": "string",
+       "seen_in": "1/1",
+       "always_present": false
+      },
+      "data[].status": {
+       "type": "number",
+       "seen_in": "1/1",
+       "always_present": false
+      },
+      "data[].schema_version": {
+       "type": "number",
+       "seen_in": "1/1",
+       "always_present": false
+      },
+      "data[].data": {
+       "type": "null",
+       "seen_in": "1/1",
+       "always_present": false
+      },
+      "data[].template_settings.note": {
+       "type": "string",
+       "seen_in": "1/1",
+       "always_present": false
+      },
+      "data[].template_settings.safe_area": {
+       "type": "object",
+       "seen_in": "1/1",
+       "always_present": false
+      },
+      "data[].template_settings.schema_version": {
+       "type": "number",
+       "seen_in": "1/1",
+       "always_present": false
+      },
+      "data[].template_settings.technical_spec": {
+       "type": "object",
+       "seen_in": "1/1",
+       "always_present": false
+      },
+      "data[].template_settings.swc_global_options": {
+       "type": "object",
+       "seen_in": "1/1",
+       "always_present": false
+      },
+      "data[].template_settings.personalization_categories": {
+       "type": "object",
+       "seen_in": "1/1",
+       "always_present": false
+      },
+      "links": {
+       "type": "object",
+       "seen_in": "1/1",
+       "always_present": false
+      },
+      "links.first": {
+       "type": "string",
+       "seen_in": "1/1",
+       "always_present": false
+      },
+      "links.last": {
+       "type": "string",
+       "seen_in": "1/1",
+       "always_present": false
+      },
+      "links.prev": {
+       "type": "null",
+       "seen_in": "1/1",
+       "always_present": false
+      },
+      "links.next": {
+       "type": "string",
+       "seen_in": "1/1",
+       "always_present": false
+      },
+      "meta": {
+       "type": "object",
+       "seen_in": "1/1",
+       "always_present": false
+      },
+      "meta.current_page": {
+       "type": "number",
+       "seen_in": "1/1",
+       "always_present": false
+      },
+      "meta.from": {
+       "type": "number",
+       "seen_in": "1/1",
+       "always_present": false
+      },
+      "meta.last_page": {
+       "type": "number",
+       "seen_in": "1/1",
+       "always_present": false
+      },
+      "meta.links": {
+       "type": "array",
+       "seen_in": "1/1",
+       "always_present": false
+      },
+      "meta.links[].url": {
+       "type": "null|string",
+       "seen_in": "1/1",
+       "always_present": false
+      },
+      "meta.links[].label": {
+       "type": "string",
+       "seen_in": "1/1",
+       "always_present": false
+      },
+      "meta.links[].page": {
+       "type": "null|number",
+       "seen_in": "1/1",
+       "always_present": false
+      },
+      "meta.links[].active": {
+       "type": "boolean",
+       "seen_in": "1/1",
+       "always_present": false
+      },
+      "meta.path": {
+       "type": "string",
+       "seen_in": "1/1",
+       "always_present": false
+      },
+      "meta.per_page": {
+       "type": "number",
+       "seen_in": "1/1",
+       "always_present": false
+      },
+      "meta.to": {
+       "type": "number",
+       "seen_in": "1/1",
+       "always_present": false
+      },
+      "meta.total": {
+       "type": "number",
+       "seen_in": "1/1",
+       "always_present": false
+      }
+     }
+    },
+    "error_shapes": [],
+    "observed_status": [
+     200
+    ],
+    "observed_status_counts": {
+     "200": 1
+    },
+    "observed_count": 1,
+    "confidence": "LOW",
+    "state_delta": [],
+    "spec_ref": null,
+    "basis": "observed",
+    "object_scope": "artwork template library ('TIB Library' modal) - NOT image-library",
+    "notes": "Query: public (bare flag), page=1, per_page=20, sort=created_at, sort_type=desc. Page-number pagination.",
+    "unknowns_single_sample": [
+     "1 sample: pagination behaviour beyond page 1 not observed"
+    ]
+   },
+   {
+    "apiop_id": "APIOP-003",
+    "protocol": "GRAPHQL",
+    "method_or_type": "query clipart_categories (alias categories, anonymous operation) via POST /api/graphql",
+    "host": "https://staging-api.teeinblue.com",
+    "host_check": "matches_expected_api_base",
+    "oracle_eligible": true,
+    "normalized_route": "POST /api/graphql :: query clipart_categories",
+    "observed_paths": [
+     "/api/graphql"
+    ],
+    "act_ids": [
+     "ACT-01-01-001",
+     "ACT-01-09-002"
+    ],
+    "scn_ids": [
+     "SCN-01-01",
+     "SCN-01-09"
+    ],
+    "feature_ids": [
+     "FEAT-01-image-layer-library"
+    ],
+    "network_label": "mapped",
+    "auth": {
+     "mechanism": "portal session (cookie, not visible to in-page hook) + header x-xsrf-token [REDACTED] + header x-acting-user-id (value equals verified account id 266 in every sample)",
+     "request_headers_seen": {
+      "accept": "2/2",
+      "content-type": "2/2",
+      "x-acting-user-id": "2/2",
+      "x-xsrf-token": "2/2"
+     },
+     "role": "merchant-owner",
+     "basis": "observed (header presence); cookie mechanism per playbook §2/explore.surfaces.portal.session = inferred for this capture"
+    },
+    "request_shape": {
+     "_sample_count": 2,
+     "_root_type": "object",
+     "fields": {
+      "variables": {
+       "type": "object",
+       "seen_in": "2/2",
+       "always_present": false
+      },
+      "query": {
+       "type": "string",
+       "seen_in": "2/2",
+       "always_present": false
+      }
+     }
+    },
+    "response_shape": {
+     "_sample_count": 2,
+     "_root_type": "object",
+     "fields": {
+      "data": {
+       "type": "object",
+       "seen_in": "2/2",
+       "always_present": false
+      },
+      "data.categories": {
+       "type": "array",
+       "seen_in": "2/2",
+       "always_present": false
+      },
+      "data.categories[].id": {
+       "type": "number",
+       "seen_in": "2/2",
+       "always_present": false
+      },
+      "data.categories[].type": {
+       "type": "string",
+       "seen_in": "2/2",
+       "always_present": false
+      },
+      "data.categories[].parent_id": {
+       "type": "null",
+       "seen_in": "2/2",
+       "always_present": false
+      },
+      "data.categories[].label": {
+       "type": "string",
+       "seen_in": "2/2",
+       "always_present": false
+      },
+      "data.categories[].__typename": {
+       "type": "string",
+       "seen_in": "2/2",
+       "always_present": false
+      }
+     }
+    },
+    "error_shapes": [],
+    "observed_status": [
+     200
+    ],
+    "observed_status_counts": {
+     "200": 2
+    },
+    "observed_count": 2,
+    "confidence": "LOW",
+    "state_delta": [],
+    "spec_ref": null,
+    "basis": "observed",
+    "object_scope": "Clipart Categories (sidebar /cliparts resource, table clipart_categories) loaded when the image picker opens (tab 'Choose from clipart category'); NOT the image-library category list",
+    "observed_literals": {
+     "where": "type _eq 'clipart', deleted_at _is_null, parent_id _is_null",
+     "order_by": "created_at desc",
+     "limit": 25,
+     "alias": "categories: clipart_categories, label: name"
+    },
+    "notes": "Anonymous GraphQL operation (no operationName). Both samples returned the same 10 rows (ids 5987-6029); id 37 (layer image category created by this run, existing at ACT-01-09-002 time) is absent.",
+    "unknowns_single_sample": [
+     "2 samples, identical result: limit 25 is a client literal; behaviour with >25 categories not observed"
+    ]
+   },
+   {
+    "apiop_id": "APIOP-004",
+    "protocol": "GRAPHQL",
+    "method_or_type": "query layer_images_connection (operationName getData) via POST /api/graphql/relay",
+    "host": "https://staging-api.teeinblue.com",
+    "host_check": "matches_expected_api_base",
+    "oracle_eligible": true,
+    "normalized_route": "POST /api/graphql/relay :: query layer_images_connection",
+    "observed_paths": [
+     "/api/graphql/relay"
+    ],
+    "observed_where_variants": [
+     {
+      "variant": "base filter only",
+      "count": 9,
+      "act_ids": [
+       "ACT-01-01-001",
+       "ACT-01-04-002",
+       "ACT-01-04-003",
+       "ACT-01-05-003",
+       "ACT-01-07-001",
+       "ACT-01-07-002",
+       "ACT-01-09-002",
+       "ACT-01-10-002",
+       "ACT-01-10-003"
+      ]
+     },
+     {
+      "variant": "name _ilike %term%",
+      "count": 1,
+      "act_ids": [
+       "ACT-01-02-001"
+      ]
+     },
+     {
+      "variant": "layer_image_category_id _eq <id>",
+      "count": 2,
+      "act_ids": [
+       "ACT-01-02-002",
+       "ACT-01-04-001"
+      ]
+     },
+     {
+      "variant": "after:<cursor>",
+      "count": 1,
+      "act_ids": [
+       "ACT-01-08-001"
+      ]
+     }
+    ],
+    "act_ids": [
+     "ACT-01-01-001",
+     "ACT-01-02-001",
+     "ACT-01-02-002",
+     "ACT-01-04-001",
+     "ACT-01-04-002",
+     "ACT-01-04-003",
+     "ACT-01-05-003",
+     "ACT-01-07-001",
+     "ACT-01-07-002",
+     "ACT-01-08-001",
+     "ACT-01-09-002",
+     "ACT-01-10-002",
+     "ACT-01-10-003"
+    ],
+    "scn_ids": [
+     "SCN-01-01",
+     "SCN-01-02",
+     "SCN-01-04",
+     "SCN-01-05",
+     "SCN-01-07",
+     "SCN-01-08",
+     "SCN-01-09",
+     "SCN-01-10"
+    ],
+    "feature_ids": [
+     "FEAT-01-image-layer-library"
+    ],
+    "network_label": "mapped",
+    "auth": {
+     "mechanism": "portal session (cookie, not visible to in-page hook) + header x-xsrf-token [REDACTED] + header x-acting-user-id (value equals verified account id 266 in every sample)",
+     "request_headers_seen": {
+      "accept": "13/13",
+      "content-type": "13/13",
+      "x-acting-user-id": "13/13",
+      "x-xsrf-token": "13/13"
+     },
+     "role": "merchant-owner",
+     "basis": "observed (header presence); cookie mechanism per playbook §2/explore.surfaces.portal.session = inferred for this capture"
+    },
+    "request_shape": {
+     "_sample_count": 13,
+     "_root_type": "object",
+     "fields": {
+      "operationName": {
+       "type": "string",
+       "seen_in": "13/13",
+       "always_present": true
+      },
+      "variables": {
+       "type": "object",
+       "seen_in": "13/13",
+       "always_present": true
+      },
+      "variables.limit": {
+       "type": "number",
+       "seen_in": "13/13",
+       "always_present": true
+      },
+      "query": {
+       "type": "string",
+       "seen_in": "13/13",
+       "always_present": true
+      }
+     }
+    },
+    "response_shape": {
+     "_sample_count": 13,
+     "_root_type": "object",
+     "fields": {
+      "data": {
+       "type": "object",
+       "seen_in": "13/13",
+       "always_present": true
+      },
+      "data.layer_images_connection": {
+       "type": "object",
+       "seen_in": "13/13",
+       "always_present": true
+      },
+      "data.layer_images_connection.edges": {
+       "type": "array",
+       "seen_in": "13/13",
+       "always_present": true
+      },
+      "data.layer_images_connection.pageInfo": {
+       "type": "object",
+       "seen_in": "13/13",
+       "always_present": true
+      },
+      "data.layer_images_connection.pageInfo.hasNextPage": {
+       "type": "boolean",
+       "seen_in": "13/13",
+       "always_present": true
+      },
+      "data.layer_images_connection.pageInfo.hasPreviousPage": {
+       "type": "boolean",
+       "seen_in": "13/13",
+       "always_present": true
+      },
+      "data.layer_images_connection.pageInfo.startCursor": {
+       "type": "null|string",
+       "seen_in": "13/13",
+       "always_present": true
+      },
+      "data.layer_images_connection.pageInfo.endCursor": {
+       "type": "null|string",
+       "seen_in": "13/13",
+       "always_present": true
+      },
+      "data.layer_images_connection.pageInfo.__typename": {
+       "type": "string",
+       "seen_in": "13/13",
+       "always_present": true
+      },
+      "data.layer_images_connection.__typename": {
+       "type": "string",
+       "seen_in": "13/13",
+       "always_present": true
+      }
+     }
+    },
+    "error_shapes": [],
+    "observed_status": [
+     200
+    ],
+    "observed_status_counts": {
+     "200": 13
+    },
+    "observed_count": 13,
+    "confidence": "HIGH",
+    "state_delta": [
+     {
+      "field": "layer_images list (All)",
+      "before": "9 pre-existing (ACT-01-01-001)",
+      "after": "21 incl. 12 QA- uploads; page 1 = 20 edges hasNextPage true (ACT-01-04-003)",
+      "confidence": "HIGH",
+      "evidence": "raw/network/ACT-01-01-001.json#1, ACT-01-04-003.json#19"
+     },
+     {
+      "field": "layer_images[11163,11166,11168].layer_image_category_id",
+      "before": "37 / 37 / 37",
+      "after": "null (after DELETE category 37)",
+      "confidence": "LOW",
+      "evidence": "raw/network/ACT-01-10-003.json#1"
+     }
+    ],
+    "spec_ref": null,
+    "basis": "observed",
+    "observed_literals": {
+     "base_where": "deleted_at _is_null AND master _nilike '%.svg' AND master _nilike '%.gpx'",
+     "order_by": "id desc",
+     "variables.limit": "20 in all 13 samples",
+     "cursor_format": "base64 of JSON {\"id\" : <layer_image_id>} (decoded from samples)",
+     "node.id_format": "base64 Relay global id of [1, \"public\", \"layer_images\", <id>] (decoded from samples)"
+    },
+    "pagination": "cursor (Relay connection): first=$limit, after=<endCursor>; pageInfo {hasNextPage, hasPreviousPage, startCursor, endCursor}. Page 2 sample (ACT-01-08-001): after = page-1 endCursor, returned 1 edge, hasPreviousPage true.",
+    "notes": "All filtering (search, category, svg/gpx exclusion, soft-delete) is composed client-side in the GraphQL where clause. Search no-match and empty category both return edges [] with pageInfo all false/null; UI text differs ('No data matched' vs 'Empty data') - UI-only difference.",
+    "unknowns_single_sample": [
+     "name _ilike search: 1 sample (no-match only); case-insensitivity/partial match on a hit not observed",
+     "after-cursor pagination: 1 sample",
+     "page sizes 50/100/250/500 shown in UI select were never sent (limit 20 only)"
+    ]
+   },
+   {
+    "apiop_id": "APIOP-005",
+    "protocol": "REST",
+    "method_or_type": "GET",
+    "host": "https://staging-api.teeinblue.com",
+    "host_check": "matches_expected_api_base",
+    "oracle_eligible": true,
+    "normalized_route": "/api/layer-image-categories",
+    "observed_paths": [
+     "/api/layer-image-categories"
+    ],
+    "observed_query_variants": [
+     {
+      "query_param_names": "type",
+      "count": 7,
+      "act_ids": [
+       "ACT-01-01-001",
+       "ACT-01-03-002",
+       "ACT-01-03-003",
+       "ACT-01-07-001",
+       "ACT-01-07-002",
+       "ACT-01-09-002",
+       "ACT-01-10-003"
+      ]
+     }
+    ],
+    "act_ids": [
+     "ACT-01-01-001",
+     "ACT-01-03-002",
+     "ACT-01-03-003",
+     "ACT-01-07-001",
+     "ACT-01-07-002",
+     "ACT-01-09-002",
+     "ACT-01-10-003"
+    ],
+    "scn_ids": [
+     "SCN-01-01",
+     "SCN-01-03",
+     "SCN-01-07",
+     "SCN-01-09",
+     "SCN-01-10"
+    ],
+    "feature_ids": [
+     "FEAT-01-image-layer-library"
+    ],
+    "network_label": "mapped",
+    "auth": {
+     "mechanism": "portal session (cookie, not visible to in-page hook) + header x-xsrf-token [REDACTED] + header x-acting-user-id (value equals verified account id 266 in every sample)",
+     "request_headers_seen": {
+      "accept": "7/7",
+      "x-acting-user-id": "7/7",
+      "x-xsrf-token": "7/7"
+     },
+     "role": "merchant-owner",
+     "basis": "observed (header presence); cookie mechanism per playbook §2/explore.surfaces.portal.session = inferred for this capture"
+    },
+    "request_shape": {
+     "body": "none"
+    },
+    "response_shape": {
+     "_sample_count": 7,
+     "_root_type": "array",
+     "fields": {
+      "[].id": {
+       "type": "number",
+       "seen_in": "5/7",
+       "always_present": false
+      },
+      "[].user_id": {
+       "type": "number",
+       "seen_in": "5/7",
+       "always_present": false
+      },
+      "[].name": {
+       "type": "string",
+       "seen_in": "5/7",
+       "always_present": false
+      },
+      "[].description": {
+       "type": "null",
+       "seen_in": "5/7",
+       "always_present": false
+      },
+      "[].type": {
+       "type": "string",
+       "seen_in": "5/7",
+       "always_present": false
+      },
+      "[].created_at": {
+       "type": "string",
+       "seen_in": "5/7",
+       "always_present": false
+      },
+      "[].updated_at": {
+       "type": "string",
+       "seen_in": "5/7",
+       "always_present": false
+      }
+     }
+    },
+    "error_shapes": [],
+    "observed_status": [
+     200
+    ],
+    "observed_status_counts": {
+     "200": 7
+    },
+    "observed_count": 7,
+    "confidence": "HIGH",
+    "state_delta": [
+     {
+      "field": "layer image categories list",
+      "before": "[] (ACT-01-01-001)",
+      "after": "[{id 37, type 'clipart', user_id 266}] (ACT-01-03-002)",
+      "confidence": "MEDIUM",
+      "evidence": "raw/network/ACT-01-03-002.json#1"
+     },
+     {
+      "field": "layer image categories list",
+      "before": "[id 37]",
+      "after": "[] (ACT-01-10-003)",
+      "confidence": "LOW",
+      "evidence": "raw/network/ACT-01-10-003.json#2"
+     }
+    ],
+    "spec_ref": null,
+    "basis": "observed",
+    "observed_literals": {
+     "query": "type=clipart in 7/7 samples"
+    },
+    "notes": "Response is a bare array (no pagination envelope). Rows: id, user_id, name, description, type, created_at, updated_at. Refetched after create/update/delete and on Move-to-category dialog open. This is the image-library category list (layer_image_categories) - distinct from GraphQL clipart_categories (APIOP-003), see conflicts.",
+    "unknowns_single_sample": []
+   },
+   {
+    "apiop_id": "APIOP-006",
+    "protocol": "REST",
+    "method_or_type": "POST",
+    "host": "https://staging-api.teeinblue.com",
+    "host_check": "matches_expected_api_base",
+    "oracle_eligible": true,
+    "normalized_route": "/api/layer-image-categories",
+    "observed_paths": [
+     "/api/layer-image-categories"
+    ],
+    "act_ids": [
+     "ACT-01-03-001",
+     "ACT-01-03-002"
+    ],
+    "scn_ids": [
+     "SCN-01-03"
+    ],
+    "feature_ids": [
+     "FEAT-01-image-layer-library"
+    ],
+    "network_label": "mapped",
+    "auth": {
+     "mechanism": "portal session (cookie, not visible to in-page hook) + header x-xsrf-token [REDACTED] + header x-acting-user-id (value equals verified account id 266 in every sample)",
+     "request_headers_seen": {
+      "accept": "2/2",
+      "content-type": "2/2",
+      "x-acting-user-id": "2/2",
+      "x-xsrf-token": "2/2"
+     },
+     "role": "merchant-owner",
+     "basis": "observed (header presence); cookie mechanism per playbook §2/explore.surfaces.portal.session = inferred for this capture"
+    },
+    "request_shape": {
+     "_sample_count": 2,
+     "_root_type": "object",
+     "fields": {
+      "name": {
+       "type": "string",
+       "seen_in": "2/2",
+       "always_present": false
+      },
+      "type": {
+       "type": "string",
+       "seen_in": "2/2",
+       "always_present": false
+      }
+     }
+    },
+    "response_shape": {
+     "_sample_count": 1,
+     "_root_type": "object",
+     "fields": {
+      "name": {
+       "type": "string",
+       "seen_in": "1/1",
+       "always_present": false
+      },
+      "type": {
+       "type": "string",
+       "seen_in": "1/1",
+       "always_present": false
+      },
+      "user_id": {
+       "type": "number",
+       "seen_in": "1/1",
+       "always_present": false
+      },
+      "updated_at": {
+       "type": "string",
+       "seen_in": "1/1",
+       "always_present": false
+      },
+      "created_at": {
+       "type": "string",
+       "seen_in": "1/1",
+       "always_present": false
+      },
+      "id": {
+       "type": "number",
+       "seen_in": "1/1",
+       "always_present": false
+      }
+     }
+    },
+    "error_shapes": [
+     {
+      "status": 422,
+      "count": 1,
+      "act_ids": [
+       "ACT-01-03-001"
+      ],
+      "shape": {
+       "message": {
+        "type": "string",
+        "seen_in": "1/1",
+        "always_present": false
+       },
+       "errors": {
+        "type": "object",
+        "seen_in": "1/1",
+        "always_present": false
+       },
+       "errors.name": {
+        "type": "array",
+        "seen_in": "1/1",
+        "always_present": false
+       }
+      },
+      "observed_messages": [
+       "The name field is required."
+      ]
+     }
+    ],
+    "observed_status": [
+     201,
+     422
+    ],
+    "observed_status_counts": {
+     "201": 1,
+     "422": 1
+    },
+    "observed_count": 2,
+    "confidence": "LOW",
+    "state_delta": [
+     {
+      "field": "layer_image_category",
+      "before": "absent",
+      "after": "created id 37 name 'QA-imgcat-A' type 'clipart' user_id 266",
+      "confidence": "LOW",
+      "evidence": "raw/network/ACT-01-03-002.json#0"
+     },
+     {
+      "field": "categories",
+      "before": "[]",
+      "after": "[] (422, nothing created)",
+      "confidence": "LOW",
+      "evidence": "raw/network/ACT-01-03-001.json#0"
+     }
+    ],
+    "spec_ref": null,
+    "basis": "observed",
+    "observed_literals": {
+     "type": "'clipart' sent in 2/2 request bodies"
+    },
+    "notes": "422 body: {message, errors.name[]} Laravel-style validation envelope. Whitespace-only name rejected with 'The name field is required.'",
+    "unknowns_single_sample": [
+     "422 whitespace-name: 1 sample - no required/trim/max-length rule inferred beyond this one input",
+     "201 create: 1 sample; duplicate category name behaviour not observed"
+    ]
+   },
+   {
+    "apiop_id": "APIOP-007",
+    "protocol": "REST",
+    "method_or_type": "GET",
+    "host": "https://staging-api.teeinblue.com",
+    "host_check": "matches_expected_api_base",
+    "oracle_eligible": true,
+    "normalized_route": "/api/layer-image-categories/{id}",
+    "observed_paths": [
+     "/api/layer-image-categories/37"
+    ],
+    "act_ids": [
+     "ACT-01-03-003"
+    ],
+    "scn_ids": [
+     "SCN-01-03"
+    ],
+    "feature_ids": [
+     "FEAT-01-image-layer-library"
+    ],
+    "network_label": "mapped",
+    "auth": {
+     "mechanism": "portal session (cookie, not visible to in-page hook) + header x-xsrf-token [REDACTED] + header x-acting-user-id (value equals verified account id 266 in every sample)",
+     "request_headers_seen": {
+      "accept": "1/1",
+      "x-acting-user-id": "1/1",
+      "x-xsrf-token": "1/1"
+     },
+     "role": "merchant-owner",
+     "basis": "observed (header presence); cookie mechanism per playbook §2/explore.surfaces.portal.session = inferred for this capture"
+    },
+    "request_shape": {
+     "body": "none"
+    },
+    "response_shape": {
+     "_sample_count": 1,
+     "_root_type": "object",
+     "fields": {
+      "id": {
+       "type": "number",
+       "seen_in": "1/1",
+       "always_present": false
+      },
+      "user_id": {
+       "type": "number",
+       "seen_in": "1/1",
+       "always_present": false
+      },
+      "name": {
+       "type": "string",
+       "seen_in": "1/1",
+       "always_present": false
+      },
+      "description": {
+       "type": "null",
+       "seen_in": "1/1",
+       "always_present": false
+      },
+      "type": {
+       "type": "string",
+       "seen_in": "1/1",
+       "always_present": false
+      },
+      "created_at": {
+       "type": "string",
+       "seen_in": "1/1",
+       "always_present": false
+      },
+      "updated_at": {
+       "type": "string",
+       "seen_in": "1/1",
+       "always_present": false
+      }
+     }
+    },
+    "error_shapes": [],
+    "observed_status": [
+     200
+    ],
+    "observed_status_counts": {
+     "200": 1
+    },
+    "observed_count": 1,
+    "confidence": "LOW",
+    "state_delta": [],
+    "spec_ref": null,
+    "basis": "observed",
+    "notes": "Called to prefill the rename dialog.",
+    "unknowns_single_sample": [
+     "1 sample"
+    ]
+   },
+   {
+    "apiop_id": "APIOP-008",
+    "protocol": "REST",
+    "method_or_type": "PUT",
+    "host": "https://staging-api.teeinblue.com",
+    "host_check": "matches_expected_api_base",
+    "oracle_eligible": true,
+    "normalized_route": "/api/layer-image-categories/{id}",
+    "observed_paths": [
+     "/api/layer-image-categories/37"
+    ],
+    "act_ids": [
+     "ACT-01-03-003"
+    ],
+    "scn_ids": [
+     "SCN-01-03"
+    ],
+    "feature_ids": [
+     "FEAT-01-image-layer-library"
+    ],
+    "network_label": "mapped",
+    "auth": {
+     "mechanism": "portal session (cookie, not visible to in-page hook) + header x-xsrf-token [REDACTED] + header x-acting-user-id (value equals verified account id 266 in every sample)",
+     "request_headers_seen": {
+      "accept": "1/1",
+      "content-type": "1/1",
+      "x-acting-user-id": "1/1",
+      "x-xsrf-token": "1/1"
+     },
+     "role": "merchant-owner",
+     "basis": "observed (header presence); cookie mechanism per playbook §2/explore.surfaces.portal.session = inferred for this capture"
+    },
+    "request_shape": {
+     "_sample_count": 1,
+     "_root_type": "object",
+     "fields": {
+      "name": {
+       "type": "string",
+       "seen_in": "1/1",
+       "always_present": false
+      }
+     }
+    },
+    "response_shape": {
+     "_sample_count": 1,
+     "_root_type": "object",
+     "fields": {
+      "id": {
+       "type": "number",
+       "seen_in": "1/1",
+       "always_present": false
+      },
+      "user_id": {
+       "type": "number",
+       "seen_in": "1/1",
+       "always_present": false
+      },
+      "name": {
+       "type": "string",
+       "seen_in": "1/1",
+       "always_present": false
+      },
+      "description": {
+       "type": "null",
+       "seen_in": "1/1",
+       "always_present": false
+      },
+      "type": {
+       "type": "string",
+       "seen_in": "1/1",
+       "always_present": false
+      },
+      "created_at": {
+       "type": "string",
+       "seen_in": "1/1",
+       "always_present": false
+      },
+      "updated_at": {
+       "type": "string",
+       "seen_in": "1/1",
+       "always_present": false
+      }
+     }
+    },
+    "error_shapes": [],
+    "observed_status": [
+     200
+    ],
+    "observed_status_counts": {
+     "200": 1
+    },
+    "observed_count": 1,
+    "confidence": "LOW",
+    "state_delta": [
+     {
+      "field": "layer_image_category[37].name",
+      "before": "QA-imgcat-A",
+      "after": "QA-imgcat-A-renamed (updated_at changed)",
+      "confidence": "LOW",
+      "evidence": "raw/network/ACT-01-03-003.json#1"
+     }
+    ],
+    "spec_ref": null,
+    "basis": "observed",
+    "notes": "Request body {name} only.",
+    "unknowns_single_sample": [
+     "1 sample; validation on update (empty/whitespace) not observed"
+    ]
+   },
+   {
+    "apiop_id": "APIOP-009",
+    "protocol": "REST",
+    "method_or_type": "DELETE",
+    "host": "https://staging-api.teeinblue.com",
+    "host_check": "matches_expected_api_base",
+    "oracle_eligible": true,
+    "normalized_route": "/api/layer-image-categories/{id}",
+    "observed_paths": [
+     "/api/layer-image-categories/37"
+    ],
+    "act_ids": [
+     "ACT-01-10-003"
+    ],
+    "scn_ids": [
+     "SCN-01-10"
+    ],
+    "feature_ids": [
+     "FEAT-01-image-layer-library"
+    ],
+    "network_label": "mapped",
+    "auth": {
+     "mechanism": "portal session (cookie, not visible to in-page hook) + header x-xsrf-token [REDACTED] + header x-acting-user-id (value equals verified account id 266 in every sample)",
+     "request_headers_seen": {
+      "accept": "1/1",
+      "x-acting-user-id": "1/1",
+      "x-xsrf-token": "1/1"
+     },
+     "role": "merchant-owner",
+     "basis": "observed (header presence); cookie mechanism per playbook §2/explore.surfaces.portal.session = inferred for this capture"
+    },
+    "request_shape": {
+     "body": "none"
+    },
+    "response_shape": {
+     "_note": "2xx with empty body"
+    },
+    "error_shapes": [],
+    "observed_status": [
+     204
+    ],
+    "observed_status_counts": {
+     "204": 1
+    },
+    "observed_count": 1,
+    "confidence": "LOW",
+    "state_delta": [
+     {
+      "field": "layer_image_category[37]",
+      "before": "exists (3 images)",
+      "after": "deleted (204, empty body); list []",
+      "confidence": "LOW",
+      "evidence": "raw/network/ACT-01-10-003.json#0,#2"
+     },
+     {
+      "field": "layer_images[11163,11166,11168].layer_image_category_id",
+      "before": "37",
+      "after": "null - images kept, uncategorized",
+      "confidence": "LOW",
+      "evidence": "raw/network/ACT-01-10-003.json#1"
+     }
+    ],
+    "spec_ref": null,
+    "basis": "observed",
+    "notes": "No request body.",
+    "unknowns_single_sample": [
+     "1 sample: 'images become uncategorized on category delete' observed once in image library (and once in mockup library, APIOP-022) - not generalized"
+    ]
+   },
+   {
+    "apiop_id": "APIOP-010",
+    "protocol": "REST",
+    "method_or_type": "POST",
+    "host": "https://staging-api.teeinblue.com",
+    "host_check": "matches_expected_api_base",
+    "oracle_eligible": true,
+    "normalized_route": "/api/users/{user_id}/temporary-files/upload-url",
+    "observed_paths": [
+     "/api/users/266/temporary-files/upload-url"
+    ],
+    "act_ids": [
+     "ACT-01-04-001",
+     "ACT-01-04-002",
+     "ACT-01-04-003",
+     "ACT-01-05-001",
+     "ACT-01-05-003",
+     "ACT-02-04-001",
+     "ACT-02-04-002",
+     "ACT-02-05-001",
+     "ACT-02-05-003"
+    ],
+    "scn_ids": [
+     "SCN-01-04",
+     "SCN-01-05",
+     "SCN-02-04",
+     "SCN-02-05"
+    ],
+    "feature_ids": [
+     "FEAT-01-image-layer-library",
+     "FEAT-02-mockup-layer-library"
+    ],
+    "network_label": "mapped",
+    "auth": {
+     "mechanism": "portal session (cookie, not visible to in-page hook) + header x-xsrf-token [REDACTED] + header x-acting-user-id (value equals verified account id 266 in every sample)",
+     "request_headers_seen": {
+      "accept": "20/20",
+      "content-type": "20/20",
+      "x-acting-user-id": "20/20",
+      "x-xsrf-token": "20/20"
+     },
+     "role": "merchant-owner",
+     "basis": "observed (header presence); cookie mechanism per playbook §2/explore.surfaces.portal.session = inferred for this capture"
+    },
+    "request_shape": {
+     "_sample_count": 20,
+     "_root_type": "object",
+     "fields": {
+      "filename": {
+       "type": "string",
+       "seen_in": "20/20",
+       "always_present": true
+      },
+      "filesize": {
+       "type": "number",
+       "seen_in": "20/20",
+       "always_present": true
+      },
+      "mimetype": {
+       "type": "string",
+       "seen_in": "20/20",
+       "always_present": true
+      }
+     }
+    },
+    "response_shape": {
+     "_sample_count": 20,
+     "_root_type": "object",
+     "fields": {
+      "data": {
+       "type": "object",
+       "seen_in": "20/20",
+       "always_present": true
+      },
+      "data.disk": {
+       "type": "string",
+       "seen_in": "20/20",
+       "always_present": true
+      },
+      "data.filename": {
+       "type": "string",
+       "seen_in": "20/20",
+       "always_present": true
+      },
+      "data.id": {
+       "type": "string",
+       "seen_in": "20/20",
+       "always_present": true
+      },
+      "data.path": {
+       "type": "string",
+       "seen_in": "20/20",
+       "always_present": true
+      },
+      "data.updated_at": {
+       "type": "string",
+       "seen_in": "20/20",
+       "always_present": true
+      },
+      "data.created_at": {
+       "type": "string",
+       "seen_in": "20/20",
+       "always_present": true
+      },
+      "meta": {
+       "type": "object",
+       "seen_in": "20/20",
+       "always_present": true
+      },
+      "meta.signed_url": {
+       "type": "string",
+       "seen_in": "20/20",
+       "always_present": true
+      },
+      "meta.headers": {
+       "type": "object",
+       "seen_in": "20/20",
+       "always_present": true
+      },
+      "meta.headers.Host": {
+       "type": "array",
+       "seen_in": "20/20",
+       "always_present": true
+      }
+     }
+    },
+    "error_shapes": [],
+    "observed_status": [
+     201
+    ],
+    "observed_status_counts": {
+     "201": 20
+    },
+    "observed_count": 20,
+    "confidence": "HIGH",
+    "state_delta": [],
+    "spec_ref": null,
+    "basis": "observed",
+    "flow": "Step 1/4 of upload (shared by image-layer and mockup-layer libraries). Response data.id = temporary_file_id used in step 3; meta.signed_url = target of step 2 (linkage verified by data in all 20 chains, see payload.upload_chain_linkage).",
+    "observed_literals": {
+     "data.disk": "'spaces' (20/20)",
+     "signed_url params": "X-Amz-Expires=300 (20/20), X-Amz-SignedHeaders=host, X-Amz-Content-Sha256=UNSIGNED-PAYLOAD",
+     "data.path_pattern": "temporary-files/<YYYY-MM-DD>/<random>.<ext>"
+    },
+    "notes": "Path param {user_id} = 266 (users.id) in all samples. Client declares filename/filesize/mimetype; 201 for declared filesize up to 27,011,273 B (2 samples) and for a 33 B text file declared image/png (2 samples). meta.signed_url values are [REDACTED] for credential/signature in raw and not copied here.",
+    "unknowns_single_sample": [
+     "No size limit boundary inferred: largest observed 27 MB accepted (2 samples, one per library); upper bound unknown"
+    ]
+   },
+   {
+    "apiop_id": "APIOP-011",
+    "protocol": "OTHER",
+    "method_or_type": "PUT (presigned object-storage upload)",
+    "host": "https://oe-cdn.sgp1.digitaloceanspaces.com",
+    "host_check": "host_not_in_expected_api_base",
+    "oracle_eligible": false,
+    "normalized_route": "/teeinblue-staging/temporary-files/{date}/{object_key}.{ext}",
+    "observed_paths": [
+     "/teeinblue-staging/temporary-files/2026-10-26/[object_key].png (17 samples)",
+     "/teeinblue-staging/temporary-files/2026-10-26/[object_key].jpg (3 samples)"
+    ],
+    "act_ids": [
+     "ACT-01-04-001",
+     "ACT-01-04-002",
+     "ACT-01-04-003",
+     "ACT-01-05-001",
+     "ACT-01-05-003",
+     "ACT-02-04-001",
+     "ACT-02-04-002",
+     "ACT-02-05-001",
+     "ACT-02-05-003"
+    ],
+    "scn_ids": [
+     "SCN-01-04",
+     "SCN-01-05",
+     "SCN-02-04",
+     "SCN-02-05"
+    ],
+    "feature_ids": [
+     "FEAT-01-image-layer-library",
+     "FEAT-02-mockup-layer-library"
+    ],
+    "network_label": "mapped",
+    "auth": {
+     "mechanism": "presigned URL: authorization carried in query string (X-Amz-Algorithm AWS4-HMAC-SHA256, X-Amz-Credential [REDACTED], X-Amz-Signature [REDACTED], X-Amz-SignedHeaders host, X-Amz-Content-Sha256 UNSIGNED-PAYLOAD); no session cookie / xsrf / acting-user header sent",
+     "request_headers_seen": {
+      "accept": "20/20",
+      "cache-control": "20/20",
+      "x-requested-with": "20/20"
+     },
+     "basis": "observed"
+    },
+    "request_shape": {
+     "body": "binary file (hook records only _binary/type/size/name)",
+     "fields": {
+      "_binary": {
+       "type": "boolean",
+       "seen_in": "20/20",
+       "always_present": true
+      },
+      "type": {
+       "type": "string",
+       "seen_in": "20/20",
+       "always_present": true
+      },
+      "size": {
+       "type": "number",
+       "seen_in": "20/20",
+       "always_present": true
+      },
+      "name": {
+       "type": "string",
+       "seen_in": "20/20",
+       "always_present": true
+      }
+     }
+    },
+    "response_shape": {
+     "_note": "2xx with empty body"
+    },
+    "error_shapes": [],
+    "observed_status": [
+     200
+    ],
+    "observed_status_counts": {
+     "200": 20
+    },
+    "observed_count": 20,
+    "confidence": "HIGH",
+    "state_delta": [],
+    "spec_ref": null,
+    "basis": "observed",
+    "observed_paths_note": "Object keys collapsed to [object_key]; full raw paths only in raw/network/*. Query string (presigned) not reproduced.",
+    "flow": "Step 2/4 of upload: browser PUTs binary directly to DigitalOcean Spaces; teeinblue API not involved. Response 200 with empty body (content-length 0).",
+    "host_flag": "host_not_in_expected_api_base (contract §14): oe-cdn.sgp1.digitaloceanspaces.com is neither expected_api_base nor in environments.staging.additional_api_hosts (not configured). Not usable as oracle until operator confirms the host.",
+    "notes": "PUT ~13 s (image) / ~10 s (mockup) for 27 MB; others <0.5 s.",
+    "unknowns_single_sample": [
+     "Behaviour of PUT after X-Amz-Expires (300 s) elapses not observed"
+    ]
+   },
+   {
+    "apiop_id": "APIOP-012",
+    "protocol": "REST",
+    "method_or_type": "POST",
+    "host": "https://staging-api.teeinblue.com",
+    "host_check": "matches_expected_api_base",
+    "oracle_eligible": true,
+    "normalized_route": "/api/layer-images/by-temporary-file",
+    "observed_paths": [
+     "/api/layer-images/by-temporary-file"
+    ],
+    "act_ids": [
+     "ACT-01-04-001",
+     "ACT-01-04-002",
+     "ACT-01-04-003",
+     "ACT-01-05-001",
+     "ACT-01-05-003"
+    ],
+    "scn_ids": [
+     "SCN-01-04",
+     "SCN-01-05"
+    ],
+    "feature_ids": [
+     "FEAT-01-image-layer-library"
+    ],
+    "network_label": "mapped",
+    "auth": {
+     "mechanism": "portal session (cookie, not visible to in-page hook) + header x-xsrf-token [REDACTED] + header x-acting-user-id (value equals verified account id 266 in every sample)",
+     "request_headers_seen": {
+      "accept": "13/13",
+      "content-type": "13/13",
+      "x-acting-user-id": "13/13",
+      "x-xsrf-token": "13/13"
+     },
+     "role": "merchant-owner",
+     "basis": "observed (header presence); cookie mechanism per playbook §2/explore.surfaces.portal.session = inferred for this capture"
+    },
+    "request_shape": {
+     "_sample_count": 13,
+     "_root_type": "object",
+     "fields": {
+      "temporary_file_id": {
+       "type": "string",
+       "seen_in": "13/13",
+       "always_present": true
+      },
+      "name": {
+       "type": "string",
+       "seen_in": "13/13",
+       "always_present": true
+      },
+      "artwork_width": {
+       "type": "number",
+       "seen_in": "13/13",
+       "always_present": true
+      },
+      "category_id": {
+       "type": "null|number",
+       "seen_in": "13/13",
+       "always_present": true
+      }
+     }
+    },
+    "response_shape": {
+     "_sample_count": 12,
+     "_root_type": "object",
+     "fields": {
+      "name": {
+       "type": "string",
+       "seen_in": "12/12",
+       "always_present": true
+      },
+      "master": {
+       "type": "string",
+       "seen_in": "12/12",
+       "always_present": true
+      },
+      "url": {
+       "type": "null",
+       "seen_in": "12/12",
+       "always_present": true
+      },
+      "thumbnail": {
+       "type": "null",
+       "seen_in": "12/12",
+       "always_present": true
+      },
+      "width": {
+       "type": "null",
+       "seen_in": "12/12",
+       "always_present": true
+      },
+      "height": {
+       "type": "null",
+       "seen_in": "12/12",
+       "always_present": true
+      },
+      "layer_image_category_id": {
+       "type": "null|number",
+       "seen_in": "12/12",
+       "always_present": true
+      },
+      "updated_at": {
+       "type": "string",
+       "seen_in": "12/12",
+       "always_present": true
+      },
+      "created_at": {
+       "type": "string",
+       "seen_in": "12/12",
+       "always_present": true
+      },
+      "id": {
+       "type": "number",
+       "seen_in": "12/12",
+       "always_present": true
+      }
+     }
+    },
+    "error_shapes": [
+     {
+      "status": 422,
+      "count": 1,
+      "act_ids": [
+       "ACT-01-05-001"
+      ],
+      "shape": {
+       "message": {
+        "type": "string",
+        "seen_in": "1/1",
+        "always_present": false
+       },
+       "errors": {
+        "type": "object",
+        "seen_in": "1/1",
+        "always_present": false
+       },
+       "errors.temporary_file_id": {
+        "type": "array",
+        "seen_in": "1/1",
+        "always_present": false
+       }
+      },
+      "observed_messages": [
+       "This file type is not supported. Please upload a PNG, JPEG, GIF or WebP image."
+      ]
+     }
+    ],
+    "observed_status": [
+     201,
+     422
+    ],
+    "observed_status_counts": {
+     "201": 12,
+     "422": 1
+    },
+    "observed_count": 13,
+    "confidence": "HIGH",
+    "state_delta": [
+     {
+      "field": "layer_images (new row)",
+      "before": "absent",
+      "after": "row created: master '' , url null, thumbnail null, width null, height null, layer_image_category_id = request category_id",
+      "confidence": "HIGH",
+      "evidence": "raw/network/ACT-01-04-001.json#2 + 11 more 201 samples"
+     },
+     {
+      "field": "layer_images[11163] after processing",
+      "before": "master '' url null width null",
+      "after": "master '<hash>.png', url '<hash>_large.webp', thumbnail '<hash>_thumbnail.webp', width/height 200x200 (via APIOP-013/004)",
+      "confidence": "MEDIUM",
+      "evidence": "raw/network/ACT-01-04-001.json#3,#4"
+     },
+     {
+      "field": "layer_images",
+      "before": "unchanged",
+      "after": "unchanged (422, no row) for 33 B text file named .png",
+      "confidence": "LOW",
+      "evidence": "raw/network/ACT-01-05-001.json#2"
+     }
+    ],
+    "spec_ref": null,
+    "basis": "observed",
+    "flow": "Step 3/4: register uploaded temp file as layer image. temporary_file_id = APIOP-010 data.id.",
+    "observed_literals": {
+     "artwork_width": "1600 in 13/13 (artwork 4087 width)",
+     "category_id": "37 when a category was selected (1), null when 'All' (12)",
+     "name": "filename without extension"
+    },
+    "rate_limit_headers": "x-ratelimit-limit 1000, x-ratelimit-remaining decremented 999->988 across 201 responses, x-ratelimit-reset counting down from 86400 (seconds). The one 422 response did not decrement remaining (995 -> 995).",
+    "stored_dimensions": "width/height after processing equal source pixels for 10x10..3000x3000 (no downscale observed; via APIOP-004/015 responses)",
+    "unknowns_single_sample": [
+     "422 'This file type is not supported. Please upload a PNG, JPEG, GIF or WebP image.' (errors.temporary_file_id[]): 1 sample - GIF/WebP acceptance not tested; message lists formats but no enum inferred",
+     "422 not consuming the rate-limit quota: 1 sample",
+     "Daily-window interpretation of reset=86400 is inferred"
+    ]
+   },
+   {
+    "apiop_id": "APIOP-013",
+    "protocol": "GRAPHQL",
+    "method_or_type": "query layer_images(where id _in $ids) (operationName get) via POST /api/graphql",
+    "host": "https://staging-api.teeinblue.com",
+    "host_check": "matches_expected_api_base",
+    "oracle_eligible": true,
+    "normalized_route": "POST /api/graphql :: query layer_images(ids)",
+    "observed_paths": [
+     "/api/graphql"
+    ],
+    "act_ids": [
+     "ACT-01-04-001",
+     "ACT-01-04-002",
+     "ACT-01-04-003",
+     "ACT-01-05-003"
+    ],
+    "scn_ids": [
+     "SCN-01-04",
+     "SCN-01-05"
+    ],
+    "feature_ids": [
+     "FEAT-01-image-layer-library"
+    ],
+    "network_label": "polling",
+    "auth": {
+     "mechanism": "portal session (cookie, not visible to in-page hook) + header x-xsrf-token [REDACTED] + header x-acting-user-id (value equals verified account id 266 in every sample)",
+     "request_headers_seen": {
+      "accept": "7/7",
+      "content-type": "7/7",
+      "x-acting-user-id": "7/7",
+      "x-xsrf-token": "7/7"
+     },
+     "role": "merchant-owner",
+     "basis": "observed (header presence); cookie mechanism per playbook §2/explore.surfaces.portal.session = inferred for this capture"
+    },
+    "request_shape": {
+     "_sample_count": 7,
+     "_root_type": "object",
+     "fields": {
+      "operationName": {
+       "type": "string",
+       "seen_in": "7/7",
+       "always_present": true
+      },
+      "variables": {
+       "type": "object",
+       "seen_in": "7/7",
+       "always_present": true
+      },
+      "variables.ids": {
+       "type": "array",
+       "seen_in": "7/7",
+       "always_present": true
+      },
+      "query": {
+       "type": "string",
+       "seen_in": "7/7",
+       "always_present": true
+      }
+     }
+    },
+    "response_shape": {
+     "_sample_count": 7,
+     "_root_type": "object",
+     "fields": {
+      "data": {
+       "type": "object",
+       "seen_in": "7/7",
+       "always_present": true
+      },
+      "data.layer_images": {
+       "type": "array",
+       "seen_in": "7/7",
+       "always_present": true
+      },
+      "data.layer_images[].id": {
+       "type": "number",
+       "seen_in": "7/7",
+       "always_present": true
+      },
+      "data.layer_images[].url": {
+       "type": "null|string",
+       "seen_in": "7/7",
+       "always_present": true
+      },
+      "data.layer_images[].thumbnail": {
+       "type": "null|string",
+       "seen_in": "7/7",
+       "always_present": true
+      },
+      "data.layer_images[].__typename": {
+       "type": "string",
+       "seen_in": "7/7",
+       "always_present": true
+      }
+     }
+    },
+    "error_shapes": [],
+    "observed_status": [
+     200
+    ],
+    "observed_status_counts": {
+     "200": 7
+    },
+    "observed_count": 7,
+    "confidence": "HIGH",
+    "state_delta": [
+     {
+      "field": "layer_images[id].url/thumbnail",
+      "before": "null",
+      "after": "'users/266/image-layers/<hash>_large.webp' / '<hash>_thumbnail.webp'",
+      "confidence": "MEDIUM",
+      "evidence": "raw/network/ACT-01-05-003.json#3..#6"
+     }
+    ],
+    "spec_ref": null,
+    "basis": "observed",
+    "flow": "Step 4/4: client status poll after by-temporary-file.",
+    "polling_cadence": "First poll 2.00 s after by-temporary-file response; each next poll 2.00 s after previous poll response (7 samples, gaps 2.002-2.005 s). Stops when every requested id has non-null url, then one relay list reload (APIOP-004). One poll covers all ids of a batch (ids[] of 1, 4 or 6).",
+    "pending_marker": "url null / thumbnail null while processing (layer_images); contrast mockup_layers uses empty string (APIOP-025)",
+    "notes": "27 MB file needed 4 polls (~8 s); small files ready at first poll.",
+    "unknowns_single_sample": [
+     "No max-retry / timeout observed (longest run = 4 polls); behaviour for a file that never finishes processing not observed in image library"
+    ]
+   },
+   {
+    "apiop_id": "APIOP-014",
+    "protocol": "GRAPHQL",
+    "method_or_type": "mutation update_layer_images (operationName update) via POST /api/graphql",
+    "host": "https://staging-api.teeinblue.com",
+    "host_check": "matches_expected_api_base",
+    "oracle_eligible": true,
+    "normalized_route": "POST /api/graphql :: mutation update_layer_images",
+    "observed_paths": [
+     "/api/graphql"
+    ],
+    "act_ids": [
+     "ACT-01-06-001",
+     "ACT-01-06-002"
+    ],
+    "scn_ids": [
+     "SCN-01-06"
+    ],
+    "feature_ids": [
+     "FEAT-01-image-layer-library"
+    ],
+    "network_label": "mapped",
+    "auth": {
+     "mechanism": "portal session (cookie, not visible to in-page hook) + header x-xsrf-token [REDACTED] + header x-acting-user-id (value equals verified account id 266 in every sample)",
+     "request_headers_seen": {
+      "accept": "2/2",
+      "content-type": "2/2",
+      "x-acting-user-id": "2/2",
+      "x-xsrf-token": "2/2"
+     },
+     "role": "merchant-owner",
+     "basis": "observed (header presence); cookie mechanism per playbook §2/explore.surfaces.portal.session = inferred for this capture"
+    },
+    "request_shape": {
+     "_sample_count": 2,
+     "_root_type": "object",
+     "fields": {
+      "operationName": {
+       "type": "string",
+       "seen_in": "2/2",
+       "always_present": false
+      },
+      "variables": {
+       "type": "object",
+       "seen_in": "2/2",
+       "always_present": false
+      },
+      "variables.objects": {
+       "type": "object",
+       "seen_in": "2/2",
+       "always_present": false
+      },
+      "variables.objects.name": {
+       "type": "string",
+       "seen_in": "2/2",
+       "always_present": false
+      },
+      "variables.objects.updated_at": {
+       "type": "string",
+       "seen_in": "2/2",
+       "always_present": false
+      },
+      "variables.id": {
+       "type": "number",
+       "seen_in": "2/2",
+       "always_present": false
+      },
+      "query": {
+       "type": "string",
+       "seen_in": "2/2",
+       "always_present": false
+      }
+     }
+    },
+    "response_shape": {
+     "_sample_count": 2,
+     "_root_type": "object",
+     "fields": {
+      "data": {
+       "type": "object",
+       "seen_in": "2/2",
+       "always_present": false
+      },
+      "data.update_layer_images": {
+       "type": "object",
+       "seen_in": "2/2",
+       "always_present": false
+      },
+      "data.update_layer_images.returning": {
+       "type": "array",
+       "seen_in": "2/2",
+       "always_present": false
+      },
+      "data.update_layer_images.__typename": {
+       "type": "string",
+       "seen_in": "2/2",
+       "always_present": false
+      }
+     }
+    },
+    "error_shapes": [],
+    "observed_status": [
+     200
+    ],
+    "observed_status_counts": {
+     "200": 2
+    },
+    "observed_count": 2,
+    "confidence": "LOW",
+    "state_delta": [
+     {
+      "field": "layer_images[11167].name",
+      "before": "QA-img-tiny-10x10",
+      "after": "'' (accepted, 200)",
+      "confidence": "LOW",
+      "evidence": "raw/network/ACT-01-06-001.json#0"
+     },
+     {
+      "field": "layer_images[11167].name",
+      "before": "''",
+      "after": "QA-img-tiny-renamed",
+      "confidence": "LOW",
+      "evidence": "raw/network/ACT-01-06-002.json#0"
+     }
+    ],
+    "spec_ref": null,
+    "basis": "observed",
+    "notes": "Direct GraphQL mutation update_layer_images(where id _eq $id, _set $objects) with $objects {name, updated_at}; client supplies updated_at ('YYYY-MM-DD HH:mm:ss'). Response returning[{id}] only - no list reload.",
+    "unknowns_single_sample": [
+     "Empty name accepted: 1 sample - no 'no validation' rule generalized (length/whitespace/duplicates untested)"
+    ]
+   },
+   {
+    "apiop_id": "APIOP-015",
+    "protocol": "REST",
+    "method_or_type": "PUT",
+    "host": "https://staging-api.teeinblue.com",
+    "host_check": "matches_expected_api_base",
+    "oracle_eligible": true,
+    "normalized_route": "/api/layer-images/move",
+    "observed_paths": [
+     "/api/layer-images/move"
+    ],
+    "act_ids": [
+     "ACT-01-07-001",
+     "ACT-01-07-002"
+    ],
+    "scn_ids": [
+     "SCN-01-07"
+    ],
+    "feature_ids": [
+     "FEAT-01-image-layer-library"
+    ],
+    "network_label": "mapped",
+    "auth": {
+     "mechanism": "portal session (cookie, not visible to in-page hook) + header x-xsrf-token [REDACTED] + header x-acting-user-id (value equals verified account id 266 in every sample)",
+     "request_headers_seen": {
+      "accept": "2/2",
+      "content-type": "2/2",
+      "x-acting-user-id": "2/2",
+      "x-xsrf-token": "2/2"
+     },
+     "role": "merchant-owner",
+     "basis": "observed (header presence); cookie mechanism per playbook §2/explore.surfaces.portal.session = inferred for this capture"
+    },
+    "request_shape": {
+     "_sample_count": 2,
+     "_root_type": "object",
+     "fields": {
+      "category_id": {
+       "type": "null|number",
+       "seen_in": "2/2",
+       "always_present": false
+      },
+      "ids": {
+       "type": "array",
+       "seen_in": "2/2",
+       "always_present": false
+      }
+     }
+    },
+    "response_shape": {
+     "_sample_count": 2,
+     "_root_type": "array",
+     "fields": {
+      "[].id": {
+       "type": "number",
+       "seen_in": "2/2",
+       "always_present": false
+      },
+      "[].master": {
+       "type": "string",
+       "seen_in": "2/2",
+       "always_present": false
+      },
+      "[].url": {
+       "type": "string",
+       "seen_in": "2/2",
+       "always_present": false
+      },
+      "[].thumbnail": {
+       "type": "string",
+       "seen_in": "2/2",
+       "always_present": false
+      },
+      "[].width": {
+       "type": "number",
+       "seen_in": "2/2",
+       "always_present": false
+      },
+      "[].height": {
+       "type": "number",
+       "seen_in": "2/2",
+       "always_present": false
+      },
+      "[].ref": {
+       "type": "null",
+       "seen_in": "2/2",
+       "always_present": false
+      },
+      "[].created_at": {
+       "type": "string",
+       "seen_in": "2/2",
+       "always_present": false
+      },
+      "[].updated_at": {
+       "type": "string",
+       "seen_in": "2/2",
+       "always_present": false
+      },
+      "[].deleted_at": {
+       "type": "null",
+       "seen_in": "2/2",
+       "always_present": false
+      },
+      "[].artwork_id": {
+       "type": "null",
+       "seen_in": "2/2",
+       "always_present": false
+      },
+      "[].name": {
+       "type": "string",
+       "seen_in": "2/2",
+       "always_present": false
+      },
+      "[].import_id": {
+       "type": "null",
+       "seen_in": "2/2",
+       "always_present": false
+      },
+      "[].layer_image_category_id": {
+       "type": "null|number",
+       "seen_in": "2/2",
+       "always_present": false
+      },
+      "[].master_large": {
+       "type": "null",
+       "seen_in": "2/2",
+       "always_present": false
+      }
+     }
+    },
+    "error_shapes": [],
+    "observed_status": [
+     200
+    ],
+    "observed_status_counts": {
+     "200": 2
+    },
+    "observed_count": 2,
+    "confidence": "LOW",
+    "state_delta": [
+     {
+      "field": "layer_images[11164,11165,11166,11168].layer_image_category_id",
+      "before": "null",
+      "after": "null (category_id null accepted, 200)",
+      "confidence": "LOW",
+      "evidence": "raw/network/ACT-01-07-001.json#1"
+     },
+     {
+      "field": "layer_images[11166,11168].layer_image_category_id",
+      "before": "null",
+      "after": "37",
+      "confidence": "LOW",
+      "evidence": "raw/network/ACT-01-07-002.json#1"
+     }
+    ],
+    "spec_ref": null,
+    "basis": "observed",
+    "notes": "Body {category_id, ids[]}. Response = array of full layer_images rows (incl. artwork_id, import_id, ref, master_large, deleted_at) - wider than the GraphQL node selection.",
+    "unknowns_single_sample": [
+     "category_id null accepted: 1 sample (effect = uncategorize, inferred from unchanged null)"
+    ]
+   },
+   {
+    "apiop_id": "APIOP-016",
+    "protocol": "REST",
+    "method_or_type": "DELETE",
+    "host": "https://staging-api.teeinblue.com",
+    "host_check": "matches_expected_api_base",
+    "oracle_eligible": true,
+    "normalized_route": "/api/layer-images/{id}",
+    "observed_paths": [
+     "/api/layer-images/11167",
+     "/api/layer-images/11171",
+     "/api/layer-images/11174",
+     "/api/layer-images/11173",
+     "/api/layer-images/11172",
+     "/api/layer-images/11170",
+     "/api/layer-images/11169",
+     "/api/layer-images/11168",
+     "/api/layer-images/11166",
+     "/api/layer-images/11165",
+     "/api/layer-images/11164",
+     "/api/layer-images/11163"
+    ],
+    "act_ids": [
+     "ACT-01-10-001",
+     "ACT-01-10-002",
+     "ACT-01-10-004"
+    ],
+    "scn_ids": [
+     "SCN-01-10"
+    ],
+    "feature_ids": [
+     "FEAT-01-image-layer-library"
+    ],
+    "network_label": "mapped",
+    "auth": {
+     "mechanism": "portal session (cookie, not visible to in-page hook) + header x-xsrf-token [REDACTED] + header x-acting-user-id (value equals verified account id 266 in every sample)",
+     "request_headers_seen": {
+      "accept": "13/13",
+      "x-acting-user-id": "13/13",
+      "content-type": "13/13",
+      "x-xsrf-token": "13/13"
+     },
+     "role": "merchant-owner",
+     "basis": "observed (header presence); cookie mechanism per playbook §2/explore.surfaces.portal.session = inferred for this capture"
+    },
+    "request_shape": {
+     "_sample_count": 13,
+     "_root_type": "object",
+     "fields": {
+      "name": {
+       "type": "string",
+       "seen_in": "13/13",
+       "always_present": true
+      },
+      "width": {
+       "type": "number",
+       "seen_in": "13/13",
+       "always_present": true
+      },
+      "height": {
+       "type": "number",
+       "seen_in": "13/13",
+       "always_present": true
+      },
+      "templates": {
+       "type": "array",
+       "seen_in": "13/13",
+       "always_present": true
+      },
+      "templates[].id": {
+       "type": "string",
+       "seen_in": "13/13",
+       "always_present": true
+      },
+      "templates[].name": {
+       "type": "string",
+       "seen_in": "13/13",
+       "always_present": true
+      },
+      "templates[].addons": {
+       "type": "array",
+       "seen_in": "13/13",
+       "always_present": true
+      },
+      "templates[].layers": {
+       "type": "array",
+       "seen_in": "13/13",
+       "always_present": true
+      },
+      "templates[].positions": {
+       "type": "array",
+       "seen_in": "13/13",
+       "always_present": true
+      },
+      "templates[].charge_enabled": {
+       "type": "boolean",
+       "seen_in": "13/13",
+       "always_present": true
+      },
+      "artwork_category_id": {
+       "type": "null",
+       "seen_in": "13/13",
+       "always_present": true
+      },
+      "template_settings": {
+       "type": "null",
+       "seen_in": "13/13",
+       "always_present": true
+      },
+      "design_format": {
+       "type": "string",
+       "seen_in": "13/13",
+       "always_present": true
+      },
+      "global_option_ids": {
+       "type": "array",
+       "seen_in": "13/13",
+       "always_present": true
+      },
+      "schema_version": {
+       "type": "number",
+       "seen_in": "13/13",
+       "always_present": true
+      }
+     }
+    },
+    "response_shape": {
+     "_sample_count": 11,
+     "_root_type": "object",
+     "fields": {
+      "message": {
+       "type": "string",
+       "seen_in": "11/11",
+       "always_present": true
+      }
+     }
+    },
+    "error_shapes": [
+     {
+      "status": 400,
+      "count": 1,
+      "act_ids": [
+       "ACT-01-10-001"
+      ],
+      "shape": {
+       "message": {
+        "type": "string",
+        "seen_in": "1/1",
+        "always_present": false
+       }
+      },
+      "observed_messages": [
+       "This image has already been added to the current artwork."
+      ]
+     }
+    ],
+    "observed_status": [
+     200,
+     400
+    ],
+    "observed_status_counts": {
+     "200": 11,
+     "400": 1,
+     "pending": 1
+    },
+    "observed_count": 13,
+    "confidence": "HIGH",
+    "state_delta": [
+     {
+      "field": "layer_images[11167]",
+      "before": "exists, referenced by url in unsaved artwork JSON sent in body",
+      "after": "unchanged (400)",
+      "confidence": "LOW",
+      "evidence": "raw/network/ACT-01-10-001.json#0"
+     },
+     {
+      "field": "layer_images[11171]",
+      "before": "exists, not referenced",
+      "after": "removed from list (200 'Successfully deleted the layer image.')",
+      "confidence": "MEDIUM",
+      "evidence": "raw/network/ACT-01-10-002.json#0,#1"
+     },
+     {
+      "field": "layer_images 11163-11174 (QA-)",
+      "before": "11 rows",
+      "after": "10 DELETE 200 + 1 pending at capture end; final read-only check by portal-explorer reports library back to 9 pre-existing",
+      "confidence": "MEDIUM",
+      "evidence": "raw/network/ACT-01-10-004.json#1..#11, raw/portal/dom/final-leftover-check.json"
+     }
+    ],
+    "spec_ref": null,
+    "basis": "observed",
+    "notes": "DELETE carries a JSON body = full current (unsaved) artwork: name, width, height, templates[] {id,name,addons,layers,positions,charge_enabled}, artwork_category_id, template_settings, design_format, global_option_ids, schema_version. Bulk delete = 1 POST in-use (APIOP-017) then sequential DELETEs (each starts at previous response end).",
+    "error_400": "{message: 'This image has already been added to the current artwork.'} - the unsaved artwork posted in body had a static-photo layer whose url matched the image; mechanism (server compares posted artwork vs image) is inferred.",
+    "unknowns_single_sample": [
+     "400 in-use: 1 sample - image used by OTHER saved artworks not tested; whether server checks persisted artworks unknown",
+     "ACT-01-10-004 last DELETE (11163) has no status in capture"
+    ]
+   },
+   {
+    "apiop_id": "APIOP-017",
+    "protocol": "REST",
+    "method_or_type": "POST",
+    "host": "https://staging-api.teeinblue.com",
+    "host_check": "matches_expected_api_base",
+    "oracle_eligible": true,
+    "normalized_route": "/api/layer-images/in-use",
+    "observed_paths": [
+     "/api/layer-images/in-use"
+    ],
+    "act_ids": [
+     "ACT-01-10-004"
+    ],
+    "scn_ids": [
+     "SCN-01-10"
+    ],
+    "feature_ids": [
+     "FEAT-01-image-layer-library"
+    ],
+    "network_label": "mapped",
+    "auth": {
+     "mechanism": "portal session (cookie, not visible to in-page hook) + header x-xsrf-token [REDACTED] + header x-acting-user-id (value equals verified account id 266 in every sample)",
+     "request_headers_seen": {
+      "accept": "1/1",
+      "content-type": "1/1",
+      "x-acting-user-id": "1/1",
+      "x-xsrf-token": "1/1"
+     },
+     "role": "merchant-owner",
+     "basis": "observed (header presence); cookie mechanism per playbook §2/explore.surfaces.portal.session = inferred for this capture"
+    },
+    "request_shape": {
+     "_sample_count": 1,
+     "_root_type": "object",
+     "fields": {
+      "ids": {
+       "type": "array",
+       "seen_in": "1/1",
+       "always_present": false
+      },
+      "templates": {
+       "type": "array",
+       "seen_in": "1/1",
+       "always_present": false
+      },
+      "templates[].id": {
+       "type": "string",
+       "seen_in": "1/1",
+       "always_present": false
+      },
+      "templates[].name": {
+       "type": "string",
+       "seen_in": "1/1",
+       "always_present": false
+      },
+      "templates[].addons": {
+       "type": "array",
+       "seen_in": "1/1",
+       "always_present": false
+      },
+      "templates[].layers": {
+       "type": "array",
+       "seen_in": "1/1",
+       "always_present": false
+      },
+      "templates[].positions": {
+       "type": "array",
+       "seen_in": "1/1",
+       "always_present": false
+      },
+      "templates[].charge_enabled": {
+       "type": "boolean",
+       "seen_in": "1/1",
+       "always_present": false
+      }
+     }
+    },
+    "response_shape": {
+     "_sample_count": 1,
+     "_root_type": "object",
+     "fields": {
+      "in_use_ids": {
+       "type": "array",
+       "seen_in": "1/1",
+       "always_present": false
+      }
+     }
+    },
+    "error_shapes": [],
+    "observed_status": [
+     200
+    ],
+    "observed_status_counts": {
+     "200": 1
+    },
+    "observed_count": 1,
+    "confidence": "LOW",
+    "state_delta": [],
+    "spec_ref": null,
+    "basis": "observed",
+    "notes": "Body {ids[], templates[] (current artwork templates)}; response {in_use_ids: []}. x-ratelimit-limit 60.",
+    "unknowns_single_sample": [
+     "1 sample, empty result only - response/UI when in_use_ids non-empty not observed"
+    ]
+   },
+   {
+    "apiop_id": "APIOP-018",
+    "protocol": "REST",
+    "method_or_type": "GET",
+    "host": "https://staging-api.teeinblue.com",
+    "host_check": "matches_expected_api_base",
+    "oracle_eligible": true,
+    "normalized_route": "/api/mockup-layer-categories",
+    "observed_paths": [
+     "/api/mockup-layer-categories"
+    ],
+    "act_ids": [
+     "ACT-02-01-001",
+     "ACT-02-03-002",
+     "ACT-02-03-003",
+     "ACT-02-07-001",
+     "ACT-02-08-002"
+    ],
+    "scn_ids": [
+     "SCN-02-01",
+     "SCN-02-03",
+     "SCN-02-07",
+     "SCN-02-08"
+    ],
+    "feature_ids": [
+     "FEAT-02-mockup-layer-library"
+    ],
+    "network_label": "mapped",
+    "auth": {
+     "mechanism": "portal session (cookie, not visible to in-page hook) + header x-xsrf-token [REDACTED] + header x-acting-user-id (value equals verified account id 266 in every sample)",
+     "request_headers_seen": {
+      "accept": "5/5",
+      "x-acting-user-id": "5/5",
+      "x-xsrf-token": "5/5"
+     },
+     "role": "merchant-owner",
+     "basis": "observed (header presence); cookie mechanism per playbook §2/explore.surfaces.portal.session = inferred for this capture"
+    },
+    "request_shape": {
+     "body": "none"
+    },
+    "response_shape": {
+     "_sample_count": 5,
+     "_root_type": "array",
+     "fields": {
+      "[].id": {
+       "type": "number",
+       "seen_in": "3/5",
+       "always_present": false
+      },
+      "[].user_id": {
+       "type": "number",
+       "seen_in": "3/5",
+       "always_present": false
+      },
+      "[].name": {
+       "type": "string",
+       "seen_in": "3/5",
+       "always_present": false
+      },
+      "[].description": {
+       "type": "null",
+       "seen_in": "3/5",
+       "always_present": false
+      },
+      "[].created_at": {
+       "type": "string",
+       "seen_in": "3/5",
+       "always_present": false
+      },
+      "[].updated_at": {
+       "type": "string",
+       "seen_in": "3/5",
+       "always_present": false
+      }
+     }
+    },
+    "error_shapes": [],
+    "observed_status": [
+     200
+    ],
+    "observed_status_counts": {
+     "200": 5
+    },
+    "observed_count": 5,
+    "confidence": "HIGH",
+    "state_delta": [
+     {
+      "field": "mockup layer categories",
+      "before": "[]",
+      "after": "[{id 18, user_id 266}] (ACT-02-03-002)",
+      "confidence": "MEDIUM",
+      "evidence": "raw/network/ACT-02-03-002.json#1"
+     },
+     {
+      "field": "mockup layer categories",
+      "before": "[id 18]",
+      "after": "[] (ACT-02-08-002)",
+      "confidence": "LOW",
+      "evidence": "raw/network/ACT-02-08-002.json#1"
+     }
+    ],
+    "spec_ref": null,
+    "basis": "observed",
+    "notes": "No query params, bare array; rows have no 'type' field (unlike layer-image-categories)."
+   },
+   {
+    "apiop_id": "APIOP-019",
+    "protocol": "REST",
+    "method_or_type": "POST",
+    "host": "https://staging-api.teeinblue.com",
+    "host_check": "matches_expected_api_base",
+    "oracle_eligible": true,
+    "normalized_route": "/api/mockup-layer-categories",
+    "observed_paths": [
+     "/api/mockup-layer-categories"
+    ],
+    "act_ids": [
+     "ACT-02-03-001",
+     "ACT-02-03-002"
+    ],
+    "scn_ids": [
+     "SCN-02-03"
+    ],
+    "feature_ids": [
+     "FEAT-02-mockup-layer-library"
+    ],
+    "network_label": "mapped",
+    "auth": {
+     "mechanism": "portal session (cookie, not visible to in-page hook) + header x-xsrf-token [REDACTED] + header x-acting-user-id (value equals verified account id 266 in every sample)",
+     "request_headers_seen": {
+      "accept": "2/2",
+      "content-type": "2/2",
+      "x-acting-user-id": "2/2",
+      "x-xsrf-token": "2/2"
+     },
+     "role": "merchant-owner",
+     "basis": "observed (header presence); cookie mechanism per playbook §2/explore.surfaces.portal.session = inferred for this capture"
+    },
+    "request_shape": {
+     "_sample_count": 2,
+     "_root_type": "object",
+     "fields": {
+      "name": {
+       "type": "string",
+       "seen_in": "2/2",
+       "always_present": false
+      }
+     }
+    },
+    "response_shape": {
+     "_sample_count": 1,
+     "_root_type": "object",
+     "fields": {
+      "name": {
+       "type": "string",
+       "seen_in": "1/1",
+       "always_present": false
+      },
+      "user_id": {
+       "type": "number",
+       "seen_in": "1/1",
+       "always_present": false
+      },
+      "updated_at": {
+       "type": "string",
+       "seen_in": "1/1",
+       "always_present": false
+      },
+      "created_at": {
+       "type": "string",
+       "seen_in": "1/1",
+       "always_present": false
+      },
+      "id": {
+       "type": "number",
+       "seen_in": "1/1",
+       "always_present": false
+      }
+     }
+    },
+    "error_shapes": [
+     {
+      "status": 422,
+      "count": 1,
+      "act_ids": [
+       "ACT-02-03-001"
+      ],
+      "shape": {
+       "message": {
+        "type": "string",
+        "seen_in": "1/1",
+        "always_present": false
+       },
+       "errors": {
+        "type": "object",
+        "seen_in": "1/1",
+        "always_present": false
+       },
+       "errors.name": {
+        "type": "array",
+        "seen_in": "1/1",
+        "always_present": false
+       }
+      },
+      "observed_messages": [
+       "The name field is required."
+      ]
+     }
+    ],
+    "observed_status": [
+     201,
+     422
+    ],
+    "observed_status_counts": {
+     "201": 1,
+     "422": 1
+    },
+    "observed_count": 2,
+    "confidence": "LOW",
+    "state_delta": [
+     {
+      "field": "mockup_layer_category",
+      "before": "absent",
+      "after": "created id 18 'QA-mockcat-A' user_id 266",
+      "confidence": "LOW",
+      "evidence": "raw/network/ACT-02-03-002.json#0"
+     }
+    ],
+    "spec_ref": null,
+    "basis": "observed",
+    "notes": "Body {name} only (no type). 422 whitespace name -> same message/envelope as APIOP-006.",
+    "unknowns_single_sample": [
+     "422 and 201 one sample each"
+    ]
+   },
+   {
+    "apiop_id": "APIOP-020",
+    "protocol": "REST",
+    "method_or_type": "GET",
+    "host": "https://staging-api.teeinblue.com",
+    "host_check": "matches_expected_api_base",
+    "oracle_eligible": true,
+    "normalized_route": "/api/mockup-layer-categories/{id}",
+    "observed_paths": [
+     "/api/mockup-layer-categories/18"
+    ],
+    "act_ids": [
+     "ACT-02-03-003"
+    ],
+    "scn_ids": [
+     "SCN-02-03"
+    ],
+    "feature_ids": [
+     "FEAT-02-mockup-layer-library"
+    ],
+    "network_label": "mapped",
+    "auth": {
+     "mechanism": "portal session (cookie, not visible to in-page hook) + header x-xsrf-token [REDACTED] + header x-acting-user-id (value equals verified account id 266 in every sample)",
+     "request_headers_seen": {
+      "accept": "1/1",
+      "x-acting-user-id": "1/1",
+      "x-xsrf-token": "1/1"
+     },
+     "role": "merchant-owner",
+     "basis": "observed (header presence); cookie mechanism per playbook §2/explore.surfaces.portal.session = inferred for this capture"
+    },
+    "request_shape": {
+     "body": "none"
+    },
+    "response_shape": {
+     "_sample_count": 1,
+     "_root_type": "object",
+     "fields": {
+      "id": {
+       "type": "number",
+       "seen_in": "1/1",
+       "always_present": false
+      },
+      "user_id": {
+       "type": "number",
+       "seen_in": "1/1",
+       "always_present": false
+      },
+      "name": {
+       "type": "string",
+       "seen_in": "1/1",
+       "always_present": false
+      },
+      "description": {
+       "type": "null",
+       "seen_in": "1/1",
+       "always_present": false
+      },
+      "created_at": {
+       "type": "string",
+       "seen_in": "1/1",
+       "always_present": false
+      },
+      "updated_at": {
+       "type": "string",
+       "seen_in": "1/1",
+       "always_present": false
+      }
+     }
+    },
+    "error_shapes": [],
+    "observed_status": [
+     200
+    ],
+    "observed_status_counts": {
+     "200": 1
+    },
+    "observed_count": 1,
+    "confidence": "LOW",
+    "state_delta": [],
+    "spec_ref": null,
+    "basis": "observed",
+    "notes": "Prefill rename dialog.",
+    "unknowns_single_sample": [
+     "1 sample"
+    ]
+   },
+   {
+    "apiop_id": "APIOP-021",
+    "protocol": "REST",
+    "method_or_type": "PUT",
+    "host": "https://staging-api.teeinblue.com",
+    "host_check": "matches_expected_api_base",
+    "oracle_eligible": true,
+    "normalized_route": "/api/mockup-layer-categories/{id}",
+    "observed_paths": [
+     "/api/mockup-layer-categories/18"
+    ],
+    "act_ids": [
+     "ACT-02-03-003"
+    ],
+    "scn_ids": [
+     "SCN-02-03"
+    ],
+    "feature_ids": [
+     "FEAT-02-mockup-layer-library"
+    ],
+    "network_label": "mapped",
+    "auth": {
+     "mechanism": "portal session (cookie, not visible to in-page hook) + header x-xsrf-token [REDACTED] + header x-acting-user-id (value equals verified account id 266 in every sample)",
+     "request_headers_seen": {
+      "accept": "1/1",
+      "content-type": "1/1",
+      "x-acting-user-id": "1/1",
+      "x-xsrf-token": "1/1"
+     },
+     "role": "merchant-owner",
+     "basis": "observed (header presence); cookie mechanism per playbook §2/explore.surfaces.portal.session = inferred for this capture"
+    },
+    "request_shape": {
+     "_sample_count": 1,
+     "_root_type": "object",
+     "fields": {
+      "name": {
+       "type": "string",
+       "seen_in": "1/1",
+       "always_present": false
+      }
+     }
+    },
+    "response_shape": {
+     "_sample_count": 1,
+     "_root_type": "object",
+     "fields": {
+      "id": {
+       "type": "number",
+       "seen_in": "1/1",
+       "always_present": false
+      },
+      "user_id": {
+       "type": "number",
+       "seen_in": "1/1",
+       "always_present": false
+      },
+      "name": {
+       "type": "string",
+       "seen_in": "1/1",
+       "always_present": false
+      },
+      "description": {
+       "type": "null",
+       "seen_in": "1/1",
+       "always_present": false
+      },
+      "created_at": {
+       "type": "string",
+       "seen_in": "1/1",
+       "always_present": false
+      },
+      "updated_at": {
+       "type": "string",
+       "seen_in": "1/1",
+       "always_present": false
+      }
+     }
+    },
+    "error_shapes": [],
+    "observed_status": [
+     200
+    ],
+    "observed_status_counts": {
+     "200": 1
+    },
+    "observed_count": 1,
+    "confidence": "LOW",
+    "state_delta": [
+     {
+      "field": "mockup_layer_category[18].name",
+      "before": "QA-mockcat-A",
+      "after": "QA-mockcat-A-renamed",
+      "confidence": "LOW",
+      "evidence": "raw/network/ACT-02-03-003.json#1"
+     }
+    ],
+    "spec_ref": null,
+    "basis": "observed",
+    "unknowns_single_sample": [
+     "1 sample"
+    ]
+   },
+   {
+    "apiop_id": "APIOP-022",
+    "protocol": "REST",
+    "method_or_type": "DELETE",
+    "host": "https://staging-api.teeinblue.com",
+    "host_check": "matches_expected_api_base",
+    "oracle_eligible": true,
+    "normalized_route": "/api/mockup-layer-categories/{id}",
+    "observed_paths": [
+     "/api/mockup-layer-categories/18"
+    ],
+    "act_ids": [
+     "ACT-02-08-002"
+    ],
+    "scn_ids": [
+     "SCN-02-08"
+    ],
+    "feature_ids": [
+     "FEAT-02-mockup-layer-library"
+    ],
+    "network_label": "mapped",
+    "auth": {
+     "mechanism": "portal session (cookie, not visible to in-page hook) + header x-xsrf-token [REDACTED] + header x-acting-user-id (value equals verified account id 266 in every sample)",
+     "request_headers_seen": {
+      "accept": "1/1",
+      "x-acting-user-id": "1/1",
+      "x-xsrf-token": "1/1"
+     },
+     "role": "merchant-owner",
+     "basis": "observed (header presence); cookie mechanism per playbook §2/explore.surfaces.portal.session = inferred for this capture"
+    },
+    "request_shape": {
+     "body": "none"
+    },
+    "response_shape": {
+     "_note": "2xx with empty body"
+    },
+    "error_shapes": [],
+    "observed_status": [
+     204
+    ],
+    "observed_status_counts": {
+     "204": 1
+    },
+    "observed_count": 1,
+    "confidence": "LOW",
+    "state_delta": [
+     {
+      "field": "mockup_layer_category[18]",
+      "before": "exists (4 images)",
+      "after": "deleted (204)",
+      "confidence": "LOW",
+      "evidence": "raw/network/ACT-02-08-002.json#0"
+     },
+     {
+      "field": "mockup_layers[4632,4633,4635,4637].mockup_layer_category_id",
+      "before": "18 (4633/4635/4637 via move, 4632 via upload)",
+      "after": "null - images kept",
+      "confidence": "LOW",
+      "evidence": "raw/network/ACT-02-08-002.json#2"
+     }
+    ],
+    "spec_ref": null,
+    "basis": "observed",
+    "unknowns_single_sample": [
+     "1 sample"
+    ]
+   },
+   {
+    "apiop_id": "APIOP-023",
+    "protocol": "REST",
+    "method_or_type": "GET",
+    "host": "https://staging-api.teeinblue.com",
+    "host_check": "matches_expected_api_base",
+    "oracle_eligible": true,
+    "normalized_route": "/api/mockup-layers",
+    "observed_paths": [
+     "/api/mockup-layers"
+    ],
+    "observed_query_variants": [
+     {
+      "query_param_names": "page&per_page&sort&sort_type",
+      "count": 6,
+      "act_ids": [
+       "ACT-02-01-001",
+       "ACT-02-04-002",
+       "ACT-02-05-003",
+       "ACT-02-07-001",
+       "ACT-02-08-002",
+       "ACT-02-08-003"
+      ]
+     },
+     {
+      "query_param_names": "public&page&per_page&sort&sort_type",
+      "count": 1,
+      "act_ids": [
+       "ACT-02-02-001"
+      ]
+     },
+     {
+      "query_param_names": "public&page&per_page&sort&sort_type&s",
+      "count": 1,
+      "act_ids": [
+       "ACT-02-02-002"
+      ]
+     },
+     {
+      "query_param_names": "category_id&page&per_page&sort&sort_type",
+      "count": 3,
+      "act_ids": [
+       "ACT-02-02-003",
+       "ACT-02-04-001",
+       "ACT-02-08-001"
+      ]
+     }
+    ],
+    "act_ids": [
+     "ACT-02-01-001",
+     "ACT-02-02-001",
+     "ACT-02-02-002",
+     "ACT-02-02-003",
+     "ACT-02-04-001",
+     "ACT-02-04-002",
+     "ACT-02-05-003",
+     "ACT-02-07-001",
+     "ACT-02-08-001",
+     "ACT-02-08-002",
+     "ACT-02-08-003"
+    ],
+    "scn_ids": [
+     "SCN-02-01",
+     "SCN-02-02",
+     "SCN-02-04",
+     "SCN-02-05",
+     "SCN-02-07",
+     "SCN-02-08"
+    ],
+    "feature_ids": [
+     "FEAT-02-mockup-layer-library"
+    ],
+    "network_label": "mapped",
+    "auth": {
+     "mechanism": "portal session (cookie, not visible to in-page hook) + header x-xsrf-token [REDACTED] + header x-acting-user-id (value equals verified account id 266 in every sample)",
+     "request_headers_seen": {
+      "accept": "11/11",
+      "x-acting-user-id": "11/11",
+      "x-xsrf-token": "11/11"
+     },
+     "role": "merchant-owner",
+     "basis": "observed (header presence); cookie mechanism per playbook §2/explore.surfaces.portal.session = inferred for this capture"
+    },
+    "request_shape": {
+     "body": "none"
+    },
+    "response_shape": {
+     "_sample_count": 11,
+     "_root_type": "object",
+     "fields": {
+      "data": {
+       "type": "array",
+       "seen_in": "11/11",
+       "always_present": true
+      },
+      "data[].id": {
+       "type": "number",
+       "seen_in": "9/11",
+       "always_present": false
+      },
+      "data[].user_id": {
+       "type": "number",
+       "seen_in": "9/11",
+       "always_present": false
+      },
+      "data[].name": {
+       "type": "string",
+       "seen_in": "9/11",
+       "always_present": false
+      },
+      "data[].master": {
+       "type": "string",
+       "seen_in": "9/11",
+       "always_present": false
+      },
+      "data[].url": {
+       "type": "string",
+       "seen_in": "9/11",
+       "always_present": false
+      },
+      "data[].thumbnail": {
+       "type": "string",
+       "seen_in": "9/11",
+       "always_present": false
+      },
+      "data[].width": {
+       "type": "number",
+       "seen_in": "9/11",
+       "always_present": false
+      },
+      "data[].height": {
+       "type": "number",
+       "seen_in": "9/11",
+       "always_present": false
+      },
+      "data[].created_at": {
+       "type": "string",
+       "seen_in": "9/11",
+       "always_present": false
+      },
+      "data[].updated_at": {
+       "type": "string",
+       "seen_in": "9/11",
+       "always_present": false
+      },
+      "data[].ref": {
+       "type": "null|string",
+       "seen_in": "9/11",
+       "always_present": false
+      },
+      "data[].mockup_layer_category_id": {
+       "type": "null|number",
+       "seen_in": "9/11",
+       "always_present": false
+      },
+      "data[].platform_imported": {
+       "type": "null",
+       "seen_in": "9/11",
+       "always_present": false
+      },
+      "links": {
+       "type": "object",
+       "seen_in": "11/11",
+       "always_present": true
+      },
+      "links.first": {
+       "type": "string",
+       "seen_in": "11/11",
+       "always_present": true
+      },
+      "links.last": {
+       "type": "string",
+       "seen_in": "11/11",
+       "always_present": true
+      },
+      "links.prev": {
+       "type": "null",
+       "seen_in": "11/11",
+       "always_present": true
+      },
+      "links.next": {
+       "type": "null",
+       "seen_in": "11/11",
+       "always_present": true
+      },
+      "meta": {
+       "type": "object",
+       "seen_in": "11/11",
+       "always_present": true
+      },
+      "meta.current_page": {
+       "type": "number",
+       "seen_in": "11/11",
+       "always_present": true
+      },
+      "meta.from": {
+       "type": "null|number",
+       "seen_in": "11/11",
+       "always_present": true
+      },
+      "meta.last_page": {
+       "type": "number",
+       "seen_in": "11/11",
+       "always_present": true
+      },
+      "meta.links": {
+       "type": "array",
+       "seen_in": "11/11",
+       "always_present": true
+      },
+      "meta.links[].url": {
+       "type": "null|string",
+       "seen_in": "11/11",
+       "always_present": true
+      },
+      "meta.links[].label": {
+       "type": "string",
+       "seen_in": "11/11",
+       "always_present": true
+      },
+      "meta.links[].page": {
+       "type": "null|number",
+       "seen_in": "11/11",
+       "always_present": true
+      },
+      "meta.links[].active": {
+       "type": "boolean",
+       "seen_in": "11/11",
+       "always_present": true
+      },
+      "meta.path": {
+       "type": "string",
+       "seen_in": "11/11",
+       "always_present": true
+      },
+      "meta.per_page": {
+       "type": "number",
+       "seen_in": "11/11",
+       "always_present": true
+      },
+      "meta.to": {
+       "type": "null|number",
+       "seen_in": "11/11",
+       "always_present": true
+      },
+      "meta.total": {
+       "type": "number",
+       "seen_in": "11/11",
+       "always_present": true
+      }
+     }
+    },
+    "error_shapes": [],
+    "observed_status": [
+     200
+    ],
+    "observed_status_counts": {
+     "200": 11
+    },
+    "observed_count": 11,
+    "confidence": "HIGH",
+    "state_delta": [
+     {
+      "field": "mockup_layers (user, All)",
+      "before": "meta.total 10",
+      "after": "meta.total 15 after 5 uploads (ACT-02-04-002); back to 10 after cleanup (ACT-02-08-003)",
+      "confidence": "MEDIUM",
+      "evidence": "raw/network/ACT-02-01-001.json#1, ACT-02-04-002.json#13, ACT-02-08-003.json#6"
+     }
+    ],
+    "spec_ref": null,
+    "basis": "observed",
+    "pagination": "page-number (Laravel paginator): response {data[], links{first,last,prev,next}, meta{current_page, from, last_page, links[], path, per_page, to, total}}; request page=1, per_page=20, sort=created_at, sort_type=desc in 11/11. Only page 1 ever requested (max total 15).",
+    "variants": "'public' bare flag = TIB Mockups built-in set (rows user_id 101, some with ref to an external image URL); 's' = server-side search; 'category_id' = category filter.",
+    "notes": "Empty result: data [], meta.from null, meta.to null, total 0 (UI renders 'Showing 1 to 0 of 0 entries' - UI-side). Fake-image rows 4502/4503 from 2026-09-13 still have master/url/thumbnail '' and width/height 0.",
+    "unknowns_single_sample": [
+     "'s' search: 1 sample (no-match only)",
+     "'public' list: 2 samples; no write ops observed on public rows (no trash icon in UI)"
+    ]
+   },
+   {
+    "apiop_id": "APIOP-024",
+    "protocol": "REST",
+    "method_or_type": "POST",
+    "host": "https://staging-api.teeinblue.com",
+    "host_check": "matches_expected_api_base",
+    "oracle_eligible": true,
+    "normalized_route": "/api/mockup-layers/by-temporary-file",
+    "observed_paths": [
+     "/api/mockup-layers/by-temporary-file"
+    ],
+    "act_ids": [
+     "ACT-02-04-001",
+     "ACT-02-04-002",
+     "ACT-02-05-001",
+     "ACT-02-05-003"
+    ],
+    "scn_ids": [
+     "SCN-02-04",
+     "SCN-02-05"
+    ],
+    "feature_ids": [
+     "FEAT-02-mockup-layer-library"
+    ],
+    "network_label": "mapped",
+    "auth": {
+     "mechanism": "portal session (cookie, not visible to in-page hook) + header x-xsrf-token [REDACTED] + header x-acting-user-id (value equals verified account id 266 in every sample)",
+     "request_headers_seen": {
+      "accept": "7/7",
+      "content-type": "7/7",
+      "x-acting-user-id": "7/7",
+      "x-xsrf-token": "7/7"
+     },
+     "role": "merchant-owner",
+     "basis": "observed (header presence); cookie mechanism per playbook §2/explore.surfaces.portal.session = inferred for this capture"
+    },
+    "request_shape": {
+     "_sample_count": 7,
+     "_root_type": "object",
+     "fields": {
+      "temporary_file_id": {
+       "type": "string",
+       "seen_in": "7/7",
+       "always_present": true
+      },
+      "name": {
+       "type": "string",
+       "seen_in": "7/7",
+       "always_present": true
+      },
+      "filewidth": {
+       "type": "number",
+       "seen_in": "6/7",
+       "always_present": false
+      },
+      "fileheight": {
+       "type": "number",
+       "seen_in": "6/7",
+       "always_present": false
+      },
+      "category_id": {
+       "type": "null|number",
+       "seen_in": "7/7",
+       "always_present": true
+      }
+     }
+    },
+    "response_shape": {
+     "_sample_count": 6,
+     "_root_type": "object",
+     "fields": {
+      "user_id": {
+       "type": "number",
+       "seen_in": "6/6",
+       "always_present": true
+      },
+      "name": {
+       "type": "string",
+       "seen_in": "6/6",
+       "always_present": true
+      },
+      "width": {
+       "type": "number",
+       "seen_in": "6/6",
+       "always_present": true
+      },
+      "height": {
+       "type": "number",
+       "seen_in": "6/6",
+       "always_present": true
+      },
+      "master": {
+       "type": "string",
+       "seen_in": "6/6",
+       "always_present": true
+      },
+      "url": {
+       "type": "string",
+       "seen_in": "6/6",
+       "always_present": true
+      },
+      "thumbnail": {
+       "type": "string",
+       "seen_in": "6/6",
+       "always_present": true
+      },
+      "mockup_layer_category_id": {
+       "type": "null|number",
+       "seen_in": "6/6",
+       "always_present": true
+      },
+      "updated_at": {
+       "type": "string",
+       "seen_in": "6/6",
+       "always_present": true
+      },
+      "created_at": {
+       "type": "string",
+       "seen_in": "6/6",
+       "always_present": true
+      },
+      "id": {
+       "type": "number",
+       "seen_in": "6/6",
+       "always_present": true
+      }
+     }
+    },
+    "error_shapes": [
+     {
+      "status": 422,
+      "count": 1,
+      "act_ids": [
+       "ACT-02-05-001"
+      ],
+      "shape": {
+       "message": {
+        "type": "string",
+        "seen_in": "1/1",
+        "always_present": false
+       },
+       "errors": {
+        "type": "object",
+        "seen_in": "1/1",
+        "always_present": false
+       },
+       "errors.temporary_file_id": {
+        "type": "array",
+        "seen_in": "1/1",
+        "always_present": false
+       }
+      },
+      "observed_messages": [
+       "This file type is not supported. Please upload a PNG, JPEG, GIF or WebP image."
+      ]
+     }
+    ],
+    "observed_status": [
+     201,
+     422
+    ],
+    "observed_status_counts": {
+     "201": 6,
+     "422": 1
+    },
+    "observed_count": 7,
+    "confidence": "HIGH",
+    "state_delta": [
+     {
+      "field": "mockup_layers (new row)",
+      "before": "absent",
+      "after": "row created: width/height = client filewidth/fileheight, master/url/thumbnail '' , mockup_layer_category_id = category_id",
+      "confidence": "HIGH",
+      "evidence": "raw/network/ACT-02-04-001.json#2 + 5 more 201 samples"
+     },
+     {
+      "field": "mockup_layers",
+      "before": "unchanged",
+      "after": "unchanged (422) for 33 B text file named .png",
+      "confidence": "LOW",
+      "evidence": "raw/network/ACT-02-05-001.json#2"
+     }
+    ],
+    "spec_ref": null,
+    "basis": "observed",
+    "flow": "Step 3/4 (mockup library). Body {temporary_file_id, name, filewidth, fileheight, category_id}; filewidth/fileheight absent (6/7 present) when the client could not read image dimensions (fake png).",
+    "notes": "Unlike APIOP-012: client sends filewidth/fileheight instead of artwork_width; response sets width/height immediately and uses '' (not null) for pending url; no x-ratelimit headers on response. No POST /api/products/{id}/mockups in any window (assignment not done, persistence guard).",
+    "unknowns_single_sample": [
+     "422 'This file type is not supported...' : 1 sample",
+     "27 MB accepted: 1 sample"
+    ]
+   },
+   {
+    "apiop_id": "APIOP-025",
+    "protocol": "GRAPHQL",
+    "method_or_type": "query mockup_layers(where id _in $ids) (operationName get) via POST /api/graphql",
+    "host": "https://staging-api.teeinblue.com",
+    "host_check": "matches_expected_api_base",
+    "oracle_eligible": true,
+    "normalized_route": "POST /api/graphql :: query mockup_layers(ids)",
+    "observed_paths": [
+     "/api/graphql"
+    ],
+    "act_ids": [
+     "ACT-02-04-001",
+     "ACT-02-04-002",
+     "ACT-02-05-003"
+    ],
+    "scn_ids": [
+     "SCN-02-04",
+     "SCN-02-05"
+    ],
+    "feature_ids": [
+     "FEAT-02-mockup-layer-library"
+    ],
+    "network_label": "polling",
+    "auth": {
+     "mechanism": "portal session (cookie, not visible to in-page hook) + header x-xsrf-token [REDACTED] + header x-acting-user-id (value equals verified account id 266 in every sample)",
+     "request_headers_seen": {
+      "accept": "8/8",
+      "content-type": "8/8",
+      "x-acting-user-id": "8/8",
+      "x-xsrf-token": "8/8"
+     },
+     "role": "merchant-owner",
+     "basis": "observed (header presence); cookie mechanism per playbook §2/explore.surfaces.portal.session = inferred for this capture"
+    },
+    "request_shape": {
+     "_sample_count": 8,
+     "_root_type": "object",
+     "fields": {
+      "operationName": {
+       "type": "string",
+       "seen_in": "8/8",
+       "always_present": true
+      },
+      "variables": {
+       "type": "object",
+       "seen_in": "8/8",
+       "always_present": true
+      },
+      "variables.ids": {
+       "type": "array",
+       "seen_in": "8/8",
+       "always_present": true
+      },
+      "query": {
+       "type": "string",
+       "seen_in": "8/8",
+       "always_present": true
+      }
+     }
+    },
+    "response_shape": {
+     "_sample_count": 8,
+     "_root_type": "object",
+     "fields": {
+      "data": {
+       "type": "object",
+       "seen_in": "8/8",
+       "always_present": true
+      },
+      "data.mockup_layers": {
+       "type": "array",
+       "seen_in": "8/8",
+       "always_present": true
+      },
+      "data.mockup_layers[].id": {
+       "type": "number",
+       "seen_in": "8/8",
+       "always_present": true
+      },
+      "data.mockup_layers[].url": {
+       "type": "string",
+       "seen_in": "8/8",
+       "always_present": true
+      },
+      "data.mockup_layers[].thumbnail": {
+       "type": "string",
+       "seen_in": "8/8",
+       "always_present": true
+      },
+      "data.mockup_layers[].__typename": {
+       "type": "string",
+       "seen_in": "8/8",
+       "always_present": true
+      }
+     }
+    },
+    "error_shapes": [],
+    "observed_status": [
+     200
+    ],
+    "observed_status_counts": {
+     "200": 8
+    },
+    "observed_count": 8,
+    "confidence": "HIGH",
+    "state_delta": [
+     {
+      "field": "mockup_layers[id].url/thumbnail",
+      "before": "''",
+      "after": "'users/266/mockup-layers/<yymmdd>_<rand>_large.webp' / '_thumbnail.webp'",
+      "confidence": "MEDIUM",
+      "evidence": "raw/network/ACT-02-04-001.json#3,#4; ACT-02-05-003.json#3..#7"
+     }
+    ],
+    "spec_ref": null,
+    "basis": "observed",
+    "flow": "Step 4/4 (mockup library): client status poll.",
+    "polling_cadence": "First poll 2.00 s after by-temporary-file response, then 2.00 s after each previous response (8 samples). Stops when url non-empty, then GET /api/mockup-layers reload. 27 MB file: 5 polls.",
+    "pending_marker": "url '' / thumbnail ''",
+    "unknowns_single_sample": [
+     "Max retries unknown; never-finishing file not observed (fake png now rejected with 422, so no stuck row was created)"
+    ]
+   },
+   {
+    "apiop_id": "APIOP-026",
+    "protocol": "REST",
+    "method_or_type": "PUT",
+    "host": "https://staging-api.teeinblue.com",
+    "host_check": "matches_expected_api_base",
+    "oracle_eligible": true,
+    "normalized_route": "/api/mockup-layers/move",
+    "observed_paths": [
+     "/api/mockup-layers/move"
+    ],
+    "act_ids": [
+     "ACT-02-07-001"
+    ],
+    "scn_ids": [
+     "SCN-02-07"
+    ],
+    "feature_ids": [
+     "FEAT-02-mockup-layer-library"
+    ],
+    "network_label": "mapped",
+    "auth": {
+     "mechanism": "portal session (cookie, not visible to in-page hook) + header x-xsrf-token [REDACTED] + header x-acting-user-id (value equals verified account id 266 in every sample)",
+     "request_headers_seen": {
+      "accept": "1/1",
+      "content-type": "1/1",
+      "x-acting-user-id": "1/1",
+      "x-xsrf-token": "1/1"
+     },
+     "role": "merchant-owner",
+     "basis": "observed (header presence); cookie mechanism per playbook §2/explore.surfaces.portal.session = inferred for this capture"
+    },
+    "request_shape": {
+     "_sample_count": 1,
+     "_root_type": "object",
+     "fields": {
+      "category_id": {
+       "type": "number",
+       "seen_in": "1/1",
+       "always_present": false
+      },
+      "ids": {
+       "type": "array",
+       "seen_in": "1/1",
+       "always_present": false
+      }
+     }
+    },
+    "response_shape": {
+     "_sample_count": 1,
+     "_root_type": "array",
+     "fields": {
+      "[].id": {
+       "type": "number",
+       "seen_in": "1/1",
+       "always_present": false
+      },
+      "[].user_id": {
+       "type": "number",
+       "seen_in": "1/1",
+       "always_present": false
+      },
+      "[].name": {
+       "type": "string",
+       "seen_in": "1/1",
+       "always_present": false
+      },
+      "[].master": {
+       "type": "string",
+       "seen_in": "1/1",
+       "always_present": false
+      },
+      "[].url": {
+       "type": "string",
+       "seen_in": "1/1",
+       "always_present": false
+      },
+      "[].thumbnail": {
+       "type": "string",
+       "seen_in": "1/1",
+       "always_present": false
+      },
+      "[].width": {
+       "type": "number",
+       "seen_in": "1/1",
+       "always_present": false
+      },
+      "[].height": {
+       "type": "number",
+       "seen_in": "1/1",
+       "always_present": false
+      },
+      "[].created_at": {
+       "type": "string",
+       "seen_in": "1/1",
+       "always_present": false
+      },
+      "[].updated_at": {
+       "type": "string",
+       "seen_in": "1/1",
+       "always_present": false
+      },
+      "[].ref": {
+       "type": "null",
+       "seen_in": "1/1",
+       "always_present": false
+      },
+      "[].mockup_layer_category_id": {
+       "type": "number",
+       "seen_in": "1/1",
+       "always_present": false
+      },
+      "[].platform_imported": {
+       "type": "null",
+       "seen_in": "1/1",
+       "always_present": false
+      }
+     }
+    },
+    "error_shapes": [],
+    "observed_status": [
+     200
+    ],
+    "observed_status_counts": {
+     "200": 1
+    },
+    "observed_count": 1,
+    "confidence": "LOW",
+    "state_delta": [
+     {
+      "field": "mockup_layers[4633,4634,4635,4637].mockup_layer_category_id",
+      "before": "null",
+      "after": "18",
+      "confidence": "LOW",
+      "evidence": "raw/network/ACT-02-07-001.json#1"
+     }
+    ],
+    "spec_ref": null,
+    "basis": "observed",
+    "notes": "Body {category_id, ids[]}; response = array of full mockup_layers rows.",
+    "unknowns_single_sample": [
+     "1 sample; category_id null not tried in mockup library"
+    ]
+   },
+   {
+    "apiop_id": "APIOP-027",
+    "protocol": "REST",
+    "method_or_type": "DELETE",
+    "host": "https://staging-api.teeinblue.com",
+    "host_check": "matches_expected_api_base",
+    "oracle_eligible": true,
+    "normalized_route": "/api/mockup-layers/{id}",
+    "observed_paths": [
+     "/api/mockup-layers/4634",
+     "/api/mockup-layers/4637",
+     "/api/mockup-layers/4636",
+     "/api/mockup-layers/4635",
+     "/api/mockup-layers/4633",
+     "/api/mockup-layers/4632"
+    ],
+    "act_ids": [
+     "ACT-02-08-001",
+     "ACT-02-08-003"
+    ],
+    "scn_ids": [
+     "SCN-02-08"
+    ],
+    "feature_ids": [
+     "FEAT-02-mockup-layer-library"
+    ],
+    "network_label": "mapped",
+    "auth": {
+     "mechanism": "portal session (cookie, not visible to in-page hook) + header x-xsrf-token [REDACTED] + header x-acting-user-id (value equals verified account id 266 in every sample)",
+     "request_headers_seen": {
+      "accept": "6/6",
+      "x-acting-user-id": "6/6",
+      "x-xsrf-token": "6/6"
+     },
+     "role": "merchant-owner",
+     "basis": "observed (header presence); cookie mechanism per playbook §2/explore.surfaces.portal.session = inferred for this capture"
+    },
+    "request_shape": {
+     "body": "none"
+    },
+    "response_shape": {
+     "_sample_count": 6,
+     "_root_type": "object",
+     "fields": {
+      "message": {
+       "type": "string",
+       "seen_in": "6/6",
+       "always_present": true
+      }
+     }
+    },
+    "error_shapes": [],
+    "observed_status": [
+     200
+    ],
+    "observed_status_counts": {
+     "200": 6
+    },
+    "observed_count": 6,
+    "confidence": "HIGH",
+    "state_delta": [
+     {
+      "field": "mockup_layers[4634]",
+      "before": "exists",
+      "after": "deleted (200 'Successfully deleted the layer.')",
+      "confidence": "LOW",
+      "evidence": "raw/network/ACT-02-08-001.json#0"
+     },
+     {
+      "field": "mockup_layers 4632/4633/4635/4636/4637",
+      "before": "exist",
+      "after": "deleted; list meta.total back to 10",
+      "confidence": "MEDIUM",
+      "evidence": "raw/network/ACT-02-08-003.json#1..#6"
+     }
+    ],
+    "spec_ref": null,
+    "basis": "observed",
+    "notes": "No request body and no content-type header (contrast APIOP-016 which sends artwork JSON). Single-card delete did not call in-use (APIOP-028); bulk delete did.",
+    "unknowns_single_sample": [
+     "Error path (mockup in use by a product) not observed"
+    ]
+   },
+   {
+    "apiop_id": "APIOP-028",
+    "protocol": "REST",
+    "method_or_type": "POST",
+    "host": "https://staging-api.teeinblue.com",
+    "host_check": "matches_expected_api_base",
+    "oracle_eligible": true,
+    "normalized_route": "/api/mockup-layers/in-use",
+    "observed_paths": [
+     "/api/mockup-layers/in-use"
+    ],
+    "act_ids": [
+     "ACT-02-08-003"
+    ],
+    "scn_ids": [
+     "SCN-02-08"
+    ],
+    "feature_ids": [
+     "FEAT-02-mockup-layer-library"
+    ],
+    "network_label": "mapped",
+    "auth": {
+     "mechanism": "portal session (cookie, not visible to in-page hook) + header x-xsrf-token [REDACTED] + header x-acting-user-id (value equals verified account id 266 in every sample)",
+     "request_headers_seen": {
+      "accept": "1/1",
+      "content-type": "1/1",
+      "x-acting-user-id": "1/1",
+      "x-xsrf-token": "1/1"
+     },
+     "role": "merchant-owner",
+     "basis": "observed (header presence); cookie mechanism per playbook §2/explore.surfaces.portal.session = inferred for this capture"
+    },
+    "request_shape": {
+     "_sample_count": 1,
+     "_root_type": "object",
+     "fields": {
+      "ids": {
+       "type": "array",
+       "seen_in": "1/1",
+       "always_present": false
+      }
+     }
+    },
+    "response_shape": {
+     "_sample_count": 1,
+     "_root_type": "object",
+     "fields": {
+      "in_use_ids": {
+       "type": "array",
+       "seen_in": "1/1",
+       "always_present": false
+      }
+     }
+    },
+    "error_shapes": [],
+    "observed_status": [
+     200
+    ],
+    "observed_status_counts": {
+     "200": 1
+    },
+    "observed_count": 1,
+    "confidence": "LOW",
+    "state_delta": [],
+    "spec_ref": null,
+    "basis": "observed",
+    "notes": "Body {ids[]} only (no templates, unlike APIOP-017); response {in_use_ids: []}; x-ratelimit-limit 60.",
+    "unknowns_single_sample": [
+     "1 sample, empty result only"
+    ]
+   }
+  ],
+  "operations_by_object": {
+   "image-layer-library (FEAT-01)": [
+    "APIOP-004",
+    "APIOP-005",
+    "APIOP-006",
+    "APIOP-007",
+    "APIOP-008",
+    "APIOP-009",
+    "APIOP-012",
+    "APIOP-013",
+    "APIOP-014",
+    "APIOP-015",
+    "APIOP-016",
+    "APIOP-017"
+   ],
+   "mockup-layer-library (FEAT-02)": [
+    "APIOP-018",
+    "APIOP-019",
+    "APIOP-020",
+    "APIOP-021",
+    "APIOP-022",
+    "APIOP-023",
+    "APIOP-024",
+    "APIOP-025",
+    "APIOP-026",
+    "APIOP-027",
+    "APIOP-028"
+   ],
+   "shared upload (FEAT-01 + FEAT-02)": [
+    "APIOP-010",
+    "APIOP-011"
+   ],
+   "clipart categories loaded by image picker (FEAT-01, other object)": [
+    "APIOP-003"
+   ],
+   "artwork template library (FEAT-00, other object)": [
+    "APIOP-001",
+    "APIOP-002"
+   ]
+  },
+  "documented_observed_mismatches": [],
+  "unmapped_endpoints": [],
+  "security_surfaces": [
+   {
+    "id": "APISURF-01",
+    "surface": "x-acting-user-id request header",
+    "observation": "Every portal API request carries x-acting-user-id (value 266 = verified account). Header is client-set; server-side binding to the session was not tested (no secondary-account / negative-auth run).",
+    "basis": "observed (presence) / unknown (enforcement)",
+    "apiop_ids": [
+     "all on staging-api"
+    ]
+   },
+   {
+    "id": "APISURF-02",
+    "surface": "Presigned direct upload to third-party object storage",
+    "observation": "upload-url returns a SigV4 presigned PUT URL (X-Amz-Expires=300, UNSIGNED-PAYLOAD, SignedHeaders=host) on oe-cdn.sgp1.digitaloceanspaces.com; filesize/mimetype are client-declared; 27 MB and a 33 B text-as-png both got 201/200 at steps 1-2. Content type is enforced only at step 3 (422 for non-image, both libraries).",
+    "basis": "observed",
+    "apiop_ids": [
+     "APIOP-010",
+     "APIOP-011",
+     "APIOP-012",
+     "APIOP-024"
+    ]
+   },
+   {
+    "id": "APISURF-03",
+    "surface": "Orphan temporary files",
+    "observation": "After a 422 at by-temporary-file no request removing the temp file was seen; whether storage keeps it is not verifiable from network (inferred from absence).",
+    "basis": "inferred",
+    "apiop_ids": [
+     "APIOP-010",
+     "APIOP-012",
+     "APIOP-024"
+    ]
+   },
+   {
+    "id": "APISURF-04",
+    "surface": "Client-supplied usage context for image delete",
+    "observation": "DELETE /api/layer-images/{id} and POST /api/layer-images/in-use receive the artwork (templates) from the client; the 400 'already been added to the current artwork' matched the posted unsaved artwork. Whether the server also checks persisted artworks (or can be bypassed by posting empty templates) is untested.",
+    "basis": "observed (body) / inferred (mechanism)",
+    "apiop_ids": [
+     "APIOP-016",
+     "APIOP-017"
+    ]
+   },
+   {
+    "id": "APISURF-05",
+    "surface": "Mockup single delete without in-use check",
+    "observation": "Single-card DELETE /api/mockup-layers/{id} was sent without a prior in-use call; only bulk delete calls /in-use. Server-side guard for in-use mockups not observed.",
+    "basis": "observed (sequence) / unknown (server guard)",
+    "apiop_ids": [
+     "APIOP-027",
+     "APIOP-028"
+    ]
+   },
+   {
+    "id": "APISURF-06",
+    "surface": "Client-composed GraphQL filters and _set",
+    "observation": "layer_images_connection where-clause (incl. deleted_at _is_null and svg/gpx exclusion) and update_layer_images _set (incl. client updated_at) are built by the client; row-level permission for other tenants' ids not tested. Relay node ids encode role segment 'public'.",
+    "basis": "observed (query text) / unknown (permission)",
+    "apiop_ids": [
+     "APIOP-004",
+     "APIOP-013",
+     "APIOP-014",
+     "APIOP-025"
+    ]
+   },
+   {
+    "id": "APISURF-07",
+    "surface": "Rate limits",
+    "observation": "x-ratelimit-limit: /api/graphql and /api/graphql/relay 300; /api/layer-images/by-temporary-file 1000 with reset countdown from 86400; /api/layer-images/in-use and /api/mockup-layers/in-use 60. No limit headers on mockup by-temporary-file or category endpoints.",
+    "basis": "observed",
+    "apiop_ids": [
+     "APIOP-004",
+     "APIOP-012",
+     "APIOP-013",
+     "APIOP-017",
+     "APIOP-028"
+    ]
+   }
+  ],
+  "unexplored_operations": [
+   "POST /api/products/{id}/mockups (assign mockup to product base 3206) - not executed, persistence guard",
+   "in-use with non-empty in_use_ids (image used by a saved artwork / mockup used by a product) - needs saving, forbidden by persistence_guard",
+   "DELETE /api/layer-images/{id} for an image used by another saved artwork",
+   "'Choose from clipart category' tab selection (APIOP-003 data only loaded)",
+   "layer_images_connection with limit 50/100/250/500; GET /api/mockup-layers page >= 2 (total never > 20)",
+   "Update category with empty/whitespace name (PUT layer-image-categories / mockup-layer-categories)",
+   "PUT /api/mockup-layers/move with category_id null",
+   "Rename mockup layer (no UI control observed; no endpoint seen)",
+   "Upload 5 raster files at once in mockup library (KB-083 condition) and GIF/WebP files",
+   "Cross-tenant / negative auth (TIB_USER_B_*, TIB_FORBIDDEN_TOKEN, TIB_INVALID_TOKEN) - not in this run",
+   "spec-inventory against TIB_OPENAPI_BASE - not run (runtime-trace only)"
+  ],
+  "coverage_limitations": [
+   "Session cookie is invisible to the in-page fetch/XHR hook; auth mechanism 'cookie' is from playbook/config, only x-xsrf-token and x-acting-user-id are observed.",
+   "Hook captures fetch/XHR only: image loads (thumbnails from CDN) and static assets are not in the captures and therefore not labeled.",
+   "raw/network/ACT-01-10-004.json entry 11 (DELETE /api/layer-images/11163) has no status/response - still pending when the capture was dumped.",
+   "3 captures have 0 entries (ACT-01-05-002, ACT-02-05-002 client-side file-type rejection; ACT-02-06-001 click toggled selection) - nothing to label; client-side rejection is evidenced by portal evidence only.",
+   "Shapes are depth-limited (3 levels); artwork JSON in DELETE/in-use bodies is described only to templates[] top-level keys.",
+   "Timing gaps are reported as observed; causality between requests is asserted only where data links them (temporary_file_id, signed_url path, ids).",
+   "raw/network/ACT-00-01-001.json: explorer note — Recovered from Playwright network log (hook dump lost). Only teeinblue API entries after click: #51, #52. Other entries in window: 2 cdn thumbnails ERR_BLOCKED_BY_ORB (cdn.ownego.com .../users/101/artworks/*_thumbnail.webp), static assets not listed.",
+   "raw/network/ACT-01-09-001.json: explorer note — Only star-maps static data GETs (editor re-render) in window; no library API call on select.",
+   "raw/network/ACT-01-11-001.json: explorer note — Only Cloudflare RUM beacon in window; no artwork save/PUT request."
+  ],
+  "redaction_applied": true,
+  "redaction_note": "Shape only: no request/response values copied except non-sensitive literals needed for QA (error messages, observed constant enums noted in operation notes, route ids in observed_paths). x-xsrf-token, X-Amz-Credential, X-Amz-Signature, Cloudflare siteToken were already [REDACTED] in raw and are not reproduced. temporary_file_id values, object keys of presigned URLs and artwork JSON contents are not copied."
+ },
+ "gate": {
+  "decision": "PASS",
+  "blocking_findings": [],
+  "conditions": [
+   "All 158 entries of 42 captures carry exactly one label: mapped 136 / polling 15 / unrelated 7 / unknown 0 (3 captures have 0 entries).",
+   "28 operations, each traces to >= 1 ACT-ID/SCN-ID/FEATURE-ID; every operation has auth context + request/response shape.",
+   "No required/enum/boundary inferred; always_present only with >= 3 samples present in all; observed_count 1 -> LOW.",
+   "APIOP-011 host_not_in_expected_api_base -> oracle_eligible false until operator confirms (no additional_api_hosts in config).",
+   "Secret scan of this artifact clean (no X-Amz-Signature/Credential values, no xsrf token, no temp-file ids, no object keys)."
+  ],
+  "allowed_next_steps": [
+   "qa-knowledge-normalizer reads intermediate/api/action-api-map.json",
+   "orchestrator: ask operator whether oe-cdn.sgp1.digitaloceanspaces.com should be added to environments.staging.additional_api_hosts",
+   "orchestrator/reviewer: decide APICONF-CTX20261026-01-01..04 against published mockup-attachment KB-081/083/084 and CONF-API-CTX20260921-03-01"
+  ]
+ },
+ "board_update": {
+  "agent_id": "api-explorer",
+  "state": "done",
+  "current_task": "CTX-20261026-01 runtime-trace: label network, map APIOP <-> ACT for image-library",
+  "inputs": [
+   "raw/network/ACT-*.json (42)",
+   "raw/portal/portal-evidence.json",
+   "config/products/teeinblue.json",
+   "config/products/teeinblue/explore-playbook.md §6",
+   "knowledge/products/teeinblue/product-base/features/mockup-attachment/ (read-only)",
+   "knowledge/products/teeinblue/artwork/features/layer-config-image/ (read-only)"
+  ],
+  "outputs": [
+   "intermediate/api/action-api-map.json"
+  ],
+  "blocked_by": [],
+  "last_event": "158 entries labeled (136 mapped / 15 polling / 7 unrelated / 0 unknown), 28 APIOP, 4 conflicts vs published KB, 1 host_not_in_expected_api_base"
+ }
+}

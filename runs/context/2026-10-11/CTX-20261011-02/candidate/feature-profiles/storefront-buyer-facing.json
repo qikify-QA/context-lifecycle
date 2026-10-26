@@ -1,0 +1,1531 @@
+{
+  "schema_version": "1.0",
+  "artifact_type": "FeatureProfileCandidate",
+  "artifact_id": "FPC-CTX-20261011-02-storefront-buyer-facing",
+  "workflow_id": "CTX-20261011-02",
+  "producer": "feature-profile-builder",
+  "source_refs": [
+    "candidate/product-kb/storefront-buyer-facing.json",
+    "knowledge/products/teeinblue/sdk/features/storefront-buyer-facing/profile.json (base, read-only)"
+  ],
+  "upstream_artifact_ids": [
+    "KBC-CTX-20261011-02-storefront-buyer-facing"
+  ],
+  "status": "READY",
+  "confidence": "MEDIUM",
+  "observations": [
+    "CCR_INGEST carry-forward: profile = base profile (last_updated 2026-09-12, có phần bổ sung 2026-09-21) + phần chạm bởi KB-053..KB-060 (CCR CBS-001, Jira TIB-5352). Mọi field base không bị chạm được giữ nguyên văn.",
+    "KB-053..KB-060 chỉ verify trên staging SDK app-v1.js build TIB-5352, campaign 2740 — khác campaign 2595 / store1-store2 của base; chưa release production (OQ-sdk-050)."
+  ],
+  "assumptions": [
+    "Base profile.json không có field stable_since_version; giữ null (không tự tạo version).",
+    "KB-053..KB-060 ghi bundle 'app-v1.js' — profile KHÔNG gắn các item này vào nhãn 'SDK v1 (store1)' của base (khác shop/campaign; nhãn v1/v2 của base đang bị CFL-004 UNRESOLVED)."
+  ],
+  "unknowns": [
+    "Thiết kế retry mong muốn (OQ-sdk-053)",
+    "Fallback 500/503/abort chưa có nguồn xác nhận (OQ-sdk-051)",
+    "pageerror khi timeout có chấp nhận được không (OQ-sdk-052)",
+    "Tổ hợp timeout + lần gọi thứ hai (TC-TIB-008 chưa chạy)",
+    "Cấu hình theme 'enable for all pages' / 2 khối teeinblue (OQ-sdk-054)",
+    "Chưa release production (OQ-sdk-050)"
+  ],
+  "conflicts": [],
+  "blocking_issues": [],
+  "payload": {
+    "feature_profiles": [
+      {
+        "feature_id": "FEAT-07-storefront-buyer-facing",
+        "feature_key": "storefront-buyer-facing",
+        "name": "Campaign Storefront / Buyer-Facing Behavior",
+        "user_goal": "Là buyer/guest, xem và tương tác với sản phẩm của 1 campaign đã publish trên storefront (vượt password-gate, xem trang sản phẩm, chọn variant/personalize — bao gồm draft cá nhân hoá được đệm tạm ở client, preview mockup, add-to-cart, cart) — mục tiêu KHÔNG đổi so với version 1; run này làm rõ thêm cơ chế nội bộ giữ draft cá nhân hoá phía client và điều kiện thực sự để add-to-cart thành công.",
+        "user_goal_kb_refs": [
+          "KB-001",
+          "KB-002",
+          "KB-004",
+          "KB-008",
+          "KB-014",
+          "KB-053",
+          "KB-058"
+        ],
+        "stable_since_version": null,
+        "actors": [
+          {
+            "role": "guest (storefront, không login) — buyer",
+            "permission_observed": "Vượt qua password-gate ngay lần thử đầu với credential hợp lệ (cả 2 store); sau đó xem trang sản phẩm, thao tác personalize (bao gồm draft được lưu tạm ở localStorage phía client), preview, add-to-cart như 1 buyer chưa đăng nhập bình thường. Chưa quan sát permission/behavior khi ĐÃ login.",
+            "kb_refs": [
+              "KB-001",
+              "KB-002",
+              "KB-014"
+            ]
+          },
+          {
+            "role": "guest (unauthenticated) — API consumer",
+            "permission_observed": "Có thể GET endpoint bootstrap config cá nhân hoá (campaigns/{platformProductId}.json) mà KHÔNG cần authorization header nào, chỉ cần biết platform_product_id — public theo thiết kế hoặc chưa gate lại, chưa khẳng định là defect.",
+            "kb_refs": [
+              "KB-013"
+            ]
+          },
+          {
+            "role": "owner (portal) — người launch multi-store",
+            "permission_observed": "Có thể launch campaign 2595 tới store thứ 2 trong cùng Organization; hệ thống chạy pre-flight check theme app-block-enabled trước khi cho phép publish (chỉ quan sát case enabled=true/thành công).",
+            "kb_refs": [
+              "KB-002",
+              "KB-012"
+            ]
+          },
+          {
+            "role": "[MỚI, CBS-001] GUEST buyer xem widget theo locale (vi / zh-TW / en) trên storefront staging build TIB-5352",
+            "permission_observed": "Buyer GUEST mở product page theo locale prefix (/vi-vn/, /zh-zh/, /en-vn/) và modal 'Edit design' ở cart; SDK tự gọi translations/<locale>.json khi dictionary không nhúng inline. Không có khác biệt quyền nào được quan sát.",
+            "kb_refs": [
+              "KB-053",
+              "KB-057",
+              "KB-058"
+            ]
+          }
+        ],
+        "entry_points": [
+          {
+            "path": "linh-explorer.myshopify.com (store1) và linh-explorer-2.myshopify.com (store2) -> /password -> route sản phẩm campaign 2595",
+            "precondition": "guest có TIB_STORE_PASSWORD hợp lệ cho store tương ứng",
+            "kb_refs": [
+              "KB-001"
+            ]
+          },
+          {
+            "path": "URL sản phẩm thật (đã xác minh qua 2 nguồn độc lập: href DOM 'Campaign link' + GraphQL campaign_instances.handle/platform_linked_id) cho campaign 2595 trên store1 (platform_linked_id 8138398629987) và store2 (platform_linked_id 15280333291824)",
+            "precondition": "campaign đã publish tới store tương ứng",
+            "kb_refs": [
+              "KB-002"
+            ]
+          },
+          {
+            "path": "GET /api/merchant/campaigns/{platformProductId}.json — bootstrap widget cá nhân hoá, public, không cần auth",
+            "precondition": "biết platform_product_id",
+            "kb_refs": [
+              "KB-013"
+            ]
+          },
+          {
+            "path": "URL san pham THAT giong het baseline 2026-09-12 (handle 'qa-explore-campaign-pb-01', platform_linked_id store1: 8138398629987, store2: 15280333291824) -- re-verify lai 2026-09-21, KHONG can doan route moi",
+            "precondition": "campaign 2595 van dang publish tren ca 2 store, chua bi go/unpublish giua 2 lan run",
+            "kb_refs": [
+              "KB-044"
+            ]
+          },
+          {
+            "path": "[MỚI] Product page campaign 2740 theo locale prefix /vi-vn/ (API path), /zh-zh/ (inline path), /en-vn/ và modal 'Edit design' ở cart — storefront staging",
+            "precondition": "Staging SDK app-v1.js build TIB-5352 (chưa release production); locale đã có dictionary Dynamic Translations",
+            "kb_refs": [
+              "KB-053",
+              "KB-058",
+              "KB-059"
+            ]
+          }
+        ],
+        "capabilities": [
+          {
+            "name": "Vượt password-gate và xem trang sản phẩm đã publish",
+            "description": "Guest dùng credential hợp lệ vượt gate '/password' ngay lần thử đầu (302 -> '/', điều hướng lại route sản phẩm thành công) cho cả 2 store; trang sản phẩm render đầy đủ ngay sau đó.",
+            "kb_refs": [
+              "KB-001",
+              "KB-002",
+              "KB-003"
+            ]
+          },
+          {
+            "name": "Personalization: chọn variant + dependency 2 cấp (SDK v1, store1)",
+            "description": "Chọn variant (Color/Size) cập nhật giá hiển thị đúng; chọn 1 giá trị template hé lộ đúng bộ field phụ thuộc riêng (1/2/3 cặp Cat Breed+Name); chọn 1 breed cấp cha hé lộ THÊM radiogroup lồng (~10 clipart) mà UI ban đầu không thể hiện rõ là bắt buộc; validation chặn submit khi thiếu field, hiện lỗi inline theo field. Quan sát nhất quán ở template 1 và 2 (SDK v1); template 3 CHƯA test.",
+            "kb_refs": [
+              "KB-004"
+            ]
+          },
+          {
+            "name": "Personalization: dependency cha-con là 1 đơn vị required duy nhất (SDK v2, store2)",
+            "description": "Chọn radio cấp cha (vd Choose Cat Breed #1) hé lộ field con lồng (grid ~9 clipart); lỗi 'This field is required!' vẫn gắn với heading cha cho tới khi field con cũng được chọn — validation coi cặp cha+con là 1 đơn vị required duy nhất. Pattern nhất quán ở Cat Breed #1, #2 và Choose Woman's Hairstyle. Chỉ test template 2; template 1/3 CHƯA test.",
+            "kb_refs": [
+              "KB-007"
+            ]
+          },
+          {
+            "name": "Client-side personalization draft persistence (localStorage)",
+            "description": "MỚI (2026-09-12). Trang product sử dụng 2 key localStorage — 'teeinblue-customizations' (array, 1 object {productId, customization: {<field-id>: <value>,..., platform_linked_id}, timestamp}) và 'teeinblue-global-options' (object keyed theo global-option id, mỗi value {value, extra:{}, timestamp}) — làm buffer/draft thuần client-side. Cả 2 key KHÔNG tồn tại lúc load trang ban đầu (getItem trả null), chỉ được tạo ngay khi tương tác field cá nhân hoá đầu tiên. Write timing khác nhau theo field type: field radio/template/clipart đơn (không lồng con) ghi ĐỒNG BỘ ngay khi click (dưới 300ms, không debounce); field text (vd Woman Name) CHỈ ghi khi blur, KHÔNG ghi khi đang gõ hay khi còn focus. ĐIỂM ĐẶC BIỆT: đây là 1 trong số ít capability của profile này KHÔNG tách SDK v1/v2 — shape, timing, và hành vi tồn tại/khởi tạo key GIỐNG HỆT NHAU (byte-for-byte structure) trên cả store1 (SDK v1) và store2 (SDK v2), khác hẳn các capability khác trong profile (personalization dependency, artwork preview, add-to-cart, cart handoff) vốn đã phải tách riêng v1/v2 vì có khác biệt hành vi rõ rệt. Lý do KHÔNG tách ở đây: bằng chứng cụ thể (KB-014, KB-015, KB-016, KB-017) đều ghi nhận 'giống hệt nhau' qua so sánh trực tiếp trên cùng campaign 2595, không phải suy đoán mặc định.",
+            "kb_refs": [
+              "KB-014",
+              "KB-015",
+              "KB-016",
+              "KB-017"
+            ]
+          },
+          {
+            "name": "Personalization: grouped_clipart field cần 2-step (radio nhóm + click con) mới thực sự hợp lệ (SDK v2, store2) — bổ sung chi tiết mới, liên quan CFL-003",
+            "description": "MỚI (2026-09-12), làm rõ hơn capability 'dependency cha-con' đã có ở v1. Với field dạng grouped_clipart (Hairstyle, Cat Breed #1/#2): click radio cấp NHÓM check=true và lộ field con bắt buộc (grid ~9-12 thumbnail), nhưng giá trị field trong localStorage KHÔNG ổn định ở giá trị nhóm thô — chỉ có giá trị thật (asset path thumbnail con) sau khi thumbnail con CŨNG được click. Nếu điền đủ chuỗi field còn lại nhưng CHỈ click radio nhóm cho field grouped_clipart (bỏ qua click con), Add-to-cart THẤT BẠI THẬT: banner lỗi chung, lỗi inline dưới đúng các field đó, GET /cart.js xác nhận item_count=0, và ZERO request tới APIOP-051 (client-side validation chặn trước khi gửi). Đây chính là nguyên nhân của lần ATC ĐẦU TIÊN thất bại trong run này trên store2 — xem CFL-003.",
+            "kb_refs": [
+              "KB-018"
+            ]
+          },
+          {
+            "name": "Artwork preview — lightbox mockup TĨNH (SDK v1, store1)",
+            "description": "Nút 'Preview' mở lightbox native theme (PhotoSwipe-style) hiển thị ảnh mockup GIỐNG HỆT trước và sau khi điền toàn bộ field cá nhân hoá — không quan sát được recomposition theo thời gian thực. 1 sample, không suy tổng quát cho toàn bộ campaign/template khác.",
+            "kb_refs": [
+              "KB-010"
+            ]
+          },
+          {
+            "name": "Artwork preview — SVG sống, cập nhật theo layer-id (SDK v2, store2)",
+            "description": "Mockup chính là SVG inline (#teeinblue-wrapper, Vue3 app) với <g> layer id 'artwork-layer--layer-<n>' khớp CHÍNH XÁC id field cá nhân hoá 'tee-field--layer-<n>' — xác nhận cơ chế mapping field->layer trực tiếp. Cơ chế KHÁC hẳn store1 (lightbox tĩnh). 1 sample, chưa test template/campaign khác.",
+            "kb_refs": [
+              "KB-011"
+            ]
+          },
+          {
+            "name": "Pricing display",
+            "description": "Chọn variant cập nhật giá hiển thị đúng (SDK v1, KB-004). Trên SDK v2, giá tại add-to-cart khớp đúng giá hiển thị ($55.99, không phụ phí ẩn) và tăng quantity 1->2 cho total_price tăng đúng tuyến tính (1 sample, không suy tổng quát bulk discount). CSS variable additional-charge tồn tại trong stylesheet SDK v2 nhưng chưa có case thực tế quan sát.",
+            "kb_refs": [
+              "KB-004",
+              "KB-008"
+            ]
+          },
+          {
+            "name": "Add-to-cart — CHƯA xác nhận hoàn tất (SDK v1, store1) — xem CFL-001",
+            "description": "Trong phiên automated: sau khi mọi field hiển thị đã điền đủ (kể cả field lồng cấp 2), bấm ADD TO CART vẫn hiện banner lỗi chung 'Error: Some fields are required or invalid data' và click KHÔNG bắn bất kỳ network request nào (netlog xác nhận 0 request, /cart vẫn empty). Tái hiện ở 2 cấu hình template khác nhau, nhiều kỹ thuật dispatch event khác nhau. Đây là phía HIGH-evidence-weight của CFL-001 UNRESOLVED — phía kia (LOW-weight) là lời khai manual-test của user rằng ATC hoạt động bình thường khi thao tác tay, KHÔNG có evidence file kèm theo. Run 2026-09-12 KHÔNG re-test ATC trên store1 (dừng trước ATC theo chủ đích) nên CFL-001 không có evidence mới.",
+            "kb_refs": [
+              "KB-005",
+              "KB-006"
+            ]
+          },
+          {
+            "name": "Add-to-cart — hoàn tất thành công toàn trình, NHƯNG lần thử đầu tiên có thể fail thật nếu bỏ sót bước con của grouped_clipart (SDK v2, store2)",
+            "description": "CẬP NHẬT (2026-09-12). Sau khi điền đủ mọi field VÀ đã click cả radio nhóm lẫn thumbnail con của mọi field grouped_clipart, POST /cart/add trả 200, cart.item_count 0->1, giá khớp hiển thị; tăng quantity qua /cart/change.js tăng tuyến tính; cleanup (set quantity 0) thành công. Tuy nhiên run này ghi nhận: lần thử ATC ĐẦU TIÊN trong phiên (chỉ click radio nhóm, chưa click con của 3 field grouped_clipart) THẤT BẠI THẬT — không phải automation artifact — với banner lỗi, lỗi inline, item_count=0, và 0 request tới APIOP-051. ATC chỉ thành công ở lần thử THỨ HAI sau khi bổ sung click con. Đây là CFL-003 (mới) vì mâu thuẫn với khung nhìn 'ATC store2 đã là đường known-working' kế thừa từ 2026-09-12.",
+            "kb_refs": [
+              "KB-008",
+              "KB-018",
+              "KB-022"
+            ]
+          },
+          {
+            "name": "Post-ATC persistence của localStorage draft (SDK v2, store2) — MỚI",
+            "description": "MỚI (2026-09-12). Sau Add-to-cart thành công trên store2, 'teeinblue-customizations'/'teeinblue-global-options' GIỮ NGUYÊN byte-identical (cùng timestamp) — ATC KHÔNG xoá/reset draft phía client. Sau khi dọn cart (POST /cart/clear.js, xác nhận item_count=0), localStorage vẫn GIỮ NGUYÊN không đổi. CHỈ xác nhận trên SDK v2 (store2); SDK v1 (store1) CHƯA xác nhận vì run này (và mọi run tới nay) dừng trước ATC trên store1 theo chủ đích (tránh re-trigger CFL-001) — hành vi tương ứng trên SDK v1 KHÔNG được suy diễn là giống nhau.",
+            "kb_refs": [
+              "KB-021"
+            ]
+          },
+          {
+            "name": "Server sync tại thời điểm Add-to-cart (APIOP-051) — MỚI",
+            "description": "MỚI (2026-09-12). Trong suốt quá trình điền field cá nhân hoá (cả 2 store), ZERO request XHR/fetch tới host teeinblue-owned nào được ghi nhận — localStorage hoạt động thuần như buffer client-side. Request teeinblue-owned ĐẦU TIÊN trong phiên chỉ xuất hiện tại thời điểm Add-to-cart trên store2: POST https://staging-api.teeinblue.com/api/merchant/shopify/customization (APIOP-051), ngay trước /cart/add gốc của Shopify. Khi lần thử ATC thất bại (thiếu click con grouped_clipart), APIOP-051 KHÔNG xuất hiện — xác nhận validation client-side chặn trước khi gửi request server. Store1/SDK v1 CHƯA xác nhận có gọi APIOP-051 hay endpoint tương đương tại ATC hay không vì chưa từng tới được bước ATC.",
+            "kb_refs": [
+              "KB-022"
+            ]
+          },
+          {
+            "name": "Cart handoff / line-item — chỉ có ở SDK v2, store2 (KHÔNG có evidence ở v1 vì ATC chưa từng chạm network layer)",
+            "description": "Line-item properties trên store2 CHỈ gồm field nội bộ tiền tố '_' (_customization_id, _customization_image, _tib_fulfilled_sku, _tib_design_link_1) — KHÔNG có property text người đọc được. Cart page/cart-drawer chỉ hiển thị info variant chuẩn + ảnh mockup; KHÔNG tìm thấy đường 'edit personalization từ cart' trong phiên này. Trên SDK v1, vì ATC chưa bao giờ hoàn tất, KHÔNG có bất kỳ dữ liệu cart/line-item nào để so sánh — đây là gap, không phải bằng chứng 'không có tính năng'.",
+            "kb_refs": [
+              "KB-009",
+              "KB-005"
+            ]
+          },
+          {
+            "name": "Multi-store publish pre-flight check (portal, owner)",
+            "description": "Trước khi gọi POST /api/campaigns/{id}/publish cho instance đích, portal gọi GET /api/instances/{instanceId}/themes/app-block-enabled và nhận {enabled:true} trước khi cho phép publish — 1 sample, chỉ case thành công; case enabled=false/lỗi chưa test.",
+            "kb_refs": [
+              "KB-012"
+            ]
+          },
+          {
+            "name": "Publish tạo Shopify product độc lập theo từng store",
+            "description": "Mỗi store nhận 1 Shopify product THẬT ĐỘC LẬP — platform_linked_id khác nhau rõ rệt giữa store1 (8138398629987) và store2 (15280333291824). URL storefront thật xác nhận qua 2 nguồn độc lập (href DOM + GraphQL).",
+            "kb_refs": [
+              "KB-002"
+            ]
+          },
+          {
+            "name": "[MOI, 2026-09-21] SDK bundle/version marker re-check tren campaign 2595 -- store1 nay serve app-v2.js/tee-campaign-v2 (KHAC baseline 2026-09-12: store1=app-v1.js/tee-campaign-v1); store2 khong doi -- day la evidence_c cua CFL-004",
+            "description": "Truy cap lai CHINH campaign 2595 (cung handle/platform_linked_id da dung de lap baseline v1/v2 2026-09-12): store1 (linh-explorer.myshopify.com) hien co script src app-v2.js + async.js?v=2 va container class 'tee-campaign-v2' -- NGUOC lai voi app-v1.js/tee-campaign-v1 ghi nhan truoc do cho CHINH store/campaign nay. store2 khong doi (van la v2). Toan bo DOM ca nhan hoa quan sat duoc (element id, nhan field, so clipart, gia, CSS custom property) hien BYTE-IDENTICAL giua 2 store, xac nhan doc lap qua 2 lan script pass rieng biet. KHONG duoc dung quan sat nay de tu ket luan CFL-004 theo huong nao -- chi ghi nhan la mot phia (evidence_c) cua conflict UNRESOLVED (xem open-questions.md OQ-sdk-001). KHONG danh dau capability 'Personalization: chon variant + dependency 2 cap (SDK v1, store1)' hay bat ky capability gan nhan v1/v2 nao khac trong profile nay la stale.",
+            "kb_refs": [
+              "KB-040"
+            ]
+          },
+          {
+            "name": "[MOI, 2026-09-21] Personalization dependency (template option 2, campaign 2595) re-observed -- hinh thai DOM moi, KHONG khop verbatim mo ta v1 cu hay v2 cu trong profile nay",
+            "description": "Chon template option 2 (id -578330) tren CA 2 store he lo DUNG 7 field bat buoc moi (Choose Woman's Skin Tone*, Choose Woman's Hairstyle*, Woman Name*, Choose Cat Breed #1*, Cat Name #1*, Choose Cat Breed #2*, Cat Name #2*), nhan/thu tu/option select GIONG HET nhau giua 2 store. Co che top-level la 3 <label> radio phang chia se chung 1 attribute 'name' -- KHONG phai role=radiogroup long ~10 clipart nhu mo ta v1 cu (capability 'Personalization: chon variant + dependency 2 cap (SDK v1, store1)', KB-004), CUNG KHONG phai grid grouped_clipart ~9 clipart nhu mo ta v2 cu (capability 'Personalization: dependency cha-con la 1 don vi required duy nhat (SDK v2, store2)', KB-007). Ghi nhan la quan sat MOI/khac biet hinh thai, KHONG ep vao nhan v1 hay v2 san co, KHONG dung de sua doi 2 capability KB-004/KB-007 da co. Template option 3 van CHUA duoc test.",
+            "kb_refs": [
+              "KB-041"
+            ]
+          },
+          {
+            "name": "[MOI, 2026-09-21] Preview/mockup mechanism (template 1, campaign 2595) re-observed -- img + overlay 'tee-printarea', zero [data-layer-id] SVG, KHONG khop verbatim KB-010 (v1 cu) hay KB-011 (v2 cu)",
+            "description": "Click nut 'Preview' (template mac dinh, khong thieu field bat buoc) tren CA 2 store mo popup voi mockup dang <img> + div overlay 'tee-printarea' (slider prev/next). ZERO phan tu [data-layer-id] tim thay trong popup o ca 2 store. Cau truc DOM (so svg/img, class name, nesting) BYTE-IDENTICAL giua 2 store. Co che nay KHONG khop verbatim voi capability 'Artwork preview -- lightbox mockup TINH (SDK v1, store1)' (KB-010: mo ta la lightbox PhotoSwipe-style tinh) lan capability 'Artwork preview -- SVG song, cap nhat theo layer-id (SDK v2, store2)' (KB-011: mo ta la SVG song voi id artwork-layer--layer-<n>). Ghi nhan rieng nhu 1 quan sat MOI, danh dau CHUA doi chieu duoc voi 2 capability cu, KHONG gan nhan v1/v2 cho quan sat nay, KHONG sua doi noi dung KB-010/KB-011.",
+            "kb_refs": [
+              "KB-042"
+            ]
+          },
+          {
+            "name": "[MOI, 2026-09-21] Add-to-cart bi chan client-side khi field bat buoc (template option 2) con de trong -- doi xung ca 2 store; day la data point KHAC kich ban voi CFL-001, KHONG dung de dong CFL-001",
+            "description": "Khi chon template option 2 va CO TINH de trong 7 field phu thuoc roi bam 'Add to cart' tren CA 2 store: banner loi inline 'Error: Some fields are required or invalid data' hien ra; GET /cart.json ngay sau do show item_count: 0 o ca 2 store; ZERO request toi bat ky endpoint '.../shopify/customization' hay cart/add nao o ca 2 store -- chan hoan toan o client-side truoc khi co network call, DOI XUNG giua 2 store (khac voi capability 'Add-to-cart -- CHUA xac nhan hoan tat (SDK v1, store1)' noi ve kich ban DA dien DU field ma van bi chan tren rieng store1). Day la data point MOI, KHAC kich ban voi CFL-001 (CFL-001 noi ve truong hop moi field DA dien du tren store1) -- KHONG dung quan sat nay de dong hay thu hep CFL-001; khong sua doi noi dung capability/risk CFL-001 da co.",
+            "kb_refs": [
+              "KB-043"
+            ]
+          },
+          {
+            "name": "[MOI, 2026-09-21] Xac nhan lai identity campaign/object 2026-09-21 -- cung campaign/product id nhu baseline 2026-09-12, theme khong doi",
+            "description": "Storefront re-check dung lai URL/handle 'qa-explore-campaign-pb-01' tu baseline 2026-09-12 ma KHONG can doan route moi: tieu de san pham 'QA Explore Campaign PB 01' va product id khop CHINH XAC baseline (store1: 8138398629987, store2: 15280333291824); endpoint bootstrap cong khai GET /api/merchant/campaigns/{product_id}.json fire tren ca 2 store -- xac nhan day LA cung 1 campaign/object voi baseline v1/v2 2026-09-12, khong phai campaign khac (loai bo kha nang 'campaign da bi thay/tao lai' nhu 1 nguyen nhan cua CFL-004). Theme cung khong doi: store1 = Dawn 16.0.0 (theme id 143116042339), store2 = 'test-data'/Generated Data Theme 1.0.0 (theme id 188105261360) -- chi rieng SDK bundle/version marker cua store1 thay doi (KB-040), theme thi khong.",
+            "kb_refs": [
+              "KB-044"
+            ]
+          },
+          {
+            "name": "[MỚI, CBS-001] Widget vẫn dùng được khi dictionary translations từ API chậm hoặc lỗi — fallback chữ gốc",
+            "description": "CONFIRMED_EXPECTED (KB-053, staging build TIB-5352, chưa production): khi locale lấy dictionary qua API (vi ≥1000 key) và response translations/vi.json trễ quá 5 giây, ở mốc 3s widget chưa có nhãn, từ mốc 6s widget hiện chữ gốc ('QA5352 Your name', 'QA5352 Enter name', 'QA5352 Your photo'); trang và widget vẫn hoạt động, không crash. Chỉ OBSERVED/INFERRED, chưa xác nhận: với 500/503/abort widget cũng render chữ gốc, 1 request mỗi lần load (KB-054, từ TC FAILED); 1 pageerror 'signal is aborted without reason' khi timeout (KB-055, CCR cấm coi là expected); bundle dùng headersTimeout 5000 ms và nuốt lỗi về null (KB-056, INFERRED); retry lazy — cache promise theo 'shop|locale', tối đa 2 fetch, lần 2 chỉ ở lần gọi kế tiếp trong cùng page session (vd 'Edit design' ở cart), không retry khi load trang (KB-057).",
+            "kb_refs": [
+              "KB-053",
+              "KB-054",
+              "KB-055",
+              "KB-056",
+              "KB-057"
+            ],
+            "act_ids": []
+          },
+          {
+            "name": "[MỚI, CBS-001] Hiển thị nhãn widget khi chuỗi không có trong dictionary, và dictionary inline không in lặp",
+            "description": "CONFIRMED_EXPECTED (KB-058, staging build TIB-5352, chưa production): nhãn color picker 'Select a color' của photo layer, không có trong dictionary vi (1249 key) / zh-TW (50 key) / en (18 key), hiển thị chữ gốc 'Select a color', không rỗng, ở /vi-vn/ (API path), /zh-zh/ (inline path), /en-vn/ và modal 'Edit design' ở cart. Chỉ OBSERVED/INFERRED: HTML /zh-zh/ có 'window.teeinblueShopTranslations =' đúng 1 lần dù có 2 lần 'window.teeinblueShop =', app embed 'product-personalizer' và 4 cụm comment 'teeinblue scripts' (KB-059, 1 lần quan sát); việc trang render cả theme app extension và theme script là suy luận, chưa kiểm theme editor (KB-060).",
+            "kb_refs": [
+              "KB-058",
+              "KB-059",
+              "KB-060"
+            ],
+            "act_ids": []
+          }
+        ],
+        "state_transitions": [
+          {
+            "from": "password-gate",
+            "to": "trang sản phẩm render đầy đủ",
+            "trigger": "submit form password với credential hợp lệ",
+            "condition": "guest, cả store1 và store2",
+            "kb_refs": [
+              "KB-001"
+            ]
+          },
+          {
+            "from": "trang sản phẩm (chưa chọn template)",
+            "to": "field cá nhân hoá cấp 1 hiển thị",
+            "trigger": "chọn 1 giá trị template",
+            "condition": "(SDK v1, store1) — bộ field phụ thuộc riêng theo giá trị template đã chọn",
+            "kb_refs": [
+              "KB-004"
+            ]
+          },
+          {
+            "from": "trang sản phẩm (chưa tương tác)",
+            "to": "localStorage 'teeinblue-customizations'/'teeinblue-global-options' được tạo lần đầu",
+            "trigger": "click field cá nhân hoá đầu tiên (bất kỳ, cả 2 store)",
+            "condition": "(SDK v1 và SDK v2 — GIỐNG NHAU) key không tồn tại (null) trước tương tác này",
+            "kb_refs": [
+              "KB-014"
+            ]
+          },
+          {
+            "from": "field cá nhân hoá cấp 1 đã chọn (vd breed)",
+            "to": "field cá nhân hoá cấp 2 lồng hiển thị (bắt buộc)",
+            "trigger": "chọn 1 giá trị cấp cha",
+            "condition": "(SDK v1, store1) radiogroup lồng ~10 clipart; (SDK v2, store2) grid ~9 clipart — cả 2 SDK đều coi cặp cha-con là 1 đơn vị required",
+            "kb_refs": [
+              "KB-004",
+              "KB-007"
+            ]
+          },
+          {
+            "from": "radio nhóm grouped_clipart đã check, field con chưa chọn",
+            "to": "field grouped_clipart vẫn CHƯA có giá trị thật hợp lệ trong localStorage/validation",
+            "trigger": "chỉ click radio nhóm, KHÔNG click thumbnail con",
+            "condition": "(SDK v2, store2) — nếu tiến thẳng tới ADD TO CART ở trạng thái này, ATC THẤT BẠI THẬT (xem CFL-003)",
+            "kb_refs": [
+              "KB-018"
+            ]
+          },
+          {
+            "from": "mọi field cá nhân hoá đã điền đủ",
+            "to": "ADD TO CART vẫn bị chặn, banner lỗi chung, 0 network request",
+            "trigger": "click ADD TO CART",
+            "condition": "(SDK v1, store1) — UNRESOLVED, xem CFL-001; tái hiện ở 2 template",
+            "kb_refs": [
+              "KB-005"
+            ]
+          },
+          {
+            "from": "field grouped_clipart chỉ có radio nhóm được click (chưa click con)",
+            "to": "ADD TO CART thất bại thật, banner lỗi chung, lỗi inline dưới field grouped_clipart, item_count=0, 0 request APIOP-051",
+            "trigger": "click ADD TO CART khi field grouped_clipart còn thiếu bước click con",
+            "condition": "(SDK v2, store2) — quan sát ở lần thử ĐẦU TIÊN trong lần quan sát 2026-09-12, xem CFL-003",
+            "kb_refs": [
+              "KB-018"
+            ]
+          },
+          {
+            "from": "mọi field cá nhân hoá đã điền đủ (bao gồm cả bước click con của grouped_clipart)",
+            "to": "cart.item_count 0 -> 1, giá khớp hiển thị, POST APIOP-051 fire đúng 1 lần ngay trước /cart/add",
+            "trigger": "click Add to cart -> POST /cart/add 200",
+            "condition": "(SDK v2, store2) — lần thử THỨ HAI trong run này",
+            "kb_refs": [
+              "KB-008",
+              "KB-018",
+              "KB-022"
+            ]
+          },
+          {
+            "from": "cart có 1 item",
+            "to": "cart có 2 item cùng SKU (total_price tăng tuyến tính) -> cart rỗng lại (cleanup)",
+            "trigger": "POST /cart/change.js tăng qty -> set qty 0 hoặc /cart/clear.js",
+            "condition": "(SDK v2, store2) — 1 sample, không suy tổng quát bulk discount; localStorage draft GIỮ NGUYÊN xuyên suốt chuỗi này (KB-021)",
+            "kb_refs": [
+              "KB-008",
+              "KB-021"
+            ]
+          },
+          {
+            "from": "trang đã có draft localStorage (đã điền field trước đó)",
+            "to": "DOM form reset về mặc định (full page reload) NHƯNG localStorage vẫn giữ nguyên byte-identical",
+            "trigger": "reload trang (F5 / page.reload)",
+            "condition": "(SDK v1 và SDK v2 — GIỐNG NHAU) 'lưu nhưng không tự khôi phục' ở mức full-page-load",
+            "kb_refs": [
+              "KB-019"
+            ]
+          },
+          {
+            "from": "sau reload, DOM chưa khôi phục field text",
+            "to": "field text (Woman Name) tự pre-fill lại giá trị đã lưu",
+            "trigger": "chọn lại field cha (template) khiến field con text remount",
+            "condition": "(SDK v2, store2) — REFINE của KB-019, không mâu thuẫn; chỉ xác nhận field type text, 1 sample; CHƯA test field radio/clipart",
+            "kb_refs": [
+              "KB-020"
+            ]
+          },
+          {
+            "from": "template option 2 da chon, 7 field phu thuoc de trong (co tinh)",
+            "to": "ADD TO CART bi chan client-side, banner loi + loi inline duoi tung field, cart.json item_count=0, 0 network request toi customization/cart-add",
+            "trigger": "click ADD TO CART khi field bat buoc con de trong",
+            "condition": "(ca store1 va store2 -- DOI XUNG) quan sat 2026-09-21, KHAC kich ban voi CFL-001 (field DA dien du van bi chan tren store1) -- KHONG dung de dong CFL-001",
+            "kb_refs": [
+              "KB-043"
+            ]
+          },
+          {
+            "from": "[MỚI] widget chờ dictionary từ translations/<locale>.json (API path), chưa có nhãn",
+            "to": "widget render bằng chữ gốc, trang/widget vẫn hoạt động",
+            "trigger": "response translations/<locale>.json không về trong 5 giây",
+            "condition": "Staging build TIB-5352 (CONFIRMED_EXPECTED, KB-053). Mốc 5s được suy là headersTimeout trong bundle (KB-056, INFERRED). Kèm 1 pageerror 'signal is aborted without reason' (KB-055, OBSERVED, không phải expected).",
+            "kb_refs": [
+              "KB-053",
+              "KB-055",
+              "KB-056"
+            ]
+          },
+          {
+            "from": "[MỚI] widget chờ dictionary từ translations/<locale>.json (API path)",
+            "to": "widget render bằng chữ gốc, chỉ 1 request translations trong lần load",
+            "trigger": "response translations/<locale>.json là 500, 503 hoặc network abort",
+            "condition": "Staging build TIB-5352; chỉ OBSERVED_CURRENT/LOW từ test case FAILED TC-TIB-4696 — chưa là expected (OQ-sdk-051).",
+            "kb_refs": [
+              "KB-054"
+            ]
+          },
+          {
+            "from": "[MỚI] lần fetch translations đầu tiên trong page session đã lỗi (promise cache theo 'shop|locale' bị xoá vì số lỗi < 2)",
+            "to": "lần gọi kế tiếp trong cùng page session (vd bấm 'Edit design' ở cart lần 1) fetch lại; sau 2 lần lỗi không fetch thêm (lần 3 vẫn tổng 2 request)",
+            "trigger": "SDK cần dictionary lần nữa trong cùng page session",
+            "condition": "Staging build TIB-5352, response mock 500; OBSERVED_CURRENT/LOW, khác kỳ vọng '1 retry khi load' của TC-TIB-4696 — thiết kế mong muốn chưa xác nhận (OQ-sdk-053).",
+            "kb_refs": [
+              "KB-057"
+            ]
+          }
+        ],
+        "confirmed_rules": [
+          {
+            "rule": "Khi response translations/<locale>.json (API path) không về trong 5 giây, widget personalization render bằng chữ gốc (không để trống nhãn vô thời hạn) và trang/widget vẫn hoạt động, không crash.",
+            "knowledge_kind": "CONFIRMED_EXPECTED",
+            "confidence": "MEDIUM",
+            "scope": "staging, GUEST buyer, SDK app-v1.js build TIB-5352 (chưa release production), locale vi 1249 key",
+            "caveats": "Chỉ nhánh timeout >5s. Không gồm 500/503/abort (KB-054), pageerror (KB-055), retry (KB-057).",
+            "confirmation_ref": "Testlane TC-TIB-4697 PASS",
+            "kb_refs": [
+              "KB-053"
+            ]
+          },
+          {
+            "rule": "Nhãn widget không có trong dictionary của locale (vd 'Select a color' của color picker photo layer) hiển thị chữ gốc, không rỗng, ở cả API path, inline path, ngôn ngữ chính và modal 'Edit design' ở cart.",
+            "knowledge_kind": "CONFIRMED_EXPECTED",
+            "confidence": "MEDIUM",
+            "scope": "staging, GUEST buyer, SDK app-v1.js build TIB-5352 (chưa release production), campaign 2740",
+            "caveats": "Một chuỗi được test ('Select a color').",
+            "confirmation_ref": "Testlane TC-TIB-4710 PASS",
+            "kb_refs": [
+              "KB-058"
+            ]
+          }
+        ],
+        "observed_behavior": [
+          {
+            "statement": "Propagation publish -> storefront: IMMEDIATE cho store2 (render đầy đủ trong cùng phiên vài phút sau publish, session mới/cold). Cho store1, độ trễ propagation thực tế KHÔNG đo được (2 sự kiện cross-session), ghi nhận NOT_OBSERVED.",
+            "kb_refs": [
+              "KB-003"
+            ]
+          },
+          {
+            "statement": "(SDK v1) Preview lightbox là ảnh TĨNH — không đổi theo lựa chọn cá nhân hoá trong phiên test (1 sample).",
+            "kb_refs": [
+              "KB-010"
+            ]
+          },
+          {
+            "statement": "(SDK v2) Preview là SVG sống — layer trong SVG map trực tiếp theo id với field cá nhân hoá tương ứng (1 sample) — cơ chế khác biệt căn bản so với SDK v1.",
+            "kb_refs": [
+              "KB-011"
+            ]
+          },
+          {
+            "statement": "(SDK v1) và (SDK v2) đều dùng chung endpoint bootstrap config public GET /api/merchant/campaigns/{platformProductId}.json, không cần auth, dù cơ chế render UI khác nhau hoàn toàn.",
+            "kb_refs": [
+              "KB-013"
+            ]
+          },
+          {
+            "statement": "(SDK v1 và SDK v2 — GIỐNG NHAU) trong lúc điền field, KHÔNG có bất kỳ request XHR/fetch nào tới host teeinblue-owned; toàn bộ tương tác chỉ ghi vào localStorage phía client. Request teeinblue-owned đầu tiên trong phiên chỉ xuất hiện tại ATC (APIOP-051, store2).",
+            "kb_refs": [
+              "KB-022"
+            ]
+          },
+          {
+            "statement": "[MOI, 2026-09-21] Store1 hien serve app-v2.js/tee-campaign-v2 tren campaign 2595 (khac han baseline 2026-09-12: app-v1.js/tee-campaign-v1 cho CHINH campaign nay); store2 khong doi. Ca 2 store hien co DOM ca nhan hoa byte-identical. Day la evidence_c cua CFL-004 -- UNRESOLVED, khong tu ket luan.",
+            "kb_refs": [
+              "KB-040"
+            ]
+          },
+          {
+            "statement": "[MOI, 2026-09-21] Co che preview img+'tee-printarea' (ca 2 store, template 1) khong khop verbatim voi mo ta lightbox tinh (v1 cu, KB-010) hay SVG song theo layer-id (v2 cu, KB-011) -- ghi nhan rieng, chua doi chieu duoc.",
+            "kb_refs": [
+              "KB-042"
+            ]
+          },
+          {
+            "statement": "[MOI, 2026-09-21] Campaign 2595/product id xac nhan lai KHOP CHINH XAC baseline 2026-09-12 tren ca 2 store; theme rieng cua tung store khong doi -- chi rieng SDK bundle/version marker cua store1 thay doi.",
+            "kb_refs": [
+              "KB-044"
+            ]
+          },
+          {
+            "statement": "[MỚI, CBS-001] Với response translations/vi.json bị giả lập 500, 503 hoặc network abort: mỗi lần load chỉ có 1 request translations (~0,9s sau load) và widget render chữ gốc ở cả 3 trường hợp. Lấy từ test case FAILED TC-TIB-4696 (fail ở kỳ vọng retry, không phải fallback) — chưa đủ làm nguồn xác nhận.",
+            "knowledge_kind": "OBSERVED_CURRENT",
+            "confidence": "LOW",
+            "scope": "staging build TIB-5352, chưa production",
+            "kb_refs": [
+              "KB-054"
+            ]
+          },
+          {
+            "statement": "[MỚI, CBS-001] Khi translations/vi.json trễ quá 5s, phát sinh 1 pageerror 'signal is aborted without reason' (AbortController 5s) trong khi trang/widget vẫn hoạt động. CCR nói KHÔNG coi pageerror này là hành vi mong muốn.",
+            "knowledge_kind": "OBSERVED_CURRENT",
+            "confidence": "LOW",
+            "scope": "staging build TIB-5352, chưa production",
+            "kb_refs": [
+              "KB-055"
+            ]
+          },
+          {
+            "statement": "[MỚI, CBS-001] Theo đoạn bundle app-v1.js do người gửi CCR đọc: hàm gọi merchant/translations/<locale>.json?shop=<domain> truyền headersTimeout 5000 ms và bắt mọi lỗi thành null; mốc 5s của KB-053 được suy là timeout chờ header. Suy luận từ mã build, chưa có nguồn thẩm quyền.",
+            "knowledge_kind": "INFERRED",
+            "confidence": "LOW",
+            "scope": "staging build TIB-5352, chưa production",
+            "kb_refs": [
+              "KB-056"
+            ]
+          },
+          {
+            "statement": "[MỚI, CBS-001] Retry fetch translations là lazy: với response mock 500, một lần load trang chỉ có 1 request; ở cart bấm 'Edit design' lần 1 → tổng 1, lần 2 → tổng 2, lần 3 → vẫn 2. Bundle cache promise theo khoá 'shop|locale', đếm lỗi, chỉ xoá cache cho phép gọi lại khi số lỗi < 2. Dev mô tả 'SDK chỉ thử lại đúng 1 lần' không nêu điều kiện; chưa xác nhận là thiết kế.",
+            "knowledge_kind": "OBSERVED_CURRENT",
+            "confidence": "LOW",
+            "scope": "staging build TIB-5352, chưa production",
+            "kb_refs": [
+              "KB-057"
+            ]
+          },
+          {
+            "statement": "[MỚI, CBS-001] Raw HTML /zh-zh/ (zh-TW 50 key, inline path): 'window.teeinblueShopTranslations =' xuất hiện đúng 1 lần, key 'QA5352 Your name' 1 lần; cùng HTML có 2 lần 'window.teeinblueShop =', app embed 'product-personalizer' và 4 cụm comment 'teeinblue scripts'. Một lần quan sát; cấu hình theme chưa kiểm.",
+            "knowledge_kind": "OBSERVED_CURRENT",
+            "confidence": "LOW",
+            "scope": "staging build TIB-5352, chưa production",
+            "kb_refs": [
+              "KB-059"
+            ]
+          },
+          {
+            "statement": "[MỚI, CBS-001] Suy luận của người gửi CCR: trang /zh-zh/ đang render cả theme app extension và theme script của teeinblue mà dictionary inline vẫn chỉ in 1 lần. Điều kiện '2 khối teeinblue' chưa được xác nhận bằng theme editor.",
+            "knowledge_kind": "INFERRED",
+            "confidence": "LOW",
+            "scope": "staging build TIB-5352, chưa production",
+            "kb_refs": [
+              "KB-060"
+            ]
+          }
+        ],
+        "observed_validations": [
+          {
+            "input": "(SDK v1, store1) click ADD TO CART khi mọi field hiển thị đã điền đủ, 2 cấu hình template khác nhau",
+            "message_verbatim": "Error: Some fields are required or invalid data",
+            "observed_count": 2,
+            "rule_confidence": "LOW",
+            "kb_refs": [
+              "KB-005"
+            ]
+          },
+          {
+            "input": "(SDK v2, store2) chọn field cấp cha (vd Choose Cat Breed #1/#2, Choose Woman's Hairstyle) mà chưa chọn field con lồng bên trong",
+            "message_verbatim": "This field is required!",
+            "observed_count": 3,
+            "rule_confidence": "MEDIUM",
+            "kb_refs": [
+              "KB-007"
+            ]
+          },
+          {
+            "input": "(SDK v2, store2) click ADD TO CART khi đã điền đủ 8 field nhưng field grouped_clipart (Hairstyle, Cat Breed #1, Cat Breed #2) chỉ click radio nhóm, CHƯA click thumbnail con",
+            "message_verbatim": "Error: Some fields are required or invalid data (banner) + This field is required! (inline, dưới 3 field grouped_clipart)",
+            "observed_count": 3,
+            "rule_confidence": "MEDIUM",
+            "kb_refs": [
+              "KB-018"
+            ]
+          },
+          {
+            "input": "(ca store1 va store2, template option 2) click ADD TO CART khi 7 field phu thuoc bat buoc con de trong hoan toan (khac kich ban CFL-001: o day field CHUA duoc dien, khong phai da dien du roi van bi chan)",
+            "message_verbatim": "Error: Some fields are required or invalid data",
+            "observed_count": 2,
+            "rule_confidence": "LOW",
+            "kb_refs": [
+              "KB-043"
+            ]
+          }
+        ],
+        "permissions": [
+          {
+            "statement": "Guest (chưa login) truy cập được đầy đủ product page, personalize (bao gồm draft localStorage), preview, add-to-cart (v2) sau khi vượt password-gate — chưa quan sát khác biệt permission khi buyer đã login.",
+            "kb_refs": [
+              "KB-001",
+              "KB-002",
+              "KB-014"
+            ]
+          },
+          {
+            "statement": "Endpoint bootstrap config cá nhân hoá (campaigns/{platformProductId}.json) không yêu cầu authorization header — bất kỳ ai biết platform_product_id đều đọc được toàn bộ config template/field/artwork.",
+            "kb_refs": [
+              "KB-013"
+            ]
+          }
+        ],
+        "surface_mapping": {
+          "portal": [
+            {
+              "path": "Launch dialog multi-store (chọn thêm store2) + link 'Campaign link' hiển thị URL storefront thật cho từng store",
+              "kb_refs": [
+                "KB-002"
+              ]
+            }
+          ],
+          "storefront": [
+            {
+              "path": "linh-explorer.myshopify.com -> /password -> product page (store1, SDK v1)",
+              "kb_refs": [
+                "KB-001",
+                "KB-004",
+                "KB-005",
+                "KB-010",
+                "KB-014",
+                "KB-016",
+                "KB-017",
+                "KB-019",
+                "KB-022"
+              ]
+            },
+            {
+              "path": "linh-explorer-2.myshopify.com -> /password -> product page (store2, SDK v2)",
+              "kb_refs": [
+                "KB-001",
+                "KB-007",
+                "KB-008",
+                "KB-009",
+                "KB-011",
+                "KB-014",
+                "KB-015",
+                "KB-016",
+                "KB-017",
+                "KB-018",
+                "KB-019",
+                "KB-020",
+                "KB-021",
+                "KB-022"
+              ]
+            },
+            {
+              "path": "/cart, cart-drawer (store2 only — store1 chưa từng có item trong cart)",
+              "kb_refs": [
+                "KB-009",
+                "KB-005",
+                "KB-021"
+              ]
+            },
+            {
+              "path": "localStorage 'teeinblue-customizations' / 'teeinblue-global-options' (client-side draft, cả 2 store)",
+              "kb_refs": [
+                "KB-014",
+                "KB-015",
+                "KB-016",
+                "KB-017",
+                "KB-019",
+                "KB-020",
+                "KB-021"
+              ]
+            },
+            {
+              "path": "Storefront re-verification pass 2026-09-21 (2026-09-21) tren CHINH campaign 2595 da dung lam baseline 2026-09-12 -- ca 2 store, bao gom SDK bundle marker check, template option 2 dependency shape, preview mechanism, ATC-block khi field de trong, campaign identity re-verify",
+              "kb_refs": [
+                "KB-040",
+                "KB-041",
+                "KB-042",
+                "KB-043",
+                "KB-044"
+              ]
+            },
+            {
+              "path": "[MỚI] Product page campaign 2740 /vi-vn/ (API path), /zh-zh/ (inline path), /en-vn/ — widget personalization theo locale, staging SDK app-v1.js build TIB-5352",
+              "kb_refs": [
+                "KB-053",
+                "KB-054",
+                "KB-055",
+                "KB-058",
+                "KB-059",
+                "KB-060"
+              ]
+            },
+            {
+              "path": "[MỚI] Cart → modal 'Edit design' (vi) — lần gọi dictionary kế tiếp trong cùng page session; nhãn thiếu trong dictionary hiển thị chữ gốc",
+              "kb_refs": [
+                "KB-057",
+                "KB-058"
+              ]
+            }
+          ],
+          "api": [
+            {
+              "path": "POST /password (cả 2 store, form authenticity_token/password redacted)",
+              "kb_refs": [
+                "KB-001"
+              ]
+            },
+            {
+              "path": "GET /api/instances/{instanceId}/themes/app-block-enabled (portal pre-flight, owner)",
+              "kb_refs": [
+                "KB-012"
+              ]
+            },
+            {
+              "path": "GET /api/merchant/campaigns/{platformProductId}.json (public, no auth, cả 2 store)",
+              "kb_refs": [
+                "KB-013"
+              ]
+            },
+            {
+              "path": "POST /cart/add, POST /cart/change.js, POST /cart/clear.js (SDK v2, store2 — thành công ở lần thử thứ hai); KHÔNG có request nào tương ứng ở SDK v1/store1",
+              "kb_refs": [
+                "KB-008",
+                "KB-005",
+                "KB-021"
+              ]
+            },
+            {
+              "path": "POST https://staging-api.teeinblue.com/api/merchant/shopify/customization (APIOP-051) — chỉ fire tại thời điểm ATC (SDK v2, store2), 0 lần khi field-fill, absent khi ATC thất bại do thiếu click con grouped_clipart",
+              "kb_refs": [
+                "KB-018",
+                "KB-022"
+              ]
+            },
+            {
+              "path": "GET /cart.json (implicit, khong phai APIOP rieng) -- xac nhan item_count=0 ngay sau khi ADD TO CART bi chan client-side do field bat buoc de trong (KB-043), ca 2 store",
+              "kb_refs": [
+                "KB-043"
+              ]
+            },
+            {
+              "path": "[MỚI] GET /api/merchant/translations/<locale>.json?shop=<domain>&v=<translation_version> — do SDK gọi (API path); timeout 5s, fallback chữ gốc, retry lazy tối đa 2 fetch/page session; staging build TIB-5352",
+              "kb_refs": [
+                "KB-053",
+                "KB-054",
+                "KB-056",
+                "KB-057"
+              ]
+            }
+          ],
+          "data": [
+            "platform_linked_id độc lập theo store (store1: 8138398629987, store2: 15280333291824) — quan sát qua GraphQL campaign_instances, KHÔNG có DB-level verification.",
+            "localStorage key 'teeinblue-customizations' (array 1 object {productId, customization, timestamp}) và 'teeinblue-global-options' (object keyed theo global-option id) — client-side only, không phải DB, cùng shape trên cả 2 store.",
+            "[MỚI, KB-059] window.teeinblueShopTranslations (dictionary inline trong HTML, in 1 lần trên /zh-zh/) — client-side, staging build TIB-5352."
+          ],
+          "code": [
+            {
+              "path": "staging-sdk.teeinblue.com/shopify/app-v1.js (SDK v1, store1) — chưa review, là 1 hướng điều tra đề xuất cho CFL-001",
+              "kb_refs": [
+                "KB-006"
+              ]
+            },
+            {
+              "path": "#teeinblue-wrapper (Vue3 app, SDK v2, store2) — chỉ quan sát qua DOM/SVG layer id, chưa review source",
+              "kb_refs": [
+                "KB-011"
+              ]
+            },
+            {
+              "path": "[MỚI] staging SDK app-v1.js build TIB-5352 — hàm fetch merchant/translations/<locale>.json: headersTimeout 5000 ms, bắt lỗi về null (INFERRED), cache promise theo 'shop|locale', cho gọi lại khi số lỗi < 2 (đọc bundle, người gửi CCR)",
+              "kb_refs": [
+                "KB-056",
+                "KB-057"
+              ]
+            }
+          ]
+        },
+        "dependencies": [
+          {
+            "description": "Phụ thuộc capability publish của FEAT-01 (by-product-base) và FEAT-02 (by-shopify) để tạo sản phẩm buyer-facing ban đầu (store1, từ v1).",
+            "kb_refs": [
+              "KB-002"
+            ]
+          },
+          {
+            "description": "Phụ thuộc capability multi-store launch, bao gồm pre-flight check theme app-block-enabled trước khi publish.",
+            "kb_refs": [
+              "KB-002",
+              "KB-012"
+            ]
+          },
+          {
+            "description": "MỚI (2026-09-12): capability Add-to-cart trên SDK v2 phụ thuộc trực tiếp vào việc field grouped_clipart hoàn tất ĐỦ 2-step (radio nhóm + click con); thiếu bước con làm ATC thất bại thật dù các field khác đã điền đủ — dependency nội bộ giữa 2 capability 'personalization dependency' và 'add-to-cart' rõ ràng hơn so với v1.",
+            "kb_refs": [
+              "KB-018"
+            ]
+          },
+          {
+            "description": "[MOI, 2026-09-21] Cac capability da gan nhan 'SDK v1 (store1)' / 'SDK v2 (store2)' trong profile nay (KB-004, KB-005, KB-007, KB-010, KB-011) phu thuoc mot phan vao gia dinh store1=v1/store2=v2 -- gia dinh nay hien dang bi CFL-004 UNRESOLVED lam lung lay (evidence 2026-09-21 cho thay store1 hien co marker v2). Nhung capability do KHONG duoc sua/danh dau stale o day; day chi la 1 dependency-risk can orchestrator/reviewer xu ly truoc khi coi cac nhan v1/v2 la 'current' mot cach chac chan.",
+            "kb_refs": [
+              "KB-040"
+            ]
+          },
+          {
+            "description": "[MOI, 2026-09-21, lien he chua xac nhan] Nguon config portal-side cho storefront rendering surface nay duoc mo ta (INFERRED, chua field-by-field) trong feature moi FEAT-08-product-page-settings-config qua GET /api/instances .config -- xem profile product-page-settings-config va CFL-005; KHONG lap lai toan bo noi dung o day.",
+            "kb_refs": [
+              "KB-038"
+            ]
+          },
+          {
+            "description": "[MỚI, CBS-001] Nhãn widget theo locale phụ thuộc dictionary Dynamic Translations do object translation giao (feature dynamic-translations): inline window.teeinblueShopTranslations hoặc translations/<locale>.json theo số key (cross_layer_evidence_map của shard: translation KB-022, KB-025, KB-029). Các capability fallback/retry/nhãn thiếu ở đây chỉ có nghĩa với 2 đường giao đó.",
+            "kb_refs": [
+              "KB-053",
+              "KB-057",
+              "KB-058",
+              "KB-059"
+            ]
+          }
+        ],
+        "risks": [
+          {
+            "description": "RỦI RO LỚN NHẤT (không đổi so với v1): SDK v1 (store1) add-to-cart CHƯA xác nhận rõ ràng có hoạt động hay không — CFL-001 UNRESOLVED giữa evidence automation (HIGH-weight, tái hiện 2 template, 0 network request) và lời khai manual-test của user (LOW-weight, không có evidence file). Run 2026-09-12 KHÔNG cung cấp evidence mới cho conflict này (dừng trước ATC theo chủ đích). KHÔNG được tự kết luận bên nào đúng.",
+            "kb_refs": [
+              "KB-005",
+              "KB-006"
+            ]
+          },
+          {
+            "description": "CFL-002 UNRESOLVED (không đổi so với v1): nhãn heading cha 'dog' không khớp nhãn field con 'cat' trên store2 — chưa xác định là lỗi copy của merchant hay quy ước nội bộ.",
+            "kb_refs": [
+              "KB-007"
+            ]
+          },
+          {
+            "description": "MỚI — CFL-003 UNRESOLVED: mâu thuẫn giữa khung task-input (coi ATC store2/SDK v2 là đường đi 'known-working' có thể tái dùng nguyên trạng từ 2026-09-12) và bằng chứng thực tế trong run này rằng lần thử ATC ĐẦU TIÊN thất bại THẬT (banner lỗi, item_count=0, 0 request APIOP-051) vì thiếu bước click thumbnail con của 3 field grouped_clipart; ATC chỉ thành công ở lần thử thứ hai. Hai khả năng KHÔNG kết luận, đều là INFERRED: (a) tooling automation của 2026-09-12 có thể đã vô tình bao gồm bước click con như một phần thao tác click nhóm bình thường, không ghi chú tách riêng trong log gốc; (b) synthetic/scripted click (label[for], .check({force:true}), dispatch event thủ công) có thể khác pointer click thật về số lần re-render DOM, dẫn tới kết quả khác nhau giữa các lần chạy. Ghi chú thêm (KHÔNG merge, CHƯA XÁC NHẬN): dạng 'cần thao tác thêm mới thoả điều kiện' ở đây CÓ THỂ liên hệ với hypothesis 'automation-interaction gap' của CFL-001 (KB-006), nhưng đây là 2 field/2 SDK version khác nhau (store2 grouped_clipart vs store1 toàn bộ chuỗi ATC) — mối liên hệ này CHƯA được xác nhận, để orchestrator/reviewer tự quyết.",
+            "kb_refs": [
+              "KB-018"
+            ]
+          },
+          {
+            "description": "Endpoint bootstrap config cá nhân hoá (GET /api/merchant/campaigns/{platformProductId}.json) không yêu cầu authorization — public data exposure tiềm ẩn. Chưa khẳng định là defect.",
+            "kb_refs": [
+              "KB-013"
+            ]
+          },
+          {
+            "description": "Coverage gap cụ thể còn lại: template 1/3 chưa test (cả 2 store, bao gồm cả việc chưa xác định template 1/3 có field grouped_clipart cần 2-step tương tự template 2 hay không), buyer state logged-in chưa test, market/locale/currency khác mặc định chưa test, mobile/tablet viewport chưa test, đường 'edit personalization từ cart' trên SDK v2 chưa xác định tồn tại hay không, TTL/expiry localStorage chưa xác định, và toàn bộ hành vi post-ATC/server-sync/grouped_clipart-2-step trên SDK v1 chưa xác nhận vì chưa từng tới ATC.",
+            "kb_refs": [
+              "KB-004",
+              "KB-007",
+              "KB-009",
+              "KB-014",
+              "KB-018",
+              "KB-021"
+            ]
+          },
+          {
+            "description": "[MOI, NOI BAT, 2026-09-21] CFL-004 UNRESOLVED -- 3 evidence sides (KB cu 2026-09-12: store1=v1/store2=v2, HIGH tai thoi diem ghi nhan; GET /api/instances portal-side 2026-09-21: sdk_version=2 ca 2 instance, LOW/1 sample; storefront runtime re-check 2026-09-21: store1 hien serve app-v2.js/tee-campaign-v2, HIGH/2 pass doc lap). Truc tiep implicate tinh CURRENT cua cac capability da publish gan nhan v1/v2 trong chinh profile nay (KB-004 'Personalization: chon variant + dependency 2 cap (SDK v1, store1)', KB-005/KB-006 'Add-to-cart CHUA xac nhan hoan tat (SDK v1, store1)', KB-007 'dependency cha-con (SDK v2, store2)', KB-010 'lightbox mockup TINH (SDK v1, store1)', KB-011 'SVG song (SDK v2, store2)'). KHONG tu danh dau cac capability do la stale/outdated, KHONG tu chon 1 phia dung -- chi de xuat: orchestrator/reviewer can quyet dinh co can 1 run storefront-explorer rieng de resolve truoc khi publish version tiep theo hay khong.",
+            "kb_refs": [
+              "KB-040"
+            ]
+          },
+          {
+            "description": "[MOI, 2026-09-21] KB-041 (dependency shape template option 2: 3 label radio phang chia se 1 name) va KB-042 (preview img+'tee-printarea', zero data-layer-id) deu KHONG khop verbatim voi mo ta v1 cu hay v2 cu da co trong profile nay -- chua doi chieu duoc, co the la (a) hinh thai UI thu 3 chua tung ghi nhan, (b) cach doc DOM khac cua cung 1 co che cu, hoac (c) thay doi thuc su ve UI/SDK ma CFL-004 goi y. KHONG duoc gan ep vao nhan v1/v2 san co khi viet checklist/oracle cho toi khi duoc doi chieu ro.",
+            "kb_refs": [
+              "KB-041",
+              "KB-042"
+            ]
+          },
+          {
+            "description": "[MOI, 2026-09-21] KB-043 (ATC bi chan khi field bat buoc de trong, doi xung ca 2 store) la 1 data point MOI ve validation client-side, nhung KHONG duoc dung de dong hay thu hep CFL-001 (kich ban CFL-001 la field DA DIEN DU tren store1 ma van bi chan) -- 2 kich ban khac nhau, khong duoc gop chung khi viet checklist/oracle.",
+            "kb_refs": [
+              "KB-043"
+            ]
+          },
+          {
+            "description": "[MỚI, CBS-001] KB-053..KB-060 chỉ verify trên staging build TIB-5352 (Jira QA Review, PR còn OPEN), chưa release production — không dùng để đánh giá hành vi production (OQ-sdk-050).",
+            "kb_refs": [
+              "KB-053",
+              "KB-054",
+              "KB-055",
+              "KB-056",
+              "KB-057",
+              "KB-058",
+              "KB-059",
+              "KB-060"
+            ]
+          },
+          {
+            "description": "[MỚI, CBS-001] Thiết kế retry chưa rõ: staging retry lazy (không retry khi load, tối đa 2 fetch/page session) trái với kỳ vọng '1 retry khi load' của TC-TIB-4696 (FAILED) và mô tả Dev không nêu điều kiện — checklist viết theo một trong hai cách hiểu đều có thể cho kết quả sai (OQ-sdk-053).",
+            "kb_refs": [
+              "KB-057"
+            ]
+          },
+          {
+            "description": "[MỚI, CBS-001] Khoảng 3–6s trước khi fallback, widget không có nhãn (KB-053), và timeout sinh pageerror 'signal is aborted without reason' (KB-055) — nếu pageerror là lỗi cần sửa, monitor lỗi JS của merchant có thể ghi nhận lỗi giả mỗi khi API chậm (OQ-sdk-052).",
+            "kb_refs": [
+              "KB-053",
+              "KB-055"
+            ]
+          },
+          {
+            "description": "[MỚI, CBS-001] Nhãn bundle 'app-v1.js' trong KB-053..KB-060 (shop/campaign 2740) KHÔNG được ghép với nhãn 'SDK v1 (store1)' của các capability base (campaign 2595), vốn đang bị CFL-004 làm lung lay.",
+            "kb_refs": [
+              "KB-053",
+              "KB-040"
+            ]
+          }
+        ],
+        "freshness": {
+          "observed_at": "2026-10-11",
+          "run_id": "CTX-20261011-02"
+        },
+        "last_updated": {
+          "date": "2026-10-11",
+          "ccr_ref": "CBS-001"
+        },
+        "unknown_areas": [
+          {
+            "question": "ATC store1 SDK v1 có thực sự hoạt động hay không khi thao tác thật (click/type), hay chỉ là automation artifact?",
+            "why_it_matters": "CFL-001 UNRESOLVED — quyết định liệu core purchase flow của SDK v1 có defect nghiêm trọng hay chỉ là giới hạn của phiên automated. Không đổi so với v1, chưa có evidence mới run này."
+          },
+          {
+            "question": "Nhãn 'dog' (heading cha) vs 'cat' (field con) trên template store2 có ý nghĩa gì — lỗi copy hay quy ước nội bộ?",
+            "why_it_matters": "CFL-002 UNRESOLVED — nếu là lỗi thật, cần báo merchant/PM sửa; nếu là quy ước, checklist/oracle cần biết để không coi đây là bug khi viết test."
+          },
+          {
+            "question": "MỚI — Lần thử ATC đầu tiên store2 thất bại thật trong run này có thực sự cùng nguyên nhân với 'ATC store2 known-working' được framing từ 2026-09-12, hay là 2 hiện tượng khác nhau (automation của run trước vô tình bao gồm bước click con, hay pointer click thật khác synthetic click)?",
+            "why_it_matters": "CFL-003 UNRESOLVED — nếu framing cũ dựa trên automation không đầy đủ, mọi regression checklist dựa 'ATC store2 = luôn pass' cần thêm bước kiểm tra rõ ràng 2-step grouped_clipart, nếu không sẽ tạo false-positive khi con người thao tác thật quên click con."
+          },
+          {
+            "question": "MỚI — TTL/expiry của 'teeinblue-customizations'/'teeinblue-global-options' có tồn tại thật không (có bị prune theo tuổi/thời gian không), hay tồn tại vô thời hạn cho tới khi bị ghi đè?",
+            "why_it_matters": "Ảnh hưởng trực tiếp tới oracle cho case 'buyer quay lại sau X ngày' — nếu có TTL ẩn không document, checklist/regression có thể sai khi test cách nhau nhiều ngày."
+          },
+          {
+            "question": "MỚI — Group-click-alone (chỉ click radio nhóm của grouped_clipart, chưa click con) có ghi giá trị placeholder tạm nào vào localStorage hay hoàn toàn không ghi gì?",
+            "why_it_matters": "Ảnh hưởng cách viết oracle cho case 'buyer bỏ dở giữa chừng rồi rời trang' — cần biết chính xác localStorage phản ánh trạng thái 'chưa hợp lệ' như thế nào để phân biệt với trạng thái 'đã hợp lệ' khi debug."
+          },
+          {
+            "question": "MỚI — Field-remount pre-fill (KB-020) có áp dụng cho field dạng radio/clipart/grouped_clipart không, hay chỉ áp dụng cho field type text như đã xác nhận (1 sample, Woman Name, store2)?",
+            "why_it_matters": "Nếu chỉ áp dụng cho text, buyer chọn lại field cha sau reload có thể mất hết lựa chọn clipart trong khi vẫn giữ được tên đã gõ — trải nghiệm không nhất quán cần biết trước khi viết regression oracle cho luồng 'sửa lựa chọn sau reload'."
+          },
+          {
+            "question": "Template 1 và template 3 có cùng pattern dependency 2 cấp và cùng yêu cầu 2-step grouped_clipart như template 2 đã quan sát không (cả 2 SDK)?",
+            "why_it_matters": "Toàn bộ evidence dependency 2 cấp và 2-step grouped_clipart hiện tại chỉ dựa trên 1-2 template; nếu template khác có cấu trúc field khác, checklist coverage sẽ thiếu."
+          },
+          {
+            "question": "Đường 'edit personalization từ cart' có tồn tại trên SDK v2 hay không (không tìm thấy trong phiên test, nhưng chưa chắc là không có)?",
+            "why_it_matters": "Ảnh hưởng UX buyer muốn sửa lựa chọn sau khi đã add-to-cart; nếu thực sự không có, đây có thể là gap trải nghiệm cần biết trước khi viết regression oracle."
+          },
+          {
+            "question": "Behavior storefront khi buyer đã login, market/locale/currency khác mặc định, và trên mobile/tablet viewport ra sao?",
+            "why_it_matters": "Toàn bộ evidence vẫn chỉ ở guest/desktop/US-default — 3 chiều biến thiên phổ biến này hoàn toàn chưa kiểm chứng."
+          },
+          {
+            "question": "SDK v1 (store1) có hành vi post-ATC persistence và server sync (APIOP-051 hoặc tương đương) giống SDK v2 hay không?",
+            "why_it_matters": "Chưa xác nhận vì store1 chưa từng tới ATC trong bất kỳ run nào tính tới nay — không thể suy diễn hành vi này là giống nhau giữa 2 SDK dù các cơ chế localStorage khác (KB-014..017, KB-019) đã xác nhận giống nhau."
+          },
+          {
+            "question": "[MOI] Store1 co that su da duoc migrate tu SDK v1 sang v2 giua 2026-09-12 va 2026-09-21 hay khong, hay sdk_version la config flag tach roi bundle thuc te, hay evidence FEAT-07 goc chi dung cho dieu kien hep chua tai hien?",
+            "why_it_matters": "CFL-004 UNRESOLVED -- neu la migration that, 5 capability gan nhan v1 (KB-004/005/006/010) co the da lac hau va can 1 run xac minh lai truoc khi dung lam regression oracle cho store1; neu la sai lech config-flag, thi cac capability do van dung nhung ten goi 'SDK v1' can duoc lam ro lai nghia."
+          },
+          {
+            "question": "[MOI] Hinh thai dependency 3 <label> radio phang (KB-041) va co che preview img+'tee-printarea' (KB-042) co phai la bien the UI/SDK thu 3, hay chi la cach doc/quan sat khac cua cung 1 SDK version da biet?",
+            "why_it_matters": "Neu la bien the that, checklist regression dung nhan 'v1'/'v2' hien tai se khong con bao phu day du cac hinh thai UI thuc te; can doi chieu voi code-config-explorer hoac 1 storefront-explorer pass sau de phan loai chinh xac."
+          },
+          {
+            "question": "[MOI] KB-043 (ATC chan khi field de trong, doi xung 2 store) co cung co che validation client-side voi CFL-001 (store1, field da dien du van bi chan) hay la 2 hien tuong hoan toan doc lap?",
+            "why_it_matters": "Neu cung 1 co che loi (vd 1 field an nao do luon bi coi la 'trong' bat ke da dien), day co the la manh moi giai CFL-001; neu khong lien quan, khong nen dung KB-043 lam bang chung cho CFL-001 duoi bat ky hinh thuc nao."
+          },
+          {
+            "question": "[MỚI, CBS-001] Các hành vi SDK về translations (KB-053..KB-060) có giữ nguyên khi TIB-5352 release production không?",
+            "why_it_matters": "Hiện chỉ verify trên staging build TIB-5352 (chưa release production); checklist production không được dựa vào các item này cho tới khi re-verify hoặc có xác nhận.",
+            "type": "OPEN_ISSUE",
+            "kb_refs": [
+              "KB-053",
+              "KB-054",
+              "KB-055",
+              "KB-056",
+              "KB-057",
+              "KB-058",
+              "KB-059",
+              "KB-060"
+            ]
+          },
+          {
+            "question": "[MỚI, CBS-001] Khi translations API trả 500/503 hoặc bị abort, widget có phải render chữ gốc (fallback) theo thiết kế không?",
+            "why_it_matters": "Fallback này chỉ quan sát trong test case FAILED TC-TIB-4696 (KB-054); chưa có test PASS hay xác nhận Dev/PO để làm oracle.",
+            "type": "NEEDS_CONFIRMATION",
+            "kb_refs": [
+              "KB-054"
+            ]
+          },
+          {
+            "question": "[MỚI, CBS-001] pageerror 'signal is aborted without reason' khi translations API timeout là lỗi cần sửa hay chấp nhận được?",
+            "why_it_matters": "CCR cấm coi là expected; checklist cần biết có assert 'không có console error' cho nhánh timeout hay không.",
+            "type": "NEEDS_CONFIRMATION",
+            "kb_refs": [
+              "KB-055"
+            ]
+          },
+          {
+            "question": "[MỚI, CBS-001] Thiết kế retry mong muốn khi fetch translations lỗi là gì: retry ngay khi load (như TC-TIB-4696 kỳ vọng) hay lazy ở lần gọi kế tiếp, tối đa 2 fetch/page session (như staging quan sát)?",
+            "why_it_matters": "Hai cách hiểu cho số request và thời điểm hiển thị bản dịch khác nhau; TC-TIB-4696 đang FAILED chính vì điểm này.",
+            "type": "NEEDS_CONFIRMATION",
+            "kb_refs": [
+              "KB-057"
+            ]
+          },
+          {
+            "question": "[MỚI, CBS-001] Timeout >5s kết hợp lần gọi thứ hai trong cùng page session (vd 'Edit design' ở cart sau khi load đã timeout) cho kết quả gì?",
+            "why_it_matters": "Tổ hợp chưa chạy (TC-TIB-008); không suy được từ KB-053 (timeout) và KB-057 (500) riêng lẻ.",
+            "type": "OPEN_ISSUE",
+            "kb_refs": [
+              "KB-053",
+              "KB-057"
+            ]
+          },
+          {
+            "question": "[MỚI, CBS-001] Trang /zh-zh/ có thật sự render cả theme app extension và theme script của teeinblue không (cấu hình theme 'enable for all pages' chưa kiểm), và dictionary inline có còn chỉ in 1 lần khi cấu hình đã xác nhận?",
+            "why_it_matters": "KB-059 chỉ là 1 lần quan sát HTML, điều kiện '2 khối' (KB-060) là suy luận — chưa đủ làm oracle cho case duplicate dictionary.",
+            "type": "NEEDS_CONFIRMATION",
+            "kb_refs": [
+              "KB-059",
+              "KB-060"
+            ]
+          },
+          {
+            "question": "[MỚI, CBS-001] Các hành vi fallback/retry/nhãn thiếu (KB-053..KB-058) có giống trên bundle app-v2.js không?",
+            "why_it_matters": "Mọi evidence CBS-001 chỉ trên app-v1.js; profile base có cả store dùng app-v2.js (KB-040) — không được suy diễn là giống nhau.",
+            "type": "OPEN_ISSUE",
+            "kb_refs": [
+              "KB-053",
+              "KB-057",
+              "KB-058",
+              "KB-040"
+            ]
+          }
+        ]
+      }
+    ],
+    "profile_relationships": [
+      {
+        "feature_id": "FEAT-07-storefront-buyer-facing",
+        "related_feature_id": "FEAT-01-create-campaign-by-product-base",
+        "relationship": "downstream_effect_of_publish",
+        "kb_refs": [
+          "KB-002"
+        ]
+      },
+      {
+        "feature_id": "FEAT-07-storefront-buyer-facing",
+        "related_feature_id": "FEAT-02-create-campaign-by-shopify",
+        "relationship": "downstream_effect_of_publish",
+        "kb_refs": [
+          "KB-002"
+        ]
+      },
+      {
+        "feature_id": "FEAT-07-storefront-buyer-facing",
+        "related_feature_id": "FEAT-01-create-campaign-by-product-base",
+        "relationship": "downstream_effect_of_multi_store_launch",
+        "kb_refs": [
+          "KB-002",
+          "KB-012"
+        ]
+      },
+      {
+        "feature_id": "FEAT-07-storefront-buyer-facing",
+        "related_feature_id": "FEAT-08-product-page-settings-config",
+        "relationship": "configured_by (INFERRED binding, chua field-by-field) -- portal feature FEAT-08 la nguon cau hinh candidate cho hanh vi hien thi/van hanh cua feature nay tren storefront",
+        "kb_refs": [
+          "KB-038"
+        ]
+      },
+      {
+        "feature_id": "FEAT-07-storefront-buyer-facing",
+        "related_feature_id": "FEAT-03-06-dynamic-translations",
+        "related_feature_key": "dynamic-translations",
+        "relationship": "renders_dictionary_delivered_by (cross-object: translation)",
+        "note": "[MỚI, CBS-001] SDK đọc dictionary Dynamic Translations inline hoặc gọi translations/<locale>.json (translation KB-022, KB-025, KB-029 theo cross_layer_evidence_map); fallback/retry/nhãn thiếu là phần của profile này. Staging build TIB-5352 only.",
+        "kb_refs": [
+          "KB-053",
+          "KB-057",
+          "KB-058",
+          "KB-059"
+        ]
+      }
+    ],
+    "coverage_matrix": [
+      {
+        "feature_id": "FEAT-07-storefront-buyer-facing",
+        "layer": "storefront",
+        "role": "guest",
+        "state": "published campaign, SDK v1 (store1)",
+        "environment": "staging",
+        "covered": true,
+        "kb_refs": [
+          "KB-001",
+          "KB-004",
+          "KB-005",
+          "KB-010",
+          "KB-014",
+          "KB-016",
+          "KB-017",
+          "KB-019",
+          "KB-022"
+        ]
+      },
+      {
+        "feature_id": "FEAT-07-storefront-buyer-facing",
+        "layer": "storefront",
+        "role": "guest",
+        "state": "published campaign, SDK v2 (store2)",
+        "environment": "staging",
+        "covered": true,
+        "kb_refs": [
+          "KB-001",
+          "KB-007",
+          "KB-008",
+          "KB-009",
+          "KB-011",
+          "KB-014",
+          "KB-015",
+          "KB-016",
+          "KB-017",
+          "KB-018",
+          "KB-019",
+          "KB-020",
+          "KB-021",
+          "KB-022"
+        ]
+      },
+      {
+        "feature_id": "FEAT-07-storefront-buyer-facing",
+        "layer": "storefront",
+        "role": "guest",
+        "state": "client-side localStorage draft persistence (cả 2 store)",
+        "environment": "staging",
+        "covered": true,
+        "kb_refs": [
+          "KB-014",
+          "KB-015",
+          "KB-016",
+          "KB-017",
+          "KB-019"
+        ]
+      },
+      {
+        "feature_id": "FEAT-07-storefront-buyer-facing",
+        "layer": "storefront",
+        "role": "guest",
+        "state": "post-ATC localStorage persistence (SDK v2 only)",
+        "environment": "staging",
+        "covered": true,
+        "kb_refs": [
+          "KB-021"
+        ]
+      },
+      {
+        "feature_id": "FEAT-07-storefront-buyer-facing",
+        "layer": "storefront",
+        "role": "guest",
+        "state": "post-ATC localStorage persistence (SDK v1)",
+        "environment": "staging",
+        "covered": false,
+        "kb_refs": [
+          "KB-021"
+        ]
+      },
+      {
+        "feature_id": "FEAT-07-storefront-buyer-facing",
+        "layer": "portal",
+        "role": "owner",
+        "state": "multi-store launch (publish tới store2)",
+        "environment": "staging",
+        "covered": true,
+        "kb_refs": [
+          "KB-002",
+          "KB-012"
+        ]
+      },
+      {
+        "feature_id": "FEAT-07-storefront-buyer-facing",
+        "layer": "api",
+        "role": "guest",
+        "state": "any, store1",
+        "environment": "staging",
+        "covered": true,
+        "kb_refs": [
+          "KB-013",
+          "KB-005",
+          "KB-022"
+        ]
+      },
+      {
+        "feature_id": "FEAT-07-storefront-buyer-facing",
+        "layer": "api",
+        "role": "guest",
+        "state": "any, store2, bao gồm APIOP-051 presence/absence tại ATC",
+        "environment": "staging",
+        "covered": true,
+        "kb_refs": [
+          "KB-013",
+          "KB-008",
+          "KB-018",
+          "KB-022"
+        ]
+      },
+      {
+        "feature_id": "FEAT-07-storefront-buyer-facing",
+        "layer": "api",
+        "role": "guest",
+        "state": "APIOP-051 full request/response body, auth, error-path (4xx/5xx)",
+        "environment": "staging",
+        "covered": false,
+        "kb_refs": [
+          "KB-022"
+        ]
+      },
+      {
+        "feature_id": "FEAT-07-storefront-buyer-facing",
+        "layer": "data",
+        "role": "any",
+        "state": "any",
+        "environment": "staging",
+        "covered": false,
+        "kb_refs": []
+      },
+      {
+        "feature_id": "FEAT-07-storefront-buyer-facing",
+        "layer": "storefront",
+        "role": "guest",
+        "state": "template 1 và 3 (cả 2 store), bao gồm cả 2-step grouped_clipart requirement",
+        "environment": "staging",
+        "covered": false,
+        "kb_refs": [
+          "KB-004",
+          "KB-007",
+          "KB-018"
+        ]
+      },
+      {
+        "feature_id": "FEAT-07-storefront-buyer-facing",
+        "layer": "storefront",
+        "role": "guest",
+        "state": "field-remount pre-fill cho field type radio/clipart",
+        "environment": "staging",
+        "covered": false,
+        "kb_refs": [
+          "KB-020"
+        ]
+      },
+      {
+        "feature_id": "FEAT-07-storefront-buyer-facing",
+        "layer": "storefront",
+        "role": "guest",
+        "state": "TTL/expiry của localStorage draft",
+        "environment": "staging",
+        "covered": false,
+        "kb_refs": []
+      },
+      {
+        "feature_id": "FEAT-07-storefront-buyer-facing",
+        "layer": "storefront",
+        "role": "guest",
+        "state": "mobile/tablet viewport",
+        "environment": "staging",
+        "covered": false,
+        "kb_refs": []
+      },
+      {
+        "feature_id": "FEAT-07-storefront-buyer-facing",
+        "layer": "storefront",
+        "role": "buyer logged-in",
+        "state": "any",
+        "environment": "staging",
+        "covered": false,
+        "kb_refs": []
+      },
+      {
+        "feature_id": "FEAT-07-storefront-buyer-facing",
+        "layer": "storefront",
+        "role": "guest",
+        "state": "non-US market/locale/currency",
+        "environment": "staging",
+        "covered": false,
+        "kb_refs": []
+      },
+      {
+        "feature_id": "FEAT-07-storefront-buyer-facing",
+        "layer": "storefront",
+        "role": "guest",
+        "state": "edit-from-cart (SDK v2, store2)",
+        "environment": "staging",
+        "covered": false,
+        "kb_refs": [
+          "KB-009"
+        ]
+      },
+      {
+        "feature_id": "FEAT-07-storefront-buyer-facing",
+        "layer": "storefront",
+        "role": "guest",
+        "state": "[MOI] SDK bundle/version marker re-check 2026-09-21 (CFL-004 evidence_c)",
+        "environment": "staging",
+        "covered": true,
+        "kb_refs": [
+          "KB-040"
+        ]
+      },
+      {
+        "feature_id": "FEAT-07-storefront-buyer-facing",
+        "layer": "storefront",
+        "role": "guest",
+        "state": "[MOI] personalization dependency shape (template option 2) re-check 2026-09-21 -- covered nhung CHUA doi chieu duoc voi nhan v1/v2 cu",
+        "environment": "staging",
+        "covered": true,
+        "kb_refs": [
+          "KB-041"
+        ]
+      },
+      {
+        "feature_id": "FEAT-07-storefront-buyer-facing",
+        "layer": "storefront",
+        "role": "guest",
+        "state": "[MOI] preview/mockup mechanism (template 1) re-check 2026-09-21 -- covered nhung CHUA doi chieu duoc voi KB-010/KB-011",
+        "environment": "staging",
+        "covered": true,
+        "kb_refs": [
+          "KB-042"
+        ]
+      },
+      {
+        "feature_id": "FEAT-07-storefront-buyer-facing",
+        "layer": "storefront",
+        "role": "guest",
+        "state": "[MOI] ATC block khi field bat buoc de trong (template option 2, doi xung 2 store)",
+        "environment": "staging",
+        "covered": true,
+        "kb_refs": [
+          "KB-043"
+        ]
+      },
+      {
+        "feature_id": "FEAT-07-storefront-buyer-facing",
+        "layer": "storefront",
+        "role": "guest",
+        "state": "[MOI] resolution cua CFL-004 (xac dinh SDK version THAT SU hien tai cho tung store)",
+        "environment": "staging",
+        "covered": false,
+        "kb_refs": [
+          "KB-040"
+        ]
+      },
+      {
+        "feature_id": "FEAT-07-storefront-buyer-facing",
+        "layer": "storefront",
+        "role": "guest",
+        "state": "[MOI] doi chieu hinh thai KB-041/KB-042 voi nhan v1/v2 cu (co phai bien the thu 3 khong)",
+        "environment": "staging",
+        "covered": false,
+        "kb_refs": [
+          "KB-041",
+          "KB-042"
+        ]
+      },
+      {
+        "feature_id": "FEAT-07-storefront-buyer-facing",
+        "layer": "storefront",
+        "role": "GUEST buyer",
+        "state": "[MỚI] translations API timeout >5s → fallback chữ gốc",
+        "environment": "staging (build TIB-5352)",
+        "covered": true,
+        "kb_refs": [
+          "KB-053",
+          "KB-055",
+          "KB-056"
+        ]
+      },
+      {
+        "feature_id": "FEAT-07-storefront-buyer-facing",
+        "layer": "storefront",
+        "role": "GUEST buyer",
+        "state": "[MỚI] translations API 500/503/abort → fallback chữ gốc (chỉ từ TC FAILED)",
+        "environment": "staging (build TIB-5352)",
+        "covered": true,
+        "kb_refs": [
+          "KB-054"
+        ]
+      },
+      {
+        "feature_id": "FEAT-07-storefront-buyer-facing",
+        "layer": "storefront",
+        "role": "GUEST buyer",
+        "state": "[MỚI] retry fetch translations (load + cart 'Edit design' lần 1/2/3, mock 500)",
+        "environment": "staging (build TIB-5352)",
+        "covered": true,
+        "kb_refs": [
+          "KB-057"
+        ]
+      },
+      {
+        "feature_id": "FEAT-07-storefront-buyer-facing",
+        "layer": "storefront",
+        "role": "GUEST buyer",
+        "state": "[MỚI] timeout >5s + lần gọi thứ hai cùng page session",
+        "environment": "staging (build TIB-5352)",
+        "covered": false,
+        "kb_refs": [
+          "KB-053",
+          "KB-057"
+        ]
+      },
+      {
+        "feature_id": "FEAT-07-storefront-buyer-facing",
+        "layer": "storefront",
+        "role": "GUEST buyer",
+        "state": "[MỚI] nhãn không có trong dictionary (API path, inline path, primary, cart Edit design)",
+        "environment": "staging (build TIB-5352)",
+        "covered": true,
+        "kb_refs": [
+          "KB-058"
+        ]
+      },
+      {
+        "feature_id": "FEAT-07-storefront-buyer-facing",
+        "layer": "storefront",
+        "role": "GUEST buyer",
+        "state": "[MỚI] dictionary inline in 1 lần (/zh-zh/), cấu hình theme 'enable for all pages' đã xác nhận",
+        "environment": "staging (build TIB-5352)",
+        "covered": false,
+        "kb_refs": [
+          "KB-059",
+          "KB-060"
+        ]
+      },
+      {
+        "feature_id": "FEAT-07-storefront-buyer-facing",
+        "layer": "code",
+        "role": "n/a",
+        "state": "[MỚI] bundle app-v1.js fetch translations (headersTimeout, promise cache) — chỉ đọc bundle, chưa review source",
+        "environment": "staging (build TIB-5352)",
+        "covered": true,
+        "kb_refs": [
+          "KB-056",
+          "KB-057"
+        ]
+      },
+      {
+        "feature_id": "FEAT-07-storefront-buyer-facing",
+        "layer": "storefront",
+        "role": "GUEST buyer",
+        "state": "[MỚI] fallback/retry/nhãn thiếu trên bundle app-v2.js",
+        "environment": "staging",
+        "covered": false,
+        "kb_refs": []
+      },
+      {
+        "feature_id": "FEAT-07-storefront-buyer-facing",
+        "layer": "storefront",
+        "role": "GUEST buyer",
+        "state": "[MỚI] toàn bộ hành vi translations của TIB-5352",
+        "environment": "production",
+        "covered": false,
+        "kb_refs": [
+          "KB-053",
+          "KB-058"
+        ]
+      }
+    ],
+    "unassigned_kb_items": [],
+    "unassigned_kb_items_note": "Shard có 35 item (base 27 + mới KB-053..KB-060); mọi item đều được tham chiếu trong profile (base hoặc phần mới).",
+    "profile_conflicts": [
+      {
+        "type": "CROSS_FEATURE_KB_REF_IN_BASE",
+        "detail": "Base dependencies[4] và profile_relationships[3] tham chiếu KB-038 — item thuộc sdk/features/product-page-settings-config, không có trong shard này. Giữ nguyên văn base (carry-forward, field không bị chạm); không thêm tham chiếu mới tới KB-038.",
+        "kb_refs": [
+          "KB-038"
+        ]
+      }
+    ],
+    "profile_change_summary": [
+      {
+        "change": "UPDATED_FEATURE_PROFILE",
+        "feature_id": "FEAT-07-storefront-buyer-facing",
+        "feature_key": "storefront-buyer-facing",
+        "detail": "Carry-forward base. Thêm: user_goal_kb_refs; 1 actor (GUEST buyer theo locale); 1 entry_point (campaign 2740 /vi-vn/ /zh-zh/ /en-vn/ + cart Edit design); 2 capabilities (fallback khi translations API chậm/lỗi + retry; nhãn thiếu trong dictionary + inline không in lặp); 3 state_transitions (timeout→chữ gốc; 500/503/abort→chữ gốc; retry lazy); 2 confirmed_rules (KB-053, KB-058); 6 observed_behavior (KB-054, KB-055, KB-056 INFERRED, KB-057, KB-059, KB-060 INFERRED); surface_mapping storefront(2)/api(1)/data(1)/code(1); 1 dependency (dynamic-translations); 4 risks; 7 unknown_areas; 1 profile_relationship; 9 coverage rows. Sửa: last_updated → 2026-10-11/CBS-001; thêm freshness. Không đổi: feature_id, feature_key, name, user_goal, toàn bộ capability/transition/validation/risk/unknown base, observed_validations.",
+        "kb_refs": [
+          "KB-053",
+          "KB-054",
+          "KB-055",
+          "KB-056",
+          "KB-057",
+          "KB-058",
+          "KB-059",
+          "KB-060"
+        ]
+      }
+    ],
+    "kb_trace_complete": true
+  },
+  "gate": {
+    "decision": "CONDITIONAL_PASS",
+    "blocking_findings": [],
+    "conditions": [
+      "CONFIRMED_EXPECTED (KB-053, KB-058) chỉ có hiệu lực trên staging build TIB-5352; chưa release production (OQ-sdk-050). Nếu orchestrator/diff analyzer áp supersede STEP 0 (NOT_SHIPPED → PROPOSED), 2 confirmed_rules phải chuyển sang observed_behavior.",
+      "Oracle cho fallback 500/503, pageerror, retry, cấu hình theme còn unknown (OQ-sdk-051..054) + 2 unknown_areas OPEN_ISSUE chưa có OQ draft (timeout + lần gọi thứ hai; áp dụng cho app-v2.js).",
+      "CFL-001/002/003/004 base vẫn UNRESOLVED, không bị KB mới chạm."
+    ],
+    "allowed_next_steps": [
+      "qa-checklist-builder",
+      "knowledge-diff-analyzer"
+    ]
+  }
+}

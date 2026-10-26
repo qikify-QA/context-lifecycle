@@ -1,0 +1,714 @@
+{
+  "feature_id": "FEAT-03-open-api-replace-order-item-design",
+  "feature_key": "open-api-replace-order-item-design",
+  "name": "Replace an order item's design file through the Open API",
+  "user_goal": "As an Open API integrator (token with orders:write), replace the design file of an existing order item artwork programmatically — the same in-place 'Replace design' the merchant can do in the Portal — without changing which artwork/customization/print area the item is linked to.",
+  "user_goal_kb_refs": [
+    "KB-025",
+    "KB-026",
+    "KB-036"
+  ],
+  "stable_since_version": null,
+  "stable_since_version_note": "Feature mới, endpoint chỉ có trên staging, chưa lên production tại 2026-10-11 (KB-025); chưa có version ổn định.",
+  "actors": [
+    {
+      "role": "Open API client (token with orders:write ability)",
+      "permission_observed": "Endpoint POST openapi/v1/order-item-artworks/{order_item_artwork_id}/design is gated by the existing orders:write ability (dev writeup, OBSERVED_CURRENT). Only resources belonging to the caller's account are reachable: another account's order item artwork returns 404. No token WITHOUT orders:write has been described or exercised, so the rejection behaviour at the ability boundary is unknown.",
+      "kb_refs": [
+        "KB-025",
+        "KB-028"
+      ]
+    },
+    {
+      "role": "Open API client (token with orders:read ability)",
+      "permission_observed": "Calls GET /openapi/v1/orders/{order_id} to discover print_areas[].id per line item before calling replace design. Ability scope stated in KB scope only; not exercised as a boundary.",
+      "kb_refs": [
+        "KB-036",
+        "KB-037"
+      ]
+    }
+  ],
+  "entry_points": [
+    {
+      "path": "GET /openapi/v1/orders/{order_id} -> read line item print_areas[].id",
+      "precondition": "Order exists in the caller's account and has a line item with a print area. Dev guidance: call this before replace design.",
+      "kb_refs": [
+        "KB-036"
+      ]
+    },
+    {
+      "path": "POST openapi/v1/order-item-artworks/{order_item_artwork_id}/design",
+      "precondition": "Token has orders:write; order_item_artwork_id exists and belongs to the caller's account; target order item currently in READY (status value 2); request provides file or url. That print_areas[].id IS the order_item_artwork_id is INFERRED only (KB-037).",
+      "kb_refs": [
+        "KB-025",
+        "KB-027",
+        "KB-028",
+        "KB-029",
+        "KB-037"
+      ]
+    }
+  ],
+  "capabilities": [
+    {
+      "name": "Discover the order_item_artwork_id to target",
+      "description": "GET /openapi/v1/orders/{order_id} already returns print_areas[].id for each line item with no special flag (OBSERVED_CURRENT, dev writeup). That this print_areas[].id is the order_item_artwork_id used by the replace endpoint is INFERRED from the doc section heading and CCR narrative only (LOW).",
+      "kb_refs": [
+        "KB-036",
+        "KB-037"
+      ]
+    },
+    {
+      "name": "Replace the design file of an order item artwork in place",
+      "description": "POST openapi/v1/order-item-artworks/{order_item_artwork_id}/design mirrors the Portal 'Replace design' action (same upload/storage logic): only the file changes in place; artwork_id, customization_id and printarea_id stay unchanged (OBSERVED_CURRENT). Scope is Replace design only — Add new design is out of scope (OBSERVED_CURRENT). INFERRED (LOW, CCR narrative only): input is multipart field `file` OR JSON {\"url\": ...} fetched server-side; 200 returns the full order-item-artwork object; the new file overwrites the same storage path so callers may append ?v={random} to bypass cache; fulfillment status of the order is not changed.",
+      "kb_refs": [
+        "KB-025",
+        "KB-026",
+        "KB-030",
+        "KB-031",
+        "KB-032",
+        "KB-033",
+        "KB-034"
+      ]
+    },
+    {
+      "name": "Reject replace requests that fail ownership, item-state or input guards",
+      "description": "404 when the order item artwork does not exist or does not belong to the caller's account; 422 when the order item is not READY (2); 422 when neither file nor url is provided (all OBSERVED_CURRENT, status codes only, no response body/message captured). INFERRED (LOW): the READY precondition is intentionally stricter than the Portal, where Replace design on a non-READY item only warns and lets the user continue — Portal behaviour itself not observed in this KB.",
+      "kb_refs": [
+        "KB-027",
+        "KB-028",
+        "KB-029",
+        "KB-035"
+      ]
+    }
+  ],
+  "state_transitions": [
+    {
+      "from": "order item artwork with current design file (order item READY, status 2)",
+      "to": "same order item artwork with new design file; artwork_id/customization_id/printarea_id unchanged",
+      "trigger": "POST openapi/v1/order-item-artworks/{order_item_artwork_id}/design with file or url",
+      "condition": "token has orders:write; artwork belongs to caller's account; item READY. Effect on order fulfillment status INFERRED unchanged (KB-034); resulting app-side order status unknown (see unknown_areas).",
+      "kb_refs": [
+        "KB-025",
+        "KB-026",
+        "KB-027",
+        "KB-034"
+      ]
+    },
+    {
+      "from": "order item not in READY (status != 2)",
+      "to": "no change (request rejected 422)",
+      "trigger": "POST replace design",
+      "condition": "item status at call time is not READY",
+      "kb_refs": [
+        "KB-027"
+      ]
+    },
+    {
+      "from": "order_item_artwork_id not existing or owned by another account",
+      "to": "no change (request rejected 404)",
+      "trigger": "POST replace design",
+      "condition": "artwork not found in caller's account",
+      "kb_refs": [
+        "KB-028"
+      ]
+    },
+    {
+      "from": "order item READY, request without file and without url",
+      "to": "no change (request rejected 422)",
+      "trigger": "POST replace design",
+      "condition": "neither file nor url provided",
+      "kb_refs": [
+        "KB-029"
+      ]
+    }
+  ],
+  "confirmed_rules": [],
+  "observed_behavior": [
+    {
+      "statement": "Open API exposes POST openapi/v1/order-item-artworks/{order_item_artwork_id}/design, gated by the existing orders:write ability; available on staging, not on production as of 2026-10-11.",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "confidence": "MEDIUM",
+      "kb_refs": [
+        "KB-025"
+      ]
+    },
+    {
+      "statement": "Replace design via Open API mirrors Portal 'Replace design' (same upload/storage logic): only the file changes in place; artwork_id/customization_id/printarea_id are untouched.",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "confidence": "MEDIUM",
+      "kb_refs": [
+        "KB-026"
+      ]
+    },
+    {
+      "statement": "Target order item must be READY (status value 2) at call time, otherwise 422.",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "confidence": "MEDIUM",
+      "kb_refs": [
+        "KB-027"
+      ]
+    },
+    {
+      "statement": "404 when the order item artwork does not exist or does not belong to the caller's account.",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "confidence": "MEDIUM",
+      "kb_refs": [
+        "KB-028"
+      ]
+    },
+    {
+      "statement": "422 when neither file nor url is provided.",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "confidence": "MEDIUM",
+      "kb_refs": [
+        "KB-029"
+      ]
+    },
+    {
+      "statement": "Endpoint scope is Replace design only; Add new design is not covered.",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "confidence": "MEDIUM",
+      "kb_refs": [
+        "KB-030"
+      ]
+    },
+    {
+      "statement": "GET /openapi/v1/orders/{order_id} returns print_areas[].id per line item without any special flag.",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "confidence": "MEDIUM",
+      "kb_refs": [
+        "KB-036"
+      ]
+    },
+    {
+      "statement": "Input is multipart `file` OR JSON {\"url\": ...} (server fetches the URL).",
+      "knowledge_kind": "INFERRED",
+      "confidence": "LOW",
+      "kb_refs": [
+        "KB-031"
+      ]
+    },
+    {
+      "statement": "Success returns 200 with the full order-item-artwork object (url, thumbnail, width/height, processing_at/processed_at, order_item, printarea, artwork, customization).",
+      "knowledge_kind": "INFERRED",
+      "confidence": "LOW",
+      "kb_refs": [
+        "KB-032"
+      ]
+    },
+    {
+      "statement": "New file overwrites the same path as the old file; callers may append ?v={random} to bypass cache.",
+      "knowledge_kind": "INFERRED",
+      "confidence": "LOW",
+      "kb_refs": [
+        "KB-033"
+      ]
+    },
+    {
+      "statement": "Replace design via this endpoint does not change the order's fulfillment status.",
+      "knowledge_kind": "INFERRED",
+      "confidence": "LOW",
+      "kb_refs": [
+        "KB-034"
+      ]
+    },
+    {
+      "statement": "The READY precondition is intentionally stricter than Portal Replace design (Portal only warns on non-READY item and continues).",
+      "knowledge_kind": "INFERRED",
+      "confidence": "LOW",
+      "kb_refs": [
+        "KB-035"
+      ]
+    },
+    {
+      "statement": "print_areas[].id from GET order is the order_item_artwork_id for the replace endpoint.",
+      "knowledge_kind": "INFERRED",
+      "confidence": "LOW",
+      "kb_refs": [
+        "KB-037"
+      ]
+    }
+  ],
+  "observed_validations": [],
+  "observed_validations_note": "Không có message nguyên văn hay observed_count nào trong KB (chỉ có status code 404/422 từ dev writeup, observed_count = null), nên không ghi observed_validation; các điều kiện từ chối nằm ở observed_behavior/state_transitions.",
+  "limitations": [
+    {
+      "statement": "Endpoint covers Replace design only, not Add new design.",
+      "kb_refs": [
+        "KB-030"
+      ]
+    },
+    {
+      "statement": "Endpoint is staging-only (not shipped to production) as of 2026-10-11.",
+      "kb_refs": [
+        "KB-025"
+      ]
+    }
+  ],
+  "permissions": [
+    {
+      "role": "Open API client (token with orders:write ability)",
+      "note": "Required ability for replace design. Account isolation: only the caller's own order item artworks are reachable (other account -> 404). Behaviour for a token lacking orders:write not described.",
+      "kb_refs": [
+        "KB-025",
+        "KB-028"
+      ]
+    },
+    {
+      "role": "Open API client (token with orders:read ability)",
+      "note": "Used for GET /openapi/v1/orders/{order_id} to discover print_areas[].id.",
+      "kb_refs": [
+        "KB-036"
+      ]
+    }
+  ],
+  "surface_mapping": {
+    "portal": [
+      {
+        "item": "Portal 'Replace design' action (parity reference only — mirrored by the API; Portal behaviour itself not observed in this KB)",
+        "kb_refs": [
+          "KB-026",
+          "KB-035"
+        ]
+      }
+    ],
+    "storefront": [],
+    "api": [
+      {
+        "item": "POST openapi/v1/order-item-artworks/{order_item_artwork_id}/design",
+        "kb_refs": [
+          "KB-025",
+          "KB-026",
+          "KB-027",
+          "KB-028",
+          "KB-029",
+          "KB-030",
+          "KB-031",
+          "KB-032",
+          "KB-033",
+          "KB-034",
+          "KB-035"
+        ]
+      },
+      {
+        "item": "GET /openapi/v1/orders/{order_id} (line item print_areas[].id)",
+        "kb_refs": [
+          "KB-036",
+          "KB-037"
+        ]
+      }
+    ],
+    "data": [
+      {
+        "item": "order item artwork: artwork_id / customization_id / printarea_id preserved, design file replaced in place at same storage path (path overwrite INFERRED)",
+        "kb_refs": [
+          "KB-026",
+          "KB-033"
+        ]
+      },
+      {
+        "item": "order item status READY = 2 (item-level status, distinct from order-level status)",
+        "kb_refs": [
+          "KB-027",
+          "KB-001"
+        ]
+      }
+    ],
+    "code": [
+      {
+        "item": "PR qikify/teeinblue-api#3910 (referenced by dev writeup TIB-5506; code not inspected)",
+        "kb_refs": [
+          "KB-025"
+        ]
+      }
+    ]
+  },
+  "dependencies": [
+    {
+      "statement": "Requires an order item in READY (status 2). Order items carry their own status independent of the order-level status, so READY here is the item-level status.",
+      "kb_refs": [
+        "KB-027",
+        "KB-001"
+      ]
+    },
+    {
+      "statement": "Reuses the Portal 'Replace design' upload/storage logic — a regression in the Portal replace path likely affects this endpoint and vice versa.",
+      "kb_refs": [
+        "KB-026"
+      ]
+    },
+    {
+      "statement": "Caller needs the order_item_artwork_id, discoverable via GET /openapi/v1/orders/{order_id} (mapping INFERRED).",
+      "kb_refs": [
+        "KB-036",
+        "KB-037"
+      ]
+    }
+  ],
+  "risks": [
+    {
+      "risk": "Oracles are not confirmed expected: every behaviour is OBSERVED_CURRENT from a dev writeup (downgraded by product policy) or INFERRED from CCR narrative. Checklist expected results built from this profile need PO confirmation.",
+      "kb_refs": [
+        "KB-025",
+        "KB-026",
+        "KB-027",
+        "KB-028",
+        "KB-029",
+        "KB-030",
+        "KB-031",
+        "KB-032",
+        "KB-033",
+        "KB-034",
+        "KB-035",
+        "KB-036",
+        "KB-037"
+      ],
+      "oq_ref": [
+        "OQ-order-018",
+        "OQ-order-019",
+        "OQ-order-020"
+      ]
+    },
+    {
+      "risk": "Replacing a design on an item that is READY but already sent to fulfillment could change a file already handed to production; behaviour unverified.",
+      "kb_refs": [
+        "KB-027",
+        "KB-034"
+      ],
+      "oq_ref": "OQ-order-025"
+    },
+    {
+      "risk": "Server-side URL fetch with undefined rules (timeout, redirect, content-type, private IP) is a potential SSRF surface.",
+      "kb_refs": [
+        "KB-031"
+      ],
+      "oq_ref": "OQ-order-023"
+    },
+    {
+      "risk": "Overwrite at the same storage path means cached consumers may keep serving the old design unless cache-busted.",
+      "kb_refs": [
+        "KB-033"
+      ]
+    }
+  ],
+  "freshness": {
+    "observed_at": "2026-10-11",
+    "source_authored_on": "2026-10-05"
+  },
+  "unknown_areas": [
+    {
+      "question": "What is the app-side order status value after a replace design via Open API? The ticket only says it is 'set to a different value'.",
+      "why_it_matters": "KB-034 only infers fulfillment status is unchanged; without the concrete app-side status, a check after replace has no oracle and a status side effect could go unnoticed.",
+      "kb_refs": [
+        "KB-034"
+      ],
+      "oq_ref": "OQ-order-021",
+      "oq_type": "OPEN_ISSUE",
+      "oq_id": "OQ-order-021"
+    },
+    {
+      "question": "What file validation does the endpoint apply (file type, max size, dimension/aspect ratio vs print area)?",
+      "why_it_matters": "No rule is described; the sample accepting 900x1345 on a 1400x1400 print area is NOT an approved rule, so negative-input checks have no expected result.",
+      "kb_refs": [
+        "KB-031"
+      ],
+      "oq_ref": "OQ-order-022",
+      "oq_type": "OPEN_ISSUE",
+      "oq_id": "OQ-order-022"
+    },
+    {
+      "question": "What are the URL fetch rules when JSON url is sent (timeout, redirect, content-type, blocking private IP/SSRF)?",
+      "why_it_matters": "Server-side fetch of caller-supplied URLs is a security surface; without defined rules it cannot be tested or judged.",
+      "kb_refs": [
+        "KB-031"
+      ],
+      "oq_ref": "OQ-order-023",
+      "oq_type": "OPEN_ISSUE",
+      "oq_id": "OQ-order-023"
+    },
+    {
+      "question": "What happens when a request sends both file and url?",
+      "why_it_matters": "Only the 'neither' case (422) is described; precedence or rejection for 'both' is undefined, so no oracle exists.",
+      "kb_refs": [
+        "KB-029",
+        "KB-031"
+      ],
+      "oq_ref": "OQ-order-024",
+      "oq_type": "OPEN_ISSUE",
+      "oq_id": "OQ-order-024"
+    },
+    {
+      "question": "What happens when the order item is READY but has already been sent to fulfillment?",
+      "why_it_matters": "The READY precondition alone would allow the call; replacing a file already handed to fulfillment may cause a wrong print. State could not be set up on staging.",
+      "kb_refs": [
+        "KB-027",
+        "KB-034"
+      ],
+      "oq_ref": "OQ-order-025",
+      "oq_type": "OPEN_ISSUE",
+      "oq_id": "OQ-order-025"
+    },
+    {
+      "question": "Bad input (URL 404 or not an image, malformed id) was reported by QA to return 500 with internal details (SQL/stack/nginx) on staging — what is the intended error response?",
+      "why_it_matters": "Suspected bug excluded from canon (no KB item, no captured artifact); must not be used as expected, but checklist needs to know this area has no oracle and a possible information-leak defect.",
+      "kb_refs": [],
+      "kb_refs_note": "Không có KB item (normalizer đưa vào unmapped_evidence); gap trace về shard qua OQ draft.",
+      "oq_ref": "OQ-order-026",
+      "oq_type": "OPEN_ISSUE",
+      "oq_id": "OQ-order-026"
+    },
+    {
+      "question": "What does the endpoint return for a token that lacks the orders:write ability (403, 401, 404)?",
+      "why_it_matters": "KB-025 states the ability gate but only 404/422 error responses are described; the permission boundary itself has no oracle.",
+      "kb_refs": [
+        "KB-025"
+      ],
+      "oq_ref": null,
+      "oq_type": "OPEN_ISSUE",
+      "oq_id": "OQ-order-027"
+    },
+    {
+      "question": "What is the response body / error message for the 404 and 422 rejections?",
+      "why_it_matters": "Only status codes are known; clients and checks cannot distinguish 'not READY' from 'no file nor url' (both 422) without the body.",
+      "kb_refs": [
+        "KB-027",
+        "KB-028",
+        "KB-029"
+      ],
+      "oq_ref": null,
+      "oq_type": "OPEN_ISSUE",
+      "oq_id": "OQ-order-028"
+    },
+    {
+      "question": "What does Portal 'Replace design' actually do for a non-READY item (warn and continue?), and do both paths produce the same stored result for a READY item?",
+      "why_it_matters": "Parity with Portal is claimed (KB-026) and the stricter API precondition is only inferred (KB-035); Portal behaviour is not observed in this KB.",
+      "kb_refs": [
+        "KB-026",
+        "KB-035"
+      ],
+      "oq_ref": "OQ-order-019",
+      "oq_type": "NEEDS_CONFIRMATION",
+      "oq_id": "OQ-order-019"
+    }
+  ],
+  "last_updated": {
+    "date": "2026-10-11",
+    "ccr_ref": "CBS-002"
+  },
+  "coverage_matrix": [
+    {
+      "feature_id": "FEAT-03-open-api-replace-order-item-design",
+      "layer": "api",
+      "role": "Open API client (orders:read)",
+      "state": "GET order returns print_areas[].id",
+      "environment": "staging",
+      "covered": true,
+      "kb_refs": [
+        "KB-036"
+      ],
+      "basis": "dev_doc (OBSERVED_CURRENT)"
+    },
+    {
+      "feature_id": "FEAT-03-open-api-replace-order-item-design",
+      "layer": "api",
+      "role": "Open API client (orders:read)",
+      "state": "print_areas[].id == order_item_artwork_id",
+      "environment": "staging",
+      "covered": false,
+      "kb_refs": [
+        "KB-037"
+      ],
+      "basis": "INFERRED only"
+    },
+    {
+      "feature_id": "FEAT-03-open-api-replace-order-item-design",
+      "layer": "api",
+      "role": "Open API client (orders:write)",
+      "state": "item READY, valid file/url -> replaced in place, ids preserved",
+      "environment": "staging",
+      "covered": true,
+      "kb_refs": [
+        "KB-025",
+        "KB-026"
+      ],
+      "basis": "dev_doc (OBSERVED_CURRENT)"
+    },
+    {
+      "feature_id": "FEAT-03-open-api-replace-order-item-design",
+      "layer": "api",
+      "role": "Open API client (orders:write)",
+      "state": "200 response shape",
+      "environment": "staging",
+      "covered": false,
+      "kb_refs": [
+        "KB-032"
+      ],
+      "basis": "INFERRED only"
+    },
+    {
+      "feature_id": "FEAT-03-open-api-replace-order-item-design",
+      "layer": "api",
+      "role": "Open API client (orders:write)",
+      "state": "item not READY -> 422",
+      "environment": "staging",
+      "covered": true,
+      "kb_refs": [
+        "KB-027"
+      ],
+      "basis": "dev_doc (OBSERVED_CURRENT)"
+    },
+    {
+      "feature_id": "FEAT-03-open-api-replace-order-item-design",
+      "layer": "api",
+      "role": "Open API client (orders:write)",
+      "state": "artwork not found / other account -> 404",
+      "environment": "staging",
+      "covered": true,
+      "kb_refs": [
+        "KB-028"
+      ],
+      "basis": "dev_doc (OBSERVED_CURRENT)"
+    },
+    {
+      "feature_id": "FEAT-03-open-api-replace-order-item-design",
+      "layer": "api",
+      "role": "Open API client (orders:write)",
+      "state": "neither file nor url -> 422",
+      "environment": "staging",
+      "covered": true,
+      "kb_refs": [
+        "KB-029"
+      ],
+      "basis": "dev_doc (OBSERVED_CURRENT)"
+    },
+    {
+      "feature_id": "FEAT-03-open-api-replace-order-item-design",
+      "layer": "api",
+      "role": "Open API client (orders:write)",
+      "state": "both file and url",
+      "environment": "staging",
+      "covered": false,
+      "kb_refs": [
+        "KB-029",
+        "KB-031"
+      ]
+    },
+    {
+      "feature_id": "FEAT-03-open-api-replace-order-item-design",
+      "layer": "api",
+      "role": "Open API client (orders:write)",
+      "state": "invalid file (type/size/dimension)",
+      "environment": "staging",
+      "covered": false,
+      "kb_refs": [
+        "KB-031"
+      ]
+    },
+    {
+      "feature_id": "FEAT-03-open-api-replace-order-item-design",
+      "layer": "api",
+      "role": "Open API client (orders:write)",
+      "state": "url fetch failure / private IP / redirect",
+      "environment": "staging",
+      "covered": false,
+      "kb_refs": [
+        "KB-031"
+      ]
+    },
+    {
+      "feature_id": "FEAT-03-open-api-replace-order-item-design",
+      "layer": "api",
+      "role": "Open API client (orders:write)",
+      "state": "item READY but already sent to fulfillment",
+      "environment": "staging",
+      "covered": false,
+      "kb_refs": [
+        "KB-027",
+        "KB-034"
+      ]
+    },
+    {
+      "feature_id": "FEAT-03-open-api-replace-order-item-design",
+      "layer": "api",
+      "role": "Open API client WITHOUT orders:write",
+      "state": "any",
+      "environment": "staging",
+      "covered": false,
+      "kb_refs": [
+        "KB-025"
+      ]
+    },
+    {
+      "feature_id": "FEAT-03-open-api-replace-order-item-design",
+      "layer": "data",
+      "role": "n/a",
+      "state": "app-side order status / fulfillment status after replace",
+      "environment": "staging",
+      "covered": false,
+      "kb_refs": [
+        "KB-034"
+      ]
+    },
+    {
+      "feature_id": "FEAT-03-open-api-replace-order-item-design",
+      "layer": "data",
+      "role": "n/a",
+      "state": "storage path overwrite + cache behaviour",
+      "environment": "staging",
+      "covered": false,
+      "kb_refs": [
+        "KB-033"
+      ],
+      "basis": "INFERRED only"
+    },
+    {
+      "feature_id": "FEAT-03-open-api-replace-order-item-design",
+      "layer": "portal",
+      "role": "merchant",
+      "state": "Portal Replace design parity (READY and non-READY)",
+      "environment": "staging",
+      "covered": false,
+      "kb_refs": [
+        "KB-026",
+        "KB-035"
+      ]
+    },
+    {
+      "feature_id": "FEAT-03-open-api-replace-order-item-design",
+      "layer": "api",
+      "role": "Open API client (orders:write)",
+      "state": "any",
+      "environment": "production",
+      "covered": false,
+      "kb_refs": [
+        "KB-025"
+      ],
+      "basis": "not shipped to production at 2026-10-11"
+    }
+  ],
+  "profile_conflicts": [],
+  "profile_relationships": [
+    {
+      "from_feature_key": "open-api-replace-order-item-design",
+      "to_feature_key": "review-and-initiate-fulfillment-portal",
+      "relationship": "related_state_dependency",
+      "description": "Replace is allowed only for READY order items; how it interacts with items already sent to fulfillment (the portal fulfillment feature) is unknown (OQ-order-025). Order items carry their own status independent of the order-level status.",
+      "kb_refs": [
+        "KB-027",
+        "KB-034",
+        "KB-001"
+      ]
+    },
+    {
+      "from_feature_key": "open-api-replace-order-item-design",
+      "to_feature_key": null,
+      "to_note": "Portal 'Replace design' action — no profile exists yet in knowledge/products/teeinblue/order/",
+      "relationship": "parity_mirror",
+      "description": "Open API endpoint mirrors Portal Replace design (same upload/storage logic), with a stricter READY precondition (inferred).",
+      "kb_refs": [
+        "KB-026",
+        "KB-035"
+      ]
+    }
+  ]
+}

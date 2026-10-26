@@ -1,0 +1,1981 @@
+{
+ "schema_version": "1.0",
+ "artifact_type": "FeatureDiscoveryArtifact",
+ "artifact_id": "FDA-CTX-20261026-01-portal",
+ "workflow_id": "CTX-20261026-01",
+ "producer": "portal-explorer",
+ "source_refs": [
+  "input/bootstrap-request.json",
+  "config/products/teeinblue.json",
+  "config/products/teeinblue/explore-playbook.md"
+ ],
+ "upstream_artifact_ids": [
+  "BootstrapRequest CTX-20261026-01"
+ ],
+ "status": "READY",
+ "confidence": "MEDIUM",
+ "observations": [
+  "2 libraries explored via real entry points (no standalone library page exists); 42 actions, 15 observations, 3 feature candidates (1 discovery-only).",
+  "All run-created test data cleaned up; leftover_test_data is empty.",
+  "2 conflicts with published mockup-attachment knowledge (KB-081 fake-png, KB-083 concurrency)."
+ ],
+ "assumptions": [
+  "The 'Replace image layer' picker is the same component as the add-layer Static Image picker (same endpoints and UI observed).",
+  "Media library 'Select' persists mockups immediately, based on prior-run network evidence (CTX-20260913-02 action map), not re-observed in this run to respect persistence_guard."
+ ],
+ "unknowns": [
+  "Polling intervals (~2.4 s image, ~3 s mockup) are single-sample observations.",
+  "Whether the image picker blocks 'Select' / layer creation when the whole image library is empty (OQ-artwork-047) - not observable without deleting pre-existing data.",
+  "Server-side upload size limit (if any) above 27 MB.",
+  "Whether in_use_ids non-empty blocks bulk delete (both libraries) and what message is shown.",
+  "Temporary-file retention/cleanup on object storage for rejected uploads."
+ ],
+ "conflicts": [
+  {
+   "id": "CONF-CTX20261026-01-01",
+   "topic": "Mockup upload of non-image content renamed .png",
+   "side_a": {
+    "source": "published knowledge product-base/mockup-attachment KB-081 (observed 2026-09-13)",
+    "claim": "file accepted by backend and stuck in 'Rendering' forever, no error"
+   },
+   "side_b": {
+    "source": "this run ACT-02-05-001 (2026-10-26)",
+    "claim": "POST /api/mockup-layers/by-temporary-file -> 422 'This file type is not supported. Please upload a PNG, JPEG, GIF or WebP image.', no record created",
+    "evidence": "raw/network/ACT-02-05-001.json"
+   },
+   "note": "Possible behaviour change between runs; old 'fake-image' records 4502/4503 still present."
+  },
+  {
+   "id": "CONF-CTX20261026-01-02",
+   "topic": "Mockup multi-file upload concurrency",
+   "side_a": {
+    "source": "published KB-083 (2026-09-13)",
+    "claim": "only 3/5 files processed when 5 chosen at once"
+   },
+   "side_b": {
+    "source": "this run ACT-02-04-002",
+    "claim": "4/4 raster files processed (5th file svg rejected client-side); image library processed 4/4 and 6/6",
+    "evidence": "raw/network/ACT-02-04-002.json, raw/network/ACT-01-04-003.json"
+   },
+   "note": "Not a like-for-like retest (5 raster files not re-uploaded to mockup library)."
+  }
+ ],
+ "blocking_issues": [],
+ "payload": {
+  "portal_context": {
+   "environment": "staging",
+   "portal_base": "https://staging-portal.teeinblue.com",
+   "api_base": "https://staging-api.teeinblue.com",
+   "role": "merchant-owner",
+   "account_verified_by": [
+    "GET /api/user in-page fetch 2026-10-26T11:36:23Z -> 200, id=266, name 'Linh explorer' (only id/name read)",
+    "sidebar store label 'linh-explorer-2.myshopify.com'",
+    "x-acting-user-id: 266 header on portal API requests (raw/network/ACT-00-01-001.json)"
+   ],
+   "store": "linh-explorer-2.myshopify.com",
+   "object_key": "image-library",
+   "object_id": "OBJ-AssetLibrary-image-library",
+   "entry_points": [
+    "https://staging-portal.teeinblue.com/artworks?id=4087 (artwork 'QA - all layers v3')",
+    "https://staging-portal.teeinblue.com/products/3206/edit (product base 'QA - product base explore copy')"
+   ],
+   "initial_state": "Verified at run start: image layer library had 0 categories (GET /api/layer-image-categories?type=clipart -> []) and 9 pre-existing images (layer_images 10268-10276, uncategorized, not QA-); mockup layer library had 0 user categories and 10 pre-existing mockup_layers (4487-4507 incl. fake-image 4502/4503 'Rendering'); 'TIB Mockups' built-in public set. Final state (raw/portal/dom/final-leftover-check.json, 12:14Z) identical to initial.",
+   "final_state_check": "raw/portal/dom/final-leftover-check.json",
+   "session_checks": [
+    "11:36:23Z id=266",
+    "11:52:16Z id=266",
+    "~12:14Z id=266 (final check)"
+   ],
+   "client_side_note": "Explorer injected a CSS rule hiding the Crisp chat widget (.crisp-client) because it intercepted clicks; client-only, no server effect."
+  },
+  "observations": [
+   {
+    "observation_id": "OBS-001",
+    "surface": "portal sidebar",
+    "element": "Sidebar navigation (all hrefs)",
+    "observed_result": "Sidebar has no Image Library / Mockup Library / Media entry. Assets group = Global Options, Clipart Categories (/cliparts), Vector Categories (/vectors), Additional Options, Map Styles, Color Categories, Font Categories, Upload Fonts (/fonts). Extras group contains 'Customer Uploads' (beta, /customer-uploads) - customer uploads, not a merchant library. Store Settings label shows 'linh-explorer-2.myshopify.com'.",
+    "evidence_refs": [
+     {
+      "type": "dom_snapshot",
+      "path": "raw/portal/dom/OBS-sidebar-router.json"
+     }
+    ],
+    "basis": "observed"
+   },
+   {
+    "observation_id": "OBS-002",
+    "surface": "portal SPA router",
+    "element": "Vue router getRoutes()",
+    "observed_result": "129 routes registered; only route matching /image|mockup|media|librar|layer|asset/i is '/customization-image' (Store Settings > Customization Image). No standalone image/mockup library route. Confirms C0 entry_point_finding.",
+    "evidence_refs": [
+     {
+      "type": "dom_snapshot",
+      "path": "raw/portal/dom/OBS-sidebar-router.json"
+     }
+    ],
+    "basis": "observed"
+   },
+   {
+    "observation_id": "OBS-003",
+    "surface": "/artworks",
+    "element": "Button 'TIB Library' (header of Artworks list, next to 'Import')",
+    "observed_result": "Opens modal titled 'Import free artworks from Teeinblue': left category tree (All, 'Category 1 - public', 'Linhpham', 'Artwork 2.0'), Search box + refresh, grid of public artwork templates each with size (e.g. 1600x1600) and 'Import' button. Data from GET /api/artwork-categories?public and GET /api/artworks?public&page=1&per_page=20. It is an artwork-template library, NOT an image asset library. Nothing imported.",
+    "evidence_refs": [
+     {
+      "type": "screenshot",
+      "path": "raw/portal/shots/ACT-00-01-001-after.png",
+      "act_id": "ACT-00-01-001"
+     },
+     {
+      "type": "har_entry",
+      "path": "raw/network/ACT-00-01-001.json",
+      "act_id": "ACT-00-01-001"
+     }
+    ],
+    "basis": "observed"
+   },
+   {
+    "observation_id": "OBS-004",
+    "surface": "artwork editor 4087",
+    "element": "'+ Layer' popup 'Select a layer type'",
+    "observed_result": "Groups: TEXT (Single-line Text, Paragraph>, Curve Text, Other>), IMAGE (Static Image, Clipart Category>, Photo Upload>, Text to Image (AI), Dynamic Clipart by Text>), VECTOR (Static Vector, Vector Category, Vector Upload), MAPS & ASTRONOMY, PUZZLES, OTHERS, FORM ELEMENTS (Toggle Switch), DESIGN ELEMENTS (Rectangle). Search box 'Search layer type...'. 'DESIGN ELEMENTS > Rectangle' group is present (published KB-001 listed 7 groups).",
+    "evidence_refs": [
+     {
+      "type": "screenshot",
+      "path": "raw/portal/shots/editor-add-layer-popup.png"
+     },
+     {
+      "type": "dom_snapshot",
+      "path": "raw/portal/dom/ACT-01-01-001-before.yml"
+     }
+    ],
+    "basis": "observed"
+   },
+   {
+    "observation_id": "OBS-005",
+    "surface": "artwork editor 4087 > Static Image picker",
+    "element": "Image picker modal",
+    "observed_result": "Modal with 2 tabs: 'Upload an image' (active) and 'Choose from clipart category'. Left: category select 'All' (clearable x), link '+ New category', list item 'All'. Right: dropzone 'Drag and drop, or click to upload!' with bullets 'Do not close this page while uploading.' and 'Use the Reload button below after image uploaded.'; 'Search' input; 'Reload' button; grid of image cards (checkbox, name as dashed-underline link, WxH, date 'Sep 9', trash icon); footer 'Move to category' control. Library is NOT empty: 9 pre-existing images (2_tay_xanh_cheo_nhau, top, hair, body, cat1, cat2, cat3, cat_mom_BG, white-bg; layer_images ids 10268-10276, created 2026-09-10, layer_image_category_id null) - not created by this run, must not be modified.",
+    "evidence_refs": [
+     {
+      "type": "screenshot",
+      "path": "raw/portal/shots/ACT-01-01-001-after.png",
+      "act_id": "ACT-01-01-001"
+     },
+     {
+      "type": "dom_snapshot",
+      "path": "raw/portal/dom/ACT-01-01-001-after.yml",
+      "act_id": "ACT-01-01-001"
+     },
+     {
+      "type": "har_entry",
+      "path": "raw/network/ACT-01-01-001.json",
+      "act_id": "ACT-01-01-001"
+     }
+    ],
+    "basis": "observed"
+   },
+   {
+    "observation_id": "OBS-006",
+    "surface": "artwork editor 4087 > Static Image picker",
+    "element": "Data loading of image picker",
+    "observed_result": "Opening picker fires: POST /api/graphql/relay operation getData layer_images_connection(first:20, where deleted_at null AND master NOT ILIKE '%.svg' AND master NOT ILIKE '%.gpx', order_by id desc) -> cursor pagination (pageInfo hasNextPage false, 9 edges); GET /api/layer-image-categories?type=clipart -> 200 []; POST /api/graphql clipart_categories(type clipart, parent null, limit 25) -> list of clipart categories (for 'Choose from clipart category' tab). Each image node has master '<hash>.webp', url '<hash>_large.webp', thumbnail '<hash>_thumbnail.webp' under users/266/image-layers/.",
+    "evidence_refs": [
+     {
+      "type": "har_entry",
+      "path": "raw/network/ACT-01-01-001.json",
+      "act_id": "ACT-01-01-001"
+     }
+    ],
+    "basis": "observed"
+   },
+   {
+    "observation_id": "OBS-007",
+    "surface": "artwork editor > Static Image picker",
+    "element": "Empty states",
+    "observed_result": "Whole-library empty state could NOT be observed: library already contains 9 pre-existing images not created by this run (deleting them is forbidden). Observed empty states: search no-match -> 'No data matched'; empty category -> 'Empty data' (same wording as Vector picker empty state in published KB). In empty category the dropzone remains available, i.e. picker does not block uploading.",
+    "evidence_refs": [
+     {
+      "type": "screenshot",
+      "path": "raw/portal/shots/ACT-01-02-001-after.png",
+      "act_id": "ACT-01-02-001"
+     },
+     {
+      "type": "screenshot",
+      "path": "raw/portal/shots/ACT-01-02-002-after.png",
+      "act_id": "ACT-01-02-002"
+     }
+    ],
+    "basis": "observed"
+   },
+   {
+    "observation_id": "OBS-008",
+    "surface": "artwork editor > Static Image picker",
+    "element": "Upload row list above grid",
+    "observed_result": "Each uploaded file gets a row (thumbnail, filename with extension, status line). Success line: 'Your file is uploaded, reload after a few minutes if there is no preview file.' Rejected type line: 'You can't upload files of this type.' Rows persist while picker is open (rows from previous upload stay listed).",
+    "evidence_refs": [
+     {
+      "type": "dom_snapshot",
+      "path": "raw/portal/dom/ACT-01-04-002-after.yml",
+      "act_id": "ACT-01-04-002"
+     }
+    ],
+    "basis": "observed"
+   },
+   {
+    "observation_id": "OBS-009",
+    "surface": "artwork editor > Static Image picker",
+    "element": "Upload validation summary",
+    "observed_result": "Client rejects by type (svg, txt) with 'You can't upload files of this type.' without network. Server rejects non-image content with 422 'This file type is not supported. Please upload a PNG, JPEG, GIF or WebP image.' (no record). 27 MB 3000x3000 PNG accepted. After by-temporary-file, client polls GraphQL layer_images(ids) ~every 2.4 s until url is set (single-sample observation of interval).",
+    "evidence_refs": [
+     {
+      "type": "har_entry",
+      "path": "raw/network/ACT-01-05-001.json",
+      "act_id": "ACT-01-05-001"
+     },
+     {
+      "type": "har_entry",
+      "path": "raw/network/ACT-01-05-002.json",
+      "act_id": "ACT-01-05-002"
+     },
+     {
+      "type": "har_entry",
+      "path": "raw/network/ACT-01-05-003.json",
+      "act_id": "ACT-01-05-003"
+     }
+    ],
+    "basis": "observed"
+   },
+   {
+    "observation_id": "OBS-010",
+    "surface": "artwork editor > Static Image picker",
+    "element": "Grid footer & selection",
+    "observed_result": "Cards have checkboxes; footer shows 'Move to category' (enabled when >=1 checked), 'Deselect all', and confirm button labelled 'Select N images' (multi-select). A red 'Delete' button appears next to Search/Reload when >=1 image is checked. Pagination footer 'Show [20] entries' + prev/next.",
+    "evidence_refs": [
+     {
+      "type": "dom_snapshot",
+      "path": "raw/portal/dom/ACT-01-07-001-before.yml"
+     }
+    ],
+    "basis": "observed"
+   },
+   {
+    "observation_id": "OBS-011",
+    "surface": "artwork editor > Static Image picker",
+    "element": "Selection scope vs pagination",
+    "observed_result": "Checked items are kept when changing page; bulk 'Delete' / 'Move to category' / 'Select N images' remain active and refer to items not visible on the current page (6 checked on page 1, page 2 shows only 1 unchecked item while footer says 'Select 6 images').",
+    "evidence_refs": [
+     {
+      "type": "screenshot",
+      "path": "raw/portal/shots/ACT-01-08-001-after.png",
+      "act_id": "ACT-01-08-001"
+     }
+    ],
+    "basis": "observed"
+   },
+   {
+    "observation_id": "OBS-012",
+    "surface": "product base 3206 edit > Mockup section",
+    "element": "'Upload' button -> media library modal",
+    "observed_result": "Modal (no title/tabs): left category select 'All' (clearable), '+ New category', list 'All', 'TIB Mockups' (+ user categories with pencil/trash when selected); right dropzone 'Drag and drop, or click to upload!' with same 2 bullets as image library; 'Search..' input + 'Reload'; grid cards (checkbox, thumbnail, bold name - plain text not a link, WxH, date, trash icon); footer 'Move to category' and 'Select'. Pre-existing user mockup layers (10, ids 4487-4507, not QA-) incl. 2 'fake-image' cards showing 'Rendering' since Sep 13. None of this run's image-library uploads (QA-img-*) appear here.",
+    "evidence_refs": [
+     {
+      "type": "screenshot",
+      "path": "raw/portal/shots/ACT-02-01-001-after.png",
+      "act_id": "ACT-02-01-001"
+     },
+     {
+      "type": "dom_snapshot",
+      "path": "raw/portal/dom/ACT-02-01-001-after.yml",
+      "act_id": "ACT-02-01-001"
+     },
+     {
+      "type": "har_entry",
+      "path": "raw/network/ACT-02-01-001.json",
+      "act_id": "ACT-02-01-001"
+     }
+    ],
+    "basis": "observed"
+   },
+   {
+    "observation_id": "OBS-013",
+    "surface": "mockup media library modal",
+    "element": "Data loading",
+    "observed_result": "GET /api/mockup-layer-categories -> [] (before run), GET /api/mockup-layers?page=1&per_page=20&sort=created_at&sort_type=desc -> Laravel paginator (data, links, meta.total 10). REST offset pagination (different from image library GraphQL relay cursor). 'TIB Mockups' is not a category record: it calls GET /api/mockup-layers?public&... returning items of user_id 101 (built-in), view has no dropzone and no trash icons.",
+    "evidence_refs": [
+     {
+      "type": "har_entry",
+      "path": "raw/network/ACT-02-01-001.json",
+      "act_id": "ACT-02-01-001"
+     },
+     {
+      "type": "har_entry",
+      "path": "raw/network/ACT-02-02-001.json",
+      "act_id": "ACT-02-02-001"
+     },
+     {
+      "type": "screenshot",
+      "path": "raw/portal/shots/ACT-02-02-001-after.png",
+      "act_id": "ACT-02-02-001"
+     }
+    ],
+    "basis": "observed"
+   },
+   {
+    "observation_id": "OBS-014",
+    "surface": "image library vs mockup library",
+    "element": "Data sharing between the two libraries",
+    "observed_result": "The two libraries are separate data sets: image library = layer_images (REST /api/layer-images*, /api/layer-image-categories?type=clipart, GraphQL relay layer_images_connection, cursor pagination); mockup library = mockup_layers (REST /api/mockup-layers*, /api/mockup-layer-categories, Laravel offset pagination). While 11 QA- images existed in the image library, the mockup modal listed only its own 10 pre-existing items; the mockup uploads (4632-4637) never appeared in the image picker (verified by relay listing at ACT-01-10-004 containing only image-library records). Categories are also separate (image cat id 37 vs mockup cat id 18). Shared mechanics: same temporary-files/upload-url + CDN PUT step, same client polling pattern, same 422 message for non-image content, same 'You can't upload files of this type.' client message, same category dialog and confirm dialog components.",
+    "evidence_refs": [
+     {
+      "type": "har_entry",
+      "path": "raw/network/ACT-02-01-001.json",
+      "act_id": "ACT-02-01-001"
+     },
+     {
+      "type": "har_entry",
+      "path": "raw/network/ACT-01-10-004.json",
+      "act_id": "ACT-01-10-004"
+     }
+    ],
+    "basis": "observed"
+   },
+   {
+    "observation_id": "OBS-015",
+    "surface": "artwork editor > Static Image picker",
+    "element": "Answer to OQ editor-layer-workspace (OQ-artwork-047): does image picker fall into empty state like Vector picker",
+    "observed_result": "Could not observe the whole-library-empty case for the image picker: the account's image library was never empty (9 pre-existing images), and deleting them is forbidden. Observed only partial evidence: an empty image category shows the same 'Empty data' text as the Vector picker, and the dropzone stays usable in that state, so the image picker does not block adding by itself; whether 'Select' is blocked with 0 images remains unobserved. Also observed that VECTOR group now has items ('qa-vector' layers exist in 4087), so KB-048's empty-vector precondition no longer holds on this store.",
+    "evidence_refs": [
+     {
+      "type": "screenshot",
+      "path": "raw/portal/shots/ACT-01-02-002-after.png",
+      "act_id": "ACT-01-02-002"
+     }
+    ],
+    "basis": "observed"
+   }
+  ],
+  "feature_candidates": [
+   {
+    "scenarios": [
+     {
+      "actions": [
+       {
+        "act_id": "ACT-00-01-001",
+        "description": "Click 'TIB Library' on /artworks (view only, no import), then Escape",
+        "input": {},
+        "before": {
+         "screenshot": "raw/portal/shots/ACT-00-01-001-before.png",
+         "dom": "raw/portal/dom/ACT-00-01-001-before.yml",
+         "object_state": {
+          "page": "/artworks list"
+         }
+        },
+        "after": {
+         "screenshot": "raw/portal/shots/ACT-00-01-001-after.png",
+         "dom": "raw/portal/dom/ACT-00-01-001-after.yml",
+         "object_state": {
+          "modal": "Import free artworks from Teeinblue"
+         },
+         "messages": []
+        },
+        "network_ref": "raw/network/ACT-00-01-001.json",
+        "console_errors": [
+         "2 console errors present on /artworks page load before action (see .playwright-mcp console log; not captured as evidence)"
+        ],
+        "mutation": false,
+        "cleanup_result": "NOT_NEEDED",
+        "outcome": "SUCCESS"
+       }
+      ],
+      "scn_id": "SCN-00-01",
+      "objective": "Check whether 'TIB Library' button on /artworks is an image library"
+     }
+    ],
+    "feature_id": "FEAT-00-library-entry-discovery",
+    "feature_key": "library-entry-discovery",
+    "name": "Locate where merchant manages image assets",
+    "user_goal": "Merchant wants to find a place to browse/manage uploaded images independently of an artwork or product base",
+    "entry_point": "Sidebar / /artworks header",
+    "observation_ids": [
+     "OBS-001",
+     "OBS-002",
+     "OBS-003"
+    ],
+    "note": "Discovery-only candidate: records that no standalone library page exists; libraries are reachable only inside artwork editor / product base mockup section."
+   },
+   {
+    "scenarios": [
+     {
+      "actions": [
+       {
+        "act_id": "ACT-01-01-001",
+        "description": "In artwork editor 4087 click '+ Layer', then 'Static Image'",
+        "input": {},
+        "before": {
+         "screenshot": "raw/portal/shots/editor-add-layer-popup.png",
+         "dom": "raw/portal/dom/ACT-01-01-001-before.yml",
+         "object_state": {
+          "editor": "artwork 4087 loaded, layer type popup open"
+         }
+        },
+        "after": {
+         "screenshot": "raw/portal/shots/ACT-01-01-001-after.png",
+         "dom": "raw/portal/dom/ACT-01-01-001-after.yml",
+         "object_state": {
+          "picker": "open, tab Upload an image, 9 pre-existing images, 0 categories"
+         },
+         "messages": []
+        },
+        "network_ref": "raw/network/ACT-01-01-001.json",
+        "console_errors": [],
+        "mutation": false,
+        "cleanup_result": "NOT_NEEDED",
+        "outcome": "SUCCESS"
+       }
+      ],
+      "scn_id": "SCN-01-01",
+      "objective": "Open image library picker from artwork editor and inventory its UI/initial state"
+     },
+     {
+      "actions": [
+       {
+        "act_id": "ACT-01-02-001",
+        "description": "Type 'QA-nomatch-zzz' in picker Search and press Enter",
+        "input": {
+         "search": "QA-nomatch-zzz"
+        },
+        "before": {
+         "screenshot": "raw/portal/shots/ACT-01-01-001-after.png",
+         "dom": "raw/portal/dom/ACT-01-01-001-after.yml",
+         "object_state": {
+          "grid": "9 pre-existing images"
+         }
+        },
+        "after": {
+         "screenshot": "raw/portal/shots/ACT-01-02-001-after.png",
+         "dom": "",
+         "object_state": {
+          "grid": "empty"
+         },
+         "messages": [
+          "No data matched"
+         ]
+        },
+        "network_ref": "raw/network/ACT-01-02-001.json",
+        "console_errors": [],
+        "mutation": false,
+        "cleanup_result": "NOT_NEEDED",
+        "outcome": "SUCCESS",
+        "notes": "Search is server-side: relay layer_images_connection adds where name _ilike '%<term>%'. Empty result shows text 'No data matched' plus 'Show [20] entries' select and prev/next buttons. Search input has clear (x)."
+       },
+       {
+        "act_id": "ACT-01-02-002",
+        "description": "Click newly created category 'QA-imgcat-A' (0 images) in left list",
+        "input": {
+         "category_id": 37
+        },
+        "before": {
+         "screenshot": "raw/portal/shots/ACT-01-03-002-after.png",
+         "dom": "",
+         "object_state": {
+          "category": "All selected"
+         }
+        },
+        "after": {
+         "screenshot": "raw/portal/shots/ACT-01-02-002-after.png",
+         "dom": "raw/portal/dom/ACT-01-02-002-after.yml",
+         "object_state": {
+          "category_select": "QA-imgcat-A",
+          "grid": "empty"
+         },
+         "messages": [
+          "Empty data"
+         ]
+        },
+        "network_ref": "raw/network/ACT-01-02-002.json",
+        "console_errors": [],
+        "mutation": false,
+        "cleanup_result": "NOT_NEEDED",
+        "outcome": "SUCCESS",
+        "notes": "Empty category shows 'Empty data' (different text from search no-match 'No data matched'). Dropzone stays usable. Selected category row shows pencil (edit) and trash (delete) icon buttons. Filter is server-side layer_image_category_id _eq 37."
+       }
+      ],
+      "scn_id": "SCN-01-02",
+      "objective": "Observe empty states of image library (search no match, empty category); OQ editor-layer-workspace: does image picker fall into empty state like Vector picker"
+     },
+     {
+      "actions": [
+       {
+        "act_id": "ACT-01-03-001",
+        "description": "Click '+ New category'; with empty name Create is disabled; type whitespace-only '   ' (Create becomes enabled) and click Create",
+        "input": {
+         "name": "   "
+        },
+        "before": {
+         "screenshot": "raw/portal/shots/ACT-01-03-001-before.png",
+         "dom": "",
+         "object_state": {
+          "dialog": "Name: [Enter category name] Create; Create disabled while empty (click timed out: element is not enabled)"
+         }
+        },
+        "after": {
+         "screenshot": "raw/portal/shots/ACT-01-03-001-after.png",
+         "dom": "",
+         "object_state": {
+          "dialog": "still open",
+          "categories": "unchanged (none)"
+         },
+         "messages": [
+          "Something went wrong!",
+          "The name field is required."
+         ]
+        },
+        "network_ref": "raw/network/ACT-01-03-001.json",
+        "console_errors": [
+         "Failed to load resource: the server responded with a status of 422 () @ https://staging-api.teeinblue.com/api/layer-image-categories"
+        ],
+        "mutation": true,
+        "cleanup_result": "NOT_NEEDED",
+        "outcome": "ERROR",
+        "notes": "POST /api/layer-image-categories {name:'   ', type:'clipart'} -> 422 {message:'The name field is required.'}. Client only disables Create for empty string, not whitespace; server rejects (trims). Image-layer category is created with type 'clipart'."
+       },
+       {
+        "act_id": "ACT-01-03-002",
+        "description": "Name 'QA-imgcat-A', click Create",
+        "input": {
+         "name": "QA-imgcat-A"
+        },
+        "before": {
+         "screenshot": "raw/portal/shots/ACT-01-03-001-after.png",
+         "dom": "",
+         "object_state": {
+          "categories": []
+         }
+        },
+        "after": {
+         "screenshot": "raw/portal/shots/ACT-01-03-002-after.png",
+         "dom": "",
+         "object_state": {
+          "categories": [
+           "QA-imgcat-A (id 37)"
+          ],
+          "selected": "All"
+         },
+         "messages": []
+        },
+        "network_ref": "raw/network/ACT-01-03-002.json",
+        "console_errors": [],
+        "mutation": true,
+        "cleanup_result": "DONE",
+        "outcome": "SUCCESS",
+        "notes": "POST /api/layer-image-categories -> 201 id 37 (user_id 266, type clipart); list reloaded via GET /api/layer-image-categories?type=clipart. Dialog closed, no success toast seen. cleanup: deleted later in run (see ACT for category delete)."
+       },
+       {
+        "act_id": "ACT-01-03-003",
+        "description": "Select category QA-imgcat-A, click its pencil icon -> dialog 'Name:' prefilled + 'Update'; change to 'QA-imgcat-A-renamed', click Update",
+        "input": {
+         "category_id": 37,
+         "name": "QA-imgcat-A-renamed"
+        },
+        "before": {
+         "screenshot": "raw/portal/shots/ACT-01-03-003-before.png",
+         "dom": "",
+         "object_state": {
+          "category_37": "QA-imgcat-A",
+          "images_in_cat": 3
+         }
+        },
+        "after": {
+         "screenshot": "raw/portal/shots/ACT-01-03-003-after.png",
+         "dom": "",
+         "object_state": {
+          "category_37": "QA-imgcat-A-renamed",
+          "category_select_label": "QA-imgcat-A-renamed",
+          "grid": "3 images (oversize, photo, small)"
+         },
+         "messages": []
+        },
+        "network_ref": "raw/network/ACT-01-03-003.json",
+        "console_errors": [],
+        "mutation": true,
+        "cleanup_result": "DONE",
+        "outcome": "SUCCESS",
+        "notes": "GET /api/layer-image-categories/37 (prefill) -> PUT /api/layer-image-categories/37 {name} 200 -> list refetch. No toast."
+       }
+      ],
+      "scn_id": "SCN-01-03",
+      "objective": "Category CRUD in image library (create, validation, rename, delete)"
+     },
+     {
+      "actions": [
+       {
+        "act_id": "ACT-01-04-001",
+        "description": "With category QA-imgcat-A selected, click dropzone and upload QA-img-small-200x200.png",
+        "input": {
+         "file": "QA-img-small-200x200.png (432 B, 200x200)"
+        },
+        "before": {
+         "screenshot": "raw/portal/shots/ACT-01-02-002-after.png",
+         "dom": "raw/portal/dom/ACT-01-02-002-after.yml",
+         "object_state": {
+          "category": "QA-imgcat-A",
+          "grid": "Empty data"
+         }
+        },
+        "after": {
+         "screenshot": "raw/portal/shots/ACT-01-04-001-after.png",
+         "dom": "",
+         "object_state": {
+          "grid": [
+           "QA-img-small-200x200 200x200 Oct 26 (checked)"
+          ],
+          "layer_image_id": 11163,
+          "category_id": 37,
+          "toolbar": "'Delete' button appears; 'Move to category' becomes active"
+         },
+         "messages": [
+          "QA-img-small-200x200.png",
+          "Your file is uploaded, reload after a few minutes if there is no preview file."
+         ]
+        },
+        "network_ref": "raw/network/ACT-01-04-001.json",
+        "console_errors": [],
+        "mutation": true,
+        "cleanup_result": "DONE",
+        "outcome": "SUCCESS",
+        "notes": "4-step flow: POST /api/users/266/temporary-files/upload-url {filename,filesize,mimetype} -> 201 with meta.signed_url (X-Amz-Expires=300); PUT binary to oe-cdn.sgp1.digitaloceanspaces.com; POST /api/layer-images/by-temporary-file {temporary_file_id,name (filename without extension),artwork_width:1600,category_id:37} -> 201 master '' url null width null; then POST /api/graphql query get layer_images(ids) returns url/thumbnail; relay reload shows master '<hash>.png', url '<hash>_large.webp', thumbnail '<hash>_thumbnail.webp', 200x200. Upload goes into the currently selected category. Newly uploaded image is auto-checked. File input in picker: accept='image/*', multiple=true (a second accept='image/*' single input also exists in dialog)."
+       },
+       {
+        "act_id": "ACT-01-04-002",
+        "description": "With 'All' selected, choose 5 files at once in dropzone file chooser: QA-img-medium-800x600.png, QA-img-large-2400x2400.png, QA-img-photo-800x600.jpg, QA-img-tiny-10x10.png, QA-img-vector.svg",
+        "input": {
+         "files": [
+          "QA-img-medium-800x600.png 2315B",
+          "QA-img-large-2400x2400.png 20519B",
+          "QA-img-photo-800x600.jpg 8631B",
+          "QA-img-tiny-10x10.png 75B",
+          "QA-img-vector.svg 184B"
+         ]
+        },
+        "before": {
+         "screenshot": "raw/portal/shots/ACT-01-04-002-before.png",
+         "dom": "",
+         "object_state": {
+          "category": "All",
+          "grid": "QA-img-small-200x200 + 9 pre-existing"
+         }
+        },
+        "after": {
+         "screenshot": "raw/portal/shots/ACT-01-04-002-after.png",
+         "dom": "raw/portal/dom/ACT-01-04-002-after.yml",
+         "object_state": {
+          "created_layer_images": {
+           "11164": "QA-img-medium-800x600 800x600",
+           "11165": "QA-img-large-2400x2400 2400x2400",
+           "11166": "QA-img-photo-800x600 800x600 (master .jpg)",
+           "11167": "QA-img-tiny-10x10 10x10"
+          },
+          "category": "null for all 4",
+          "grid": "4 new images auto-checked at top; 'Delete' button visible",
+          "svg": "not uploaded"
+         },
+         "messages": [
+          "QA-img-medium-800x600.png / QA-img-large-2400x2400.png / QA-img-photo-800x600.jpg / QA-img-tiny-10x10.png: 'Your file is uploaded, reload after a few minutes if there is no preview file.'",
+          "QA-img-vector.svg: 'You can't upload files of this type.'"
+         ]
+        },
+        "network_ref": "raw/network/ACT-01-04-002.json",
+        "console_errors": [],
+        "mutation": true,
+        "cleanup_result": "DONE",
+        "outcome": "SUCCESS",
+        "notes": "All 4 raster files processed (no 3-file concurrency cap observed here, unlike published mockup KB-083). Uploads run in parallel/overlapping (4x upload-url -> PUT -> by-temporary-file), then one graphql get(ids [11164..11167]) and one relay reload. SVG rejected client-side, no network request for it. Stored dims equal original (2400x2400 kept, no downscale in stored width/height); master keeps original extension (.png/.jpg) while url/thumbnail are .webp. 'All' list shows images of every category (image 11163 in cat 37 also listed)."
+       },
+       {
+        "act_id": "ACT-01-04-003",
+        "description": "With 'All' selected upload 6 files at once (QA-img-small-200x200.png, QA-img-medium-800x600.png, QA-img-tiny-10x10.png, QA-img-photo-800x600.jpg, QA-img-large-2400x2400.png, QA-mockup-1000x1000.png) - names duplicate earlier uploads",
+        "input": {
+         "files": 6
+        },
+        "before": {
+         "screenshot": "raw/portal/shots/ACT-01-03-003-after.png",
+         "dom": "",
+         "object_state": {
+          "all_count": 15
+         }
+        },
+        "after": {
+         "screenshot": "raw/portal/shots/ACT-01-04-003-after.png",
+         "dom": "",
+         "object_state": {
+          "created_layer_images": {
+           "11169": "QA-img-medium-800x600",
+           "11170": "QA-img-small-200x200",
+           "11171": "QA-img-tiny-10x10",
+           "11172": "QA-img-photo-800x600",
+           "11173": "QA-img-large-2400x2400",
+           "11174": "QA-mockup-1000x1000"
+          },
+          "all_count": 21,
+          "page1": "20 items, hasNextPage true"
+         },
+         "messages": [
+          "Your file is uploaded, reload after a few minutes if there is no preview file. (x6)"
+         ]
+        },
+        "network_ref": "raw/network/ACT-01-04-003.json",
+        "console_errors": [],
+        "mutation": true,
+        "cleanup_result": "DONE",
+        "outcome": "SUCCESS",
+        "notes": "6/6 processed; duplicate names accepted (no uniqueness check, no warning). Second sample confirming no 3-file cap in image-layer library."
+       }
+      ],
+      "scn_id": "SCN-01-04",
+      "objective": "Upload single and multiple images (png/jpg/svg, sizes) and observe processing state"
+     },
+     {
+      "actions": [
+       {
+        "act_id": "ACT-01-05-001",
+        "description": "Upload QA-invalid-not-image.png (33-byte text file renamed .png)",
+        "input": {
+         "file": "QA-invalid-not-image.png 33B mimetype image/png"
+        },
+        "before": {
+         "screenshot": "raw/portal/shots/ACT-01-04-002-after.png",
+         "dom": "raw/portal/dom/ACT-01-04-002-after.yml",
+         "object_state": {
+          "category": "All"
+         }
+        },
+        "after": {
+         "screenshot": "raw/portal/shots/ACT-01-05-001-after.png",
+         "dom": "",
+         "object_state": {
+          "grid": "unchanged, no new record"
+         },
+         "messages": [
+          "QA-invalid-not-image.png",
+          "This file type is not supported. Please upload a PNG, JPEG, GIF or WebP image."
+         ]
+        },
+        "network_ref": "raw/network/ACT-01-05-001.json",
+        "console_errors": [
+         "Failed to load resource: the server responded with a status of 422 () @ https://staging-api.teeinblue.com/api/layer-images/by-temporary-file"
+        ],
+        "mutation": true,
+        "cleanup_result": "NOT_NEEDED",
+        "outcome": "ERROR",
+        "notes": "Client passes the file (extension/mime ok): upload-url 201, PUT to CDN 200, then POST /api/layer-images/by-temporary-file -> 422 {errors.temporary_file_id:['This file type is not supported. Please upload a PNG, JPEG, GIF or WebP image.']}. No layer_images record created. A temporary file (id 8bd3451e-..., temporary-files/2026-10-26/...) remains on storage - not a library record, no UI to remove it. Differs from mockup library behavior published in KB-081 (mockup accepts fake png and sticks in 'Rendering')."
+       },
+       {
+        "act_id": "ACT-01-05-002",
+        "description": "Upload QA-invalid-document.txt via file chooser (bypasses accept='image/*')",
+        "input": {
+         "file": "QA-invalid-document.txt 20B"
+        },
+        "before": {
+         "screenshot": "raw/portal/shots/ACT-01-05-001-after.png",
+         "dom": "",
+         "object_state": {}
+        },
+        "after": {
+         "screenshot": "raw/portal/shots/ACT-01-05-002-after.png",
+         "dom": "",
+         "object_state": {
+          "grid": "unchanged"
+         },
+         "messages": [
+          "QA-invalid-document.txt",
+          "You can't upload files of this type."
+         ]
+        },
+        "network_ref": "raw/network/ACT-01-05-002.json",
+        "console_errors": [],
+        "mutation": false,
+        "cleanup_result": "NOT_NEEDED",
+        "outcome": "ERROR",
+        "notes": "Rejected client-side, 0 network entries in window (network file has entry_count 0). Same message as SVG in ACT-01-04-002."
+       },
+       {
+        "act_id": "ACT-01-05-003",
+        "description": "Upload QA-img-oversize-3000x3000.png (27,011,273 bytes)",
+        "input": {
+         "file": "QA-img-oversize-3000x3000.png 27011273B"
+        },
+        "before": {
+         "screenshot": "raw/portal/shots/ACT-01-05-002-after.png",
+         "dom": "",
+         "object_state": {}
+        },
+        "after": {
+         "screenshot": "raw/portal/shots/ACT-01-05-003-after.png",
+         "dom": "",
+         "object_state": {
+          "created_layer_image": {
+           "11168": "QA-img-oversize-3000x3000 3000x3000, master .png"
+          },
+          "grid": "new image auto-checked at top"
+         },
+         "messages": [
+          "During PUT (~13 s): 'Uploading...'",
+          "After: 'Your file is uploaded, reload after a few minutes if there is no preview file.'"
+         ]
+        },
+        "network_ref": "raw/network/ACT-01-05-003.json",
+        "console_errors": [],
+        "mutation": true,
+        "cleanup_result": "DONE",
+        "outcome": "SUCCESS",
+        "notes": "No size limit hit at 27 MB: upload-url 201 (filesize 27011273 declared), PUT 200 (~13 s), by-temporary-file 201 (master '' url null). Client then polls POST /api/graphql get(ids:[11168]) every ~2.4 s; url null for 3 polls (~7 s), then url/thumbnail present -> polling stops and relay list reloads. Processing state is visible only as the row text; grid card appears once processed. Stored dims 3000x3000 (no downscale)."
+       }
+      ],
+      "scn_id": "SCN-01-05",
+      "objective": "Upload validation: wrong content, wrong extension, very large file; observe processing state"
+     },
+     {
+      "actions": [
+       {
+        "act_id": "ACT-01-06-001",
+        "description": "Click name link 'QA-img-tiny-10x10' (id 11167) -> inline popover (textbox 'Name', Save, Cancel); clear text to empty; click Save",
+        "input": {
+         "name": ""
+        },
+        "before": {
+         "screenshot": "raw/portal/shots/ACT-01-06-001-mid.png",
+         "dom": "raw/portal/dom/ACT-01-06-001-before.yml",
+         "object_state": {
+          "image_11167_name": "QA-img-tiny-10x10"
+         }
+        },
+        "after": {
+         "screenshot": "raw/portal/shots/ACT-01-06-001-after.png",
+         "dom": "",
+         "object_state": {
+          "image_11167_name": "'' (card label shows '...')"
+         },
+         "messages": []
+        },
+        "network_ref": "raw/network/ACT-01-06-001.json",
+        "console_errors": [],
+        "mutation": true,
+        "cleanup_result": "DONE",
+        "outcome": "SUCCESS",
+        "notes": "No client or server validation: POST /api/graphql mutation update_layer_images(_set {name:'', updated_at}) -> 200. Rename is a direct GraphQL mutation (not REST). Cleanup: renamed back to QA- name in ACT-01-06-002."
+       },
+       {
+        "act_id": "ACT-01-06-002",
+        "description": "Click '...' link of image 11167, type 'QA-img-tiny-renamed', Save",
+        "input": {
+         "name": "QA-img-tiny-renamed"
+        },
+        "before": {
+         "screenshot": "raw/portal/shots/ACT-01-06-001-after.png",
+         "dom": "",
+         "object_state": {
+          "image_11167_name": ""
+         }
+        },
+        "after": {
+         "screenshot": "raw/portal/shots/ACT-01-06-002-after.png",
+         "dom": "",
+         "object_state": {
+          "image_11167_name": "QA-img-tiny-renamed"
+         },
+         "messages": []
+        },
+        "network_ref": "raw/network/ACT-01-06-002.json",
+        "console_errors": [],
+        "mutation": true,
+        "cleanup_result": "DONE",
+        "outcome": "SUCCESS",
+        "notes": "update_layer_images 200; label updated in place without list reload; no toast."
+       }
+      ],
+      "scn_id": "SCN-01-06",
+      "objective": "Rename an image in the library (inline rename), including empty-name attempt"
+     },
+     {
+      "actions": [
+       {
+        "act_id": "ACT-01-07-001",
+        "description": "With 4 run-created images checked (11164,11165,11166,11168; all uncategorized) click 'Move to category'; dialog 'Category: [Select option]' + Move; click Move without choosing",
+        "input": {
+         "category": null,
+         "ids": [
+          11164,
+          11165,
+          11166,
+          11168
+         ]
+        },
+        "before": {
+         "screenshot": "raw/portal/shots/ACT-01-07-001-mid.png",
+         "dom": "raw/portal/dom/ACT-01-07-001-before.yml",
+         "object_state": {
+          "footer": "'Move to category' | 'Deselect all' | 'Select 4 images'"
+         }
+        },
+        "after": {
+         "screenshot": "raw/portal/shots/ACT-01-07-001-after.png",
+         "dom": "",
+         "object_state": {
+          "selection": "cleared",
+          "categories_of_ids": "null (unchanged)"
+         },
+         "messages": []
+        },
+        "network_ref": "raw/network/ACT-01-07-001.json",
+        "console_errors": [],
+        "mutation": true,
+        "cleanup_result": "NOT_NEEDED",
+        "outcome": "SUCCESS",
+        "notes": "No validation for empty category: PUT /api/layer-images/move {category_id:null, ids:[...]} -> 200 (returns full rows incl. artwork_id, import_id, master_large, deleted_at). Effectively 'remove from category'. Opening the dialog refetches GET /api/layer-image-categories?type=clipart. Selection is cleared after move."
+       },
+       {
+        "act_id": "ACT-01-07-002",
+        "description": "Check QA-img-oversize-3000x3000 (11168) and QA-img-photo-800x600 (11166); Move to category -> choose 'QA-imgcat-A' -> Move",
+        "input": {
+         "category_id": 37,
+         "ids": [
+          11168,
+          11166
+         ]
+        },
+        "before": {
+         "screenshot": "raw/portal/shots/ACT-01-07-001-after.png",
+         "dom": "",
+         "object_state": {
+          "11166": "no category",
+          "11168": "no category"
+         }
+        },
+        "after": {
+         "screenshot": "raw/portal/shots/ACT-01-07-002-after.png",
+         "dom": "",
+         "object_state": {
+          "11166": "cat 37",
+          "11168": "cat 37"
+         },
+         "messages": []
+        },
+        "network_ref": "raw/network/ACT-01-07-002.json",
+        "console_errors": [],
+        "mutation": true,
+        "cleanup_result": "DONE",
+        "outcome": "SUCCESS",
+        "notes": "PUT /api/layer-images/move {category_id:37, ids} -> 200; relay list reloaded. Category combobox is searchable ('Press enter to select'). No toast."
+       }
+      ],
+      "scn_id": "SCN-01-07",
+      "objective": "Assign/move images to a category (bulk), incl. move without choosing a category"
+     },
+     {
+      "actions": [
+       {
+        "act_id": "ACT-01-08-001",
+        "description": "With 21 images in All (6 still checked from upload), click next page '›'",
+        "input": {},
+        "before": {
+         "screenshot": "raw/portal/shots/ACT-01-04-003-after.png",
+         "dom": "",
+         "object_state": {
+          "page": 1,
+          "checked": 6
+         }
+        },
+        "after": {
+         "screenshot": "raw/portal/shots/ACT-01-08-001-after.png",
+         "dom": "",
+         "object_state": {
+          "page": 2,
+          "items": [
+           "white-bg"
+          ],
+          "footer": "Delete | Move to category | Deselect all | Select 6 images"
+         },
+         "messages": []
+        },
+        "network_ref": "raw/network/ACT-01-08-001.json",
+        "console_errors": [],
+        "mutation": false,
+        "cleanup_result": "NOT_NEEDED",
+        "outcome": "SUCCESS",
+        "notes": "Cursor pagination: relay query adds after:<endCursor>, first:20; pageInfo hasPreviousPage true. Page size select options: 20/50/100/250/500. Selection persists across pages: on page 2 with no visible checked card, 'Delete', 'Move to category' and 'Select 6 images' still act on the 6 hidden checked items from page 1."
+       }
+      ],
+      "scn_id": "SCN-01-08",
+      "objective": "Browse/paginate library (page size, next/prev, selection across pages)"
+     },
+     {
+      "actions": [
+       {
+        "act_id": "ACT-01-09-001",
+        "description": "Deselect all, check only QA-img-tiny-renamed (11167), click 'Select 1 image'",
+        "input": {
+         "layer_image_id": 11167
+        },
+        "before": {
+         "screenshot": "raw/portal/shots/ACT-01-09-001-before.png",
+         "dom": "",
+         "object_state": {
+          "artwork_4087": "unsaved, no new layer"
+         }
+        },
+        "after": {
+         "screenshot": "raw/portal/shots/ACT-01-09-001-after.png",
+         "dom": "raw/portal/dom/ACT-01-09-001-after.yml",
+         "object_state": {
+          "picker": "closed",
+          "layer_list": "new top layer 'QA-img-tiny-renamed' selected ('1 selected')",
+          "canvas": "yellow 10x10 image rendered at 400x400 centered (label '400x400')",
+          "toolbar": "Transform | Align | Border | Print Effects",
+          "artwork_4087": "unsaved"
+         },
+         "messages": []
+        },
+        "network_ref": "raw/network/ACT-01-09-001.json",
+        "console_errors": [],
+        "mutation": false,
+        "cleanup_result": "DONE",
+        "outcome": "SUCCESS",
+        "notes": "No library/artwork API call on select (only star-maps static JSON reloaded by editor). Layer added as type 'static-photo' with url users/266/image-layers/<hash>_large.webp, name = image name, width/height 400 (seen in DELETE body of ACT-01-10-001). Layer row icons: pen, 'Replace image layer' (la-exchange-alt), copy, trash. Cleanup: editor discarded without saving (see ACT-01-11-001)."
+       },
+       {
+        "act_id": "ACT-01-09-002",
+        "description": "Click 'Replace image layer' icon on new layer",
+        "input": {},
+        "before": {
+         "screenshot": "raw/portal/shots/ACT-01-09-001-after.png",
+         "dom": "raw/portal/dom/ACT-01-09-001-after.yml",
+         "object_state": {}
+        },
+        "after": {
+         "screenshot": "raw/portal/shots/ACT-01-09-002-after.png",
+         "dom": "",
+         "object_state": {
+          "picker": "open in replace mode: heading 'Choose new image for these layers:', footer 'Move to category' + 'Select' (disabled until a choice)"
+         },
+         "messages": []
+        },
+        "network_ref": "raw/network/ACT-01-09-002.json",
+        "console_errors": [],
+        "mutation": false,
+        "cleanup_result": "NOT_NEEDED",
+        "outcome": "SUCCESS",
+        "notes": "Same picker component reloads clipart_categories (graphql), relay list and layer-image-categories."
+       }
+      ],
+      "scn_id": "SCN-01-09",
+      "objective": "Pick an image from the library into a Static Image layer (unsaved) and reopen picker via 'Replace image layer'"
+     },
+     {
+      "actions": [
+       {
+        "act_id": "ACT-01-10-001",
+        "description": "In replace picker, click trash icon on QA-img-tiny-renamed (11167, used by the unsaved new layer) -> Confirm dialog -> 'Remove'",
+        "input": {
+         "layer_image_id": 11167
+        },
+        "before": {
+         "screenshot": "raw/portal/shots/ACT-01-10-001-confirm.png",
+         "dom": "",
+         "object_state": {
+          "confirm_dialog": "title 'Confirm', text 'Are you sure to remove QA-img-tiny-renamed', buttons 'Remove' (red) / 'Cancel'"
+         }
+        },
+        "after": {
+         "screenshot": "raw/portal/shots/ACT-01-10-001-after.png",
+         "dom": "",
+         "object_state": {
+          "image_11167": "still present",
+          "layer": "unchanged"
+         },
+         "messages": [
+          "Something went wrong!",
+          "This image has already been added to the current artwork."
+         ]
+        },
+        "network_ref": "raw/network/ACT-01-10-001.json",
+        "console_errors": [
+         "Failed to load resource: the server responded with a status of 400 () @ https://staging-api.teeinblue.com/api/layer-images/11167"
+        ],
+        "mutation": true,
+        "cleanup_result": "NOT_NEEDED",
+        "outcome": "BLOCKED",
+        "notes": "DELETE /api/layer-images/11167 carries the full CURRENT (unsaved) artwork JSON as request body (name, width, height, templates[].layers[], artwork_category_id, template_settings, design_format, global_option_ids, schema_version); server answers 400 {message:'This image has already been added to the current artwork.'}. Server-side usage check is against the posted unsaved artwork (layer references image by url, not id). Confirm dialog gives no hint that image is in use. Not tested: image used by a SAVED artwork other than the open one (would need saving)."
+       },
+       {
+        "act_id": "ACT-01-10-002",
+        "description": "In replace picker, click trash icon on QA-img-tiny-10x10 (11171, not used) -> Confirm 'Are you sure to remove QA-img-tiny-10x10' -> 'Remove'",
+        "input": {
+         "layer_image_id": 11171
+        },
+        "before": {
+         "screenshot": "raw/portal/shots/ACT-01-10-001-after.png",
+         "dom": "",
+         "object_state": {
+          "image_11171": "present"
+         }
+        },
+        "after": {
+         "screenshot": "raw/portal/shots/ACT-01-10-002-after.png",
+         "dom": "",
+         "object_state": {
+          "image_11171": "removed from grid"
+         },
+         "messages": []
+        },
+        "network_ref": "raw/network/ACT-01-10-002.json",
+        "console_errors": [],
+        "mutation": true,
+        "cleanup_result": "DONE",
+        "outcome": "SUCCESS",
+        "notes": "DELETE /api/layer-images/11171 (body = current artwork JSON) -> 200 {message:'Successfully deleted the layer image.'}; relay list reloaded. No success toast captured in screenshot."
+       },
+       {
+        "act_id": "ACT-01-10-003",
+        "description": "Select category QA-imgcat-A-renamed (id 37; contains 11163, 11166, 11168), click its trash icon -> Confirm -> 'Remove'",
+        "input": {
+         "category_id": 37
+        },
+        "before": {
+         "screenshot": "raw/portal/shots/ACT-01-10-003-before.png",
+         "dom": "",
+         "object_state": {
+          "category_37": "exists, 3 images"
+         }
+        },
+        "after": {
+         "screenshot": "raw/portal/shots/ACT-01-10-003-after.png",
+         "dom": "",
+         "object_state": {
+          "categories": "[] (only 'All')",
+          "images_11163_11166_11168": "still exist, layer_image_category_id null"
+         },
+         "messages": [
+          "Confirm: 'Are you sure to delete QA-imgcat-A-renamed' [Remove] [Cancel]"
+         ]
+        },
+        "network_ref": "raw/network/ACT-01-10-003.json",
+        "console_errors": [],
+        "mutation": true,
+        "cleanup_result": "DONE",
+        "outcome": "SUCCESS",
+        "notes": "DELETE /api/layer-image-categories/37 -> 204; images are NOT deleted, they become uncategorized (relay shows category null for all). Confirm text does not mention contained images. Note wording differs: image delete says 'remove', category delete says 'delete'."
+       },
+       {
+        "act_id": "ACT-01-10-004",
+        "description": "Reopen editor 4087 (no changes), '+ Layer' > Static Image; check exactly the 11 remaining QA- images (11163-11170, 11172-11174), click red 'Delete' -> Confirm -> Remove (bulk delete + cleanup)",
+        "input": {
+         "ids": [
+          11174,
+          11173,
+          11172,
+          11170,
+          11169,
+          11168,
+          11167,
+          11166,
+          11165,
+          11164,
+          11163
+         ]
+        },
+        "before": {
+         "screenshot": "raw/portal/shots/ACT-01-10-004-before.png",
+         "dom": "",
+         "object_state": {
+          "selected": "11 QA- images ('Select 11 images')"
+         }
+        },
+        "after": {
+         "screenshot": "raw/portal/shots/ACT-01-10-004-after.png",
+         "dom": "raw/portal/dom/final-leftover-check.json",
+         "object_state": {
+          "library": "9 pre-existing images only; categories []"
+         },
+         "messages": [
+          "Confirm: 'Are you sure you want to remove 11 selected images?' [Remove] [Cancel]",
+          "toast: '11 images removed'"
+         ]
+        },
+        "network_ref": "raw/network/ACT-01-10-004.json",
+        "console_errors": [],
+        "mutation": true,
+        "cleanup_result": "DONE",
+        "outcome": "SUCCESS",
+        "notes": "Bulk delete: POST /api/layer-images/in-use {ids, templates:[current artwork templates]} -> {in_use_ids:[]}; then sequential DELETE /api/layer-images/{id} (each with full current artwork JSON body) ~2-5 s apart (~35 s for 11). Last DELETE (11163) still pending at capture time in the network file; final read-only check confirms it is gone. Picker closed with Escape, editor left via navigation with no unsaved-changes prompt and no save request."
+       }
+      ],
+      "scn_id": "SCN-01-10",
+      "objective": "Delete images (in-use by unsaved layer vs unused), confirm dialog, delete category containing images"
+     },
+     {
+      "actions": [
+       {
+        "act_id": "ACT-01-11-001",
+        "description": "Close picker (Escape), click editor top-bar 'Cancel', accept native confirm; then reload /artworks?id=4087 to verify",
+        "input": {},
+        "before": {
+         "screenshot": "raw/portal/shots/ACT-01-11-001-before.png",
+         "dom": "",
+         "object_state": {
+          "artwork_4087": "unsaved: extra top layer QA-img-tiny-renamed"
+         }
+        },
+        "after": {
+         "screenshot": "raw/portal/shots/ACT-01-11-001-verify-reload.png",
+         "dom": "",
+         "object_state": {
+          "url": "/artworks (editor closed)",
+          "artwork_4087_after_reload": "top layer 'Dynamic Clipart by Text', no 'QA-img-tiny-renamed' layer -> unchanged"
+         },
+         "messages": [
+          "native confirm: 'Do you really want to leave? You have unsaved changes!' (accepted = leave without saving)"
+         ]
+        },
+        "network_ref": "raw/network/ACT-01-11-001.json",
+        "console_errors": [],
+        "mutation": false,
+        "cleanup_result": "DONE",
+        "outcome": "SUCCESS",
+        "notes": "No artwork save request sent. Save & Close never clicked."
+       }
+      ],
+      "scn_id": "SCN-01-11",
+      "objective": "Discard unsaved editor changes (persistence guard) and verify artwork 4087 unchanged"
+     }
+    ],
+    "feature_id": "FEAT-01-image-layer-library",
+    "feature_key": "image-layer-library",
+    "name": "Manage and pick images for artwork image layers",
+    "user_goal": "Merchant uploads/organizes images in the artwork-editor image library and picks one for a Static Image layer",
+    "entry_point": "Artwork editor > '+ Layer' > IMAGE > Static Image (picker modal, tab 'Upload an image')",
+    "observation_ids": [
+     "OBS-004",
+     "OBS-005",
+     "OBS-006"
+    ]
+   },
+   {
+    "scenarios": [
+     {
+      "actions": [
+       {
+        "act_id": "ACT-02-01-001",
+        "description": "On /products/3206/edit click 'Upload' in Mockup section",
+        "input": {},
+        "before": {
+         "screenshot": "raw/portal/shots/ACT-02-01-001-before.png",
+         "dom": "",
+         "object_state": {
+          "product_3206": "Mockup section with existing mockup cards (Edit/Duplicate mockup/More)"
+         }
+        },
+        "after": {
+         "screenshot": "raw/portal/shots/ACT-02-01-001-after.png",
+         "dom": "raw/portal/dom/ACT-02-01-001-after.yml",
+         "object_state": {
+          "modal": "media library, All selected, 10 pre-existing items, 0 user categories"
+         },
+         "messages": []
+        },
+        "network_ref": "raw/network/ACT-02-01-001.json",
+        "console_errors": [],
+        "mutation": false,
+        "cleanup_result": "NOT_NEEDED",
+        "outcome": "SUCCESS"
+       }
+      ],
+      "scn_id": "SCN-02-01",
+      "objective": "Open mockup media library modal and inventory initial state"
+     },
+     {
+      "actions": [
+       {
+        "act_id": "ACT-02-02-001",
+        "description": "Click 'TIB Mockups' in left list (view only)",
+        "input": {},
+        "before": {
+         "screenshot": "raw/portal/shots/ACT-02-01-001-after.png",
+         "dom": "",
+         "object_state": {}
+        },
+        "after": {
+         "screenshot": "raw/portal/shots/ACT-02-02-001-after.png",
+         "dom": "",
+         "object_state": {
+          "grid": "public mockups (e.g. footballmug-right 1024x1024, image_4723, new-bag_back_final_2, Canvas - 16x24 - Black)",
+          "dropzone": "hidden",
+          "trash_icons": "none"
+         },
+         "messages": []
+        },
+        "network_ref": "raw/network/ACT-02-02-001.json",
+        "console_errors": [],
+        "mutation": false,
+        "cleanup_result": "NOT_NEEDED",
+        "outcome": "SUCCESS"
+       },
+       {
+        "act_id": "ACT-02-02-002",
+        "description": "(TIB Mockups selected) type 'QA-nomatch-zzz' in 'Search..' + Enter",
+        "input": {
+         "s": "QA-nomatch-zzz"
+        },
+        "before": {
+         "screenshot": "raw/portal/shots/ACT-02-02-001-after.png",
+         "dom": "",
+         "object_state": {}
+        },
+        "after": {
+         "screenshot": "raw/portal/shots/ACT-02-02-002-after.png",
+         "dom": "",
+         "object_state": {
+          "grid": "empty"
+         },
+         "messages": [
+          "Empty data",
+          "Showing 1 to 0 of 0 entries"
+         ]
+        },
+        "network_ref": "raw/network/ACT-02-02-002.json",
+        "console_errors": [],
+        "mutation": false,
+        "cleanup_result": "NOT_NEEDED",
+        "outcome": "SUCCESS",
+        "notes": "Server-side search param s=; empty text 'Empty data' (image library uses 'No data matched' for search). Footer counter reads 'Showing 1 to 0 of 0 entries' (from=1 while total=0)."
+       },
+       {
+        "act_id": "ACT-02-02-003",
+        "description": "Click newly created empty category 'QA-mockcat-A' (id 18)",
+        "input": {
+         "category_id": 18
+        },
+        "before": {
+         "screenshot": "raw/portal/shots/ACT-02-03-002-after.png",
+         "dom": "",
+         "object_state": {}
+        },
+        "after": {
+         "screenshot": "raw/portal/shots/ACT-02-02-003-after.png",
+         "dom": "",
+         "object_state": {
+          "grid": "empty",
+          "category_row": "pencil + trash icons"
+         },
+         "messages": [
+          "Empty data",
+          "Showing 1 to 0 of 0 entries"
+         ]
+        },
+        "network_ref": "raw/network/ACT-02-02-003.json",
+        "console_errors": [],
+        "mutation": false,
+        "cleanup_result": "NOT_NEEDED",
+        "outcome": "SUCCESS",
+        "notes": "GET /api/mockup-layers?category_id=18&page=1&per_page=20... -> data []. Dropzone stays available; 'Select' footer button visible (not tested, would persist mockup)."
+       }
+      ],
+      "scn_id": "SCN-02-02",
+      "objective": "Browse built-in TIB Mockups and observe empty states (search no match, empty category)"
+     },
+     {
+      "actions": [
+       {
+        "act_id": "ACT-02-03-001",
+        "description": "'+ New category' with whitespace-only name '   ' -> Create",
+        "input": {
+         "name": "   "
+        },
+        "before": {
+         "screenshot": "raw/portal/shots/ACT-02-03-001-before.png",
+         "dom": "",
+         "object_state": {
+          "categories": []
+         }
+        },
+        "after": {
+         "screenshot": "raw/portal/shots/ACT-02-03-001-after.png",
+         "dom": "",
+         "object_state": {
+          "dialog": "still open",
+          "categories": []
+         },
+         "messages": [
+          "Something went wrong!",
+          "The name field is required."
+         ]
+        },
+        "network_ref": "raw/network/ACT-02-03-001.json",
+        "console_errors": [
+         "Failed to load resource: the server responded with a status of 422 () @ https://staging-api.teeinblue.com/api/mockup-layer-categories"
+        ],
+        "mutation": true,
+        "cleanup_result": "NOT_NEEDED",
+        "outcome": "ERROR",
+        "notes": "POST /api/mockup-layer-categories {name:'   '} -> 422 (same message as image library; mockup category body has no 'type')."
+       },
+       {
+        "act_id": "ACT-02-03-002",
+        "description": "Category name 'QA-mockcat-A' -> Create",
+        "input": {
+         "name": "QA-mockcat-A"
+        },
+        "before": {
+         "screenshot": "raw/portal/shots/ACT-02-03-001-after.png",
+         "dom": "",
+         "object_state": {
+          "categories": []
+         }
+        },
+        "after": {
+         "screenshot": "raw/portal/shots/ACT-02-03-002-after.png",
+         "dom": "",
+         "object_state": {
+          "categories": [
+           "QA-mockcat-A (id 18)"
+          ]
+         },
+         "messages": []
+        },
+        "network_ref": "raw/network/ACT-02-03-002.json",
+        "console_errors": [],
+        "mutation": true,
+        "cleanup_result": "DONE",
+        "outcome": "SUCCESS",
+        "notes": "POST /api/mockup-layer-categories -> 201 id 18 user_id 266; list refetch."
+       },
+       {
+        "act_id": "ACT-02-03-003",
+        "description": "Select QA-mockcat-A, pencil icon -> name 'QA-mockcat-A-renamed' -> Update",
+        "input": {
+         "category_id": 18,
+         "name": "QA-mockcat-A-renamed"
+        },
+        "before": {
+         "screenshot": "raw/portal/shots/ACT-02-03-003-before.png",
+         "dom": "",
+         "object_state": {
+          "category_18": "QA-mockcat-A"
+         }
+        },
+        "after": {
+         "screenshot": "raw/portal/shots/ACT-02-03-003-after.png",
+         "dom": "",
+         "object_state": {
+          "category_18": "QA-mockcat-A-renamed",
+          "grid": "5 images in category (4632, 4633, 4634, 4635, 4637)"
+         },
+         "messages": [
+          "Success",
+          "Your category has been updated"
+         ]
+        },
+        "network_ref": "raw/network/ACT-02-03-003.json",
+        "console_errors": [],
+        "mutation": true,
+        "cleanup_result": "DONE",
+        "outcome": "SUCCESS",
+        "notes": "GET /api/mockup-layer-categories/18 -> PUT /api/mockup-layer-categories/18 {name} 200 -> list refetch. Mockup library shows success toasts; image library showed none for the same action."
+       }
+      ],
+      "scn_id": "SCN-02-03",
+      "objective": "Mockup category CRUD"
+     },
+     {
+      "actions": [
+       {
+        "act_id": "ACT-02-04-001",
+        "description": "With QA-mockcat-A selected, upload QA-mockup-1000x1000.png",
+        "input": {
+         "file": "QA-mockup-1000x1000.png 4370B"
+        },
+        "before": {
+         "screenshot": "raw/portal/shots/ACT-02-02-003-after.png",
+         "dom": "",
+         "object_state": {
+          "category": "QA-mockcat-A",
+          "grid": "Empty data"
+         }
+        },
+        "after": {
+         "screenshot": "raw/portal/shots/ACT-02-04-001-after-settled.png",
+         "dom": "",
+         "object_state": {
+          "mockup_layer_id": 4632,
+          "category_id": 18,
+          "grid": "QA-mockup-1000x1000 1000x1000 (auto-checked)",
+          "product_3206_mockups": "no POST /api/products/3206/mockups in window"
+         },
+         "messages": [
+          "During processing: progress bar + 'Generating...' (raw/portal/shots/ACT-02-04-001-after.png)",
+          "After: 'Your file is uploaded, reload after a few minutes if there is no preview file.'"
+         ]
+        },
+        "network_ref": "raw/network/ACT-02-04-001.json",
+        "console_errors": [],
+        "mutation": true,
+        "cleanup_result": "DONE",
+        "outcome": "SUCCESS",
+        "notes": "upload-url 201 -> PUT CDN -> POST /api/mockup-layers/by-temporary-file {temporary_file_id,name,filewidth:1000,fileheight:1000,category_id:18} -> 201 (width/height set from client, master/url ''), then client polls POST /api/graphql get mockup_layers(ids:[4632]) ~every 3 s until url set (2 polls), then GET list. While 'Generating...' the left panel (+ New category, categories) is shown disabled/greyed. Upload into selected category. Image library sends artwork_width instead of filewidth/fileheight."
+       },
+       {
+        "act_id": "ACT-02-04-002",
+        "description": "With 'All' selected upload 5 files at once: QA-img-medium-800x600.png, QA-img-large-2400x2400.png, QA-img-photo-800x600.jpg, QA-img-tiny-10x10.png, QA-img-vector.svg",
+        "input": {
+         "files": 5
+        },
+        "before": {
+         "screenshot": "raw/portal/shots/ACT-02-04-002-before.png",
+         "dom": "",
+         "object_state": {
+          "user_items": "10 pre-existing + 4632"
+         }
+        },
+        "after": {
+         "screenshot": "raw/portal/shots/ACT-02-04-002-after-settled.png",
+         "dom": "raw/portal/dom/ACT-02-04-002-after.yml",
+         "object_state": {
+          "created_mockup_layers": {
+           "4633": "QA-img-medium-800x600 800x600",
+           "4634": "QA-img-large-2400x2400 2400x2400",
+           "4635": "QA-img-photo-800x600 800x600",
+           "4636": "QA-img-tiny-10x10 10x10"
+          },
+          "grid": "4 new cards auto-checked, footer 'Move to category' | 'Deselect all' | 'Select 4 images', red 'Delete' button"
+         },
+         "messages": [
+          "4x 'Your file is uploaded, reload after a few minutes if there is no preview file.'",
+          "QA-img-vector.svg: 'You can't upload files of this type.'"
+         ]
+        },
+        "network_ref": "raw/network/ACT-02-04-002.json",
+        "console_errors": [],
+        "mutation": true,
+        "cleanup_result": "DONE",
+        "outcome": "SUCCESS",
+        "notes": "All 4 raster files reached by-temporary-file 201 and rendered (single graphql poll then list reload). This single sample does NOT reproduce the 3-of-5 concurrency limit in published KB-083 (that sample used 5 raster files; here 4 raster + 1 svg rejected client-side, so 5 raster files not re-tested). Intermediate screenshot raw/portal/shots/ACT-02-04-002-after.png shows grid greyed with spinner during list reload. 2400x2400 kept as width/height 2400."
+       }
+      ],
+      "scn_id": "SCN-02-04",
+      "objective": "Upload mockup images (single, multiple) and observe processing state"
+     },
+     {
+      "actions": [
+       {
+        "act_id": "ACT-02-05-001",
+        "description": "Upload QA-invalid-not-image.png (33-byte text renamed .png)",
+        "input": {
+         "file": "QA-invalid-not-image.png"
+        },
+        "before": {
+         "screenshot": "raw/portal/shots/ACT-02-04-002-after-settled.png",
+         "dom": "",
+         "object_state": {}
+        },
+        "after": {
+         "screenshot": "raw/portal/shots/ACT-02-05-001-after.png",
+         "dom": "",
+         "object_state": {
+          "grid": "unchanged; no new record"
+         },
+         "messages": [
+          "QA-invalid-not-image.png",
+          "This file type is not supported. Please upload a PNG, JPEG, GIF or WebP image."
+         ]
+        },
+        "network_ref": "raw/network/ACT-02-05-001.json",
+        "console_errors": [
+         "Failed to load resource: the server responded with a status of 422 () @ https://staging-api.teeinblue.com/api/mockup-layers/by-temporary-file"
+        ],
+        "mutation": true,
+        "cleanup_result": "NOT_NEEDED",
+        "outcome": "ERROR",
+        "notes": "upload-url 201, PUT 200, POST /api/mockup-layers/by-temporary-file {temporary_file_id,name,category_id:null} (no filewidth/fileheight - client could not read dims) -> 422 'This file type is not supported. Please upload a PNG, JPEG, GIF or WebP image.'. No mockup_layer created, no 'Rendering' card. CONFLICTS with published mockup-attachment KB-081 (2026-09-13: fake png accepted and stuck in 'Rendering'); the 2 old 'fake-image' Rendering records (4502/4503, 0x0) from that run are still in the library."
+       },
+       {
+        "act_id": "ACT-02-05-002",
+        "description": "Upload QA-invalid-document.txt",
+        "input": {
+         "file": "QA-invalid-document.txt"
+        },
+        "before": {
+         "screenshot": "raw/portal/shots/ACT-02-05-001-after.png",
+         "dom": "",
+         "object_state": {}
+        },
+        "after": {
+         "screenshot": "raw/portal/shots/ACT-02-05-002-after.png",
+         "dom": "",
+         "object_state": {
+          "grid": "unchanged"
+         },
+         "messages": [
+          "QA-invalid-document.txt",
+          "You can't upload files of this type."
+         ]
+        },
+        "network_ref": "raw/network/ACT-02-05-002.json",
+        "console_errors": [],
+        "mutation": false,
+        "cleanup_result": "NOT_NEEDED",
+        "outcome": "ERROR",
+        "notes": "Client-side rejection, 0 network entries."
+       },
+       {
+        "act_id": "ACT-02-05-003",
+        "description": "Upload QA-img-oversize-3000x3000.png (27,011,273 bytes)",
+        "input": {
+         "file": "QA-img-oversize-3000x3000.png 27011273B"
+        },
+        "before": {
+         "screenshot": "raw/portal/shots/ACT-02-05-002-after.png",
+         "dom": "",
+         "object_state": {}
+        },
+        "after": {
+         "screenshot": "raw/portal/shots/ACT-02-05-003-after.png",
+         "dom": "",
+         "object_state": {
+          "created_mockup_layer": {
+           "4637": "QA-img-oversize-3000x3000 3000x3000"
+          }
+         },
+         "messages": [
+          "processing screenshot raw/portal/shots/ACT-02-05-003-processing.png",
+          "Your file is uploaded, reload after a few minutes if there is no preview file."
+         ]
+        },
+        "network_ref": "raw/network/ACT-02-05-003.json",
+        "console_errors": [],
+        "mutation": true,
+        "cleanup_result": "DONE",
+        "outcome": "SUCCESS",
+        "notes": "No size limit at 27 MB: upload-url 201, PUT 200 (~10 s), by-temporary-file 201 (width/height 3000 from client). Client polls graphql mockup_layers(ids:[4637]) 5 times ~every 3 s (url '' for 4 polls, ~14 s) then list reload."
+       }
+      ],
+      "scn_id": "SCN-02-05",
+      "objective": "Mockup upload validation: fake png, txt, 27 MB file"
+     },
+     {
+      "actions": [
+       {
+        "act_id": "ACT-02-06-001",
+        "description": "Click the name text 'QA-img-tiny-10x10' on mockup card 4636 looking for rename",
+        "input": {},
+        "before": {
+         "screenshot": "raw/portal/shots/ACT-02-05-003-after.png",
+         "dom": "",
+         "object_state": {
+          "4636": "checked"
+         }
+        },
+        "after": {
+         "screenshot": "raw/portal/shots/ACT-02-06-001-after.png",
+         "dom": "",
+         "object_state": {
+          "4636": "unchecked (click toggled card selection)",
+          "rename_ui": "none"
+         },
+         "messages": []
+        },
+        "network_ref": "raw/network/ACT-02-06-001.json",
+        "console_errors": [],
+        "mutation": false,
+        "cleanup_result": "NOT_NEEDED",
+        "outcome": "SUCCESS",
+        "notes": "Mockup card name is plain text (bold), not a link; clicking toggles selection. No rename control observed in mockup media library (image library has inline rename)."
+       }
+      ],
+      "scn_id": "SCN-02-06",
+      "objective": "Rename a mockup image"
+     },
+     {
+      "actions": [
+       {
+        "act_id": "ACT-02-07-001",
+        "description": "With 4637, 4635, 4634, 4633 checked: 'Move to category' -> 'QA-mockcat-A' -> Move",
+        "input": {
+         "category_id": 18,
+         "ids": [
+          4633,
+          4634,
+          4635,
+          4637
+         ]
+        },
+        "before": {
+         "screenshot": "raw/portal/shots/ACT-02-06-001-after.png",
+         "dom": "",
+         "object_state": {
+          "ids": "no category"
+         }
+        },
+        "after": {
+         "screenshot": "raw/portal/shots/ACT-02-07-001-after.png",
+         "dom": "",
+         "object_state": {
+          "ids": "category 18",
+          "selection": "still 4 checked after move"
+         },
+         "messages": []
+        },
+        "network_ref": "raw/network/ACT-02-07-001.json",
+        "console_errors": [],
+        "mutation": true,
+        "cleanup_result": "DONE",
+        "outcome": "SUCCESS",
+        "notes": "GET /api/mockup-layer-categories on dialog open; PUT /api/mockup-layers/move {category_id:18, ids} -> 200; list reload. Selection is NOT cleared after move (image library clears it). The category option list was rendered as a detached listbox (snapshot showed it next to the product page 'Pick one fulfillment' combobox) - product page field value not changed (no product save done)."
+       }
+      ],
+      "scn_id": "SCN-02-07",
+      "objective": "Move mockup images to a category"
+     },
+     {
+      "actions": [
+       {
+        "act_id": "ACT-02-08-001",
+        "description": "(category 18 view) trash icon on QA-img-large-2400x2400 (4634) -> Confirm -> Remove",
+        "input": {
+         "mockup_layer_id": 4634
+        },
+        "before": {
+         "screenshot": "raw/portal/shots/ACT-02-08-001-confirm.png",
+         "dom": "",
+         "object_state": {
+          "confirm": "title 'Confirm', text 'Are you sure to remove ?' (name empty), Remove/Cancel"
+         }
+        },
+        "after": {
+         "screenshot": "raw/portal/shots/ACT-02-08-001-after.png",
+         "dom": "",
+         "object_state": {
+          "4634": "deleted"
+         },
+         "messages": []
+        },
+        "network_ref": "raw/network/ACT-02-08-001.json",
+        "console_errors": [],
+        "mutation": true,
+        "cleanup_result": "DONE",
+        "outcome": "SUCCESS",
+        "notes": "Confirm text shows an empty <strong> - image name missing ('Are you sure to remove ?'), whereas the image library confirm shows the name. DELETE /api/mockup-layers/4634 (no request body) -> 200 {message:'Successfully deleted the layer.'}; list reload."
+       },
+       {
+        "act_id": "ACT-02-08-002",
+        "description": "Trash icon on category QA-mockcat-A-renamed (18; holds 4632, 4633, 4635, 4637) -> Confirm 'Are you sure to delete QA-mockcat-A-renamed' -> Remove",
+        "input": {
+         "category_id": 18
+        },
+        "before": {
+         "screenshot": "raw/portal/shots/ACT-02-08-002-before.png",
+         "dom": "",
+         "object_state": {
+          "category_18": "4 images"
+         }
+        },
+        "after": {
+         "screenshot": "raw/portal/shots/ACT-02-08-002-after.png",
+         "dom": "",
+         "object_state": {
+          "categories": [],
+          "images": "4632, 4633, 4635, 4637 still exist with mockup_layer_category_id null"
+         },
+         "messages": [
+          "Success",
+          "Your category has been deleted"
+         ]
+        },
+        "network_ref": "raw/network/ACT-02-08-002.json",
+        "console_errors": [],
+        "mutation": true,
+        "cleanup_result": "DONE",
+        "outcome": "SUCCESS",
+        "notes": "DELETE /api/mockup-layer-categories/18 -> 204; images are not deleted, they become uncategorized (same as image library). For a moment the deleted category still shows in the left list with 'Empty data' + spinner until reload."
+       },
+       {
+        "act_id": "ACT-02-08-003",
+        "description": "Check exactly the 5 run-created items (4637 QA-img-oversize-3000x3000, 4636 QA-img-tiny-10x10, 4635 QA-img-photo-800x600, 4633 QA-img-medium-800x600, 4632 QA-mockup-1000x1000), click red 'Delete' in modal -> Confirm -> Remove",
+        "input": {
+         "ids": [
+          4637,
+          4636,
+          4635,
+          4633,
+          4632
+         ]
+        },
+        "before": {
+         "screenshot": "raw/portal/shots/ACT-02-08-003-before.png",
+         "dom": "raw/portal/dom/ACT-02-08-003-before.yml",
+         "object_state": {
+          "selected": 5
+         }
+        },
+        "after": {
+         "screenshot": "raw/portal/shots/ACT-02-08-003-after.png",
+         "dom": "",
+         "object_state": {
+          "library": "10 pre-existing items only (4487-4507)"
+         },
+         "messages": [
+          "Confirm: 'Are you sure you want to remove 5 selected images?' [Remove] [Cancel]"
+         ]
+        },
+        "network_ref": "raw/network/ACT-02-08-003.json",
+        "console_errors": [],
+        "mutation": true,
+        "cleanup_result": "DONE",
+        "outcome": "SUCCESS",
+        "notes": "Bulk delete first calls POST /api/mockup-layers/in-use {ids} -> {in_use_ids:[]}, then one DELETE /api/mockup-layers/{id} per item (5x 200), then list reload. Single-card trash (ACT-02-08-001) did NOT call in-use. Behaviour when in_use_ids is non-empty not observed (would need a mockup assigned to a product = forbidden persistence). Explorer note: a first in-page selection script over-selected 15 cards (incl. pre-existing); it was reverted with 'Deselect all' before any delete request (0 network entries) - no pre-existing data touched."
+       }
+      ],
+      "scn_id": "SCN-02-08",
+      "objective": "Delete mockup images (single, bulk) and a category containing images"
+     }
+    ],
+    "feature_id": "FEAT-02-mockup-layer-library",
+    "feature_key": "mockup-layer-library",
+    "name": "Manage mockup images in the product base media library",
+    "user_goal": "Merchant uploads/organizes mockup background images in the media library and picks them as mockups for a product base",
+    "entry_point": "Product base edit > Mockup section > 'Upload' (media library modal)",
+    "observation_ids": [
+     "OBS-012",
+     "OBS-013"
+    ]
+   }
+  ],
+  "permissions_observed": [],
+  "skipped_actions": [
+   {
+    "description": "Mockup library: pick image into product base 3206 via modal 'Select' / 'Select N images' (unsaved state) and then delete that image",
+    "reason": "Selecting in the media library modal immediately calls POST /api/products/{id}/mockups (evidence from run CTX-20260913-02 action map: mockup created right after select), i.e. persists on product base 3206 - forbidden by persistence_guard. There is no unsaved state for mockup selection, so 'delete image currently selected for an unsaved mockup' is NOT_COVERED."
+   },
+   {
+    "description": "Assign mockups / Save on product base 3206",
+    "reason": "persistence_guard: not run-created data."
+   },
+   {
+    "description": "Save & Close artwork 4087 after picking an image (to test deleting an image used by a SAVED artwork / in_use_ids non-empty)",
+    "reason": "persistence_guard: artwork 4087 must not be saved."
+   },
+   {
+    "description": "Delete pre-existing images/mockups (9 layer_images 10268-10276, 10 mockup_layers 4487-4507 incl. 'fake-image' 4502/4503) to observe whole-library empty state",
+    "reason": "Not created by this run; delete exception covers only QA- run data."
+   },
+   {
+    "description": "Import from 'TIB Library' modal on /artworks",
+    "reason": "View only per task; import would create an artwork."
+   },
+   {
+    "description": "Rename mockup image",
+    "reason": "No rename UI exists in mockup modal (clicking name toggles selection) - nothing to execute."
+   }
+  ],
+  "unexplored_areas": [
+   "Image picker tab 'Choose from clipart category' (clipart categories, GraphQL clipart_categories) - not part of image library scope, not opened.",
+   "Image library: behaviour when an image is used by another SAVED artwork (server in-use check posts only current artwork templates; cross-artwork usage untested).",
+   "Image library: 'Select N images' with N>1 (does it add N layers?) - only N=1 tested.",
+   "Image library: drag-and-drop upload (only click-to-upload via file chooser used).",
+   "Image library: page-size change (50/100/250/500) and prev-page beyond 2 pages; search combined with category filter.",
+   "Image library: rename with very long name / special characters; category name max length; duplicate category names.",
+   "Image library pickers of other layer types (Photo Upload, Clipart Category 'Upload an image' tab, Dynamic Clipart) - only Static Image picker and its 'Replace image layer' mode explored; shared component assumed but not verified.",
+   "Vector picker / /api/layer-images/svg flow (SVG files are excluded from image picker by master NOT ILIKE '%.svg').",
+   "Mockup library: pagination beyond page 1 (only 16 items max, below page size 20); page-size options seen 20/50/100/250/500 only.",
+   "Mockup library: bulk delete when in-use returns non-empty in_use_ids (needs an assigned mockup = forbidden).",
+   "Mockup library: re-test of 5 raster files at once to re-check published 3-file concurrency limit (only 4 raster + 1 svg uploaded together).",
+   "Mockup library: Move with no category chosen (tested only in image library).",
+   "Orphan temporary files on CDN after rejected uploads (no UI/endpoint observed to list or remove them).",
+   "Customer Uploads (beta, /customer-uploads) page - out of scope, not opened."
+  ],
+  "leftover_test_data": [],
+  "suspected_issues": [
+   {
+    "id": "SUSP-01",
+    "library": "image",
+    "summary": "Image rename accepts empty name: update_layer_images with name '' succeeds (200), card label becomes '...'. No client or server validation.",
+    "evidence": "raw/network/ACT-01-06-001.json",
+    "act_id": "ACT-01-06-001"
+   },
+   {
+    "id": "SUSP-02",
+    "library": "mockup",
+    "summary": "Single-image delete confirm shows empty name: 'Are you sure to remove ?' (image library shows the name).",
+    "evidence": "raw/portal/shots/ACT-02-08-001-confirm.png",
+    "act_id": "ACT-02-08-001"
+   },
+   {
+    "id": "SUSP-03",
+    "library": "image",
+    "summary": "Bulk selection persists across pages: on page 2 the 'Delete'/'Move to category'/'Select 6 images' buttons act on items not visible - risk of deleting unseen images.",
+    "evidence": "raw/portal/shots/ACT-01-08-001-after.png",
+    "act_id": "ACT-01-08-001"
+   },
+   {
+    "id": "SUSP-04",
+    "library": "image",
+    "summary": "'Move to category' with no category chosen is accepted (PUT /api/layer-images/move category_id null -> 200) - silently removes images from their category instead of validating.",
+    "evidence": "raw/network/ACT-01-07-001.json",
+    "act_id": "ACT-01-07-001"
+   },
+   {
+    "id": "SUSP-05",
+    "library": "both",
+    "summary": "Category name: Create button disabled only for empty string; whitespace-only enables it and relies on server 422 'The name field is required.' shown as generic 'Something went wrong!' toast.",
+    "evidence": "raw/network/ACT-01-03-001.json, raw/network/ACT-02-03-001.json"
+   },
+   {
+    "id": "SUSP-06",
+    "library": "both",
+    "summary": "No file size limit observed: 27 MB PNG accepted in both libraries (upload-url, PUT and by-temporary-file all succeed).",
+    "evidence": "raw/network/ACT-01-05-003.json, raw/network/ACT-02-05-003.json"
+   },
+   {
+    "id": "SUSP-07",
+    "library": "mockup",
+    "summary": "Counter text 'Showing 1 to 0 of 0 entries' on empty results.",
+    "evidence": "raw/portal/shots/ACT-02-02-002-after.png",
+    "act_id": "ACT-02-02-002"
+   },
+   {
+    "id": "SUSP-08",
+    "library": "image",
+    "summary": "DELETE /api/layer-images/{id} and POST in-use send the whole current (unsaved) artwork JSON as request body; in-use check is only against that body (layers reference image by url), so deleting an image used by a different saved artwork may not be blocked - unverified.",
+    "evidence": "raw/network/ACT-01-10-001.json",
+    "act_id": "ACT-01-10-001"
+   },
+   {
+    "id": "SUSP-09",
+    "library": "both",
+    "summary": "Rejected uploads (fake png) still create a temporary file on object storage (upload-url 201 + PUT 200 before server validation) - orphan files, no cleanup UI.",
+    "evidence": "raw/network/ACT-01-05-001.json, raw/network/ACT-02-05-001.json"
+   },
+   {
+    "id": "SUSP-10",
+    "library": "mockup",
+    "summary": "Single-card delete does not call POST /api/mockup-layers/in-use (bulk delete does) - possible inconsistency in usage protection between single and bulk delete.",
+    "evidence": "raw/network/ACT-02-08-001.json vs raw/network/ACT-02-08-003.json"
+   }
+  ],
+  "current_behavior_only": true,
+  "redaction_applied": true
+ },
+ "gate": {
+  "decision": "CONDITIONAL_PASS",
+  "blocking_findings": [],
+  "conditions": [
+   "Some actions reuse the previous action's after-screenshot as their before evidence and several have no DOM snapshot (dom ''); screenshots + network exist for every ACT.",
+   "ACT-01-10-004 network window ends with the last DELETE (11163) still pending; completion proven by final-leftover-check.json.",
+   "Mockup 'select into product' and 'delete image in use' scenarios NOT_COVERED due to persistence_guard (see skipped_actions)."
+  ],
+  "allowed_next_steps": [
+   "api-explorer: map raw/network/ACT-*.json",
+   "qa-knowledge-normalizer: consume raw/portal/portal-evidence.json",
+   "orchestrator: decide conflicts CONF-CTX20261026-01-01/02 against product-base/mockup-attachment"
+  ]
+ }
+}

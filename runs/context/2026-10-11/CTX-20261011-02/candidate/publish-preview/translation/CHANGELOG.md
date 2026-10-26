@@ -1,0 +1,2 @@
+
+- 2026-10-11 — CBS-001 — TIB-5352 (translation delivery qua API khi ≥1000 key): feature `dynamic-translations` thêm KB-022..KB-029 — dictionary nhúng HTML dưới 1000 key, qua API `translations/<locale>.json` từ 1000 key; Save một locale không đổi locale khác; độ trễ propagation; hành vi endpoint public với tham số v, locale không tồn tại, hoa/thường, locale dị dạng; chuỗi form được dịch trên product page và modal 'Edit design'. Các mục CONFIRMED_EXPECTED chỉ áp cho staging build TIB-5352 (chưa release production). Mở OQ-translation-023..033.

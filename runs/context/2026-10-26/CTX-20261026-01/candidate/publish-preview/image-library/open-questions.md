@@ -1,0 +1,234 @@
+# Open Questions — Image Library
+
+_Mọi mục dưới đây chưa có nguồn thẩm quyền (spec/PO/Dev/test case PASS). Resolve phải qua đúng authority; file này không tự đóng mục nào. Toàn bộ knowledge của object là quan sát trên staging (role merchant-owner)._
+
+## Tóm tắt
+
+| Loại | Số lượng |
+|---|---|
+| CONFLICT | 5 |
+| NEEDS_CONFIRMATION | 13 |
+| OPEN_ISSUE | 19 |
+| **Tổng** | **37** |
+
+## OQ-image-library-001 — CONFLICT
+
+```json
+{"oq_id": "OQ-image-library-001", "type": "CONFLICT", "feature_id": "mockup-layer-library", "summary": "Upload file không phải ảnh (text đổi đuôi .png) làm mockup: knowledge đã publish nói backend nhận và kẹt 'Rendering' mãi mãi, nay server trả 422 và không tạo bản ghi. Hành vi hiện hành/expected là gì và KB-081 của product-base còn đúng không?", "side_a": "product-base/mockup-attachment KB-081 (2026-09-13): file được nhận, tạo bản ghi width/height 0, url rỗng, card 'Rendering' mãi mãi, không báo lỗi.", "side_b": "image-library 2026-10-26: POST /api/mockup-layers/by-temporary-file → 422 'This file type is not supported. Please upload a PNG, JPEG, GIF or WebP image.', không tạo bản ghi."}
+```
+
+## OQ-image-library-002 — CONFLICT
+
+```json
+{"oq_id": "OQ-image-library-002", "type": "CONFLICT", "feature_id": "mockup-layer-library", "summary": "Giới hạn ~3 file khi chọn nhiều file upload mockup: KB-083 thấy chỉ 3/5 file được xử lý; run này 4/4 file raster ở mockup library (và 4/4, 6/6 ở image library). Cần retest đúng 5 file raster cùng lúc để biết giới hạn còn không.", "side_a": "product-base/mockup-attachment KB-083: 5 file chọn cùng lúc → chỉ 3 upload-url, 2 file bị bỏ âm thầm.", "side_b": "image-library 2026-10-26: 4 raster + 1 svg → 4 upload-url, 4 file xử lý xong; svg bị client từ chối. Không phải cùng điều kiện (chưa thử 5 file raster)."}
+```
+
+## OQ-image-library-003 — CONFLICT
+
+```json
+{"oq_id": "OQ-image-library-003", "type": "CONFLICT", "feature_id": "mockup-layer-library", "summary": "Polling trạng thái render mockup: KB-084/KB-051 nói không có polling tự động (phải bấm Refresh), run này thấy media library modal tự poll mockup_layers khoảng 2 giây/lần sau upload. Đây là hai cơ chế khác scope (card mockup đã gán vs modal sau upload) hay là mâu thuẫn?", "side_a": "product-base/mockup-attachment KB-084 (CONFIRMED_EXPECTED legacy) / KB-051: 0 request polling trong 8,2 giây sau 'Rendering' trên card mockup đã gán; Refresh '.la-sync' gọi lại GraphQL 'mockups'.", "side_b": "image-library 2026-10-26: media library modal tự gọi GraphQL mockup_layers(ids) ~2 giây/lần sau upload tới khi có url (8 mẫu)."}
+```
+
+## OQ-image-library-004 — CONFLICT
+
+```json
+{"oq_id": "OQ-image-library-004", "type": "CONFLICT", "feature_id": "image-layer-library", "summary": "Bằng chứng mới cho CONF-API-CTX20260921-03-01 (OQ-artwork-010): REST /api/layer-image-categories?type=clipart và GraphQL clipart_categories có đang đọc hai tập dữ liệu khác nhau (category của image library vs Clipart Categories) không? Nếu đúng, conflict cũ có thể không phải lỗi dữ liệu — cần owner artwork/dev xác nhận.", "side_a": "artwork OQ-artwork-010 / CONF-API-CTX20260921-03-01: REST trả [] trong khi GraphQL trả 10 dòng cho cùng user/session.", "side_b": "image-library 2026-10-26: REST trả đúng category tạo qua POST /api/layer-image-categories; GraphQL trả 10 Clipart Category không chứa nó; hai tập id không giao nhau (2 lần đo)."}
+```
+
+## OQ-image-library-005 — CONFLICT
+
+```json
+{"oq_id": "OQ-image-library-005", "type": "CONFLICT", "feature_id": "object-level (image-layer-library + mockup-layer-library)", "summary": "Popup '+ Layer' của artwork editor nay có nhóm DESIGN ELEMENTS (Rectangle) — knowledge artwork KB-001 ghi 7 nhóm/29 item. Layer type mới được thêm hay khác plan/store? Cần refresh artwork/editor-layer-workspace.", "side_a": "artwork/editor-layer-workspace KB-001 (2026-09-10): 29 item, 7 nhóm.", "side_b": "image-library 2026-10-26: có thêm nhóm DESIGN ELEMENTS (Rectangle); số item không đếm lại."}
+```
+
+## OQ-image-library-006 — OPEN_ISSUE
+
+```json
+{"oq_id": "OQ-image-library-006", "type": "OPEN_ISSUE", "feature_id": "image-layer-library", "summary": "Trả lời một phần OQ-artwork-047 (picker image library có rơi vào trạng thái rỗng chặn thêm layer như Vector không): đã thấy category rỗng hiện 'Empty data' (cùng câu chữ với Vector picker), search không khớp hiện 'No data matched', và dropzone vẫn upload được trong trạng thái rỗng — tức picker không tự chặn việc thêm ảnh. CÒN THIẾU: trạng thái toàn bộ image library rỗng (0 ảnh) và việc nút Select/thêm layer có bị chặn khi đó — không quan sát được vì account có 9 ảnh có sẵn không được phép xoá. Cần account/store có image library trống, hoặc operator cho phép tạm thời."}
+```
+
+## OQ-image-library-007 — NEEDS_CONFIRMATION
+
+```json
+{"oq_id": "OQ-image-library-007", "type": "NEEDS_CONFIRMATION", "feature_id": "object-level (image-layer-library + mockup-layer-library)", "summary": "Xác nhận host object storage oe-cdn.sgp1.digitaloceanspaces.com (PUT presigned của luồng upload cả hai thư viện) là host hợp lệ của staging — có nên thêm vào environments.staging.additional_api_hosts trong config teeinblue? Cho tới khi xác nhận, các item phụ thuộc host này không làm oracle."}
+```
+
+## OQ-image-library-008 — NEEDS_CONFIRMATION
+
+```json
+{"oq_id": "OQ-image-library-008", "type": "NEEDS_CONFIRMATION", "feature_id": "image-layer-library", "summary": "Đổi tên ảnh thành chuỗi rỗng được chấp nhận (200, card hiện '...'), không có kiểm tra client/server. Tên ảnh có bắt buộc không? Đây là defect hay hành vi chấp nhận được?"}
+```
+
+## OQ-image-library-009 — NEEDS_CONFIRMATION
+
+```json
+{"oq_id": "OQ-image-library-009", "type": "NEEDS_CONFIRMATION", "feature_id": "mockup-layer-library", "summary": "Confirm xoá một mockup ghi 'Are you sure to remove ?' (thiếu tên), trong khi image library hiện tên ảnh. Có phải lỗi hiển thị?"}
+```
+
+## OQ-image-library-010 — NEEDS_CONFIRMATION
+
+```json
+{"oq_id": "OQ-image-library-010", "type": "NEEDS_CONFIRMATION", "feature_id": "image-layer-library", "summary": "Lựa chọn ảnh được giữ khi chuyển trang; trên trang 2 các nút 'Delete' / 'Move to category' / 'Select 6 images' tác động lên ảnh không hiển thị — rủi ro xoá ảnh không nhìn thấy. Có phải hành vi mong muốn?"}
+```
+
+## OQ-image-library-011 — NEEDS_CONFIRMATION
+
+```json
+{"oq_id": "OQ-image-library-011", "type": "NEEDS_CONFIRMATION", "feature_id": "image-layer-library", "summary": "Bấm Move không chọn category vẫn thành công (PUT /api/layer-images/move category_id null → 200), không có validation. Expected là chặn hay đây là cách 'gỡ khỏi category'? Lưu ý: mẫu chỉ có ảnh vốn chưa có category, nên việc ảnh đang thuộc category bị gỡ im lặng là suy luận, chưa quan sát."}
+```
+
+## OQ-image-library-012 — NEEDS_CONFIRMATION
+
+```json
+{"oq_id": "OQ-image-library-012", "type": "NEEDS_CONFIRMATION", "feature_id": "object-level (image-layer-library + mockup-layer-library)", "summary": "Tên category toàn khoảng trắng làm nút Create bật, server trả 422 'The name field is required.' và UI hiện toast chung 'Something went wrong!' (cả hai thư viện). Client có nên chặn trước/hiển thị lỗi tại field?"}
+```
+
+## OQ-image-library-013 — NEEDS_CONFIRMATION
+
+```json
+{"oq_id": "OQ-image-library-013", "type": "NEEDS_CONFIRMATION", "feature_id": "object-level (image-layer-library + mockup-layer-library)", "summary": "Không thấy giới hạn kích thước file — PNG 27 MB được chấp nhận ở cả hai thư viện (upload-url, PUT, by-temporary-file đều thành công). Có giới hạn kích thước mong đợi không? Nếu có thì là bao nhiêu?"}
+```
+
+## OQ-image-library-014 — NEEDS_CONFIRMATION
+
+```json
+{"oq_id": "OQ-image-library-014", "type": "NEEDS_CONFIRMATION", "feature_id": "mockup-layer-library", "summary": "Bộ đếm hiển thị 'Showing 1 to 0 of 0 entries' khi kết quả rỗng (API trả meta.from null, total 0). Có phải lỗi hiển thị?"}
+```
+
+## OQ-image-library-015 — NEEDS_CONFIRMATION
+
+```json
+{"oq_id": "OQ-image-library-015", "type": "NEEDS_CONFIRMATION", "feature_id": "image-layer-library", "summary": "DELETE /api/layer-images/{id} và POST /api/layer-images/in-use gửi JSON artwork đang mở (chưa lưu) trong body; chặn 400 chỉ quan sát được khi chính artwork đang mở dùng ảnh. Server có kiểm các artwork đã lưu khác dùng ảnh đó không? Nếu không, xoá ảnh đang được artwork khác dùng sẽ ra sao?"}
+```
+
+## OQ-image-library-016 — NEEDS_CONFIRMATION
+
+```json
+{"oq_id": "OQ-image-library-016", "type": "NEEDS_CONFIRMATION", "feature_id": "object-level (image-layer-library + mockup-layer-library)", "summary": "Upload bị từ chối (422) vẫn để lại temporary file trên object storage (upload-url 201 + PUT 200 trước khi server kiểm nội dung), không thấy request dọn dẹp hay UI xoá. Có cơ chế dọn temporary file phía server (TTL/cron) không?"}
+```
+
+## OQ-image-library-017 — NEEDS_CONFIRMATION
+
+```json
+{"oq_id": "OQ-image-library-017", "type": "NEEDS_CONFIRMATION", "feature_id": "mockup-layer-library", "summary": "Xoá một mockup (thùng rác trên card) không gọi POST /api/mockup-layers/in-use, trong khi xoá hàng loạt thì có. Server có chặn xoá mockup đang được product dùng ở đường xoá đơn không?"}
+```
+
+## OQ-image-library-018 — OPEN_ISSUE
+
+```json
+{"oq_id": "OQ-image-library-018", "type": "OPEN_ISSUE", "feature_id": "object-level (image-layer-library + mockup-layer-library)", "summary": "Upload bằng kéo-thả vào dropzone có cùng hành vi với click-to-upload không?"}
+```
+
+## OQ-image-library-019 — OPEN_ISSUE
+
+```json
+{"oq_id": "OQ-image-library-019", "type": "OPEN_ISSUE", "feature_id": "object-level (image-layer-library + mockup-layer-library)", "summary": "Picker của Photo Upload, Clipart Category (tab 'Upload an image') và Dynamic Clipart có dùng chung image layer library/component không?"}
+```
+
+## OQ-image-library-020 — OPEN_ISSUE
+
+```json
+{"oq_id": "OQ-image-library-020", "type": "OPEN_ISSUE", "feature_id": "object-level (image-layer-library + mockup-layer-library)", "summary": "SVG bị loại khỏi image picker (master NOT ILIKE '%.svg'); luồng /api/layer-images/svg của Vector layer có cùng bảng dữ liệu với image library không?"}
+```
+
+## OQ-image-library-021 — OPEN_ISSUE
+
+```json
+{"oq_id": "OQ-image-library-021", "type": "OPEN_ISSUE", "feature_id": "object-level (image-layer-library + mockup-layer-library)", "summary": "GIF và WebP (được nêu trong câu lỗi 422) có thực sự upload được vào hai thư viện không?"}
+```
+
+## OQ-image-library-022 — OPEN_ISSUE
+
+```json
+{"oq_id": "OQ-image-library-022", "type": "OPEN_ISSUE", "feature_id": "object-level (image-layer-library + mockup-layer-library)", "summary": "Account khác (hoặc token forbidden/invalid) có đọc/sửa/xoá được ảnh, mockup, category theo id của account này không? Server có ràng buộc x-acting-user-id với phiên không?"}
+```
+
+## OQ-image-library-023 — OPEN_ISSUE
+
+```json
+{"oq_id": "OQ-image-library-023", "type": "OPEN_ISSUE", "feature_id": "object-level (image-layer-library + mockup-layer-library)", "summary": "Khi vượt x-ratelimit-limit (vd 60 cho in-use, 1000 cho by-temporary-file) thì client/server phản ứng thế nào? Chu kỳ quota có đúng theo ngày không?"}
+```
+
+## OQ-image-library-024 — OPEN_ISSUE
+
+```json
+{"oq_id": "OQ-image-library-024", "type": "OPEN_ISSUE", "feature_id": "object-level (image-layer-library + mockup-layer-library)", "summary": "Plan/role khác có trang thư viện độc lập hoặc điểm vào khác không? Spec OpenAPI có liệt kê thêm operation nào của layer-images/mockup-layers ngoài các operation đã trace không?"}
+```
+
+## OQ-image-library-025 — OPEN_ISSUE
+
+```json
+{"oq_id": "OQ-image-library-025", "type": "OPEN_ISSUE", "feature_id": "object-level (image-layer-library + mockup-layer-library)", "summary": "Import artwork từ 'TIB Library' và trang Customer Uploads (beta) có thuộc object nào khác cần bootstrap riêng không?"}
+```
+
+## OQ-image-library-026 — OPEN_ISSUE
+
+```json
+{"oq_id": "OQ-image-library-026", "type": "OPEN_ISSUE", "feature_id": "image-layer-library", "summary": "'Select N images' với N>1 thêm N layer, một layer, hay bị chặn? Kích thước hiển thị 400x400 cho ảnh 10x10 có phải quy tắc chung không?"}
+```
+
+## OQ-image-library-027 — OPEN_ISSUE
+
+```json
+{"oq_id": "OQ-image-library-027", "type": "OPEN_ISSUE", "feature_id": "image-layer-library", "summary": "Đổi page size 50/100/250/500, lùi trang nhiều lần và search kết hợp filter category hoạt động ra sao?"}
+```
+
+## OQ-image-library-028 — OPEN_ISSUE
+
+```json
+{"oq_id": "OQ-image-library-028", "type": "OPEN_ISSUE", "feature_id": "image-layer-library", "summary": "Giới hạn độ dài/ký tự đặc biệt của tên ảnh và tên category là gì? Trùng tên category có bị chặn không?"}
+```
+
+## OQ-image-library-029 — OPEN_ISSUE
+
+```json
+{"oq_id": "OQ-image-library-029", "type": "OPEN_ISSUE", "feature_id": "image-layer-library", "summary": "PUT /api/layer-image-categories/{id} với tên rỗng/khoảng trắng có bị từ chối như khi tạo (422) không?"}
+```
+
+## OQ-image-library-030 — OPEN_ISSUE
+
+```json
+{"oq_id": "OQ-image-library-030", "type": "OPEN_ISSUE", "feature_id": "image-layer-library", "summary": "Tab 'Choose from clipart category' trong image picker hoạt động thế nào và có thuộc phạm vi image library không?"}
+```
+
+## OQ-image-library-031 — OPEN_ISSUE
+
+```json
+{"oq_id": "OQ-image-library-031", "type": "OPEN_ISSUE", "feature_id": "mockup-layer-library", "summary": "Chọn mockup ('Select' / 'Select N images') gán vào product base hoạt động thế nào, và xoá một mockup đã gán thì product base ra sao?"}
+```
+
+## OQ-image-library-032 — OPEN_ISSUE
+
+```json
+{"oq_id": "OQ-image-library-032", "type": "OPEN_ISSUE", "feature_id": "mockup-layer-library", "summary": "Khi mockup library có 0 mockup của user, modal hiển thị gì và 'Select' có bị chặn không?"}
+```
+
+## OQ-image-library-033 — OPEN_ISSUE
+
+```json
+{"oq_id": "OQ-image-library-033", "type": "OPEN_ISSUE", "feature_id": "mockup-layer-library", "summary": "Đổi tên mockup có được hỗ trợ ở nơi khác (endpoint/UI) không, hay mockup không đổi tên được theo thiết kế?"}
+```
+
+## OQ-image-library-034 — OPEN_ISSUE
+
+```json
+{"oq_id": "OQ-image-library-034", "type": "OPEN_ISSUE", "feature_id": "mockup-layer-library", "summary": "Phân trang offset quá trang 1 và đổi page size 50/100/250/500 hoạt động thế nào? Lựa chọn có giữ qua trang như image library không?"}
+```
+
+## OQ-image-library-035 — OPEN_ISSUE
+
+```json
+{"oq_id": "OQ-image-library-035", "type": "OPEN_ISSUE", "feature_id": "mockup-layer-library", "summary": "PUT /api/mockup-layers/move với category_id null có được chấp nhận như image library không?"}
+```
+
+## OQ-image-library-036 — NEEDS_CONFIRMATION
+
+```json
+{"oq_id": "OQ-image-library-036", "type": "NEEDS_CONFIRMATION", "feature_id": "image-layer-library", "summary": "Các check BASELINE của image-layer-library chỉ dựa trên hành vi quan sát (OBSERVED_CURRENT), chưa có nguồn thẩm quyền (spec/PO/Dev/test case PASS) xác nhận là expected: CHK-001, CHK-002, CHK-003, CHK-004, CHK-005, CHK-006, CHK-010, CHK-013, CHK-015, CHK-017, CHK-019, CHK-020, CHK-021, CHK-025, CHK-027, CHK-029, CHK-030, CHK-032, CHK-034, CHK-036, CHK-037. Cần PO/Dev xác nhận hành vi hiện tại là đúng trước khi dùng làm expected result."}
+```
+
+## OQ-image-library-037 — NEEDS_CONFIRMATION
+
+```json
+{"oq_id": "OQ-image-library-037", "type": "NEEDS_CONFIRMATION", "feature_id": "mockup-layer-library", "summary": "Các check BASELINE của mockup-layer-library chỉ dựa trên hành vi quan sát (OBSERVED_CURRENT), chưa có nguồn thẩm quyền (spec/PO/Dev/test case PASS) xác nhận là expected: CHK-001, CHK-002, CHK-005, CHK-010, CHK-012, CHK-014, CHK-015, CHK-019, CHK-021, CHK-025. Cần PO/Dev xác nhận hành vi hiện tại là đúng trước khi dùng làm expected result."}
+```

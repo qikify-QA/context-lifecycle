@@ -1,0 +1,343 @@
+{
+  "schema_version": "1.0",
+  "artifact_type": "FeatureProfileCandidate",
+  "artifact_id": "FP-CTX-20261026-01-image-layer-library",
+  "workflow_id": "CTX-20261026-01",
+  "producer": "feature-profile-builder",
+  "source_refs": [
+    "candidate/product-kb/image-layer-library.json",
+    "candidate/product-kb/_object-level.json"
+  ],
+  "upstream_artifact_ids": [
+    "PKBC-CTX-20261026-01-image-layer-library",
+    "PKBC-CTX-20261026-01-object-level"
+  ],
+  "status": "READY",
+  "confidence": "LOW",
+  "observations": [
+    "ZERO_DOC_BOOTSTRAP, object mới image-library, không có base: profile tạo mới, không carry-forward.",
+    "Profile dựng từ KB-014..KB-042 (shard feature) và KB-001..KB-013 (shard _object-level, dùng làm entry point/dependency/luồng upload dùng chung). Mọi field trace về kb_id; tham chiếu object khác chỉ nằm ở cross_object_refs.",
+    "Không có item CONFIRMED_EXPECTED trong KB → confirmed_rules rỗng; mọi hành vi nằm ở observed_behavior với knowledge_kind/confidence của KB item gốc.",
+    "Item tag host_not_in_expected_api_base/not-oracle (KB-007, KB-010, KB-011), item suspected-defect và item UNRESOLVED (KB-004, KB-042) được gắn markers + oracle_eligible:false.",
+    "Rework theo yêu cầu orchestrator (C6): unknown dùng chung (UA-OBJ-01..12) đưa thẳng vào unknown_areas của từng profile áp dụng; bỏ draft_ref, nhãn run-local và con trỏ file."
+  ],
+  "assumptions": [
+    "kb_id đánh số liên tục toàn object image-library (KB-001..KB-063 qua 3 shard), nên kb_refs dạng 'KB-xxx' là duy nhất trong object; KB-001..KB-013 nằm ở shard _object-level.",
+    "observed_validations.observed_count tính theo số mẫu của chính feature này; khi KB item gộp mẫu của cả hai thư viện thì ghi thêm object_level_observed_count.",
+    "UA-OBJ-01..11 áp dụng cho cả hai feature xuất hiện trong unknown_areas của cả hai profile với cùng ua_id; orchestrator gán một oq_id cho mỗi ua_id UA-OBJ."
+  ],
+  "unknowns": [
+    "Xem payload.feature_profiles[0].unknown_areas — không lặp lại ở đây."
+  ],
+  "conflicts": [
+    { "conflict_group": "CONF-image-library-R1026-04", "kb_refs": ["KB-042"], "resolution": "UNRESOLVED", "see": "payload.profile_conflicts" },
+    { "conflict_group": "CONF-image-library-R1026-05", "kb_refs": ["KB-004"], "resolution": "UNRESOLVED", "see": "payload.profile_conflicts" }
+  ],
+  "blocking_issues": [],
+  "payload": {
+    "feature_profiles": [
+      {
+        "feature_id": "FEAT-01-image-layer-library",
+        "feature_key": "image-layer-library",
+        "name": "Image Layer Library — thư viện ảnh của Image layer trong artwork editor",
+        "user_goal": "Là merchant-owner đang dựng artwork, tôi upload và tổ chức ảnh riêng của mình (category, tên, vị trí) trong thư viện ảnh ngay bên trong artwork editor, rồi chọn ảnh từ thư viện để thêm layer Static Image hoặc thay ảnh cho layer ảnh có sẵn; dọn ảnh không dùng mà không làm hỏng artwork đang dùng ảnh đó.",
+        "user_goal_kb_refs": ["KB-003", "KB-014", "KB-036", "KB-037", "KB-039"],
+        "stable_since_version": null,
+        "stable_since_version_note": "Feature mới, không có base; version ổn định do publish đầu tiên quyết định.",
+        "actors": [
+          {
+            "role": "merchant-owner",
+            "permission_observed": "Trên staging, account explorer thực hiện được toàn bộ thao tác thư viện (upload, CRUD category, đổi tên, move, xoá đơn/hàng loạt, chọn ảnh vào layer) mà không gặp access-denied. Request mang x-acting-user-id = id account đang đăng nhập; {user_id} trong path upload-url = id account. Chỉ một role/account được quan sát.",
+            "kb_refs": ["KB-006", "KB-013", "KB-019", "KB-030", "KB-032", "KB-038"]
+          }
+        ],
+        "entry_points": [
+          {
+            "path": "Artwork editor (/artworks?id=<artwork>) > '+ Layer' > nhóm IMAGE > 'Static Image' → modal image picker, tab 'Upload an image' mặc định",
+            "precondition": "Đã login portal; artwork editor đã load (artwork chưa lưu vẫn mở được picker).",
+            "kb_refs": ["KB-003", "KB-004", "KB-014"],
+            "markers": ["KB-004 UNRESOLVED (CONF-image-library-R1026-05): cấu trúc nhóm của popup '+ Layer' lệch với knowledge artwork đã publish — không dùng danh sách nhóm làm oracle."]
+          },
+          {
+            "path": "Artwork editor > dòng layer ảnh > icon 'Replace image layer' → cùng image picker ở chế độ thay ảnh ('Choose new image for these layers:')",
+            "precondition": "Artwork đang mở có ít nhất một layer ảnh.",
+            "kb_refs": ["KB-003", "KB-037"]
+          },
+          {
+            "path": "Không có điểm vào độc lập: sidebar và router SPA không có trang Image Library/Media; nút 'TIB Library' trên /artworks là thư viện artwork template, không phải điểm vào của feature này.",
+            "precondition": "Kết luận từ một account/plan merchant-owner trên staging.",
+            "kb_refs": ["KB-001", "KB-002"],
+            "is_negative_finding": true
+          }
+        ],
+        "capabilities": [
+          {
+            "capability_id": "CAP-IMG-01",
+            "name": "Upload ảnh vào thư viện (một hoặc nhiều file)",
+            "description": "Click-to-upload qua file chooser (accept image/*, cho chọn nhiều file). Chuỗi dùng chung: upload-url (201, presigned) → PUT lên object storage → POST /api/layer-images/by-temporary-file (201, bản ghi chưa có url) → polling. Ảnh vào category đang chọn (ở 'All' thì không có category), xuất hiện đầu lưới ở trạng thái đã tick. 5 file (4 raster + 1 svg) → 4/4 raster xử lý; 6 raster → 6/6. Tên trùng được tạo bản ghi mới, không cảnh báo. Bước PUT đi tới host ngoài expected_api_base (not-oracle).",
+            "kb_refs": ["KB-006", "KB-007", "KB-009", "KB-023", "KB-024", "KB-025", "KB-026"],
+            "act_ids": ["ACT-01-04-001", "ACT-01-04-002", "ACT-01-04-003", "ACT-01-05-003"]
+          },
+          {
+            "capability_id": "CAP-IMG-02",
+            "name": "Theo dõi trạng thái xử lý ảnh sau upload (processing → sẵn sàng)",
+            "description": "Sau 201 của by-temporary-file, client tự gọi lặp GraphQL get layer_images(id _in ids) (~2 giây sau mỗi response; explorer ước ~2,4 giây) tới khi url/thumbnail có giá trị rồi tải lại danh sách relay. Trong lúc xử lý trạng thái chỉ hiện ở dòng upload; card chỉ xuất hiện khi xong. Sau xử lý: master giữ đuôi gốc, url '_large.webp', thumbnail '_thumbnail.webp', width/height giữ kích thước gốc (10x10 tới 3000x3000).",
+            "kb_refs": ["KB-029", "KB-023", "KB-016", "KB-009"],
+            "act_ids": ["ACT-01-04-001", "ACT-01-04-002", "ACT-01-04-003", "ACT-01-05-003"]
+          },
+          {
+            "capability_id": "CAP-IMG-03",
+            "name": "Kiểm tra file khi upload (loại file, nội dung, kích thước)",
+            "description": "Client chặn svg/txt ngay khi chọn ('You can't upload files of this type.', không gửi request). File text đổi đuôi .png qua được client, upload-url 201 + PUT 200, rồi server trả 422 ở by-temporary-file. PNG 27 MB được chấp nhận (không thấy giới hạn). Temporary file đã nằm trên storage trước khi server kiểm nội dung (not-oracle).",
+            "kb_refs": ["KB-008", "KB-027", "KB-028", "KB-010", "KB-011"],
+            "act_ids": ["ACT-01-04-002", "ACT-01-05-001", "ACT-01-05-002", "ACT-01-05-003"]
+          },
+          {
+            "capability_id": "CAP-IMG-04",
+            "name": "Quản lý category của thư viện ảnh (tạo, đổi tên, xoá)",
+            "description": "'+ New category' → dialog 'Name:' + Create (disable khi rỗng) → POST /api/layer-image-categories {name, type:'clipart'} 201, không toast. Bút chì → dialog điền sẵn → PUT 200, không toast. Thùng rác → 'Are you sure to delete <tên category>' → DELETE 204; ảnh bên trong được giữ, thành không có category. Danh sách category REST khác tập GraphQL clipart_categories (UNRESOLVED).",
+            "kb_refs": ["KB-019", "KB-020", "KB-021", "KB-022", "KB-042"],
+            "act_ids": ["ACT-01-03-001", "ACT-01-03-002", "ACT-01-03-003", "ACT-01-10-003"]
+          },
+          {
+            "capability_id": "CAP-IMG-05",
+            "name": "Duyệt, tìm kiếm, lọc theo category và phân trang ảnh",
+            "description": "Lưới card (checkbox, tên-link, WxH, ngày tạo, thùng rác), dữ liệu từ GraphQL relay layer_images_connection(first: 20) cursor, loại svg/gpx và bản ghi đã soft-delete (điều kiện do client ghép). Search (Enter) → name _ilike phía server; chọn category → layer_image_category_id _eq. Rỗng: 'No data matched' (search) / 'Empty data' (category rỗng), dropzone vẫn dùng được. Page size 20/50/100/250/500, nút trước/sau, trang sau dùng after: <endCursor>. Lựa chọn được giữ khi chuyển trang.",
+            "kb_refs": ["KB-014", "KB-015", "KB-017", "KB-018", "KB-034", "KB-035"],
+            "act_ids": ["ACT-01-01-001", "ACT-01-02-001", "ACT-01-02-002", "ACT-01-08-001"]
+          },
+          {
+            "capability_id": "CAP-IMG-06",
+            "name": "Đổi tên ảnh trong thư viện",
+            "description": "Bấm tên ảnh (link) → popover 'Name' + Save/Cancel → GraphQL mutation update_layer_images(_set {name, updated_at}) 200; nhãn card đổi tại chỗ, không toast. Tên rỗng được chấp nhận (card hiện '...').",
+            "kb_refs": ["KB-030", "KB-031"],
+            "act_ids": ["ACT-01-06-001", "ACT-01-06-002"]
+          },
+          {
+            "capability_id": "CAP-IMG-07",
+            "name": "Chuyển ảnh sang category khác (hàng loạt)",
+            "description": "Tick ≥1 ảnh → 'Move to category' → dialog 'Category: [Select option]' (combobox có search) → Move → PUT /api/layer-images/move {category_id, ids} 200; danh sách tải lại, lựa chọn bị xoá, không toast. Move không chọn category vẫn 200 (category_id null).",
+            "kb_refs": ["KB-032", "KB-033", "KB-034"],
+            "act_ids": ["ACT-01-07-001", "ACT-01-07-002"]
+          },
+          {
+            "capability_id": "CAP-IMG-08",
+            "name": "Chọn ảnh từ thư viện vào layer của artwork (thêm Static Image hoặc thay ảnh)",
+            "description": "Tick 1 ảnh → 'Select 1 image' → picker đóng, layer 'static-photo' mới (tên = tên ảnh, url = file _large.webp) được thêm lên đầu danh sách layer và được chọn; không có request API lúc chọn — layer chỉ ở trạng thái chưa lưu của editor. Chế độ 'Replace image layer' mở cùng picker với nút 'Select' disable tới khi chọn ảnh. Thao tác thư viện ghi server ngay, không phụ thuộc Save artwork; layer thêm từ picker mất khi rời editor không lưu.",
+            "kb_refs": ["KB-036", "KB-037", "KB-041"],
+            "act_ids": ["ACT-01-09-001", "ACT-01-09-002", "ACT-01-11-001"]
+          },
+          {
+            "capability_id": "CAP-IMG-09",
+            "name": "Xoá ảnh khỏi thư viện (đơn và hàng loạt) kèm kiểm tra ảnh đang được dùng",
+            "description": "Xoá đơn: thùng rác → 'Are you sure to remove <tên ảnh>' → DELETE /api/layer-images/{id} mang JSON artwork hiện tại trong body → 200 'Successfully deleted the layer image.'. Ảnh đang được layer của artwork đang mở dùng → 400 'This image has already been added to the current artwork.' + toast 'Something went wrong!', ảnh và layer giữ nguyên. Xoá hàng loạt: nút đỏ 'Delete' → 'Are you sure you want to remove N selected images?' → POST /api/layer-images/in-use {ids, templates} → {in_use_ids: []} → DELETE tuần tự từng ảnh → toast 'N images removed'. Ảnh dùng bởi artwork khác đã lưu chưa được kiểm.",
+            "kb_refs": ["KB-038", "KB-039", "KB-040", "KB-035"],
+            "act_ids": ["ACT-01-10-001", "ACT-01-10-002", "ACT-01-10-004"]
+          }
+        ],
+        "state_transitions": [
+          { "from": "file ảnh raster được chọn", "to": "bản ghi layer_image tồn tại, master rỗng, url/thumbnail/width/height null (đang xử lý; chỉ hiện ở dòng upload)", "trigger": "POST /api/layer-images/by-temporary-file → 201", "condition": "upload-url 201 và PUT lên object storage 200 trước đó", "kb_refs": ["KB-006", "KB-023", "KB-029"] },
+          { "from": "bản ghi đang xử lý (url null)", "to": "ảnh sẵn sàng: url _large.webp, thumbnail webp, width/height gốc; card xuất hiện đầu lưới, đã tick", "trigger": "polling GraphQL get trả url có giá trị → client tải lại danh sách relay", "condition": "file nhỏ có url ngay lần gọi đầu; file 27 MB cần vài lần (~7–8 giây)", "kb_refs": ["KB-029", "KB-016", "KB-024"] },
+          { "from": "file .svg/.txt được chọn", "to": "dòng upload báo 'You can't upload files of this type.', không bản ghi, không request", "trigger": "chọn file qua file chooser", "condition": "client-side", "kb_refs": ["KB-008"] },
+          { "from": "file text đổi đuôi .png được chọn", "to": "bị từ chối 422, không bản ghi; temporary file đã PUT lên storage và không thấy request dọn", "trigger": "POST /api/layer-images/by-temporary-file → 422", "condition": "client không chặn vì đuôi/mime hợp lệ; phần temporary file là not-oracle (host chưa xác nhận)", "kb_refs": ["KB-027", "KB-010"] },
+          { "from": "category chứa ảnh", "to": "category không còn; ảnh bên trong giữ nguyên, không có category", "trigger": "Remove trong confirm → DELETE /api/layer-image-categories/{id} → 204", "condition": "1 mẫu (3 ảnh)", "kb_refs": ["KB-022"] },
+          { "from": "ảnh không có category", "to": "ảnh thuộc category được chọn; lựa chọn bị xoá", "trigger": "Move → PUT /api/layer-images/move {category_id, ids} → 200", "condition": "", "kb_refs": ["KB-032"] },
+          { "from": "ảnh có tên", "to": "ảnh có tên rỗng, card hiện '...'", "trigger": "Save trong popover đổi tên với ô trống → update_layer_images 200", "condition": "suspected-defect (đổi tên rỗng được chấp nhận); không phải expected", "kb_refs": ["KB-031"] },
+          { "from": "ảnh trong thư viện, không được artwork đang mở dùng", "to": "ảnh bị xoá khỏi thư viện (biến mất khỏi danh sách)", "trigger": "Remove → DELETE /api/layer-images/{id} → 200", "condition": "", "kb_refs": ["KB-038", "KB-040"] },
+          { "from": "ảnh đang được layer (chưa lưu) của artwork đang mở dùng", "to": "không đổi (ảnh và layer giữ nguyên), toast lỗi", "trigger": "Remove → DELETE /api/layer-images/{id} → 400", "condition": "server dựa vào JSON artwork client gửi trong body; artwork đã lưu khác chưa kiểm", "kb_refs": ["KB-039"] },
+          { "from": "ảnh được tick trong picker", "to": "layer static-photo mới trong editor (chưa lưu)", "trigger": "'Select 1 image'", "condition": "không có request API; rời editor không lưu thì layer mất, còn thay đổi thư viện vẫn giữ", "kb_refs": ["KB-036", "KB-041"] }
+        ],
+        "confirmed_rules": [],
+        "confirmed_rules_note": "Run không có nguồn thẩm quyền (§3); không KB item nào là CONFIRMED_EXPECTED.",
+        "observed_behavior": [
+          { "statement": "Không có trang Image Library/Media độc lập trong sidebar hay router; thư viện chỉ mở từ artwork editor (và mockup library từ product base).", "knowledge_kind": "OBSERVED_CURRENT", "confidence": "MEDIUM", "kb_refs": ["KB-001", "KB-003"] },
+          { "statement": "'TIB Library' trên /artworks là modal import artwork template công khai, không thuộc thư viện ảnh.", "knowledge_kind": "OBSERVED_CURRENT", "confidence": "LOW", "kb_refs": ["KB-002"] },
+          { "statement": "Popup '+ Layer' có nhóm IMAGE gồm Static Image, Clipart Category›, Photo Upload›, Text to Image (AI), Dynamic Clipart by Text›, và có thêm nhóm DESIGN ELEMENTS (Rectangle).", "knowledge_kind": "OBSERVED_CURRENT", "confidence": "LOW", "kb_refs": ["KB-004"], "markers": ["UNRESOLVED", "CONF-image-library-R1026-05"], "oracle_eligible": false },
+          { "statement": "Image layer library và mockup layer library là hai tập dữ liệu tách biệt (ảnh, category, endpoint khác nhau); dùng chung luồng upload-url + PUT, kiểu polling, thông báo client và 422, component dialog.", "knowledge_kind": "OBSERVED_CURRENT", "confidence": "MEDIUM", "kb_refs": ["KB-005"] },
+          { "statement": "Luồng upload 4 bước dùng chung: upload-url (201) → PUT object storage → by-temporary-file (201, chưa có url) → polling GraphQL get(ids); không có request gán ảnh vào artwork trong luồng upload.", "knowledge_kind": "OBSERVED_CURRENT", "confidence": "HIGH", "kb_refs": ["KB-006"] },
+          { "statement": "PUT nội dung file đi thẳng tới oe-cdn.sgp1.digitaloceanspaces.com bằng presigned URL (X-Amz-Expires=300), mọi PUT quan sát được trả 200.", "knowledge_kind": "OBSERVED_CURRENT", "confidence": "MEDIUM", "kb_refs": ["KB-007"], "markers": ["host_not_in_expected_api_base", "not-oracle"], "oracle_eligible": false },
+          { "statement": "Dòng upload và dropzone: 'Your file is uploaded, reload after a few minutes if there is no preview file.', 'Drag and drop, or click to upload!', 'Do not close this page while uploading.', 'Use the Reload button below after image uploaded.'; dòng của lần upload trước còn lại khi picker còn mở.", "knowledge_kind": "OBSERVED_CURRENT", "confidence": "MEDIUM", "kb_refs": ["KB-009"] },
+          { "statement": "Temporary file được tạo trên storage (upload-url 201, PUT 200) trước khi server kiểm nội dung và trả 422; không thấy request dọn dẹp, portal không có UI liệt kê/xoá temporary file.", "knowledge_kind": "OBSERVED_CURRENT", "confidence": "LOW", "kb_refs": ["KB-010"], "markers": ["suspected-defect", "host_not_in_expected_api_base", "not-oracle"], "oracle_eligible": false },
+          { "statement": "Suy luận (chưa kiểm storage): temporary file của upload bị từ chối nhiều khả năng thành file mồ côi.", "knowledge_kind": "INFERRED", "confidence": "LOW", "kb_refs": ["KB-011"], "markers": ["suspected-defect", "host_not_in_expected_api_base", "not-oracle", "inferred-from-absence"], "oracle_eligible": false },
+          { "statement": "Header x-ratelimit-limit: 300 cho /api/graphql và /api/graphql/relay, 1000 cho /api/layer-images/by-temporary-file, 60 cho /api/layer-images/in-use; endpoint category không trả header rate limit. Chu kỳ quota theo ngày là suy đoán.", "knowledge_kind": "OBSERVED_CURRENT", "confidence": "MEDIUM", "kb_refs": ["KB-012"] },
+          { "statement": "Modal picker Static Image: 2 tab ('Upload an image' mặc định, 'Choose from clipart category'), cột trái category ('All', '+ New category'), dropzone, Search, Reload, lưới card; thư viện có sẵn 9 ảnh không thuộc category.", "knowledge_kind": "OBSERVED_CURRENT", "confidence": "MEDIUM", "kb_refs": ["KB-014"] },
+          { "statement": "Danh sách ảnh lấy qua POST /api/graphql/relay layer_images_connection(first: 20), deleted_at null, loại master '%.svg'/'%.gpx', id giảm dần, phân trang cursor; điều kiện lọc do client ghép vào where. Category qua GET /api/layer-image-categories?type=clipart (mảng trần).", "knowledge_kind": "OBSERVED_CURRENT", "confidence": "HIGH", "kb_refs": ["KB-015"] },
+          { "statement": "Bản ghi sau xử lý: master giữ đuôi gốc, url '<hash>_large.webp', thumbnail '<hash>_thumbnail.webp'; width/height = kích thước gốc với mẫu 10x10 tới 3000x3000.", "knowledge_kind": "OBSERVED_CURRENT", "confidence": "HIGH", "kb_refs": ["KB-016"] },
+          { "statement": "Search không khớp → 'No data matched'; category rỗng → 'Empty data' (cùng câu chữ Vector picker); dropzone vẫn upload được trong category rỗng.", "knowledge_kind": "OBSERVED_CURRENT", "confidence": "LOW", "kb_refs": ["KB-017"] },
+          { "statement": "Search và lọc category chạy phía server (name _ilike, layer_image_category_id _eq); 'All' gồm ảnh mọi category và ảnh chưa có category.", "knowledge_kind": "OBSERVED_CURRENT", "confidence": "LOW", "kb_refs": ["KB-018"] },
+          { "statement": "Tạo category: Create disable khi ô rỗng; POST {name, type:'clipart'} 201; không toast thành công.", "knowledge_kind": "OBSERVED_CURRENT", "confidence": "LOW", "kb_refs": ["KB-019"] },
+          { "statement": "Tên category toàn khoảng trắng: Create bật, server 422 'The name field is required.', UI toast 'Something went wrong!' kèm câu đó, dialog vẫn mở.", "knowledge_kind": "OBSERVED_CURRENT", "confidence": "LOW", "kb_refs": ["KB-020"], "markers": ["suspected-defect"], "oracle_eligible": false },
+          { "statement": "Đổi tên category: GET /{id} điền sẵn, PUT /{id} 200, danh sách và nhãn select cập nhật, không toast.", "knowledge_kind": "OBSERVED_CURRENT", "confidence": "LOW", "kb_refs": ["KB-021"] },
+          { "statement": "Xoá category chứa ảnh: confirm không nhắc ảnh bên trong; DELETE 204; ảnh thành không có category.", "knowledge_kind": "OBSERVED_CURRENT", "confidence": "LOW", "kb_refs": ["KB-022"] },
+          { "statement": "by-temporary-file gửi {temporary_file_id, name = tên file bỏ đuôi, artwork_width: 1600, category_id} → 201 với master rỗng, url/thumbnail/width/height null.", "knowledge_kind": "OBSERVED_CURRENT", "confidence": "HIGH", "kb_refs": ["KB-023"] },
+          { "statement": "Ảnh mới vào category đang chọn, hiện đầu lưới đã tick; nút đỏ 'Delete' hiện, 'Move to category' bật.", "knowledge_kind": "OBSERVED_CURRENT", "confidence": "MEDIUM", "kb_refs": ["KB-024"] },
+          { "statement": "Upload nhiều file: 4/4 raster (kèm 1 svg bị loại) và 6/6 raster đều được xử lý; upload chồng lấn, một lần get(ids) chung và một lần tải lại.", "knowledge_kind": "OBSERVED_CURRENT", "confidence": "MEDIUM", "kb_refs": ["KB-025"] },
+          { "statement": "Upload file trùng tên ảnh đã có → bản ghi mới, không cảnh báo.", "knowledge_kind": "OBSERVED_CURRENT", "confidence": "LOW", "kb_refs": ["KB-026"] },
+          { "statement": "File text 33 byte đổi đuôi .png: client không chặn, server 422 errors.temporary_file_id, dòng upload hiện câu lỗi, không tạo bản ghi.", "knowledge_kind": "OBSERVED_CURRENT", "confidence": "LOW", "kb_refs": ["KB-027"] },
+          { "statement": "PNG 27.011.273 byte (3000x3000) được chấp nhận ở mọi bước (PUT ~13 giây, 'Uploading...'); giới hạn trên 27 MB chưa kiểm.", "knowledge_kind": "OBSERVED_CURRENT", "confidence": "LOW", "kb_refs": ["KB-028"], "markers": ["suspected-defect"], "oracle_eligible": false },
+          { "statement": "Polling GraphQL get layer_images(id _in ids) ~2 giây sau mỗi response (explorer ước ~2,4 giây) tới khi có url; card chỉ xuất hiện khi xử lý xong; giới hạn số lần poll/timeout chưa thấy.", "knowledge_kind": "OBSERVED_CURRENT", "confidence": "MEDIUM", "kb_refs": ["KB-029"] },
+          { "statement": "Đổi tên ảnh inline qua GraphQL update_layer_images(_set {name, updated_at}) — updated_at do client gửi; nhãn đổi tại chỗ, không toast.", "knowledge_kind": "OBSERVED_CURRENT", "confidence": "MEDIUM", "kb_refs": ["KB-030"] },
+          { "statement": "Đổi tên ảnh thành chuỗi rỗng được chấp nhận (200), card hiện '...'.", "knowledge_kind": "OBSERVED_CURRENT", "confidence": "LOW", "kb_refs": ["KB-031"], "markers": ["suspected-defect"], "oracle_eligible": false },
+          { "statement": "Move hàng loạt: PUT /api/layer-images/move {category_id, ids} 200 trả mảng bản ghi đầy đủ, lựa chọn bị xoá sau move, không toast.", "knowledge_kind": "OBSERVED_CURRENT", "confidence": "MEDIUM", "kb_refs": ["KB-032"] },
+          { "statement": "Move không chọn category → PUT category_id null 200, dialog đóng; mẫu chỉ có ảnh vốn chưa có category (việc gỡ ảnh khỏi category là suy luận, chưa quan sát).", "knowledge_kind": "OBSERVED_CURRENT", "confidence": "LOW", "kb_refs": ["KB-033"], "markers": ["suspected-defect"], "oracle_eligible": false },
+          { "statement": "Khi tick ≥1 card: chân modal có 'Move to category', 'Deselect all', 'Select N images'; nút đỏ 'Delete' cạnh Search/Reload; page size 20/50/100/250/500; trang sau dùng cursor after: <endCursor>.", "knowledge_kind": "OBSERVED_CURRENT", "confidence": "MEDIUM", "kb_refs": ["KB-034"] },
+          { "statement": "Lựa chọn giữ qua chuyển trang: trang 2 không có card nào tick nhưng 'Select 6 images', 'Delete', 'Move to category' vẫn tác động lên 6 ảnh ở trang 1.", "knowledge_kind": "OBSERVED_CURRENT", "confidence": "LOW", "kb_refs": ["KB-035"], "markers": ["suspected-defect"], "oracle_eligible": false },
+          { "statement": "'Select 1 image' thêm layer type 'static-photo' (tên = tên ảnh, url _large.webp) lên đầu danh sách layer; ảnh 10x10 hiển thị 400x400 (1 mẫu, không suy quy tắc); không có request API.", "knowledge_kind": "OBSERVED_CURRENT", "confidence": "LOW", "kb_refs": ["KB-036"] },
+          { "statement": "'Replace image layer' mở cùng picker với tiêu đề 'Choose new image for these layers:', 'Select' disable tới khi chọn ảnh.", "knowledge_kind": "OBSERVED_CURRENT", "confidence": "LOW", "kb_refs": ["KB-037"] },
+          { "statement": "Xoá đơn: confirm 'Are you sure to remove <tên ảnh>'; DELETE /api/layer-images/{id} mang toàn bộ JSON artwork hiện tại (kể cả thay đổi chưa lưu) → 200 'Successfully deleted the layer image.'.", "knowledge_kind": "OBSERVED_CURRENT", "confidence": "MEDIUM", "kb_refs": ["KB-038"] },
+          { "statement": "Xoá ảnh đang được layer chưa lưu của artwork đang mở dùng → 400 'This image has already been added to the current artwork.'; confirm không báo trước; layer tham chiếu ảnh bằng url, không bằng id.", "knowledge_kind": "OBSERVED_CURRENT", "confidence": "LOW", "kb_refs": ["KB-039"], "markers": ["suspected-defect", "security-surface"], "oracle_eligible": false },
+          { "statement": "Xoá hàng loạt 11 ảnh: POST /api/layer-images/in-use {ids, templates} → in_use_ids [], rồi DELETE tuần tự (2–5 giây/ảnh, ~35 giây), toast '11 images removed'.", "knowledge_kind": "OBSERVED_CURRENT", "confidence": "LOW", "kb_refs": ["KB-040"] },
+          { "statement": "Upload, đổi tên, move, xoá ảnh và CRUD category có hiệu lực ngay trên server, không phụ thuộc Save artwork; layer thêm từ picker biến mất khi rời editor không lưu.", "knowledge_kind": "OBSERVED_CURRENT", "confidence": "MEDIUM", "kb_refs": ["KB-041"] },
+          { "statement": "GET /api/layer-image-categories?type=clipart trả category của thư viện ảnh (rỗng khi chưa có, có category vừa tạo), còn GraphQL clipart_categories trả 10 Clipart Category khác; hai tập id không giao nhau (2 lần đo).", "knowledge_kind": "OBSERVED_CURRENT", "confidence": "LOW", "kb_refs": ["KB-042"], "markers": ["UNRESOLVED", "CONF-image-library-R1026-04", "cross-object-conflict"], "oracle_eligible": false }
+        ],
+        "observed_validations": [
+          { "input": "Tên category chỉ gồm khoảng trắng, bấm Create", "condition": "Dialog '+ New category' của image picker; nút Create bật vì chuỗi không rỗng; server trả 422", "message_verbatim": "The name field is required.", "ui_wrapper_verbatim": "Something went wrong!", "observed_count": 1, "rule_confidence": "LOW", "markers": ["suspected-defect"], "kb_refs": ["KB-020"] },
+          { "input": "Ô tên category rỗng", "condition": "Dialog '+ New category'; client-side", "message_verbatim": "", "behavior": "Nút Create bị disable, không có thông báo", "observed_count": 1, "rule_confidence": "LOW", "kb_refs": ["KB-019"] },
+          { "input": "Chọn file .svg hoặc .txt qua file chooser", "condition": "Client-side, không gửi request; file raster chọn cùng lúc vẫn upload", "message_verbatim": "You can't upload files of this type.", "observed_count": 2, "object_level_observed_count": 4, "rule_confidence": "LOW", "note": "KB-008 gộp 4 mẫu trên cả hai thư viện; 2 mẫu thuộc feature này. Không suy danh sách loại file được phép.", "kb_refs": ["KB-008"] },
+          { "input": "File text 33 byte đổi tên thành .png", "condition": "Client không chặn; upload-url 201, PUT 200; server trả 422 ở POST /api/layer-images/by-temporary-file (errors.temporary_file_id)", "message_verbatim": "This file type is not supported. Please upload a PNG, JPEG, GIF or WebP image.", "observed_count": 1, "rule_confidence": "LOW", "note": "Câu lỗi liệt kê PNG/JPEG/GIF/WebP nhưng GIF/WebP chưa được thử — không tổng quát hoá thành rule.", "kb_refs": ["KB-027"] },
+          { "input": "Xoá ảnh đang được một layer (chưa lưu) của artwork đang mở dùng", "condition": "DELETE /api/layer-images/{id} mang JSON artwork hiện tại → 400", "message_verbatim": "This image has already been added to the current artwork.", "ui_wrapper_verbatim": "Something went wrong!", "observed_count": 1, "rule_confidence": "LOW", "markers": ["suspected-defect"], "kb_refs": ["KB-039"] },
+          { "input": "Đổi tên ảnh thành chuỗi rỗng", "condition": "Popover đổi tên, Save → update_layer_images 200", "message_verbatim": "", "behavior": "Không có kiểm tra client/server; card hiện '...'", "observed_count": 1, "rule_confidence": "LOW", "markers": ["suspected-defect"], "kb_refs": ["KB-031"] },
+          { "input": "Bấm Move khi chưa chọn category", "condition": "PUT /api/layer-images/move {category_id: null} → 200", "message_verbatim": "", "behavior": "Không có kiểm tra; dialog đóng, lựa chọn bị xoá", "observed_count": 1, "rule_confidence": "LOW", "markers": ["suspected-defect"], "kb_refs": ["KB-033"] },
+          { "input": "File PNG 27.011.273 byte (3000x3000)", "condition": "upload-url, PUT, by-temporary-file đều thành công", "message_verbatim": "", "behavior": "Không có giới hạn kích thước nào chặn", "observed_count": 1, "rule_confidence": "LOW", "markers": ["suspected-defect"], "kb_refs": ["KB-028"] },
+          { "input": "Upload lại file cùng tên với ảnh đã có", "condition": "by-temporary-file 201 cho từng file", "message_verbatim": "", "behavior": "Không cảnh báo trùng tên, tạo bản ghi mới", "observed_count": 1, "rule_confidence": "LOW", "kb_refs": ["KB-026"] }
+        ],
+        "permissions": [
+          { "statement": "Chỉ quan sát một role (merchant-owner, một account/plan); chưa biết role/plan khác có thấy điểm vào hay bị giới hạn thao tác thư viện không.", "kb_refs": ["KB-001", "KB-013"] },
+          { "statement": "Request portal mang x-acting-user-id = id account đang đăng nhập và x-xsrf-token; server có ràng buộc header với phiên hay không chưa được kiểm.", "kb_refs": ["KB-013"] },
+          { "statement": "Category tạo ra thuộc account đang đăng nhập; {user_id} trong path upload-url = id account. Tenant isolation cho id ảnh/category (account khác) chưa thử.", "kb_refs": ["KB-006", "KB-019", "KB-013"] }
+        ],
+        "surface_mapping": {
+          "portal": [
+            { "item": "Artwork editor > '+ Layer' > Static Image → image picker modal (tab 'Upload an image')", "kb_refs": ["KB-003", "KB-004", "KB-014"] },
+            { "item": "Artwork editor > 'Replace image layer' → picker chế độ thay ảnh", "kb_refs": ["KB-037"] },
+            { "item": "Dropzone + danh sách trạng thái upload", "kb_refs": ["KB-009", "KB-024"] },
+            { "item": "Dialog category (Name/Create/Update), dialog Confirm (Remove/Cancel), dialog 'Move to category', popover đổi tên", "kb_refs": ["KB-019", "KB-021", "KB-022", "KB-030", "KB-032", "KB-038", "KB-040"] },
+            { "item": "Chân modal: 'Move to category', 'Deselect all', 'Select N images'; nút đỏ 'Delete'; phân trang 'Show [20] entries'", "kb_refs": ["KB-034", "KB-035"] }
+          ],
+          "storefront": [],
+          "api": [
+            { "item": "POST /api/users/{user_id}/temporary-files/upload-url", "kb_refs": ["KB-006", "KB-010"] },
+            { "item": "PUT presigned URL lên oe-cdn.sgp1.digitaloceanspaces.com (host ngoài expected_api_base, not-oracle)", "kb_refs": ["KB-007"], "markers": ["host_not_in_expected_api_base", "not-oracle"] },
+            { "item": "POST /api/layer-images/by-temporary-file (201 / 422)", "kb_refs": ["KB-023", "KB-027", "KB-028"] },
+            { "item": "POST /api/graphql operation get — layer_images(where id _in ids) (polling)", "kb_refs": ["KB-029"] },
+            { "item": "POST /api/graphql/relay operation getData — layer_images_connection (cursor, search, filter)", "kb_refs": ["KB-015", "KB-018", "KB-034"] },
+            { "item": "GraphQL clipart_categories (tab 'Choose from clipart category')", "kb_refs": ["KB-015", "KB-042"], "markers": ["UNRESOLVED", "CONF-image-library-R1026-04"] },
+            { "item": "GET /api/layer-image-categories?type=clipart; POST /api/layer-image-categories; GET/PUT/DELETE /api/layer-image-categories/{id}", "kb_refs": ["KB-015", "KB-019", "KB-020", "KB-021", "KB-022", "KB-042"] },
+            { "item": "POST /api/graphql mutation update_layer_images (đổi tên)", "kb_refs": ["KB-030", "KB-031"] },
+            { "item": "PUT /api/layer-images/move", "kb_refs": ["KB-032", "KB-033"] },
+            { "item": "DELETE /api/layer-images/{id} (body = JSON artwork hiện tại)", "kb_refs": ["KB-038", "KB-039"] },
+            { "item": "POST /api/layer-images/in-use {ids, templates}", "kb_refs": ["KB-040"] },
+            { "item": "Header x-ratelimit-limit trên graphql / by-temporary-file / in-use", "kb_refs": ["KB-012"] }
+          ],
+          "data": [
+            { "item": "Bản ghi layer image: name, master (đuôi gốc), url (_large.webp), thumbnail (_thumbnail.webp), width/height (gốc), layer_image_category_id, deleted_at (soft delete, lọc phía client)", "kb_refs": ["KB-015", "KB-016", "KB-023"] },
+            { "item": "Layer image category: name, type 'clipart', thuộc account; xoá category không xoá ảnh", "kb_refs": ["KB-019", "KB-022", "KB-042"] },
+            { "item": "Temporary file trên object storage (prefix temporary-files theo ngày), không có UI quản lý", "kb_refs": ["KB-007", "KB-010", "KB-011"], "markers": ["not-oracle"] },
+            { "item": "Layer static-photo trong artwork JSON tham chiếu ảnh bằng url, không bằng id", "kb_refs": ["KB-036", "KB-039"] }
+          ],
+          "code": []
+        },
+        "dependencies": [
+          { "target": "Luồng upload dùng chung của object image-library (upload-url → PUT object storage → by-temporary-file → polling)", "relation": "CAP-IMG-01/02/03 dùng chung với FEAT-02-mockup-layer-library", "kb_refs": ["KB-006", "KB-007", "KB-008", "KB-009", "KB-010"] },
+          { "target": "Object storage oe-cdn.sgp1.digitaloceanspaces.com", "relation": "Bước PUT file; host chưa được operator xác nhận → item phụ thuộc không làm oracle", "kb_refs": ["KB-007"], "markers": ["host_not_in_expected_api_base", "not-oracle"] },
+          { "target": "artwork / editor-layer-workspace (object khác)", "relation": "Host của điểm vào '+ Layer' và danh sách layer nhận layer static-photo", "kb_refs": ["KB-003", "KB-004", "KB-036"], "cross_object_refs": ["artwork/editor-layer-workspace#KB-001"], "markers": ["UNRESOLVED", "CONF-image-library-R1026-05"] },
+          { "target": "artwork / layer-config-image và clipart-category-storefront-behavior (object khác)", "relation": "Tab 'Choose from clipart category' dùng GraphQL clipart_categories; bằng chứng mới cho OQ-artwork-010", "kb_refs": ["KB-042"], "cross_object_refs": ["OQ-artwork-010"], "markers": ["UNRESOLVED", "CONF-image-library-R1026-04"] },
+          { "target": "artwork save (object khác)", "relation": "Thay đổi thư viện không phụ thuộc Save artwork; layer thêm từ picker phụ thuộc Save. Kiểm tra in-use dựa trên JSON artwork client gửi", "kb_refs": ["KB-039", "KB-040", "KB-041"] }
+        ],
+        "risks": [
+          { "risk": "Lựa chọn giữ qua chuyển trang khiến 'Delete'/'Move to category' tác động lên ảnh không hiển thị trên trang hiện tại — rủi ro xoá nhầm ảnh không nhìn thấy.", "severity": "MEDIUM", "category": "data-loss-ux", "markers": ["suspected-defect"], "kb_refs": ["KB-035", "KB-040"] },
+          { "risk": "Kiểm tra 'ảnh đang được dùng' chỉ quan sát được với artwork đang mở, dựa trên JSON artwork do client gửi trong body DELETE/in-use; artwork đã lưu khác dùng ảnh có được bảo vệ hay không chưa biết.", "severity": "MEDIUM", "category": "security-surface / data-integrity", "markers": ["suspected-defect"], "kb_refs": ["KB-038", "KB-039", "KB-040"] },
+          { "risk": "Điều kiện lọc (deleted_at null, loại svg/gpx) và updated_at do client ghép/gửi qua GraphQL; quyền truy cập trực tiếp của client với các điều kiện này và tenant isolation chưa được kiểm.", "severity": "MEDIUM", "category": "security-surface-unverified", "kb_refs": ["KB-015", "KB-030", "KB-013"] },
+          { "risk": "Không thấy giới hạn kích thước file (27 MB được nhận).", "severity": "MEDIUM", "category": "input-validation", "markers": ["suspected-defect"], "kb_refs": ["KB-028"] },
+          { "risk": "Đổi tên ảnh thành rỗng và Move không chọn category được chấp nhận không kiểm tra.", "severity": "LOW", "category": "input-validation", "markers": ["suspected-defect"], "kb_refs": ["KB-031", "KB-033"] },
+          { "risk": "Tên category toàn khoảng trắng: lỗi server hiển thị dưới toast chung 'Something went wrong!' thay vì ở field.", "severity": "LOW", "category": "ux-validation", "markers": ["suspected-defect"], "kb_refs": ["KB-020"] },
+          { "risk": "Temporary file của upload bị từ chối có thể thành file mồ côi trên storage (suy luận, host chưa xác nhận).", "severity": "LOW", "category": "storage-hygiene", "markers": ["suspected-defect", "not-oracle"], "kb_refs": ["KB-010", "KB-011"] },
+          { "risk": "Danh sách nhóm popup '+ Layer' và tập category REST vs GraphQL đang lệch với knowledge artwork đã publish — dùng làm oracle sẽ sai cho tới khi conflict được quyết.", "severity": "MEDIUM", "category": "oracle-risk", "markers": ["UNRESOLVED"], "kb_refs": ["KB-004", "KB-042"] }
+        ],
+        "freshness": { "observed_at": "2026-10-26", "run_id": "CTX-20261026-01" },
+        "unknown_areas": [
+          { "ua_id": "UA-IMG-01", "source": "conflict UNRESOLVED", "related_conflict_group": "CONF-image-library-R1026-04", "suggested_oq_type": "CONFLICT", "question": "GET /api/layer-image-categories?type=clipart và GraphQL clipart_categories có đang đọc hai tập dữ liệu khác nhau (category của image library vs Clipart Categories) không? Nếu đúng, OQ-artwork-010 có phải lỗi dữ liệu không?", "why_it_matters": "Chưa biết danh sách category nào là nguồn đúng cho picker; conflict cross-object với artwork (owner artwork) đang mở.", "kb_refs": ["KB-042"], "cross_object_refs": ["OQ-artwork-010", "OQ-artwork-027", "OQ-artwork-057"] },
+          { "ua_id": "UA-IMG-02", "source": "conflict UNRESOLVED", "related_conflict_group": "CONF-image-library-R1026-05", "suggested_oq_type": "CONFLICT", "question": "Popup '+ Layer' nay có nhóm DESIGN ELEMENTS (Rectangle) trong khi knowledge artwork ghi 7 nhóm/29 item — layer type mới hay khác plan/store?", "why_it_matters": "Điểm vào của feature nằm trong popup này; check điều hướng không có oracle ổn định cho tới khi artwork được refresh.", "kb_refs": ["KB-004"], "cross_object_refs": ["artwork/editor-layer-workspace#KB-001"] },
+          { "ua_id": "UA-IMG-03", "source": "suspected-defect: đổi tên ảnh thành rỗng", "suggested_oq_type": "NEEDS_CONFIRMATION", "question": "Tên ảnh có bắt buộc không? Đổi tên thành chuỗi rỗng (200, card '...') là defect hay chấp nhận được?", "why_it_matters": "Quyết định expected result cho validation đổi tên.", "kb_refs": ["KB-031"] },
+          { "ua_id": "UA-IMG-04", "source": "suspected-defect: lựa chọn giữ qua chuyển trang", "suggested_oq_type": "NEEDS_CONFIRMATION", "question": "Việc giữ lựa chọn qua chuyển trang và cho Delete/Move/Select tác động lên ảnh không hiển thị có phải hành vi mong muốn?", "why_it_matters": "Rủi ro xoá ảnh không nhìn thấy; quyết định oracle cho bulk action đa trang.", "kb_refs": ["KB-035"] },
+          { "ua_id": "UA-IMG-05", "source": "suspected-defect: Move không chọn category + coverage gap", "suggested_oq_type": "NEEDS_CONFIRMATION", "question": "Move không chọn category (category_id null → 200) là thiếu validation hay là cách 'gỡ khỏi category'? Ảnh đang thuộc category có bị gỡ im lặng không (chưa quan sát)?", "why_it_matters": "Mẫu chỉ có ảnh vốn chưa có category; hệ quả với ảnh đã phân loại chưa biết.", "kb_refs": ["KB-033"] },
+          { "ua_id": "UA-IMG-06", "source": "suspected-defect: phạm vi kiểm tra in-use + coverage gap 'Xoá ảnh đang được một artwork đã lưu dùng'", "suggested_oq_type": "NEEDS_CONFIRMATION", "question": "Server có kiểm các artwork đã lưu khác dùng ảnh khi DELETE /api/layer-images/{id} và POST /api/layer-images/in-use không, hay chỉ dựa vào JSON artwork client gửi? in_use_ids khác rỗng thì bulk delete bị chặn và báo gì?", "why_it_matters": "Xoá ảnh có thể làm hỏng artwork đã lưu; không explore được vì không được Save artwork test.", "kb_refs": ["KB-038", "KB-039", "KB-040"] },
+          { "ua_id": "UA-IMG-07", "source": "coverage gap 'Trạng thái toàn bộ image library rỗng' (trả lời một phần OQ-artwork-047)", "suggested_oq_type": "OPEN_ISSUE", "question": "Khi image library có 0 ảnh, picker hiển thị gì và nút Select/thêm layer có bị chặn không?", "why_it_matters": "Account có 9 ảnh có sẵn không được xoá nên trạng thái này chưa quan sát; OQ-artwork-047 mới được trả lời một phần.", "kb_refs": ["KB-017"], "cross_object_refs": ["OQ-artwork-047", "artwork/editor-layer-workspace#KB-048"] },
+          { "ua_id": "UA-IMG-08", "source": "coverage gap 'Select N images với N>1'", "suggested_oq_type": "OPEN_ISSUE", "question": "'Select N images' với N>1 thêm N layer, một layer, hay bị chặn? Kích thước hiển thị 400x400 cho ảnh 10x10 có phải quy tắc chung không?", "why_it_matters": "Chỉ thử N=1 và 1 kích thước nguồn; không có oracle cho chọn nhiều ảnh.", "kb_refs": ["KB-036", "KB-034"] },
+          { "ua_id": "UA-IMG-09", "source": "coverage gap 'Đổi page size, lùi trang quá 2 trang, search kết hợp filter category'", "suggested_oq_type": "OPEN_ISSUE", "question": "Đổi page size 50/100/250/500, lùi trang nhiều lần và search kết hợp filter category hoạt động ra sao?", "why_it_matters": "Phân trang cursor chỉ thử 2 trang với page size 20; search và filter chỉ thử riêng lẻ.", "kb_refs": ["KB-018", "KB-034"] },
+          { "ua_id": "UA-IMG-10", "source": "coverage gap 'Tên ảnh rất dài/ký tự đặc biệt; độ dài tối đa tên category; trùng tên category'", "suggested_oq_type": "OPEN_ISSUE", "question": "Giới hạn độ dài/ký tự đặc biệt của tên ảnh và tên category là gì? Trùng tên category có bị chặn không?", "why_it_matters": "Chưa có boundary nào cho các field tên.", "kb_refs": ["KB-019", "KB-030"] },
+          { "ua_id": "UA-IMG-11", "source": "coverage gap 'Update category với tên rỗng/khoảng trắng'", "suggested_oq_type": "OPEN_ISSUE", "question": "PUT /api/layer-image-categories/{id} với tên rỗng/khoảng trắng có bị từ chối như khi tạo (422) không?", "why_it_matters": "Validation đổi tên category chưa thử; chỉ biết hành vi lúc tạo.", "kb_refs": ["KB-021", "KB-020"] },
+          { "ua_id": "UA-IMG-12", "source": "coverage gap 'Tab Choose from clipart category của image picker'", "suggested_oq_type": "OPEN_ISSUE", "question": "Tab 'Choose from clipart category' trong image picker hoạt động thế nào và có thuộc phạm vi image library không?", "why_it_matters": "Tab không được mở; liên quan trực tiếp conflict CONF-image-library-R1026-04.", "kb_refs": ["KB-014", "KB-042"] },
+          { "ua_id": "UA-OBJ-01", "source": "item tag host_not_in_expected_api_base / not-oracle", "suggested_oq_type": "NEEDS_CONFIRMATION", "priority": "high", "applies_to": ["FEAT-01-image-layer-library", "FEAT-02-mockup-layer-library"], "question": "Host object storage oe-cdn.sgp1.digitaloceanspaces.com (PUT presigned của luồng upload cả hai thư viện) có phải host hợp lệ của staging để thêm vào environments.staging.additional_api_hosts không?", "why_it_matters": "Cho tới khi xác nhận, KB-007/KB-010/KB-011 không làm oracle; mọi check chạm bước PUT phải giữ BASELINE/NONE.", "kb_refs": ["KB-007", "KB-010", "KB-011"] },
+          { "ua_id": "UA-OBJ-02", "source": "suspected-defect: tên category toàn khoảng trắng (cả hai thư viện)", "suggested_oq_type": "NEEDS_CONFIRMATION", "applies_to": ["FEAT-01-image-layer-library", "FEAT-02-mockup-layer-library"], "question": "Tên category toàn khoảng trắng làm Create bật và nhận lỗi 422 dưới toast chung 'Something went wrong!' — client có nên chặn trước/hiển thị lỗi tại field?", "why_it_matters": "Quyết định expected result validation tên category ở cả hai thư viện.", "kb_refs": ["KB-020", "KB-049"] },
+          { "ua_id": "UA-OBJ-03", "source": "suspected-defect: không thấy giới hạn kích thước file + coverage gap 'Giới hạn kích thước file trên 27 MB'", "suggested_oq_type": "NEEDS_CONFIRMATION", "applies_to": ["FEAT-01-image-layer-library", "FEAT-02-mockup-layer-library"], "question": "Có giới hạn kích thước file mong đợi cho upload ảnh/mockup không? Nếu có thì bao nhiêu? (PNG 27 MB được nhận; file lớn hơn chưa thử.)", "why_it_matters": "Không có boundary kích thước để làm oracle.", "kb_refs": ["KB-028", "KB-057"] },
+          { "ua_id": "UA-OBJ-04", "source": "suspected-defect: temporary file còn lại sau upload bị từ chối + coverage gap 'Temporary file mồ côi trên storage'", "suggested_oq_type": "NEEDS_CONFIRMATION", "applies_to": ["FEAT-01-image-layer-library", "FEAT-02-mockup-layer-library"], "question": "Có cơ chế dọn temporary file phía server (TTL/cron) cho upload bị từ chối 422 không?", "why_it_matters": "Không có UI/endpoint để kiểm; KB-011 chỉ là suy luận.", "kb_refs": ["KB-010", "KB-011"] },
+          { "ua_id": "UA-OBJ-05", "source": "coverage gap 'Upload bằng kéo-thả'", "suggested_oq_type": "OPEN_ISSUE", "applies_to": ["FEAT-01-image-layer-library", "FEAT-02-mockup-layer-library"], "question": "Upload bằng kéo-thả vào dropzone có cùng hành vi với click-to-upload không?", "why_it_matters": "Dropzone ghi 'Drag and drop, or click to upload!' nhưng chỉ click-to-upload được thử.", "kb_refs": ["KB-009"] },
+          { "ua_id": "UA-OBJ-06", "source": "coverage gap 'Picker của các layer type khác (Photo Upload, Clipart Category tab Upload an image, Dynamic Clipart)'", "suggested_oq_type": "OPEN_ISSUE", "applies_to": ["FEAT-01-image-layer-library"], "question": "Picker của Photo Upload, Clipart Category (tab 'Upload an image') và Dynamic Clipart có dùng chung image layer library/component không?", "why_it_matters": "Có thể có thêm điểm vào của thư viện ảnh; hiện chỉ là giả định chưa kiểm.", "kb_refs": ["KB-003", "KB-004"] },
+          { "ua_id": "UA-OBJ-07", "source": "coverage gap 'Vector picker / luồng /api/layer-images/svg'", "suggested_oq_type": "OPEN_ISSUE", "applies_to": ["FEAT-01-image-layer-library"], "question": "SVG bị loại khỏi image picker (master NOT ILIKE '%.svg'); luồng /api/layer-images/svg của Vector layer có cùng bảng dữ liệu với image library không?", "why_it_matters": "Ranh giới dữ liệu giữa image library và Vector chưa rõ.", "kb_refs": ["KB-015", "KB-008"] },
+          { "ua_id": "UA-OBJ-08", "source": "coverage gap 'Upload GIF/WebP'", "suggested_oq_type": "OPEN_ISSUE", "applies_to": ["FEAT-01-image-layer-library", "FEAT-02-mockup-layer-library"], "question": "GIF và WebP (được nêu trong câu lỗi 422) có thực sự upload được vào hai thư viện không?", "why_it_matters": "Không suy danh sách loại file được phép từ câu lỗi; test file không có GIF/WebP.", "kb_refs": ["KB-008", "KB-027", "KB-055"] },
+          { "ua_id": "UA-OBJ-09", "source": "coverage gap 'Cross-tenant / negative auth cho id thư viện'", "suggested_oq_type": "OPEN_ISSUE", "applies_to": ["FEAT-01-image-layer-library", "FEAT-02-mockup-layer-library"], "question": "Account khác (hoặc token forbidden/invalid) có đọc/sửa/xoá được ảnh, mockup, category theo id của account này không? Server có ràng buộc x-acting-user-id với phiên không?", "why_it_matters": "Tenant isolation và quyền chưa được kiểm; chỉ một account quan sát.", "kb_refs": ["KB-013", "KB-006"] },
+          { "ua_id": "UA-OBJ-10", "source": "KB unknown: hành vi khi vượt rate limit", "suggested_oq_type": "OPEN_ISSUE", "applies_to": ["FEAT-01-image-layer-library", "FEAT-02-mockup-layer-library"], "question": "Khi vượt x-ratelimit-limit (vd 60 cho in-use, 1000 cho by-temporary-file) thì client/server phản ứng thế nào? Chu kỳ quota có đúng theo ngày không?", "why_it_matters": "Bulk delete/upload lớn có thể chạm limit; hành vi vượt limit chưa thử.", "kb_refs": ["KB-012"] },
+          { "ua_id": "UA-OBJ-11", "source": "KB unknown: plan/role khác + coverage gap 'Spec inventory OpenAPI chưa đối chiếu (chỉ runtime trace)'", "suggested_oq_type": "OPEN_ISSUE", "applies_to": ["FEAT-01-image-layer-library", "FEAT-02-mockup-layer-library"], "question": "Plan/role khác có trang thư viện độc lập hoặc điểm vào khác không? Spec OpenAPI có liệt kê thêm operation nào của layer-images/mockup-layers ngoài các operation đã trace không?", "why_it_matters": "Kết luận 'không có trang độc lập' dựa trên một account/plan; API inventory chỉ từ runtime trace.", "kb_refs": ["KB-001"] },
+          { "ua_id": "UA-OBJ-12", "source": "coverage gap ngoài ranh giới object ('Import từ modal TIB Library', 'Trang Customer Uploads')", "suggested_oq_type": "OPEN_ISSUE", "applies_to": [], "out_of_object_boundary": true, "question": "Import artwork từ 'TIB Library' và trang Customer Uploads (beta) có thuộc object nào khác cần bootstrap riêng không?", "why_it_matters": "Hai khu vực bị loại khỏi object image-library; cần owner quyết có mở scope ở object khác hay không. Có thể chỉ ghi nhận, không cần OQ.", "kb_refs": ["KB-001", "KB-002"] }
+        ]
+      }
+    ],
+    "object_level_unknown_areas": [],
+    "profile_relationships": [
+      { "from": "FEAT-01-image-layer-library", "to": "FEAT-02-mockup-layer-library", "relation": "Cùng object, dùng chung luồng upload/validation client/thông báo 422/component dialog, nhưng dữ liệu (ảnh, category, endpoint) tách biệt", "kb_refs": ["KB-005", "KB-006", "KB-008", "KB-009"] }
+    ],
+    "coverage_matrix": [
+      { "feature_id": "FEAT-01-image-layer-library", "layer": "portal", "role": "merchant-owner", "state": "picker-open-library-has-preexisting-images", "environment": "staging", "covered": true, "kb_refs": ["KB-014"] },
+      { "feature_id": "FEAT-01-image-layer-library", "layer": "portal", "role": "merchant-owner", "state": "picker-replace-mode", "environment": "staging", "covered": true, "kb_refs": ["KB-037"] },
+      { "feature_id": "FEAT-01-image-layer-library", "layer": "portal+api", "role": "merchant-owner", "state": "upload-single-and-multi-raster", "environment": "staging", "covered": true, "kb_refs": ["KB-023", "KB-024", "KB-025"] },
+      { "feature_id": "FEAT-01-image-layer-library", "layer": "portal+api", "role": "merchant-owner", "state": "upload-processing-to-ready (polling)", "environment": "staging", "covered": true, "kb_refs": ["KB-029", "KB-016"] },
+      { "feature_id": "FEAT-01-image-layer-library", "layer": "api", "role": "merchant-owner", "state": "upload-put-object-storage", "environment": "staging", "covered": true, "note": "host_not_in_expected_api_base, not-oracle", "kb_refs": ["KB-007"] },
+      { "feature_id": "FEAT-01-image-layer-library", "layer": "portal", "role": "merchant-owner", "state": "upload-rejected-client (svg/txt)", "environment": "staging", "covered": true, "kb_refs": ["KB-008"] },
+      { "feature_id": "FEAT-01-image-layer-library", "layer": "portal+api", "role": "merchant-owner", "state": "upload-rejected-server-422 (non-image content)", "environment": "staging", "covered": true, "kb_refs": ["KB-027"] },
+      { "feature_id": "FEAT-01-image-layer-library", "layer": "portal+api", "role": "merchant-owner", "state": "upload-large-27MB", "environment": "staging", "covered": true, "kb_refs": ["KB-028"] },
+      { "feature_id": "FEAT-01-image-layer-library", "layer": "portal", "role": "merchant-owner", "state": "upload-drag-and-drop", "environment": "staging", "covered": false, "kb_refs": ["KB-009"] },
+      { "feature_id": "FEAT-01-image-layer-library", "layer": "portal+api", "role": "merchant-owner", "state": "upload-gif-webp / >27MB", "environment": "staging", "covered": false, "kb_refs": ["KB-008", "KB-028"] },
+      { "feature_id": "FEAT-01-image-layer-library", "layer": "portal+api", "role": "merchant-owner", "state": "category-create/whitespace/rename/delete-with-images", "environment": "staging", "covered": true, "kb_refs": ["KB-019", "KB-020", "KB-021", "KB-022"] },
+      { "feature_id": "FEAT-01-image-layer-library", "layer": "portal+api", "role": "merchant-owner", "state": "category-update-empty-name / long-name / duplicate-name", "environment": "staging", "covered": false, "kb_refs": ["KB-019", "KB-021"] },
+      { "feature_id": "FEAT-01-image-layer-library", "layer": "portal+api", "role": "merchant-owner", "state": "browse-search-no-match / category-empty", "environment": "staging", "covered": true, "kb_refs": ["KB-017", "KB-018"] },
+      { "feature_id": "FEAT-01-image-layer-library", "layer": "portal", "role": "merchant-owner", "state": "whole-library-empty", "environment": "staging", "covered": false, "kb_refs": ["KB-017"] },
+      { "feature_id": "FEAT-01-image-layer-library", "layer": "portal+api", "role": "merchant-owner", "state": "pagination-page-2 (size 20) with selection kept", "environment": "staging", "covered": true, "kb_refs": ["KB-034", "KB-035"] },
+      { "feature_id": "FEAT-01-image-layer-library", "layer": "portal+api", "role": "merchant-owner", "state": "pagination-page-size-change / back >2 pages / search+filter", "environment": "staging", "covered": false, "kb_refs": ["KB-018", "KB-034"] },
+      { "feature_id": "FEAT-01-image-layer-library", "layer": "portal+api", "role": "merchant-owner", "state": "rename-image (incl. empty)", "environment": "staging", "covered": true, "kb_refs": ["KB-030", "KB-031"] },
+      { "feature_id": "FEAT-01-image-layer-library", "layer": "portal+api", "role": "merchant-owner", "state": "move-to-category (incl. no category, uncategorized images only)", "environment": "staging", "covered": true, "kb_refs": ["KB-032", "KB-033"] },
+      { "feature_id": "FEAT-01-image-layer-library", "layer": "portal", "role": "merchant-owner", "state": "select-1-image-into-static-layer (unsaved)", "environment": "staging", "covered": true, "kb_refs": ["KB-036"] },
+      { "feature_id": "FEAT-01-image-layer-library", "layer": "portal", "role": "merchant-owner", "state": "select-N>1-images", "environment": "staging", "covered": false, "kb_refs": ["KB-036"] },
+      { "feature_id": "FEAT-01-image-layer-library", "layer": "portal+api", "role": "merchant-owner", "state": "delete-single-unused / bulk-in-use-empty", "environment": "staging", "covered": true, "kb_refs": ["KB-038", "KB-040"] },
+      { "feature_id": "FEAT-01-image-layer-library", "layer": "portal+api", "role": "merchant-owner", "state": "delete-in-use-by-open-unsaved-artwork", "environment": "staging", "covered": true, "kb_refs": ["KB-039"] },
+      { "feature_id": "FEAT-01-image-layer-library", "layer": "portal+api", "role": "merchant-owner", "state": "delete-in-use-by-saved-artwork (in_use_ids non-empty)", "environment": "staging", "covered": false, "kb_refs": ["KB-039", "KB-040"] },
+      { "feature_id": "FEAT-01-image-layer-library", "layer": "portal+api", "role": "merchant-owner", "state": "leave-editor-without-save (library persisted, layer discarded)", "environment": "staging", "covered": true, "kb_refs": ["KB-041"] },
+      { "feature_id": "FEAT-01-image-layer-library", "layer": "api", "role": "other-account / negative-auth", "state": "cross-tenant id access", "environment": "staging", "covered": false, "kb_refs": ["KB-013"] },
+      { "feature_id": "FEAT-01-image-layer-library", "layer": "portal", "role": "other-role/plan", "state": "entry-point-visibility", "environment": "staging", "covered": false, "kb_refs": ["KB-001"] },
+      { "feature_id": "FEAT-01-image-layer-library", "layer": "storefront", "role": "buyer", "state": "n/a (surface disabled in run)", "environment": "staging", "covered": false, "kb_refs": [] },
+      { "feature_id": "FEAT-01-image-layer-library", "layer": "db", "role": "n/a", "state": "n/a (surface disabled in run)", "environment": "staging", "covered": false, "kb_refs": [] },
+      { "feature_id": "FEAT-01-image-layer-library", "layer": "code", "role": "n/a", "state": "n/a (surface disabled in run)", "environment": "staging", "covered": false, "kb_refs": [] }
+    ],
+    "unassigned_kb_items": [],
+    "unassigned_kb_items_note": "Mọi item KB-014..KB-042 và KB-001..KB-013 đều được dùng ở profile này hoặc profile mockup-layer-library. KB-002 chỉ dùng làm negative finding (không phải điểm vào).",
+    "profile_conflicts": [
+      { "conflict_group": "CONF-image-library-R1026-04", "topic": "GET /api/layer-image-categories?type=clipart vs GraphQL clipart_categories", "kb_refs": ["KB-042"], "cross_object_refs": ["OQ-artwork-010"], "resolution": "UNRESOLVED", "profile_handling": "Item giữ trong observed_behavior với marker UNRESOLVED, oracle_eligible:false; không chọn bên." },
+      { "conflict_group": "CONF-image-library-R1026-05", "topic": "Cấu trúc nhóm popup '+ Layer' của artwork editor", "kb_refs": ["KB-004"], "cross_object_refs": ["artwork/editor-layer-workspace#KB-001"], "resolution": "UNRESOLVED", "profile_handling": "Dùng làm mô tả điểm vào nhưng không làm oracle cho danh sách nhóm/số item." }
+    ],
+    "profile_change_summary": [
+      { "feature_key": "image-layer-library", "change": "NEW_PROFILE", "base_present": false, "note": "Object mới image-library; không có base để carry-forward." }
+    ],
+    "kb_trace_complete": true
+  },
+  "gate": {
+    "decision": "CONDITIONAL_PASS",
+    "blocking_findings": [],
+    "conditions": [
+      "Identity ổn định (feature_id/feature_key lấy từ shard), user goal rõ, 9 capability theo user goal, mọi field trace kb_id.",
+      "Không có confirmed_rules (không có nguồn thẩm quyền): oracle cho checklist chỉ ở mức OBSERVED_CURRENT; item suspected-defect, UNRESOLVED (KB-004, KB-042) và not-oracle (KB-007, KB-010, KB-011) đánh oracle_eligible:false.",
+      "observed_validations đều observed_count < 3 → rule_confidence LOW, không tổng quát hoá thành rule.",
+      "24 unknown_area (UA-IMG-01..12 + UA-OBJ-01..12) chờ orchestrator gán OQ; UA-OBJ dùng chung cùng ua_id với profile mockup."
+    ],
+    "allowed_next_steps": ["qa-checklist-builder", "orchestrator: gán OQ cho unknown_areas"]
+  }
+}

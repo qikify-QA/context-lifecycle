@@ -1,0 +1,1883 @@
+{
+  "feature_id": "FEAT-01-image-layer-library",
+  "feature_key": "image-layer-library",
+  "object_id": "image-library",
+  "checklist_version": "1",
+  "checks": [
+    {
+      "check_id": "CHK-001",
+      "capability_id": "CAP-IMG-05",
+      "dimension": "CORE",
+      "layer": "portal",
+      "title": "Mở image picker từ '+ Layer' > Static Image: bố cục modal và tab mặc định",
+      "applicability": {
+        "role": "merchant-owner",
+        "state": "artwork editor đã load; thư viện có sẵn ảnh",
+        "environment": "staging",
+        "surface_or_device": "portal desktop — artwork editor > image picker modal"
+      },
+      "precondition": "Đã login portal (account guard đã verify); mở artwork editor của một artwork test do QA sở hữu (artwork chưa lưu vẫn được).",
+      "steps": [
+        "Bấm '+ Layer' trên artwork editor",
+        "Trong nhóm IMAGE chọn 'Static Image'",
+        "Quan sát modal picker vừa mở"
+      ],
+      "observation_point": "Modal picker: các tab, cột trái category, dropzone, ô Search, nút Reload, lưới card",
+      "expected_result": "Modal có 2 tab 'Upload an image' (được chọn mặc định) và 'Choose from clipart category'; cột trái có 'All' và '+ New category'; có dropzone, ô Search, nút Reload và lưới card ảnh.",
+      "oracle": {
+        "kb_ids": [
+          "KB-014",
+          "KB-003"
+        ],
+        "oracle_strength": "BASELINE"
+      },
+      "status": "NEEDS_CONFIRMATION",
+      "open_question_draft": "Xác nhận bố cục image picker (2 tab, tab 'Upload an image' mặc định, cột category 'All' + '+ New category') là expected — hiện chỉ có OBSERVED_CURRENT.",
+      "oq_group": "BASELINE-CONFIRM-image-layer-library",
+      "related_kb_ids": [
+        "KB-004",
+        "KB-001"
+      ],
+      "regression_watch_kb_ids": [],
+      "risk_refs": [],
+      "priority": "P2",
+      "automation_suitability": "SUITABLE",
+      "oq_id": "OQ-image-library-036"
+    },
+    {
+      "check_id": "CHK-002",
+      "capability_id": "CAP-IMG-01",
+      "dimension": "CORE",
+      "layer": "api",
+      "title": "Upload 1 ảnh raster hợp lệ: chuỗi request và bản ghi tạo ra",
+      "applicability": {
+        "role": "merchant-owner",
+        "state": "picker mở, đang ở 'All' hoặc một category QA-",
+        "environment": "staging",
+        "surface_or_device": "portal desktop — image picker modal + network"
+      },
+      "precondition": "Image picker đang mở; có sẵn 1 file PNG hoặc JPG raster hợp lệ cỡ vài trăm px, tên tiền tố QA-.",
+      "steps": [
+        "Bấm vào dropzone, chọn 1 file PNG/JPG hợp lệ qua file chooser",
+        "Theo dõi network cho tới khi card ảnh xuất hiện trong lưới",
+        "Mở response của bước tạo bản ghi và của lần polling cuối"
+      ],
+      "observation_point": "POST /api/users/{user_id}/temporary-files/upload-url; POST /api/layer-images/by-temporary-file (body + response); GraphQL get layer_images(ids) cuối; card mới trong lưới",
+      "expected_result": "upload-url trả 201 với {user_id} = id account đang đăng nhập; by-temporary-file gửi {temporary_file_id, name = tên file bỏ đuôi, artwork_width, category_id} và trả 201 với master rỗng, url/thumbnail/width/height null; sau polling bản ghi có url '<hash>_large.webp', thumbnail '<hash>_thumbnail.webp', width/height bằng kích thước gốc; không có request gán ảnh vào artwork.",
+      "oracle": {
+        "kb_ids": [
+          "KB-006",
+          "KB-023",
+          "KB-016"
+        ],
+        "oracle_strength": "BASELINE"
+      },
+      "status": "NEEDS_CONFIRMATION",
+      "open_question_draft": "Xác nhận chuỗi upload (upload-url 201 -> by-temporary-file 201 chưa có url -> polling ra _large.webp/_thumbnail.webp, width/height gốc) là contract expected của image library.",
+      "oq_group": "BASELINE-CONFIRM-image-layer-library",
+      "related_kb_ids": [
+        "KB-007",
+        "KB-029",
+        "KB-024"
+      ],
+      "regression_watch_kb_ids": [],
+      "risk_refs": [],
+      "priority": "P2",
+      "notes": "Bước PUT nội dung file lên object storage (KB-007) KHÔNG được assert ở check này (host chưa xác nhận) — xem CHK-009.",
+      "automation_suitability": "SUITABLE",
+      "oq_id": "OQ-image-library-036"
+    },
+    {
+      "check_id": "CHK-003",
+      "capability_id": "CAP-IMG-02",
+      "dimension": "CORE",
+      "layer": "portal",
+      "title": "Trạng thái xử lý sau upload: card chỉ xuất hiện khi xử lý xong, tự polling không cần Reload",
+      "applicability": {
+        "role": "merchant-owner",
+        "state": "vừa upload ảnh, đang xử lý",
+        "environment": "staging",
+        "surface_or_device": "portal desktop — image picker modal + network"
+      },
+      "precondition": "Image picker đang mở; 1 file raster hợp lệ (file lớn vài chục MB cho thấy rõ hơn nhiều vòng polling).",
+      "steps": [
+        "Upload 1 file raster hợp lệ, không bấm Reload",
+        "Quan sát dòng upload và lưới card trong lúc xử lý",
+        "Quan sát network: các lần GraphQL get layer_images(where id _in ids) lặp lại",
+        "Chờ tới khi card xuất hiện"
+      ],
+      "observation_point": "Dòng trạng thái upload; thời điểm card xuất hiện; chuỗi request polling và request tải lại danh sách relay",
+      "expected_result": "Trong lúc xử lý trạng thái chỉ hiện ở dòng upload (dòng thành công ghi 'Your file is uploaded, reload after a few minutes if there is no preview file.'), chưa có card; client tự gọi lặp GraphQL get(ids) khoảng 2 giây sau mỗi response tới khi url có giá trị, rồi tải lại danh sách; card xuất hiện đầu lưới ở trạng thái đã tick mà không cần bấm Reload.",
+      "oracle": {
+        "kb_ids": [
+          "KB-029",
+          "KB-009",
+          "KB-024"
+        ],
+        "oracle_strength": "BASELINE"
+      },
+      "status": "NEEDS_CONFIRMATION",
+      "open_question_draft": "Xác nhận cơ chế polling tự động (~2 giây, không cần Reload) và việc card chỉ hiện khi xử lý xong là expected; giới hạn số lần poll/timeout chưa biết.",
+      "oq_group": "BASELINE-CONFIRM-image-layer-library",
+      "related_kb_ids": [
+        "KB-016"
+      ],
+      "regression_watch_kb_ids": [],
+      "risk_refs": [],
+      "priority": "P2",
+      "automation_suitability": "HYBRID",
+      "oq_id": "OQ-image-library-036"
+    },
+    {
+      "check_id": "CHK-004",
+      "capability_id": "CAP-IMG-01",
+      "dimension": "CORE",
+      "layer": "api",
+      "title": "Upload nhiều file raster cùng lúc: không file nào bị rơi im lặng",
+      "applicability": {
+        "role": "merchant-owner",
+        "state": "picker mở, chọn 6 file raster cùng lúc",
+        "environment": "staging",
+        "surface_or_device": "portal desktop — image picker modal + network"
+      },
+      "precondition": "Image picker đang mở; 6 file PNG/JPG hợp lệ tiền tố QA-.",
+      "steps": [
+        "Bấm dropzone, chọn cùng lúc 6 file raster hợp lệ",
+        "Đếm số request upload-url và by-temporary-file",
+        "Chờ xử lý xong, đếm số card mới trong lưới"
+      ],
+      "observation_point": "Số request upload-url / by-temporary-file 201; số card mới; số dòng upload thành công",
+      "expected_result": "Có 6 upload-url và 6 by-temporary-file trả 201; sau một lần GraphQL get(ids) chung và một lần tải lại danh sách, cả 6 ảnh xuất hiện trong lưới.",
+      "oracle": {
+        "kb_ids": [
+          "KB-025"
+        ],
+        "oracle_strength": "BASELINE"
+      },
+      "status": "NEEDS_CONFIRMATION",
+      "open_question_draft": "Xác nhận upload nhiều file không có giới hạn số file (6/6 được xử lý) là expected cho image library; giới hạn tối đa số file mỗi lần chọn (nếu có) là bao nhiêu?",
+      "oq_group": "BASELINE-CONFIRM-image-layer-library",
+      "related_kb_ids": [
+        "KB-006"
+      ],
+      "regression_watch_kb_ids": [],
+      "risk_refs": [],
+      "priority": "P1",
+      "notes": "P1 vì rủi ro mất file im lặng khi upload nhiều file; mockup library có câu hỏi/conflict riêng về giới hạn ~3 file (mockup-layer-library CHK-004).",
+      "automation_suitability": "SUITABLE",
+      "oq_id": "OQ-image-library-036"
+    },
+    {
+      "check_id": "CHK-005",
+      "capability_id": "CAP-IMG-03",
+      "dimension": "NEGATIVE",
+      "layer": "portal",
+      "title": "Chọn file .svg / .txt: client từ chối ngay, không gửi request",
+      "applicability": {
+        "role": "merchant-owner",
+        "state": "picker mở",
+        "environment": "staging",
+        "surface_or_device": "portal desktop — image picker modal + network"
+      },
+      "precondition": "Image picker đang mở; 1 file .svg, 1 file .txt và 1 file PNG hợp lệ.",
+      "steps": [
+        "Chọn cùng lúc file .svg và 1 file PNG hợp lệ",
+        "Lặp lại với file .txt",
+        "Quan sát danh sách upload và network"
+      ],
+      "observation_point": "Dòng upload của file .svg/.txt; network cho file đó; file PNG chọn cùng lúc",
+      "expected_result": "File .svg/.txt hiện thành dòng với thông báo 'You can't upload files of this type.' và không có request mạng nào cho file đó; file PNG chọn cùng lúc vẫn upload bình thường.",
+      "oracle": {
+        "kb_ids": [
+          "KB-008"
+        ],
+        "oracle_strength": "BASELINE"
+      },
+      "status": "NEEDS_CONFIRMATION",
+      "open_question_draft": "Xác nhận client chặn .svg/.txt với 'You can't upload files of this type.' là expected; danh sách loại file được phép chính thức là gì?",
+      "oq_group": "BASELINE-CONFIRM-image-layer-library",
+      "related_kb_ids": [],
+      "regression_watch_kb_ids": [],
+      "risk_refs": [],
+      "priority": "P2",
+      "automation_suitability": "SUITABLE",
+      "oq_id": "OQ-image-library-036"
+    },
+    {
+      "check_id": "CHK-006",
+      "capability_id": "CAP-IMG-03",
+      "dimension": "NEGATIVE",
+      "layer": "api",
+      "title": "File không phải ảnh nhưng mang đuôi .png: server từ chối 422, không tạo bản ghi",
+      "applicability": {
+        "role": "merchant-owner",
+        "state": "picker mở",
+        "environment": "staging",
+        "surface_or_device": "portal desktop — image picker modal + network"
+      },
+      "precondition": "Image picker đang mở; 1 file text nhỏ được đổi tên thành .png (tiền tố QA-).",
+      "steps": [
+        "Chọn file text đổi đuôi .png qua file chooser",
+        "Quan sát network và dòng upload",
+        "Bấm Reload, kiểm lưới không có ảnh mới"
+      ],
+      "observation_point": "Response POST /api/layer-images/by-temporary-file; dòng upload; lưới sau Reload",
+      "expected_result": "Client không chặn; POST /api/layer-images/by-temporary-file trả 422 với errors.temporary_file_id 'This file type is not supported. Please upload a PNG, JPEG, GIF or WebP image.'; dòng upload hiện đúng câu đó; không có bản ghi ảnh mới.",
+      "oracle": {
+        "kb_ids": [
+          "KB-027"
+        ],
+        "oracle_strength": "BASELINE"
+      },
+      "status": "NEEDS_CONFIRMATION",
+      "open_question_draft": "Xác nhận 422 'This file type is not supported...' ở by-temporary-file là cách xử lý expected cho file sai nội dung (không có card kẹt xử lý).",
+      "oq_group": "BASELINE-CONFIRM-image-layer-library",
+      "related_kb_ids": [
+        "KB-010",
+        "KB-011"
+      ],
+      "regression_watch_kb_ids": [],
+      "risk_refs": [],
+      "priority": "P2",
+      "notes": "Không assert số phận temporary file (KB-010/KB-011 not-oracle) — xem CHK-008.",
+      "automation_suitability": "SUITABLE",
+      "oq_id": "OQ-image-library-036"
+    },
+    {
+      "check_id": "CHK-007",
+      "capability_id": "CAP-IMG-03",
+      "dimension": "BOUNDARY",
+      "layer": "api",
+      "title": "Giới hạn kích thước file upload ảnh (watch nghi defect: không thấy giới hạn)",
+      "applicability": {
+        "role": "merchant-owner",
+        "state": "picker mở, file PNG rất lớn",
+        "environment": "staging",
+        "surface_or_device": "portal desktop — image picker modal + network"
+      },
+      "precondition": "Image picker đang mở; file PNG ~27 MB (3000x3000) và, nếu có, file lớn hơn.",
+      "steps": [
+        "Upload file PNG ~27 MB",
+        "Quan sát upload-url (filesize khai), by-temporary-file và kết quả xử lý",
+        "Lặp lại với file lớn hơn nếu có"
+      ],
+      "observation_point": "Status upload-url / by-temporary-file; thông báo trên dòng upload; kích thước lưu",
+      "expected_result": "",
+      "observed_current_behavior": "Quan sát 1 lần: PNG 27.011.273 byte được nhận ở mọi bước (upload-url 201, by-temporary-file 201, lưu 3000x3000), không thấy giới hạn; file lớn hơn chưa thử. Đây không phải expected.",
+      "oracle": {
+        "kb_ids": [],
+        "oracle_strength": "NONE"
+      },
+      "status": "NEEDS_CONFIRMATION",
+      "open_question_draft": "Có giới hạn kích thước file mong đợi cho upload ảnh không? Nếu có thì bao nhiêu và server/client báo gì khi vượt?",
+      "unknown_area_ref": "UA-OBJ-03",
+      "related_kb_ids": [],
+      "regression_watch_kb_ids": [
+        "KB-028"
+      ],
+      "risk_refs": [
+        "R-IMG-04"
+      ],
+      "priority": "P2",
+      "automation_suitability": "HYBRID",
+      "oq_id": "OQ-image-library-013"
+    },
+    {
+      "check_id": "CHK-008",
+      "capability_id": "CAP-IMG-03",
+      "dimension": "STATE_DATA",
+      "layer": "api",
+      "title": "Temporary file của upload bị từ chối 422 có được dọn không (watch nghi defect, dùng chung hai thư viện)",
+      "applicability": {
+        "role": "merchant-owner",
+        "state": "upload file sai nội dung bị 422",
+        "environment": "staging",
+        "surface_or_device": "api + object storage (cần quyền xem storage)"
+      },
+      "precondition": "Có quyền liệt kê object storage prefix temporary-files của staging (hoặc dev hỗ trợ); 1 file text đổi đuôi .png.",
+      "steps": [
+        "Upload file text đổi đuôi .png, ghi lại temporary_file_id / key từ response upload-url",
+        "Sau khi nhận 422, kiểm object tương ứng trên storage ngay và sau khoảng thời gian dọn dẹp mà dev công bố (nếu có)"
+      ],
+      "observation_point": "Sự tồn tại của object temporary file trên storage sau 422; request dọn dẹp (nếu có)",
+      "expected_result": "",
+      "observed_current_behavior": "upload-url 201 và PUT lên storage 200 xảy ra trước khi server trả 422; không thấy request dọn dẹp nào; portal không có UI liệt kê/xoá temporary file. Việc file còn lại trên storage chưa kiểm trực tiếp (KB-011 chỉ là suy luận).",
+      "oracle": {
+        "kb_ids": [],
+        "oracle_strength": "NONE"
+      },
+      "status": "NEEDS_CONFIRMATION",
+      "open_question_draft": "Có cơ chế dọn temporary file phía server (TTL/cron) cho upload bị từ chối 422 không? Host object storage có phải host hợp lệ của staging không?",
+      "unknown_area_ref": "UA-OBJ-04",
+      "related_unknown_area_refs": [
+        "UA-OBJ-01"
+      ],
+      "related_kb_ids": [
+        "KB-007",
+        "KB-027"
+      ],
+      "regression_watch_kb_ids": [
+        "KB-010",
+        "KB-011"
+      ],
+      "risk_refs": [
+        "R-IMG-07"
+      ],
+      "priority": "P3",
+      "applies_to_features": [
+        "FEAT-01-image-layer-library",
+        "FEAT-02-mockup-layer-library"
+      ],
+      "automation_suitability": "NOT_SUITABLE",
+      "oq_id": "OQ-image-library-016"
+    },
+    {
+      "check_id": "CHK-009",
+      "capability_id": "CAP-IMG-01",
+      "dimension": "INTEGRATION",
+      "layer": "api",
+      "title": "Bước PUT nội dung file lên object storage bằng presigned URL (dùng chung hai thư viện, host chưa xác nhận)",
+      "applicability": {
+        "role": "merchant-owner",
+        "state": "upload ảnh hợp lệ",
+        "environment": "staging",
+        "surface_or_device": "network (request tới host object storage)"
+      },
+      "precondition": "Image picker hoặc media library đang mở; 1 file raster hợp lệ.",
+      "steps": [
+        "Upload 1 file raster hợp lệ",
+        "Trong network, tìm request PUT ngay sau upload-url"
+      ],
+      "observation_point": "Host, query X-Amz-Expires và status của request PUT",
+      "expected_result": "",
+      "observed_current_behavior": "Client PUT thẳng nội dung file lên host object storage ngoài expected_api_base (prefix temporary-files/<ngày>/) bằng presigned URL X-Amz-Expires=300, không qua backend; mọi PUT quan sát được trả 200, kể cả file 27 MB và file text đổi đuôi .png.",
+      "oracle": {
+        "kb_ids": [],
+        "oracle_strength": "NONE"
+      },
+      "status": "NEEDS_CONFIRMATION",
+      "open_question_draft": "Host object storage của bước PUT presigned có phải host hợp lệ của staging (thêm vào environments.staging.additional_api_hosts) không? TTL 300 giây có phải giá trị expected?",
+      "unknown_area_ref": "UA-OBJ-01",
+      "related_kb_ids": [
+        "KB-006"
+      ],
+      "regression_watch_kb_ids": [
+        "KB-007"
+      ],
+      "risk_refs": [],
+      "priority": "P2",
+      "applies_to_features": [
+        "FEAT-01-image-layer-library",
+        "FEAT-02-mockup-layer-library"
+      ],
+      "automation_suitability": "HYBRID",
+      "oq_id": "OQ-image-library-007"
+    },
+    {
+      "check_id": "CHK-010",
+      "capability_id": "CAP-IMG-01",
+      "dimension": "NEGATIVE",
+      "layer": "api",
+      "title": "Upload file trùng tên với ảnh đã có",
+      "applicability": {
+        "role": "merchant-owner",
+        "state": "thư viện đã có ảnh QA- cùng tên",
+        "environment": "staging",
+        "surface_or_device": "portal desktop — image picker modal + network"
+      },
+      "precondition": "Thư viện đã có một ảnh QA- tên X (do người chạy tạo); file upload cùng tên X.",
+      "steps": [
+        "Upload lại file cùng tên X",
+        "Quan sát response by-temporary-file và lưới"
+      ],
+      "observation_point": "Response by-temporary-file; số card tên X trong lưới; cảnh báo (nếu có)",
+      "expected_result": "by-temporary-file trả 201 và tạo bản ghi mới; lưới có thêm một card cùng tên; không có cảnh báo trùng tên.",
+      "oracle": {
+        "kb_ids": [
+          "KB-026"
+        ],
+        "oracle_strength": "BASELINE"
+      },
+      "status": "NEEDS_CONFIRMATION",
+      "open_question_draft": "Không cảnh báo/chặn khi upload ảnh trùng tên có phải hành vi mong muốn?",
+      "oq_group": "BASELINE-CONFIRM-image-layer-library",
+      "related_kb_ids": [],
+      "regression_watch_kb_ids": [],
+      "risk_refs": [],
+      "priority": "P3",
+      "automation_suitability": "SUITABLE",
+      "oq_id": "OQ-image-library-036"
+    },
+    {
+      "check_id": "CHK-011",
+      "capability_id": "CAP-IMG-03",
+      "dimension": "BOUNDARY",
+      "layer": "api",
+      "title": "Upload GIF và WebP vào image library",
+      "applicability": {
+        "role": "merchant-owner",
+        "state": "picker mở",
+        "environment": "staging",
+        "surface_or_device": "portal desktop — image picker modal + network"
+      },
+      "precondition": "Image picker đang mở; 1 file GIF và 1 file WebP hợp lệ tiền tố QA-.",
+      "steps": [
+        "Upload file GIF",
+        "Upload file WebP",
+        "Quan sát client, by-temporary-file và kết quả xử lý"
+      ],
+      "observation_point": "Thông báo client; status by-temporary-file; bản ghi sau xử lý",
+      "expected_result": "",
+      "observed_current_behavior": "Chưa quan sát (NOT_COVERED). Câu lỗi 422 liệt kê PNG/JPEG/GIF/WebP nhưng GIF/WebP chưa được thử; không suy danh sách loại file từ câu lỗi.",
+      "oracle": {
+        "kb_ids": [],
+        "oracle_strength": "NONE"
+      },
+      "status": "NEEDS_CONFIRMATION",
+      "open_question_draft": "GIF và WebP có upload được vào image library không, và bản ghi sau xử lý ra sao (GIF động giữ animation?)",
+      "unknown_area_ref": "UA-OBJ-08",
+      "related_kb_ids": [
+        "KB-008",
+        "KB-027"
+      ],
+      "regression_watch_kb_ids": [],
+      "risk_refs": [],
+      "priority": "P2",
+      "coverage_status": "NOT_COVERED",
+      "automation_suitability": "UNKNOWN",
+      "oq_id": "OQ-image-library-021"
+    },
+    {
+      "check_id": "CHK-012",
+      "capability_id": "CAP-IMG-01",
+      "dimension": "CORE",
+      "layer": "portal",
+      "title": "Upload bằng kéo-thả vào dropzone của image picker",
+      "applicability": {
+        "role": "merchant-owner",
+        "state": "picker mở",
+        "environment": "staging",
+        "surface_or_device": "portal desktop — image picker modal"
+      },
+      "precondition": "Image picker đang mở; 1 file raster hợp lệ trên máy.",
+      "steps": [
+        "Kéo file từ hệ điều hành thả vào dropzone",
+        "Quan sát dòng upload, network và lưới"
+      ],
+      "observation_point": "Dòng upload; chuỗi request upload; card mới",
+      "expected_result": "",
+      "observed_current_behavior": "Chưa quan sát (NOT_COVERED): dropzone ghi 'Drag and drop, or click to upload!' nhưng chỉ click-to-upload được thử.",
+      "oracle": {
+        "kb_ids": [],
+        "oracle_strength": "NONE"
+      },
+      "status": "NEEDS_CONFIRMATION",
+      "open_question_draft": "Upload bằng kéo-thả có cùng hành vi với click-to-upload (cùng chuỗi request, cùng validation client) không?",
+      "unknown_area_ref": "UA-OBJ-05",
+      "related_kb_ids": [
+        "KB-009"
+      ],
+      "regression_watch_kb_ids": [],
+      "risk_refs": [],
+      "priority": "P3",
+      "coverage_status": "NOT_COVERED",
+      "automation_suitability": "UNKNOWN",
+      "oq_id": "OQ-image-library-018"
+    },
+    {
+      "check_id": "CHK-013",
+      "capability_id": "CAP-IMG-04",
+      "dimension": "CORE",
+      "layer": "portal",
+      "title": "Tạo category ảnh: Create disable khi rỗng, tạo thành công",
+      "applicability": {
+        "role": "merchant-owner",
+        "state": "picker mở",
+        "environment": "staging",
+        "surface_or_device": "portal desktop — image picker modal + network"
+      },
+      "precondition": "Image picker đang mở.",
+      "steps": [
+        "Bấm '+ New category'",
+        "Để trống ô Name, quan sát nút Create",
+        "Nhập tên tiền tố QA-, bấm Create"
+      ],
+      "observation_point": "Trạng thái nút Create; request POST /api/layer-image-categories; cột trái sau khi tạo; toast",
+      "expected_result": "Create disable khi ô trống; Create gửi POST /api/layer-image-categories {name, type: 'clipart'} -> 201; dialog đóng, danh sách category tải lại và có category mới; không có toast thành công.",
+      "oracle": {
+        "kb_ids": [
+          "KB-019"
+        ],
+        "oracle_strength": "BASELINE"
+      },
+      "status": "NEEDS_CONFIRMATION",
+      "open_question_draft": "Xác nhận luồng tạo category (Create disable khi rỗng, không toast thành công) là expected.",
+      "oq_group": "BASELINE-CONFIRM-image-layer-library",
+      "related_kb_ids": [
+        "KB-042"
+      ],
+      "regression_watch_kb_ids": [],
+      "risk_refs": [],
+      "priority": "P2",
+      "notes": "Không assert quan hệ với GraphQL clipart_categories (KB-042 UNRESOLVED) — xem CHK-038.",
+      "automation_suitability": "SUITABLE",
+      "oq_id": "OQ-image-library-036"
+    },
+    {
+      "check_id": "CHK-014",
+      "capability_id": "CAP-IMG-04",
+      "dimension": "NEGATIVE",
+      "layer": "portal",
+      "title": "Tên category toàn khoảng trắng (watch nghi defect: lỗi dưới toast chung)",
+      "applicability": {
+        "role": "merchant-owner",
+        "state": "dialog '+ New category' mở",
+        "environment": "staging",
+        "surface_or_device": "portal desktop — image picker modal + network"
+      },
+      "precondition": "Image picker đang mở.",
+      "steps": [
+        "Bấm '+ New category', nhập vài ký tự khoảng trắng",
+        "Quan sát nút Create, bấm Create",
+        "Quan sát response, toast và dialog"
+      ],
+      "observation_point": "Trạng thái Create; response POST; vị trí và nội dung thông báo lỗi; dialog",
+      "expected_result": "",
+      "observed_current_behavior": "Create được bật; POST trả 422 'The name field is required.'; UI hiện toast chung 'Something went wrong!' kèm câu đó; dialog vẫn mở; không category nào được tạo.",
+      "oracle": {
+        "kb_ids": [],
+        "oracle_strength": "NONE"
+      },
+      "status": "NEEDS_CONFIRMATION",
+      "open_question_draft": "Tên category toàn khoảng trắng: client có nên chặn trước (disable Create) và/hoặc hiện lỗi tại field thay vì toast chung 'Something went wrong!'?",
+      "unknown_area_ref": "UA-OBJ-02",
+      "related_kb_ids": [
+        "KB-019"
+      ],
+      "regression_watch_kb_ids": [
+        "KB-020"
+      ],
+      "risk_refs": [
+        "R-IMG-06"
+      ],
+      "priority": "P3",
+      "automation_suitability": "SUITABLE",
+      "oq_id": "OQ-image-library-012"
+    },
+    {
+      "check_id": "CHK-015",
+      "capability_id": "CAP-IMG-04",
+      "dimension": "CORE",
+      "layer": "portal",
+      "title": "Đổi tên category ảnh",
+      "applicability": {
+        "role": "merchant-owner",
+        "state": "đang chọn một category QA- có ảnh",
+        "environment": "staging",
+        "surface_or_device": "portal desktop — image picker modal + network"
+      },
+      "precondition": "Có một category QA- (do người chạy tạo) chứa ít nhất 1 ảnh.",
+      "steps": [
+        "Chọn category ở cột trái, bấm icon bút chì",
+        "Quan sát dialog, đổi tên, bấm Update"
+      ],
+      "observation_point": "Dialog điền sẵn (GET /api/layer-image-categories/{id}); PUT /{id}; cột trái và nhãn select; ảnh trong category; toast",
+      "expected_result": "Dialog 'Name:' điền sẵn tên hiện tại với nút 'Update'; PUT /api/layer-image-categories/{id} {name} -> 200; danh sách và nhãn select đổi sang tên mới; ảnh trong category giữ nguyên; không có toast.",
+      "oracle": {
+        "kb_ids": [
+          "KB-021"
+        ],
+        "oracle_strength": "BASELINE"
+      },
+      "status": "NEEDS_CONFIRMATION",
+      "open_question_draft": "Xác nhận luồng đổi tên category (không toast, khác mockup library có toast 'Your category has been updated') là expected.",
+      "oq_group": "BASELINE-CONFIRM-image-layer-library",
+      "related_kb_ids": [],
+      "regression_watch_kb_ids": [],
+      "risk_refs": [],
+      "priority": "P3",
+      "automation_suitability": "SUITABLE",
+      "oq_id": "OQ-image-library-036"
+    },
+    {
+      "check_id": "CHK-016",
+      "capability_id": "CAP-IMG-04",
+      "dimension": "NEGATIVE",
+      "layer": "api",
+      "title": "Đổi tên category thành rỗng / toàn khoảng trắng",
+      "applicability": {
+        "role": "merchant-owner",
+        "state": "dialog Update category mở",
+        "environment": "staging",
+        "surface_or_device": "portal desktop — image picker modal + network"
+      },
+      "precondition": "Có một category QA- do người chạy tạo.",
+      "steps": [
+        "Mở dialog đổi tên category, xoá hết tên, quan sát nút Update",
+        "Nhập toàn khoảng trắng, bấm Update"
+      ],
+      "observation_point": "Trạng thái nút Update; response PUT /api/layer-image-categories/{id}; tên category sau thao tác",
+      "expected_result": "",
+      "observed_current_behavior": "Chưa quan sát (NOT_COVERED). Chỉ biết hành vi lúc tạo (422 với tên toàn khoảng trắng).",
+      "oracle": {
+        "kb_ids": [],
+        "oracle_strength": "NONE"
+      },
+      "status": "NEEDS_CONFIRMATION",
+      "open_question_draft": "PUT /api/layer-image-categories/{id} với tên rỗng/khoảng trắng có bị từ chối như khi tạo (422) không?",
+      "unknown_area_ref": "UA-IMG-11",
+      "related_kb_ids": [
+        "KB-021",
+        "KB-020"
+      ],
+      "regression_watch_kb_ids": [],
+      "risk_refs": [],
+      "priority": "P3",
+      "coverage_status": "NOT_COVERED",
+      "automation_suitability": "UNKNOWN",
+      "oq_id": "OQ-image-library-029"
+    },
+    {
+      "check_id": "CHK-017",
+      "capability_id": "CAP-IMG-04",
+      "dimension": "STATE_DATA",
+      "layer": "portal",
+      "title": "Xoá category đang chứa ảnh: ảnh bên trong được giữ, thành không có category",
+      "applicability": {
+        "role": "merchant-owner",
+        "state": "category QA- chứa ≥1 ảnh QA-",
+        "environment": "staging",
+        "surface_or_device": "portal desktop — image picker modal + network"
+      },
+      "precondition": "Category QA- do người chạy tạo, chứa ít nhất 3 ảnh QA-; ghi lại tên các ảnh.",
+      "steps": [
+        "Chọn category, bấm icon thùng rác",
+        "Đọc nội dung dialog Confirm, bấm Remove",
+        "Chọn 'All', tìm lại các ảnh đã ghi"
+      ],
+      "observation_point": "Nội dung dialog Confirm; DELETE /api/layer-image-categories/{id}; cột trái; các ảnh trong 'All'",
+      "expected_result": "Dialog 'Confirm' ghi 'Are you sure to delete <tên category>' với Remove/Cancel; Remove gửi DELETE -> 204; category biến mất; các ảnh vẫn còn trong 'All' và không có category.",
+      "oracle": {
+        "kb_ids": [
+          "KB-022"
+        ],
+        "oracle_strength": "BASELINE"
+      },
+      "status": "NEEDS_CONFIRMATION",
+      "open_question_draft": "Xác nhận xoá category giữ lại ảnh bên trong (không xoá theo) là expected; confirm có nên nhắc số ảnh bị ảnh hưởng?",
+      "oq_group": "BASELINE-CONFIRM-image-layer-library",
+      "related_kb_ids": [],
+      "regression_watch_kb_ids": [],
+      "risk_refs": [],
+      "priority": "P1",
+      "automation_suitability": "SUITABLE",
+      "oq_id": "OQ-image-library-036"
+    },
+    {
+      "check_id": "CHK-018",
+      "capability_id": "CAP-IMG-04",
+      "dimension": "BOUNDARY",
+      "layer": "api",
+      "title": "Độ dài/ký tự đặc biệt của tên category và tên ảnh; trùng tên category",
+      "applicability": {
+        "role": "merchant-owner",
+        "state": "picker mở",
+        "environment": "staging",
+        "surface_or_device": "portal desktop — image picker modal + network"
+      },
+      "precondition": "Image picker đang mở; có một category QA- do người chạy tạo.",
+      "steps": [
+        "Tạo category với tên rất dài (vd 256+ ký tự) và tên có ký tự đặc biệt/emoji",
+        "Tạo category trùng tên category QA- đã có",
+        "Đổi tên một ảnh QA- thành chuỗi rất dài / ký tự đặc biệt"
+      ],
+      "observation_point": "Response POST/PUT category, mutation update_layer_images; hiển thị tên trên UI",
+      "expected_result": "",
+      "observed_current_behavior": "Chưa quan sát (NOT_COVERED); chưa có boundary nào cho các field tên.",
+      "oracle": {
+        "kb_ids": [],
+        "oracle_strength": "NONE"
+      },
+      "status": "NEEDS_CONFIRMATION",
+      "open_question_draft": "Giới hạn độ dài/ký tự cho tên ảnh và tên category là gì? Trùng tên category có bị chặn không?",
+      "unknown_area_ref": "UA-IMG-10",
+      "related_kb_ids": [
+        "KB-019",
+        "KB-030"
+      ],
+      "regression_watch_kb_ids": [],
+      "risk_refs": [],
+      "priority": "P3",
+      "coverage_status": "NOT_COVERED",
+      "automation_suitability": "UNKNOWN",
+      "oq_id": "OQ-image-library-028"
+    },
+    {
+      "check_id": "CHK-019",
+      "capability_id": "CAP-IMG-05",
+      "dimension": "CORE",
+      "layer": "api",
+      "title": "Tìm kiếm ảnh theo tên (server-side) và trạng thái không khớp",
+      "applicability": {
+        "role": "merchant-owner",
+        "state": "picker mở, thư viện có ảnh",
+        "environment": "staging",
+        "surface_or_device": "portal desktop — image picker modal + network"
+      },
+      "precondition": "Image picker đang mở; biết tên một ảnh QA- có trong thư viện.",
+      "steps": [
+        "Gõ một phần tên ảnh vào ô Search, nhấn Enter",
+        "Xoá bằng nút (x), gõ từ khoá chắc chắn không khớp, nhấn Enter"
+      ],
+      "observation_point": "Biến where của query layer_images_connection; lưới kết quả; thông báo rỗng",
+      "expected_result": "Client gửi lại layer_images_connection với điều kiện name _ilike '%<từ khoá>%' và lưới chỉ còn ảnh khớp; từ khoá không khớp hiện 'No data matched'.",
+      "oracle": {
+        "kb_ids": [
+          "KB-018",
+          "KB-017"
+        ],
+        "oracle_strength": "BASELINE"
+      },
+      "status": "NEEDS_CONFIRMATION",
+      "open_question_draft": "Xác nhận search server-side theo name _ilike và copy rỗng 'No data matched' là expected.",
+      "oq_group": "BASELINE-CONFIRM-image-layer-library",
+      "related_kb_ids": [
+        "KB-015"
+      ],
+      "regression_watch_kb_ids": [],
+      "risk_refs": [],
+      "priority": "P2",
+      "automation_suitability": "SUITABLE",
+      "oq_id": "OQ-image-library-036"
+    },
+    {
+      "check_id": "CHK-020",
+      "capability_id": "CAP-IMG-05",
+      "dimension": "CORE",
+      "layer": "portal",
+      "title": "Lọc theo category; category rỗng vẫn upload được",
+      "applicability": {
+        "role": "merchant-owner",
+        "state": "có ≥1 category QA- rỗng và ≥1 category có ảnh",
+        "environment": "staging",
+        "surface_or_device": "portal desktop — image picker modal + network"
+      },
+      "precondition": "Một category QA- có ảnh và một category QA- rỗng (do người chạy tạo).",
+      "steps": [
+        "Chọn category có ảnh",
+        "Chọn category rỗng, quan sát lưới và dropzone",
+        "Chọn 'All'"
+      ],
+      "observation_point": "Biến where (layer_image_category_id _eq); lưới; thông báo rỗng; dropzone",
+      "expected_result": "Chọn category gửi query với layer_image_category_id _eq <category> và lưới chỉ có ảnh của category đó; category rỗng hiện 'Empty data' và dropzone vẫn dùng được; 'All' gồm ảnh của mọi category và ảnh chưa có category.",
+      "oracle": {
+        "kb_ids": [
+          "KB-018",
+          "KB-017"
+        ],
+        "oracle_strength": "BASELINE"
+      },
+      "status": "NEEDS_CONFIRMATION",
+      "open_question_draft": "Xác nhận hành vi lọc category và trạng thái 'Empty data' (dropzone vẫn dùng được) là expected.",
+      "oq_group": "BASELINE-CONFIRM-image-layer-library",
+      "related_kb_ids": [
+        "KB-015"
+      ],
+      "regression_watch_kb_ids": [],
+      "risk_refs": [],
+      "priority": "P3",
+      "automation_suitability": "SUITABLE",
+      "oq_id": "OQ-image-library-036"
+    },
+    {
+      "check_id": "CHK-021",
+      "capability_id": "CAP-IMG-05",
+      "dimension": "CORE",
+      "layer": "api",
+      "title": "Danh sách ảnh và phân trang cursor (page size 20)",
+      "applicability": {
+        "role": "merchant-owner",
+        "state": "thư viện có > 20 ảnh",
+        "environment": "staging",
+        "surface_or_device": "portal desktop — image picker modal + network"
+      },
+      "precondition": "Thư viện có hơn 20 ảnh (upload thêm ảnh QA- nếu cần).",
+      "steps": [
+        "Mở picker, quan sát query danh sách đầu tiên",
+        "Bấm nút trang sau",
+        "Bấm nút trang trước"
+      ],
+      "observation_point": "Query layer_images_connection (first, after, where, order); pageInfo; tuỳ chọn 'Show [20] entries'",
+      "expected_result": "Danh sách lấy qua POST /api/graphql/relay layer_images_connection(first: 20) với deleted_at null, loại master '%.svg'/'%.gpx', thứ tự id giảm dần; trang sau dùng after: <endCursor> và pageInfo.hasPreviousPage true; page size có các lựa chọn 20/50/100/250/500.",
+      "oracle": {
+        "kb_ids": [
+          "KB-015",
+          "KB-034"
+        ],
+        "oracle_strength": "BASELINE"
+      },
+      "status": "NEEDS_CONFIRMATION",
+      "open_question_draft": "Xác nhận contract danh sách (relay cursor, lọc deleted_at/svg/gpx do client ghép) là expected; quyền của client với các điều kiện lọc này có được server ràng buộc không?",
+      "oq_group": "BASELINE-CONFIRM-image-layer-library",
+      "related_kb_ids": [],
+      "regression_watch_kb_ids": [],
+      "risk_refs": [
+        "R-IMG-03"
+      ],
+      "priority": "P3",
+      "automation_suitability": "SUITABLE",
+      "oq_id": "OQ-image-library-036"
+    },
+    {
+      "check_id": "CHK-022",
+      "capability_id": "CAP-IMG-05",
+      "dimension": "BOUNDARY",
+      "layer": "portal",
+      "title": "Đổi page size, lùi nhiều trang, search kết hợp lọc category",
+      "applicability": {
+        "role": "merchant-owner",
+        "state": "thư viện có > 50 ảnh",
+        "environment": "staging",
+        "surface_or_device": "portal desktop — image picker modal + network"
+      },
+      "precondition": "Thư viện có đủ ảnh để có ≥3 trang ở page size 20.",
+      "steps": [
+        "Đổi page size lần lượt 50/100/250/500",
+        "Đi tới trang 3 rồi lùi về trang 1",
+        "Chọn một category rồi search trong category đó"
+      ],
+      "observation_point": "Biến first/after/where của query; số card; điều kiện kết hợp search + category",
+      "expected_result": "",
+      "observed_current_behavior": "Chưa quan sát (NOT_COVERED); chỉ thử 2 trang ở page size 20, search và lọc thử riêng lẻ.",
+      "oracle": {
+        "kb_ids": [],
+        "oracle_strength": "NONE"
+      },
+      "status": "NEEDS_CONFIRMATION",
+      "open_question_draft": "Đổi page size, lùi trang nhiều lần và search kết hợp filter category hoạt động ra sao?",
+      "unknown_area_ref": "UA-IMG-09",
+      "related_kb_ids": [
+        "KB-018",
+        "KB-034"
+      ],
+      "regression_watch_kb_ids": [],
+      "risk_refs": [],
+      "priority": "P3",
+      "coverage_status": "NOT_COVERED",
+      "automation_suitability": "UNKNOWN",
+      "oq_id": "OQ-image-library-027"
+    },
+    {
+      "check_id": "CHK-023",
+      "capability_id": "CAP-IMG-05",
+      "dimension": "STATE_DATA",
+      "layer": "portal",
+      "title": "Trạng thái toàn bộ image library rỗng (0 ảnh)",
+      "applicability": {
+        "role": "merchant-owner",
+        "state": "account/store có image library 0 ảnh",
+        "environment": "staging",
+        "surface_or_device": "portal desktop — image picker modal"
+      },
+      "precondition": "Account/store test có image library trống (không xoá ảnh có sẵn không do QA tạo).",
+      "steps": [
+        "Mở image picker từ '+ Layer' > Static Image",
+        "Quan sát lưới, thông báo rỗng, nút Select và dropzone"
+      ],
+      "observation_point": "Thông báo rỗng; trạng thái nút chọn; dropzone",
+      "expected_result": "",
+      "observed_current_behavior": "Chưa quan sát (NOT_COVERED). Chỉ biết category rỗng hiện 'Empty data' và search không khớp hiện 'No data matched', dropzone vẫn dùng được.",
+      "oracle": {
+        "kb_ids": [],
+        "oracle_strength": "NONE"
+      },
+      "status": "NEEDS_CONFIRMATION",
+      "open_question_draft": "Khi image library có 0 ảnh, picker hiển thị gì và việc thêm layer có bị chặn không? (trả lời phần còn lại của OQ-artwork-047)",
+      "unknown_area_ref": "UA-IMG-07",
+      "related_kb_ids": [
+        "KB-017"
+      ],
+      "regression_watch_kb_ids": [],
+      "risk_refs": [],
+      "priority": "P3",
+      "coverage_status": "NOT_COVERED",
+      "automation_suitability": "UNKNOWN",
+      "oq_id": "OQ-image-library-006"
+    },
+    {
+      "check_id": "CHK-024",
+      "capability_id": "CAP-IMG-05",
+      "dimension": "STATE_DATA",
+      "layer": "portal",
+      "title": "Lựa chọn giữ qua chuyển trang và bulk action trên ảnh không hiển thị (watch nghi defect)",
+      "applicability": {
+        "role": "merchant-owner",
+        "state": "≥2 trang; đã tick ảnh ở trang 1",
+        "environment": "staging",
+        "surface_or_device": "portal desktop — image picker modal"
+      },
+      "precondition": "Thư viện có > 20 ảnh; tick 6 ảnh QA- ở trang 1.",
+      "steps": [
+        "Tick 6 ảnh QA- ở trang 1",
+        "Sang trang 2",
+        "Quan sát tick trên card, nhãn 'Select N images', trạng thái 'Delete' và 'Move to category' (KHÔNG bấm Delete trừ khi mọi ảnh được tick đều là QA- do người chạy tạo)"
+      ],
+      "observation_point": "Card được tick ở trang 2; nhãn chân modal; trạng thái nút bulk",
+      "expected_result": "",
+      "observed_current_behavior": "Trang 2 không có card nào tick nhưng chân modal vẫn 'Select 6 images', 'Delete' và 'Move to category' vẫn bật — bulk action tác động lên ảnh không hiển thị ở trang hiện tại.",
+      "oracle": {
+        "kb_ids": [],
+        "oracle_strength": "NONE"
+      },
+      "status": "NEEDS_CONFIRMATION",
+      "open_question_draft": "Giữ lựa chọn qua chuyển trang và cho Delete/Move/Select tác động lên ảnh không hiển thị có phải hành vi mong muốn? Nếu có, UI có cần báo số ảnh ẩn trước khi xoá?",
+      "unknown_area_ref": "UA-IMG-04",
+      "related_kb_ids": [
+        "KB-034",
+        "KB-040"
+      ],
+      "regression_watch_kb_ids": [
+        "KB-035"
+      ],
+      "risk_refs": [
+        "R-IMG-01"
+      ],
+      "priority": "P1",
+      "automation_suitability": "HYBRID",
+      "oq_id": "OQ-image-library-010"
+    },
+    {
+      "check_id": "CHK-025",
+      "capability_id": "CAP-IMG-06",
+      "dimension": "CORE",
+      "layer": "portal",
+      "title": "Đổi tên ảnh inline và tên mới còn sau khi mở lại picker",
+      "applicability": {
+        "role": "merchant-owner",
+        "state": "picker mở, có ảnh QA-",
+        "environment": "staging",
+        "surface_or_device": "portal desktop — image picker modal + network"
+      },
+      "precondition": "Có ảnh QA- do người chạy tạo.",
+      "steps": [
+        "Bấm vào tên ảnh (link) trên card",
+        "Nhập tên mới tiền tố QA-, bấm Save",
+        "Đóng picker, mở lại (hoặc bấm Reload), tìm ảnh"
+      ],
+      "observation_point": "Popover; mutation update_layer_images; nhãn card; tên sau khi mở lại",
+      "expected_result": "Popover có ô 'Name', Save và Cancel; Save gửi GraphQL mutation update_layer_images(_set {name, updated_at}) -> 200; nhãn card đổi tại chỗ không tải lại danh sách, không có toast; tên mới vẫn còn khi mở lại picker.",
+      "oracle": {
+        "kb_ids": [
+          "KB-030",
+          "KB-041"
+        ],
+        "oracle_strength": "BASELINE"
+      },
+      "status": "NEEDS_CONFIRMATION",
+      "open_question_draft": "Xác nhận đổi tên inline (không toast, updated_at do client gửi) là expected; server có tự đặt updated_at không?",
+      "oq_group": "BASELINE-CONFIRM-image-layer-library",
+      "related_kb_ids": [],
+      "regression_watch_kb_ids": [],
+      "risk_refs": [
+        "R-IMG-03"
+      ],
+      "priority": "P2",
+      "automation_suitability": "SUITABLE",
+      "oq_id": "OQ-image-library-036"
+    },
+    {
+      "check_id": "CHK-026",
+      "capability_id": "CAP-IMG-06",
+      "dimension": "NEGATIVE",
+      "layer": "portal",
+      "title": "Đổi tên ảnh thành chuỗi rỗng (watch nghi defect)",
+      "applicability": {
+        "role": "merchant-owner",
+        "state": "popover đổi tên mở",
+        "environment": "staging",
+        "surface_or_device": "portal desktop — image picker modal + network"
+      },
+      "precondition": "Có ảnh QA- do người chạy tạo.",
+      "steps": [
+        "Mở popover đổi tên, xoá hết tên",
+        "Bấm Save",
+        "Quan sát response và nhãn card"
+      ],
+      "observation_point": "Trạng thái nút Save; response update_layer_images; nhãn card",
+      "expected_result": "",
+      "observed_current_behavior": "Không có kiểm tra client/server: update_layer_images với name '' trả 200, nhãn card hiện '...'.",
+      "oracle": {
+        "kb_ids": [],
+        "oracle_strength": "NONE"
+      },
+      "status": "NEEDS_CONFIRMATION",
+      "open_question_draft": "Tên ảnh có bắt buộc không? Đổi tên thành rỗng (200, card '...') là defect hay chấp nhận được?",
+      "unknown_area_ref": "UA-IMG-03",
+      "related_kb_ids": [
+        "KB-030"
+      ],
+      "regression_watch_kb_ids": [
+        "KB-031"
+      ],
+      "risk_refs": [
+        "R-IMG-05"
+      ],
+      "priority": "P3",
+      "automation_suitability": "SUITABLE",
+      "oq_id": "OQ-image-library-008"
+    },
+    {
+      "check_id": "CHK-027",
+      "capability_id": "CAP-IMG-07",
+      "dimension": "CORE",
+      "layer": "api",
+      "title": "Move nhiều ảnh sang category khác",
+      "applicability": {
+        "role": "merchant-owner",
+        "state": "≥1 ảnh QA- được tick, có category QA- đích",
+        "environment": "staging",
+        "surface_or_device": "portal desktop — image picker modal + network"
+      },
+      "precondition": "Có ≥2 ảnh QA- và một category QA- đích (do người chạy tạo).",
+      "steps": [
+        "Tick 2 ảnh QA-",
+        "Bấm 'Move to category', chọn category đích trong combobox, bấm Move",
+        "Chọn category đích ở cột trái"
+      ],
+      "observation_point": "PUT /api/layer-images/move (body, response); lựa chọn sau move; nội dung category đích; toast",
+      "expected_result": "Dialog 'Category: [Select option]' có combobox tìm kiếm; Move gửi PUT /api/layer-images/move {category_id, ids} -> 200 trả mảng bản ghi; danh sách tải lại, lựa chọn bị xoá, không có toast; category đích chứa 2 ảnh.",
+      "oracle": {
+        "kb_ids": [
+          "KB-032"
+        ],
+        "oracle_strength": "BASELINE"
+      },
+      "status": "NEEDS_CONFIRMATION",
+      "open_question_draft": "Xác nhận move xoá lựa chọn sau khi xong (mockup library thì giữ) và không toast là expected.",
+      "oq_group": "BASELINE-CONFIRM-image-layer-library",
+      "related_kb_ids": [
+        "KB-034"
+      ],
+      "regression_watch_kb_ids": [],
+      "risk_refs": [],
+      "priority": "P2",
+      "automation_suitability": "SUITABLE",
+      "oq_id": "OQ-image-library-036"
+    },
+    {
+      "check_id": "CHK-028",
+      "capability_id": "CAP-IMG-07",
+      "dimension": "NEGATIVE",
+      "layer": "api",
+      "title": "Move khi chưa chọn category, kể cả ảnh đang thuộc category (watch nghi defect)",
+      "applicability": {
+        "role": "merchant-owner",
+        "state": "dialog Move mở, chưa chọn category",
+        "environment": "staging",
+        "surface_or_device": "portal desktop — image picker modal + network"
+      },
+      "precondition": "Có ảnh QA- chưa có category VÀ ảnh QA- đang thuộc một category QA-.",
+      "steps": [
+        "Tick ảnh chưa có category, mở 'Move to category', không chọn gì, bấm Move",
+        "Lặp lại với ảnh đang thuộc category QA-",
+        "Kiểm category của ảnh sau thao tác"
+      ],
+      "observation_point": "Body/response PUT /api/layer-images/move; dialog; category của ảnh sau move",
+      "expected_result": "",
+      "observed_current_behavior": "Với ảnh vốn chưa có category: PUT {category_id: null} -> 200, dialog đóng, lựa chọn bị xoá, không có kiểm tra. Ảnh đang thuộc category bị gỡ khỏi category hay không: chưa quan sát.",
+      "oracle": {
+        "kb_ids": [],
+        "oracle_strength": "NONE"
+      },
+      "status": "NEEDS_CONFIRMATION",
+      "open_question_draft": "Move không chọn category (category_id null -> 200) là thiếu validation hay cách 'gỡ khỏi category'? Ảnh đang thuộc category có bị gỡ im lặng không?",
+      "unknown_area_ref": "UA-IMG-05",
+      "related_kb_ids": [
+        "KB-032"
+      ],
+      "regression_watch_kb_ids": [
+        "KB-033"
+      ],
+      "risk_refs": [
+        "R-IMG-05"
+      ],
+      "priority": "P2",
+      "automation_suitability": "SUITABLE",
+      "oq_id": "OQ-image-library-011"
+    },
+    {
+      "check_id": "CHK-029",
+      "capability_id": "CAP-IMG-08",
+      "dimension": "INTEGRATION",
+      "layer": "portal",
+      "title": "Chọn 1 ảnh từ thư viện thêm layer Static Image vào artwork (chưa lưu)",
+      "applicability": {
+        "role": "merchant-owner",
+        "state": "artwork editor, picker mở từ '+ Layer' > Static Image",
+        "environment": "staging",
+        "surface_or_device": "portal desktop — artwork editor + image picker"
+      },
+      "precondition": "Artwork test do QA sở hữu đang mở; thư viện có ảnh QA-.",
+      "steps": [
+        "Tick đúng 1 ảnh QA-",
+        "Bấm 'Select 1 image'",
+        "Quan sát danh sách layer, layer được chọn và network"
+      ],
+      "observation_point": "Picker; danh sách layer; JSON layer mới (type, tên, url); network lúc chọn",
+      "expected_result": "Picker đóng; một layer type 'static-photo' (tên = tên ảnh, url trỏ file _large.webp của ảnh) được thêm lên đầu danh sách layer và được chọn; không có request API nào lúc chọn — layer chỉ ở trạng thái chưa lưu của editor.",
+      "oracle": {
+        "kb_ids": [
+          "KB-036"
+        ],
+        "oracle_strength": "BASELINE"
+      },
+      "status": "NEEDS_CONFIRMATION",
+      "open_question_draft": "Xác nhận chọn ảnh tạo layer 'static-photo' tham chiếu url _large.webp (không bằng id ảnh) là expected; kích thước hiển thị mặc định trên canvas theo quy tắc nào?",
+      "oq_group": "BASELINE-CONFIRM-image-layer-library",
+      "related_kb_ids": [
+        "KB-041",
+        "KB-039"
+      ],
+      "regression_watch_kb_ids": [],
+      "risk_refs": [],
+      "priority": "P2",
+      "notes": "Không assert kích thước 400x400 trên canvas (1 mẫu ảnh 10x10, không suy quy tắc).",
+      "automation_suitability": "HYBRID",
+      "oq_id": "OQ-image-library-036"
+    },
+    {
+      "check_id": "CHK-030",
+      "capability_id": "CAP-IMG-08",
+      "dimension": "CORE",
+      "layer": "portal",
+      "title": "Mở picker ở chế độ 'Replace image layer'",
+      "applicability": {
+        "role": "merchant-owner",
+        "state": "artwork có ≥1 layer ảnh",
+        "environment": "staging",
+        "surface_or_device": "portal desktop — artwork editor + image picker"
+      },
+      "precondition": "Artwork test do QA sở hữu có ít nhất 1 layer ảnh.",
+      "steps": [
+        "Bấm icon 'Replace image layer' trên dòng layer ảnh",
+        "Quan sát tiêu đề và chân modal trước khi chọn ảnh",
+        "Tick 1 ảnh, quan sát nút 'Select'"
+      ],
+      "observation_point": "Tiêu đề picker; trạng thái nút 'Select' trước/sau khi chọn",
+      "expected_result": "Cùng image picker mở với tiêu đề 'Choose new image for these layers:'; chân modal có 'Move to category' và 'Select'; 'Select' disable cho tới khi chọn ảnh.",
+      "oracle": {
+        "kb_ids": [
+          "KB-037"
+        ],
+        "oracle_strength": "BASELINE"
+      },
+      "status": "NEEDS_CONFIRMATION",
+      "open_question_draft": "Xác nhận chế độ Replace (tiêu đề, Select disable tới khi chọn) là expected; kết quả sau khi bấm Select ở chế độ này chưa được quan sát.",
+      "oq_group": "BASELINE-CONFIRM-image-layer-library",
+      "related_kb_ids": [],
+      "regression_watch_kb_ids": [],
+      "risk_refs": [],
+      "priority": "P3",
+      "automation_suitability": "SUITABLE",
+      "oq_id": "OQ-image-library-036"
+    },
+    {
+      "check_id": "CHK-031",
+      "capability_id": "CAP-IMG-08",
+      "dimension": "BOUNDARY",
+      "layer": "portal",
+      "title": "'Select N images' với N > 1",
+      "applicability": {
+        "role": "merchant-owner",
+        "state": "picker mở từ Static Image, tick ≥2 ảnh",
+        "environment": "staging",
+        "surface_or_device": "portal desktop — artwork editor + image picker"
+      },
+      "precondition": "Artwork test do QA sở hữu đang mở; ≥2 ảnh QA-.",
+      "steps": [
+        "Tick 2 ảnh QA-",
+        "Bấm 'Select 2 images'",
+        "Quan sát danh sách layer"
+      ],
+      "observation_point": "Số layer được thêm; thứ tự; layer được chọn",
+      "expected_result": "",
+      "observed_current_behavior": "Chưa quan sát (NOT_COVERED); chỉ thử N=1.",
+      "oracle": {
+        "kb_ids": [],
+        "oracle_strength": "NONE"
+      },
+      "status": "NEEDS_CONFIRMATION",
+      "open_question_draft": "'Select N images' với N>1 thêm N layer, một layer, hay bị chặn? Kích thước hiển thị mặc định trên canvas theo quy tắc nào?",
+      "unknown_area_ref": "UA-IMG-08",
+      "related_kb_ids": [
+        "KB-036",
+        "KB-034"
+      ],
+      "regression_watch_kb_ids": [],
+      "risk_refs": [],
+      "priority": "P3",
+      "coverage_status": "NOT_COVERED",
+      "automation_suitability": "UNKNOWN",
+      "oq_id": "OQ-image-library-026"
+    },
+    {
+      "check_id": "CHK-032",
+      "capability_id": "CAP-IMG-09",
+      "dimension": "CORE",
+      "layer": "api",
+      "title": "Xoá đơn một ảnh không được artwork đang mở dùng",
+      "applicability": {
+        "role": "merchant-owner",
+        "state": "ảnh QA- không được layer nào của artwork đang mở dùng",
+        "environment": "staging",
+        "surface_or_device": "portal desktop — image picker modal + network"
+      },
+      "precondition": "Ảnh QA- do người chạy tạo, chưa được thêm vào artwork đang mở.",
+      "steps": [
+        "Bấm icon thùng rác trên card ảnh QA-",
+        "Đọc dialog Confirm, bấm Remove",
+        "Bấm Reload, tìm lại ảnh"
+      ],
+      "observation_point": "Nội dung Confirm; DELETE /api/layer-images/{id} (body, response); lưới sau Reload",
+      "expected_result": "Dialog 'Confirm' ghi 'Are you sure to remove <tên ảnh>' với 'Remove'/'Cancel'; Remove gửi DELETE /api/layer-images/{id} mang body là JSON artwork hiện tại -> 200 'Successfully deleted the layer image.'; danh sách tải lại và ảnh không còn.",
+      "oracle": {
+        "kb_ids": [
+          "KB-038"
+        ],
+        "oracle_strength": "BASELINE"
+      },
+      "status": "NEEDS_CONFIRMATION",
+      "open_question_draft": "Xác nhận luồng xoá đơn (confirm có tên ảnh, DELETE mang JSON artwork hiện tại) là expected; xoá là soft delete hay xoá hẳn?",
+      "oq_group": "BASELINE-CONFIRM-image-layer-library",
+      "related_kb_ids": [
+        "KB-015",
+        "KB-039"
+      ],
+      "regression_watch_kb_ids": [],
+      "risk_refs": [
+        "R-IMG-02"
+      ],
+      "priority": "P1",
+      "automation_suitability": "SUITABLE",
+      "oq_id": "OQ-image-library-036"
+    },
+    {
+      "check_id": "CHK-033",
+      "capability_id": "CAP-IMG-09",
+      "dimension": "NEGATIVE",
+      "layer": "api",
+      "title": "Xoá ảnh đang được layer (chưa lưu) của artwork đang mở dùng (watch nghi defect)",
+      "applicability": {
+        "role": "merchant-owner",
+        "state": "ảnh QA- đã được thêm thành layer trong artwork đang mở, chưa lưu",
+        "environment": "staging",
+        "surface_or_device": "portal desktop — artwork editor + image picker + network"
+      },
+      "precondition": "Artwork test do QA sở hữu đang mở; đã thêm ảnh QA- thành layer (CHK-029), không Save.",
+      "steps": [
+        "Mở lại picker, bấm thùng rác trên chính ảnh đó, bấm Remove",
+        "Quan sát response, toast, lưới và layer trên canvas",
+        "Rời editor không lưu (cleanup)"
+      ],
+      "observation_point": "Confirm (có cảnh báo trước không); response DELETE; toast; ảnh và layer sau thao tác",
+      "expected_result": "",
+      "observed_current_behavior": "Confirm không báo trước; DELETE trả 400 'This image has already been added to the current artwork.'; UI toast 'Something went wrong!'; ảnh và layer giữ nguyên. Kiểm tra dựa trên JSON artwork client gửi trong body; layer tham chiếu ảnh bằng url.",
+      "oracle": {
+        "kb_ids": [],
+        "oracle_strength": "NONE"
+      },
+      "status": "NEEDS_CONFIRMATION",
+      "open_question_draft": "Chặn xoá ảnh đang dùng có phải expected, và server có kiểm độc lập với JSON artwork client gửi không? Confirm/toast có nên báo rõ lý do?",
+      "unknown_area_ref": "UA-IMG-06",
+      "related_kb_ids": [
+        "KB-038",
+        "KB-036"
+      ],
+      "regression_watch_kb_ids": [
+        "KB-039"
+      ],
+      "risk_refs": [
+        "R-IMG-02"
+      ],
+      "priority": "P1",
+      "automation_suitability": "HYBRID",
+      "oq_id": "OQ-image-library-015"
+    },
+    {
+      "check_id": "CHK-034",
+      "capability_id": "CAP-IMG-09",
+      "dimension": "CORE",
+      "layer": "api",
+      "title": "Xoá hàng loạt ảnh không được dùng: kiểm in-use rồi xoá từng ảnh",
+      "applicability": {
+        "role": "merchant-owner",
+        "state": "tick nhiều ảnh QA- không được dùng",
+        "environment": "staging",
+        "surface_or_device": "portal desktop — image picker modal + network"
+      },
+      "precondition": "Nhiều ảnh QA- do người chạy tạo, không được artwork nào dùng; chỉ tick ảnh QA- (cùng một trang).",
+      "steps": [
+        "Tick N ảnh QA-",
+        "Bấm nút đỏ 'Delete', đọc dialog, bấm Remove",
+        "Quan sát network tới khi xong, đọc toast"
+      ],
+      "observation_point": "Dialog confirm; POST /api/layer-images/in-use (body, response); chuỗi DELETE; toast; lưới",
+      "expected_result": "Dialog 'Are you sure you want to remove N selected images?'; POST /api/layer-images/in-use {ids, templates} -> {in_use_ids: []}; sau đó DELETE tuần tự từng ảnh; toast 'N images removed'; N ảnh không còn trong lưới.",
+      "oracle": {
+        "kb_ids": [
+          "KB-040"
+        ],
+        "oracle_strength": "BASELINE"
+      },
+      "status": "NEEDS_CONFIRMATION",
+      "open_question_draft": "Xác nhận luồng xoá hàng loạt (in-use rồi DELETE tuần tự, toast 'N images removed') là expected; thời gian 2–5 giây/ảnh có chấp nhận được?",
+      "oq_group": "BASELINE-CONFIRM-image-layer-library",
+      "related_kb_ids": [
+        "KB-038",
+        "KB-035",
+        "KB-012"
+      ],
+      "regression_watch_kb_ids": [],
+      "risk_refs": [
+        "R-IMG-01",
+        "R-IMG-02"
+      ],
+      "priority": "P1",
+      "automation_suitability": "SUITABLE",
+      "oq_id": "OQ-image-library-036"
+    },
+    {
+      "check_id": "CHK-035",
+      "capability_id": "CAP-IMG-09",
+      "dimension": "INTEGRATION",
+      "layer": "api",
+      "title": "Xoá ảnh đang được một artwork ĐÃ LƯU khác dùng (đơn và hàng loạt, in_use_ids khác rỗng)",
+      "applicability": {
+        "role": "merchant-owner",
+        "state": "ảnh QA- được dùng trong artwork QA- đã lưu, artwork đang mở là artwork khác",
+        "environment": "staging",
+        "surface_or_device": "portal desktop — artwork editor + image picker + network"
+      },
+      "precondition": "Artwork A do QA tạo và được phép Save, chứa layer dùng ảnh QA- X; mở artwork B khác.",
+      "steps": [
+        "Trong artwork B, mở picker, xoá đơn ảnh X",
+        "Lặp lại với xoá hàng loạt có ảnh X",
+        "Mở lại artwork A, kiểm layer dùng ảnh X"
+      ],
+      "observation_point": "Response DELETE và in-use (in_use_ids); thông báo; trạng thái ảnh X và layer trong artwork A",
+      "expected_result": "",
+      "observed_current_behavior": "Chưa quan sát (NOT_COVERED, persistence_guard cấm Save artwork test có sẵn). Chỉ biết chặn 400 khi artwork đang mở dùng ảnh.",
+      "oracle": {
+        "kb_ids": [],
+        "oracle_strength": "NONE"
+      },
+      "status": "NEEDS_CONFIRMATION",
+      "open_question_draft": "Server có kiểm các artwork đã lưu khác dùng ảnh khi DELETE và in-use không? in_use_ids khác rỗng thì xoá hàng loạt bị chặn và báo gì? Artwork đã lưu sẽ ra sao nếu ảnh bị xoá?",
+      "unknown_area_ref": "UA-IMG-06",
+      "related_kb_ids": [
+        "KB-038",
+        "KB-040"
+      ],
+      "regression_watch_kb_ids": [
+        "KB-039"
+      ],
+      "risk_refs": [
+        "R-IMG-02"
+      ],
+      "priority": "P1",
+      "coverage_status": "NOT_COVERED",
+      "automation_suitability": "UNKNOWN",
+      "oq_id": "OQ-image-library-015"
+    },
+    {
+      "check_id": "CHK-036",
+      "capability_id": "CAP-IMG-08",
+      "dimension": "STATE_DATA",
+      "layer": "portal",
+      "title": "Thao tác thư viện có hiệu lực ngay, không phụ thuộc Save artwork; layer thêm từ picker mất khi rời editor không lưu",
+      "applicability": {
+        "role": "merchant-owner",
+        "state": "artwork editor có thay đổi chưa lưu",
+        "environment": "staging",
+        "surface_or_device": "portal desktop — artwork editor + image picker"
+      },
+      "precondition": "Artwork test do QA sở hữu đang mở.",
+      "steps": [
+        "Trong picker: upload 1 ảnh QA-, đổi tên nó, tạo 1 category QA- và move ảnh vào đó",
+        "Chọn ảnh vào layer ('Select 1 image')",
+        "Rời editor không lưu (Cancel, chấp nhận confirm rời trang)",
+        "Mở lại artwork và picker"
+      ],
+      "observation_point": "Ảnh/tên/category trong picker sau khi mở lại; danh sách layer của artwork",
+      "expected_result": "Ảnh, tên mới và category vẫn còn trong thư viện (đã ghi server ngay); layer thêm từ picker không còn trong artwork.",
+      "oracle": {
+        "kb_ids": [
+          "KB-041"
+        ],
+        "oracle_strength": "BASELINE"
+      },
+      "status": "NEEDS_CONFIRMATION",
+      "open_question_draft": "Xác nhận thao tác thư viện độc lập với Save artwork (ghi ngay) là expected.",
+      "oq_group": "BASELINE-CONFIRM-image-layer-library",
+      "related_kb_ids": [
+        "KB-036"
+      ],
+      "regression_watch_kb_ids": [],
+      "risk_refs": [],
+      "priority": "P2",
+      "automation_suitability": "HYBRID",
+      "oq_id": "OQ-image-library-036"
+    },
+    {
+      "check_id": "CHK-037",
+      "capability_id": "CAP-IMG-01",
+      "dimension": "INTEGRATION",
+      "layer": "portal",
+      "title": "Image layer library và mockup layer library là hai tập dữ liệu tách biệt",
+      "applicability": {
+        "role": "merchant-owner",
+        "state": "cả hai thư viện có ảnh QA- của người chạy",
+        "environment": "staging",
+        "surface_or_device": "portal desktop — artwork editor image picker + product base media library"
+      },
+      "precondition": "Một artwork test và một product base test do QA sở hữu.",
+      "steps": [
+        "Upload ảnh QA-IMG vào image picker và tạo category QA-IMG-CAT",
+        "Upload ảnh QA-MCK vào media library của product base và tạo category QA-MCK-CAT (không bấm Select/Assign)",
+        "Search QA-MCK trong image picker; search QA-IMG trong media library; so cột category hai bên"
+      ],
+      "observation_point": "Kết quả search mỗi bên; danh sách category mỗi bên; endpoint dùng",
+      "expected_result": "Ảnh của thư viện này không xuất hiện ở thư viện kia và category tách riêng; image library dùng /api/layer-images*, /api/layer-image-categories?type=clipart và GraphQL relay; mockup library dùng /api/mockup-layers*, /api/mockup-layer-categories.",
+      "oracle": {
+        "kb_ids": [
+          "KB-005"
+        ],
+        "oracle_strength": "BASELINE"
+      },
+      "status": "NEEDS_CONFIRMATION",
+      "open_question_draft": "Xác nhận hai thư viện tách dữ liệu theo thiết kế (không dùng chung ảnh giữa artwork và mockup).",
+      "oq_group": "BASELINE-CONFIRM-image-layer-library",
+      "related_kb_ids": [],
+      "regression_watch_kb_ids": [],
+      "risk_refs": [],
+      "priority": "P2",
+      "applies_to_features": [
+        "FEAT-01-image-layer-library",
+        "FEAT-02-mockup-layer-library"
+      ],
+      "automation_suitability": "HYBRID",
+      "oq_id": "OQ-image-library-036"
+    },
+    {
+      "check_id": "CHK-038",
+      "capability_id": "CAP-IMG-04",
+      "dimension": "INTEGRATION",
+      "layer": "api",
+      "title": "Category của image library (REST) so với Clipart Categories (GraphQL) và tab 'Choose from clipart category'",
+      "applicability": {
+        "role": "merchant-owner",
+        "state": "picker mở; có category QA- vừa tạo",
+        "environment": "staging",
+        "surface_or_device": "portal desktop — image picker (2 tab) + network"
+      },
+      "precondition": "Tạo một category QA- trong image picker.",
+      "steps": [
+        "So response GET /api/layer-image-categories?type=clipart với GraphQL clipart_categories trong cùng phiên",
+        "Mở tab 'Choose from clipart category', quan sát danh sách category"
+      ],
+      "observation_point": "Tập id hai nguồn; category hiển thị ở tab clipart",
+      "expected_result": "",
+      "observed_current_behavior": "REST trả [] khi chưa có category và trả đúng category vừa tạo; GraphQL clipart_categories trả 10 Clipart Category khác, hai tập id không giao nhau (2 lần đo). Tab 'Choose from clipart category' chưa được mở. Conflict cross-object với artwork (OQ-artwork-010) còn UNRESOLVED.",
+      "oracle": {
+        "kb_ids": [],
+        "oracle_strength": "NONE"
+      },
+      "status": "NEEDS_CONFIRMATION",
+      "open_question_draft": "REST /api/layer-image-categories?type=clipart và GraphQL clipart_categories có đọc hai tập dữ liệu khác nhau (category image library vs Clipart Categories) không? Tab 'Choose from clipart category' có thuộc phạm vi image library không?",
+      "unknown_area_ref": "UA-IMG-01",
+      "related_unknown_area_refs": [
+        "UA-IMG-12"
+      ],
+      "conflict_group": "CONF-image-library-R1026-04",
+      "related_kb_ids": [
+        "KB-042",
+        "KB-019",
+        "KB-015"
+      ],
+      "regression_watch_kb_ids": [],
+      "risk_refs": [
+        "R-IMG-08"
+      ],
+      "priority": "P3",
+      "automation_suitability": "HYBRID",
+      "oq_id": "OQ-image-library-004"
+    },
+    {
+      "check_id": "CHK-039",
+      "capability_id": "CAP-IMG-09",
+      "dimension": "PERMISSION",
+      "layer": "api",
+      "title": "Cross-tenant: account khác / phiên không hợp lệ thao tác ảnh và category theo id của account này",
+      "applicability": {
+        "role": "merchant-owner account B (khác) và phiên không hợp lệ",
+        "state": "biết id ảnh/category QA- của account A",
+        "environment": "staging",
+        "surface_or_device": "api"
+      },
+      "precondition": "Hai account merchant test được phép dùng (operator cấp); ảnh và category QA- thuộc account A.",
+      "steps": [
+        "Bằng phiên account B, gọi GraphQL get layer_images theo id của A, update_layer_images, PUT /api/layer-images/move, DELETE /api/layer-images/{id}, GET/PUT/DELETE /api/layer-image-categories/{id} của A",
+        "Lặp lại khi đổi header x-acting-user-id sang id của A",
+        "Lặp lại không có phiên"
+      ],
+      "observation_point": "Status/response từng request; dữ liệu của A sau thao tác",
+      "expected_result": "",
+      "observed_current_behavior": "Chưa quan sát (NOT_COVERED). Chỉ một account được quan sát; request mang x-acting-user-id = id account, ràng buộc với phiên chưa kiểm.",
+      "oracle": {
+        "kb_ids": [],
+        "oracle_strength": "NONE"
+      },
+      "status": "NEEDS_CONFIRMATION",
+      "open_question_draft": "Account khác hoặc phiên không hợp lệ có đọc/sửa/xoá được ảnh và category theo id của account này không? Server có ràng buộc x-acting-user-id với phiên không?",
+      "unknown_area_ref": "UA-OBJ-09",
+      "related_kb_ids": [
+        "KB-013",
+        "KB-006",
+        "KB-015",
+        "KB-030"
+      ],
+      "regression_watch_kb_ids": [],
+      "risk_refs": [
+        "R-IMG-03"
+      ],
+      "priority": "P1",
+      "coverage_status": "NOT_COVERED",
+      "automation_suitability": "UNKNOWN",
+      "oq_id": "OQ-image-library-022"
+    },
+    {
+      "check_id": "CHK-040",
+      "capability_id": "CAP-IMG-05",
+      "dimension": "PERMISSION",
+      "layer": "portal",
+      "title": "Role/plan khác: điểm vào image picker và quyền thao tác thư viện",
+      "applicability": {
+        "role": "role/plan khác merchant-owner (staff, plan thấp hơn)",
+        "state": "artwork editor",
+        "environment": "staging",
+        "surface_or_device": "portal desktop"
+      },
+      "precondition": "Account test với role/plan khác do operator cấp.",
+      "steps": [
+        "Mở artwork editor, '+ Layer' > Static Image",
+        "Thử upload, tạo category, xoá ảnh QA-"
+      ],
+      "observation_point": "Có điểm vào không; thông báo access-denied (nếu có); response API",
+      "expected_result": "",
+      "observed_current_behavior": "Chưa quan sát (NOT_COVERED); chỉ một account/plan merchant-owner; không có trang thư viện độc lập trên account đó.",
+      "oracle": {
+        "kb_ids": [],
+        "oracle_strength": "NONE"
+      },
+      "status": "NEEDS_CONFIRMATION",
+      "open_question_draft": "Plan/role khác có thấy điểm vào image library, có trang thư viện độc lập, hay bị giới hạn thao tác không?",
+      "unknown_area_ref": "UA-OBJ-11",
+      "related_kb_ids": [
+        "KB-001",
+        "KB-003"
+      ],
+      "regression_watch_kb_ids": [],
+      "risk_refs": [],
+      "priority": "P2",
+      "coverage_status": "NOT_COVERED",
+      "automation_suitability": "UNKNOWN",
+      "oq_id": "OQ-image-library-024"
+    },
+    {
+      "check_id": "CHK-041",
+      "capability_id": "CAP-IMG-09",
+      "dimension": "BOUNDARY",
+      "layer": "api",
+      "title": "Hành vi khi vượt rate limit (in-use 60, by-temporary-file 1000, graphql 300)",
+      "applicability": {
+        "role": "merchant-owner",
+        "state": "bulk delete / upload số lượng lớn",
+        "environment": "staging",
+        "surface_or_device": "api"
+      },
+      "precondition": "Được operator cho phép tạo tải trên staging; dữ liệu QA-.",
+      "steps": [
+        "Ghi header x-ratelimit-limit / remaining của in-use, by-temporary-file, graphql",
+        "Gọi in-use nhiều hơn limit trong cửa sổ quota",
+        "Quan sát response và UI khi vượt"
+      ],
+      "observation_point": "Header rate limit; status khi vượt; thông báo UI",
+      "expected_result": "",
+      "observed_current_behavior": "Đã thấy header x-ratelimit-limit 300 (/api/graphql, /api/graphql/relay), 1000 (/api/layer-images/by-temporary-file), 60 (/api/layer-images/in-use); endpoint category không trả header. Hành vi khi vượt chưa thử; chu kỳ theo ngày chỉ là suy đoán.",
+      "oracle": {
+        "kb_ids": [],
+        "oracle_strength": "NONE"
+      },
+      "status": "NEEDS_CONFIRMATION",
+      "open_question_draft": "Khi vượt x-ratelimit-limit thì client/server phản ứng thế nào? Chu kỳ quota có đúng theo ngày không?",
+      "unknown_area_ref": "UA-OBJ-10",
+      "related_kb_ids": [
+        "KB-012",
+        "KB-040"
+      ],
+      "regression_watch_kb_ids": [],
+      "risk_refs": [],
+      "priority": "P3",
+      "coverage_status": "NOT_COVERED",
+      "automation_suitability": "UNKNOWN",
+      "oq_id": "OQ-image-library-023"
+    },
+    {
+      "check_id": "CHK-042",
+      "capability_id": "CAP-IMG-08",
+      "dimension": "INTEGRATION",
+      "layer": "portal",
+      "title": "Picker của các layer type khác (Photo Upload, Clipart Category tab 'Upload an image', Dynamic Clipart) có dùng chung image library",
+      "applicability": {
+        "role": "merchant-owner",
+        "state": "artwork editor",
+        "environment": "staging",
+        "surface_or_device": "portal desktop — artwork editor"
+      },
+      "precondition": "Artwork test do QA sở hữu; thư viện có ảnh QA-.",
+      "steps": [
+        "Thêm lần lượt layer Photo Upload, Clipart Category, Dynamic Clipart by Text",
+        "Mở picker/tab 'Upload an image' của từng loại (nếu có), search ảnh QA-"
+      ],
+      "observation_point": "Component picker; ảnh QA- có xuất hiện; endpoint dùng",
+      "expected_result": "",
+      "observed_current_behavior": "Chưa quan sát (NOT_COVERED); giả định dùng chung component chưa kiểm.",
+      "oracle": {
+        "kb_ids": [],
+        "oracle_strength": "NONE"
+      },
+      "status": "NEEDS_CONFIRMATION",
+      "open_question_draft": "Picker của Photo Upload, Clipart Category (tab 'Upload an image') và Dynamic Clipart có dùng chung image layer library/component không?",
+      "unknown_area_ref": "UA-OBJ-06",
+      "related_kb_ids": [
+        "KB-003",
+        "KB-004"
+      ],
+      "regression_watch_kb_ids": [],
+      "risk_refs": [],
+      "priority": "P3",
+      "coverage_status": "NOT_COVERED",
+      "automation_suitability": "UNKNOWN",
+      "oq_id": "OQ-image-library-019"
+    },
+    {
+      "check_id": "CHK-043",
+      "capability_id": "CAP-IMG-05",
+      "dimension": "INTEGRATION",
+      "layer": "api",
+      "title": "Ranh giới dữ liệu image library và Vector (SVG bị loại khỏi picker)",
+      "applicability": {
+        "role": "merchant-owner",
+        "state": "artwork editor; có vector QA-",
+        "environment": "staging",
+        "surface_or_device": "portal desktop + network"
+      },
+      "precondition": "Một vector QA- upload qua luồng Vector layer.",
+      "steps": [
+        "Upload vector QA- qua Vector layer (luồng /api/layer-images/svg)",
+        "Mở image picker, search tên vector đó; quan sát điều kiện where của query"
+      ],
+      "observation_point": "Vector có xuất hiện trong image picker; điều kiện master NOT ILIKE '%.svg'",
+      "expected_result": "",
+      "observed_current_behavior": "Chưa quan sát (NOT_COVERED). Query danh sách image picker loại master '%.svg'/'%.gpx' (do client ghép vào where); luồng /api/layer-images/svg chưa được trace.",
+      "oracle": {
+        "kb_ids": [],
+        "oracle_strength": "NONE"
+      },
+      "status": "NEEDS_CONFIRMATION",
+      "open_question_draft": "Luồng /api/layer-images/svg của Vector layer có cùng bảng dữ liệu với image library không? Việc loại SVG do client ghép điều kiện có phải ranh giới duy nhất?",
+      "unknown_area_ref": "UA-OBJ-07",
+      "related_kb_ids": [
+        "KB-015",
+        "KB-008"
+      ],
+      "regression_watch_kb_ids": [],
+      "risk_refs": [
+        "R-IMG-03"
+      ],
+      "priority": "P3",
+      "coverage_status": "NOT_COVERED",
+      "automation_suitability": "UNKNOWN",
+      "oq_id": "OQ-image-library-020"
+    }
+  ],
+  "coverage_by_feature_and_risk": [
+    {
+      "feature_id": "FEAT-01-image-layer-library",
+      "capability_id": "CAP-IMG-01",
+      "name": "Upload ảnh (một/nhiều file)",
+      "check_ids": [
+        "CHK-002",
+        "CHK-004",
+        "CHK-009",
+        "CHK-010",
+        "CHK-012",
+        "CHK-037"
+      ],
+      "max_oracle": "BASELINE",
+      "gaps": [
+        "kéo-thả (CHK-012 NONE)",
+        "host PUT chưa xác nhận (CHK-009 NONE)"
+      ]
+    },
+    {
+      "feature_id": "FEAT-01-image-layer-library",
+      "capability_id": "CAP-IMG-02",
+      "name": "Trạng thái xử lý sau upload",
+      "check_ids": [
+        "CHK-003"
+      ],
+      "max_oracle": "BASELINE",
+      "gaps": [
+        "giới hạn số lần poll/timeout"
+      ]
+    },
+    {
+      "feature_id": "FEAT-01-image-layer-library",
+      "capability_id": "CAP-IMG-03",
+      "name": "Kiểm tra file khi upload",
+      "check_ids": [
+        "CHK-005",
+        "CHK-006",
+        "CHK-007",
+        "CHK-008",
+        "CHK-011"
+      ],
+      "max_oracle": "BASELINE",
+      "gaps": [
+        "giới hạn kích thước (CHK-007 NONE)",
+        "GIF/WebP (CHK-011 NONE)",
+        "temporary file (CHK-008 NONE)"
+      ]
+    },
+    {
+      "feature_id": "FEAT-01-image-layer-library",
+      "capability_id": "CAP-IMG-04",
+      "name": "Quản lý category",
+      "check_ids": [
+        "CHK-013",
+        "CHK-014",
+        "CHK-015",
+        "CHK-016",
+        "CHK-017",
+        "CHK-018",
+        "CHK-038"
+      ],
+      "max_oracle": "BASELINE",
+      "gaps": [
+        "update tên rỗng (CHK-016)",
+        "boundary tên (CHK-018)",
+        "REST vs GraphQL UNRESOLVED (CHK-038)"
+      ]
+    },
+    {
+      "feature_id": "FEAT-01-image-layer-library",
+      "capability_id": "CAP-IMG-05",
+      "name": "Duyệt/tìm/lọc/phân trang",
+      "check_ids": [
+        "CHK-001",
+        "CHK-019",
+        "CHK-020",
+        "CHK-021",
+        "CHK-022",
+        "CHK-023",
+        "CHK-024",
+        "CHK-040",
+        "CHK-043"
+      ],
+      "max_oracle": "BASELINE",
+      "gaps": [
+        "page size/lùi trang/kết hợp (CHK-022)",
+        "thư viện rỗng (CHK-023)",
+        "chọn qua trang, nghi defect (CHK-024)"
+      ]
+    },
+    {
+      "feature_id": "FEAT-01-image-layer-library",
+      "capability_id": "CAP-IMG-06",
+      "name": "Đổi tên ảnh",
+      "check_ids": [
+        "CHK-025",
+        "CHK-026"
+      ],
+      "max_oracle": "BASELINE",
+      "gaps": [
+        "tên rỗng, nghi defect (CHK-026)"
+      ]
+    },
+    {
+      "feature_id": "FEAT-01-image-layer-library",
+      "capability_id": "CAP-IMG-07",
+      "name": "Move sang category",
+      "check_ids": [
+        "CHK-027",
+        "CHK-028"
+      ],
+      "max_oracle": "BASELINE",
+      "gaps": [
+        "move không chọn category, nghi defect (CHK-028)"
+      ]
+    },
+    {
+      "feature_id": "FEAT-01-image-layer-library",
+      "capability_id": "CAP-IMG-08",
+      "name": "Chọn ảnh vào layer",
+      "check_ids": [
+        "CHK-029",
+        "CHK-030",
+        "CHK-031",
+        "CHK-036",
+        "CHK-042"
+      ],
+      "max_oracle": "BASELINE",
+      "gaps": [
+        "N>1 (CHK-031)",
+        "kết quả Replace chưa quan sát",
+        "picker layer type khác (CHK-042)"
+      ]
+    },
+    {
+      "feature_id": "FEAT-01-image-layer-library",
+      "capability_id": "CAP-IMG-09",
+      "name": "Xoá ảnh kèm kiểm tra in-use",
+      "check_ids": [
+        "CHK-032",
+        "CHK-033",
+        "CHK-034",
+        "CHK-035",
+        "CHK-039",
+        "CHK-041"
+      ],
+      "max_oracle": "BASELINE",
+      "gaps": [
+        "artwork đã lưu dùng ảnh (CHK-035)",
+        "cross-tenant (CHK-039)",
+        "rate limit (CHK-041)"
+      ]
+    },
+    {
+      "feature_id": "FEAT-01-image-layer-library",
+      "risk_coverage": "Mọi risk R-IMG-01..08 có ≥1 check — xem risk_index."
+    }
+  ],
+  "excluded_dimensions": [
+    {
+      "dimension": "REGRESSION",
+      "reason": "Object mới, không có base đã publish để so; không có item KNOWN_DEFECT. Hành vi nghi defect được theo dõi dạng watch (regression_watch_kb_ids) ngay trong check NEGATIVE/BOUNDARY/STATE_DATA tương ứng (CHK-007, 008, 009, 014, 024, 026, 028, 033, 035)."
+    }
+  ],
+  "last_updated": {
+    "date": "2026-10-26",
+    "ccr_ref": "bootstrap"
+  }
+}

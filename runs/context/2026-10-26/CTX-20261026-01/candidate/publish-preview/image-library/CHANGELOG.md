@@ -1,0 +1,3 @@
+# CHANGELOG — image-library
+
+- 2026-10-26 — bootstrap — Tạo object mới `image-library` từ zero-doc bootstrap (explore portal + API trên staging, role merchant-owner): 2 feature (`image-layer-library`, `mockup-layer-library`), 63 KB item (13 mức object, 29 image-layer-library, 21 mockup-layer-library; toàn bộ OBSERVED_CURRENT/INFERRED), 73 regression check (32 BASELINE, 41 NONE), 37 open question (5 CONFLICT, 13 NEEDS_CONFIRMATION, 19 OPEN_ISSUE). 5 conflict với knowledge đã publish của product-base (mockup-attachment) và artwork (editor-layer-workspace, layer-config-image) được giữ UNRESOLVED ở phía object này; knowledge của object kia không bị sửa.
