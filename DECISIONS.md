@@ -140,7 +140,9 @@ Contract §5a liệt 20+ tên; script cũ có 5. Bổ sung đủ, nhưng **khôn
 
 **Bug gốc:** skill `create-ccr` tìm khuôn ở `contracts/context-change-request.template.md`, nhưng QA member nhận nó ở `how-to-request/` trong bản clone. Nên khi skill chạy ở repo consumer — **đúng nơi duy nhất member có template** — nó không tìm thấy và **âm thầm** rơi về bản bundled.
 
-→ khuôn đầy đủ **chỉ** ở `~/.claude/skills/create-ccr/references/ccr-template.md`; repo giữ `contracts/ccr-product-appendix.md`. Xoá `contracts/context-change-request.template.{md,json}`.
+→ khuôn đầy đủ **chỉ** ở trong skill `create-ccr` (`references/ccr-template.md`); repo giữ `contracts/ccr-product-appendix.md`. Xoá `contracts/context-change-request.template.{md,json}`.
+
+Cập nhật 2026-10-30: bản gốc của skill (cả khuôn) nằm ở `contracts/create-ccr/` và được publish sang `how-to-request/create-ccr/` để member tự cài vào `~/.claude/skills/`, thay vì gửi tay. Vẫn là một khuôn — `~/.claude/skills/create-ccr` là bản cài, không phải nguồn; sửa skill thì sửa ở `contracts/create-ccr/`.
 
 **Ràng buộc cứng đi kèm:** tên mục trong khuôn **không được đổi** — §12.3/§12.3a bắt orchestrator đọc theo đúng tên mục và trả `NEEDS_INFO` nêu đúng tên mục. Hai khuôn song song đã lệch tên (*"Phần 4 — Hai câu chỉ **con người** trả lời được"* vs *"...chỉ **bạn** trả lời được"*), làm lời `NEEDS_INFO` trỏ vào mục không tồn tại.
 

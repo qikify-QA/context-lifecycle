@@ -57,7 +57,7 @@ Thấy một item không đủ cơ sở để tin? Gửi CCR (mục 5), đừng 
 
 ## 5. Thấy context thiếu/sai/cũ → gửi Context Change Request
 
-1. Dùng skill `create-ccr` — nó mang khuôn CCR chuẩn và tự điền phần lớn form từ lần chạy daily-test vừa rồi. Đọc kèm `how-to-request/ccr-product-appendix.md` (product/object hợp lệ, chính sách environment, sức ghi đè canon). Thay hết mọi chỗ `<<< ... >>>`, **đặc biệt là phần trích nguyên văn** — sau khi publish thì file CCR, Proposal và tài liệu gửi kèm đều xoá được, chỉ nội dung trong CCR sống sót.
+1. Dùng skill `create-ccr` (cài một lần: `cp -R how-to-request/create-ccr ~/.claude/skills/`; chép lại sau mỗi lần pull nếu thư mục này thay đổi) — nó mang khuôn CCR chuẩn và tự điền phần lớn form từ lần chạy daily-test vừa rồi. Đọc kèm `how-to-request/ccr-product-appendix.md` (product/object hợp lệ, chính sách environment, sức ghi đè canon). Thay hết mọi chỗ `<<< ... >>>`, **đặc biệt là phần trích nguyên văn** — sau khi publish thì file CCR, Proposal và tài liệu gửi kèm đều xoá được, chỉ nội dung trong CCR sống sót.
 2. Mở task liên quan trên QA Hub, đính file `.md` vào field **CCR**.
 3. Bấm **Submit CCR** → QA Hub tạo một Proposal (`CBS-<n>`) ở cột `Todo` của tab "Context Builder Board".
 4. **Kéo Proposal sang `In Progress`** khi sẵn sàng — đây là tín hiệu duy nhất để context builder nhặt CCR.

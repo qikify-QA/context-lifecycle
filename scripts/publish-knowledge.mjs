@@ -140,10 +140,10 @@ async function main() {
   await cp(path.join(knowledgeDir, "products"), path.join(stageDir, "products"), { recursive: true });
   await cp(path.join(knowledgeDir, "manifest.json"), path.join(stageDir, "manifest.json"));
   await mkdir(path.join(stageDir, "how-to-request"), { recursive: true });
-  // Khuôn CCR đầy đủ thuộc skill `create-ccr`; repo chỉ ship phụ lục product-specific
-  // và hướng dẫn dùng context cho consumer.
-  for (const name of ["ccr-product-appendix.md", "consumer-guide.md"]) {
-    await cp(path.join(rootDir, "contracts", name), path.join(stageDir, "how-to-request", name));
+  // Ship phụ lục product-specific, hướng dẫn cho consumer, và chính skill `create-ccr`
+  // (mang khuôn CCR đầy đủ) — consumer cài skill từ bản clone, không ai phải gửi tay.
+  for (const name of ["ccr-product-appendix.md", "consumer-guide.md", "create-ccr"]) {
+    await cp(path.join(rootDir, "contracts", name), path.join(stageDir, "how-to-request", name), { recursive: true });
   }
 
   // 4. Lưới an toàn: staged knowledge/ không được rò rỉ field nội bộ nào (§5a). Đây là
