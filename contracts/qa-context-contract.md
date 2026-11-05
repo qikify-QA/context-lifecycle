@@ -409,7 +409,7 @@ KB item của khác biệt: `topic: "environment_difference"`, `tags` chứa `ty
 
 **`_product-guide.md`** là bản đồ, mọi bước đều đọc, nên ≤ 10 KB. Khuôn: `contracts/templates/product-guide.template.md`.
 
-**`_flows/`** là cách thao tác đã verify, chỉ đọc đúng file theo chủ đề. `README.md` là index. Thao tác đổi đi qua CCR Phần 2b.
+**`_flows/`** là cách thao tác đã verify, chỉ đọc đúng file theo chủ đề. `README.md` là index. Guide, flow và `_env.example` đổi đi qua khối C của CCR.
 
 **Ai đọc gì:**
 

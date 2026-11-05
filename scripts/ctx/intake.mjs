@@ -15,10 +15,10 @@ import { activeProducts } from "../lib/product-config.mjs";
 
 const RANK = { HIGH: 0, MEDIUM: 1, LOW: 2, UNKNOWN: 3 };
 
-/** Mức gấp ở mục "4.4 Mức độ gấp": mức đầu tiên trên dòng đầu có giá trị; dòng chú thích mẫu (đủ cả 3 mức) → UNKNOWN. */
+/** Mức gấp ở mục "Mức độ gấp" (khuôn cũ: "4.4 Mức độ gấp"): mức đầu tiên trên dòng đầu có giá trị; dòng chú thích mẫu (đủ cả 3 mức) → UNKNOWN. */
 export function parseUrgency(content = "") {
   const lines = content.split("\n");
-  const start = lines.findIndex((l) => /^#{1,4}\s*4\.4\b/.test(l));
+  const start = lines.findIndex((l) => /^#{1,4}\s*(4\.4\b|Mức độ gấp)/.test(l));
   if (start < 0) return "UNKNOWN";
   for (const line of lines.slice(start + 1)) {
     if (/^#{1,4}\s/.test(line)) break;

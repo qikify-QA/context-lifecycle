@@ -65,7 +65,7 @@ Thấy một item không đủ cơ sở để tin? Gửi CCR (mục 5), đừng 
 3. Bấm **Submit CCR** → QA Hub tạo một Proposal (`CBS-<n>`) ở cột `Todo` của tab "Context Builder Board".
 4. **Kéo Proposal sang `In Progress`** khi sẵn sàng — đây là tín hiệu duy nhất để context builder nhặt CCR.
 
-Bạn chỉ cần tự quyết 4 chỗ trong form: có ai xác nhận đây là hành vi đúng không · bạn KHÔNG đề xuất điều gì · mức độ gấp · đây có đúng là một thay đổi độc lập không. Không ai hỏi bạn về mutation policy hay account explore — đó là chính sách của bên sở hữu môi trường. Chỉ có quyền storefront mà không có quyền portal thì cứ gửi thứ bạn có.
+Guide, `_flows/` hoặc `_env.example` thiếu hay cũ thì ghi ở khối C của CCR. CCR gồm phần đầu và 4 khối (A hành vi, B môi trường, C guide và flow, D trả lời open question), chỉ giữ khối có dùng. Không ai hỏi bạn về mutation policy hay account explore — đó là chính sách của bên sở hữu môi trường. Chỉ có quyền storefront mà không có quyền portal thì cứ gửi thứ bạn có.
 
 Kết quả trả về trên chính Proposal: `published` (kèm version mới) hoặc `blocked` kèm 1 trong `NEEDS_INFO` · `CONFLICT` · `REJECTED` · `DEFERRED`. Khi được publish, `manifest.json` → `resolved_requests` ghi CCR của bạn.
 

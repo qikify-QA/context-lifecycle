@@ -21,9 +21,9 @@ Khuôn CCR đầy đủ thuộc skill `create-ccr` (`references/ccr-template.md`
 5. **Product trước, object sau:** product đã biết từ `project_id`; `object_key` resolve qua `knowledge/products/<product_key>/_registry.json` của **đúng product đó**. Hai product có thể dùng chung tên object (`order`, `product-base`), nên resolve ngược lại sẽ map sai.
 6. Thứ tự thử: `node scripts/ctx/intake.mjs --proposals <file>` xếp theo mức gấp (CCR mục 4.4) rồi `submittedAt`. Claim lock theo object (§16) → mỗi (product, object-set) là một run độc lập. Proposal không đụng cùng object chạy song song; Proposal claim lock sau nhận `DEFERRED` với `results.reason: "locked_by_run"` — **không** phải `CONFLICT`, vì đây không phải mâu thuẫn knowledge.
 
-**1 run = 1 Proposal = 1 product.** CCR chạm nhiều product → `NEEDS_INFO`: "Phần 0 — Cần mấy CCR? (CCR chạm nhiều product: X, Y — tách thành 1 CCR mỗi product)".
+**1 run = 1 Proposal = 1 product.** CCR chạm nhiều product → `NEEDS_INFO`: "Phần đầu (CCR chạm nhiều product: X, Y — tách thành 1 CCR mỗi product)".
 
-**Chạy tay (không qua board):** đặt file CCR vào `inputs/ccr-drafts/` rồi gọi orchestrator với đường dẫn file. Product lấy từ phần product/object của CCR; object phải khớp đúng một `_registry.json` của một product ACTIVE, không khớp hoặc khớp nhiều → `NEEDS_INFO` "Phần 1 — Thấy gì". Run chạy tay không có `proposal_id` thì không gọi tool phản hồi board; kết quả trả trong response của orchestrator.
+**Chạy tay (không qua board):** đặt file CCR vào `inputs/ccr-drafts/` rồi gọi orchestrator với đường dẫn file. Product lấy từ phần product/object của CCR; object phải khớp đúng một `_registry.json` của một product ACTIVE, không khớp hoặc khớp nhiều → `NEEDS_INFO` "Phần đầu". Run chạy tay không có `proposal_id` thì không gọi tool phản hồi board; kết quả trả trong response của orchestrator.
 
 ## 12.2 Triage — 5 kết cục
 
@@ -54,30 +54,28 @@ Gate C0 cần 5 thứ, nhưng **CCR chỉ cung cấp 2**. Ba thứ còn lại l�
 | C0 cần | Nguồn |
 |---|---|
 | product | `project_id` của Proposal (§12.1 bước 5); chạy tay thì từ CCR |
-| object target | "Phần 1 — Thấy gì" + "Phần 1b — Đề xuất địa chỉ trong KB" + "Phần 2 — Thấy nó ở đâu" (URL/ID, best-effort), map qua `_registry.json` |
-| environment | **Cố định** = `config/products/<key>.json` → `environments.default`. "Phần 2" chỉ mô tả nơi người gửi quan sát (có thể production hoặc không rõ) — **không bao giờ** là lý do `NEEDS_INFO`. Khác biệt giữa các môi trường đi qua "Phần 2a", xem §12.3c |
+| object target | Phần đầu + field "Object / feature" của từng khối, map qua `_registry.json` |
+| environment | **Cố định** = `config/products/<key>.json` → `environments.default`. Khác biệt giữa các môi trường đi qua khối B, xem §12.3c |
 | role dùng để explore | Orchestrator tự chọn theo `defaults.role` của product; role người gửi là dữ kiện |
 | mutation policy | Orchestrator tự áp theo §7 |
 
-URL/ID ở Phần 2 là best-effort: người gửi có thể chỉ có quyền storefront. CCR chỉ có storefront URL vẫn hợp lệ — orchestrator map sang target qua `_registry.json`.
+Object map sang target qua `_registry.json`.
 
-Trả `NEEDS_INFO` **chỉ** khi không xác định được object, và nêu đúng tên mục (vd "Phần 1 — Thấy gì"), không nói chung chung.
+Trả `NEEDS_INFO` **chỉ** khi không xác định được object, và nêu đúng tên mục (vd "Khối A, CLAIM-02, Object / feature"), không nói chung chung.
 
-Ba mục không chặn run nhưng quyết định chất lượng đầu ra — trống hoặc "không rõ" thì ghi vào `unknowns`, đừng tự suy:
+Mục không chặn run nhưng quyết định chất lượng đầu ra — trống hoặc "không rõ" thì ghi vào `unknowns`, đừng tự suy:
 
-- "Phần 3 — Để không sinh conflict giả" (build/version/ngày deploy) — thiếu thì **không được kết luận** một hành vi là "mới" hay "cũ".
-- "4.1 Có ai xác nhận đây là hành vi ĐÚNG không?" — `KHÔNG AI` thì claim đó không bao giờ là `S3`.
-- Số lần quan sát ở Phần 1 — 1 lần thì `confidence: LOW` (§3).
+- Claim không có người xác nhận và không có nguồn thì không bao giờ là `S3`.
 
-**Tương thích ngược:** CCR do skill bản cũ sinh vẫn tới orchestrator (Proposal immutable). Thiếu cột `Claim ID` → orchestrator tự đặt `CLAIM-01..n` theo thứ tự dòng bảng, `claim_id_source: "positional"`. Thiếu Phần 5.1 → mọi claim về `S1`/`S0`. Thiếu Phần 2a/2b → ghi vào `unknowns`. Không trả `NEEDS_INFO` chỉ vì thiếu cột/mục mới.
+**Tương thích ngược:** CCR khuôn cũ (Phần 1a, 2a, 2b, 5.1) vẫn xử lý được: Phần 1a là khối A, 5.1 là block của claim, 2a là khối B. Thiếu cột `Claim ID` → orchestrator tự đặt `CLAIM-01..n` theo thứ tự dòng bảng, `claim_id_source: "positional"`. Thiếu Phần 5.1 → mọi claim về `S1`/`S0`. Thiếu Phần 2a/2b → ghi vào `unknowns`. Không trả `NEEDS_INFO` chỉ vì thiếu cột/mục mới.
 
 ## 12.3a Gate C0.5 — CCR Source Strength Assessment
 
-Chạy ngay sau C0 và **sau khi đã khoá lock** (§16), trước khi dispatch bất kỳ agent nào. Đánh giá **từng dòng** của bảng "Phần 1a — Phạm vi thay đổi & ảnh hưởng ước tính" — từng claim một, không gộp cả CCR.
+Chạy ngay sau C0 và **sau khi đã khoá lock** (§16), trước khi dispatch bất kỳ agent nào. Đánh giá **từng claim** ở khối A, B, D — từng claim một, không gộp cả CCR.
 
 | Bậc | Nguồn | Hệ quả |
 |---|---|---|
-| `S3` | Một nguồn `confirmation_source` hợp lệ (§3: `spec_doc` · `dev_doc` · `po_dev_confirm` · `test_case`), có locator + `authored_on` + trích **nguyên văn** ở "5.1 Nguồn & evidence theo từng claim", kèm link khi nguồn có link | Normalize thẳng, **0 explorer**, `CONFIRMED_EXPECTED` kèm `confirmation_source`, được supersede (§12.5) |
+| `S3` | Một nguồn `confirmation_source` hợp lệ (§3: `spec_doc` · `dev_doc` · `po_dev_confirm` · `test_case`), có locator + `authored_on` + trích **nguyên văn** trong block của claim, kèm link khi nguồn có link | Normalize thẳng, **0 explorer**, `CONFIRMED_EXPECTED` kèm `confirmation_source`, được supersede (§12.5) |
 | `S1` | Ảnh/HAR/API capture do người gửi tự chụp, không kèm nguồn `S3` | Normalize thẳng thành `OBSERVED_CURRENT` + `confidence: LOW` + OQ `NEEDS_CONFIRMATION` trỏ về `kb_id`. **Không explore**, không làm oracle |
 | `S0` | Chỉ lời kể, không artifact, không link | Không nạp; nêu trong `results.open_questions` với đúng tên mục. Ngoại lệ: claim khác biệt môi trường, xem §12.3c |
 
@@ -129,8 +127,8 @@ Mọi `NEEDS_CONFIRMATION`/`CONFLICT`/`OPEN_ISSUE` phát sinh trong run phải v
 
 Định nghĩa và nơi ghi ở contract §5b. CCR mang hai mục:
 
-- **"Phần 2a — Khác biệt giữa môi trường":** mỗi dòng trỏ về một `Claim ID` ở Phần 1a. Orchestrator ghi `environment_difference` vào claim đó trong plan.
-- **"Phần 2b — Setup mới":** dòng áp dụng cho một feature trỏ về một `Claim ID` và đi như claim thường. Dòng áp dụng cho cả product không vào KB; orchestrator đưa vào `_product-guide.md` ở bước prose.
+- **Khối B:** mỗi dòng là một claim. Orchestrator ghi `environment_difference` vào claim đó trong plan.
+- **Setup:** của một feature nằm ở claim khối A; mức product nằm ở khối C. Khuôn cũ có "Phần 2b": dòng áp dụng cho feature đi như claim, dòng mức product đưa vào guide.
 
 Claim có `environment_difference` đánh giá nguồn như mọi claim, nhưng khác hệ quả:
 
@@ -139,7 +137,21 @@ Claim có `environment_difference` đánh giá nguồn như mọi claim, nhưng 
 | `S3` | `CONFIRMED_EXPECTED`, như claim thường |
 | `S1`, `S0` | Vẫn nạp: `INFERRED` + `confidence: LOW` + OQ `NEEDS_CONFIRMATION` trỏ về `kb_id`. Không làm oracle |
 
-`S0` được nạp vì phần lớn khác biệt loại này là kinh nghiệm vận hành, không có artifact, trong khi thiếu nó người test sẽ báo `FAIL` sai. Evidence của claim `S0` là dòng Phần 2a, copy vào `raw/ccr-evidence/<claim_key>/`. Muốn ghi nhận phía môi trường test là quan sát thật thì operator yêu cầu explore cho claim đó (§12.3a).
+`S0` được nạp vì phần lớn khác biệt loại này là kinh nghiệm vận hành, không có artifact, trong khi thiếu nó người test sẽ báo `FAIL` sai. Evidence của claim `S0` là dòng khối B, copy vào `raw/ccr-evidence/<claim_key>/`. Muốn ghi nhận phía môi trường test là quan sát thật thì operator yêu cầu explore cho claim đó (§12.3a).
+
+**Khối C:** dòng ở đây không phải claim, không qua C0.5 và không vào KB. Orchestrator áp vào file được nêu ở bước prose (`.claude/orchestrator/publish.md` §3). Nội dung trái contract §5b, §5c thì không áp, nêu trong `results`. CCR có cả claim và khối C chạy trong cùng một run; run không được publish thì khối C cũng không vào knowledge.
+
+CCR chỉ có khối C, hoặc khối D toàn `KHÔNG CÒN ÁP DỤNG`, không tạo run: xử lý theo `.claude/orchestrator/ccr-intake.md` §2b.
+
+## 12.3d Khối D — trả lời open question
+
+| Kết quả | Xử lý |
+|---|---|
+| `XÁC NHẬN HÀNH VI` | Đi như claim khối A, kèm `answers_oq` trong plan. Publish thì gỡ entry OQ, thêm dòng CHANGELOG `Resolved OQ-xxx` |
+| `CHỌN side_a`, `CHỌN side_b` | Ghi vào `input/approvals.json` như quyết định của người phân xử (§12.5), rồi gỡ OQ |
+| `KHÔNG CÒN ÁP DỤNG` | Gỡ entry OQ, CHANGELOG ghi lý do. Không tạo item KB |
+
+`OQ-ID` không có trong `open-questions.md` → bỏ dòng đó, nêu trong `results`.
 
 ## 12.4 Quy tắc bắt buộc
 
