@@ -343,3 +343,9 @@ Cùng đợt: dòng `artwork/` trong `knowledge/.gitignore` vốn dành cho thư
 Backfill teeinblue cho thấy phần lớn quyết định do QA chốt, nên theo luật cũ không được nạp vào KB, dù đây là quyết định thật mà team test đang dùng.
 
 Operator chốt: PO, Dev hay QA xác nhận đều tính, kể cả QA là người gửi CCR, không chia thêm loại nguồn. Giữ tên `po_dev_confirm` để không đổi schema và item đã publish. Vẫn bắt buộc trích nguyên văn và ngày, vì §12.5 cần `authored_on` để so độ mới. Đánh đổi: giới hạn "người gửi không tự làm authority" không còn áp cho loại này.
+
+### 2.26 Guide và flow: hai file, mỗi thông tin một chỗ (2026-11-05)
+
+Operator muốn agent kiểm thử không đọc gì local, áp được cho mọi product, và không trùng lặp. Thử tách thêm file môi trường riêng thì 37% guide trùng với nó, nên bỏ. Chỉ còn hai loại: guide trả lời "có gì, ở đâu, test được không"; `_flows/` trả lời "làm thế nào" (contract §5c). Chỉ ghi tên biến như §5b.
+
+Đánh đổi: flow đổi theo UI nhưng giờ cập nhật qua CCR, chậm hơn sửa tại chỗ.
