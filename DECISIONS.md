@@ -337,3 +337,9 @@ Operator muốn agent kiểm thử chỉ lấy context từ `qa-knowledge`, bỏ
 Operator chốt: guide chia Phần A (mọi bước đọc) và Phần B (chỉ execute, dựng data), có marker để script trích riêng. Guide giữ thêm bảng index khác biệt môi trường, chỉ gồm hạng mục, feature key, `type`, mức; chi tiết vẫn ở `environment_differences` như 2.23, để không có 2 nơi ghi. Danh sách biến env nằm ở `_env.example` cạnh guide, chỉ tên biến và chú thích, nên luật không ghi id và tên store ở §5b giữ nguyên.
 
 Cùng đợt: dòng `artwork/` trong `knowledge/.gitignore` vốn dành cho thư mục local ở gốc, nhưng khớp cả `products/teeinblue/artwork/`, làm file mới của object này không được commit (5 feature và `layer-common-config/kb.json`). Đã neo thành `/artwork/`.
+
+### 2.25 Ai xác nhận cũng tính (2026-11-05)
+
+Backfill teeinblue cho thấy phần lớn quyết định do QA chốt, nên theo luật cũ không được nạp vào KB, dù đây là quyết định thật mà team test đang dùng.
+
+Operator chốt: PO, Dev hay QA xác nhận đều tính, kể cả QA là người gửi CCR, không chia thêm loại nguồn. Giữ tên `po_dev_confirm` để không đổi schema và item đã publish. Vẫn bắt buộc trích nguyên văn và ngày, vì §12.5 cần `authored_on` để so độ mới. Đánh đổi: giới hạn "người gửi không tự làm authority" không còn áp cho loại này.

@@ -127,7 +127,7 @@ Enum `confirmation_source.type` — đúng 4 giá trị:
 |---|---|
 | `spec_doc` | Spec/tài liệu chính thức của sản phẩm, có tên tài liệu + version/ngày + mục cụ thể, và mục đó phát biểu đúng hành vi đang xét |
 | `dev_doc` | Tài liệu dev sinh từ source code, changelog/release note do dev viết, hoặc PR/commit diff — kèm locator + link + `authored_on` + trích nguyên văn |
-| `po_dev_confirm` | PO/Dev xác nhận trực tiếp, trích dẫn **nguyên văn** + link. Comment mơ hồ không tính |
+| `po_dev_confirm` | PO, Dev hoặc QA xác nhận trực tiếp, trích dẫn **nguyên văn** + ngày + ticket. Có link thì kèm link. Comment mơ hồ không tính |
 | `test_case` | Test case đã chạy và PASS đúng hành vi đang xét (id + ngày chạy + build ≥ bản có thay đổi) |
 
 Jira ticket **trần** (không kèm doc/changelog/diff/quote/test-case) KHÔNG đủ — vẫn là `OBSERVED_CURRENT`. Ticket **kèm** dev doc hoặc PR diff thì đủ, và type là `dev_doc`.
