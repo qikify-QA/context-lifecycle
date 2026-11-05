@@ -112,6 +112,7 @@ Trích nguyên văn là phần quan trọng nhất của cả CCR: theo contract
 
 Dùng khuôn chuẩn `references/ccr-template.md` cộng phụ lục product đã tìm ở Bước 0. Điền đầy đủ mọi Phần, đúng nhãn `[AGENT]`/`[BẠN]`:
 
+- **Phần 2a (khác biệt môi trường) và 2b (setup mới)**: tìm trong ticket và comment những chỗ nói tới staging/production, flag, token, biến env, role, app bên thứ ba, cách dựng data. Không suy đoán: thấy gì thì đề xuất, rồi hỏi người dùng ở Bước 7 xem còn khác biệt nào không. Không có thì ghi `không có`, chưa biết thì ghi `không rõ`. Chỉ ghi tên biến, không ghi giá trị.
 - **Phần 4.1 (ai xác nhận)**: phân biệt rõ ràng comment kỹ thuật dev tự viết ("Ready to test", "Resolution: Done") KHÔNG PHẢI là PO/business sign-off. Chỉ ghi có xác nhận thật khi có bằng chứng PO/spec/business rõ ràng.
 - **Phần 4.2 (KHÔNG đề xuất điều gì)**: bắt buộc điền cụ thể — số liệu tại thời điểm ship, tên object đề xuất, ranh giới feature đề xuất, v.v. đều KHÔNG được coi là đã duyệt.
 - Không bao giờ tự nâng một quan sát/mô tả ticket thành `CONFIRMED_EXPECTED` hay tương đương — dù ticket ghi "Resolution: Done".

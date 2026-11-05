@@ -41,6 +41,7 @@ Artifact/claim có `gate.decision: FAIL`, hoặc claim `S3` thiếu `confirmatio
    - `S3` → `CONFIRMED_EXPECTED`, chép nguyên `confirmation_source` từ plan.
    - `S1` → `OBSERVED_CURRENT`, `confidence: LOW`, không `confirmation_source`, kèm 1 OQ draft `NEEDS_CONFIRMATION` trỏ về `kb_id`.
    - `S0` → không nạp.
+   - Claim có `environment_difference`: thay cho `S1`/`S0` ở trên, theo `contracts/ccr-protocol.md` §12.3c; dạng item theo contract §5b.
    Đặt item theo `kb_address`; `relation: SUPERSEDES`/`CONTRADICTS` thì giữ `target_kb_ids` để diff analyzer khớp.
 2. **Carry-forward base** (run có base): shard của mỗi feature bị chạm = **toàn bộ** item base (giữ nguyên `kb_id`, statement, `confirmation_source`, `last_updated`) **cộng** delta. Không sửa item base — khác biệt giữa base và claim mới là việc của `knowledge-diff-analyzer`. Feature không bị chạm thì không xuất shard.
 3. **Dedupe theo ngữ nghĩa**, không theo chuỗi. Gộp hai observation cùng nói một điều: `evidence_refs` cộng dồn, `observed_count` tăng. Gộp hai behavior khác nhau là FAIL. `from-doc`: dùng `doc_support: {docs, sections, docs_cited[]}` — hai section cùng một tài liệu **không** phải 2 nguồn độc lập.

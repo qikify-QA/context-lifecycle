@@ -37,7 +37,8 @@ Tổ chức KB shard của mỗi feature thành một Feature Profile hướng c
 4. **Tách bạch** `confirmed_rules` (`CONFIRMED_EXPECTED`) / `observed_behavior` (`OBSERVED_CURRENT`) / `unknown_areas` / limitation. Không trộn.
 5. `observed_validations`: `observed_count < 3` → `rule_confidence: LOW`, không tổng quát hoá thành rule.
 6. Coverage theo layer × role × state × environment; dependency và profile liên quan.
-7. Run có base: bắt đầu từ profile base, cập nhật phần bị chạm bởi KB mới, giữ nguyên phần còn lại.
+7. Setup riêng của feature và khác biệt môi trường theo contract §5b: setup vào `entry_points[].precondition`, item `topic: "environment_difference"` vào `environment_differences`.
+8. Run có base: bắt đầu từ profile base, cập nhật phần bị chạm bởi KB mới, giữ nguyên phần còn lại.
 
 ## Output
 
@@ -56,6 +57,7 @@ Tổ chức KB shard của mỗi feature thành một Feature Profile hướng c
       "permissions": [],
       "surface_mapping": { "portal": [], "storefront": [], "api": [], "data": [], "code": [] },
       "dependencies": [], "risks": [],
+      "environment_differences": [ { "type": "ALTERNATIVE_SETUP | NOT_TESTABLE | DIFFERENT_VALUE", "test_env": "", "production": "", "how_to_test": "", "kb_refs": [] } ],
       "freshness": { "observed_at": "", "run_id": "" },
       "unknown_areas": [ { "question": "", "why_it_matters": "" } ] } ],
   "profile_relationships": [],

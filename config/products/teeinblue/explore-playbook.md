@@ -1,6 +1,8 @@
 # Explore playbook — teeinblue
 
-Hướng dẫn riêng của teeinblue cho các explorer runtime. Cấu hình máy đọc nằm ở `config/products/teeinblue.json` → `explore`, `environments`, `credentials`, `defaults`.
+Hướng dẫn riêng của teeinblue cho các explorer runtime: cách vận hành ở §1–§7, khi nào explore ở §8–§10. Cấu hình máy đọc nằm ở `config/products/teeinblue.json` → `explore`, `environments`, `credentials`, `defaults`. Tổng quan và setup của product cho người test nằm ở `knowledge/products/teeinblue/_product-guide.md`.
+
+Account guard và luật chỉ dùng store explorer ở file này chỉ áp dụng cho explorer của context builder, không áp dụng cho QA test hằng ngày.
 
 Không ghi giá trị credential, email hay tên người thật vào file này.
 
@@ -41,8 +43,11 @@ Danh sách object hợp lệ: `knowledge/products/teeinblue/_registry.json`.
 | `translation` | portal + storefront | vd Store Settings > Product Page Content (`/product-page-content`) |
 | `order` | storefront + portal | đặt đơn personalized trên storefront, review/fulfillment trên portal |
 | `sdk` | storefront | runtime personalization cho buyer, cấu hình product page settings |
+| `image-library` | portal | thư viện ảnh của Image layer và Mockup layer, không có trang riêng |
 
 Account explore có thể gắn nhiều store (instance); ghi rõ store nào trong `portal_context`/`storefront_context` của artifact.
+
+**Chỉ dùng store của account explore** (store trên sidebar của account đã qua account guard, `TIB_STORE_URL_*` trong `.env`). Store, instance, org, campaign hay product id ghi trong CCR, test case hoặc evidence của QA (vd `nprice1..6`, org "Test new pricing 4") là test data của người khác: không mở, không thao tác, kể cả chỉ đọc storefront. Cần fixture tương đương thì dựng lại trên store explorer.
 
 Khi `.env` đổi account thì store đổi theo: mọi id mẫu (campaign, product, order, font) của run cũ không còn dùng được — luôn lấy id mới từ portal.
 
@@ -76,3 +81,44 @@ Storefront: ghi product page, personalization panel, preview, cart drawer/page; 
 - Sidebar có thể collapse → chờ phần tử ở trạng thái `attached`, không phải `visible`.
 - Label sidebar có ký tự icon đứng trước text → match theo `href`, không anchor regex vào đầu chuỗi.
 - Cơ chế session staging từng đổi (JWT → cookie). Nếu login xong mà không thấy cookie session như mục 2, kiểm lại bằng DevTools trước khi tin playbook này, và ghi lại thay đổi.
+
+## 8. Khi nào trigger explore
+
+| Trigger | Mode | Phạm vi |
+|---|---|---|
+| CCR nêu hành vi đã đổi, operator yêu cầu explore cho claim đó | `INCREMENTAL_UPDATE` | Claim trong CCR |
+| Object `STALE` (`publish.stale_after_days` = 45) | `REFRESH` | Object đó. Tại 2026-11-05: `font` (publish 2026-09-11). `asset-category` tới hạn 2026-11-10 |
+| Open Question loại `CONFLICT` quan sát được ở runtime | `REFRESH` | Feature của OQ, xem §9 |
+| Object chưa có knowledge | `ZERO_DOC_BOOTSTRAP` | Object mới |
+
+CCR mặc định không explore (`contracts/ccr-protocol.md` §12.3a). Surface `db` đang tắt; `code` chỉ dispatch kèm câu hỏi cụ thể và repo/revision do operator cấp.
+
+## 9. Câu hỏi nên explore trước
+
+36 `CONFLICT` trong knowledge tại 2026-11-05, nội dung ở `open-questions.md` của từng object:
+
+| Object | `CONFLICT` |
+|---|---|
+| `artwork` | 13 |
+| `global-option`, `image-library`, `sdk` | 5 mỗi object |
+| `asset-category`, `font`, `product-base` | 2 mỗi object |
+| `order`, `translation` | 1 mỗi object |
+
+Quan sát runtime chỉ cho `OBSERVED_CURRENT`. Muốn thành `CONFIRMED_EXPECTED` vẫn cần PO/Dev hoặc test case PASS theo contract.
+
+## 10. Bằng chứng chưa vào canon
+
+Nên tạo CCR, không cần explore. Nguồn: sổ tay QA `teeinblue-manual/rules/env-capabilities.md` (ngoài repo), mỗi dòng đã có ngày và ticket ở đó. Khi gửi, điền vào "Phần 2a — Khác biệt giữa môi trường":
+
+| Khác biệt | Loại | Feature gợi ý |
+|---|---|---|
+| Strava của Route Maps không kết nối được trên staging | `NOT_TESTABLE` | `layer-config-maps-astronomy` |
+| Tracking từ fulfillment provider không có trên staging | `NOT_TESTABLE` | `review-and-initiate-fulfillment-portal` |
+| Size gốc của provider không lấy được | `NOT_TESTABLE` | `printarea-definition` |
+| Horizon không xem được | `NOT_TESTABLE` | Cần xác định feature |
+| `photo-api`, CORS upload và preconnect vẫn là production | `NOT_TESTABLE` | `storefront-buyer-facing` |
+| `photo_endpoint=snap` chỉ Dev set được | `NOT_TESTABLE` | `storefront-buyer-facing` |
+| Order Etsy tạo bằng request fake order, response có token cần che | `ALTERNATIVE_SETUP` | `review-and-initiate-fulfillment-portal`, có thể là feature mới |
+| Generate test design bị tắt trên dev store, lấy design từ order test | `ALTERNATIVE_SETUP` | Cần xác định feature |
+| Link Edit Customization luôn trỏ production, đổi host sang customize staging | `ALTERNATIVE_SETUP` | `storefront-buyer-facing` |
+| Translation storefront cache theo `translation_version` | `DIFFERENT_VALUE` | `dynamic-translations` |
