@@ -193,7 +193,7 @@ Với MỖI ticket:
 
 Field này quyết định knowledge có **dùng làm expected result** được hay không.
 
-- Ai xác nhận: `<<< PO | Dev | spec | dev doc | test case đã PASS | KHÔNG AI — chỉ là mô tả/comment của dev trong ticket >>>`
+- Ai xác nhận: `<<< PO | Dev | QA | spec | dev doc | test case đã PASS | KHÔNG AI — chỉ là mô tả/comment của dev trong ticket >>>`
 - Ở đâu, ngày nào: `<<< vd: dev viết "Behaviour changes" trong comment #xxx ngày yyyy-mm-dd — hoặc: TC-xxx PASS ngày yyyy-mm-dd trên build yyy >>>`
 - Họ xác nhận chính xác điều gì: `<<< trích nguyên văn, đừng diễn giải >>>`
 

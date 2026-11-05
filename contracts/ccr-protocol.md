@@ -77,13 +77,13 @@ Chạy ngay sau C0 và **sau khi đã khoá lock** (§16), trước khi dispatch
 
 | Bậc | Nguồn | Hệ quả |
 |---|---|---|
-| `S3` | Một nguồn `confirmation_source` hợp lệ (§3: `spec_doc` · `dev_doc` · `po_dev_confirm` · `test_case`), có locator + link + `authored_on` + trích **nguyên văn** ở "5.1 Nguồn & evidence theo từng claim" | Normalize thẳng, **0 explorer**, `CONFIRMED_EXPECTED` kèm `confirmation_source`, được supersede (§12.5) |
+| `S3` | Một nguồn `confirmation_source` hợp lệ (§3: `spec_doc` · `dev_doc` · `po_dev_confirm` · `test_case`), có locator + `authored_on` + trích **nguyên văn** ở "5.1 Nguồn & evidence theo từng claim", kèm link khi nguồn có link | Normalize thẳng, **0 explorer**, `CONFIRMED_EXPECTED` kèm `confirmation_source`, được supersede (§12.5) |
 | `S1` | Ảnh/HAR/API capture do người gửi tự chụp, không kèm nguồn `S3` | Normalize thẳng thành `OBSERVED_CURRENT` + `confidence: LOW` + OQ `NEEDS_CONFIRMATION` trỏ về `kb_id`. **Không explore**, không làm oracle |
 | `S0` | Chỉ lời kể, không artifact, không link | Không nạp; nêu trong `results.open_questions` với đúng tên mục. Ngoại lệ: claim khác biệt môi trường, xem §12.3c |
 
 Explore chỉ chạy khi operator yêu cầu tường minh cho một claim — khi đó run thành `INCREMENTAL_UPDATE` (§10a, mode settling).
 
-`authored_by` của nguồn `S3` loại `spec_doc` / `dev_doc` / `po_dev_confirm` không được trùng người gửi CCR — người gửi không tự làm authority cho chính mình. `test_case` là ngoại lệ: nó là record chạy thật trên hệ thống quản lý test (Testlane), không phải ý kiến người viết, nên test case PASS do chính người gửi chạy vẫn là `S3` khi có đủ id test case + kết quả PASS + ngày chạy + build/bản đã test (chủ repo chốt 2026-10-11).
+`authored_by` của nguồn `S3` loại `spec_doc` / `dev_doc` không được trùng người gửi CCR — người gửi không tự làm authority cho chính mình. `po_dev_confirm` không có giới hạn này: PO, Dev hay QA chốt đều tính, kể cả QA là người gửi (chủ repo chốt 2026-11-05). `test_case` là ngoại lệ: nó là record chạy thật trên hệ thống quản lý test (Testlane), không phải ý kiến người viết, nên test case PASS do chính người gửi chạy vẫn là `S3` khi có đủ id test case + kết quả PASS + ngày chạy + build/bản đã test (chủ repo chốt 2026-10-11).
 
 **Kiểm trùng:** sau khi ghi plan, chạy `node scripts/ctx/dedup.mjs --run <id>`. Claim trùng (cùng object, chung `target_kb_ids` hoặc cùng `confirmation_source`) với CCR đang `IN_PROGRESS`/`PUBLISHED` → bỏ claim đó khỏi run và nêu trong `results`; mọi claim đều trùng → `REJECTED` + `reason: duplicate_of`. `covered_by_open_question` chỉ là thông tin, không loại claim.
 
