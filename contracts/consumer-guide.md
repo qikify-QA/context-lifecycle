@@ -10,7 +10,7 @@ git clone --depth 1 https://github.com/qikify-QA/qa-knowledge.git
 
 Cập nhật bằng `git pull`. Muốn cố định một version để test lặp lại được: checkout tag `ctx-YYYY-MM-DD`.
 
-Mới làm với một product thì đọc `products/<key>/_product-guide.md` trước, nếu có: tổng quan, setup, env, cách dựng test data.
+Mới làm với một product thì đọc `products/<key>/_product-guide.md` trước, nếu có: tổng quan, setup, env, cách dựng test data. Cách thao tác ở `_flows/`, đọc theo chủ đề.
 
 ## 2. Đọc `manifest.json` trước
 

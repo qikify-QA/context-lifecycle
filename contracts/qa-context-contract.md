@@ -272,6 +272,7 @@ knowledge/
     ├── _product-summary.md                (OPTIONAL — data flow, bản đồ object/feature mức product)
     ├── _product-guide.md                       (OPTIONAL — tổng quan và setup của project; không chứa rule nghiệp vụ, không liên quan explore)
     ├── _env.example                            (OPTIONAL — danh sách biến env của người test, chỉ tên biến và chú thích, không có giá trị)
+    ├── _flows/                                 (OPTIONAL — cách thao tác đã verify theo chủ đề: selector, label, bước; không chứa rule nghiệp vụ)
     └── <object-key>/                      (object nằm TRỰC TIẾP dưới product — không có tầng objects/)
         ├── kb.json                        (mảng JSON phẳng — thuộc tính/luật dùng chung toàn object)
         ├── publish-meta.json              ({published_context_version, published_at, mode})
@@ -380,7 +381,7 @@ Entry mẫu: `{"oq_id": "OQ-order-014", "type": "CONFLICT", "feature_id": "order
 - Token hoặc biến env mới của một feature → guide giữ tên biến để danh sách env đầy đủ (product có `_env.example` thì thêm cả vào đó), feature ghi cần biến nào.
 - Chỉ dùng cho một lần test → test case, không ghi vào knowledge.
 
-Guide và `_env.example` chỉ ghi tên biến env: không ghi giá trị, id account, id instance, tên store. Store nào dùng cho việc gì thì viết theo tên biến. Account guard và phạm vi store của explorer chỉ nằm ở explore playbook, không áp dụng cho người test hằng ngày.
+Guide, `_env.example` và `_flows/` chỉ ghi tên biến env: không ghi giá trị, id account, id instance, tên store. Store nào dùng cho việc gì thì viết theo tên biến. Account guard và phạm vi store của explorer chỉ nằm ở explore playbook, không áp dụng cho người test hằng ngày.
 
 **Không phải setup:** rule nghiệp vụ, ngưỡng, công thức, thông báo lỗi (KB) · expected result, test condition (checklist) · câu hỏi chưa rõ, conflict (`open-questions.md`) · bug không cản trở việc setup (Testlane) · lịch sử thay đổi (`CHANGELOG.md`). Bug chặn việc dựng data thì có tính, chỉ ghi phần cần biết để đi vòng. Feature mới chỉ đổi hành vi thì không có setup mới, chỉ thêm dòng vào bản đồ feature của guide. Thông tin setup trong guide chưa chắc chắn vẫn ghi, kèm nhãn nguồn hoặc `[?]`.
 
@@ -395,6 +396,31 @@ Guide và `_env.example` chỉ ghi tên biến env: không ghi giá trị, id ac
 Guide được giữ bảng index các khác biệt: mỗi dòng chỉ có hạng mục, feature key, `type`, mức (case hay vế). `how_to_test` và mô tả chỉ nằm ở `profile.json`.
 
 KB item của khác biệt: `topic: "environment_difference"`, `tags` chứa `type`, `statement` đúng dạng `[<type>] Môi trường test: ...; Production: ...; Cách test: ...`. `scope.environment` vẫn là `environments.default`. Explorer không vào được production nên không tự kiểm chứng phía production: `knowledge_kind` theo `contracts/ccr-protocol.md` §12.3c.
+
+## 5c. Guide và flow
+
+Áp cho mọi product. Mỗi thông tin chỉ nằm một nơi, chọn theo câu nó trả lời:
+
+| Câu hỏi | Nơi | Không chứa |
+|---|---|---|
+| Đúng phải là gì? | KB, checklist | Cách thao tác, setup |
+| Có gì, ở đâu, test được không? | `_product-guide.md` | Bước, selector, request, expected |
+| Làm thế nào? | `_flows/<chủ đề>.md` | Rule nghiệp vụ, giá trị ảnh chụp theo ngày, id |
+
+**`_product-guide.md`** là bản đồ, mọi bước đều đọc, nên ≤ 10 KB. Khuôn: `contracts/templates/product-guide.template.md`.
+
+**`_flows/`** là cách thao tác đã verify, chỉ đọc đúng file theo chủ đề. `README.md` là index. Thao tác đổi đi qua CCR Phần 2b.
+
+**Ai đọc gì:**
+
+| Bước | Đọc |
+|---|---|
+| Phân tích yêu cầu | Guide, KB của feature |
+| Viết test case | Guide, KB, checklist của feature |
+| Dựng test data | Guide, `_flows/` theo chủ đề |
+| Execute | Guide, checklist, `_flows/` theo chủ đề |
+| Verify production | Guide, `_flows/` theo chủ đề |
+| Soạn CCR | KB của feature |
 
 ## 6. Redaction — chạy TRƯỚC khi ghi file
 
