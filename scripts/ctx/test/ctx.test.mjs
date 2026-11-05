@@ -10,6 +10,7 @@ import { stripForbidden, scanText, confirmationSourceProblems } from "../../lib/
 import { createRun } from "../new-run.mjs";
 import { publishKbItem, applySupersedes, publishConfirmationSource } from "../publish-strip.mjs";
 import { scanSecrets } from "../freeze-docs.mjs";
+import { mergeRegistry } from "../publish-apply.mjs";
 
 const tmp = () => mkdtemp(path.join(tmpdir(), "ctx-test-"));
 const obj = (object) => ({ product: "p", object });
@@ -332,4 +333,13 @@ test("context health: đếm KB/oracle/OQ/conflict và gắn cờ, không ghi fi
   assert.deepEqual(h.last_ccr, { ccr_ref: "CBS-7", date: "2026-10-05" });
   assert.deepEqual(h.flags.sort(), ["no_confirmed_expected", "open_conflicts", "stale", "weak_oracle"]);
   assert.deepEqual((await readdir(dir, { recursive: true })).sort(), before);
+});
+
+test("publish-apply: registry chỉ lấy entry của object được publish, giữ entry run khác vừa thêm", () => {
+  const current = { note: "n", objects: [{ object_key: "a", aliases: ["a1"] }, { object_key: "b", aliases: ["b1", "b2-run-khac"] }] };
+  const preview = { note: "cũ", objects: [{ object_key: "a", aliases: ["a1", "a2"] }, { object_key: "b", aliases: ["b1"] }, { object_key: "c", aliases: ["c1"] }] };
+  const merged = mergeRegistry(current, preview, ["a", "c"]);
+  assert.equal(merged.note, "n");
+  assert.deepEqual(merged.objects.map((o) => [o.object_key, o.aliases]), [["a", ["a1", "a2"]], ["b", ["b1", "b2-run-khac"]], ["c", ["c1"]]]);
+  assert.deepEqual(mergeRegistry(null, preview, ["a"]), preview);
 });

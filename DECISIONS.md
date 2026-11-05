@@ -247,12 +247,29 @@ Ba run CCR đầu tiên sau tái cấu trúc (CBS-001/002/004) đều có item m
 
 Cùng đợt: id nháp `OQ-DRAFT-*` của normalizer lọt vào profile/checklist ở cả ba run mà audit không bắt; đã thêm pattern vào `contracts/forbidden-fields.json`.
 
+### 2.22 Product guide nằm trong knowledge, tách khỏi explore (2026-11-05)
+
+Operator muốn một file đọc vào là hiểu product và setup được để test, và agent kiểm thử chỉ clone `qa-knowledge`. Nên file nằm ở `knowledge/products/<key>/_product-guide.md`, chỉ giữ tổng quan và setup; `explore-playbook.md` giữ trigger explore. Rule nghiệp vụ vẫn ở KB.
+
+File phải sống cùng knowledge: setup mức product đi vào guide ở bước prose của mỗi run, qua reviewer và `publish-apply.mjs`. Riêng `_product-guide.md` đầu tiên của qikfiliate được đặt thẳng vào `knowledge/` theo yêu cầu operator, ngoài pipeline run, và phát hành qua PR tiếp theo. `_product-guide.md` của teeinblue cũng vậy.
+
+Playbook của product có explore đang bật (teeinblue) không rút gọn được như qikfiliate: explorer đọc playbook theo số mục, nên §1–§7 giữ nguyên và phần trigger thêm ở §8–§10. Login và vocabulary vì vậy có ở cả guide lẫn playbook; đổi một bên thì đổi cả bên kia. Guide không chứa account guard của explorer (§5b).
+
+### 2.23 Định nghĩa setup; config theo feature; khác biệt môi trường đi qua CCR (2026-11-05)
+
+Không có định nghĩa thì orchestrator tự suy đoán: bỏ sót token mới, hoặc chép rule nghiệp vụ vào guide rồi lệch với KB. Định nghĩa nằm ở contract §5b.
+
+Operator chốt: config bật/tắt rất nhiều nên nằm ở feature, không nằm ở guide; khác biệt staging/production do CCR báo. Lý do cần mục CCR riêng: `scope.environment` cố định theo product và Phần 2 chỉ là nơi quan sát, nên trước đây không có chỗ ghi những khác biệt như fake order qua request hay app không kết nối được trên staging.
+
+Feature không chạy được trên môi trường test có verdict `NOT_APPLICABLE`, không phải `BLOCKED`, vì không có việc gì để gỡ. Claim khác biệt môi trường chỉ có lời kể (`S0`) vẫn được nạp dưới dạng `INFERRED` kèm OQ: đây là ngoại lệ của luật `S0` không nạp, chấp nhận được vì `INFERRED` không làm oracle, còn thiếu thông tin thì người test báo `FAIL` sai.
+
 ## 3. Phát hiện làm đổi thiết kế
 
 | Phát hiện | Hệ quả |
 |---|---|
 | **`project_id` teeinblue trong contract/memory là SAI** — `proj-5a26d73c-...` **không tồn tại** trên production; đúng là `proj-7082bc68-...` | Filter `project_id` lâu nay trông như đang chạy nhưng không khớp gì. Giờ đọc từ config. |
 | **4 tool Context Board từng không tồn tại** trên `qa-hub-production` (2026-09-30: `Unknown tool`) | Từ 2026-10-11 đã có trên `qa-hub-production` và `testlane`. Bài học: thiếu tool thì kiểm `tools/list` trước, đừng chẩn đoán thành lỗi token. |
+| **`testlane` và `qa-hub-production` là cùng một QA Hub** (operator xác nhận 2026-10-31) | Mọi `qa_hub.mcp_server` trong config đổi về `testlane`. Lệnh cấm dùng `testlane` ở CTX-20261018-02 hết hiệu lực. |
 | **`ops-board` đọc thiếu `primary_object_key`** | `CTX-20260926-01` (thực ra là object `artwork`) bị fallback dán nhãn `sdk`, rồi đọc `open-questions.md` của object khác để kết luận "done". Đã sửa: 99 OQ của artwork thay vì 49 của sdk. |
 | **`confidence_source` vs `confirmation_source` lệch nhau** — reviewer audit field thứ nhất, normalizer ghi field thứ hai | Reviewer đang audit một field **producer không bao giờ ghi**. Hợp nhất, và khai enum **một chỗ duy nhất** ở §3 — việc lặp lại enum chính là nguyên nhân gốc. |
 | **28 item `CONFIRMED_EXPECTED` không có `confirmation_source`** (`product-base` 21, `asset-category` 6, `global-option` 1) | Luật mới tạo ngay 28 vi phạm tồn đọng → grandfathering tường minh, `rank()` cho chúng = 2 không phải 3. |
@@ -310,3 +327,5 @@ Contract chỉ nói luật; các con số dưới đây là trạng thái dữ l
 ## 7. Sự cố đã xảy ra
 
 **2026-09-10 — publish trái phép.** Nội dung của object `font` và `product-base` từng được ghi vào `knowledge/` ngoài quy trình publish. Bản bị ghi được giữ ở `runs/_archive/incident-2026-09-10-unauthorized-publish/`. Đây là lý do cho luật "chỉ orchestrator được ghi `knowledge/`, chỉ khi `publish_allowed: true` và lock còn thuộc run" (§5), và giờ là lý do `publish-apply.mjs` tự kiểm verdict + lock trước khi copy.
+
+**2026-10-26 — `_registry.json` mất entry khi hai run publish cùng ngày.** CTX-20261026-01 thêm object `image-library` vào registry; 50 phút sau CTX-20261026-02 (sdk) publish và `publish-apply.mjs` chép đè nguyên `_registry.json` từ preview của nó (dựng từ base trước khi có `image-library`), xoá entry. Lock theo object không bảo vệ được file dùng chung cả product. Từ đó `publish-apply.mjs` chỉ lấy từ preview entry của các object trong `--objects`, giữ entry khác theo `knowledge/` hiện tại, và merge trong lock `_manifest`. Entry `image-library` được khôi phục bằng cách chạy lại `publish-apply.mjs` cho CTX-20261026-01.

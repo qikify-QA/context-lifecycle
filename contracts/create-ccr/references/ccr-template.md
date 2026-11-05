@@ -141,6 +141,27 @@ Hai lưu ý thêm:
 
 Không có URL của surface mà bạn không có quyền? **Bình thường.** Gửi thứ bạn có; agent tự map sang target của nó.
 
+## Phần 2a — Khác biệt giữa môi trường `[AGENT đề xuất, BẠN duyệt]`
+
+Feature có hoạt động hoặc cách test nào khác giữa staging và production không? Ví dụ: tạo fake order qua request trên staging, app bên thứ ba không kết nối được trên staging. Không có thì ghi `không có`, chưa biết thì ghi `không rõ`.
+
+| Claim ID | Feature | Loại | Staging | Production | Cách test trên staging | Nguồn và ngày |
+|---|---|---|---|---|---|---|
+| `<<< CLAIM-xx ở Phần 1a >>>` | `<<< feature_key >>>` | `<<< ALTERNATIVE_SETUP / NOT_TESTABLE / DIFFERENT_VALUE >>>` | `<<< ĐIỀN >>>` | `<<< ĐIỀN, hoặc "không rõ" >>>` | `<<< ĐIỀN, hoặc "không test được" >>>` | `<<< ĐIỀN, hoặc "kinh nghiệm vận hành, chưa ai xác nhận" >>>` |
+
+- `ALTERNATIVE_SETUP`: staging test theo cách khác production. `NOT_TESTABLE`: staging không chạy được. `DIFFERENT_VALUE`: hành vi hoặc giá trị khác production.
+- Mỗi dòng cần một claim ở Phần 1a. Chỉ có lời kể vẫn gửi được, nhưng context sẽ ghi là chưa xác nhận và tạo một câu hỏi cho PO/Dev.
+
+## Phần 2b — Setup mới `[AGENT đề xuất, BẠN duyệt]`
+
+Thay đổi này có làm người test mới không vào được, không dựng được data, hoặc không chạy được feature nếu không ai nói trước không? Không có thì ghi `không có`. Rule nghiệp vụ và expected result không ghi ở đây.
+
+| Claim ID | Loại | Cần gì | Áp dụng cho | Nguồn |
+|---|---|---|---|---|
+| `<<< CLAIM-xx, hoặc "—" nếu áp dụng cho cả product >>>` | `<<< truy cập / môi trường / config / account-quyền / điểm vào / test data / phụ thuộc ngoài / giới hạn thao tác >>>` | `<<< tên biến, tên flag, tên role... KHÔNG ghi giá trị secret >>>` | `<<< feature_key, hoặc "cả product" >>>` | `<<< ĐIỀN >>>` |
+
+- Config bật/tắt của một feature ghi theo feature đó, và cần một claim ở Phần 1a.
+
 ---
 
 # Phần 3 — Để không sinh conflict giả `[AGENT]`
@@ -251,6 +272,7 @@ Field này quyết định knowledge có **dùng làm expected result** được
 - [ ] Mỗi `Claim ID` ở Phần 1a có dòng tương ứng ở Phần 1b (object/feature/role/surface)
 - [ ] Cột "Nguồn & độ mạnh" của mỗi dòng ghi đúng 1 trong 5 trạng thái, kèm trích dẫn cụ thể khi không phải `KHÔNG CÓ NGUỒN`
 - [ ] Mọi claim ghi `dev_doc`/`spec_doc`/`po_dev_confirm`/`test_case` đều có **ngày nguồn cụ thể** ở 5.1 (không phải "không rõ")
+- [ ] Phần 2a và 2b đã điền, hoặc ghi rõ `không có`/`không rõ`; dòng áp dụng cho một feature có `Claim ID` ở Phần 1a
 - [ ] Không còn placeholder `<<< ... >>>` nào sót lại trong file
 
 ---

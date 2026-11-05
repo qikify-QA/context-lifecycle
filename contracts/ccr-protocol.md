@@ -9,7 +9,7 @@ Khuôn CCR đầy đủ thuộc skill `create-ccr` (`references/ccr-template.md`
 **Trigger duy nhất của luồng tự động:** người gửi (hoặc người phụ trách) kéo card **Proposal** từ `Todo` sang `In Progress` trên tab "Context Builder Board" của QA Hub.
 
 1. **Soạn nháp trên task:** người gửi đính kèm 1 file CCR markdown vào task liên quan trên QA Hub (field CCR). Sửa được nhiều lần trước khi Submit.
-2. **Submit → 1 Proposal mới** (id `CBS-<n>`): QA Hub chỉ kiểm file không còn placeholder `<<< ... >>>`, rồi copy nội dung vào Proposal. Proposal **immutable** — sửa file trên task sau đó không đổi Proposal đã tạo; mỗi lần Submit (kể cả resubmit sau `NEEDS_INFO`) là một Proposal mới. Proposal vào cột `Todo`.
+2. **Submit → 1 Proposal mới** (id `CBS-<n>`): QA Hub chỉ kiểm file không còn placeholder `<<< ... >>>`, rồi copy nội dung vào Proposal. Proposal **immutable** — sửa file trên task sau đó không đổi Proposal đã tạo; mỗi lần Submit (kể cả resubmit sau `NEEDS_INFO`) là một Proposal mới. Proposal vào cột `Todo`. **Ngoại lệ:** operator được thay file của một Proposal đã `blocked` (vd sau `NEEDS_INFO`, nhiều conflict hoặc nhiều claim S0) bằng `replace_proposal_file` rồi kéo lại sang In Progress. Orchestrator coi đó là nội dung mới: mở run mới, không coi là vi phạm, `results` cũ vẫn nằm trong run trước.
 3. **Kéo Proposal sang `In Progress`** = sẵn sàng cho orchestrator nhặt. Proposal ở `Todo` không được nhặt.
 
 **Nhặt Proposal — vòng quét multi-product:**
@@ -55,7 +55,7 @@ Gate C0 cần 5 thứ, nhưng **CCR chỉ cung cấp 2**. Ba thứ còn lại l�
 |---|---|
 | product | `project_id` của Proposal (§12.1 bước 5); chạy tay thì từ CCR |
 | object target | "Phần 1 — Thấy gì" + "Phần 1b — Đề xuất địa chỉ trong KB" + "Phần 2 — Thấy nó ở đâu" (URL/ID, best-effort), map qua `_registry.json` |
-| environment | **Cố định** = `config/products/<key>.json` → `environments.default`. "Phần 2" chỉ mô tả nơi người gửi quan sát (có thể production hoặc không rõ) — **không bao giờ** là lý do `NEEDS_INFO` |
+| environment | **Cố định** = `config/products/<key>.json` → `environments.default`. "Phần 2" chỉ mô tả nơi người gửi quan sát (có thể production hoặc không rõ) — **không bao giờ** là lý do `NEEDS_INFO`. Khác biệt giữa các môi trường đi qua "Phần 2a", xem §12.3c |
 | role dùng để explore | Orchestrator tự chọn theo `defaults.role` của product; role người gửi là dữ kiện |
 | mutation policy | Orchestrator tự áp theo §7 |
 
@@ -69,7 +69,7 @@ Ba mục không chặn run nhưng quyết định chất lượng đầu ra — 
 - "4.1 Có ai xác nhận đây là hành vi ĐÚNG không?" — `KHÔNG AI` thì claim đó không bao giờ là `S3`.
 - Số lần quan sát ở Phần 1 — 1 lần thì `confidence: LOW` (§3).
 
-**Tương thích ngược:** CCR do skill bản cũ sinh vẫn tới orchestrator (Proposal immutable). Thiếu cột `Claim ID` → orchestrator tự đặt `CLAIM-01..n` theo thứ tự dòng bảng, `claim_id_source: "positional"`. Thiếu Phần 5.1 → mọi claim về `S1`/`S0`. Không trả `NEEDS_INFO` chỉ vì thiếu cột/mục mới.
+**Tương thích ngược:** CCR do skill bản cũ sinh vẫn tới orchestrator (Proposal immutable). Thiếu cột `Claim ID` → orchestrator tự đặt `CLAIM-01..n` theo thứ tự dòng bảng, `claim_id_source: "positional"`. Thiếu Phần 5.1 → mọi claim về `S1`/`S0`. Thiếu Phần 2a/2b → ghi vào `unknowns`. Không trả `NEEDS_INFO` chỉ vì thiếu cột/mục mới.
 
 ## 12.3a Gate C0.5 — CCR Source Strength Assessment
 
@@ -79,7 +79,7 @@ Chạy ngay sau C0 và **sau khi đã khoá lock** (§16), trước khi dispatch
 |---|---|---|
 | `S3` | Một nguồn `confirmation_source` hợp lệ (§3: `spec_doc` · `dev_doc` · `po_dev_confirm` · `test_case`), có locator + link + `authored_on` + trích **nguyên văn** ở "5.1 Nguồn & evidence theo từng claim" | Normalize thẳng, **0 explorer**, `CONFIRMED_EXPECTED` kèm `confirmation_source`, được supersede (§12.5) |
 | `S1` | Ảnh/HAR/API capture do người gửi tự chụp, không kèm nguồn `S3` | Normalize thẳng thành `OBSERVED_CURRENT` + `confidence: LOW` + OQ `NEEDS_CONFIRMATION` trỏ về `kb_id`. **Không explore**, không làm oracle |
-| `S0` | Chỉ lời kể, không artifact, không link | Không nạp; nêu trong `results.open_questions` với đúng tên mục |
+| `S0` | Chỉ lời kể, không artifact, không link | Không nạp; nêu trong `results.open_questions` với đúng tên mục. Ngoại lệ: claim khác biệt môi trường, xem §12.3c |
 
 Explore chỉ chạy khi operator yêu cầu tường minh cho một claim — khi đó run thành `INCREMENTAL_UPDATE` (§10a, mode settling).
 
@@ -112,17 +112,34 @@ Với mỗi claim: copy evidence vào `raw/ccr-evidence/<claim_key>/` (`claim_ke
                       "scope": { "environment": "<environments.default>", "role": "...", "surface": "..." } },
       "relation": "ADD | SUPERSEDES | CONTRADICTS | UNKNOWN",
       "target_kb_ids": ["KB-126"],
+      "environment_difference": { "type": "ALTERNATIVE_SETUP | NOT_TESTABLE | DIFFERENT_VALUE", "test_env": "...", "production": "...", "how_to_test": "..." },
       "required_explorers": [] } ],
   "overall_decision": "..." }
 ```
 
-`shipped`, `kb_address`, `relation`, `target_kb_ids` là input bắt buộc của §12.5 — không có chúng thì supersede không tất định. `confirmation_source` chỉ có ở claim `S3`. File này thuộc `runs/`, không copy sang `knowledge/`.
+`environment_difference` chỉ có ở claim khác biệt môi trường (§12.3c). `shipped`, `kb_address`, `relation`, `target_kb_ids` là input bắt buộc của §12.5 — không có chúng thì supersede không tất định. `confirmation_source` chỉ có ở claim `S3`. File này thuộc `runs/`, không copy sang `knowledge/`.
 
 `context-quality-reviewer` audit lại từng claim (`contracts/gates.md`, audit source-strength): `confirmation_source` thiếu key hoặc `ref` không resolve về nguồn thật → claim đó không được publish làm `CONFIRMED_EXPECTED`, hạ xuống `PROPOSED` + OQ. Ở `CCR_INGEST` không có lane explore để quay lại.
 
 ## 12.3b Open question và ops-board
 
 Mọi `NEEDS_CONFIRMATION`/`CONFLICT`/`OPEN_ISSUE` phát sinh trong run phải vào `open-questions.md` của object, đúng `oq_id` + `type` (§5a), **trước khi** reviewer chạy — thiếu là BLOCKING. Không cần bước push riêng: `ops-board/server.mjs` đọc `open-questions.md` của object đang xử lý ở mỗi lần load board.
+
+## 12.3c Setup và khác biệt môi trường trong CCR
+
+Định nghĩa và nơi ghi ở contract §5b. CCR mang hai mục:
+
+- **"Phần 2a — Khác biệt giữa môi trường":** mỗi dòng trỏ về một `Claim ID` ở Phần 1a. Orchestrator ghi `environment_difference` vào claim đó trong plan.
+- **"Phần 2b — Setup mới":** dòng áp dụng cho một feature trỏ về một `Claim ID` và đi như claim thường. Dòng áp dụng cho cả product không vào KB; orchestrator đưa vào `_product-guide.md` ở bước prose.
+
+Claim có `environment_difference` đánh giá nguồn như mọi claim, nhưng khác hệ quả:
+
+| Bậc | Hệ quả |
+|---|---|
+| `S3` | `CONFIRMED_EXPECTED`, như claim thường |
+| `S1`, `S0` | Vẫn nạp: `INFERRED` + `confidence: LOW` + OQ `NEEDS_CONFIRMATION` trỏ về `kb_id`. Không làm oracle |
+
+`S0` được nạp vì phần lớn khác biệt loại này là kinh nghiệm vận hành, không có artifact, trong khi thiếu nó người test sẽ báo `FAIL` sai. Evidence của claim `S0` là dòng Phần 2a, copy vào `raw/ccr-evidence/<claim_key>/`. Muốn ghi nhận phía môi trường test là quan sát thật thì operator yêu cầu explore cho claim đó (§12.3a).
 
 ## 12.4 Quy tắc bắt buộc
 

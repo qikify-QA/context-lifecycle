@@ -7,18 +7,29 @@
 //
 // Chỉ orchestrator gọi script này, và chỉ sau khi reviewer trả publish_allowed: true.
 // Copy là merge: file trong preview ghi đè, file không có trong preview giữ nguyên.
+// Riêng `_registry.json` dùng chung cho mọi object của product: chỉ entry của các
+// object trong --objects được lấy từ preview, entry khác giữ theo knowledge/ hiện tại
+// (preview dựng từ base cũ, chép đè sẽ xoá entry mà run khác vừa publish).
 // Exit 2 = lock không còn thuộc run (outcome DEFERRED, reason lock_lost). Exit 1 = lỗi khác.
 
 import { cp } from "node:fs/promises";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import path from "node:path";
-import { parseArgs, readJson, readJsonOr } from "../lib/fs-utils.mjs";
+import { parseArgs, readJson, readJsonOr, writeJson } from "../lib/fs-utils.mjs";
 import { resolveRunDir, runPaths, knowledgeProductsDir, rootDir } from "../lib/run-layout.mjs";
 import { verifyAll, acquireAll, releaseAll } from "../lib/locks.mjs";
 import { auditDir } from "./audit-preview.mjs";
 
 const execFileAsync = promisify(execFile);
+
+export function mergeRegistry(current, preview, objectKeys) {
+  if (!current) return preview;
+  const fromPreview = new Map((preview?.objects ?? []).filter((o) => objectKeys.includes(o.object_key)).map((o) => [o.object_key, o]));
+  const objects = (current.objects ?? []).map((o) => fromPreview.get(o.object_key) ?? o);
+  for (const [key, o] of fromPreview) if (!objects.some((x) => x.object_key === key)) objects.push(o);
+  return { ...current, objects };
+}
 
 async function main() {
   const args = parseArgs();
@@ -66,7 +77,11 @@ async function main() {
     process.exit(1);
   }
   try {
-    await cp(paths.previewDir, target, { recursive: true, force: true });
+    const previewRegistry = path.join(paths.previewDir, "_registry.json");
+    const registry = path.join(target, "_registry.json");
+    await cp(paths.previewDir, target, { recursive: true, force: true, filter: (src) => src !== previewRegistry });
+    const preview = await readJsonOr(previewRegistry, null);
+    if (preview) await writeJson(registry, mergeRegistry(await readJsonOr(registry, null), preview, keys.map((k) => k.object)));
     const { stdout } = await execFileAsync("node", [path.join(rootDir, "scripts", "generate-manifest.mjs")], { cwd: rootDir });
     console.log(JSON.stringify({ ok: true, copied_to: path.relative(rootDir, target), manifest: stdout.trim().split("\n").slice(-3) }, null, 2));
   } finally {
@@ -74,7 +89,7 @@ async function main() {
   }
 }
 
-main().catch((e) => {
+if (import.meta.url === `file://${process.argv[1]}`) main().catch((e) => {
   console.error(e.message || e);
   process.exit(1);
 });

@@ -10,6 +10,8 @@ git clone --depth 1 https://github.com/qikify-QA/qa-knowledge.git
 
 Cập nhật bằng `git pull`. Muốn cố định một version để test lặp lại được: checkout tag `ctx-YYYY-MM-DD`.
 
+Mới làm với một product thì đọc `products/<key>/_product-guide.md` trước, nếu có: tổng quan, setup, env, cách dựng test data.
+
 ## 2. Đọc `manifest.json` trước
 
 File đầu tiên agent của bạn nên đọc. Nó cho biết có product/object nào, version bao nhiêu, và **object đó có dùng làm expected result được không**:
@@ -43,6 +45,7 @@ File đầu tiên agent của bạn nên đọc. Nó cho biết có product/obje
 - `usable_as_oracle: "DOC_ONLY"` = mọi item `CONFIRMED_EXPECTED` của object đến 100% từ tài liệu dev sinh từ source code. Loại tài liệu đó có thể mô tả cả bug như thể đúng: khi lệch, đối chiếu spec/PO trước khi kết luận là bug.
 - Item `status: UNRESOLVED` (cùng `conflict_group`) là hai phía chưa ngã ngũ — không phía nào là oracle.
 - `scope.brand` khác `null` = hành vi chỉ đúng cho một brand/instance.
+- Trước khi test một feature, đọc `entry_points[].precondition` và `environment_differences` trong `profile.json`: config riêng của feature nằm ở đó. `ALTERNATIVE_SETUP` = làm theo `how_to_test`. `NOT_TESTABLE` = không chạy, ghi `NOT_APPLICABLE`, không tính là `FAIL`. `DIFFERENT_VALUE` = test theo giá trị của môi trường đang dùng.
 
 ## 4. Knowledge tự chứa — không cần mở evidence
 

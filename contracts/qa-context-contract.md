@@ -234,7 +234,7 @@ API và DB evidence BẮT BUỘC map về `ACT-ID` (mode explore) hoặc `DSEC-I
 - Subagent CHỈ ghi vào `runs/context/<YYYY-MM-DD>/<CTX-RUN-ID>/`, theo thư mục được cấp trong agent definition.
 - KHÔNG subagent nào được ghi vào `knowledge/`. Chỉ `qa-context-lifecycle-orchestrator` publish (`scripts/ctx/publish-apply.mjs`), và CHỈ khi **cả 2** điều kiện đúng: (a) reviewer trả `publish_allowed: true`, **và** (b) lock của mọi object bị ảnh hưởng vẫn thuộc `ctx_run_id` của chính run này (§16). Thiếu (b) → DỪNG, không ghi `knowledge/`, `DEFERRED` + `reason: lock_lost`.
 - **Thứ tự bắt buộc: checklist-builder → `knowledge-diff-analyzer` (khi có base) → publish strip → reviewer → publish.** Publish strip (`scripts/ctx/publish-strip.mjs`) đọc candidate gốc và sinh `candidate/publish-preview/` theo đúng layout `knowledge/products/<product>/` và đúng schema §5a, đồng thời áp `resolution: SUPERSEDE` của diff (§12.5). Preview là bản **y hệt** sẽ được copy vào `knowledge/`. Candidate gốc giữ nguyên envelope/evidence, không bị sửa.
-- Sau strip, orchestrator cập nhật file prose trong preview (`feature-summary.md`, `open-questions.md`, `CHANGELOG.md`, `_registry.json`). Reviewer chạy C1–C5 trên candidate gốc và C6 trên preview (`scripts/ctx/audit-preview.mjs`). Publish copy nguyên preview sang `knowledge/` (merge: file không có trong preview giữ nguyên), không strip lại.
+- Sau strip, orchestrator cập nhật file prose trong preview (`feature-summary.md`, `open-questions.md`, `CHANGELOG.md`, `_registry.json`, `_product-guide.md`). Reviewer chạy C1–C5 trên candidate gốc và C6 trên preview (`scripts/ctx/audit-preview.mjs`). Publish copy nguyên preview sang `knowledge/` (merge: file không có trong preview giữ nguyên), không strip lại.
 - Không sửa file của agent khác. Cần dữ liệu bước trước thì đọc, đừng ghi đè.
 
 ```text
@@ -270,6 +270,7 @@ knowledge/
     ├── _registry.json                     (alias registry, 1 file/product)
     ├── _product-kb.json                   (OPTIONAL — mức product: vocabulary, actor, ranh giới hệ thống)
     ├── _product-summary.md                (OPTIONAL — data flow, bản đồ object/feature mức product)
+    ├── _product-guide.md                       (OPTIONAL — tổng quan và setup của project; không chứa rule nghiệp vụ, không liên quan explore)
     └── <object-key>/                      (object nằm TRỰC TIẾP dưới product — không có tầng objects/)
         ├── kb.json                        (mảng JSON phẳng — thuộc tính/luật dùng chung toàn object)
         ├── publish-meta.json              ({published_context_version, published_at, mode})
@@ -355,6 +356,42 @@ Entry mẫu: `{"oq_id": "OQ-order-014", "type": "CONFLICT", "feature_id": "order
 **Mỗi entry PHẢI bọc trong một khối ```` ```json ````.** Parser (`scripts/lib/open-questions.mjs`) đọc được cả entry không fence, nhưng audit coi entry ngoài fence là BLOCKING — fence là quy ước để người đọc và máy đọc cùng thấy một thứ.
 
 `knowledge/_open-issues/consolidated-open-questions.md` là bản tổng hợp theo product, sinh bởi `generate-manifest.mjs` từ các file object-level — không phải nơi tạo/sửa `oq_id`.
+
+## 5b. Setup và khác biệt môi trường
+
+**Setup** là thông tin mà nếu thiếu, người đã đọc guide vẫn không vào được, không dựng được data, hoặc không chạy được feature. Nó trả lời "cần gì để bắt đầu test", không trả lời "kết quả đúng là gì".
+
+| Loại setup | Nghĩa |
+|---|---|
+| Truy cập | Credential hoặc cách vào mới. Chỉ ghi tên biến, không ghi giá trị |
+| Môi trường | Host, URL, instance đổi |
+| Config | Flag hoặc giá trị phải đặt thì feature mới chạy |
+| Account / quyền | Cần loại account hoặc role khác |
+| Điểm vào | Route, màn hình, menu mới hoặc đổi chỗ |
+| Test data | Cách dựng data đổi, hoặc cần fixture mới |
+| Phụ thuộc ngoài | Hệ thống bên thứ ba phải kết nối |
+| Giới hạn thao tác | Việc mới bị cấm, hoặc có tác dụng phụ khi test |
+
+**Nơi ghi:**
+
+- Cần trước mọi test, hoặc dùng cho nhiều feature → `_product-guide.md`.
+- Chỉ một feature cần, gồm mọi config bật/tắt của feature → KB item của feature, hiện ở `entry_points[].precondition` của `profile.json` kèm `kb_refs`.
+- Token hoặc biến env mới của một feature → guide giữ tên biến để danh sách env đầy đủ, feature ghi cần biến nào.
+- Chỉ dùng cho một lần test → test case, không ghi vào knowledge.
+
+Guide chỉ ghi tên biến env: không ghi id account, id instance, tên store. Account guard và phạm vi store của explorer chỉ nằm ở explore playbook, không áp dụng cho người test hằng ngày.
+
+**Không phải setup:** rule nghiệp vụ, ngưỡng, công thức, thông báo lỗi (KB) · expected result, test condition (checklist) · câu hỏi chưa rõ, conflict (`open-questions.md`) · bug không cản trở việc setup (Testlane) · lịch sử thay đổi (`CHANGELOG.md`). Bug chặn việc dựng data thì có tính, chỉ ghi phần cần biết để đi vòng. Feature mới chỉ đổi hành vi thì không có setup mới, chỉ thêm dòng vào bản đồ feature của guide. Thông tin setup trong guide chưa chắc chắn vẫn ghi, kèm nhãn nguồn hoặc `[?]`.
+
+**Khác biệt môi trường** là việc một feature hoạt động hoặc được test khác nhau giữa môi trường test và production. Mỗi khác biệt là một dòng ở `environment_differences` trong `profile.json` của feature, trace về đúng một KB item:
+
+| `type` | Nghĩa | Khi test trên môi trường test |
+|---|---|---|
+| `ALTERNATIVE_SETUP` | Cách test khác production | Làm theo `how_to_test` rồi test bình thường |
+| `NOT_TESTABLE` | Không chạy được trên môi trường test | Không chạy, verdict `NOT_APPLICABLE`, không tính là `FAIL` |
+| `DIFFERENT_VALUE` | Hành vi hoặc giá trị khác production | Test theo giá trị của môi trường test, không dùng giá trị production làm expected |
+
+KB item của khác biệt: `topic: "environment_difference"`, `tags` chứa `type`, `statement` đúng dạng `[<type>] Môi trường test: ...; Production: ...; Cách test: ...`. `scope.environment` vẫn là `environments.default`. Explorer không vào được production nên không tự kiểm chứng phía production: `knowledge_kind` theo `contracts/ccr-protocol.md` §12.3c.
 
 ## 6. Redaction — chạy TRƯỚC khi ghi file
 

@@ -47,7 +47,7 @@ Sinh check tái sử dụng cho mỗi feature, gắn đúng `oracle_strength` th
 
 1. Xác định core capability và risk P1 từ profile.
 2. Tạo check cho mỗi dimension applicable (bảng dưới); dimension không applicable → `excluded_dimensions` kèm lý do, không bỏ im lặng.
-3. Gắn applicability (role, state, environment, surface/device) và layer cho mỗi check.
+3. Gắn applicability (role, state, environment, surface/device) và layer cho mỗi check. Check chạm `environment_differences` của profile (contract §5b): `ALTERNATIVE_SETUP` → ghi cách test vào `precondition`; `NOT_TESTABLE` → `applicability.environment` loại môi trường không chạy được; `DIFFERENT_VALUE` → `expected_result` theo giá trị của môi trường test.
 4. Map check → feature, `related_kb_ids`, risk, oracle theo luật trên.
 5. Dedupe theo ngữ nghĩa; tạo case trùng để tăng số lượng là FAIL.
 6. `REGRESSION`: hành vi trong KB shard khác base đã publish (đọc base), hoặc item `KNOWN_DEFECT` cần theo dõi.
