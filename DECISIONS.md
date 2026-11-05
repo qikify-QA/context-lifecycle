@@ -329,3 +329,11 @@ Contract chỉ nói luật; các con số dưới đây là trạng thái dữ l
 **2026-09-10 — publish trái phép.** Nội dung của object `font` và `product-base` từng được ghi vào `knowledge/` ngoài quy trình publish. Bản bị ghi được giữ ở `runs/_archive/incident-2026-09-10-unauthorized-publish/`. Đây là lý do cho luật "chỉ orchestrator được ghi `knowledge/`, chỉ khi `publish_allowed: true` và lock còn thuộc run" (§5), và giờ là lý do `publish-apply.mjs` tự kiểm verdict + lock trước khi copy.
 
 **2026-10-26 — `_registry.json` mất entry khi hai run publish cùng ngày.** CTX-20261026-01 thêm object `image-library` vào registry; 50 phút sau CTX-20261026-02 (sdk) publish và `publish-apply.mjs` chép đè nguyên `_registry.json` từ preview của nó (dựng từ base trước khi có `image-library`), xoá entry. Lock theo object không bảo vệ được file dùng chung cả product. Từ đó `publish-apply.mjs` chỉ lấy từ preview entry của các object trong `--objects`, giữ entry khác theo `knowledge/` hiện tại, và merge trong lock `_manifest`. Entry `image-library` được khôi phục bằng cách chạy lại `publish-apply.mjs` cho CTX-20261026-01.
+
+### 2.24 Guide là index; biến env có file riêng (2026-11-05)
+
+Operator muốn agent kiểm thử chỉ lấy context từ `qa-knowledge`, bỏ file rule local ở repo test. Guide teeinblue dài 22 KB, và agent phân tích phải đọc cả phần login, fixture mà bước đó không cần.
+
+Operator chốt: guide chia Phần A (mọi bước đọc) và Phần B (chỉ execute, dựng data), có marker để script trích riêng. Guide giữ thêm bảng index khác biệt môi trường, chỉ gồm hạng mục, feature key, `type`, mức; chi tiết vẫn ở `environment_differences` như 2.23, để không có 2 nơi ghi. Danh sách biến env nằm ở `_env.example` cạnh guide, chỉ tên biến và chú thích, nên luật không ghi id và tên store ở §5b giữ nguyên.
+
+Cùng đợt: dòng `artwork/` trong `knowledge/.gitignore` vốn dành cho thư mục local ở gốc, nhưng khớp cả `products/teeinblue/artwork/`, làm file mới của object này không được commit (5 feature và `layer-common-config/kb.json`). Đã neo thành `/artwork/`.

@@ -2,13 +2,13 @@
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtemp, readdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readdir, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { acquireAll, verifyAll, releaseAll } from "../../lib/locks.mjs";
 import { stripForbidden, scanText, confirmationSourceProblems } from "../../lib/forbidden-fields.mjs";
 import { createRun } from "../new-run.mjs";
-import { publishKbItem, applySupersedes, publishConfirmationSource } from "../publish-strip.mjs";
+import { publishKbItem, applySupersedes, publishConfirmationSource, copyProductFiles } from "../publish-strip.mjs";
 import { scanSecrets } from "../freeze-docs.mjs";
 import { mergeRegistry } from "../publish-apply.mjs";
 
@@ -342,4 +342,18 @@ test("publish-apply: registry chỉ lấy entry của object được publish, g
   assert.equal(merged.note, "n");
   assert.deepEqual(merged.objects.map((o) => [o.object_key, o.aliases]), [["a", ["a1", "a2"]], ["b", ["b1", "b2-run-khac"]], ["c", ["c1"]]]);
   assert.deepEqual(mergeRegistry(null, preview, ["a"]), preview);
+});
+
+test("publish-strip: copy guide và _env.example của base, không đè bản đã có trong preview", async () => {
+  const dir = await tmp();
+  const base = path.join(dir, "base");
+  const out = path.join(dir, "out");
+  await mkdir(base);
+  await mkdir(out);
+  await writeFile(path.join(base, "_product-guide.md"), "base guide");
+  await writeFile(path.join(base, "_env.example"), "BASE=");
+  await writeFile(path.join(out, "_product-guide.md"), "preview guide");
+  await copyProductFiles(base, out);
+  assert.equal(await readFile(path.join(out, "_product-guide.md"), "utf8"), "preview guide");
+  assert.equal(await readFile(path.join(out, "_env.example"), "utf8"), "BASE=");
 });
