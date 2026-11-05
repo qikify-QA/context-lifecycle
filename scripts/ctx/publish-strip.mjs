@@ -8,7 +8,7 @@
 //
 // Sinh: <object>/kb.json, <object>/features/<f>/{kb.json,profile.json},
 //       <object>/checklists/<f>.json, <object>/publish-meta.json, _product-kb.json.
-// File prose (feature-summary.md, open-questions.md, CHANGELOG.md, _registry.json, _product-guide.md)
+// File prose (feature-summary.md, open-questions.md, CHANGELOG.md, _registry.json, _product-guide.md, _env.example)
 // được copy từ knowledge/ nếu preview chưa có — orchestrator sửa chúng sau bước này.
 // `oq_id` của check / unknown_area lấy từ candidate/oq-assignments.json (orchestrator
 // ghi khi mint OQ): { "<feature_key>": { "checks": {"CHK-001": "OQ-.."},
@@ -98,6 +98,13 @@ export function applySupersedes(diff, kbFiles, { date, ccrRef, mode, approvals =
     applied.push({ kb_id: base.kb_id, candidate_kb_id: candId, object: entry.object, feature_key: entry.featureKey });
   }
   return { applied, problems, changelog };
+}
+
+export async function copyProductFiles(baseDir, out) {
+  for (const name of ["_product-guide.md", "_env.example"]) {
+    const target = path.join(out, name);
+    if (!(await exists(target)) && (await exists(path.join(baseDir, name)))) await copyFile(path.join(baseDir, name), target);
+  }
 }
 
 async function main() {
@@ -237,8 +244,7 @@ async function main() {
   }
   const registry = path.join(out, "_registry.json");
   if (!(await exists(registry)) && (await exists(path.join(baseDir, "_registry.json")))) await copyFile(path.join(baseDir, "_registry.json"), registry);
-  const productGuide = path.join(out, "_product-guide.md");
-  if (!(await exists(productGuide)) && (await exists(path.join(baseDir, "_product-guide.md")))) await copyFile(path.join(baseDir, "_product-guide.md"), productGuide);
+  await copyProductFiles(baseDir, out);
 
   const summary = { product, mode, date, ccr_ref: ccrRef, objects, versions, files_written: written.length, supersedes_applied: sup.applied, problems };
   await writeJson(path.join(path.dirname(out), "strip-summary.json"), summary);

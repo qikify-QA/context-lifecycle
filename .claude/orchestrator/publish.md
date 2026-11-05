@@ -16,7 +16,7 @@ Gom mọi `NEEDS_CONFIRMATION` / `CONFLICT` / `OPEN_ISSUE` của run: `open_ques
 - chuyển KB/profile/checklist sang schema published (allowlist §5a), lấy `confirmation_source.ref` từ `ref.citation`;
 - áp `resolution: SUPERSEDE` của `review/knowledge-diff.json`, kèm dòng CHANGELOG trích nguyên văn statement cũ;
 - sinh `publish-meta.json` (version = base + 1) cho mọi object bị chạm, `kb.json` rỗng cho object mới không có shard object-level;
-- copy `feature-summary.md`, `open-questions.md`, `CHANGELOG.md`, `_registry.json`, `_product-guide.md` của base vào preview nếu preview chưa có.
+- copy `feature-summary.md`, `open-questions.md`, `CHANGELOG.md`, `_registry.json`, `_product-guide.md`, `_env.example` của base vào preview nếu preview chưa có.
 
 Exit 1 → đọc `problems` trong `candidate/strip-summary.json`, sửa nguồn của lỗi (không sửa tay preview).
 
@@ -28,7 +28,7 @@ Với mỗi object bị chạm, trong `candidate/publish-preview/<object>/`:
 - `feature-summary.md`: trạng thái hiện tại (không tích luỹ lịch sử); **dòng 2 là `**Published context version:** <N>`** đúng với `publish-meta.json`.
 - `_registry.json`: thêm object/feature mới và alias.
 
-Ở gốc preview, `_product-guide.md` (tổng quan và setup của project): thêm setup mức product mà run làm xuất hiện hoặc đổi, theo định nghĩa và nơi ghi ở contract §5b (nguồn trong CCR: "Phần 2b — Setup mới"), và bỏ thông tin đã lỗi thời. Setup riêng một feature và khác biệt môi trường nằm ở `profile.json` của feature, không vào guide. Feature mới thì thêm dòng vào bản đồ feature nếu guide có mục này. Ghi tên biến, không ghi giá trị. Không ghi nội dung explore. Run không có gì mới về setup thì giữ nguyên file. Product chưa có file thì tạo khi run đầu tiên có nội dung setup.
+Ở gốc preview, `_product-guide.md` (tổng quan và setup của project): thêm setup mức product mà run làm xuất hiện hoặc đổi, theo định nghĩa và nơi ghi ở contract §5b (nguồn trong CCR: "Phần 2b — Setup mới"), và bỏ thông tin đã lỗi thời. Setup riêng một feature và chi tiết khác biệt môi trường nằm ở `profile.json` của feature; guide chỉ giữ dòng index (hạng mục, feature key, `type`, mức) nếu guide có bảng này. Feature mới thì thêm key vào bản đồ feature nếu guide có mục này. Biến env mới thì thêm vào cả guide và `_env.example` nếu product có file này. Ghi tên biến, không ghi giá trị. Không ghi nội dung explore. Run không có gì mới về setup thì giữ nguyên file. Product chưa có file thì tạo khi run đầu tiên có nội dung setup.
 
 Không ghi `ctx_run_id`, đường dẫn `runs/`, hay ID run-local (`DOC-`, `DSEC-`, `CLM-`, `ACT-`) vào prose.
 
