@@ -8,23 +8,33 @@ Trình tự của orchestrator cho run xuất phát từ Context Change Request.
 2. Với mỗi product: `mcp__<mcp_server>__list_context_board_proposals({ status: "in-progress", project_id })`. Lỗi/401 ở một product → ghi log, tiếp tục product khác.
 3. Với mỗi Proposal: `mcp__<mcp_server>__get_proposal({ proposal_id })`. Ghi mảng Proposal (có `id`, `projectId`, `submittedAt`, `content`) ra một file tạm trong scratchpad.
 4. `node scripts/ctx/intake.mjs --proposals <file>` → hàng đợi theo mức gấp rồi `submittedAt`; Proposal trong `skipped` (project không thuộc product ACTIVE) bỏ qua. Xử lý theo đúng thứ tự `queue`.
-5. Proposal chạm nhiều product → `finish_context_board_proposal` outcome `NEEDS_INFO` ("Phần 0 — Cần mấy CCR?"), không tạo run.
+5. Proposal chạm nhiều product → `finish_context_board_proposal` outcome `NEEDS_INFO` ("Phần đầu"), không tạo run.
 
 **Chạy tay:** operator đưa đường dẫn file trong `inputs/ccr-drafts/`. Không có `proposal_id` → không gọi tool phản hồi board; trả kết quả trong response.
 
 ## 2. Dựng run
 
-1. Resolve `object_key` qua `knowledge/products/<product>/_registry.json` của **đúng product đó** (§12.1 bước 5). Không resolve được → `update_context_board_proposal({ status: "blocked", results: { summary, open_questions: ["Phần 1 — Thấy gì: ..."] } })`, dừng.
+1. Resolve `object_key` qua `knowledge/products/<product>/_registry.json` của **đúng product đó** (§12.1 bước 5). Không resolve được → `update_context_board_proposal({ status: "blocked", results: { summary, open_questions: ["Phần đầu: ..."] } })`, dừng.
 2. Object phải đã có base (`knowledge/products/<p>/<o>/publish-meta.json`). Chưa có → `DEFERRED` + `reason: object_has_no_base`.
 3. `node scripts/ctx/new-run.mjs --product <p> --mode CCR_INGEST --object <o> --proposal <CBS-n> --label "<vài từ gợi nhớ>"`.
 4. Ghi `input/bootstrap-request.json` theo `contracts/templates/bootstrap-request.ccr.json`.
 5. `node scripts/ctx/lock.mjs acquire --run <id> --product <p> --objects <o,...> --proposal <CBS-n>`. Exit 2 → `finish_context_board_proposal` outcome `DEFERRED`, `results: { summary, reason: "locked_by_run", held_by }` (lấy từ `conflict.held_by` của output), ghi `status: DEFERRED` vào run-manifest, dừng. Người gửi kéo Proposal lại sau khi run kia xong.
 6. Gate C0 biến thể CCR (`contracts/gates.md`).
 
+## 2b. CCR không có claim
+
+CCR chỉ có khối C, hoặc khối D toàn `KHÔNG CÒN ÁP DỤNG`: không tạo run, không lock object, không qua C0.5.
+
+1. Áp từng dòng vào file trong `knowledge/products/<product>/`, kiểm theo contract §5b, §5c: đúng nơi, không trùng nơi khác, chỉ tên biến, guide ≤ 10 KB. Khối D: gỡ entry OQ, thêm CHANGELOG (`contracts/ccr-protocol.md` §12.3d).
+2. Dòng không đạt thì bỏ và nêu lý do trong `results`.
+3. `finish_context_board_proposal` với danh sách file đã đổi. Phát hành theo `CLAUDE.md`.
+
+Đây là ngoại lệ duy nhất của luật "chỉ ghi `knowledge/` qua `publish-apply.mjs`", vì các file này không có version hay oracle.
+
 ## 3. Gate C0.5 — Source Strength
 
-1. Từng dòng của "Phần 1a — Phạm vi thay đổi & ảnh hưởng ước tính" là một claim. Thiếu cột `Claim ID` → `CLAIM-01..n` theo thứ tự dòng, `claim_id_source: "positional"`.
-2. Gán `S3` / `S1` / `S0` theo `contracts/ccr-protocol.md` §12.3a, đọc nguồn ở "5.1 Nguồn & evidence theo từng claim". Với `S3`, điền `confirmation_source.ref.citation` đúng dạng sẽ publish (§3).
+1. Mỗi block khối A, dòng khối B, block khối D (trừ `KHÔNG CÒN ÁP DỤNG`) là một claim. Thiếu cột `Claim ID` → `CLAIM-01..n` theo thứ tự dòng, `claim_id_source: "positional"`.
+2. Gán `S3` / `S1` / `S0` theo `contracts/ccr-protocol.md` §12.3a, đọc nguồn trong block của claim. Với `S3`, điền `confirmation_source.ref.citation` đúng dạng sẽ publish (§3).
 3. Copy evidence từng claim vào `raw/ccr-evidence/<claim_key>/`; toàn văn Proposal vào `raw/ccr-evidence/_ccr-full-content.md`.
 4. Ghi `input/ccr-fastpath-plan.json` đúng schema §12.3a.
 5. `node scripts/ctx/dedup.mjs --run <id>`: claim trùng → bỏ khỏi plan và ghi vào `results`; mọi claim trùng → `REJECTED` + `reason: duplicate_of`, dừng.

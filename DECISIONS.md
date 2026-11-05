@@ -349,3 +349,9 @@ Operator chốt: PO, Dev hay QA xác nhận đều tính, kể cả QA là ngư�
 Operator muốn agent kiểm thử không đọc gì local, áp được cho mọi product, và không trùng lặp. Thử tách thêm file môi trường riêng thì 37% guide trùng với nó, nên bỏ. Chỉ còn hai loại: guide trả lời "có gì, ở đâu, test được không"; `_flows/` trả lời "làm thế nào" (contract §5c). Chỉ ghi tên biến như §5b.
 
 Đánh đổi: flow đổi theo UI nhưng giờ cập nhật qua CCR, chậm hơn sửa tại chỗ.
+
+### 2.27 CCR gồm phần đầu và 4 khối (2026-11-05)
+
+Khuôn cũ dài 304 dòng, mọi CCR đi qua khoảng 20 mục. Guide, flow và open question cũng cần đường cập nhật. Nay CCR chỉ gồm phần đầu và khối có dùng: A hành vi, B môi trường, C guide và flow, D trả lời open question. Nhiều loại thì nối các khối, không gộp mục.
+
+Khối C không phải claim. CCR không có claim không tạo run, vì run bắt buộc có claim và object, còn các file này không có version hay oracle. Khuôn cũ vẫn xử lý được.

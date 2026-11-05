@@ -24,7 +24,7 @@ Product phục vụ nhiều brand trên cùng codebase (vd qikfiliate): claim ch
 
 ## 2. Những gì KHÔNG cần hỏi người gửi
 
-- **Environment:** context builder luôn dùng environment trong bảng trên. Mục "Phần 2 — Thấy nó ở đâu" chỉ là dữ kiện về nơi *bạn* quan sát; ghi `production` hoặc `không rõ` đều hợp lệ và không bao giờ là lý do bị trả `NEEDS_INFO`.
+- **Environment:** context builder luôn dùng environment trong bảng trên. Khác biệt giữa môi trường ghi ở khối B.
 - **Mutation policy, account dùng để explore, có capture network/DB không:** là chính sách của bên sở hữu môi trường.
 
 ## 3. Cách gửi
@@ -34,7 +34,7 @@ Product phục vụ nhiều brand trên cùng codebase (vd qikfiliate): claim ch
 3. **Kéo Proposal sang `In Progress`** khi sẵn sàng. Đây là tín hiệu duy nhất để context builder nhặt CCR; Proposal ở `Todo` không được xử lý.
 4. Kết quả trả về ngay trên Proposal: `published` (kèm version mới) hoặc `blocked` (kèm lý do: thiếu thông tin, conflict, bị từ chối hoặc hoãn).
 
-Nhiều CCR cùng lúc thì kéo hết sang `In Progress` được — CCR được xử lý theo mức gấp (mục 4.4) rồi theo thời điểm submit; CCR chạm object khác nhau chạy song song. CCR chạm cùng object với một CCR đang chạy sẽ nhận `blocked` với lý do `locked_by_run` (không phải conflict nội dung) — kéo lại sau khi CCR kia xong. CCR trùng hoàn toàn với một CCR đang chạy hoặc đã publish nhận lý do `duplicate_of`.
+Nhiều CCR cùng lúc thì kéo hết sang `In Progress` được — CCR được xử lý theo mức gấp (mục Mức độ gấp) rồi theo thời điểm submit; CCR chạm object khác nhau chạy song song. CCR chạm cùng object với một CCR đang chạy sẽ nhận `blocked` với lý do `locked_by_run` (không phải conflict nội dung) — kéo lại sau khi CCR kia xong. CCR trùng hoàn toàn với một CCR đang chạy hoặc đã publish nhận lý do `duplicate_of`.
 
 Một CCR chỉ thuộc một product. CCR chạm nhiều product → tách thành nhiều CCR.
 
@@ -55,8 +55,8 @@ Cột cuối của bảng ở mục 1 cho biết CCR có thể **ghi đè** cano
 
 Dù product nào, các trường hợp sau luôn cần người quyết, không tự ghi đè: nguồn `test_case` bị một tài liệu dev nói ngược · item chạm permission/tiền/mất dữ liệu · conflict đang mở · item là oracle mạnh duy nhất của một check · scope khác nhau (khi đó là item mới) · topic nằm trong danh sách cấm ghi đè của product.
 
-Vì vậy **ngày của nguồn** ở mục 5.1 của CCR phải chính xác: đó là ngày tài liệu được viết, ngày comment PO/Dev, hoặc ngày chạy test case — **không** phải ngày ticket được resolve. Lấy sai ngày sẽ làm ghi đè sai chiều, và sai im lặng.
+Vì vậy **ngày nguồn** trong block của claim phải chính xác: đó là ngày tài liệu được viết, ngày comment PO/Dev, hoặc ngày chạy test case — **không** phải ngày ticket được resolve. Lấy sai ngày sẽ làm ghi đè sai chiều, và sai im lặng.
 
 ## 6. Mọi thứ cần thiết phải nằm TRONG file CCR
 
-Knowledge sau khi publish tự chứa hoàn toàn: file CCR, Proposal và tài liệu gửi kèm đều có thể bị xoá mà knowledge vẫn dùng được. Hệ quả: phần **trích nguyên văn** ở mục 5.1 là thứ sống sót, còn link thì không. Claim chỉ có link mà không có quote sẽ thành provenance rỗng ngay khi nguồn bị dọn.
+Knowledge sau khi publish tự chứa hoàn toàn: file CCR, Proposal và tài liệu gửi kèm đều có thể bị xoá mà knowledge vẫn dùng được. Hệ quả: phần **trích nguyên văn** trong block của claim là thứ sống sót, còn link thì không. Claim chỉ có link mà không có quote sẽ thành provenance rỗng ngay khi nguồn bị dọn.
