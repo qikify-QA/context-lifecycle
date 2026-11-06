@@ -26,7 +26,7 @@ Integration API và console command không trigger explore: không có explorer 
 1. Operator chốt cho phép staging. Instance đã dùng để test là `https://staging-partners.mysbox.io/`, brand Koin/Mysbox.
 2. Bổ sung phần còn thiếu trong `.env.koin`: host và credential hoặc quy trình bàn giao session admin, `X-API-Key`, host Integration API.
 3. Trả lời: Slack staging có bắn vào kênh thật không; hộp thư test đọc bằng cách nào.
-4. Sửa `config/products/qikfiliate.json`: `modes`, `environments.staging`, `credentials` (`env_prefix` `KOIN_`), `defaults` (mutation policy, `forbidden_actions` theo §5 của product guide, `cleanup_required`), `explore.surfaces`, `explore.account_guard`. Chạy `npm test`.
+4. Sửa `config/products/qikfiliate.json`: `modes`, `environments.staging`, `credentials` (`env_prefix` `KOIN_`), `defaults` (mutation policy, `forbidden_actions` theo mục Mutation guard của product guide, `cleanup_required`), `explore.surfaces`, `explore.account_guard`. Chạy `npm test`.
 5. Chạy một `REFRESH` nhỏ trên `payment-method` để xác nhận product guide trước khi mở rộng.
 
 ## 4. Khả năng explore theo surface
