@@ -67,6 +67,8 @@ Thấy một item không đủ cơ sở để tin? Gửi CCR (mục 5), đừng 
 
 Guide, `_flows/` hoặc `_env.example` thiếu hay cũ thì ghi ở khối C của CCR. CCR gồm phần đầu và 4 khối (A hành vi, B môi trường, C guide và flow, D trả lời open question), chỉ giữ khối có dùng. Không ai hỏi bạn về mutation policy hay account explore — đó là chính sách của bên sở hữu môi trường. Chỉ có quyền storefront mà không có quyền portal thì cứ gửi thứ bạn có.
 
-Kết quả trả về trên chính Proposal: `published` (kèm version mới) hoặc `blocked` kèm 1 trong `NEEDS_INFO` · `CONFLICT` · `REJECTED` · `DEFERRED`. Khi được publish, `manifest.json` → `resolved_requests` ghi CCR của bạn.
+Kéo card chưa làm context builder tự chạy: operator nhặt các card đang `In Progress` theo lịch trong README của `context-lifecycle`.
+
+Kết quả trả về trên chính Proposal: `published` (kèm version mới) hoặc `blocked` kèm 1 trong `NEEDS_INFO` · `CONFLICT` · `REJECTED` · `DEFERRED`. `published` nghĩa là đã duyệt, chưa chắc đã vào repo này: xem `results.release.status`, `released` kèm `sha` mới là team dùng được. Khi đó QA tự review knowledge, ổn thì kéo Proposal sang `Completed`. Khi được publish, `manifest.json` → `resolved_requests` ghi CCR của bạn.
 
 **Conflict thì sao?** Context builder không tự chọn bên (trừ khi product cho phép ghi đè — xem phụ lục mục 5). Cả hai phía được giữ, Proposal ở `blocked` chờ PO/Dev/QA lead phân xử.

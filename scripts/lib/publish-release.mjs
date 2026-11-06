@@ -45,3 +45,25 @@ export function buildPrBody({ sourceRepo, sha, manifest, files, runs = [] }) {
   lines.push("", `${files.length} file thay đổi. Merge xong thì gắn tag bằng \`node scripts/publish-knowledge.mjs --tag\` ở repo build.`);
   return lines.join("\n");
 }
+
+/** Proposal của một PR phát hành: từ các run kèm theo, cộng CCR §2b truyền bằng --proposal. */
+export function releaseProposals(runs = [], extra = []) {
+  return [...new Set([...runs.map((r) => r.proposal_id), ...extra].filter(Boolean))].sort();
+}
+
+/**
+ * Chia các PR phát hành đang chờ thành đã merge và chưa merge. `prState(url)` trả
+ * `{ state, mergeCommit: { oid } }` của `gh pr view`. Đã merge thì mỗi Proposal có một dòng
+ * `results.release` để orchestrator ghi lên board.
+ */
+export async function resolveReleases(records, prState, tag) {
+  const released = [];
+  const pending = [];
+  for (const record of records) {
+    const pr = await prState(record.pr);
+    if (pr?.state === "MERGED") {
+      for (const proposal_id of record.proposals) released.push({ proposal_id, release: { status: "released", pr: record.pr, sha: pr.mergeCommit?.oid ?? null, tag } });
+    } else pending.push({ pr: record.pr, state: pr?.state ?? "UNKNOWN", proposals: record.proposals });
+  }
+  return { released, pending };
+}

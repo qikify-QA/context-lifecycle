@@ -4,6 +4,8 @@ Trình tự của orchestrator cho run xuất phát từ Context Change Request.
 
 ## 1. Nhặt Proposal (luồng tự động)
 
+Kéo card không tự đánh thức orchestrator: board không đẩy sự kiện. Operator chạy `/process-ccr` theo lịch trong `README.md`.
+
 1. `node scripts/ctx/products.mjs` → mỗi product ACTIVE có `project_id` và `mcp_server`.
 2. Với mỗi product: `mcp__<mcp_server>__list_context_board_proposals({ status: "in-progress", project_id })`. Lỗi/401 ở một product → ghi log, tiếp tục product khác.
 3. Với mỗi Proposal: `mcp__<mcp_server>__get_proposal({ proposal_id })`. Ghi mảng Proposal (có `id`, `projectId`, `submittedAt`, `content`) ra một file tạm trong scratchpad.
@@ -15,7 +17,7 @@ Trình tự của orchestrator cho run xuất phát từ Context Change Request.
 ## 2. Dựng run
 
 1. Resolve `object_key` qua `knowledge/products/<product>/_registry.json` của **đúng product đó** (§12.1 bước 5). Không resolve được → `update_context_board_proposal({ status: "blocked", results: { summary, open_questions: ["Phần đầu: ..."] } })`, dừng.
-2. Object phải đã có base (`knowledge/products/<p>/<o>/publish-meta.json`). Chưa có → `DEFERRED` + `reason: object_has_no_base`.
+2. Object phải đã có base (`knowledge/products/<p>/<o>/publish-meta.json`). Chưa có → `DEFERRED` + `reason: object_has_no_base`, `action: "bootstrap_required"`, `object`, `scope` (lấy từ phần Thuộc / Không thuộc của CCR), và báo operator mở run bootstrap.
 3. `node scripts/ctx/new-run.mjs --product <p> --mode CCR_INGEST --object <o> --proposal <CBS-n> --label "<vài từ gợi nhớ>"`.
 4. Ghi `input/bootstrap-request.json` theo `contracts/templates/bootstrap-request.ccr.json`.
 5. `node scripts/ctx/lock.mjs acquire --run <id> --product <p> --objects <o,...> --proposal <CBS-n>`. Exit 2 → `finish_context_board_proposal` outcome `DEFERRED`, `results: { summary, reason: "locked_by_run", held_by }` (lấy từ `conflict.held_by` của output), ghi `status: DEFERRED` vào run-manifest, dừng. Người gửi kéo Proposal lại sau khi run kia xong.
@@ -25,9 +27,11 @@ Trình tự của orchestrator cho run xuất phát từ Context Change Request.
 
 CCR chỉ có khối C, hoặc khối D toàn `KHÔNG CÒN ÁP DỤNG`: không tạo run, không lock object, không qua C0.5.
 
+0. `node scripts/ctx/lock.mjs acquire --run <CBS-n> --name _shared --ttl 600`. Exit 2 → chờ run kia xong rồi thử lại. Chỉ đọc file sau khi đã giữ lock.
 1. Áp từng dòng vào file trong `knowledge/products/<product>/`, kiểm theo contract §5b, §5c: đúng nơi, không trùng nơi khác, chỉ tên biến, guide ≤ 10 KB. Khối D: gỡ entry OQ, thêm CHANGELOG (`contracts/ccr-protocol.md` §12.3d).
 2. Dòng không đạt thì bỏ và nêu lý do trong `results`.
-3. `finish_context_board_proposal` với danh sách file đã đổi. Phát hành theo `CLAUDE.md`.
+3. `node scripts/ctx/lock.mjs release --run <CBS-n> --name _shared`.
+4. `finish_context_board_proposal` với danh sách file đã đổi, `results.release = { status: "pending" }`. Phát hành theo `publish.md` mục 7, kèm `--proposal <CBS-n>`.
 
 Đây là ngoại lệ duy nhất của luật "chỉ ghi `knowledge/` qua `publish-apply.mjs`", vì các file này không có version hay oracle.
 
