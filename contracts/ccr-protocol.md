@@ -9,7 +9,7 @@ Khuôn CCR đầy đủ thuộc skill `create-ccr` (`references/ccr-template.md`
 **Trigger duy nhất của luồng tự động:** người gửi (hoặc người phụ trách) kéo card **Proposal** từ `Todo` sang `In Progress` trên tab "Context Builder Board" của QA Hub.
 
 1. **Soạn nháp trên task:** người gửi đính kèm 1 file CCR markdown vào task liên quan trên QA Hub (field CCR). Sửa được nhiều lần trước khi Submit.
-2. **Submit → 1 Proposal mới** (id `CBS-<n>`): QA Hub chỉ kiểm file không còn placeholder `<<< ... >>>`, rồi copy nội dung vào Proposal. Proposal **immutable** — sửa file trên task sau đó không đổi Proposal đã tạo; mỗi lần Submit (kể cả resubmit sau `NEEDS_INFO`) là một Proposal mới. Proposal vào cột `Todo`. **Ngoại lệ:** operator được thay file của một Proposal đã `blocked` (vd sau `NEEDS_INFO`, nhiều conflict hoặc nhiều claim S0) bằng `replace_proposal_file` rồi kéo lại sang In Progress. Orchestrator coi đó là nội dung mới: mở run mới, không coi là vi phạm, `results` cũ vẫn nằm trong run trước.
+2. **Submit → 1 Proposal mới** (id `CBS-<n>`): QA Hub chỉ kiểm file không còn placeholder `<<< ... >>>`, rồi copy nội dung vào Proposal. Proposal **immutable** — sửa file trên task sau đó không đổi Proposal đã tạo. Mỗi task chỉ Submit được **một lần**; sau đó draft bị khoá. Proposal vào cột `Todo`. **Sửa CCR:** Proposal `blocked` (vd sau `NEEDS_INFO`, nhiều conflict hoặc nhiều claim S0) thì thay file bằng `replace_proposal_file`: giữ nguyên id, Proposal về `Todo`, rồi kéo lại sang In Progress. Proposal đã `published`/`completed` không thay file được: tạo Proposal sửa bằng `create_proposal`, mỗi claim bắt buộc ghi `SUPERSEDES`/`CONTRADICTS <kb_id>` để plan có `target_kb_ids` và dedup bắt được bản trùng. Orchestrator coi đó là nội dung mới: mở run mới, không coi là vi phạm, `results` cũ vẫn nằm trong run trước.
 3. **Kéo Proposal sang `In Progress`** = sẵn sàng cho orchestrator nhặt. Proposal ở `Todo` không được nhặt.
 
 **Nhặt Proposal — vòng quét multi-product:**
@@ -29,7 +29,7 @@ Khuôn CCR đầy đủ thuộc skill `create-ccr` (`references/ccr-template.md`
 
 | Kết cục | Nghĩa | Board status | `results` chứa gì |
 |---|---|---|---|
-| `ACCEPTED` | Đủ evidence, vào context | `published` | `summary`, `published_context_version`, `product_kb_refs`, `feature_profile_refs`, `checklist_refs`, `feature_summary_refs` |
+| `ACCEPTED` | Đủ evidence, vào context | `published` | `summary`, `published_context_version`, `product_kb_refs`, `feature_profile_refs`, `checklist_refs`, `feature_summary_refs`, `release` (`{ status: "pending" }`, xem dưới) |
 | `NEEDS_INFO` | Thiếu thông tin để quyết | `blocked` | `summary`, `open_questions` (nêu **đúng tên mục** còn thiếu) |
 | `CONFLICT` | Mâu thuẫn **nghiệp vụ** với knowledge hiện có | `blocked` | `summary`, `conflicts` (cả hai phía kèm evidence) |
 | `REJECTED` | Không vào context | `blocked` | `summary` nêu lý do |
@@ -41,11 +41,15 @@ Board chỉ có 5 outcome cố định, nên lý do chi tiết đi trong `result
 |---|---|---|---|
 | `locked_by_run` | `DEFERRED` | object đang bị run khác giữ lock lúc bắt đầu | `held_by: {ctx_run_id, proposal_id}` — kéo Proposal lại sau khi run kia xong |
 | `lock_lost` | `DEFERRED` | lock hết hạn/mất trước bước publish | `lock_problems` — chạy lại run |
-| `object_has_no_base` | `DEFERRED` | object chưa bootstrap nên chưa ingest CCR được | — |
+| `object_has_no_base` | `DEFERRED` | object chưa bootstrap nên chưa ingest CCR được | `action: "bootstrap_required"`, `object`, `scope` — operator mở run bootstrap, xong thì kéo Proposal lại |
 | `duplicate_of` | `REJECTED` | **mọi** claim trùng với CCR đang chạy hoặc đã publish (`dedup.mjs`) | `duplicate_of: [{proposal_id, claim_key}]` |
 | `awaiting_decision` | `DEFERRED` | cần người quyết (approval, `requires_human_decision`) | `approval_needed: [...]` |
 
-Board status của Proposal chỉ có 4 giá trị: `todo` · `in-progress` · `blocked` · `published`. Toàn bộ pipeline (kể cả reviewer) chạy trong lúc Proposal ở `in-progress`. Không bao giờ set `published` cho outcome khác `ACCEPTED`.
+Board status của Proposal có 5 giá trị: `todo` · `in-progress` · `blocked` · `published` · `completed`. Toàn bộ pipeline (kể cả reviewer) chạy trong lúc Proposal ở `in-progress`. Không bao giờ set `published` cho outcome khác `ACCEPTED`.
+
+- `published`: run đã duyệt và đã ghi vào `knowledge/` local. **Chưa** có nghĩa team dùng được.
+- `results.release`: mốc phát hành. `{ status: "pending" }` lúc kết thúc run; `{ status: "released", pr, sha, tag }` sau khi PR merge vào `qa-knowledge`. Proposal vẫn ở `published`.
+- `completed`: QA đã tự review knowledge sau publish và **tự kéo** sang. Orchestrator không bao giờ set trạng thái này. QA review khi `release.status` đã là `released`, để xem đúng bản team đang dùng.
 
 ## 12.3 Gate C0 từ CCR
 
@@ -80,6 +84,8 @@ Chạy ngay sau C0 và **sau khi đã khoá lock** (§16), trước khi dispatch
 | `S0` | Chỉ lời kể, không artifact, không link | Không nạp; nêu trong `results.open_questions` với đúng tên mục. Ngoại lệ: claim khác biệt môi trường, xem §12.3c |
 
 Explore chỉ chạy khi operator yêu cầu tường minh cho một claim — khi đó run thành `INCREMENTAL_UPDATE` (§10a, mode settling).
+
+Nguồn `test_case` còn cần **căn cứ expected** trong block của claim: ticket, comment, spec hoặc câu trả lời PO/Dev mà expected của case dựa vào. Thiếu hoặc ghi `KHÔNG CÓ` thì xếp `S1`, vì PASS chỉ chứng minh hành vi khớp expected, không chứng minh expected đúng. Áp dụng cho CCR theo khuôn có mục này; item đã publish giữ nguyên. `po_dev_confirm` phải là người thật trích nguyên văn có ngày, lời tóm tắt của agent là `S0`.
 
 `authored_by` của nguồn `S3` loại `spec_doc` / `dev_doc` không được trùng người gửi CCR — người gửi không tự làm authority cho chính mình. `po_dev_confirm` không có giới hạn này: PO, Dev hay QA chốt đều tính, kể cả QA là người gửi (chủ repo chốt 2026-11-05). `test_case` là ngoại lệ: nó là record chạy thật trên hệ thống quản lý test (Testlane), không phải ý kiến người viết, nên test case PASS do chính người gửi chạy vẫn là `S3` khi có đủ id test case + kết quả PASS + ngày chạy + build/bản đã test (chủ repo chốt 2026-10-11).
 

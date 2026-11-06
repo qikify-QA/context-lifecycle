@@ -16,6 +16,7 @@
 // Tóm tắt ghi ở candidate/strip-summary.json. Exit 1 khi có candidate không xác
 // định được object, hoặc supersede không áp được.
 
+import { SHARED_ROOT_FILES, copySharedToPreview } from "../lib/shared-files.mjs";
 import { readdir, rm, copyFile, mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { parseArgs, readJson, readJsonOr, writeJson, exists, today } from "../lib/fs-utils.mjs";
@@ -101,9 +102,8 @@ export function applySupersedes(diff, kbFiles, { date, ccrRef, mode, approvals =
 }
 
 export async function copyProductFiles(baseDir, out) {
-  for (const name of ["_product-guide.md", "_env.example"]) {
-    const target = path.join(out, name);
-    if (!(await exists(target)) && (await exists(path.join(baseDir, name)))) await copyFile(path.join(baseDir, name), target);
+  for (const name of SHARED_ROOT_FILES) {
+    if (!(await exists(path.join(out, name))) && (await exists(path.join(baseDir, name)))) await copySharedToPreview(baseDir, out, name);
   }
 }
 

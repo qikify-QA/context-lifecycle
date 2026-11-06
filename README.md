@@ -40,9 +40,13 @@ npm run manifest:check     # chỉ kiểm, exit 1 nếu có object chưa publish
 npm run appendix           # sinh lại bảng product trong contracts/ccr-product-appendix.md
 npm run publish:dry        # kiểm gói publish, KHÔNG đẩy
 npm run prune              # liệt kê run đủ điều kiện xoá (§15)
-node scripts/publish-knowledge.mjs --pr --run CTX-...   # nhánh publish + PR vào qa-knowledge
-node scripts/publish-knowledge.mjs --tag                # sau khi PR merge: tag ctx-YYYY-MM-DD[-n]
+node scripts/publish-knowledge.mjs --pr --run CTX-...   # nhánh publish + PR vào qa-knowledge (CCR không có run: --proposal CBS-n)
+node scripts/publish-knowledge.mjs --tag                # sau khi PR merge: tag ctx-YYYY-MM-DD[-n], in Proposal đã phát hành
 ```
+
+## Nhặt CCR
+
+Board không đẩy sự kiện nên kéo Proposal sang In Progress chưa làm gì cả. Operator mở Claude Code ở repo này và chạy `/process-ccr` sau khi kéo card và một lần cuối ngày làm việc. Lệnh xử lý mọi Proposal đang In Progress của các product ACTIVE. Sau đó phát hành theo `.claude/orchestrator/publish.md` mục 7.
 
 Việc của orchestrator trong một run (run-id, lock, đóng băng doc, strip, audit, publish) đều là script trong `scripts/ctx/` — xem bảng ở `.claude/agents/qa-context-lifecycle-orchestrator.md`.
 

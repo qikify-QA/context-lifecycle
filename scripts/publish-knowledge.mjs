@@ -21,18 +21,19 @@
 // repo consumer dùng chung cho cả team.
 //
 //   node scripts/publish-knowledge.mjs             # dry-run: chuẩn bị + kiểm, KHÔNG đẩy
-//   node scripts/publish-knowledge.mjs --pr [--run CTX-... ...]   # nhánh publish/<date>-<sha> + PR vào qa-knowledge
-//   node scripts/publish-knowledge.mjs --tag       # sau khi PR đã merge: tag ctx-YYYY-MM-DD[-n] trên origin/main
+//   node scripts/publish-knowledge.mjs --pr [--run CTX-... ...] [--proposal CBS-n ...]   # nhánh publish/<date>-<sha> + PR vào qa-knowledge
+//   node scripts/publish-knowledge.mjs --tag       # sau khi PR đã merge: tag ctx-YYYY-MM-DD[-n] trên origin/main,
+//                                                  # in Proposal đã vào qa-knowledge để ghi `results.release`
 //   node scripts/publish-knowledge.mjs --allow-unpublished   # cho qua object thiếu block publish
 
-import { readFile, mkdir, rm, stat, cp } from "node:fs/promises";
+import { readFile, readdir, mkdir, rm, stat, cp } from "node:fs/promises";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { walk, readJsonOr, today } from "./lib/fs-utils.mjs";
 import { resolveRunDir, runPaths } from "./lib/run-layout.mjs";
-import { nextTagName, buildPrBody } from "./lib/publish-release.mjs";
+import { nextTagName, buildPrBody, releaseProposals, resolveReleases } from "./lib/publish-release.mjs";
 import { writeFile } from "node:fs/promises";
 import { findForbiddenLeaks, findBadConfirmationRefs } from "./lib/forbidden-fields.mjs";
 
@@ -47,7 +48,10 @@ const TARGET_REPO = process.env.CTX_TARGET_REPO ?? "https://github.com/qikify-QA
 const doPr = process.argv.includes("--pr");
 const doTag = process.argv.includes("--tag");
 const runArgs = process.argv.flatMap((a, i, all) => (a === "--run" && all[i + 1] ? [all[i + 1]] : []));
+const proposalArgs = process.argv.flatMap((a, i, all) => (a === "--proposal" && all[i + 1] ? [all[i + 1]] : []));
 const allowUnpublished = process.argv.includes("--allow-unpublished");
+// PR đang chờ merge và Proposal của nó. Dữ liệu tạm giữa --pr và --tag, không track.
+const releasesDir = path.join(rootDir, "runs", "releases");
 
 async function git(...args) {
   const { stdout } = await execFileAsync("git", args, { cwd: rootDir, maxBuffer: 32 * 1024 * 1024 });
@@ -69,6 +73,17 @@ async function tagMerged() {
   await run("tag", "-a", tag, "origin/main", "-m", `Knowledge release ${tag}`);
   await run("push", "origin", tag);
   console.log(`Đã gắn tag ${tag} trên origin/main của ${TARGET_REPO}.`);
+  await reportReleases(tag);
+}
+
+async function reportReleases(tag) {
+  const names = await readdir(releasesDir).catch(() => []);
+  const records = await Promise.all(names.filter((n) => n.endsWith(".json")).map(async (n) => ({ ...(await readJsonOr(path.join(releasesDir, n), {})), file: n })));
+  const prState = async (url) => JSON.parse((await execFileAsync("gh", ["pr", "view", url, "--json", "state,mergeCommit"])).stdout);
+  const result = await resolveReleases(records, prState, tag);
+  const done = new Set(result.released.map((r) => r.release.pr));
+  for (const r of records) if (done.has(r.pr)) await rm(path.join(releasesDir, r.file), { force: true });
+  console.log(`Ghi release lên board cho từng Proposal (publish.md §7):\n${JSON.stringify(result, null, 2)}`);
 }
 
 async function runSummaries() {
@@ -219,9 +234,12 @@ async function main() {
   await run("commit", "-m", `Publish knowledge from ${SOURCE_REPO}@${sha.slice(0, 8)}`);
   await run("push", "-u", "origin", branch);
   const bodyFile = path.join(stageDir, "pr-body.md");
-  await writeFile(bodyFile, buildPrBody({ sourceRepo: SOURCE_REPO, sha, manifest, files, runs: await runSummaries() }));
+  const runs = await runSummaries();
+  await writeFile(bodyFile, buildPrBody({ sourceRepo: SOURCE_REPO, sha, manifest, files, runs }));
   const repo = TARGET_REPO.replace(/^https:\/\/github\.com\//, "").replace(/\.git$/, "");
   const { stdout } = await execFileAsync("gh", ["pr", "create", "--repo", repo, "--base", "main", "--head", branch, "--title", `Publish knowledge ${today()} (${sha.slice(0, 8)})`, "--body-file", bodyFile], { cwd: knowledgeDir });
+  await mkdir(releasesDir, { recursive: true });
+  await writeFile(path.join(releasesDir, `${branch.replace(/\W+/g, "-")}.json`), JSON.stringify({ pr: stdout.trim(), proposals: releaseProposals(runs, proposalArgs) }, null, 2) + "\n");
   console.log(`PR: ${stdout.trim()}\nReview + merge PR, rồi chạy: node scripts/publish-knowledge.mjs --tag`);
 }
 

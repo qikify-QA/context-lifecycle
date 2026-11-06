@@ -10,6 +10,8 @@
 // Riêng `_registry.json` dùng chung cho mọi object của product: chỉ entry của các
 // object trong --objects được lấy từ preview, entry khác giữ theo knowledge/ hiện tại
 // (preview dựng từ base cũ, chép đè sẽ xoá entry mà run khác vừa publish).
+// File dùng chung (guide, _env.example, _flows/) theo `planSharedFiles`: run không sửa thì giữ bản
+// trong knowledge/; run có sửa mà knowledge/ đã đổi thì dừng với `shared_file_changed`, không ghi gì.
 // Exit 2 = lock không còn thuộc run (outcome DEFERRED, reason lock_lost). Exit 1 = lỗi khác.
 
 import { cp } from "node:fs/promises";
@@ -19,6 +21,7 @@ import path from "node:path";
 import { parseArgs, readJson, readJsonOr, writeJson } from "../lib/fs-utils.mjs";
 import { resolveRunDir, runPaths, knowledgeProductsDir, rootDir } from "../lib/run-layout.mjs";
 import { verifyAll, acquireAll, releaseAll } from "../lib/locks.mjs";
+import { planSharedFiles } from "../lib/shared-files.mjs";
 import { auditDir } from "./audit-preview.mjs";
 
 const execFileAsync = promisify(execFile);
@@ -65,27 +68,34 @@ async function main() {
 
   const target = path.join(knowledgeProductsDir, product);
   if (args["dry-run"] === true) {
-    console.log(JSON.stringify({ ok: true, dry_run: true, from: path.relative(rootDir, paths.previewDir), to: path.relative(rootDir, target) }, null, 2));
+    console.log(JSON.stringify({ ok: true, dry_run: true, from: path.relative(rootDir, paths.previewDir), to: path.relative(rootDir, target), shared: await planSharedFiles(paths.previewDir, target) }, null, 2));
     return;
   }
 
   // knowledge/manifest.json và consolidated-open-questions.md bị ghi đè toàn bộ —
-  // hai run publish gần nhau phải xếp hàng ở đây.
-  const manifestLock = await acquireAll(["_manifest"], { ctxRunId, ttlSeconds: 600 });
+  // hai run publish gần nhau phải xếp hàng ở đây. `_shared` cũng do CCR §2b giữ khi sửa guide/flow.
+  const manifestLock = await acquireAll(["_manifest", "_shared"], { ctxRunId, ttlSeconds: 600 });
   if (!manifestLock.ok) {
     console.log(JSON.stringify({ ok: false, reason: "run khác đang sinh manifest, chạy lại sau", held_by: manifestLock.conflict }, null, 2));
     process.exit(1);
   }
   try {
+    const shared = await planSharedFiles(paths.previewDir, target);
+    if (shared.conflicts.length) {
+      console.log(JSON.stringify({ ok: false, reason: "shared_file_changed", conflicts: shared.conflicts }, null, 2));
+      process.exitCode = 1;
+      return;
+    }
+    const keepCurrent = new Set(shared.skip.map((rel) => path.join(paths.previewDir, rel)));
     const previewRegistry = path.join(paths.previewDir, "_registry.json");
     const registry = path.join(target, "_registry.json");
-    await cp(paths.previewDir, target, { recursive: true, force: true, filter: (src) => src !== previewRegistry });
+    await cp(paths.previewDir, target, { recursive: true, force: true, filter: (src) => src !== previewRegistry && !keepCurrent.has(src) });
     const preview = await readJsonOr(previewRegistry, null);
     if (preview) await writeJson(registry, mergeRegistry(await readJsonOr(registry, null), preview, keys.map((k) => k.object)));
     const { stdout } = await execFileAsync("node", [path.join(rootDir, "scripts", "generate-manifest.mjs")], { cwd: rootDir });
-    console.log(JSON.stringify({ ok: true, copied_to: path.relative(rootDir, target), manifest: stdout.trim().split("\n").slice(-3) }, null, 2));
+    console.log(JSON.stringify({ ok: true, copied_to: path.relative(rootDir, target), shared_written: shared.write, manifest: stdout.trim().split("\n").slice(-3) }, null, 2));
   } finally {
-    await releaseAll(["_manifest"], { ctxRunId });
+    await releaseAll(["_manifest", "_shared"], { ctxRunId });
   }
 }
 

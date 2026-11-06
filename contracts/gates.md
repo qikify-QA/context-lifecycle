@@ -128,7 +128,7 @@ Với mọi item `CONFIRMED_EXPECTED` mà run tạo mới hoặc sửa, trong pr
 
 Đọc `input/ccr-fastpath-plan.json`. Với mỗi claim `strength: "S3"`, xác minh theo `type`:
 
-- `test_case` → test case thật, kết quả PASS, ngày chạy, build ≥ bản có thay đổi, kiểm đúng hành vi đang claim.
+- `test_case` → test case thật, kết quả PASS, ngày chạy, build ≥ bản có thay đổi, kiểm đúng hành vi đang claim, có căn cứ expected (`ccr-protocol.md` §12.3a).
 - `po_dev_confirm` → trích nguyên văn + link thật, xác nhận đúng hành vi; không tính comment mơ hồ.
 - `spec_doc` → tên tài liệu + version/ngày + mục cụ thể phát biểu đúng hành vi. Không có version/ngày → BLOCKING.
 - `dev_doc` → tên logic + version + `authored_on` + mục cụ thể + `derivation`; resolve theo recipe `dev_doc` ở C1-DOC.

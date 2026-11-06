@@ -11,6 +11,8 @@ import { createRun } from "../new-run.mjs";
 import { publishKbItem, applySupersedes, publishConfirmationSource, copyProductFiles } from "../publish-strip.mjs";
 import { scanSecrets } from "../freeze-docs.mjs";
 import { mergeRegistry } from "../publish-apply.mjs";
+import { copySharedToPreview, planSharedFiles } from "../../lib/shared-files.mjs";
+import { releaseProposals, resolveReleases } from "../../lib/publish-release.mjs";
 
 const tmp = () => mkdtemp(path.join(tmpdir(), "ctx-test-"));
 const obj = (object) => ({ product: "p", object });
@@ -357,4 +359,62 @@ test("publish-strip: copy guide và _env.example của base, không đè bản �
   await copyProductFiles(base, out);
   assert.equal(await readFile(path.join(out, "_product-guide.md"), "utf8"), "preview guide");
   assert.equal(await readFile(path.join(out, "_env.example"), "utf8"), "BASE=");
+});
+
+async function sharedFixture() {
+  const dir = await tmp();
+  const knowledge = path.join(dir, "knowledge");
+  const preview = path.join(dir, "candidate", "publish-preview");
+  await mkdir(path.join(knowledge, "_flows"), { recursive: true });
+  await mkdir(preview, { recursive: true });
+  await writeFile(path.join(knowledge, "_product-guide.md"), "guide v1");
+  await writeFile(path.join(knowledge, "_flows", "a.md"), "flow v1");
+  return { knowledge, preview };
+}
+
+test("shared files: run không sửa guide thì không ghi đè bản mới trong knowledge", async () => {
+  const { knowledge, preview } = await sharedFixture();
+  await copyProductFiles(knowledge, preview);
+  await writeFile(path.join(knowledge, "_product-guide.md"), "guide v2 từ CCR §2b");
+  const plan = await planSharedFiles(preview, knowledge);
+  assert.deepEqual(plan, { skip: ["_product-guide.md"], write: [], conflicts: [] });
+});
+
+test("shared files: hai bên cùng sửa thì dừng, không mất bản nào", async () => {
+  const { knowledge, preview } = await sharedFixture();
+  await copySharedToPreview(knowledge, preview, "_flows/a.md");
+  await writeFile(path.join(preview, "_flows", "a.md"), "flow của run");
+  await writeFile(path.join(knowledge, "_flows", "a.md"), "flow của run khác");
+  const plan = await planSharedFiles(preview, knowledge);
+  assert.deepEqual(plan.conflicts, [{ file: "_flows/a.md", reason: "changed_since_copy" }]);
+});
+
+test("shared files: run sửa khi knowledge chưa đổi thì ghi; file mới thì ghi", async () => {
+  const { knowledge, preview } = await sharedFixture();
+  await copySharedToPreview(knowledge, preview, "_flows/a.md");
+  await writeFile(path.join(preview, "_flows", "a.md"), "flow đã sửa");
+  await writeFile(path.join(preview, "_flows", "moi.md"), "flow mới");
+  const plan = await planSharedFiles(preview, knowledge);
+  assert.deepEqual(plan.write.sort(), ["_flows/a.md", "_flows/moi.md"]);
+  assert.deepEqual(plan.conflicts, []);
+});
+
+test("shared files: copy tay vào preview thì không rõ bản gốc nên dừng", async () => {
+  const { knowledge, preview } = await sharedFixture();
+  await mkdir(path.join(preview, "_flows"));
+  await writeFile(path.join(preview, "_flows", "a.md"), "copy tay rồi sửa");
+  const plan = await planSharedFiles(preview, knowledge);
+  assert.deepEqual(plan.conflicts, [{ file: "_flows/a.md", reason: "base_unknown" }]);
+});
+
+test("release: gộp Proposal của run và --proposal, bỏ trùng", () => {
+  assert.deepEqual(releaseProposals([{ proposal_id: "CBS-2" }, { proposal_id: null }], ["CBS-1", "CBS-2"]), ["CBS-1", "CBS-2"]);
+});
+
+test("release: chỉ PR đã merge mới thành released, kèm merge SHA", async () => {
+  const records = [{ pr: "u1", proposals: ["CBS-1"] }, { pr: "u2", proposals: ["CBS-2"] }];
+  const states = { u1: { state: "MERGED", mergeCommit: { oid: "abc" } }, u2: { state: "OPEN" } };
+  const { released, pending } = await resolveReleases(records, async (u) => states[u], "ctx-1");
+  assert.deepEqual(released, [{ proposal_id: "CBS-1", release: { status: "released", pr: "u1", sha: "abc", tag: "ctx-1" } }]);
+  assert.deepEqual(pending, [{ pr: "u2", state: "OPEN", proposals: ["CBS-2"] }]);
 });

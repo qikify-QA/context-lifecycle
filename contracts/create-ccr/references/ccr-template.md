@@ -27,6 +27,7 @@ BR, hành vi mới hoặc đổi. Một block cho mỗi claim.
 - **Loại nguồn:** `<<< po_dev_confirm | test_case | dev_doc | spec_doc | KHÔNG CÓ NGUỒN >>>`
 - **Người xác nhận, ngày nguồn:** `<<< PO | Dev | QA, YYYY-MM-DD >>>`
 - **Locator:** `<<< comment, TC, PR, link nếu có >>>`
+- **Căn cứ expected:** `<<< chỉ khi nguồn là test_case: ticket, comment, spec hoặc câu trả lời PO/Dev mà expected của case dựa vào; không có thì "KHÔNG CÓ" >>>`
 - **Trích nguyên văn:**
   ```
   <<< câu gốc, không diễn giải >>>
@@ -46,7 +47,7 @@ Chọn file theo câu nó trả lời: "có gì, ở đâu, test được không
 
 | File | Hành động | Nội dung | Lý do |
 |---|---|---|---|
-| `<<< _product-guide.md mục n, _flows/<chủ đề>.md, _env.example >>>` | `<<< thêm, sửa, xoá đoạn >>>` | `<<< nội dung đầy đủ; sửa thì ghi cả đoạn cũ >>>` | `<<< vd: UI đổi, TIB-xxx >>>` |
+| `<<< _product-guide.md mục n, _flows/<chủ đề>.md, _env.example >>>` | `<<< thêm, sửa, xoá đoạn >>>` | `<<< nội dung đầy đủ; sửa thì ghi cả đoạn cũ >>>` | `<<< vd: UI đổi, <KEY> >>>` |
 
 # Khối D — Trả lời open question
 
