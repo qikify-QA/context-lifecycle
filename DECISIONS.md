@@ -355,3 +355,9 @@ Operator muốn agent kiểm thử không đọc gì local, áp được cho m�
 Khuôn cũ dài 304 dòng, mọi CCR đi qua khoảng 20 mục. Guide, flow và open question cũng cần đường cập nhật. Nay CCR chỉ gồm phần đầu và khối có dùng: A hành vi, B môi trường, C guide và flow, D trả lời open question. Nhiều loại thì nối các khối, không gộp mục.
 
 Khối C không phải claim. CCR không có claim không tạo run, vì run bắt buộc có claim và object, còn các file này không có version hay oracle. Khuôn cũ vẫn xử lý được.
+### 2.28 Agent đối chiếu Jira được tính là đã đối chiếu (2026-11-07)
+
+Đợt backfill teeinblue, các reviewer xử lý khác nhau cùng một loại bằng chứng: CBS-075 hạ item vì chưa có người mở link, CBS-077 và CBS-079 đóng điều kiện với agent đối chiếu. Operator chốt: quote được agent đọc trực tiếp Jira và so khớp từng chữ, có comment id, tác giả, ngày, là đã đối chiếu, không cần người mở link. Áp cả cho quote agent lấy từ comment Jira ngoài CCR.
+
+Đánh đổi: reviewer không lặp lại được phép so, nên niềm tin nằm ở bản ghi của agent. Dòng ghi chú "(người dùng <ngày>)" vẫn là thuật lại ngôi thứ ba, không phải lời xác nhận.
+
