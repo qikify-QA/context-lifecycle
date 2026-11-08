@@ -12,6 +12,8 @@
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { unchangedLegacySource } from "./legacy-debt.mjs";
+import { AUTHORITY_TYPES, validDate } from "./authority.mjs";
 import { walk } from "./fs-utils.mjs";
 
 const rootDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
@@ -90,19 +92,21 @@ export async function findForbiddenLeaks(dir, opts = {}) {
 /** Lỗi của một confirmation_source dạng published (§3). Trả mảng lý do. */
 export function confirmationSourceProblems(cs) {
   const problems = [];
-  if (!cs) return problems;
+  if (!cs) return ["thiếu confirmation_source"];
+  if (!AUTHORITY_TYPES.includes(cs.type)) problems.push("type nguồn không hợp lệ");
   if (typeof cs.ref !== "string") problems.push("ref phải là chuỗi citation ở bản published (§3)");
   else {
     if (CONFIRMATION_REF_BAD.test(cs.ref)) problems.push("ref chứa ID run-local hoặc đường runs/");
     if (CONFIRMATION_REF_PATHLIKE.test(cs.ref)) problems.push("ref dùng cú pháp đường dẫn — phải là câu trích dẫn (§3)");
   }
   if (!cs.authored_on) problems.push("thiếu authored_on (§12.5)");
+  else if (!validDate(cs.authored_on)) problems.push("authored_on phải là ngày hợp lệ, không ở tương lai");
   if (cs.type === "dev_doc" && !["prose", "code_artifact"].includes(cs.derivation)) problems.push("dev_doc thiếu derivation hợp lệ");
   return problems;
 }
 
 /** Check dương trên mọi kb.json / _product-kb.json dưới `dir`. */
-export async function findBadConfirmationRefs(dir) {
+export async function findBadConfirmationRefs(dir, {product} = {}) {
   const bad = [];
   for (const file of await walk(dir)) {
     const base = path.basename(file);
@@ -111,10 +115,14 @@ export async function findBadConfirmationRefs(dir) {
     try {
       items = JSON.parse(await readFile(file, "utf8"));
     } catch {
-      continue;
+      bad.push({file,reason:"KB JSON không parse được"}); continue;
     }
-    if (!Array.isArray(items)) continue;
+    if (!Array.isArray(items)) {bad.push({file,reason:"KB phải là mảng"}); continue;}
     for (const item of items) {
+      if(item.knowledge_kind!=="CONFIRMED_EXPECTED") {if(item.confirmation_source)bad.push({file,kb_id:item.kb_id,reason:"non-confirmed item có confirmation_source"});continue;}
+      let key=path.relative(dir,file).replaceAll(path.sep,"/").replace(/^products\//,"");
+      if(product)key=`${product}/${key}`;
+      if(!item.confirmation_source && await unchangedLegacySource(key,item))continue;
       for (const reason of confirmationSourceProblems(item?.confirmation_source)) {
         bad.push({ file, kb_id: item.kb_id, reason, ref: item.confirmation_source?.ref });
       }

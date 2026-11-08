@@ -19,18 +19,19 @@ Kéo card không tự đánh thức orchestrator: board không đẩy sự kiệ
 1. Resolve `object_key` qua `knowledge/products/<product>/_registry.json` của **đúng product đó** (§12.1 bước 5). Không resolve được → `update_context_board_proposal({ status: "blocked", results: { summary, open_questions: ["Phần đầu: ..."] } })`, dừng.
 2. Object phải đã có base (`knowledge/products/<p>/<o>/publish-meta.json`). Chưa có → `DEFERRED` + `reason: object_has_no_base`, `action: "bootstrap_required"`, `object`, `scope` (lấy từ phần Thuộc / Không thuộc của CCR), và báo operator mở run bootstrap.
 3. `node scripts/ctx/new-run.mjs --product <p> --mode CCR_INGEST --object <o> --proposal <CBS-n> --label "<vài từ gợi nhớ>"`.
+   Exit 3 (`proposal_already_claimed`) → dùng run đã có hoặc báo outcome đã có; không tạo run mới và không ghi DEFERRED lên card đang được xử lý. Intake busy → retry sau, không đổi board.
 4. Ghi `input/bootstrap-request.json` theo `contracts/templates/bootstrap-request.ccr.json`.
 5. `node scripts/ctx/lock.mjs acquire --run <id> --product <p> --objects <o,...> --proposal <CBS-n>`. Exit 2 → `finish_context_board_proposal` outcome `DEFERRED`, `results: { summary, reason: "locked_by_run", held_by }` (lấy từ `conflict.held_by` của output), ghi `status: DEFERRED` vào run-manifest, dừng. Người gửi kéo Proposal lại sau khi run kia xong.
 6. Gate C0 biến thể CCR (`contracts/gates.md`).
 
 ## 2b. CCR không có claim
 
-CCR chỉ có khối C, hoặc khối D toàn `KHÔNG CÒN ÁP DỤNG`: không tạo run, không lock object, không qua C0.5.
+CCR chỉ có khối C, hoặc khối D toàn `KHÔNG CÒN ÁP DỤNG`: không tạo run, không qua C0.5. Có sửa file của object thì vẫn phải lock object đó.
 
-0. `node scripts/ctx/lock.mjs acquire --run <CBS-n> --name _shared --ttl 600`. Exit 2 → chờ run kia xong rồi thử lại. Chỉ đọc file sau khi đã giữ lock.
+0. `node scripts/ctx/proposal-claim.mjs acquire --product <p> --proposal <CBS-n>`; giữ `claim_id`. Exit 3 → không áp lại: `done` dùng receipt để hoàn tất phản hồi board còn thiếu; `in-progress`/record hỏng cần kiểm tra run trước, không tự takeover. Lấy lock mọi object bị khối D sửa, rồi `node scripts/ctx/lock.mjs acquire --run <CBS-n> --name _shared --ttl 600`. Exit 2 → chờ run kia xong rồi thử lại. Chỉ đọc file sau khi đã giữ lock.
 1. Áp từng dòng vào file trong `knowledge/products/<product>/`, kiểm theo contract §5b, §5c: đúng nơi, không trùng nơi khác, chỉ tên biến, guide ≤ 10 KB. Khối D: gỡ entry OQ, thêm CHANGELOG (`contracts/ccr-protocol.md` §12.3d).
 2. Dòng không đạt thì bỏ và nêu lý do trong `results`.
-3. `node scripts/ctx/lock.mjs release --run <CBS-n> --name _shared`.
+3. Sau khi audit sạch, ghi receipt trước phản hồi board: `node scripts/ctx/proposal-claim.mjs finish --product <p> --proposal <CBS-n> --claim-id <id> --files <relative-file,...>`. Luôn release `_shared` và object lock trong finally, kể cả khi lỗi.
 4. `finish_context_board_proposal` với danh sách file đã đổi, `results.release = { status: "pending" }`. Phát hành theo `publish.md` mục 7, kèm `--proposal <CBS-n>`.
 
 Đây là ngoại lệ duy nhất của luật "chỉ ghi `knowledge/` qua `publish-apply.mjs`", vì các file này không có version hay oracle.

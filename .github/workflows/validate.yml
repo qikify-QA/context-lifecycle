@@ -10,29 +10,32 @@ permissions:
 
 jobs:
   repo:
-    name: contracts, config, agents, scripts
+    name: contracts, config, skills, scripts
     runs-on: ubuntu-latest
     steps:
-      # runs/context (~280MB evidence) không cần cho validate — bỏ khỏi checkout.
+      # Security checks need every tracked path, including historical run artifacts at HEAD.
       - uses: actions/checkout@v4
         with:
           submodules: false
-          sparse-checkout-cone-mode: false
-          sparse-checkout: |
-            /*
-            !/runs/context/
+          fetch-depth: 0
       - uses: actions/setup-node@v4
         with:
           node-version: 22
       # Script chỉ dùng thư viện chuẩn của Node — không cần npm ci.
-      - name: Contracts, schemas, templates, config, appendix, agents
+      - name: Contracts, schemas, templates, config, appendix, skills
         run: node scripts/ctx/validate-contracts.mjs
       - name: Deterministic script tests
         run: npm test
-      - name: Không commit token MCP
+      - name: Block new credentials across all tracked paths (including runs)
+        env:
+          PR_BASE: ${{ github.event.pull_request.base.sha }}
+          PUSH_BASE: ${{ github.event.before }}
         run: |
-          if git grep -nE 'tlmcp_[A-Za-z0-9]{8,}|/api/mcp/u/[A-Za-z0-9]{16,}|Bearer [A-Za-z0-9._-]{24,}' -- ':!scripts/ctx/test/**'; then
-            echo "::error::Phát hiện token trong file được track"; exit 1
+          base="${PR_BASE:-$PUSH_BASE}"
+          if [ -n "$base" ] && [ "$base" != "0000000000000000000000000000000000000000" ]; then
+            node scripts/ctx/secret-scan.mjs --base "$base"
+          else
+            node scripts/ctx/secret-scan.mjs
           fi
 
   knowledge:

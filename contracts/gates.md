@@ -153,3 +153,13 @@ Quét mọi `NEEDS_CONFIRMATION`/`CONFLICT`/`OPEN_ISSUE` phát sinh trong candid
 ## REJECT khi
 
 Provenance loss · assumption leakage · unresolved high conflict · unsafe evidence · version lineage hỏng · run-reference còn sót trong preview · claim `S3` không xác minh được · open question thiếu coverage · supersede áp sai §12.5 · item nguồn doc khẳng định fact runtime đã quan sát · `authored_by` trùng người gửi CCR · `known_defect` bị publish như hành vi đúng.
+
+## Kiểm soát thực thi review/publish
+
+C6 phải kiểm reference theo namespace object/feature, không flatten KB theo ID. STRONG đòi mọi nguồn oracle hợp lệ, không UNRESOLVED/KNOWN_DEFECT và giữ phanh dev_doc/P1. NONE đòi expected rỗng và NEEDS_CONFIRMATION; check cần xác nhận phải trỏ OQ tồn tại trong prose. `PROPOSED` thông thường không bắt buộc qa_rule_ref; item có nguồn S2 phải giữ đủ qa_rule_ref và OQ.
+
+`validate-run --complete` chạy trước review; review dùng `review-delta --start`, validate verdict rồi `--snapshot`. Publish cần decision hợp lệ, đủ gate bắt buộc, không FAIL/BLOCKING chưa giải quyết và seal khớp. Không được dùng NOT_APPLICABLE cho C0/C0.5/C3–C6. Seal chỉ xác nhận tính bất biến, không chứng minh nội dung reviewer đã kiểm đúng.
+
+Ngoại lệ legacy chỉ áp item khớp path + ID + hash trong `config/legacy-authority-debt.json`; đổi nội dung phải bổ sung nguồn hợp lệ. Ngoại lệ không cho dùng làm STRONG oracle. Không ghi thêm debt mới vào baseline để bỏ qua gate.
+
+Reviewer còn phải kiểm nội dung nhạy cảm: chi tiết khai thác chưa công bố, quyền truy cập nội bộ, dữ liệu khách hàng; scanner chỉ là lớp cơ học. Không tự công bố hoặc tự tạo ticket/nhắn ngoài để xử lý finding.

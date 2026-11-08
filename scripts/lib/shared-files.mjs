@@ -7,8 +7,8 @@ import { createHash } from "node:crypto";
 import { readFile, readdir, writeFile, mkdir, copyFile } from "node:fs/promises";
 import path from "node:path";
 
-export const SHARED_ROOT_FILES = ["_product-guide.md", "_env.example"];
-export const isSharedFile = (rel) => SHARED_ROOT_FILES.includes(rel) || rel.startsWith("_flows/");
+export const SHARED_ROOT_FILES = ["_product-guide.md", "_env.example", "_product-kb.json"];
+export const isSharedFile = (rel) => SHARED_ROOT_FILES.includes(rel) || rel.startsWith("_flows/") || /^[a-z0-9-]+\/(?:open-questions|CHANGELOG|feature-summary)\.md$/.test(rel);
 export const sharedBaseFile = (previewDir) => path.join(path.dirname(previewDir), "shared-base.json");
 
 async function hashOf(file) {
@@ -31,6 +31,7 @@ async function readBase(previewDir) {
 
 /** Copy một file dùng chung từ base vào preview và ghi hash. `null` = base chưa có file. */
 export async function copySharedToPreview(baseDir, previewDir, rel) {
+  if(path.isAbsolute(rel)||rel.split(/[\\/]/).some(p=>p===".."))throw new Error("Unsafe shared path");
   const source = path.join(baseDir, rel);
   const hash = await hashOf(source);
   if (hash) {
@@ -52,6 +53,10 @@ async function sharedInPreview(previewDir) {
     }
   } catch (e) {
     if (e.code !== "ENOENT") throw e;
+  }
+  for(const entry of await readdir(previewDir,{withFileTypes:true})){
+    if(!entry.isDirectory()||entry.name.startsWith("_"))continue;
+    for(const name of ["open-questions.md","CHANGELOG.md","feature-summary.md"]){const rel=`${entry.name}/${name}`;if(await hashOf(path.join(previewDir,rel)))found.push(rel);}
   }
   return found;
 }

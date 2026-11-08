@@ -25,10 +25,12 @@ import {
   staleAfterDays,
   consumerLabel
 } from "./lib/product-config.mjs";
+import { oracleSummary } from "./lib/authority.mjs";
 import { extractOpenQuestions, findUnfencedEntries } from "./lib/open-questions.mjs";
 import { readChangelogRefs } from "./lib/changelog.mjs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { isDeepStrictEqual } from "node:util";
 
 const rootDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const knowledgeDir = path.join(rootDir, "knowledge");
@@ -218,11 +220,7 @@ async function describeObject(productKey, objectKey, staleDays = STALE_AFTER_DAY
 
   if (candidates.length) {
     const confirmed = candidates.filter((c) => c.knowledge_kind === "CONFIRMED_EXPECTED").length;
-    entry.kb_items = {
-      total: candidates.length,
-      confirmed_expected: confirmed,
-      usable_as_oracle: confirmed > 0
-    };
+    entry.kb_items = oracleSummary(candidates);
     if (confirmed === 0) {
       entry.issues.push("0 item CONFIRMED_EXPECTED — chỉ dùng cho regression discovery, không dùng làm expected result");
     }
@@ -377,7 +375,7 @@ async function main() {
       date: r.date,
       mode: r.mode,
       published_context_version:
-        allObjects.find((o) => o.object_key === r.object_key)?.published_context_version ?? null
+        products.find(p=>p.product_key===r.product_key)?.objects.find((o) => o.object_key === r.object_key)?.published_context_version ?? null
     }));
   const resolvedRefs = [...byRef.values()]
     .sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0))
@@ -463,7 +461,12 @@ async function main() {
       console.error(`\nFAIL: ${blocking.length} object chưa publish được: ${blocking.map((o) => o.object_key).join(", ")}`);
       process.exit(1);
     }
-    console.log("OK: mọi object đều có block publish hợp lệ");
+    const saved=JSON.parse(await readFile(path.join(knowledgeDir,'manifest.json'),'utf8'));
+    const {generated_at:_savedDate,...savedContent}=saved;
+    const {generated_at:_newDate,...expectedContent}=manifest;
+    if(!isDeepStrictEqual(savedContent,expectedContent))throw new Error('manifest.json is stale: regenerate before release');
+    if(await readFile(consolidatedFile,'utf8')!==await buildConsolidatedOpenQuestions(products))throw new Error('consolidated-open-questions.md is stale: regenerate before release');
+    console.log("OK: publish metadata, manifest và OQ index khớp dữ liệu hiện tại");
     return;
   }
 

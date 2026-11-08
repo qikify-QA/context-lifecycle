@@ -84,7 +84,7 @@ Chạy ngay sau C0 và **sau khi đã khoá lock** (§16), trước khi dispatch
 | `S1` | Ảnh/HAR/API capture do người gửi tự chụp, không kèm nguồn `S3` | Normalize thẳng thành `OBSERVED_CURRENT` + `confidence: LOW` + OQ `NEEDS_CONFIRMATION` trỏ về `kb_id`. **Không explore**, không làm oracle |
 | `S0` | Chỉ lời kể, không artifact, không link | Không nạp; nêu trong `results.open_questions` với đúng tên mục. Ngoại lệ: claim khác biệt môi trường, xem §12.3c |
 
-`S2` thiếu một trong 5 thứ thì rơi về `S0`. Rule mà hành vi làm mất dữ liệu, tiền hoặc quyền (P1) thì yêu cầu QA chạy thành test case Testlane rồi gửi như `S3`, không dùng `S2`. Một CCR được chứa nhiều rule `S2` dạng bảng; `dedup.mjs` bắt trùng theo mã rule. Item `PROPOSED` lên `CONFIRMED_EXPECTED` khi một CCR sau mang nguồn `S3` cho cùng hành vi (tính là `SUPERSEDES` item đó). Reviewer không mở được kho QA thì `CONDITIONAL_PASS` kèm `publish_conditions` nêu đúng `ref`.
+`S2` thiếu một trong 5 thứ thì rơi về `S0`. Rule mà hành vi làm mất dữ liệu, tiền hoặc quyền (P1) thì yêu cầu QA chạy thành test case Testlane rồi gửi như `S3`, không dùng `S2`. Một CCR được chứa nhiều rule `S2` dạng bảng; `dedup.mjs` đối chiếu mã rule, nội dung và ngày ghi nhận. Item `PROPOSED` lên `CONFIRMED_EXPECTED` khi một CCR sau mang nguồn `S3` cho cùng hành vi (tính là `SUPERSEDES` item đó). Reviewer không mở được kho QA thì `CONDITIONAL_PASS` kèm `publish_conditions` nêu đúng `ref`.
 
 Explore chỉ chạy khi operator yêu cầu tường minh cho một claim — khi đó run thành `INCREMENTAL_UPDATE` (§10a, mode settling).
 
@@ -92,7 +92,7 @@ Nguồn `test_case` còn cần **căn cứ expected** trong block của claim: t
 
 `authored_by` của nguồn `S3` loại `spec_doc` / `dev_doc` không được trùng người gửi CCR — người gửi không tự làm authority cho chính mình. `po_dev_confirm` không có giới hạn này: PO, Dev hay QA chốt đều tính, kể cả QA là người gửi (chủ repo chốt 2026-11-05). `test_case` là ngoại lệ: nó là record chạy thật trên hệ thống quản lý test (Testlane), không phải ý kiến người viết, nên test case PASS do chính người gửi chạy vẫn là `S3` khi có đủ id test case + kết quả PASS + ngày chạy + build/bản đã test (chủ repo chốt 2026-10-11).
 
-**Kiểm trùng:** sau khi ghi plan, chạy `node scripts/ctx/dedup.mjs --run <id>`. Claim trùng (cùng object, chung `target_kb_ids` hoặc cùng `confirmation_source`) với CCR đang `IN_PROGRESS`/`PUBLISHED` → bỏ claim đó khỏi run và nêu trong `results`; mọi claim đều trùng → `REJECTED` + `reason: duplicate_of`. `covered_by_open_question` chỉ là thông tin, không loại claim.
+**Kiểm trùng:** sau khi ghi plan, chạy `node scripts/ctx/dedup.mjs --run <id>`. Claim trùng (cùng object/feature, cùng nội dung chuẩn hoá và cùng nguồn + revision; không có nguồn thì cùng target + nội dung + revision) với CCR đang `IN_PROGRESS`/`PUBLISHED` → bỏ claim đó khỏi run và nêu trong `results`; mọi claim đều trùng → `REJECTED` + `reason: duplicate_of`. `covered_by_open_question` chỉ là thông tin, không loại claim.
 
 Với mỗi claim: copy evidence vào `raw/ccr-evidence/<claim_key>/` (`claim_key` = `<proposal_id>__<CLAIM-nn>`); toàn văn Proposal vào `raw/ccr-evidence/_ccr-full-content.md`.
 
@@ -127,7 +127,7 @@ Với mỗi claim: copy evidence vào `raw/ccr-evidence/<claim_key>/` (`claim_ke
 
 `environment_difference` chỉ có ở claim khác biệt môi trường (§12.3c). `shipped`, `kb_address`, `relation`, `target_kb_ids` là input bắt buộc của §12.5 — không có chúng thì supersede không tất định. `confirmation_source` chỉ có ở claim `S3`; `qa_rule_ref` chỉ có ở claim `S2`. File này thuộc `runs/`, không copy sang `knowledge/`.
 
-`context-quality-reviewer` audit lại từng claim (`contracts/gates.md`, audit source-strength): `confirmation_source` thiếu key hoặc `ref` không resolve về nguồn thật → claim đó không được publish làm `CONFIRMED_EXPECTED`, hạ xuống `PROPOSED` + OQ. Ở `CCR_INGEST` không có lane explore để quay lại.
+reviewer độc lập của `ctx-review` audit lại từng claim (`contracts/gates.md`, audit source-strength): `confirmation_source` thiếu key hoặc `ref` không resolve về nguồn thật → claim đó không được publish làm `CONFIRMED_EXPECTED`, hạ xuống `PROPOSED` + OQ. Ở `CCR_INGEST` không có lane explore để quay lại.
 
 ## 12.3b Open question
 

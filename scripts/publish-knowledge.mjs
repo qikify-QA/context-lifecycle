@@ -34,7 +34,10 @@ import { fileURLToPath } from "node:url";
 import { walk, readJsonOr, today } from "./lib/fs-utils.mjs";
 import { resolveRunDir, runPaths } from "./lib/run-layout.mjs";
 import { nextTagName, buildPrBody, releaseProposals, resolveReleases } from "./lib/publish-release.mjs";
-import { writeFile } from "node:fs/promises";
+import { recoverRelease } from "./lib/release-recovery.mjs";
+import { secretFindings } from "./lib/secret-scan.mjs";
+import { randomUUID } from "node:crypto";
+import { writeFile, rename } from "node:fs/promises";
 import { findForbiddenLeaks, findBadConfirmationRefs } from "./lib/forbidden-fields.mjs";
 
 const execFileAsync = promisify(execFile);
@@ -49,13 +52,14 @@ const doPr = process.argv.includes("--pr");
 const doTag = process.argv.includes("--tag");
 const runArgs = process.argv.flatMap((a, i, all) => (a === "--run" && all[i + 1] ? [all[i + 1]] : []));
 const proposalArgs = process.argv.flatMap((a, i, all) => (a === "--proposal" && all[i + 1] ? [all[i + 1]] : []));
+const acknowledge=process.argv.includes("--ack");
 const allowUnpublished = process.argv.includes("--allow-unpublished");
 // PR đang chờ merge và Proposal của nó. Dữ liệu tạm giữa --pr và --tag, không track.
 const releasesDir = path.join(rootDir, "runs", "releases");
 
 async function git(...args) {
   const { stdout } = await execFileAsync("git", args, { cwd: rootDir, maxBuffer: 32 * 1024 * 1024 });
-  return stdout.trim();
+  return args.includes("-z") ? stdout : stdout.trim();
 }
 
 // Danh sách field/đường dẫn cấm (§5a) nằm ở contracts/forbidden-fields.json;
@@ -65,25 +69,64 @@ async function git(...args) {
 const STRICT_IDS = process.env.PUBLISH_STRICT_IDS === "1";
 const STRICT_SELFCONTAINED = process.env.PUBLISH_STRICT_SELFCONTAINED === "1";
 
-async function tagMerged() {
-  const run = (...a) => git("-C", knowledgeDir, ...a);
-  await run("fetch", "origin", "main", "--tags");
-  const date = today();
-  const tag = nextTagName((await run("tag", "-l", `ctx-${date}*`)).split("\n").filter(Boolean), date);
-  await run("tag", "-a", tag, "origin/main", "-m", `Knowledge release ${tag}`);
-  await run("push", "origin", tag);
-  console.log(`Đã gắn tag ${tag} trên origin/main của ${TARGET_REPO}.`);
-  await reportReleases(tag);
+async function saveRelease(file,data){
+ const target=path.join(releasesDir,file),temp=target+'.tmp-'+randomUUID();
+ await writeFile(temp,JSON.stringify(data,null,2)+'\n');await rename(temp,target);
 }
-
-async function reportReleases(tag) {
-  const names = await readdir(releasesDir).catch(() => []);
-  const records = await Promise.all(names.filter((n) => n.endsWith(".json")).map(async (n) => ({ ...(await readJsonOr(path.join(releasesDir, n), {})), file: n })));
-  const prState = async (url) => JSON.parse((await execFileAsync("gh", ["pr", "view", url, "--json", "state,mergeCommit"])).stdout);
-  const result = await resolveReleases(records, prState, tag);
-  const done = new Set(result.released.map((r) => r.release.pr));
-  for (const r of records) if (done.has(r.pr)) await rm(path.join(releasesDir, r.file), { force: true });
-  console.log(`Ghi release lên board cho từng Proposal (publish.md §7):\n${JSON.stringify(result, null, 2)}`);
+async function releaseRecords(){
+ const names=await readdir(releasesDir).catch(()=>[]);
+ return Promise.all(names.filter(n=>n.endsWith('.json')).map(async file=>{const record=JSON.parse(await readFile(path.join(releasesDir,file),'utf8'));if(!record.branch||!Array.isArray(record.proposals))throw new Error('invalid_release_record: '+file);return {...record,file};}));
+}
+async function ackReleases(){
+ if(!proposalArgs.length)throw new Error('--ack needs --proposal after successful board update');
+ for(const record of await releaseRecords()){
+  if(!record.release)continue;
+  record.acknowledged=[...new Set([...(record.acknowledged??[]),...proposalArgs.filter(p=>record.proposals.includes(p))])];
+  const {file,...data}=record;await saveRelease(file,data);
+ }
+ console.log(JSON.stringify({ok:true,acknowledged:proposalArgs}));
+}
+async function tagMerged() {
+ const run=(...a)=>git('-C',knowledgeDir,...a);
+ await run('fetch','origin','main','--tags');
+ const records=await releaseRecords(),pending=[],eligible=[];
+ for(const record of records){
+  if(!record.pr){pending.push({branch:record.branch,reason:'pr_not_created'});continue;}
+  const proposals=record.proposals.filter(p=>!record.acknowledged?.includes(p));if(!proposals.length)continue;
+  if(record.release){eligible.push({...record,pending_proposals:proposals});continue;}
+  const pr=JSON.parse((await execFileAsync('gh',['pr','view',record.pr,'--json','state,mergeCommit'])).stdout);
+  if(pr.state!=='MERGED'){pending.push({pr:record.pr,state:pr.state,action:pr.state==='CLOSED'?'operator_decision':'wait_for_merge',proposals});continue;}
+  if(!pr.mergeCommit?.oid)throw new Error('merged PR missing merge SHA');
+  try{await run('merge-base','--is-ancestor',pr.mergeCommit.oid,'origin/main');}
+  catch{pending.push({pr:record.pr,reason:'merge_not_in_fetched_main',proposals});continue;}
+  eligible.push({...record,pending_proposals:proposals,merge_sha:pr.mergeCommit.oid});
+ }
+ if(!eligible.length){console.log(JSON.stringify({released:[],pending}));return;}
+ let tag;
+ if(eligible.some(r=>!r.release)){
+  const date=today();
+  tag=(await run('tag','--points-at','origin/main','-l','ctx-*')).split('\n').filter(Boolean).sort().at(-1);
+  if(!tag){tag=nextTagName((await run('tag','-l',`ctx-${date}*`)).split('\n').filter(Boolean),date);await run('tag','-a',tag,'origin/main','-m',`Knowledge release ${tag}`);}
+  await run('push','origin',tag);
+ }
+ const released=[];
+ for(const record of eligible){
+  const release=record.release??{status:'released',pr:record.pr,sha:record.merge_sha,tag};
+  const {file,...data}=record;data.release=release;
+  await saveRelease(file,data);
+  for(const proposal_id of record.pending_proposals)released.push({proposal_id,release});
+ }
+ console.log(JSON.stringify({released,pending},null,2));
+}
+async function resumeRelease(record){
+ const repo=TARGET_REPO.replace(/^https:\/\/github\.com\//,'').replace(/\.git$/,'');
+ const url=await recoverRelease(record,{
+  run:(...a)=>git('-C',knowledgeDir,...a),
+  findPr:async branch=>JSON.parse((await execFileAsync('gh',['pr','list','--repo',repo,'--head',branch,'--state','all','--json','url,state'])).stdout),
+  createPr:async r=>{const bodyFile=path.join(releasesDir,r.file+'.body.md');await writeFile(bodyFile,r.body);return (await execFileAsync('gh',['pr','create','--repo',repo,'--base','main','--head',r.branch,'--title',r.title,'--body-file',bodyFile],{cwd:knowledgeDir})).stdout.trim();},
+  persist:async r=>{const {file,...data}=r;await saveRelease(file,data);}
+ });
+ console.log(`PR: ${url}`);
 }
 
 async function runSummaries() {
@@ -110,7 +153,9 @@ async function main() {
     console.error("--push đã bỏ (commit thẳng + ghi đè tag). Dùng --pr, rồi --tag sau khi PR merge.");
     process.exit(1);
   }
+  if (acknowledge) return ackReleases();
   if (doTag) return tagMerged();
+  if(doPr){const unfinished=(await releaseRecords()).filter(r=>r.branch&&!r.pr);if(unfinished.length>1)throw new Error("multiple_incomplete_releases: inspect records");if(unfinished.length)return resumeRelease(unfinished[0]);}
   // 1. knowledge/ phải là submodule đã checkout. Sha repo build chỉ ghi vào commit message
   // để tra ngược (không bắt buộc đã push — knowledge publish độc lập với repo build).
   try {
@@ -202,6 +247,11 @@ async function main() {
     process.exit(1);
   }
 
+  for(const file of await walk(stageDir)){
+    const bytes=await readFile(file);if(bytes.includes(0))continue;
+    const findings=secretFindings(bytes.toString('utf8'),{envFile:path.basename(file)==='_env.example'});
+    if(findings.length)throw new Error(`secret scan failed: ${path.relative(stageDir,file)} (${[...new Set(findings.map(f=>f.kind))].join(', ')})`);
+  }
   const stageSize = (await Promise.all((await walk(stageDir)).map(async (f) => (await stat(f)).size))).reduce(
     (a, b) => a + b,
     0
@@ -223,24 +273,31 @@ async function main() {
   await rm(path.join(knowledgeDir, "how-to-request"), { recursive: true, force: true });
   await cp(path.join(stageDir, "how-to-request"), path.join(knowledgeDir, "how-to-request"), { recursive: true });
   const run = (...a) => git("-C", knowledgeDir, ...a);
-  await run("add", "-A");
-  const files = (await run("diff", "--cached", "--name-only")).split("\n").filter(Boolean);
-  if (!files.length) {
-    console.log("knowledge/ không có thay đổi — không có gì để publish.");
-    return;
+  await run('fetch','origin','main');
+  try{await run('merge-base','--is-ancestor','origin/main','HEAD');}catch{throw new Error('knowledge_base_stale: reconcile with origin/main before release');}
+  const allowed=f=>f==='manifest.json'||f.startsWith('products/')||f.startsWith('how-to-request/')||f==='_open-issues/consolidated-open-questions.md'||f==='_open-issues/README.md';
+  const existing=(await run('diff','--cached','--name-only')).split('\n').filter(Boolean);
+  if(existing.some(f=>!allowed(f)))throw new Error('unscanned_staged_paths: unstage unrelated files before release');
+  const changed=(await run('status','--porcelain','--no-renames','--untracked-files=all','-z')).split('\0').filter(Boolean).map(s=>s.slice(3));
+  const files=changed.filter(allowed);
+  for(const file of files){
+    if(file.includes('..')||path.isAbsolute(file))throw new Error('unsafe release path');
+    const bytes=await readFile(path.join(knowledgeDir,file)).catch(e=>{if(e.code==='ENOENT')return null;throw e;});
+    if(bytes&&!bytes.includes(0)&&secretFindings(bytes.toString('utf8'),{envFile:path.basename(file)==='_env.example'}).length)throw new Error(`secret scan failed: ${file}`);
   }
-  const branch = `publish/${today()}-${sha.slice(0, 8)}`;
-  await run("switch", "-c", branch);
-  await run("commit", "-m", `Publish knowledge from ${SOURCE_REPO}@${sha.slice(0, 8)}`);
-  await run("push", "-u", "origin", branch);
-  const bodyFile = path.join(stageDir, "pr-body.md");
-  const runs = await runSummaries();
-  await writeFile(bodyFile, buildPrBody({ sourceRepo: SOURCE_REPO, sha, manifest, files, runs }));
-  const repo = TARGET_REPO.replace(/^https:\/\/github\.com\//, "").replace(/\.git$/, "");
-  const { stdout } = await execFileAsync("gh", ["pr", "create", "--repo", repo, "--base", "main", "--head", branch, "--title", `Publish knowledge ${today()} (${sha.slice(0, 8)})`, "--body-file", bodyFile], { cwd: knowledgeDir });
-  await mkdir(releasesDir, { recursive: true });
-  await writeFile(path.join(releasesDir, `${branch.replace(/\W+/g, "-")}.json`), JSON.stringify({ pr: stdout.trim(), proposals: releaseProposals(runs, proposalArgs) }, null, 2) + "\n");
-  console.log(`PR: ${stdout.trim()}\nReview + merge PR, rồi chạy: node scripts/publish-knowledge.mjs --tag`);
+  if(!files.length){console.log(JSON.stringify({no_changes:true,proposals:proposalArgs,action:'use existing canonical release; no new PR or pending release created'}));return;}
+  await run('add','-A','--',...files);
+  const staged=(await run('diff','--cached','--name-only')).split('\n').filter(Boolean);
+  if(!staged.length){console.log(JSON.stringify({no_changes:true,proposals:proposalArgs}));return;}
+  if(staged.some(f=>!files.includes(f)))throw new Error('staged_scope_mismatch');
+  const tree=await run('write-tree');
+  const branch=`publish/${today()}-${sha.slice(0,8)}-${tree.slice(0,10)}`;
+  const runs=await runSummaries();
+  const record={branch,tree,proposals:releaseProposals(runs,proposalArgs),message:`Publish knowledge from ${SOURCE_REPO}@${sha.slice(0,8)}`,title:`Publish knowledge ${today()} (${tree.slice(0,8)})`,body:buildPrBody({sourceRepo:SOURCE_REPO,sha,manifest,files:staged,runs}),pr:null};
+  await mkdir(releasesDir,{recursive:true});
+  record.file=branch.replace(/\W+/g,'-')+'.json';
+  await saveRelease(record.file,record);
+  await resumeRelease(record);
 }
 
 main().catch((e) => {

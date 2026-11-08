@@ -38,10 +38,18 @@ export function findDuplicates(plan, others, openKbIds = new Set()) {
     const src = claimKey(claim);
     for (const other of others) {
       if (other.product !== plan.product_key || other.object !== plan.object_key) continue;
+      if (plan.proposal_id && other.plan.proposal_id === plan.proposal_id) continue;
       for (const oc of other.plan.claims ?? []) {
         const basis = [];
-        if ((oc.target_kb_ids ?? []).some((id) => targets.has(id))) basis.push("same_target_kb_ids");
-        if (src && src === claimKey(oc)) basis.push("same_confirmation_source");
+        const sameTarget=(oc.target_kb_ids??[]).some(id=>targets.has(id));
+        const sameStatement=norm(claim.description??claim.statement)!==''&&norm(claim.description??claim.statement)===norm(oc.description??oc.statement);
+        const sameScope=JSON.stringify(claim.kb_address??{})===JSON.stringify(oc.kb_address??{});
+        const sameSource=src&&src===claimKey(oc);
+        const sourceDate=c=>c.confirmation_source?.authored_on??c.confirmation_source?.ref?.authored_on??c.qa_rule_ref?.recorded_on??null;
+        const sameRevision=sourceDate(claim)===sourceDate(oc);
+        // A target or citation is not a content identity. Updated decisions must pass through.
+        if(sameSource&&sameRevision&&sameStatement&&sameScope)basis.push("same_claim_revision");
+        else if(sameTarget&&sameStatement&&sameScope&&sameRevision&&!src&&!claimKey(oc))basis.push("same_target_and_statement");
         if (basis.length) {
           duplicates.push({ claim_key: claim.claim_key, duplicate_of: { proposal_id: other.plan.proposal_id ?? null, run_id: other.runId, claim_key: oc.claim_key, status: other.status }, basis });
         }

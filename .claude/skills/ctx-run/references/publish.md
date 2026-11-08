@@ -34,7 +34,7 @@ Không ghi `ctx_run_id`, đường dẫn `runs/`, hay ID run-local (`DOC-`, `DSE
 
 ## 4. Review
 
-Chạy `node scripts/ctx/audit-preview.mjs --run <id>` để chắc preview sạch, rồi dispatch `context-quality-reviewer`. `rework_targets` → retry đúng nhánh (bảng Retry trong agent definition), chạy lại strip, rồi review lại.
+Chạy `node scripts/ctx/audit-preview.mjs --run <id>` để chắc preview sạch, rồi dùng skill `ctx-review` với reviewer native độc lập. `rework_targets` → sửa đúng nguồn, strip lại, hoàn tất prose, rồi review và seal lại.
 
 ## 5. Publish
 
@@ -44,9 +44,9 @@ Khi `review/verdict.json` có `publish_allowed: true`:
 node scripts/ctx/publish-apply.mjs --run <id> --objects <o1,o2,...>
 ```
 
-Script kiểm verdict + lock + audit, copy preview vào `knowledge/products/<product>/` (merge), sinh lại manifest dưới lock `_manifest` và `_shared`. Exit 2 → `DEFERRED` + `reason: lock_lost`, không ghi gì.
+Script kiểm đủ gate, decision, verdict seal + lock + audit; `--objects` phải không rỗng và khớp toàn bộ object trong preview. Script kiểm verdict + lock + audit, copy preview vào `knowledge/products/<product>/` (merge), sinh lại manifest dưới lock `_manifest` và `_shared`. Exit 2 → `DEFERRED` + `reason: lock_lost`, không ghi gì.
 
-File dùng chung run không sửa thì giữ nguyên bản trong `knowledge/`. Exit 1 với `shared_file_changed`: file đã đổi từ lúc copy, không có gì được ghi. Chạy `copy-shared.mjs --run <id> --files <file> --reset`, áp lại phần sửa rồi publish lại.
+File dùng chung run không sửa thì giữ nguyên bản trong `knowledge/`. Exit 1 với `shared_file_changed`: file đã đổi từ lúc copy, không có gì được ghi. Chạy `copy-shared.mjs --run <id> --files <file> --reset`, áp lại phần sửa rồi review và seal lại trước publish.
 
 Phát hành cho team là bước riêng, xem mục 7.
 
@@ -65,4 +65,8 @@ Chỉ khi operator đồng ý. `published` trên board chưa phải là đã ph�
 3. `--pr --run <id>`, thêm `--proposal CBS-n` cho CCR §2b không có run. Đưa link PR cho operator.
 4. Operator review + merge.
 5. `--tag`: script in `released` (Proposal, `pr`, `sha`, `tag`) và `pending` (PR chưa merge).
-6. Mỗi Proposal trong `released`: đọc `results` hiện có, gọi `update_context_board_proposal({ proposal_id, status: "published", results: { ...results cũ, release } })`. Tool lưu `results` nguyên văn nên phải gửi đủ. Không set `completed`: QA tự kéo sau khi review.
+6. Ledger release được giữ để retry khi board chưa nhận phản hồi. Mỗi Proposal trong `released`: đọc `results` hiện có, gọi `update_context_board_proposal({ proposal_id, status: "published", results: { ...results cũ, release } })`. Tool lưu `results` nguyên văn nên phải gửi đủ. Không set `completed`: QA tự kéo sau khi review.
+
+7. Chỉ sau khi board đã xác nhận cập nhật thành công: `node scripts/publish-knowledge.mjs --ack --proposal CBS-n`. Không ack trước board. `--tag` chỉ xử lý PR đã merge và merge SHA thuộc `origin/main`; OPEN chờ, CLOSED cần operator quyết định. Retry `--pr` dùng ledger đã chuẩn bị, tiếp tục commit/push/PR còn thiếu và tìm lại PR đã tạo, không tạo release trùng. Trước release mới phải có base chứa `origin/main`; không tự merge. Chỉ stage các đường dẫn release đã scan, không `git add -A`.
+
+Preview dựng lại xoá các file JSON do lần strip trước sinh, giữ prose để cập nhật. Preview cũ không có danh sách generated_files cần `--clean` rồi dựng lại prose. Các resolution PROPOSED/CONFLICTED/REFRESHED_ONLY/SUPERSEDE được materialize, reference đến ID candidate được đổi theo ID ổn định. Lỗi apply thông thường rollback file; mất điện/kill giữa lúc ghi vẫn cần đối chiếu receipt và kiểm tra thủ công trước retry.

@@ -573,3 +573,11 @@ Mỗi object bị một run ảnh hưởng được khoá suốt vòng đời ru
 - Re-verify ngay trước publish (`publish-apply.mjs` tự làm). Release khi run tới trạng thái terminal.
 - Lock global `_manifest` bao bước sinh `knowledge/manifest.json` + `consolidated-open-questions.md` (`publish-apply.mjs` tự làm).
 - `qa-context-scope-planner` ở `BROAD_BOOTSTRAP` nhận danh sách object đang bị khoá từ orchestrator và không đề xuất chúng.
+
+## Bảo trì dữ liệu đã có (2026-11-08)
+
+Maintenance deterministic do operator yêu cầu dùng `scripts/ctx/repair-knowledge.mjs` (mặc định preview; `--apply` mới ghi) và canonical writer trong `publish-apply.mjs`. Phải giữ nguyên KB identity/statement/scope/nguồn, số check và test steps; được chuẩn hoá reference, hạ mức oracle/authority thiếu căn cứ, sửa OQ/metadata. Không tạo authority mới. Apply có object/shared/manifest lock, base hash, backup, rollback khi exception và audit trước/sau.
+
+`reference_issues` là thông tin thiếu xác nhận ở published KB/profile/check: reference gốc, field, lý do và `oq_id`; không phải evidence/run reference. Không dùng nó làm authority hoặc liên kết KB đang hoạt động. Profile chứa reference chưa xác định phải có `context_status: NEEDS_CONFIRMATION`.
+
+Oracle NONE: expected để rỗng; giữ nội dung quan sát cũ trong `observation_guidance`, chờ xác nhận qua OQ. `expected_result_basis: BASELINE_NOT_REQUIREMENT` đánh dấu baseline đang chờ authority. Đây không phải xác nhận requirement hay kết quả PASS.

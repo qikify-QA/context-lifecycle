@@ -17,8 +17,11 @@ export function extractOpenQuestions(text) {
   if (!text) return entries;
   for (let i = 0; i < text.length; i++) {
     if (text[i] !== "{") continue;
-    let depth = 0;
+    let depth = 0, quoted = false, escaped = false;
     for (let j = i; j < text.length; j++) {
+      const ch = text[j];
+      if (quoted) { if (escaped) escaped = false; else if (ch === "\\") escaped = true; else if (ch === '"') quoted = false; continue; }
+      if (ch === '"') { quoted = true; continue; }
       if (text[j] === "{") depth++;
       else if (text[j] === "}") {
         depth--;

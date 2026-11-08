@@ -25,6 +25,8 @@ File đầu tiên agent của bạn nên đọc. Nó cho biết có product/obje
     "total": 112,
     "confirmed_expected": 0,
     "confirmed_from_dev_doc": 0,
+    "confirmed_with_valid_source": 0,
+    "invalid_confirmed": 0,
     "usable_as_oracle": false         // đọc kỹ dòng này; có thể là "DOC_ONLY"
   },
   "issues": ["..."]
@@ -42,7 +44,7 @@ File đầu tiên agent của bạn nên đọc. Nó cho biết có product/obje
 
 - Dùng `OBSERVED_CURRENT` làm expected result cho một task đang *thay đổi* chính hành vi đó là lỗi nghiêm trọng: test sẽ fail đúng lúc dev làm đúng. Nó dùng tốt để tìm vùng regression và biết feature có surface nào.
 - `confidence: LOW` = một nguồn/một sample duy nhất, không thành quy luật.
-- `usable_as_oracle: "DOC_ONLY"` = mọi item `CONFIRMED_EXPECTED` của object đến 100% từ tài liệu dev sinh từ source code. Loại tài liệu đó có thể mô tả cả bug như thể đúng: khi lệch, đối chiếu spec/PO trước khi kết luận là bug.
+- `usable_as_oracle: "DOC_ONLY"` = mọi item có nguồn hợp lệ dùng được của object đến 100% từ tài liệu dev sinh từ source code. Loại tài liệu đó có thể mô tả cả bug như thể đúng: khi lệch, đối chiếu spec/PO trước khi kết luận là bug.
 - Item `status: UNRESOLVED` (cùng `conflict_group`) là hai phía chưa ngã ngũ — không phía nào là oracle.
 - `scope.brand` khác `null` = hành vi chỉ đúng cho một brand/instance.
 - Trước khi test một feature, đọc `entry_points[].precondition` và `environment_differences` trong `profile.json`: config riêng của feature nằm ở đó. `ALTERNATIVE_SETUP` = làm theo `how_to_test`. `NOT_TESTABLE` = không chạy, ghi `NOT_APPLICABLE`, không tính là `FAIL`. `DIFFERENT_VALUE` = test theo giá trị của môi trường đang dùng.
@@ -72,3 +74,16 @@ Kéo card chưa làm context builder tự chạy: operator nhặt các card đan
 Kết quả trả về trên chính Proposal: `published` (kèm version mới) hoặc `blocked` kèm 1 trong `NEEDS_INFO` · `CONFLICT` · `REJECTED` · `DEFERRED`. `published` nghĩa là đã duyệt, chưa chắc đã vào repo này: xem `results.release.status`, `released` kèm `sha` mới là team dùng được. Khi đó QA tự review knowledge, ổn thì kéo Proposal sang `Completed`. Khi được publish, `manifest.json` → `resolved_requests` ghi CCR của bạn.
 
 **Conflict thì sao?** Context builder không tự chọn bên (trừ khi product cho phép ghi đè — xem phụ lục mục 5). Cả hai phía được giữ, Proposal ở `blocked` chờ PO/Dev/QA lead phân xử.
+
+## Định danh và kiểm tra oracle
+
+Reference mới dùng `object/feature#KB-ID`, hoặc `object/_object-level#KB-ID`; không gộp KB chỉ theo ID vì ID cũ có thể trùng giữa feature. Reference cũ được resolve trong feature hiện tại trước, rồi object-level, rồi chỉ khi duy nhất trong object; mơ hồ phải dừng. Chưa có migration đổi hàng loạt ID.
+
+`confirmed_expected` là số nhãn, không phải số oracle hợp lệ. `confirmed_with_valid_source` loại item thiếu nguồn, ngày sai/tương lai, conflict và known defect; `invalid_confirmed` thể hiện phần bị loại. `usable_as_oracle: true` vẫn cần kiểm từng check và scope, không có nghĩa toàn bộ object đã READY. Item legacy thiếu nguồn không được dùng làm STRONG oracle.
+
+## Khi dữ liệu còn chờ xác nhận
+
+- `observation_guidance` giữ nội dung quan sát hoặc expected cũ chưa có căn cứ; không dùng để chấm pass/fail. Với oracle NONE, `expected_result` để rỗng và check phải NEEDS_CONFIRMATION, có `oq_id` mở được.
+- `expected_result_basis: BASELINE_NOT_REQUIREMENT` nghĩa là nội dung dựa trên implementation hiện tại, chưa đủ chốt requirement.
+- `reference_issues` giữ reference không resolve được hoặc authority còn thiếu, kèm `oq_id`. Các reference lỗi đã được loại khỏi liên kết đang hoạt động, không bị xoá dấu vết. Profile có `context_status: NEEDS_CONFIRMATION` cần xử lý các mục này trước khi dựa vào phần liên quan.
+- KNOWN_DEFECT đi vào `regression_watch_kb_ids`, không vào oracle. Bản sửa dữ liệu không đồng nghĩa sản phẩm đã sửa defect hoặc PO/Dev đã xác nhận các câu hỏi.
