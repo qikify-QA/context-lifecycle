@@ -1,0 +1,853 @@
+{
+  "feature_id": "FEAT-13-genai-model-settings",
+  "feature_key": "genai-model-settings",
+  "name": "Cài đặt model GenAI ở Gen AI Effects — chọn model, validate key, retirement và migration model cũ, toggle auto-switch",
+  "user_goal": "Merchant cấu hình model GenAI (Gemini, GPT) và API key dùng cho Gen AI Effects ở Extras > 3rd-party Services > Gen AI Effects: chọn và lưu model (gồm Nano Banana 2.1), kiểm key có dùng được với model đang chọn, bật/tắt auto-switch sang model dự phòng, và vẫn có model hợp lệ khi model đang dùng bị retire (account được chuyển sang model kế nhiệm). Không gồm hành vi generate và failover lúc runtime (genai-personalization-runtime).",
+  "user_goal_kb_refs": [
+    "KB-456",
+    "KB-457",
+    "KB-458",
+    "KB-462",
+    "KB-469"
+  ],
+  "stable_since_version": null,
+  "actors": [
+    {
+      "role": "merchant-owner — người cấu hình Gen AI Effects trên portal",
+      "permission_observed": "Chọn và lưu model Gemini/GPT, Validate key, bật/tắt toggle auto-switch, lưu Gen AI Effects; quan sát trên staging. KB không có quan sát với role khác (staff hạn chế quyền, cross-tenant).",
+      "kb_refs": [
+        "KB-456",
+        "KB-457",
+        "KB-462",
+        "KB-469",
+        "KB-471"
+      ]
+    },
+    {
+      "role": "admin / dev vận hành — chạy job migration model retired",
+      "permission_observed": "Chạy genai:migrate-retired-models (có thể kèm --user-id) và đặt migrate_at trên staging theo mô tả của dev; QA không có quyền Admin, Admin > Settings chưa có KB.",
+      "kb_refs": [
+        "KB-461"
+      ]
+    }
+  ],
+  "entry_points": [
+    {
+      "path": "Portal: Extras > 3rd-party Services > Gen AI Effects (phần Gemini và GPT: model picker, Validate key, toggle \"Auto-switch to a backup model during temporary outages\", Save)",
+      "precondition": "Đăng nhập merchant-owner trên staging. Account có API key của provider (KB-462 ghi quy tắc model mặc định áp khi account có API key). Muốn kiểm Nano Banana 2.1 với key thật thì cần key có quyền với model đó; trường hợp key không có quyền chưa có fixture (KB-457).",
+      "kb_refs": [
+        "KB-456",
+        "KB-457",
+        "KB-462",
+        "KB-469"
+      ]
+    },
+    {
+      "path": "API: POST /api/user/openai-key/validate (Validate key), PUT /api/user/private-config (lưu), GET /api/user (đọc private_config)",
+      "precondition": "Phiên merchant-owner trên staging. Kiểm model retired qua validate phải gửi model retired trong request, vì trên staging không đặt được model retired đã lưu qua save (KB-463).",
+      "kb_refs": [
+        "KB-457",
+        "KB-463",
+        "KB-471"
+      ]
+    },
+    {
+      "path": "Job migration genai:migrate-retired-models (chạy hằng ngày 00:00 UTC, hoặc chạy tay với --user-id)",
+      "precondition": "Cần người có quyền chạy lệnh (dev/admin). migrate_at phải đã tới thì quy tắc lưu, model mặc định và Validate key mới áp; khi migrate_at đặt tới ngày hiện tại thì quy tắc áp cho mọi account trên staging, không chỉ account trong lượt chạy. Lượt chạy với --user-id không đặt migrated_at nên chạy lặp được.",
+      "kb_refs": [
+        "KB-460",
+        "KB-461"
+      ]
+    }
+  ],
+  "capabilities": [
+    {
+      "name": "Chọn và lưu model GenAI, gồm Nano Banana 2.1",
+      "description": "CONFIRMED_EXPECTED/MEDIUM (KB-456, Testlane TC-TIB-7902 PASS 2026-10-30): phần Gemini có option \"Nano Banana 2.1\" chọn được, lưu được, giữ sau reload; description liệt kê gemini-nano-banana-2.1; Nano Banana Pro và Nano Banana 2 vẫn còn. Id lưu nano_banana_21 qua PUT /api/user/private-config chỉ là quan sát (KB-471). Lưu không chọn model: quan sát sau ngày migrate thấy model rỗng được thay bằng model mặc định hiện tại (gpt-image-1.5, nano_banana_31), không gửi field model thì giữ model đã lưu (KB-462, OBSERVED_CURRENT/LOW). API lưu hiện không kiểm giá trị model (KB-467): đây là hành vi hiện tại, không phải mong muốn, không làm expected.",
+      "kb_refs": [
+        "KB-456",
+        "KB-471",
+        "KB-462",
+        "KB-467"
+      ]
+    },
+    {
+      "name": "Validate API key với model đang chọn",
+      "description": "CONFIRMED_EXPECTED/MEDIUM (KB-457, dev TIB-5573 Q6): Validate gọi thử đúng model đang chọn; key sai hoặc không có quyền với model đó báo not valid với câu chung \"Key is not working. Please check & try again.\", không hiện lỗi gốc của provider, không crash. Vế key hợp lệ nhưng không có quyền với 2.1 chưa chạy. Quan sát (KB-463, LOW): gửi model retired trả 200 {valid:false, code:model_retired} kèm câu retired; không gửi model thì validate theo model mặc định.",
+      "kb_refs": [
+        "KB-457",
+        "KB-463",
+        "KB-464"
+      ]
+    },
+    {
+      "name": "Retirement model cũ và migration account sang model kế nhiệm",
+      "description": "CONFIRMED_EXPECTED: mốc \"từ ngày migrate\" bắt đầu 00:00 UTC của migrate_at, áp cho quy tắc lưu model, model mặc định và Validate key (KB-460); trước ngày migrate vẫn chọn và lưu được model retired, lưu giữ nguyên model đã lưu (kể cả retired) trả 200 (KB-466, LOW); câu báo Gemini retired (KB-464); không có email báo trước, chỉ email xác nhận sau khi model đổi (KB-468, LOW); lượt --user-id không đặt migrated_at (KB-461). Quan sát (LOW): account ở gpt-image-1 chuyển sang gpt-image-1.5, nano_banana sang nano_banana_31, cài đặt khác giữ nguyên, picker disable model cũ (KB-458); request lưu từ tab cũ gửi model retired vẫn 200 và giữ model đã lưu (KB-465). Giá trị lưu nano_banana và đích nano_banana_31 của Gemini (KB-459) đang UNRESOLVED với global-option, không làm oracle.",
+      "kb_refs": [
+        "KB-458",
+        "KB-459",
+        "KB-460",
+        "KB-461",
+        "KB-464",
+        "KB-465",
+        "KB-466",
+        "KB-468"
+      ]
+    },
+    {
+      "name": "Bật/tắt auto-switch sang model dự phòng (cấu hình)",
+      "description": "OBSERVED_CURRENT/LOW (KB-469, KB-470): toggle \"Auto-switch to a backup model during temporary outages\" kèm mô tả nguyên văn ở KB-469; account chưa từng lưu thì không có key genai_auto_fallback và toggle OFF; bật/tắt rồi Save trả 200, giữ sau reload, model đã lưu không đổi. Hiện có đúng 1 toggle cho mọi provider, lưu một field genai_auto_fallback; spec PO ghi phạm vi theo service/model đang active, PO chưa chốt. Chỉ phần cấu hình; hành vi chuyển model lúc runtime không có KB trong feature này.",
+      "kb_refs": [
+        "KB-469",
+        "KB-470"
+      ]
+    }
+  ],
+  "state_transitions": [
+    {
+      "from": "account đã lưu model GPT gpt-image-1 (retired)",
+      "to": "account ở gpt-image-1.5; cài đặt khác giữ nguyên; picker hiện successor được chọn, model cũ bị disable",
+      "trigger": "job genai:migrate-retired-models (hằng ngày 00:00 UTC hoặc chạy tay với --user-id)",
+      "condition": "migrate_at đã tới. Quan sát một lượt QA-3408 TC-07/TC-14 (OBSERVED_CURRENT/LOW), không ghi build.",
+      "kb_refs": [
+        "KB-458",
+        "KB-460",
+        "KB-461"
+      ]
+    },
+    {
+      "from": "account đã lưu model Gemini nano_banana",
+      "to": "account ở nano_banana_31",
+      "trigger": "job genai:migrate-retired-models",
+      "condition": "Quan sát một lượt (KB-458) và theo dev (KB-459). KB-459 UNRESOLVED (CONF-CBS089-01): không làm oracle cho tới khi resolve.",
+      "kb_refs": [
+        "KB-458",
+        "KB-459"
+      ]
+    },
+    {
+      "from": "trước ngày migrate: chọn và lưu được model retired (200)",
+      "to": "từ ngày migrate: quy tắc lưu model, model mặc định và Validate key mới áp",
+      "trigger": "tới 00:00 UTC của migrate_at",
+      "condition": "Khi migrate_at đặt tới ngày hiện tại trên staging, quy tắc áp cho mọi account trên staging. Phía trước ngày migrate chưa quan sát.",
+      "kb_refs": [
+        "KB-460",
+        "KB-461",
+        "KB-466"
+      ]
+    },
+    {
+      "from": "model của account được đổi bởi migration",
+      "to": "email xác nhận gửi sau khi model đổi",
+      "trigger": "migration đổi model",
+      "condition": "Không có email báo trước ngày cắt model (KB-468, LOW). Nội dung email, điều kiện gửi chưa có KB.",
+      "kb_refs": [
+        "KB-468",
+        "KB-464"
+      ]
+    },
+    {
+      "from": "account chưa từng lưu toggle: private_config không có key genai_auto_fallback, toggle OFF",
+      "to": "genai_auto_fallback true hoặc false, giữ sau reload",
+      "trigger": "bật hoặc tắt toggle rồi Save (200)",
+      "condition": "Quan sát một lượt QA-3408 TC-01/TC-02 (OBSERVED_CURRENT/LOW).",
+      "kb_refs": [
+        "KB-469"
+      ]
+    }
+  ],
+  "confirmed_rules": [
+    {
+      "rule": "Ở Extras > 3rd-party Services > Gen AI Effects, phần Gemini có option model \"Nano Banana 2.1\" chọn được, lưu được và vẫn được chọn sau reload; description liệt kê provider model gemini-nano-banana-2.1; Nano Banana Pro và Nano Banana 2 vẫn còn trong danh sách.",
+      "knowledge_kind": "CONFIRMED_EXPECTED",
+      "confidence": "MEDIUM",
+      "scope": "staging, merchant-owner, portal",
+      "caveats": "Id lưu nano_banana_21 không nằm trong rule này; chỉ là quan sát (KB-471).",
+      "confirmation_ref": "Testlane TC-TIB-7902 (QA-3442 TC-01) PASS portal build index.BMgdZMSW.js, 2026-10-30; expected theo Jira TIB-5573 comment #55592 (dev), 2026-10-26",
+      "kb_refs": [
+        "KB-456"
+      ]
+    },
+    {
+      "rule": "Validate key ở Gen AI Effects gọi thử đúng model đang chọn; key sai hoặc không có quyền với model đó báo not valid với câu chung \"Key is not working. Please check & try again.\", không hiện lỗi gốc của provider, không crash.",
+      "knowledge_kind": "CONFIRMED_EXPECTED",
+      "confidence": "MEDIUM",
+      "scope": "staging, merchant-owner, portal + POST /api/user/openai-key/validate",
+      "caveats": "Bổ trợ: TC-TIB-7939 PASS 2026-10-30 với key rác + nano_banana_21 trả 400 {valid:false, message:\"Key is not working. Please check & try again.\"}. Vế key hợp lệ nhưng không có quyền với 2.1 (TC-26) chưa chạy.",
+      "confirmation_ref": "Jira TIB-5573 comment #56094 (dev), Q6, 2026-10-30",
+      "kb_refs": [
+        "KB-457"
+      ]
+    },
+    {
+      "rule": "Mốc \"từ ngày migrate\" bắt đầu lúc 00:00 UTC của migrate_at, cùng giờ job migration hằng ngày chạy; mốc này áp cho quy tắc lưu model, model mặc định và Validate key.",
+      "knowledge_kind": "CONFIRMED_EXPECTED",
+      "confidence": "MEDIUM",
+      "scope": "staging, merchant-owner, api",
+      "caveats": "Một nguồn dev.",
+      "confirmation_ref": "Jira TIB-5554 comment #54687 (dev), Q11, 2026-10-15",
+      "kb_refs": [
+        "KB-460"
+      ]
+    },
+    {
+      "rule": "Lượt chạy genai:migrate-retired-models với --user-id không đặt migrated_at nên chạy lặp lại được; khi migrate_at được đặt tới ngày hiện tại, quy tắc lưu và model mặc định áp cho mọi account trên staging, không chỉ account trong lượt chạy.",
+      "knowledge_kind": "CONFIRMED_EXPECTED",
+      "confidence": "MEDIUM",
+      "scope": "staging, admin, api",
+      "caveats": "Mô tả vận hành trên staging; migrated_at sau lượt chạy sạch (không --user-id) chưa có KB (claim S0 không nạp).",
+      "confirmation_ref": "Jira TIB-5554 comment #54687 (dev), Q2, 2026-10-15",
+      "kb_refs": [
+        "KB-461"
+      ]
+    },
+    {
+      "rule": "Câu báo model Gemini retired là \"Nano Banana (Gemini 2.5 Flash) has been retired. Select Nano Banana 2 (Gemini 3.1 Flash) or another model.\"; tên model phía API khớp nhãn trên portal (không có hậu tố \"Image\"), và các tên này dùng y như vậy trong email migration.",
+      "knowledge_kind": "CONFIRMED_EXPECTED",
+      "confidence": "MEDIUM",
+      "scope": "staging, merchant-owner, api",
+      "caveats": "Câu đã thấy trong response Validate key (QA-3408 TC-22, 2026-10-16); toast 422 và email chưa quan sát trực tiếp. Rule này không xác nhận việc save trả 422 (claim đó S0, không nạp).",
+      "confirmation_ref": "Jira TIB-5554 comment #54687 (dev), Q4, 2026-10-15",
+      "kb_refs": [
+        "KB-464"
+      ]
+    },
+    {
+      "rule": "Trước ngày migrate vẫn chọn và lưu được model retired (200); lưu mà giữ nguyên model đã lưu, kể cả model retired, trả 200.",
+      "knowledge_kind": "CONFIRMED_EXPECTED",
+      "confidence": "LOW",
+      "scope": "staging, merchant-owner, api",
+      "caveats": "Nguồn chỉ là \"ok Q10\" đồng ý câu đề xuất của QA; phía trước ngày migrate chưa quan sát (QA-3408 TC-04 không kết luận).",
+      "confirmation_ref": "Jira TIB-5554 comment #54687 (dev), Q10, 2026-10-15",
+      "kb_refs": [
+        "KB-466"
+      ]
+    },
+    {
+      "rule": "Ticket TIB-5554 không có email báo trước ngày cắt model; chỉ có email xác nhận gửi sau khi model được đổi.",
+      "knowledge_kind": "CONFIRMED_EXPECTED",
+      "confidence": "LOW",
+      "scope": "staging, merchant-owner, api",
+      "caveats": "Nguồn chỉ là \"ok Q13\" đồng ý đề xuất của QA; nội dung và điều kiện gửi email xác nhận chưa có KB.",
+      "confirmation_ref": "Jira TIB-5554 comment #54687 (dev), Q13, 2026-10-15",
+      "kb_refs": [
+        "KB-468"
+      ]
+    }
+  ],
+  "unresolved_rules": [
+    {
+      "rule": "Giá trị lưu của model Gemini cũ là nano_banana (gemini-2.5-flash-image chỉ là tên model phía provider), không cần entry retirement riêng; account đang ở nano_banana được chuyển sang nano_banana_31.",
+      "knowledge_kind": "CONFIRMED_EXPECTED",
+      "confidence": "LOW",
+      "status": "UNRESOLVED",
+      "conflict_group": "CONF-CBS089-01",
+      "scope": "staging, merchant-owner, api",
+      "caveats": "Mâu thuẫn chưa giải quyết với global-option KB-031 (job generate trả model='nano_banana', quan sát 2026-09-16 trước khi ticket ship) và CHK-02-011 expect model='nano_banana'. Không làm oracle cho tới khi resolve; object global-option ngoài lock run này.",
+      "confirmation_ref": "Jira TIB-5554 comment #54687 (dev), Q9, 2026-10-15",
+      "kb_refs": [
+        "KB-459"
+      ]
+    }
+  ],
+  "observed_behavior": [
+    {
+      "statement": "Account đang ở model retired được chuyển sang successor: GPT gpt-image-1 thành gpt-image-1.5, Gemini nano_banana thành nano_banana_31; API key, gpt_quality, Flux, image_generation_name, background_remover_name, genai_auto_fallback giữ nguyên; picker hiện successor được chọn, model cũ bị disable. Chưa có nguồn xác nhận đây là hành vi đúng.",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "confidence": "LOW",
+      "observed_count": 1,
+      "scope": "staging, merchant-owner, api, QA-3408 TC-07/TC-14 2026-10-16 sau lượt migration dev chạy cùng ngày (không ghi build)",
+      "kb_refs": [
+        "KB-458"
+      ]
+    },
+    {
+      "statement": "Account có API key lưu Gen AI Effects mà không chọn model: gpt_model rỗng hoặc null lưu thành gpt-image-1.5, gemini_model rỗng lưu thành nano_banana_31; model không bao giờ để trống; request không gửi field model thì model đã lưu giữ nguyên. Chỉ phía sau ngày migrate.",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "confidence": "LOW",
+      "observed_count": 1,
+      "scope": "staging, merchant-owner, api, QA-3408 TC-05 2026-10-16 (không ghi build)",
+      "kb_refs": [
+        "KB-462"
+      ]
+    },
+    {
+      "statement": "POST /api/user/openai-key/validate gửi model retired (gpt-image-1, nano_banana) trả 200 {\"valid\":false,\"code\":\"model_retired\"} kèm câu retired (GPT: \"GPT Image 1 has been retired. Select GPT Image 1.5 or another model.\"; Gemini: câu ở KB-464), không phải lỗi key sai; không gửi model hoặc model rỗng thì validate với model mặc định và trả {\"valid\":true,\"message\":\"API key and model are valid!\"}.",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "confidence": "LOW",
+      "observed_count": 1,
+      "scope": "staging, merchant-owner, api, QA-3408 TC-06/TC-22 2026-10-16 (không ghi build)",
+      "kb_refs": [
+        "KB-463"
+      ]
+    },
+    {
+      "statement": "Request lưu (mô phỏng tab cũ) gửi gpt_model=gpt-image-1 (retired) và gpt_quality=high khi account đã ở gpt-image-1.5: HTTP 200, toast \"Settings saved\", gpt_quality lưu thành high, model giữ gpt-image-1.5.",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "confidence": "LOW",
+      "observed_count": 1,
+      "scope": "staging, merchant-owner, api, QA-3408 TC-20 2026-10-16 sau ngày migrate (không ghi build)",
+      "kb_refs": [
+        "KB-465"
+      ]
+    },
+    {
+      "statement": "API lưu Gen AI Effects hiện không kiểm giá trị model: id lạ (gpt-image-999), chuỗi <script>…</script>, chuỗi SQL/NoSQL trả 200 và lưu nguyên văn; chuỗi rỗng thay bằng model mặc định; không có HTTP 500. Theo dev (TIB-5554 Q5) đây là hành vi hiện tại ticket không đổi, không phải hành vi mong muốn: không dùng làm expected rằng phải trả 200 hay phải lưu giá trị lạ.",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "confidence": "LOW",
+      "observed_count": 1,
+      "scope": "staging, merchant-owner, api, QA-3408 TC-37/TC-41 2026-10-16",
+      "not_expected": true,
+      "kb_refs": [
+        "KB-467"
+      ]
+    },
+    {
+      "statement": "Trang Gen AI Effects có toggle \"Auto-switch to a backup model during temporary outages\" với mô tả \"When your selected AI model is temporarily unreachable, keep generating with the nearest available model, then switch back to your model automatically once it recovers. Your saved model selection is never changed.\"; account chưa từng lưu thì private_config không có key genai_auto_fallback và toggle OFF; bật/tắt rồi Save trả 200, giữ sau reload, model đã lưu không đổi.",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "confidence": "LOW",
+      "observed_count": 1,
+      "scope": "staging, merchant-owner, portal, QA-3408 TC-01/TC-02 2026-10-16 (không ghi build)",
+      "kb_refs": [
+        "KB-469"
+      ]
+    },
+    {
+      "statement": "Trang Gen AI Effects có đúng 1 toggle \"Auto-switch…\" dùng cho mọi provider GenAI, lưu thành một field genai_auto_fallback. Spec PO trong description TIB-5554 ghi \"Activate scope: applies to the account's active AI service and model.\"; PO chưa chốt phạm vi nào là ý định.",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "confidence": "LOW",
+      "observed_count": 1,
+      "scope": "staging, merchant-owner, portal, QA-3408 TC-03 2026-10-16 (không ghi build)",
+      "kb_refs": [
+        "KB-470"
+      ]
+    },
+    {
+      "statement": "Chọn Nano Banana 2.1 (radio #gemini_model-nano_banana_21) rồi Save gửi PUT /api/user/private-config với gemini_model:\"nano_banana_21\", trả 200, toast \"Settings saved\"; sau reload GET /api/user trả private_config.gemini_model = nano_banana_21. Id lưu chưa có nguồn xác nhận.",
+      "knowledge_kind": "OBSERVED_CURRENT",
+      "confidence": "LOW",
+      "observed_count": 1,
+      "scope": "staging, merchant-owner, api, Testlane TC-TIB-7902 2026-10-30 portal build index.BMgdZMSW.js",
+      "kb_refs": [
+        "KB-471"
+      ]
+    }
+  ],
+  "observed_validations": [],
+  "observed_validations_note": "Mode CCR_INGEST: không có observed_validations từ runtime. Thông báo có nguồn nằm ở confirmed_rules (KB-457, KB-464); thông báo chỉ quan sát nằm ở observed_behavior (KB-463, KB-465, KB-471).",
+  "permissions": [
+    {
+      "role": "merchant-owner",
+      "capability": "chọn/lưu model, Validate key, bật/tắt auto-switch ở Gen AI Effects; KB không có quan sát role khác hay cross-tenant",
+      "kb_refs": [
+        "KB-456",
+        "KB-457",
+        "KB-469"
+      ]
+    },
+    {
+      "role": "admin / dev vận hành",
+      "capability": "chạy genai:migrate-retired-models, đặt migrate_at trên staging; Admin > Settings (genai_model_retirements, genai_model_fallbacks) chưa có KB",
+      "kb_refs": [
+        "KB-461"
+      ]
+    }
+  ],
+  "surface_mapping": {
+    "portal": [
+      "Extras > 3rd-party Services > Gen AI Effects, phần Gemini: option \"Nano Banana 2.1\", description gemini-nano-banana-2.1 (KB-456); radio #gemini_model-nano_banana_21, toast \"Settings saved\" (KB-471, quan sát)",
+      "Nút Validate key, câu \"Key is not working. Please check & try again.\" (KB-457)",
+      "Model picker sau migration: successor được chọn, model cũ disable (KB-458, quan sát)",
+      "Toggle \"Auto-switch to a backup model during temporary outages\" (KB-469, KB-470, quan sát)"
+    ],
+    "storefront": [],
+    "api": [
+      "POST /api/user/openai-key/validate: 400 key không dùng được (KB-457); 200 code model_retired, validate theo model mặc định khi không gửi model (KB-463, quan sát)",
+      "PUT /api/user/private-config: lưu gemini_model (KB-471, quan sát)",
+      "GET /api/user: private_config.gemini_model sau reload (KB-471, quan sát)",
+      "API lưu Gen AI Effects (endpoint không nêu trong item): model mặc định khi rỗng (KB-462), request tab cũ gửi model retired (KB-465), không kiểm giá trị model (KB-467) — đều quan sát"
+    ],
+    "data": [
+      "private_config.gemini_model / gpt_model / gpt_quality (KB-458, KB-462, KB-465, KB-471)",
+      "private_config.genai_auto_fallback, không có key khi chưa từng lưu (KB-469, KB-470)",
+      "migrate_at, migrated_at (KB-460, KB-461)",
+      "Giá trị lưu Gemini cũ nano_banana, đích nano_banana_31 (KB-459, UNRESOLVED)"
+    ],
+    "code": [
+      "Lệnh genai:migrate-retired-models [--user-id], chạy hằng ngày 00:00 UTC (KB-460, KB-461; theo dev, không đọc code)",
+      "Nguồn: Jira TIB-5554 (retirement/migration, toggle) và TIB-5573 (Nano Banana 2.1, Validate key) (KB-456..KB-471)"
+    ]
+  },
+  "dependencies": [
+    {
+      "type": "feature",
+      "description": "genai-personalization-runtime (FEAT-09, object sdk) dùng model và cài đặt lưu ở feature này khi generate; hành vi auto-switch lúc model tạm thời không truy cập được (mô tả toggle ở KB-469) thuộc phía runtime, feature này chỉ giữ phần cấu hình. Profile FEAT-09 hiện chưa có KB về failover.",
+      "kb_refs": [
+        "KB-469"
+      ]
+    },
+    {
+      "type": "cross_object",
+      "description": "Object global-option, feature artwork-personalization-global-option-link: KB-031 (quan sát job generate trả model='nano_banana', 2026-09-16) và CHK-02-011 mâu thuẫn với KB-459 (CONF-CBS089-01). Chỉ đọc, không sửa; cần run có lock global-option.",
+      "kb_refs": [
+        "KB-459"
+      ]
+    }
+  ],
+  "risks": [
+    {
+      "risk": "CONF-CBS089-01 UNRESOLVED: KB-459 (dev: nano_banana chuyển sang nano_banana_31) mâu thuẫn global-option KB-031 / CHK-02-011 (expect model='nano_banana'). Không viết check dựa trên KB-459; check migration Gemini chỉ là baseline từ KB-458. Supersede tắt ở teeinblue nên không bên nào tự thay bên kia.",
+      "kb_refs": [
+        "KB-459",
+        "KB-458"
+      ],
+      "conflict_id": "CONF-CBS089-01",
+      "oq_id": "OQ-sdk-134"
+    },
+    {
+      "risk": "Mọi kết quả QA-3408 (2026-10-16) không ghi build; các item OBSERVED_CURRENT/LOW chỉ là baseline, không làm oracle STRONG.",
+      "kb_refs": [
+        "KB-458",
+        "KB-462",
+        "KB-463",
+        "KB-465",
+        "KB-467",
+        "KB-469",
+        "KB-470"
+      ]
+    },
+    {
+      "risk": "KB-466 và KB-468 là CONFIRMED_EXPECTED nhưng LOW: nguồn chỉ là \"ok\" đồng ý câu đề xuất của QA, chưa có quan sát bổ trợ.",
+      "kb_refs": [
+        "KB-466",
+        "KB-468"
+      ]
+    },
+    {
+      "risk": "KB-467: API lưu nhận mọi giá trị model (id lạ, script, SQL/NoSQL) với 200 và lưu nguyên văn — hành vi hiện tại không mong muốn. Không viết check expect 200 hay expect lưu giá trị lạ; cũng không expect 4xx khi PO chưa quyết.",
+      "kb_refs": [
+        "KB-467"
+      ],
+      "oq_id": "OQ-sdk-130"
+    },
+    {
+      "risk": "Staging đã qua migrate_at: không còn tái hiện được phía trước ngày migrate trên staging chung; đặt migrate_at về ngày hiện tại thì quy tắc áp cho mọi account trên staging (ảnh hưởng người test khác).",
+      "kb_refs": [
+        "KB-460",
+        "KB-461",
+        "KB-462",
+        "KB-466"
+      ]
+    }
+  ],
+  "environment_differences": [],
+  "environment_differences_note": "Shard không có KB item topic environment_difference; mọi item scope staging. Không suy khác biệt production.",
+  "freshness": {
+    "observed_at": "2026-10-30"
+  },
+  "last_updated": {
+    "date": "2026-11-07",
+    "ccr_ref": "CBS-089"
+  },
+  "unknown_areas": [
+    {
+      "question": "Sau migration, model Gemini của account (và model job generate trả về) là nano_banana_31 theo dev (KB-459) hay nano_banana như quan sát ở global-option KB-031 / CHK-02-011?",
+      "why_it_matters": "CONF-CBS089-01 UNRESOLVED; không có oracle cho model Gemini sau migration, và CHK-02-011 ở global-option có thể đã lỗi thời. Cần run có lock global-option hoặc operator quyết.",
+      "type": "CONFLICT",
+      "kb_refs": [
+        "KB-459"
+      ],
+      "oq_id": "OQ-sdk-134"
+    },
+    {
+      "question": "Phía trước ngày migrate: model mặc định khi lưu không chọn model là gì, và lưu model retired có trả 200 không?",
+      "why_it_matters": "KB-462 chỉ quan sát phía sau ngày migrate; KB-466 chưa có quan sát (TC-04 không kết luận). Staging đã qua migrate_at nên chưa có oracle cho vế trước ngày migrate.",
+      "type": "NEEDS_CONFIRMATION",
+      "kb_refs": [
+        "KB-462",
+        "KB-466"
+      ],
+      "oq_id": "OQ-sdk-127"
+    },
+    {
+      "question": "Từ ngày migrate, chọn model retired rồi lưu có bị 422 kèm toast câu retired không? Trạng thái nào tái hiện được 422?",
+      "why_it_matters": "Dev nói 422 nhưng QA-3408 TC-18, TC-21 (2026-10-16) ra 200; claim S0 không nạp KB. Câu retired (KB-464) chưa thấy trong toast.",
+      "type": "OPEN_ISSUE",
+      "kb_refs": [
+        "KB-464"
+      ],
+      "oq_id": "OQ-sdk-136"
+    },
+    {
+      "question": "Email migration gửi sau khi đổi model có nội dung gì (một email, nêu model cũ/mới), gửi cho account nào (chỉ account có API key provider đó)?",
+      "why_it_matters": "KB-468 chỉ xác nhận có email xác nhận sau khi đổi, KB-464 nêu tên model dùng trong email; nội dung và điều kiện gửi là claim S0 không nạp, TC-08/10/11/40 chưa chạy, Q3 dev chưa trả lời.",
+      "type": "OPEN_ISSUE",
+      "kb_refs": [
+        "KB-468",
+        "KB-464"
+      ],
+      "oq_id": "OQ-sdk-137"
+    },
+    {
+      "question": "Admin > Settings có từ chối giá trị sai của genai_model_retirements và genai_model_fallbacks không?",
+      "why_it_matters": "QA không có quyền Admin; claim S0 không nạp, TC-23/24/39/42 chưa chạy. Registry không có object Admin, phần này tạm đặt dưới sdk/genai-model-settings theo CCR.",
+      "type": "OPEN_ISSUE",
+      "kb_refs": [],
+      "oq_id": "OQ-sdk-138"
+    },
+    {
+      "question": "Key hợp lệ nhưng không có quyền với Nano Banana 2.1 có báo not valid với câu chung như dev nói không?",
+      "why_it_matters": "KB-457 mới có quan sát bổ trợ cho key rác; TC-26 chưa chạy, cần fixture key không có quyền với 2.1.",
+      "kb_refs": [
+        "KB-457"
+      ],
+      "oq_id": "OQ-sdk-139"
+    },
+    {
+      "question": "migrated_at sau lượt chạy migration sạch (không --user-id) và known limitation (account bị ép về model retired, email lần hai) là gì?",
+      "why_it_matters": "Claim S0 không nạp; TC-09/12/13/17 của QA-3408 chưa chạy. KB-461 chỉ nói lượt --user-id không đặt migrated_at.",
+      "type": "OPEN_ISSUE",
+      "kb_refs": [
+        "KB-461"
+      ],
+      "oq_id": "OQ-sdk-135"
+    },
+    {
+      "question": "Hành vi migration (successor, giữ cài đặt khác, picker disable model cũ) có phải hành vi đúng không?",
+      "why_it_matters": "KB-458 một lượt chạy không ghi build, chưa có nguồn xác nhận.",
+      "type": "NEEDS_CONFIRMATION",
+      "kb_refs": [
+        "KB-458"
+      ],
+      "oq_id": "OQ-sdk-126"
+    },
+    {
+      "question": "Response mong muốn của Validate key với model retired (code model_retired, 200) và khi không gửi model (validate theo model mặc định) là gì?",
+      "why_it_matters": "KB-463 chỉ là quan sát; checklist chưa có oracle.",
+      "type": "NEEDS_CONFIRMATION",
+      "kb_refs": [
+        "KB-463"
+      ],
+      "oq_id": "OQ-sdk-128"
+    },
+    {
+      "question": "Request lưu từ tab cũ còn gửi model retired sau ngày migrate: 200, lưu cài đặt khác, giữ model đã lưu — có phải hành vi mong muốn?",
+      "why_it_matters": "KB-465 chỉ là quan sát, không có căn cứ expected.",
+      "type": "NEEDS_CONFIRMATION",
+      "kb_refs": [
+        "KB-465"
+      ],
+      "oq_id": "OQ-sdk-129"
+    },
+    {
+      "question": "Có chặn giá trị model không hợp lệ bằng 4xx ở API lưu Gen AI Effects không, theo ticket nào?",
+      "why_it_matters": "KB-467 là hành vi hiện tại không mong muốn; chưa có expected cho input sai.",
+      "type": "NEEDS_CONFIRMATION",
+      "kb_refs": [
+        "KB-467"
+      ],
+      "oq_id": "OQ-sdk-130"
+    },
+    {
+      "question": "Nhãn, mô tả, mặc định OFF và cách lưu của toggle auto-switch có khớp spec PO nguyên văn không?",
+      "why_it_matters": "KB-469 chỉ là quan sát; CCR không trích spec PO, build không ghi.",
+      "type": "NEEDS_CONFIRMATION",
+      "kb_refs": [
+        "KB-469"
+      ],
+      "oq_id": "OQ-sdk-131"
+    },
+    {
+      "question": "Toggle auto-switch áp theo service/model đang active hay 1 toggle cho mọi provider (PENDING-14)?",
+      "why_it_matters": "KB-470: hiện 1 toggle cho mọi provider, spec PO ghi theo service/model active; PO chưa chốt.",
+      "type": "NEEDS_CONFIRMATION",
+      "kb_refs": [
+        "KB-470"
+      ],
+      "oq_id": "OQ-sdk-132"
+    },
+    {
+      "question": "Id lưu của Nano Banana 2.1 có đúng là nano_banana_21 không?",
+      "why_it_matters": "KB-471 chỉ là quan sát; check id lưu chỉ là baseline.",
+      "type": "NEEDS_CONFIRMATION",
+      "kb_refs": [
+        "KB-471"
+      ],
+      "oq_id": "OQ-sdk-133"
+    },
+    {
+      "question": "Hành vi với role khác merchant-owner, cross-tenant và trên production chưa có KB (mọi item scope staging).",
+      "why_it_matters": "coverage_matrix các ô này covered false; không viết check production hay role khác từ evidence hiện tại.",
+      "kb_refs": [
+        "KB-456",
+        "KB-457",
+        "KB-458",
+        "KB-460",
+        "KB-461",
+        "KB-462",
+        "KB-463",
+        "KB-464",
+        "KB-465",
+        "KB-466",
+        "KB-467",
+        "KB-468",
+        "KB-469",
+        "KB-470",
+        "KB-471"
+      ],
+      "oq_id": "OQ-sdk-140"
+    }
+  ],
+  "coverage_matrix": [
+    {
+      "feature_id": "FEAT-13-genai-model-settings",
+      "layer": "portal",
+      "role": "merchant-owner",
+      "state": "chọn/lưu Nano Banana 2.1, giữ sau reload",
+      "environment": "staging",
+      "covered": true,
+      "kb_refs": [
+        "KB-456",
+        "KB-471"
+      ],
+      "basis": "CONFIRMED_EXPECTED/MEDIUM (test_case PASS 2026-10-30); id lưu OBSERVED_CURRENT/LOW"
+    },
+    {
+      "feature_id": "FEAT-13-genai-model-settings",
+      "layer": "api",
+      "role": "merchant-owner",
+      "state": "Validate key: key rác với model đang chọn",
+      "environment": "staging",
+      "covered": true,
+      "kb_refs": [
+        "KB-457"
+      ],
+      "basis": "CONFIRMED_EXPECTED/MEDIUM + TC-TIB-7939 PASS"
+    },
+    {
+      "feature_id": "FEAT-13-genai-model-settings",
+      "layer": "api",
+      "role": "merchant-owner",
+      "state": "Validate key: key hợp lệ nhưng không có quyền với Nano Banana 2.1",
+      "environment": "staging",
+      "covered": false,
+      "kb_refs": [
+        "KB-457"
+      ],
+      "basis": "Có rule, TC-26 chưa chạy"
+    },
+    {
+      "feature_id": "FEAT-13-genai-model-settings",
+      "layer": "api",
+      "role": "merchant-owner",
+      "state": "Validate key với model retired / không gửi model",
+      "environment": "staging",
+      "covered": true,
+      "kb_refs": [
+        "KB-463",
+        "KB-464"
+      ],
+      "basis": "OBSERVED_CURRENT/LOW; câu Gemini retired CONFIRMED_EXPECTED"
+    },
+    {
+      "feature_id": "FEAT-13-genai-model-settings",
+      "layer": "api",
+      "role": "merchant-owner",
+      "state": "lưu không chọn model, sau ngày migrate",
+      "environment": "staging",
+      "covered": true,
+      "kb_refs": [
+        "KB-462"
+      ],
+      "basis": "OBSERVED_CURRENT/LOW, baseline"
+    },
+    {
+      "feature_id": "FEAT-13-genai-model-settings",
+      "layer": "api",
+      "role": "merchant-owner",
+      "state": "trước ngày migrate: model mặc định, lưu model retired",
+      "environment": "staging",
+      "covered": false,
+      "kb_refs": [
+        "KB-462",
+        "KB-466"
+      ],
+      "basis": "KB-466 CONFIRMED_EXPECTED/LOW chưa quan sát; staging đã qua migrate_at"
+    },
+    {
+      "feature_id": "FEAT-13-genai-model-settings",
+      "layer": "api",
+      "role": "merchant-owner",
+      "state": "sau ngày migrate: lưu model retired (chọn trên UI) → 422 + toast",
+      "environment": "staging",
+      "covered": false,
+      "kb_refs": [],
+      "basis": "Claim S0 không nạp; TC-18/21 ra 200"
+    },
+    {
+      "feature_id": "FEAT-13-genai-model-settings",
+      "layer": "api",
+      "role": "merchant-owner",
+      "state": "sau ngày migrate: request tab cũ gửi model retired",
+      "environment": "staging",
+      "covered": true,
+      "kb_refs": [
+        "KB-465"
+      ],
+      "basis": "OBSERVED_CURRENT/LOW, baseline"
+    },
+    {
+      "feature_id": "FEAT-13-genai-model-settings",
+      "layer": "api",
+      "role": "merchant-owner",
+      "state": "giá trị model không hợp lệ (id lạ, script, SQL/NoSQL)",
+      "environment": "staging",
+      "covered": true,
+      "kb_refs": [
+        "KB-467"
+      ],
+      "basis": "OBSERVED_CURRENT/LOW, hành vi không mong muốn, không làm expected"
+    },
+    {
+      "feature_id": "FEAT-13-genai-model-settings",
+      "layer": "data",
+      "role": "merchant-owner",
+      "state": "migration GPT gpt-image-1 → gpt-image-1.5",
+      "environment": "staging",
+      "covered": true,
+      "kb_refs": [
+        "KB-458"
+      ],
+      "basis": "OBSERVED_CURRENT/LOW, một lượt"
+    },
+    {
+      "feature_id": "FEAT-13-genai-model-settings",
+      "layer": "data",
+      "role": "merchant-owner",
+      "state": "migration Gemini nano_banana → nano_banana_31",
+      "environment": "staging",
+      "covered": true,
+      "kb_refs": [
+        "KB-458",
+        "KB-459"
+      ],
+      "basis": "KB-458 quan sát; KB-459 UNRESOLVED, không có oracle"
+    },
+    {
+      "feature_id": "FEAT-13-genai-model-settings",
+      "layer": "code",
+      "role": "admin",
+      "state": "job migration theo --user-id, mốc 00:00 UTC migrate_at",
+      "environment": "staging",
+      "covered": true,
+      "kb_refs": [
+        "KB-460",
+        "KB-461"
+      ],
+      "basis": "CONFIRMED_EXPECTED/MEDIUM theo dev, chưa quan sát trực tiếp"
+    },
+    {
+      "feature_id": "FEAT-13-genai-model-settings",
+      "layer": "code",
+      "role": "admin",
+      "state": "migrated_at sau lượt chạy sạch, known limitation",
+      "environment": "staging",
+      "covered": false,
+      "kb_refs": [],
+      "basis": "Claim S0 không nạp"
+    },
+    {
+      "feature_id": "FEAT-13-genai-model-settings",
+      "layer": "data",
+      "role": "merchant-owner",
+      "state": "email xác nhận sau migration (nội dung, người nhận)",
+      "environment": "staging",
+      "covered": false,
+      "kb_refs": [
+        "KB-468",
+        "KB-464"
+      ],
+      "basis": "Chỉ có rule không có email báo trước và tên model trong email; nội dung claim S0"
+    },
+    {
+      "feature_id": "FEAT-13-genai-model-settings",
+      "layer": "portal",
+      "role": "merchant-owner",
+      "state": "toggle auto-switch: mặc định, bật/tắt, giữ sau reload, phạm vi",
+      "environment": "staging",
+      "covered": true,
+      "kb_refs": [
+        "KB-469",
+        "KB-470"
+      ],
+      "basis": "OBSERVED_CURRENT/LOW; phạm vi chờ PO"
+    },
+    {
+      "feature_id": "FEAT-13-genai-model-settings",
+      "layer": "portal",
+      "role": "admin",
+      "state": "Admin > Settings genai_model_retirements / genai_model_fallbacks",
+      "environment": "staging",
+      "covered": false,
+      "kb_refs": [],
+      "basis": "QA không có quyền Admin; claim S0 không nạp"
+    },
+    {
+      "feature_id": "FEAT-13-genai-model-settings",
+      "layer": "portal",
+      "role": "role khác merchant-owner",
+      "state": "toàn feature",
+      "environment": "staging",
+      "covered": false,
+      "kb_refs": [],
+      "basis": "Không có KB"
+    },
+    {
+      "feature_id": "FEAT-13-genai-model-settings",
+      "layer": "api",
+      "role": "any",
+      "state": "toàn feature",
+      "environment": "production",
+      "covered": false,
+      "kb_refs": [
+        "KB-456",
+        "KB-457",
+        "KB-458",
+        "KB-460",
+        "KB-461",
+        "KB-462",
+        "KB-463",
+        "KB-464",
+        "KB-465",
+        "KB-466",
+        "KB-467",
+        "KB-468",
+        "KB-469",
+        "KB-470",
+        "KB-471"
+      ],
+      "basis": "Mọi item scope staging"
+    }
+  ],
+  "profile_conflicts": [],
+  "profile_relationships": [
+    {
+      "from_feature_id": "FEAT-13-genai-model-settings",
+      "to_feature_id": "FEAT-09-genai-personalization-runtime",
+      "relation": "companion_feature (cấu hình model/key/toggle vs generate và failover lúc runtime, cùng object sdk)",
+      "note": "Hành vi runtime và failover thuộc FEAT-09; feature này chỉ giữ cấu hình. Không chạm profile FEAT-09.",
+      "kb_refs": [
+        "KB-469"
+      ]
+    },
+    {
+      "from_feature_id": "FEAT-13-genai-model-settings",
+      "to_feature_id": "global-option / artwork-personalization-global-option-link",
+      "relation": "related_feature (cross-object, conflict CONF-CBS089-01)",
+      "note": "KB-459 mâu thuẫn KB-031 và CHK-02-011 của global-option; object đó ngoài lock run này, không sửa.",
+      "kb_refs": [
+        "KB-459"
+      ]
+    }
+  ]
+}

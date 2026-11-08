@@ -1,0 +1,339 @@
+{
+  "feature_id": "FEAT-09-condition-cycle-validation",
+  "feature_key": "condition-cycle-validation",
+  "name": "Ngăn vòng lặp phụ thuộc điều kiện (Circular Condition Validation)",
+  "user_goal": "Hệ thống ngăn không cho lưu 1 artwork mà đồ thị điều kiện hiển thị (Conditional Setting) giữa các layer tạo thành vòng lặp phụ thuộc, để tránh trạng thái không thể resolve khi render.",
+  "user_goal_kb_refs": [
+    "KB-072",
+    "KB-228"
+  ],
+  "actors": [
+    {
+      "role": "store owner / staff (sub=273, user_id=266, plan Blue (Test))",
+      "permission_observed": "Có thể tạo cấu hình vòng qua UI (không bị chặn lúc chọn), nhưng bị chặn khi Save",
+      "kb_refs": [
+        "KB-071",
+        "KB-072"
+      ]
+    },
+    {
+      "role": "merchant-owner (store owner/staff, instance 520 nprice1)",
+      "permission_observed": "Đặt được 2 layer action Hide phụ thuộc vòng trong editor, bị chặn khi Save & Close",
+      "kb_refs": [
+        "KB-228"
+      ]
+    }
+  ],
+  "entry_points": [
+    {
+      "path": "artwork editor — accordion CONDITIONAL SETTING, đang chọn nguồn condition",
+      "precondition": "layer đích đã có ≥1 condition sẵn, chuẩn bị thêm nguồn tạo vòng",
+      "kb_refs": [
+        "KB-071"
+      ]
+    },
+    {
+      "path": "artwork editor — nút Save & Close / Save",
+      "precondition": "đồ thị dependency giữa các layer đã tạo thành vòng khép kín",
+      "kb_refs": [
+        "KB-072",
+        "KB-228"
+      ]
+    }
+  ],
+  "capabilities": [
+    {
+      "name": "UI không chặn lúc chọn nguồn tạo vòng",
+      "description": "Khi chọn ở dropdown 'Option:' một nguồn sẽ tạo thành vòng, UI KHÔNG ẩn, KHÔNG disable, KHÔNG toast ngay lúc chọn — chọn được bình thường như mọi nguồn khác. Quan sát nhất quán ở cả vòng 2 bước và vòng 3 bước.",
+      "kb_refs": [
+        "KB-071"
+      ]
+    },
+    {
+      "name": "Chặn Save khi có vòng (client-side)",
+      "description": "Save & Close / Save bị chặn: modal KHÔNG đóng, validate-default-value vẫn chạy và trả 204, nhưng PUT KHÔNG BAO GIỜ được gửi (0/2 lần thử). DB không bị chạm.",
+      "kb_refs": [
+        "KB-072"
+      ]
+    },
+    {
+      "name": "Vòng không persist khi Cancel",
+      "description": "Sau khi Cancel và mở lại artwork, layer liên quan vẫn ở trạng thái 'No conditions' — điều kiện vòng chỉ tồn tại in-memory trong modal.",
+      "kb_refs": [
+        "KB-072"
+      ]
+    },
+    {
+      "name": "Self-loop không tạo được qua UI",
+      "description": "Dropdown 'Option:' luôn loại trừ chính layer đang cấu hình (đồng nhất với KB-065), nên không có đường UI để tạo self-loop A->A.",
+      "kb_refs": [
+        "KB-074"
+      ]
+    },
+    {
+      "name": "Chặn vòng không phụ thuộc action Show/Hide",
+      "description": "Vòng giữa 2 layer action Hide bị chặn khi Save & Close, editor không đóng, thông báo và hành vi chặn giống từng chữ với cùng cấu hình dùng action Show; đọc lại qua GraphQL dependency của cả hai layer vẫn null.",
+      "kb_refs": [
+        "KB-228"
+      ]
+    }
+  ],
+  "state_transitions": [
+    {
+      "from": "condition graph có vòng, đang trong modal Save",
+      "to": "Save bị chặn, toast circular hiện, PUT không gửi, modal vẫn mở",
+      "trigger": "bấm Save & Close / Save",
+      "condition": "đồ thị dependency giữa các layer tạo thành vòng khép kín",
+      "kb_refs": [
+        "KB-072"
+      ]
+    },
+    {
+      "from": "modal Save bị chặn vì vòng",
+      "to": "layer trở về 'No conditions' (điều kiện vòng bị bỏ, không persist)",
+      "trigger": "Cancel modal, mở lại artwork",
+      "condition": "",
+      "kb_refs": [
+        "KB-072"
+      ]
+    },
+    {
+      "from": "2 layer action Hide phụ thuộc lẫn nhau (A Hide theo B, B Hide theo A), chưa lưu",
+      "to": "Save bị chặn, editor không đóng, thông báo 'Circular conditions between: …'; dependency của cả hai layer vẫn null",
+      "trigger": "bấm Save & Close",
+      "condition": "Artwork 2.0, action Hide",
+      "kb_refs": [
+        "KB-228"
+      ]
+    }
+  ],
+  "confirmed_rules": [
+    {
+      "statement": "Vòng điều kiện giữa các layer action Hide bị chặn khi Save giống hệt action Show (cùng hành vi, cùng thông báo), không ghi dữ liệu.",
+      "knowledge_kind": "CONFIRMED_EXPECTED",
+      "confidence": "MEDIUM",
+      "confirmation_source_type": "test_case",
+      "message_verbatim": "Template - Default template: Circular conditions between: QUOTE A > QUOTE B",
+      "message_note": "Trong fixture của test, thông báo kèm dòng 'Conditions haven't been finished' cho từng layer (xem unknown_areas).",
+      "scope_note": "staging, test chạy 2026-10-28 trước khi PR merge; production chưa xác nhận",
+      "kb_refs": [
+        "KB-228"
+      ]
+    }
+  ],
+  "observed_behavior": [],
+  "observed_validations": [
+    {
+      "input": "Save khi condition graph có vòng 2 bước hoặc 3 bước",
+      "message_verbatim": "Template - <tên template>:\\nCircular conditions between: A > B > C",
+      "observed_count": 2,
+      "rule_confidence": "LOW",
+      "kb_refs": [
+        "KB-073"
+      ]
+    }
+  ],
+  "permissions": [
+    {
+      "role": "store owner/staff",
+      "capability": "có thể tạo cấu hình vòng qua UI nhưng luôn bị chặn ở bước Save",
+      "kb_refs": [
+        "KB-071",
+        "KB-072"
+      ]
+    },
+    {
+      "role": "merchant-owner",
+      "capability": "đặt vòng giữa layer action Hide nhưng bị chặn ở Save & Close",
+      "observed": true,
+      "kb_refs": [
+        "KB-228"
+      ]
+    }
+  ],
+  "surface_mapping": {
+    "portal": [
+      "artwork editor — accordion CONDITIONAL SETTING, modal Save"
+    ],
+    "storefront": [],
+    "api": [
+      "POST /api/artworks/{id}/validate-default-value (204, KHÔNG phải endpoint kiểm vòng, xem KB-062)",
+      "PUT /api/artworks/{id} (không bao giờ được gửi khi có vòng, theo evidence hiện có)",
+      {
+        "item": "GraphQL artworks — readback sau khi bị chặn: dependency của layer trong vòng vẫn null",
+        "kb_refs": [
+          "KB-228"
+        ]
+      }
+    ],
+    "data": [],
+    "code": []
+  },
+  "dependencies": [
+    {
+      "type": "feature",
+      "description": "Dropdown nguồn/exclusion rule đến từ FEAT-08-conditional-setting-config (KB-065).",
+      "kb_refs": [
+        "KB-065",
+        "KB-074"
+      ]
+    },
+    {
+      "type": "feature",
+      "description": "Sequence validate-default-value/PUT thuộc FEAT-07-artwork-save-persist; feature này mô tả điểm chặn XẢY RA TRƯỚC PUT trong cùng sequence đó.",
+      "kb_refs": [
+        "KB-072"
+      ]
+    },
+    {
+      "type": "feature",
+      "description": "Action Show/Hide của layer đến từ Conditional Setting (FEAT-08); kiểm vòng áp như nhau cho cả hai action.",
+      "kb_refs": [
+        "KB-221",
+        "KB-228"
+      ]
+    }
+  ],
+  "risks": [
+    {
+      "risk": "BLK-API-002 (CRITICAL): TOÀN BỘ evidence của cả 3 run — PUT chưa BAO GIỜ được gửi với payload chứa đồ thị vòng (client luôn chặn trước). validate-default-value vẫn 204 ngay cả ở 2 lần bị chặn này, nghĩa là đây KHÔNG phải endpoint kiểm vòng. KHÔNG CÓ evidence nào xác nhận hay bác bỏ việc server tự chặn vòng độc lập với client — rủi ro data-integrity tiềm ẩn nếu client bị bypass.",
+      "kb_refs": [
+        "KB-072"
+      ],
+      "note": "Cần orchestrator duyệt tường minh direct-API mutation test (PUT thủ công với payload vòng) trước khi mở rộng feature này thành 'API reject cyclic payload'. Cho tới khi đó, feature CHỈ được mô tả là 'chặn ở client/UI'."
+    },
+    {
+      "risk": "KB-228 chỉ xác nhận chặn ở editor và dữ liệu không bị ghi (readback); không thử PUT trực tiếp với vòng Hide — BLK-API-002 áp nguyên cho action Hide. Test chạy staging 2026-10-28 trước khi PR merge; production chưa xác nhận.",
+      "kb_refs": [
+        "KB-228",
+        "KB-072"
+      ]
+    },
+    {
+      "risk": "Assert thông báo vòng theo nguyên văn toàn bộ sẽ dễ gãy: KB-228 có thêm dòng 'Conditions haven't been finished' theo fixture, KB-073 (LOW) cho thấy chuỗi là đường duyệt, không phải chu trình tối giản. Chỉ assert tiền tố 'Circular conditions between:' và tên layer trong vòng.",
+      "kb_refs": [
+        "KB-228",
+        "KB-073"
+      ]
+    }
+  ],
+  "freshness": {
+    "observed_at": "2026-10-30",
+    "source_observed_on": "2026-10-28"
+  },
+  "unknown_areas": [
+    {
+      "question": "Server có tự validate/reject đồ thị vòng ở tầng PUT hay hoàn toàn phụ thuộc client? (BLK-API-002)",
+      "why_it_matters": "Nếu chỉ chặn ở client, bypass client (gọi PUT trực tiếp qua API) có thể ghi được dữ liệu vòng vào DB — rủi ro nghiêm trọng, PHẢI xác nhận trước khi coi feature này 'đã bảo vệ' ở mọi tầng."
+    },
+    {
+      "question": "Thuật toán chọn 'layer gốc' hiển thị đầu message lỗi — 2/2 sample đều ra Word Search chỉ vì nó tình cờ là layer DUY NHẤT phụ thuộc cả 8 nguồn trong artwork test này; chưa tách biệt coincidence của test data vs quy luật thật (vd theo thứ tự template/layer).",
+      "why_it_matters": "Không thể viết assertion chính xác cho nội dung message lỗi ở artwork có cấu trúc dependency khác."
+    },
+    {
+      "question": "Chuỗi in trong message là đường đi duyệt (traversal path) DẪN TỚI vòng, KHÔNG phải chu trình tối giản — chưa xác nhận cách hệ thống chọn đường đi khi có nhiều đường khác nhau dẫn tới cùng 1 vòng.",
+      "why_it_matters": "Ảnh hưởng cách verify nội dung message trong test case phức tạp hơn 2 sample đã thử (vd nhiều layer cùng phụ thuộc 1 phần của vòng)."
+    },
+    {
+      "question": "Self-loop qua API trực tiếp (bỏ qua UI, gọi PUT với element trỏ vào chính layer đó) chưa được thử.",
+      "why_it_matters": "Cùng nhóm rủi ro với BLK-API-002."
+    },
+    {
+      "question": "Hành vi runtime storefront khi 1 artwork (giả sử) có vòng lọt qua được validation — 0 evidence, và bản thân trường hợp này chưa xác nhận có thể xảy ra hay không.",
+      "why_it_matters": "coverage_gaps #1; đặc biệt quan trọng vì đây là edge case bảo vệ tính toàn vẹn dữ liệu."
+    },
+    {
+      "question": "Dòng 'Conditions haven't been finished' đi kèm thông báo vòng ở test Hide/Show là do fixture (điều kiện chưa hoàn tất) hay luôn xuất hiện khi có vòng?",
+      "why_it_matters": "Quyết định phần nào của thông báo được dùng làm expected nguyên văn cho check chặn vòng.",
+      "kb_refs": [
+        "KB-228"
+      ],
+      "oq_type": "OPEN_ISSUE",
+      "oq_id": "OQ-artwork-159"
+    }
+  ],
+  "last_updated": {
+    "date": "2026-10-30",
+    "ccr_ref": "CBS-011"
+  },
+  "coverage_matrix": [
+    {
+      "feature_id": "FEAT-09-condition-cycle-validation",
+      "layer": "portal",
+      "role": "owner",
+      "state": "vòng 2 bước / 3 bước",
+      "environment": "staging",
+      "covered": true
+    },
+    {
+      "feature_id": "FEAT-09-condition-cycle-validation",
+      "layer": "api",
+      "role": "owner",
+      "state": "PUT trực tiếp với payload vòng (bypass client)",
+      "environment": "staging",
+      "covered": false
+    },
+    {
+      "feature_id": "FEAT-09-condition-cycle-validation",
+      "layer": "api",
+      "role": "owner",
+      "state": "self-loop qua API",
+      "environment": "staging",
+      "covered": false
+    },
+    {
+      "feature_id": "FEAT-09-condition-cycle-validation",
+      "layer": "storefront",
+      "role": "owner",
+      "state": "toàn bộ",
+      "environment": "staging",
+      "covered": false
+    },
+    {
+      "feature_id": "FEAT-09-condition-cycle-validation",
+      "layer": "portal+data",
+      "role": "merchant-owner",
+      "state": "vòng 2 layer action Hide (và đối chứng Show)",
+      "environment": "staging",
+      "covered": true,
+      "kb_refs": [
+        "KB-228"
+      ]
+    },
+    {
+      "feature_id": "FEAT-09-condition-cycle-validation",
+      "layer": "portal",
+      "role": "merchant-owner",
+      "state": "vòng trộn layer Show và layer Hide; vòng ≥3 layer Hide",
+      "environment": "staging",
+      "covered": false,
+      "kb_refs": [
+        "KB-228"
+      ]
+    }
+  ],
+  "profile_conflicts": [],
+  "profile_relationships": [
+    {
+      "from_feature_id": "FEAT-09-condition-cycle-validation",
+      "to_feature_id": "FEAT-08-conditional-setting-config",
+      "relation": "guards",
+      "note": "Bảo vệ tính toàn vẹn cho cấu hình được tạo ở FEAT-08."
+    },
+    {
+      "from_feature_id": "FEAT-09-condition-cycle-validation",
+      "to_feature_id": "FEAT-07-artwork-save-persist",
+      "relation": "blocks_step_in",
+      "note": "Điểm chặn nằm trong chính sequence Save của FEAT-07, xảy ra giữa validate-default-value và PUT."
+    },
+    {
+      "from_feature_id": "FEAT-09-condition-cycle-validation",
+      "to_feature_id": "FEAT-08-conditional-setting-config",
+      "relation": "action_agnostic",
+      "note": "Kiểm vòng áp như nhau cho layer action Show và Hide.",
+      "kb_refs": [
+        "KB-228"
+      ]
+    }
+  ]
+}

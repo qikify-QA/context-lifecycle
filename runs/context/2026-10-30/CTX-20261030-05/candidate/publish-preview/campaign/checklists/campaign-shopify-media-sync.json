@@ -1,0 +1,261 @@
+{
+  "feature_id": "FEAT-07-campaign-shopify-media-sync",
+  "feature_key": "campaign-shopify-media-sync",
+  "object_id": "campaign",
+  "checklist_version": "1",
+  "checks": [
+    {
+      "check_id": "CHK-001",
+      "dimension": "CORE",
+      "layer": "api",
+      "title": "Variant gán cả video và mockup, video đứng đầu thứ tự assignment: sau Update/sync, Shopify variant image là mockup gán đầu tiên, video không làm variant image; thứ tự assignment không bị tự sắp lại",
+      "applicability": {
+        "role": "merchant owner/staff — account explore (verify GET /api/user id=266 sau mỗi lần login)",
+        "state": "campaign by Product Base đã publish lên store Shopify staging; list media có video đứng đầu rồi hai mockup; một variant được gán video + mockup thứ nhất + mockup thứ hai theo đúng thứ tự đó",
+        "environment": "staging — lượt PASS duy nhất 2026-10-22 trước khi 4 PR TIB-5428 merge 2026-10-27, build hash không rõ, shipped UNKNOWN; build sau merge / production phải chạy lại qua CHK-005 trước khi dùng làm oracle",
+        "surface_or_device": "portal campaign editor (Mockup assignments, Update) + Shopify storefront /products/<handle>.json, desktop browser"
+      },
+      "precondition": "Dựng campaign tương đương fixture gốc trên store staging được phép; video dùng URL mà Shopify nhận được (một URL video bị Shopify từ chối làm cả lần sync lỗi — xem CHK-003); vượt password-gate bằng TIB_STORE_PASSWORD khi đọc storefront.",
+      "steps": [
+        "Trong campaign editor, đặt video đứng đầu list media; gán cho variant A lần lượt: video, mockup thứ nhất, mockup thứ hai. Mở Mockup assignments → Group by Variant, ghi thứ tự media của variant A.",
+        "Bấm Update (sync) campaign; ghi status của POST /api/campaigns/<id>/sync.",
+        "Mở lại Mockup assignments, ghi thứ tự media của variant A.",
+        "GET https://<store>/products/<handle>.json; ghi image_id của variant A và đối chiếu với danh sách images của product để biết ảnh đó là mockup nào."
+      ],
+      "observation_point": "image_id của variant A trong /products/<handle>.json (ảnh nào của product); thứ tự assignment của variant A trong Mockup assignments trước và sau sync.",
+      "expected_result": "Shopify variant image của variant A là mockup được gán đầu tiên (mockup thứ nhất), không phải video dù video đứng trước trong thứ tự assignment; thứ tự assignment của variant A trong campaign editor vẫn là video → mockup thứ nhất → mockup thứ hai, không bị hệ thống tự sắp lại. Lệch = bug theo lượt PASS staging 2026-10-22; nếu đang chạy trên build sau merge/production thì ghi build và báo qua CHK-005.",
+      "oracle": {
+        "kb_ids": [
+          "KB-314"
+        ],
+        "oracle_strength": "STRONG"
+      },
+      "status": "READY",
+      "open_question_draft": null,
+      "related_kb_ids": [
+        "KB-315",
+        "KB-317"
+      ],
+      "regression_watch_kb_ids": [],
+      "risk_refs": [
+        "Lượt PASS duy nhất (TC-TIB-6434, 2026-10-22) trên campaign clone, một video, đọc qua storefront .json — chạy trước khi 4 PR merge; xem CHK-005",
+        "Không phủ nhánh variant chỉ gán video (known defect BUG-362, CHK-004)"
+      ],
+      "priority": "P2",
+      "automation_suitability": "HYBRID"
+    },
+    {
+      "check_id": "CHK-002",
+      "dimension": "INTEGRATION",
+      "layer": "api",
+      "title": "Sync campaign có video từ URL hợp lệ: video có vào Shopify product media (ExternalVideo) không, có variant Shopify nào nhận video làm variant image không, mapping variant ↔ video có chỉ giữ phía Teeinblue không — chưa xác nhận",
+      "applicability": {
+        "role": "merchant owner/staff — account explore (verify GET /api/user id=266 sau mỗi lần login)",
+        "state": "campaign đã publish lên store Shopify staging, có hai video từ URL hợp lệ (một YouTube, một Vimeo) đã gán cho variant",
+        "environment": "staging, ghi build; build sau merge 4 PR TIB-5428 (2026-10-27) nếu có",
+        "surface_or_device": "portal campaign editor + network (POST /api/campaigns/<id>/sync) + Shopify Storefront API / /products/<handle>.json + merchant JSON GET /api/merchant/campaigns/<platform_product_id>.json"
+      },
+      "precondition": "Như CHK-001; chọn URL video mà Shopify nhận (tránh URL đã làm sync lỗi ở CHK-003); mở network monitor.",
+      "steps": [
+        "Gán hai video cho một hoặc nhiều variant; bấm Update (sync); ghi body và status của POST /api/campaigns/<id>/sync.",
+        "Đọc product media qua Storefront API (hoặc /products/<handle>.json); ghi các media dạng video và image_id của từng variant.",
+        "Mở Mockup assignments và GET merchant JSON của campaign; ghi variant_ids của từng video.",
+        "Ghi kèm build và ngày chạy."
+      ],
+      "observation_point": "Media video trong Shopify product; image_id của từng variant; mapping variant ↔ video ở Mockup assignments và merchant JSON; nội dung request sync. Quan sát 1 lượt (2026-10-22, OBSERVED_CURRENT/LOW — không dùng làm expected): video URL vào product media dạng ExternalVideo cùng các ảnh; variant chỉ có image_id là ảnh; mapping vẫn đủ ở Mockup assignments và merchant JSON; request sync chỉ gửi config (instance_id và các cờ), không mang mapping.",
+      "expected_result": "",
+      "oracle": {
+        "kb_ids": [],
+        "oracle_strength": "NONE"
+      },
+      "status": "NEEDS_CONFIRMATION",
+      "open_question_draft": "Khi sync campaign có video từ URL hợp lệ: video có luôn vào Shopify product media (ExternalVideo), không variant Shopify nào nhận video làm variant image, và mapping variant ↔ video chỉ giữ phía Teeinblue không? Cần chạy lại TC-TIB-6435 với fixture video hợp lệ trên bản đã merge (qua Shopify admin nếu được).",
+      "related_kb_ids": [
+        "KB-315",
+        "KB-316",
+        "KB-314"
+      ],
+      "regression_watch_kb_ids": [],
+      "risk_refs": [
+        "TC-TIB-6435 không PASS trọn oracle (một video fixture không vào Shopify media) — chưa có expected cho media video trên Shopify",
+        "Gallery SDK lọc theo variant dùng mapping phía Teeinblue (sdk storefront-buyer-facing)"
+      ],
+      "priority": "P2",
+      "automation_suitability": "HYBRID",
+      "oq_id": "OQ-campaign-064"
+    },
+    {
+      "check_id": "CHK-003",
+      "dimension": "NEGATIVE",
+      "layer": "api",
+      "title": "Publish/sync campaign có video từ một URL mà Shopify không nhận: thông báo lỗi cho merchant, có nêu video nào gây lỗi không, media và variant image còn lại ra sao — chưa xác nhận",
+      "applicability": {
+        "role": "merchant owner/staff — account explore (verify GET /api/user id=266 sau mỗi lần login)",
+        "state": "campaign đã publish lên store Shopify staging, có ít nhất một video mà Shopify từ chối và ít nhất một mockup/video hợp lệ đã gán variant",
+        "environment": "staging, ghi build; build sau merge 4 PR TIB-5428 nếu có",
+        "surface_or_device": "portal campaign editor (thông báo publish/Update) + Shopify /products/<handle>.json"
+      },
+      "precondition": "Như CHK-001; có một URL video đã biết bị Shopify từ chối (lượt gốc dùng URL Vimeo nêu ở KB-316: https://vimeo.com/76979871) và một URL video hợp lệ để đối chứng.",
+      "steps": [
+        "Thêm video URL bị từ chối vào campaign; bấm Update (sync) hoặc publish; ghi nguyên văn thông báo lỗi và status request.",
+        "Đọc /products/<handle>.json; ghi product media và image_id của các variant.",
+        "Thay bằng URL video hợp lệ; Update lại; ghi kết quả để đối chứng."
+      ],
+      "observation_point": "Thông báo lỗi (nguyên văn, có nêu video nào không); media và variant image trên Shopify sau lần sync lỗi. Quan sát 1 lượt (2026-10-22, OBSERVED_CURRENT/LOW — không dùng làm expected): publish/sync kết thúc với lỗi chung 'Error when publishing … Can not upload images to shopify', video không vào product media, không variant image nào được gán, app không nêu video nào gây lỗi; URL Vimeo khác sync bình thường.",
+      "expected_result": "",
+      "oracle": {
+        "kb_ids": [],
+        "oracle_strength": "NONE"
+      },
+      "status": "NEEDS_CONFIRMATION",
+      "open_question_draft": "Lỗi 'Can not upload images to shopify' khi campaign có một URL video mà Shopify không nhận có tồn tại trước TIB-5428 không, do URL hay do tính năng; app có nên báo rõ video nào hỏng và có nên vẫn gán variant image cho phần còn lại không?",
+      "related_kb_ids": [
+        "KB-316",
+        "KB-315"
+      ],
+      "regression_watch_kb_ids": [],
+      "risk_refs": [
+        "Một URL video hỏng làm cả lần publish/sync lỗi, không variant image nào được gán, merchant khó tự chẩn đoán",
+        "Fixture video hỏng có thể làm fail sai các check khác (CHK-001, CHK-002)"
+      ],
+      "priority": "P2",
+      "automation_suitability": "HYBRID",
+      "oq_id": "OQ-campaign-065"
+    },
+    {
+      "check_id": "CHK-004",
+      "dimension": "REGRESSION",
+      "layer": "api",
+      "title": "Watch known defect BUG-362: variant chỉ gán video (0 mockup) — Shopify variant image sau publish/sync",
+      "applicability": {
+        "role": "merchant owner/staff — account explore (verify GET /api/user id=266 sau mỗi lần login)",
+        "state": "campaign đã publish lên store Shopify staging; một variant chỉ được gán video (không mockup nào), các variant khác có mockup",
+        "environment": "staging, ghi build và ngày chạy; production chỉ khi operator cho phép",
+        "surface_or_device": "portal campaign editor (Update) + Shopify /products/<handle>.json"
+      },
+      "precondition": "Như CHK-001; dùng URL video Shopify nhận được.",
+      "steps": [
+        "Gán cho variant B chỉ video (0 mockup); các variant khác gán mockup.",
+        "Bấm Update (sync) hoặc publish; ghi status request.",
+        "GET /products/<handle>.json; ghi image_id của variant B và ảnh tương ứng của product.",
+        "Ghi kết quả kèm build và ngày chạy."
+      ],
+      "observation_point": "image_id của variant chỉ gán video. Hành vi lỗi hiện tại (2026-10-22, TC-TIB-6433 ghi Fail, KB-317): variant image vẫn là ảnh đầu tiên của product (mockup đầu tiên), không để trống; tái hiện trên hai campaign clone. Còn tái hiện = defect còn; khác = cần xác nhận đã fix trên build nào. Hành vi đúng chưa có nguồn xác nhận — không tự đặt expected.",
+      "expected_result": "",
+      "oracle": {
+        "kb_ids": [],
+        "oracle_strength": "NONE"
+      },
+      "status": "NEEDS_CONFIRMATION",
+      "open_question_draft": "Known defect BUG-362 (variant chỉ gán video nhận ảnh đầu tiên của product làm Shopify variant image) đã fix/retest chưa, trên build nào? PO xác nhận hành vi mong đợi cho variant chỉ gán video (variant image để trống hay khác) rồi chạy lại TC-TIB-6433.",
+      "related_kb_ids": [
+        "KB-314"
+      ],
+      "regression_watch_kb_ids": [
+        "KB-317"
+      ],
+      "risk_refs": [
+        "Buyer chọn variant chỉ có video vẫn thấy ảnh mockup không liên quan trên Shopify",
+        "Mô tả Jira TIB-5428 (variant image để trống) chưa đủ làm nguồn xác nhận — không dùng làm expected"
+      ],
+      "priority": "P2",
+      "automation_suitability": "HYBRID",
+      "oq_id": "OQ-campaign-066"
+    },
+    {
+      "check_id": "CHK-005",
+      "dimension": "REGRESSION",
+      "layer": "api",
+      "title": "Re-verify CHK-001 (variant image khi variant gán cả video và mockup) trên build staging sau khi 4 PR TIB-5428 merge và trên production khi release, đọc cả qua Shopify admin nếu được",
+      "applicability": {
+        "role": "merchant owner/staff — account explore trên staging; account được operator chỉ định trên production",
+        "state": "fixture như CHK-001",
+        "environment": "staging build sau 2026-10-27 (4 PR merged) và production sau khi TIB-5428 release (chưa xác nhận)",
+        "surface_or_device": "portal campaign editor + Shopify /products/<handle>.json (+ Shopify admin nếu có quyền)"
+      },
+      "precondition": "Ghi build/release đang chạy. Production chỉ chạy khi operator cho phép.",
+      "steps": [
+        "Ghi build/release hiện tại.",
+        "Chạy lại các bước của CHK-001; nếu có quyền Shopify admin, đọc thêm variant image và media trên admin.",
+        "Ghi khác biệt so với lượt 2026-10-22."
+      ],
+      "observation_point": "Kết quả CHK-001 theo build/release, kèm nguồn đọc (storefront .json / Shopify admin).",
+      "expected_result": "",
+      "oracle": {
+        "kb_ids": [],
+        "oracle_strength": "NONE"
+      },
+      "status": "NEEDS_CONFIRMATION",
+      "open_question_draft": "Rule variant image = mockup gán đầu tiên khi variant có cả video và mockup (TC-TIB-6434, staging 2026-10-22) có giữ trên build staging sau khi 4 PR TIB-5428 merge 2026-10-27 và trên production không?",
+      "related_kb_ids": [
+        "KB-314"
+      ],
+      "regression_watch_kb_ids": [],
+      "risk_refs": [
+        "Dùng lượt PASS trước merge (build hash không rõ) làm oracle cho build hiện tại/production có thể sai"
+      ],
+      "priority": "P2",
+      "automation_suitability": "HYBRID",
+      "oq_id": "OQ-campaign-063"
+    }
+  ],
+  "coverage_by_feature_and_risk": [
+    {
+      "feature_id": "FEAT-07-campaign-shopify-media-sync",
+      "risk": "[CBS-009] Shopify variant image khi variant được gán cả video và mockup (KB-314)",
+      "checks": [
+        "CHK-001",
+        "CHK-005"
+      ],
+      "covered": "STRONG trên staging theo lượt PASS 2026-10-22 trước merge (CHK-001); build sau merge / production là gap NONE (CHK-005)"
+    },
+    {
+      "feature_id": "FEAT-07-campaign-shopify-media-sync",
+      "risk": "[CBS-009] Video vào Shopify product media, mapping variant ↔ video chỉ phía Teeinblue (KB-315, S1)",
+      "checks": [
+        "CHK-002"
+      ],
+      "covered": "NONE + NEEDS_CONFIRMATION"
+    },
+    {
+      "feature_id": "FEAT-07-campaign-shopify-media-sync",
+      "risk": "[CBS-009] URL video bị Shopify từ chối làm cả lần publish/sync lỗi với thông báo chung (KB-316, S1)",
+      "checks": [
+        "CHK-003"
+      ],
+      "covered": "NONE + NEEDS_CONFIRMATION"
+    },
+    {
+      "feature_id": "FEAT-07-campaign-shopify-media-sync",
+      "risk": "[CBS-009] Known defect BUG-362: variant chỉ gán video nhận ảnh đầu tiên làm variant image (KB-317); hành vi đúng chưa xác nhận",
+      "checks": [
+        "CHK-004"
+      ],
+      "covered": "REGRESSION watch NONE (KB-317 chỉ ở regression_watch_kb_ids)"
+    },
+    {
+      "feature_id": "FEAT-07-campaign-shopify-media-sync",
+      "risk": "[CBS-009] Etsy sync bỏ qua video / picker Etsy ẩn video; migration campaign/PB có video sang format mapping mới",
+      "checks": [],
+      "covered": "gap — nguồn S0 (test case Blocked / not-run), không có KB item nên không sinh check; nêu ở câu hỏi mở của run"
+    }
+  ],
+  "excluded_dimensions": [
+    {
+      "dimension": "BOUNDARY",
+      "reason": "Không có evidence về số video/media tối đa, độ dài hay định dạng URL video được Shopify nhận; một URL bị từ chối là NEGATIVE (CHK-003), không suy ra giới hạn."
+    },
+    {
+      "dimension": "PERMISSION",
+      "reason": "Mọi evidence là merchant-owner trên một store; không có vai trò/tenant khác."
+    },
+    {
+      "dimension": "STATE_DATA",
+      "reason": "Persistence của mapping sau sync chỉ có quan sát S1 (KB-315), đã đặt trong CHK-002; việc thứ tự assignment không bị tự sắp lại thuộc expected của CHK-001. Không tạo check STATE_DATA trùng."
+    }
+  ],
+  "last_updated": {
+    "date": "2026-10-30",
+    "ccr_ref": "CBS-009"
+  }
+}

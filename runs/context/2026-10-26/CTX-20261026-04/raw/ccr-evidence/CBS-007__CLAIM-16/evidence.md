@@ -1,0 +1,3 @@
+Dòng bảng 'Phạm vi cần re-explore & ảnh hưởng ước tính' (positional CLAIM-16):
+
+| TIB-5580 — Fill opacity < 1: bleed trong phạm vi một dòng là Known Issue; vùng stroke 2 dòng chồng nhau bị đậm gấp đôi là Fail | api (PNG) · vectorize (SVG) · storefront | TC-TIB-6333 / TC-TIB-6334 Blocked: không tải được SVG, SDK chưa có code. Order #1095: vòng stroke trắng trên PNG ~2.5px so với ~10px trên editor (quan sát của agent, chưa rõ nguyên nhân) | artwork.md → Text layer multi-stroke (TIB-5417 …) (known limitation opacity) · artwork.md → Paragraph multi-stroke (TIB-5580 / TIB-220 …) | CHƯA ĐỦ — cần re-explore |

@@ -1,0 +1,9 @@
+# CHANGELOG — Order (teeinblue)
+
+- 2026-09-13 — bootstrap:CTX-20260913-01 — Initial context created from zero-doc bootstrap: 2 features (place-personalized-order-storefront, review-and-initiate-fulfillment-portal), 24 KB items, 33 checklist checks. Published as context version 1 (APPROVED_WITH_CONDITIONS).
+- 2026-09-13 — bootstrap:CTX-20260913-01 — Orchestrator decided linh-explorer-2.myshopify.com (not the originally-requested linh-explorer.myshopify.com) is the authoritative store for this KB version, because the other store has a known add-to-cart failure for the same campaign that prevented placing a real order there.
+- 2026-09-13 — bootstrap:CTX-20260913-01 — Reconciled a stale run-manifest before publish (it had recorded an earlier BLOCKED attempt under the same run id).
+- 2026-10-30 — CBS-006 — TIB-5584: feature `review-and-initiate-fulfillment-portal` thêm KB-182 (CONFIRMED_EXPECTED/MEDIUM: print file PNG/PDF không chứa nội dung Group ẩn) và KB-183 (OBSERVED_CURRENT/LOW: layout emboss/shape-cut chưa verify), checklist CHK-P17..CHK-P20. KB-182 đổi đầu ra fulfillment — chờ PO xác nhận. Mở OQ-order-018..020.
+- 2026-10-30 — CBS-011 — TIB-5558: feature `place-personalized-order-storefront` thêm KB-238 (CONFIRMED_EXPECTED/MEDIUM: layer Hide Required đang ẩn không chặn Add to cart, giá trị không vào cart/order/print file) và CHK-018..CHK-021-ORDER01. Mở OQ-order-021..022, OQ-order-025 (PO xác nhận ý định).
+- 2026-10-30 — CBS-011 — TIB-5558: feature `review-and-initiate-fulfillment-portal` thêm KB-239 (CONFIRMED_EXPECTED/MEDIUM: preview, mockup, print file PNG theo điều kiện Hide) và CHK-P21..CHK-P23. Mở OQ-order-023..024, OQ-order-026 (PO xác nhận ý định).
+- 2026-10-30 — CBS-013 — TIB-5203: feature `place-personalized-order-storefront` thêm KB-369 (OBSERVED_CURRENT/LOW: giá trị layer + Global Option vào order và file design) và CHK-022-ORDER01. Mở OQ-order-027.
