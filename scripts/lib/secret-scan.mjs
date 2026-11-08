@@ -1,7 +1,10 @@
 // Findings contain category/location only. Never echo credential values or prefixes.
 import {createHash} from "node:crypto";
 const patterns=[
- ['credential-assignment',/(?<![\w-])(?:password|passwd|secret|api[_-]?key|access[_-]?token|refresh[_-]?token|[A-Z][A-Z0-9_]*(?:PASSWORD|SECRET|TOKEN|API_KEY))\b["']?[ \t]*[:=][ \t]*["']?([^\s"',}]+)/gi],
+ ['credential-assignment',/(?<![\w-])(?:password|passwd|secret|api[_-]?key|access[_-]?token|refresh[_-]?token|[A-Z][A-Z0-9_]*(?:PASSWORD|SECRET|TOKEN|API_KEY))\b["']?[ \t]*[:=][ \t]*["']?(\$\{[A-Z_][A-Z0-9_]*\}(?=$|[\s"',}])|[^\s"',}]+)/gi],
+ // Bare "token" is also a common prose/template term. Treat it as a field
+ // when it is a quoted key or an assignment at the beginning of a line.
+ ['credential-assignment',/(?:^[ \t]*token[ \t]*[:=]|["']token["'][ \t]*:)[ \t]*["']?(\$\{[A-Z_][A-Z0-9_]*\}(?=$|[\s"',}])|[^\s"',}]+)/gim],
  ['bearer-token',/\bbearer\s+([A-Za-z0-9._-]{12,})/gi],
  ['provider-token',/\b(?:tlmcp_|sk-|ghp_|github_pat_|xox[bp]-|shpat_|shpca_)[A-Za-z0-9_-]{12,}/g],
  ['private-key',/-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----/g],
@@ -10,7 +13,13 @@ const patterns=[
  ['checkout-token',/["']?x-checkout-one-session-token["']?\s*[:=]\s*["']?([^\s"',}]+)/gi],
  ['credential-url',/\b[a-z][\w+.-]*:\/\/[^\s/:@]+:[^\s/@]+@/gi]
 ];
-const placeholder=value=>!value||/^(?:\[?REDACTED\]?|MASKED|REMOVED|null|undefined|true|false|YOUR_API_KEY$|process\.env\.|\$|<|\*\*|\.\.\.)/i.test(value)||/^\{/.test(value);
+// Match complete, documented markers only. Credential values may start with
+// any of these words/symbols; a prefix is never proof of redaction.
+const placeholder=value=>!value
+ ||/^(?:REDACTED|\[REDACTED\]|MASKED|REMOVED|null|undefined|true|false|YOUR_API_KEY|\.\.\.)$/i.test(value)
+ ||/^\*{2,}$/.test(value)
+ ||/^<(?:REDACTED|PASSWORD|SECRET|TOKEN|API_KEY|ACCESS_TOKEN|REFRESH_TOKEN|YOUR_API_KEY)>$/i.test(value)
+ ||/^(?:process\.env\.[A-Z_][A-Z0-9_]*|\$[A-Z_][A-Z0-9_]*|\$\{[A-Z_][A-Z0-9_]*\})$/.test(value);
 export function secretFindings(text,{envFile=false}={}){
  const findings=[];
  for(const [kind,pattern] of patterns){pattern.lastIndex=0;for(const match of text.matchAll(pattern)){
@@ -19,9 +28,10 @@ export function secretFindings(text,{envFile=false}={}){
   // secret patterns and quoted/env assignments active; do not ignore whole files.
   if(kind==='credential-assignment'){
    const quotedKey=/^[^:=]*["']\s*[:=]/.test(match[0]);
-   if(!quotedKey&&(/^(?:đã|chưa|mọi|về|các|gọi|lấy|đọc)$/i.test(value)||/^\d+\s+trigger/.test(text.slice(match.index+match[0].indexOf(':')+1).trim())))continue;
-   if(/^`[A-Z][A-Z0-9_-]+`[.;,]?$/.test(match[1]??''))continue;
-   if(!quotedKey&&/^(?:GET|POST|PUT|PATCH|DELETE|HEAD|OPTIONS)$/.test(value)&&/^\s+được\b/u.test(text.slice(match.index+match[0].length)))continue;
+   const quotedValue=/[:=][ \t]*["']/.test(match[0]);
+   if(!quotedKey&&!quotedValue&&(/^(?:đã|chưa|mọi|về|các|gọi|lấy|đọc)$/i.test(value)||/^\d+\s+trigger/.test(text.slice(match.index+match[0].indexOf(':')+1).trim())))continue;
+   if(!quotedValue&&/^`[A-Z][A-Z0-9_]*_(?:PASSWORD|PW|TOKEN|KEY)`[.;,]?$/.test(match[1]??''))continue;
+   if(!quotedKey&&!quotedValue&&/^(?:GET|POST|PUT|PATCH|DELETE|HEAD|OPTIONS)$/.test(value)&&/^\s+được\b/u.test(text.slice(match.index+match[0].length)))continue;
   }
   if(placeholder(value))continue;
   findings.push({kind,line:text.slice(0,match.index).split('\n').length,fingerprint:createHash("sha256").update(match[0]).digest("hex")});

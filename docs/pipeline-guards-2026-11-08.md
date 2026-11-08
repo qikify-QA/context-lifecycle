@@ -46,3 +46,11 @@ Rollback file xử lý exception thông thường, không bảo đảm atomicity
 72 tests qua: seal invalidation, immutable verdict, oracle/ref, resolution/remap, metadata, rerun strip, scope guard, S2/generic PROPOSED, proposal replay, rollback, lock cùng tiến trình và nhiều tiến trình, release retry sau lỗi tạo PR/lưu receipt, scanner và OQ escaping. Contract/schema/config validation qua. Không chạy kiểm thử live Claude, board, credential hoặc release remote trong lượt update.
 
 Sau maintenance data: xem docs/knowledge-data-repair-2026-11-08.md để biết phạm vi, số liệu và nợ xác nhận còn mở. `manifest --check` nay còn so manifest và OQ index đã lưu với dữ liệu hiện tại, không chỉ kiểm block publish.
+
+## Follow-up sau review: secret placeholder
+
+Scanner chỉ miễn marker trùng toàn bộ (ví dụ REDACTED/[REDACTED], MASKED, null, true), mask toàn dấu *, placeholder có tên trong allowlist và biến env đúng cú pháp đầy đủ. Giá trị bắt đầu bằng marker nhưng còn suffix vẫn bị chặn. Không miễn mọi chuỗi bắt đầu bằng $, <, ** hoặc {. Bare token được kiểm khi là quoted key hoặc assignment đầu dòng, tránh coi từ token trong mô tả nghiệp vụ là credential. Ngoại lệ prose không áp cho literal đã quote; code span chỉ miễn tên biến env đúng dạng.
+
+77 tests pass, gồm các prefix bypass do reviewer nêu, quoted keys/values, bearer/signed URL/checkout header và quy tắc _env.example vẫn phải để rỗng. validate:knowledge và validate:contracts pass.
+
+Seal hiện ưu tiên an toàn: đổi bất kỳ skill/contract/script đã băm làm mất hiệu lực review đã seal; publish object khác cùng product cũng làm mất hiệu lực nếu KB base đổi. Các run song song có thể phải review lại trước apply. Chưa thu hẹp dependency set; không chỉnh lại snapshot bằng tay để bỏ qua thay đổi này.
