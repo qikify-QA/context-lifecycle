@@ -1,9 +1,9 @@
 // Parser duy nhất cho open-questions.md (contract §5a, §12.3b).
 //
 // Trước đây có HAI parser cho cùng một file và chúng không giống nhau:
-//   - ops-board/server.mjs        : quét brace-balanced, chấp mọi wrapper
+//   - (không còn consumer khác)
 //   - scripts/generate-manifest.mjs: đòi fence ```json
-// Hệ quả: một entry viết không có fence sẽ HIỆN trên ops-board nhưng MẤT khỏi
+// Hệ quả: một entry viết không có fence sẽ được đọc ở nơi này nhưng MẤT khỏi
 // consolidated-open-questions.md — tức mất khỏi đúng bản được gửi cho PO/Dev.
 // Đó là loại lệch âm thầm nên chỉ có một implementation.
 //

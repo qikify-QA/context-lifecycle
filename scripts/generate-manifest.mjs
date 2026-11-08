@@ -246,7 +246,7 @@ async function describeObject(productKey, objectKey, staleDays = STALE_AFTER_DAY
 // Đây là cách đáng tin cậy để lấy dữ liệu có cấu trúc (oq_id/type/summary/...) ra khỏi
 // file — không cố parse markdown/prose tự do. Heading chỉ để người đọc lướt nhanh, JSON
 // trong fence mới là nguồn dữ liệu thật được đọc ở đây.
-// Parser sống ở scripts/lib/open-questions.mjs — dùng CHUNG với ops-board.
+// Parser sống ở scripts/lib/open-questions.mjs.
 
 // Regenerate knowledge/_open-issues/consolidated-open-questions.md từ toàn bộ
 // open-questions.md theo object (§5a) — file này CHỈ ĐỌC, luôn bị ghi đè hoàn toàn ở
@@ -359,7 +359,7 @@ async function main() {
       objects
     };
     // knowledge/products/<key>/ mà không có config/products/<key>.json là FAIL:
-    // từ đây trở xuống mọi consumer (manifest, publish, ops-board) sẽ phải ĐOÁN
+    // từ đây trở xuống mọi consumer (manifest, publish) sẽ phải ĐOÁN
     // ngưỡng freshness, environment và project_id của product này.
     if (!cfg) {
       entry.config_missing = true;

@@ -140,11 +140,6 @@ test("audit: preview sạch thì ok, có key cấm thì blocking", async () => {
   assert.equal((await auditDir(dir)).ok, false);
 });
 
-test("lint: agent definitions theo template chung", async () => {
-  const { lintAgents } = await import("../lint-agents.mjs");
-  assert.deepEqual(await lintAgents(), []);
-});
-
 async function makeRun(files) {
   const { mkdir } = await import("node:fs/promises");
   const dir = await tmp();

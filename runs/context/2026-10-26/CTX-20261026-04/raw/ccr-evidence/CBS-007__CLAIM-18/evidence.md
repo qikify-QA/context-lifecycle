@@ -1,3 +1,0 @@
-Dòng bảng 'Phạm vi cần re-explore & ảnh hưởng ước tính' (positional CLAIM-18):
-
-| TIB-5580 — Buyer chèn stroke_layers vượt giới hạn (4 entry, width "abc") qua request personalization | api (POST /api/merchant/shopify/customization) · storefront (localStorage) · api (PNG order) | TC-TIB-6338 Failed → BUG-357: API trả 201 và trả lại nguyên payload chèn; localStorage và PNG order #1100 không bị ảnh hưởng. Canon nói server "silently ignores rather than rejecting" là an toàn, còn RA (Q6 "Có validate") coi lọt là bug — mâu thuẫn chưa ai phân xử | artwork.md → Text layer multi-stroke (TIB-5417 …) (dòng "A buyer cannot inject strokes") | CHƯA ĐỦ — cần re-explore |

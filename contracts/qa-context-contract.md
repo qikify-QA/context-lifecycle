@@ -1,6 +1,6 @@
 # QA Context Contract
 
-Luật chung cho mọi agent của QA context builder. Mọi agent đọc context pack được trích từ file này theo vai trò trước khi làm việc; không nạp toàn bộ contract mặc định.
+Luật chung cho mọi subagent của QA context builder. Đọc đúng § cần cho việc được giao; không nạp toàn bộ contract.
 
 File này nói **luật là gì**. `DECISIONS.md` ở root nói **vì sao** và giữ các vi phạm tồn đọng đã biết — đọc nó trước khi nới hoặc bỏ một luật ở đây.
 
@@ -21,26 +21,17 @@ Khác biệt giữa các product (environment, explorer được phép, cách lo
 
 Áp cho mọi agent; agent definition không lặp lại mục này.
 
-- **Thứ tự đọc:** `input/context-packs/<agent>.md` (agenda sinh bằng `context-pack.mjs`, xem `contracts/context-routing.md`) → `run-manifest.json` (mode đã settle) → `input/bootstrap-request.json` → đúng input được giao. Pack trích nguyên văn luật từ nguồn chuẩn, không phải bản tóm tắt thay luật. Chỉ mở thêm section khi task cần, ghi lý do trong handoff.
+- **Thứ tự đọc:** `run-manifest.json` (mode đã settle) → `input/bootstrap-request.json` → đúng input được giao → chỉ các § contract cần cho việc đó (skill `ctx-run`/`ctx-evidence`/`ctx-build`/`ctx-review` chỉ ra §).  Ghi lý do trong handoff khi đọc thêm.
 - **Write root:** chỉ ghi dưới `runs/context/<YYYY-MM-DD>/<CTX-RUN-ID>/`, đúng thư mục ghi trong agent definition (§5).
 - **Envelope:** mọi artifact bọc trong Artifact Envelope (§1).
 - **Shape:** artifact chính có JSON Schema ở `contracts/schemas/` (field bắt buộc + enum; field thêm được phép). Orchestrator chạy `scripts/ctx/validate-run.mjs` sau mỗi bước; luật có điều kiện giữa field (vd `CONFIRMED_EXPECTED` ⇒ có `confirmation_source`) nằm trong script đó.
 - **Redaction:** chạy §6 trước khi ghi bất kỳ file nào.
 - **Product context:** đọc `config/products/<key>.json`; agent explore đọc thêm playbook khai ở `explore.playbook`. Không suy hành vi product từ hiểu biết chung.
-- **Skill binding:** khi một skill tương ứng với vai trò của agent tồn tại, nạp nó và coi nó ưu tiên hơn hướng dẫn trong agent definition. Hiện chưa có skill nào cho các vai trò context builder.
-- **Board status:** khi bắt đầu, khi bị chặn và trước handoff, agent trả payload `board_update`:
-
-  ```json
-  { "agent_id": "<agent>", "state": "idle|running|blocked|review|done|failed",
-    "current_task": "", "inputs": [], "outputs": [], "blocked_by": [], "last_event": "" }
-  ```
-
-  `inputs` nêu đúng artifact/target đang dùng, `outputs` nêu path thực tế đã ghi hoặc còn thiếu. Có board API thì `PATCH /api/agents/<agent>`; không có thì trả payload trong response để orchestrator/board ingester cập nhật.
 - **Kết thúc:** trả `PARTIAL` thay vì đoán cho đủ; trả `BLOCKED` khi không thể tiếp tục an toàn (§2 rule 5).
 
 ## 1. Artifact Envelope
 
-Artifact đầy đủ trên đĩa dùng envelope này. Response handoff chỉ trả receipt ngắn theo `contracts/context-execution.md`, không lặp envelope/payload. `payload` là phần riêng của từng agent.
+Artifact đầy đủ trên đĩa dùng envelope này. Response handoff chỉ trả receipt ngắn (status, output paths, counts, blockers), không lặp envelope/payload. `payload` là phần riêng của từng agent.
 
 ```json
 {
@@ -232,7 +223,7 @@ API và DB evidence BẮT BUỘC map về `ACT-ID` (mode explore) hoặc `DSEC-I
 ## 5. Write scope
 
 - Subagent CHỈ ghi vào `runs/context/<YYYY-MM-DD>/<CTX-RUN-ID>/`, theo thư mục được cấp trong agent definition.
-- KHÔNG subagent nào được ghi vào `knowledge/`. Chỉ `otto` publish (`scripts/ctx/publish-apply.mjs`), và CHỈ khi **cả 2** điều kiện đúng: (a) reviewer trả `publish_allowed: true`, **và** (b) lock của mọi object bị ảnh hưởng vẫn thuộc `ctx_run_id` của chính run này (§16). Thiếu (b) → DỪNG, không ghi `knowledge/`, `DEFERRED` + `reason: lock_lost`.
+- KHÔNG subagent nào được ghi vào `knowledge/`. Chỉ orchestrator (skill `ctx-run`) publish (`scripts/ctx/publish-apply.mjs`), và CHỈ khi **cả 2** điều kiện đúng: (a) reviewer trả `publish_allowed: true`, **và** (b) lock của mọi object bị ảnh hưởng vẫn thuộc `ctx_run_id` của chính run này (§16). Thiếu (b) → DỪNG, không ghi `knowledge/`, `DEFERRED` + `reason: lock_lost`.
 - **Thứ tự bắt buộc: feature-context-builder → `knowledge-diff-analyzer` (khi có base) → publish strip → reviewer → publish.** Publish strip (`scripts/ctx/publish-strip.mjs`) đọc candidate gốc và sinh `candidate/publish-preview/` theo đúng layout `knowledge/products/<product>/` và đúng schema §5a, đồng thời áp `resolution: SUPERSEDE` của diff (§12.5). Preview là bản **y hệt** sẽ được copy vào `knowledge/`. Candidate gốc giữ nguyên envelope/evidence, không bị sửa.
 - Sau strip, orchestrator cập nhật file prose trong preview (`feature-summary.md`, `open-questions.md`, `CHANGELOG.md`, `_registry.json`, `_product-guide.md`, `_env.example`). Reviewer chạy C1–C5 trên candidate gốc và C6 trên preview (`scripts/ctx/audit-preview.mjs`). Publish copy nguyên preview sang `knowledge/` (merge: file không có trong preview giữ nguyên), không strip lại.
 - Không sửa file của agent khác. Cần dữ liệu bước trước thì đọc, đừng ghi đè.
@@ -518,20 +509,17 @@ Mode được phép của từng product nằm ở `config/products/<key>.json` 
 
 **Mode settling.** Run CCR bắt đầu với `mode: "CCR_INGEST"` provisional. Gate C0.5 chốt: `CCR_INGEST` khi và chỉ khi 0 explorer được dispatch; operator yêu cầu explore cho ≥1 claim → `INCREMENTAL_UPDATE`. Ghi `mode_settled_at: "C0.5"`. Mặc định là **tách, không trộn**: claim `S3` publish ngay, claim `S1` vào KB dạng `OBSERVED_CURRENT`/`LOW` + OQ, claim `S0` không nạp và nêu trong `results.open_questions`. Mode là thô; độ mạnh từng item truy được qua `confirmation_source.type`.
 
-## 11. Agent roster
+## 11. Skill và vai trò
 
-| Agent | Vai trò |
+Không có agent definition; main session chạy skill, subagent native nhận việc từ reference của skill. Ranh giới sở hữu / không làm / input / output / handoff của từng vai trò nằm ở reference tương ứng.
+
+| Skill | Vai trò (reference) |
 |---|---|
-| `otto` | Điều phối run, mint ID, chạy script tất định, publish |
-| `qa-context-scope-planner` | Phân rã scope (BROAD/DOC) |
-| `portal-explorer` · `storefront-explorer` · `api-explorer` · `db-explorer` · `code-config-explorer` | Evidence runtime |
-| `doc-ingest-explorer` | Evidence tài liệu |
-| `qa-knowledge-normalizer` | Fan-in duy nhất → Product KB candidate |
-| `feature-context-builder` | KB → Feature Profile (C4) → Regression Checklist (C5), cùng context |
-| `knowledge-diff-analyzer` | Candidate vs base: diff, resolution, blast radius |
-| `context-quality-reviewer` | Gate độc lập trước publish |
-
-Ranh giới chi tiết (sở hữu / không làm / input / output / handoff) nằm ở mục "Function" và "Handoff" của từng agent definition.
+| `ctx-run` | Điều phối run, mint ID, chạy script tất định, publish; nhận CCR (`ccr-intake.md`, `publish.md`) |
+| `ctx-evidence` | scope-planner · portal · storefront · api · db · code · doc-ingest |
+| `ctx-build` | normalizer (fan-in duy nhất) · feature-builder (Profile C4 → Checklist C5) · diff-analyzer |
+| `ctx-review` | Gate độc lập trước publish (`reviewer.md`) |
+| `pick-model` | Chọn model/effort khi spawn subagent |
 
 ## 12. Context Change Request, supersede, gate
 
@@ -560,6 +548,8 @@ Credential nằm trong `.env` ở project root, gitignored, chỉ đọc qua bi�
 ## 15. Run retention & pruning
 
 `knowledge/` tự chứa hoàn toàn (§5a), nên giữ run không phải để bảo vệ knowledge — chỉ để team quay lại được evidence gốc khi open question mà run đó để lại chưa được giải quyết.
+
+**Lưu trữ:** `runs/context/` nằm ngoài git, trừ `run-manifest.json` và `review/verdict.json` (xem `.gitignore`). Evidence nặng (ảnh, network capture, doc đã redact) chỉ nằm trên đĩa của operator; mất nó chỉ ảnh hưởng việc quay lại evidence cho OQ còn mở, không ảnh hưởng `knowledge/`.
 
 Một run được phép xoá khi **cả 2** đúng:
 

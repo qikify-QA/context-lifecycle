@@ -125,9 +125,9 @@ Với mỗi claim: copy evidence vào `raw/ccr-evidence/<claim_key>/` (`claim_ke
 
 `context-quality-reviewer` audit lại từng claim (`contracts/gates.md`, audit source-strength): `confirmation_source` thiếu key hoặc `ref` không resolve về nguồn thật → claim đó không được publish làm `CONFIRMED_EXPECTED`, hạ xuống `PROPOSED` + OQ. Ở `CCR_INGEST` không có lane explore để quay lại.
 
-## 12.3b Open question và ops-board
+## 12.3b Open question
 
-Mọi `NEEDS_CONFIRMATION`/`CONFLICT`/`OPEN_ISSUE` phát sinh trong run phải vào `open-questions.md` của object, đúng `oq_id` + `type` (§5a), **trước khi** reviewer chạy — thiếu là BLOCKING. Không cần bước push riêng: `ops-board/server.mjs` đọc `open-questions.md` của object đang xử lý ở mỗi lần load board.
+Mọi `NEEDS_CONFIRMATION`/`CONFLICT`/`OPEN_ISSUE` phát sinh trong run phải vào `open-questions.md` của object, đúng `oq_id` + `type` (§5a), **trước khi** reviewer chạy — thiếu là BLOCKING.
 
 ## 12.3c Setup và khác biệt môi trường trong CCR
 
@@ -145,9 +145,9 @@ Claim có `environment_difference` đánh giá nguồn như mọi claim, nhưng 
 
 `S0` được nạp vì phần lớn khác biệt loại này là kinh nghiệm vận hành, không có artifact, trong khi thiếu nó người test sẽ báo `FAIL` sai. Evidence của claim `S0` là dòng khối B, copy vào `raw/ccr-evidence/<claim_key>/`. Muốn ghi nhận phía môi trường test là quan sát thật thì operator yêu cầu explore cho claim đó (§12.3a).
 
-**Khối C:** dòng ở đây không phải claim, không qua C0.5 và không vào KB. Orchestrator áp vào file được nêu ở bước prose (`.claude/orchestrator/publish.md` §3). Nội dung trái contract §5b, §5c thì không áp, nêu trong `results`. CCR có cả claim và khối C chạy trong cùng một run; run không được publish thì khối C cũng không vào knowledge.
+**Khối C:** dòng ở đây không phải claim, không qua C0.5 và không vào KB. Orchestrator áp vào file được nêu ở bước prose (`.claude/skills/ctx-run/references/publish.md` §3). Nội dung trái contract §5b, §5c thì không áp, nêu trong `results`. CCR có cả claim và khối C chạy trong cùng một run; run không được publish thì khối C cũng không vào knowledge.
 
-CCR chỉ có khối C, hoặc khối D toàn `KHÔNG CÒN ÁP DỤNG`, không tạo run: xử lý theo `.claude/orchestrator/ccr-intake.md` §2b.
+CCR chỉ có khối C, hoặc khối D toàn `KHÔNG CÒN ÁP DỤNG`, không tạo run: xử lý theo `.claude/skills/ctx-run/references/ccr-intake.md` §2b.
 
 ## 12.3d Khối D — trả lời open question
 
