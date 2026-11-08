@@ -1,0 +1,385 @@
+{
+  "feature_id": "FEAT-10-open-platform-customization-callback",
+  "feature_key": "open-platform-customization-callback",
+  "name": "Open-platform SDK — callback onCustomizationCreated trả design_url / design_urls",
+  "user_goal": "Là merchant integration dùng open-platform SDK (open/index.js), nhận được payload của customization mà buyer vừa submit — gồm link design (design_url và mảng design_urls theo artwork) — qua callback window.teeinblue.onCustomizationCreated đã gán sẵn.",
+  "user_goal_kb_refs": [
+    "KB-061",
+    "KB-064"
+  ],
+  "stable_since_version": null,
+  "actors": [
+    {
+      "role": "merchant integration — consumer của callback window.teeinblue.onCustomizationCreated",
+      "permission_observed": "Theo Testlane TC-TIB-4355/4358 (2026-10-07, staging, customization 1 artwork): integration gán window.teeinblue.onCustomizationCreated trước khi buyer submit và SDK gọi hàm đó với payload. Kiểm soát truy cập chưa xác định (OQ-sdk-065).",
+      "kb_refs": [
+        "KB-061",
+        "KB-064"
+      ]
+    },
+    {
+      "role": "buyer — kích hoạt gián tiếp bằng việc submit platform customization",
+      "permission_observed": "Submit customization qua open-platform SDK trên staging; không quan sát khác biệt quyền.",
+      "kb_refs": [
+        "KB-061"
+      ]
+    }
+  ],
+  "entry_points": [
+    {
+      "path": "Open-platform SDK staging-sdk.teeinblue.com/open/index.js (staging, build 2026-10-07, sau PR teeinblue-sdk#2014 / TIB-5427, không có tag version) — buyer submit platform customization",
+      "precondition": "Integration của merchant đã gán window.teeinblue.onCustomizationCreated trước khi submit",
+      "kb_refs": [
+        "KB-061",
+        "KB-064"
+      ]
+    },
+    {
+      "path": "Widget open-platform chạy trong iframe (component TeeinbluePlatformProductElement) — payload gửi qua window.parent.postMessage",
+      "precondition": "Chỉ đọc từ bundle, chưa kiểm trực tiếp",
+      "kb_refs": [
+        "KB-064"
+      ]
+    }
+  ],
+  "capabilities": [
+    {
+      "name": "Nhận design_url và design_urls cho customization 1 artwork",
+      "description": "CONFIRMED_EXPECTED/MEDIUM (KB-061): với customization 1 artwork, callback nhận payload có design_url (giữ như trước bản sửa) và design_urls là mảng đúng 1 phần tử, bằng design_url (design_url == design_urls[0]). URL dạng designs/{customizationId}/{customizationId}-{artworkId}.{ext}. Chỉ phạm vi 1 artwork, staging.",
+      "kb_refs": [
+        "KB-061"
+      ]
+    },
+    {
+      "name": "Nhận 1 design link cho mỗi artwork khi customization có nhiều artwork",
+      "description": "INFERRED/LOW (KB-062), chỉ đọc bundle: generateDesignLinks map qua mọi artwork, addToCart gán design_url = phần tử đầu, design_urls = cả mảng — suy ra 2+ artwork cho 1 URL mỗi artwork. Chưa có kiểm tra end-to-end; TC-TIB-4353/4354/4359/4360/4361 skipped. Thứ tự theo artwork trong form chỉ là mô tả Dev, chưa kiểm. Không dùng làm oracle.",
+      "kb_refs": [
+        "KB-062"
+      ]
+    },
+    {
+      "name": "Đuôi file của design URL theo design_format của từng artwork",
+      "description": "Nhánh 'rgb' → .png đã xác nhận theo Testlane TC-TIB-4355/4357/4358 (KB-061, CONFIRMED_EXPECTED). Bảng ánh xạ còn lại ('svg'→svg, 'eps'→eps, 'ai'→ai, 'jpeg'/'jpeg_cmyk'/'jpeg_cmyk_coated_fogra39'→jpeg, 'pdf'→pdf, khác→png) chỉ đọc từ bundle (KB-063, INFERRED/LOW).",
+      "kb_refs": [
+        "KB-061",
+        "KB-063"
+      ]
+    },
+    {
+      "name": "Kênh giao payload: gọi trực tiếp hàm callback hoặc postMessage tới parent iframe",
+      "description": "INFERRED/LOW (KB-064). Theo Testlane TC-TIB-4355/4358 (2026-10-07, staging open/index.js), payload được bắt bằng cách integration gán window.teeinblue.onCustomizationCreated trước khi buyer submit, và SDK đã gọi hàm đó với payload. Chỉ từ bundle do người gửi CCR đọc: payload gồm id customization, data, design_url, design_urls, preview_url; khi widget trong iframe (TeeinbluePlatformProductElement) thì gửi bằng window.parent.postMessage thay vì gọi hàm. Nhánh postMessage và danh sách đủ các key chưa được kiểm trực tiếp.",
+      "kb_refs": [
+        "KB-064"
+      ]
+    }
+  ],
+  "state_transitions": [
+    {
+      "from": "customization 1 artwork đang soạn, integration đã gán window.teeinblue.onCustomizationCreated",
+      "to": "callback được gọi với payload có design_url và design_urls (mảng 1 phần tử, == design_url)",
+      "trigger": "buyer submit platform customization",
+      "condition": "staging open/index.js build 2026-10-07; 1 artwork, design_format 'rgb' → .png (CONFIRMED_EXPECTED, KB-061; cách bắt payload theo Testlane TC-TIB-4355/4358, KB-064)",
+      "kb_refs": [
+        "KB-061",
+        "KB-064"
+      ]
+    },
+    {
+      "from": "customization đang soạn, widget open-platform chạy trong iframe",
+      "to": "payload gửi lên parent bằng window.parent.postMessage",
+      "trigger": "buyer submit platform customization",
+      "condition": "INFERRED/LOW, chỉ đọc bundle — chưa kiểm trực tiếp",
+      "kb_refs": [
+        "KB-064"
+      ]
+    }
+  ],
+  "confirmed_rules": [
+    {
+      "rule": "Với platform customization có 1 artwork, callback window.teeinblue.onCustomizationCreated nhận payload có design_url và design_urls là mảng đúng 1 phần tử bằng design_url (design_url == design_urls[0]); URL dạng designs/{customizationId}/{customizationId}-{artworkId}.{ext}, ext theo design_format của artwork ('rgb' → .png).",
+      "knowledge_kind": "CONFIRMED_EXPECTED",
+      "confidence": "MEDIUM",
+      "scope": "staging, open-platform SDK open/index.js build 2026-10-07 (không có tag version), merchant integration đã gán callback trước khi submit, customization 1 artwork design_format 'rgb'",
+      "caveats": "Không gồm 2+ artwork (KB-062), các design_format khác 'rgb' (KB-063), nhánh postMessage (KB-064). Kiểm soát truy cập design URL chưa xác định (OQ-sdk-065).",
+      "confirmation_ref": "Testlane TC-TIB-4355, TC-TIB-4357, TC-TIB-4358 PASS (task TIB-154), Jira TIB-5427",
+      "kb_refs": [
+        "KB-061"
+      ]
+    }
+  ],
+  "observed_behavior": [
+    {
+      "statement": "Theo bundle open/index.js (người gửi CCR đọc): generateDesignLinks map qua mọi artwork, mỗi phần tử lấy đuôi theo design_format riêng; addToCart gán design_url = phần tử đầu, design_urls = cả mảng. Suy ra 2+ artwork → 1 URL mỗi artwork. Chưa có kiểm tra end-to-end; thứ tự theo artwork trong form chỉ là mô tả Dev.",
+      "knowledge_kind": "INFERRED",
+      "confidence": "LOW",
+      "scope": "staging open/index.js build 2026-10-07, customization nhiều artwork (chưa dựng được dữ liệu)",
+      "kb_refs": [
+        "KB-062"
+      ]
+    },
+    {
+      "statement": "Theo bundle (retrieveDesignExt): 'svg'→svg, 'eps'→eps, 'ai'→ai, 'jpeg'/'jpeg_cmyk'/'jpeg_cmyk_coated_fogra39'→jpeg, 'pdf'→pdf, mọi giá trị khác→png. Chỉ 'rgb'→.png đã được xác nhận theo Testlane (KB-061).",
+      "knowledge_kind": "INFERRED",
+      "confidence": "LOW",
+      "scope": "staging open/index.js build 2026-10-07",
+      "kb_refs": [
+        "KB-063"
+      ]
+    },
+    {
+      "statement": "Theo Testlane TC-TIB-4355/4358 (2026-10-07, staging open-platform SDK open/index.js), payload được bắt bằng cách integration gán window.teeinblue.onCustomizationCreated trước khi buyer submit customization, và SDK đã gọi hàm đó với payload. Theo đoạn bundle do người gửi CCR đọc, payload gồm id customization, data, design_url, design_urls, preview_url, và khi widget chạy trong iframe (component TeeinbluePlatformProductElement) payload được gửi bằng window.parent.postMessage thay vì gọi hàm. Nhánh postMessage và danh sách đủ các key của payload chưa được kiểm trực tiếp.",
+      "knowledge_kind": "INFERRED",
+      "confidence": "LOW",
+      "scope": "staging open/index.js build 2026-10-07",
+      "kb_refs": [
+        "KB-064"
+      ]
+    }
+  ],
+  "observed_validations": [],
+  "permissions": [],
+  "surface_mapping": {
+    "portal": [],
+    "storefront": [
+      {
+        "path": "Open-platform SDK runtime (staging-sdk.teeinblue.com/open/index.js, staging) — submit platform customization, callback window.teeinblue.onCustomizationCreated",
+        "kb_refs": [
+          "KB-061",
+          "KB-064"
+        ]
+      },
+      {
+        "path": "Widget open-platform trong iframe (TeeinbluePlatformProductElement) → window.parent.postMessage (INFERRED, chỉ từ bundle)",
+        "kb_refs": [
+          "KB-064"
+        ]
+      }
+    ],
+    "api": [],
+    "data": [
+      {
+        "path": "Payload callback: design_url (string), design_urls (array); URL designs/{customizationId}/{customizationId}-{artworkId}.{ext} — 1 artwork CONFIRMED; key id/data/preview_url chỉ từ bundle",
+        "kb_refs": [
+          "KB-061",
+          "KB-064"
+        ]
+      },
+      {
+        "path": "design_format của artwork → đuôi file design URL",
+        "kb_refs": [
+          "KB-061",
+          "KB-063"
+        ]
+      }
+    ],
+    "code": [
+      {
+        "path": "open/index.js (bundle minify, staging 2026-10-07): addToCart, generateDesignLinks, retrieveDesignExt (hàm Zc), notifyParentIFrame — người gửi CCR đọc, chưa review source",
+        "kb_refs": [
+          "KB-062",
+          "KB-063",
+          "KB-064"
+        ]
+      }
+    ]
+  },
+  "dependencies": [
+    {
+      "description": "Đuôi file của từng design link phụ thuộc design_format cấu hình trên artwork (xác nhận 'rgb'; phần còn lại INFERRED).",
+      "kb_refs": [
+        "KB-061",
+        "KB-063"
+      ]
+    },
+    {
+      "description": "Callback nhận payload khi integration đã gán window.teeinblue.onCustomizationCreated trước lúc buyer submit (cách bắt payload theo Testlane TC-TIB-4355/4358).",
+      "kb_refs": [
+        "KB-061",
+        "KB-064"
+      ]
+    }
+  ],
+  "risks": [
+    {
+      "description": "Toàn bộ hành vi nhiều artwork (số phần tử, thứ tự, design_format khác nhau giữa artwork) chỉ suy từ bundle; test case tương ứng bị skip — integration dựa vào design_urls cho 2+ artwork chưa có oracle.",
+      "kb_refs": [
+        "KB-062"
+      ]
+    },
+    {
+      "description": "Hành vi khi 1 artwork tạo design thất bại không được định nghĩa trong yêu cầu/testing plan (TC-TIB-4361 skipped) — payload có thể thiếu phần tử, chứa null hoặc bị chặn; chưa biết.",
+      "kb_refs": [
+        "KB-062"
+      ]
+    },
+    {
+      "description": "Chỉ 'rgb' → .png được kiểm; checklist dùng bảng ánh xạ đuôi file khác làm oracle là dựa trên đọc bundle.",
+      "kb_refs": [
+        "KB-063"
+      ]
+    },
+    {
+      "description": "Integration nhúng widget trong iframe phụ thuộc nhánh postMessage chưa được kiểm trực tiếp.",
+      "kb_refs": [
+        "KB-064"
+      ]
+    },
+    {
+      "description": "Build staging không có tag version; khi bundle open/index.js thay đổi, không có mốc version để đối chiếu hành vi đã confirm.",
+      "kb_refs": [
+        "KB-061"
+      ]
+    }
+  ],
+  "freshness": {
+    "observed_at": "2026-10-26",
+    "source_authored_on": "2026-10-07"
+  },
+  "unknown_areas": [
+    {
+      "question": "Với customization 2 artwork trở lên: design_urls có số phần tử bằng số artwork không, thứ tự có theo thứ tự artwork trong form không, mỗi phần tử có lấy đuôi theo design_format riêng khi các artwork khác design_format không, và nền tảng có cho phép design_format khác nhau trong cùng customization không?",
+      "why_it_matters": "Chỉ suy từ bundle (KB-062); TC-TIB-4353/4354/4359/4360 skipped — chưa có oracle cho case nhiều artwork, vốn là mục đích chính của design_urls.",
+      "type": "NEEDS_CONFIRMATION",
+      "kb_refs": [
+        "KB-062"
+      ],
+      "oq_id": "OQ-sdk-058"
+    },
+    {
+      "question": "Khi 1 artwork trong customization nhiều artwork tạo design thất bại, design_urls xử lý thế nào (bỏ phần tử, null, cờ lỗi, hay chặn cả payload)?",
+      "why_it_matters": "Yêu cầu và testing plan không định nghĩa, TC-TIB-4361 skipped; integration của merchant cần biết để xử lý đơn thiếu design.",
+      "type": "NEEDS_CONFIRMATION",
+      "kb_refs": [
+        "KB-062"
+      ],
+      "oq_id": "OQ-sdk-059"
+    },
+    {
+      "question": "Bảng ánh xạ design_format → đuôi file (svg/eps/ai/jpeg/pdf, mặc định png) có đúng như bundle không, ngoài nhánh 'rgb' → .png đã xác nhận?",
+      "why_it_matters": "Chỉ đọc từ bundle minify (KB-063); oracle cho artwork design_format khác 'rgb' chưa có.",
+      "type": "NEEDS_CONFIRMATION",
+      "kb_refs": [
+        "KB-063"
+      ],
+      "oq_id": "OQ-sdk-060"
+    },
+    {
+      "question": "Khi widget open-platform chạy trong iframe, payload (kể cả design_urls) có được gửi qua window.parent.postMessage không, và payload đầy đủ gồm những key nào?",
+      "why_it_matters": "Chỉ nhánh gọi trực tiếp hàm có nguồn (Testlane TC-TIB-4355/4358, KB-064); integration dùng iframe chưa có evidence.",
+      "type": "NEEDS_CONFIRMATION",
+      "kb_refs": [
+        "KB-064"
+      ],
+      "oq_id": "OQ-sdk-061"
+    }
+  ],
+  "last_updated": {
+    "date": "2026-10-26",
+    "ccr_ref": "CBS-003"
+  },
+  "coverage_matrix": [
+    {
+      "feature_id": "FEAT-10-open-platform-customization-callback",
+      "layer": "storefront",
+      "role": "merchant integration",
+      "state": "customization 1 artwork, design_format 'rgb', callback gọi trực tiếp",
+      "environment": "staging",
+      "covered": true,
+      "kb_refs": [
+        "KB-061",
+        "KB-064"
+      ]
+    },
+    {
+      "feature_id": "FEAT-10-open-platform-customization-callback",
+      "layer": "storefront",
+      "role": "merchant integration",
+      "state": "customization 2+ artwork (số phần tử, thứ tự, mixed design_format)",
+      "environment": "staging",
+      "covered": false,
+      "kb_refs": [
+        "KB-062"
+      ]
+    },
+    {
+      "feature_id": "FEAT-10-open-platform-customization-callback",
+      "layer": "storefront",
+      "role": "merchant integration",
+      "state": "1 artwork tạo design thất bại",
+      "environment": "staging",
+      "covered": false,
+      "kb_refs": [
+        "KB-062"
+      ]
+    },
+    {
+      "feature_id": "FEAT-10-open-platform-customization-callback",
+      "layer": "storefront",
+      "role": "merchant integration",
+      "state": "design_format khác 'rgb' (svg/eps/ai/jpeg/pdf)",
+      "environment": "staging",
+      "covered": false,
+      "kb_refs": [
+        "KB-063"
+      ]
+    },
+    {
+      "feature_id": "FEAT-10-open-platform-customization-callback",
+      "layer": "storefront",
+      "role": "merchant integration",
+      "state": "widget trong iframe — postMessage",
+      "environment": "staging",
+      "covered": false,
+      "kb_refs": [
+        "KB-064"
+      ]
+    },
+    {
+      "feature_id": "FEAT-10-open-platform-customization-callback",
+      "layer": "code",
+      "role": "n/a",
+      "state": "bundle open/index.js (addToCart, generateDesignLinks, retrieveDesignExt, notifyParentIFrame) — chỉ đọc bundle minify",
+      "environment": "staging",
+      "covered": true,
+      "kb_refs": [
+        "KB-062",
+        "KB-063",
+        "KB-064"
+      ]
+    },
+    {
+      "feature_id": "FEAT-10-open-platform-customization-callback",
+      "layer": "api",
+      "role": "any",
+      "state": "kiểm soát truy cập design URL — chưa có kết luận, test case bảo mật đang bị chặn (OQ-sdk-065)",
+      "environment": "staging",
+      "covered": false,
+      "kb_refs": [],
+      "oq_id": "OQ-sdk-065"
+    },
+    {
+      "feature_id": "FEAT-10-open-platform-customization-callback",
+      "layer": "storefront",
+      "role": "merchant integration",
+      "state": "toàn bộ hành vi callback",
+      "environment": "production",
+      "covered": false,
+      "kb_refs": []
+    }
+  ],
+  "profile_conflicts": [],
+  "profile_relationships": [
+    {
+      "feature_id": "FEAT-10-open-platform-customization-callback",
+      "related_feature_id": "FEAT-07-storefront-buyer-facing",
+      "related_feature_key": "storefront-buyer-facing",
+      "relationship": "sibling_delivery_channel (open-platform vs Shopify theme-embed) — bundle theme-embed app-v1.js không có design_urls/onCustomizationCreated (1 lần grep; app-v2.js chưa kiểm)",
+      "note": "KB-065 và KB-009 thuộc storefront-buyer-facing. Chủ đích hay thiếu sót chưa xác nhận (OQ-sdk-062); app-v2.js chưa kiểm (OQ-sdk-063); cơ chế per-artwork ở theme-embed (OQ-sdk-064).",
+      "kb_refs": [
+        "KB-061",
+        "KB-062",
+        "KB-065"
+      ]
+    }
+  ]
+}

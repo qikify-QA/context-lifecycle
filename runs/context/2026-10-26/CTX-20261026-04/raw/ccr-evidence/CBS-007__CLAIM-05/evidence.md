@@ -1,0 +1,3 @@
+Dòng bảng 'Phạm vi cần re-explore & ảnh hưởng ước tính' (positional CLAIM-05):
+
+| TIB-5580 — Thứ tự vẽ ở cả 3 renderer: từng lớp stroke vẽ qua mọi dòng, lớp ngoài trước, fill mọi dòng sau cùng; PNG (API, 2 đường ≤15px / >15px) và SVG (vectorize) phải giống preview | storefront (SDK preview) · api (PNG order design) · vectorize (SVG) | SDK storefront staging chưa có code TIB-5580 (chỉ vẽ 1 vòng); không tải được SVG từ portal staging. TC-TIB-6319/6320/6321/6322 trên Testlane đang Passed nhưng actualResult ghi Blocked hoặc chỉ còn link order — trạng thái không đáng tin. PNG khớp preview editor ở stack mỏng và dày (quan sát của agent) | artwork.md → Paragraph multi-stroke (TIB-5580 / TIB-220 …) · storefront-sdk.md (chưa có mục paragraph stroke) | CHƯA ĐỦ — cần re-explore |

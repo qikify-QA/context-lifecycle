@@ -48,7 +48,7 @@ node scripts/publish-knowledge.mjs --tag                # sau khi PR merge: tag 
 
 Board không đẩy sự kiện nên kéo Proposal sang In Progress chưa làm gì cả. Operator mở Claude Code ở repo này và chạy `/process-ccr` sau khi kéo card và một lần cuối ngày làm việc. Lệnh xử lý mọi Proposal đang In Progress của các product ACTIVE. Sau đó phát hành theo `.claude/orchestrator/publish.md` mục 7.
 
-Việc của orchestrator trong một run (run-id, lock, đóng băng doc, strip, audit, publish) đều là script trong `scripts/ctx/` — xem bảng ở `.claude/agents/qa-context-lifecycle-orchestrator.md`.
+Việc của orchestrator trong một run (run-id, lock, đóng băng doc, strip, audit, publish) đều là script trong `scripts/ctx/` — xem bảng ở `.claude/agents/otto.md`.
 
 ## Đọc gì trước
 
@@ -58,7 +58,7 @@ Việc của orchestrator trong một run (run-id, lock, đóng băng doc, strip
 
 ## Quy tắc không được phá
 
-- **Chỉ `qa-context-lifecycle-orchestrator` ghi `knowledge/`**, qua `scripts/ctx/publish-apply.mjs`, chỉ sau khi reviewer cho phép và lock còn thuộc run. Subagent ghi vào `runs/context/<date>/<CTX-RUN-ID>/`.
+- **Chỉ `otto` ghi `knowledge/`**, qua `scripts/ctx/publish-apply.mjs`, chỉ sau khi reviewer cho phép và lock còn thuộc run. Subagent ghi vào `runs/context/<date>/<CTX-RUN-ID>/`.
 - **`knowledge/` tự chứa hoàn toàn (§5a).** Không field nào trỏ vào `runs/`, tài liệu dev hay thư mục ngoài gói publish.
 - **Đừng xoá `runs/` tuỳ ý** — chỉ qua `npm run prune`, vì evidence gốc cần cho open question chưa giải quyết (§15).
 - **Không biến `OBSERVED_CURRENT` thành `CONFIRMED_EXPECTED`** nếu không có nguồn thẩm quyền.
@@ -75,7 +75,7 @@ Việc của orchestrator trong một run (run-id, lock, đóng băng doc, strip
 ## Cấu trúc
 
 ```
-.claude/agents/          13 agent: orchestrator + planner + 6 explorer + normalizer + 2 builder + diff + reviewer
+.claude/agents/          12 agent: orchestrator + planner + 6 explorer + normalizer + 1 builder + diff + reviewer
 .claude/orchestrator/    điều phối theo mode + nhận CCR + publish (orchestrator đọc khi cần)
 contracts/               contract, CCR protocol, supersede, gates, forbidden-fields.json, templates, tài liệu cho consumer
 config/products/         config + schema + explore playbook theo product

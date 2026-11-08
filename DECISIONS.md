@@ -361,3 +361,21 @@ Khối C không phải claim. CCR không có claim không tạo run, vì run b�
 
 Đánh đổi: reviewer không lặp lại được phép so, nên niềm tin nằm ở bản ghi của agent. Dòng ghi chú "(người dùng <ngày>)" vẫn là thuật lại ngôi thứ ba, không phải lời xác nhận.
 
+
+### 2.29 Giới hạn context theo vai trò và delta (2026-11-07)
+
+Contract được trích nguyên văn theo role/mode bằng script, không bắt mọi worker đọc toàn bộ. Otto chỉ giữ state/receipt, mỗi run có worker riêng; KB carry-forward và profile/checklist patch được materialize bằng script với hash base. Reviewer vẫn độc lập và có quyền đọc đầy đủ phạm vi kiểm tra. Dung lượng file là chỉ báo, không phải token usage; chỉ ghi token thực khi runtime cung cấp.
+
+### 2.30 Gộp hai builder (2026-11-07)
+
+`feature-context-builder` thay profile builder và checklist builder để dùng lại KB/base trong cùng context. Hai artifact và gate C4/C5 vẫn riêng; profile phải đạt trước checklist. Retry chỉ checklist giữ nguyên profile; sửa profile làm mất hiệu lực checklist liên quan cho tới khi build lại. Reviewer/diff độc lập, không thay đổi published schema hay producer trong artifact lịch sử. Ops Board dùng một card cho builder và theo dõi đủ output của từng feature trước khi báo hoàn tất.
+
+### 2.31 Guide dừng ở mức object (2026-11-07)
+
+Guide teeinblue vượt 10 KB (10,6 KB) sau CBS-096, qikfiliate 9,97 KB. Mục "Object và feature" chiếm khoảng 4 KB vì liệt kê từng feature key, nên mỗi feature mới làm guide dài thêm; rút gọn chỗ khác chỉ hoãn được vài CCR. Danh sách feature đã có ở `<object>/feature-summary.md` và thư mục `features/`, nên đây cũng là ghi hai nơi.
+
+Operator chốt: guide chỉ liệt kê object (phạm vi, không thuộc), trỏ sang `feature-summary.md` cho feature. Feature mới không đổi guide. Bảng index khác biệt môi trường ở mục 4 vẫn giữ feature key như 2.24. Giới hạn đổi từ "nên" thành "tối đa 10 KB". Đánh đổi: muốn biết object có feature nào phải mở thêm một file; consumer chọn feature key bằng script riêng nên không bị ảnh hưởng.
+
+### 2.32 Agenda, rule chunks và runtime theo vai trò (2026-11-07)
+
+Mẫu 24 transcript sub-agent của repo chỉ thấy Opus; có worker đọc lại pack/KB không giới hạn range. Pack monolithic được thay bằng agenda + rule chunks nguyên văn dùng hash chung; JSON có index phân trang và reader theo pointer giới hạn output. Default Claude repo là Sonnet 1M/medium, normalizer dùng Opus/medium, diff và reviewer Opus/high; agent khác Sonnet/medium. Window compact repo 650k, cap theo model thực. Không đổi cấu hình Codex/global hay giả định mọi model/runtime có 1M. Checkpoint giữ trạng thái sau compact; không đọc lại toàn bộ run. Chưa có A/B token usage, nên chưa chốt tỷ lệ tiết kiệm.

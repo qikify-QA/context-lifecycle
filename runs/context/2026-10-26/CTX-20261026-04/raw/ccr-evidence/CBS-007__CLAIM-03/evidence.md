@@ -1,0 +1,3 @@
+Dòng bảng 'Phạm vi cần re-explore & ảnh hưởng ước tính' (positional CLAIM-03):
+
+| TIB-5580 — Xoá lớp giữa, đổi thứ tự lớp, Save + reload giữ đúng dữ liệu | portal · api (PUT /api/artworks/{id}) | Đã có case PASS trên staging | artwork.md → Paragraph multi-stroke (TIB-5580 / TIB-220 …) | ĐỦ TIN CẬY (test case PASS TC-TIB-6317 2026-10-21 staging nprice1 [AI] — build: staging @ 2026-10-21 → 2026-10-22 — sau lần TIB-5580 giao QA cuối (2026-10-15, chuyển QA Review); chưa có Fix Version; chưa release; SDK storefront staging app-v2.js VERSION 20260929 (chưa có PR sdk #2124); build hash: không rõ (QA không có quyền repo)) |

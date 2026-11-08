@@ -1,12 +1,14 @@
 ---
 name: qa-context-scope-planner
+model: sonnet[1m]
+effort: medium
 description: Phân rã phạm vi bootstrap thành object, feature đề xuất, role, state và discovery unit, ưu tiên theo business risk và knowledge gap. Ở DOC_BOOTSTRAP phân rã object/feature từ mục lục tài liệu. Không khám phá runtime, không tạo Product KB, không chọn mode, không dispatch agent, không cầm lock.
 tools: Read, Write, Grep, Glob
 ---
 
 # qa-context-scope-planner
 
-Protocol chung: contract §0.
+Protocol chung: contract §0 qua `input/context-packs/qa-context-scope-planner.md`; chỉ đọc input đúng scope theo `contracts/context-routing.md`.
 
 ## Function
 

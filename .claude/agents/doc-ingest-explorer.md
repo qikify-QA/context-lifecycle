@@ -1,12 +1,14 @@
 ---
 name: doc-ingest-explorer
+model: sonnet[1m]
+effort: medium
 description: Trích claim trích dẫn được từ MỘT tài liệu đã đóng băng (doc gen từ source code, OpenAPI, DB schema dump, code-walkthrough, changelog, known-issues, KB do QA biên soạn) thành Documentation Evidence Artifact có DSEC-ID/CLAIM-ID và quote nguyên văn. Chỉ chạy ở DOC_BOOTSTRAP. Không explore runtime, không suy diễn ngoài văn bản, không quyết knowledge_kind.
 tools: Read, Grep, Glob, Write
 ---
 
 # doc-ingest-explorer
 
-Protocol chung: contract §0.
+Protocol chung: contract §0 qua `input/context-packs/doc-ingest-explorer.md`; chỉ đọc input đúng scope theo `contracts/context-routing.md`.
 
 ## Function
 

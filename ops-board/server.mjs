@@ -5,6 +5,7 @@ import { fileURLToPath } from "node:url";
 import { getProduct, soleActiveProductKey } from "../scripts/lib/product-config.mjs";
 import { extractOpenQuestions } from "../scripts/lib/open-questions.mjs";
 import { walk, readJson, readJsonOr, writeJson, exists as fileExists } from "../scripts/lib/fs-utils.mjs";
+import { featureBuilderProgress } from "../scripts/lib/feature-builder-progress.mjs";
 import { contextHealth } from "../scripts/lib/context-health.mjs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -227,7 +228,7 @@ async function computeRun(runDir, roster) {
     agents[id] = { ...roleInfo(roster, id), ...patch, updated_at: new Date().toISOString(), updated_seq: seq, run_id: runId };
   };
 
-  stamp("qa-context-lifecycle-orchestrator", {
+  stamp("otto", {
     state: "running",
     current_task: taskName,
     inputs: [sourceInput],
@@ -379,66 +380,25 @@ async function computeRun(runDir, roster) {
     });
   }
 
-  const profileDir = path.join(runDir, "candidate", "feature-profiles");
-  let profileFiles = [];
-  try {
-    profileFiles = (await readdir(profileDir)).filter((name) => name.endsWith(".json"));
-  } catch {
-    profileFiles = [];
-  }
-  if (profileFiles.length) {
-    const profileArtifacts = (await readArtifactsInDir(runDir, "candidate/feature-profiles")).filter(Boolean);
-    stamp("feature-profile-builder", {
-      ...summarizeArtifacts("Feature profile candidate(s) generated", runId, profileArtifacts),
-      current_task: taskName,
-      inputs: ["candidate/product-kb/*.json"]
-    });
-  } else if (kbArtifacts.length) {
-    stamp("feature-profile-builder", {
-      state: "running",
-      current_task: taskName,
-      inputs: ["candidate/product-kb/*.json"],
-      outputs: ["candidate/feature-profiles/<feature-key>.json"],
-      blocked_by: [],
-      last_event: `Ready for feature profile build after Product KB candidate in ${runId}`
-    });
-  } else {
-    stamp("feature-profile-builder", {
-      state: "idle",
-      current_task: taskName,
-      inputs: ["candidate/product-kb/*.json"],
-      outputs: [],
-      blocked_by: [],
-      last_event: `Queued for ${runId}, waiting on Product KB candidate`
-    });
-  }
-
+  const profileArtifacts = (await readArtifactsInDir(runDir, "candidate/feature-profiles")).filter(Boolean);
   const checklistArtifacts = (await readArtifactsInDir(runDir, "candidate/checklists")).filter(Boolean);
-  if (checklistArtifacts.length) {
-    stamp("qa-checklist-builder", {
-      ...summarizeArtifacts("Checklist candidate(s) generated", runId, checklistArtifacts),
-      current_task: taskName,
-      inputs: ["candidate/feature-profiles/*.json"]
-    });
-  } else if (profileFiles.length) {
-    stamp("qa-checklist-builder", {
-      state: "running",
-      current_task: taskName,
-      inputs: ["candidate/feature-profiles/*.json"],
-      outputs: ["candidate/checklists/<feature-key>.json"],
-      blocked_by: [],
-      last_event: `Ready for checklist build after feature profiles in ${runId}`
-    });
-  } else {
-    stamp("qa-checklist-builder", {
-      state: "idle",
-      current_task: taskName,
-      inputs: ["candidate/feature-profiles/*.json"],
-      outputs: [],
-      blocked_by: [],
-      last_event: `Queued for ${runId}, waiting on feature profiles`
-    });
-  }
+  const builderArtifacts = [...profileArtifacts, ...checklistArtifacts];
+  const progress = featureBuilderProgress({
+    expected: kbArtifacts.map(a => path.basename(a.rel)).filter(name => !name.startsWith("_")),
+    profiles: profileArtifacts.map(a => path.basename(a.rel)),
+    checklists: checklistArtifacts.map(a => path.basename(a.rel)),
+    hasKb: kbArtifacts.length > 0
+  });
+  const builderSummary = summarizeArtifacts("Feature context candidate(s) generated", runId, builderArtifacts);
+  stamp("feature-context-builder", {
+    ...builderSummary,
+    state: progress.phase === "done" ? builderSummary.state
+      : worstState([builderSummary.state === "done" ? "idle" : builderSummary.state, progress.phase === "idle" ? "idle" : "running"]),
+    current_task: taskName,
+    inputs: ["candidate/product-kb/*.json"],
+    last_event: progress.phase === "done" ? builderSummary.last_event
+      : `Feature context ${progress.phase} phase for ${runId}; missing profiles: ${progress.missingProfiles.length}, checklists: ${progress.missingChecklists.length}`
+  });
 
   const diffArtifact = await readArtifact(runDir, "review/knowledge-diff.json");
   if (diffArtifact) {
@@ -521,8 +481,7 @@ async function computeRun(runDir, roster) {
       for (const agentId of [
         ...Object.keys(agents).filter((id) => id.endsWith("-explorer")),
         "qa-knowledge-normalizer",
-        "feature-profile-builder",
-        "qa-checklist-builder",
+        "feature-context-builder",
         "knowledge-diff-analyzer",
         "context-quality-reviewer"
       ]) {
@@ -533,7 +492,7 @@ async function computeRun(runDir, roster) {
           last_event: `Accepted in approved publish for ${runId}; conditions preserved in review verdict`
         });
       }
-      stamp("qa-context-lifecycle-orchestrator", {
+      stamp("otto", {
         state: "done",
         current_task: `write feature summary for ${objectLabel}`,
         inputs: ["review/verdict.json", "candidate artifacts"],
@@ -542,7 +501,7 @@ async function computeRun(runDir, roster) {
         last_event: `Feature summary published after approved review for ${runId}`
       });
     } else if (publishAllowed) {
-      stamp("qa-context-lifecycle-orchestrator", {
+      stamp("otto", {
         state: "running",
         current_task: `write feature summary for ${objectLabel}`,
         inputs: ["review/verdict.json", "candidate artifacts"],
@@ -622,7 +581,7 @@ async function computeRun(runDir, roster) {
       : null
   };
 
-  const orchestratorRole = roster.find((item) => item.id === "qa-context-lifecycle-orchestrator");
+  const orchestratorRole = roster.find((item) => item.id === "otto");
   return {
     run_id: runId,
     path: path.relative(rootDir, runDir),

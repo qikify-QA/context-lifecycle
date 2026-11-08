@@ -1,0 +1,676 @@
+{
+  "feature_id": "FEAT-09-variant-add-to-campaigns",
+  "feature_key": "variant-add-to-campaigns",
+  "name": "Thêm nhiều variant của Product Base vào campaign (bulk Add to campaigns)",
+  "user_goal": "Merchant chọn nhiều variant trong bảng Variants của Product Base rồi thêm chúng một lần vào các campaign đang dùng product base đó, các variant được thêm ở trạng thái available, không nhân đôi variant campaign đã có và không kéo theo variant Unavailable.",
+  "user_goal_kb_refs": [
+    "KB-187",
+    "KB-191",
+    "KB-197"
+  ],
+  "stable_since_version": null,
+  "last_updated": {
+    "date": "2026-10-30",
+    "ccr_ref": "CBS-010"
+  },
+  "actors": [
+    {
+      "role": "merchant-owner (store owner/staff, store Nprice1)",
+      "permission_observed": "Chọn nhiều dòng variant, mở modal 'Campaigns that use this product' chế độ nhiều variant, tick campaign, xác nhận Add và ghi được variant vào campaign trên staging. Không có nguồn nào cho role khác.",
+      "kb_refs": [
+        "KB-187",
+        "KB-191",
+        "KB-197"
+      ]
+    }
+  ],
+  "entry_points": [
+    {
+      "path": "Product Base editor → bảng Variants → nút (+) 'Add to campaigns' trên một dòng nằm trong vùng chọn nhiều dòng",
+      "precondition": "Đã chọn nhiều dòng variant (Ctrl-click/Shift-click, xem FEAT-05-variant-catalog) và dòng được bấm là variant Available; (+) trên dòng Unavailable bị disable.",
+      "kb_refs": [
+        "KB-187",
+        "KB-188",
+        "KB-186"
+      ]
+    },
+    {
+      "path": "Product Base editor → bảng Variants → nút (+) 'Add to campaigns' trên dòng ngoài vùng chọn, hoặc khi không chọn dòng nào",
+      "precondition": "Chạy luồng một variant (không phải bulk).",
+      "kb_refs": [
+        "KB-202"
+      ]
+    }
+  ],
+  "capabilities": [
+    {
+      "name": "Mở modal 'Campaigns that use this product' ở chế độ nhiều variant từ vùng chọn",
+      "description": "(+) trên dòng thuộc vùng chọn mở modal chế độ nhiều variant: banner 'Adding N variants to selected campaigns will also mark them as available' (N in đậm = số variant được chọn) và cột Variant status dạng 'K/N available'. (+) trên dòng Unavailable bị disable, bấm cưỡng bức không mở modal. Khi vùng chọn lẫn Unavailable, quan sát thấy N chỉ đếm variant Available và không có hint nào (OBSERVED_CURRENT, chưa xác nhận; BUG-262).",
+      "kb_refs": [
+        "KB-187",
+        "KB-188",
+        "KB-189",
+        "KB-190"
+      ]
+    },
+    {
+      "name": "Chọn campaign đích trong modal nhiều variant",
+      "description": "Campaign 0/N và K/N (K < N) tick được; campaign N/N available có checkbox disable. '+ Add' chỉ enabled khi tick ≥1 campaign. Select-all tick mọi campaign tick được, bỏ qua campaign N/N. Phạm vi select-all khi danh sách nhiều trang chỉ là quan sát (25 campaign/trang, chỉ trang đang xem) và checkbox header hiển thị sai ở trang 2 (BUG-263).",
+      "kb_refs": [
+        "KB-191",
+        "KB-192",
+        "KB-193",
+        "KB-194"
+      ]
+    },
+    {
+      "name": "Xác nhận hoặc huỷ thao tác thêm",
+      "description": "'+ Add' mở confirmation 'Add variants to campaigns' (nút Add/Cancel). Cancel đóng confirmation, không gửi Add, giữ tick và cột K/N. Nội dung câu hỏi trong confirmation chưa được chốt (BUG-261).",
+      "kb_refs": [
+        "KB-195",
+        "KB-196"
+      ]
+    },
+    {
+      "name": "Ghi các variant còn thiếu vào từng campaign đã tick",
+      "description": "Xác nhận Add chỉ insert variant được chọn mà campaign còn thiếu, ở trạng thái available, không thêm variant Unavailable, không nhân đôi; double-click chỉ gửi một mutation; 4 variant × 25 campaign hoàn tất không lỗi. Ghi qua POST /api/graphql với operation sẵn có insert_campaign_variants + update_campaign_instances (need_sync), không có endpoint mới. Quan sát: một mutation chung cho mọi campaign; khi mutation lỗi UI vẫn toast Success (BUG-265).",
+      "kb_refs": [
+        "KB-197",
+        "KB-204",
+        "KB-200",
+        "KB-201"
+      ]
+    },
+    {
+      "name": "Thêm một variant đơn lẻ khi bấm (+) ngoài vùng chọn",
+      "description": "(+) trên dòng ngoài vùng chọn hoặc khi không chọn dòng nào mở modal chế độ một variant (banner 'Adding this variant to selected campaigns will also mark it as available', cột 'Available / Not available'), Add chỉ insert đúng variant đó, đóng modal thì vùng chọn ở bảng Variants được giữ.",
+      "kb_refs": [
+        "KB-202"
+      ]
+    },
+    {
+      "name": "Đánh dấu campaign cần đồng bộ sau khi thêm",
+      "description": "Bulk Add đặt need_sync qua update_campaign_instances, campaign hiện 'Update required'; variant mới chỉ vào dữ liệu sync Shopify sau khi Update thủ công (chi tiết đồng bộ thuộc FEAT-08-product-base-campaign-link).",
+      "kb_refs": [
+        "KB-204",
+        "KB-203"
+      ]
+    }
+  ],
+  "state_transitions": [
+    {
+      "from": "bảng Variants có vùng chọn nhiều dòng",
+      "to": "modal 'Campaigns that use this product' mở ở chế độ nhiều variant (banner N variants, cột K/N available)",
+      "trigger": "bấm (+) 'Add to campaigns' trên một dòng thuộc vùng chọn",
+      "condition": "dòng được bấm là variant Available; (+) trên dòng Unavailable disabled, không mở modal",
+      "kb_refs": [
+        "KB-187",
+        "KB-188"
+      ]
+    },
+    {
+      "from": "modal nhiều variant, chưa tick campaign nào ('+ Add' disabled)",
+      "to": "'+ Add' enabled",
+      "trigger": "tick ≥1 campaign 0/N hoặc K/N (hoặc select-all)",
+      "condition": "campaign N/N available không tick được; bỏ hết tick thì '+ Add' disabled trở lại",
+      "kb_refs": [
+        "KB-191",
+        "KB-192"
+      ]
+    },
+    {
+      "from": "modal nhiều variant có campaign đang tick",
+      "to": "confirmation modal 'Add variants to campaigns' mở",
+      "trigger": "bấm '+ Add'",
+      "condition": "",
+      "kb_refs": [
+        "KB-195"
+      ]
+    },
+    {
+      "from": "confirmation modal 'Add variants to campaigns' đang mở",
+      "to": "confirmation đóng, modal chính giữ nguyên tick và cột Variant status, không có Add nào được gửi",
+      "trigger": "bấm Cancel",
+      "condition": "",
+      "kb_refs": [
+        "KB-195"
+      ]
+    },
+    {
+      "from": "campaign đã tick ở trạng thái 0/N hoặc K/N available",
+      "to": "campaign có đủ N variant được chọn, mỗi variant một dòng, đều available",
+      "trigger": "bấm Add trong confirmation",
+      "condition": "chỉ insert variant còn thiếu; variant Unavailable không được thêm; double-click chỉ gửi một mutation",
+      "kb_refs": [
+        "KB-197"
+      ]
+    },
+    {
+      "from": "campaign vừa nhận variant qua bulk Add",
+      "to": "campaign được đánh dấu cần sync (nút 'Update required')",
+      "trigger": "mutation insert_campaign_variants + update_campaign_instances (need_sync) thành công",
+      "condition": "",
+      "kb_refs": [
+        "KB-204",
+        "KB-203"
+      ]
+    }
+  ],
+  "confirmed_rules": [
+    {
+      "statement": "(+) 'Add to campaigns' trên một dòng nằm trong vùng chọn nhiều dòng mở modal 'Campaigns that use this product' chế độ nhiều variant: banner 'Adding N variants to selected campaigns will also mark them as available' với N là số variant được chọn, in đậm, và cột Variant status dạng 'K/N available'. Đã kiểm với vùng chọn chỉ gồm variant Available; chữ banner có thể đổi tuỳ cách sửa BUG-262.",
+      "kb_refs": [
+        "KB-187"
+      ]
+    },
+    {
+      "statement": "Nút (+) 'Add to campaigns' trên dòng variant Unavailable ở trạng thái disabled, kể cả khi dòng đó nằm trong vùng chọn; bấm cưỡng bức không mở modal.",
+      "kb_refs": [
+        "KB-188"
+      ]
+    },
+    {
+      "statement": "Trong modal chế độ nhiều variant, campaign 0/N hoặc K/N (K < N) có checkbox enabled và tick được; campaign N/N available có checkbox disabled. '+ Add' disabled khi chưa tick campaign nào, enabled khi tick ≥1, disabled trở lại khi bỏ hết tick.",
+      "kb_refs": [
+        "KB-191"
+      ]
+    },
+    {
+      "statement": "Checkbox select-all trong modal nhiều variant tick mọi campaign có checkbox enabled, không tick campaign N/N available, và làm '+ Add' enabled. Phạm vi khi danh sách nhiều trang không thuộc rule này.",
+      "kb_refs": [
+        "KB-192"
+      ]
+    },
+    {
+      "statement": "'+ Add' mở confirmation 'Add variants to campaigns' có nút Add và Cancel; Cancel đóng confirmation, không gửi Add nào, modal chính giữ nguyên tick và cột Variant status. Rule không bao gồm nội dung câu hỏi trong confirmation.",
+      "kb_refs": [
+        "KB-195"
+      ]
+    },
+    {
+      "statement": "Xác nhận Add trong modal chế độ nhiều variant chỉ insert các variant được chọn mà campaign còn thiếu (campaign đã có V1, V2 thì Add V1–V4 chỉ insert V3, V4; không nhân đôi variant đã có); variant được thêm ở trạng thái available, variant Unavailable không được thêm; double-click nút xác nhận Add chỉ gửi một mutation insert, mỗi variant đúng một dòng trong campaign, không lỗi hệ thống; Add 4 variant vào 25 campaign được tick hoàn tất trong vài giây không timeout/lỗi, 25 campaign đó chuyển 4/4 available trên UI và các campaign được kiểm qua API có đủ các variant, không trùng.",
+      "kb_refs": [
+        "KB-197"
+      ]
+    },
+    {
+      "statement": "(+) ở dòng ngoài vùng chọn, hoặc khi không có dòng nào đang chọn, chạy luồng một variant: banner 'Adding this variant to selected campaigns will also mark it as available', cột 'Available / Not available'; Add chỉ insert đúng variant đó; đóng modal thì vùng chọn đang có được giữ nguyên.",
+      "kb_refs": [
+        "KB-202"
+      ]
+    },
+    {
+      "statement": "Bulk Add chỉ ghi qua POST /api/graphql với operation sẵn có insert_campaign_variants và update_campaign_instances (đặt need_sync), cùng query getData/get để reload; không gọi endpoint/API/SDK mới; campaign được đánh dấu cần sync ('Update required').",
+      "kb_refs": [
+        "KB-204"
+      ]
+    }
+  ],
+  "observed_behavior": [
+    {
+      "statement": "[OBSERVED_CURRENT/LOW — không dùng làm expected] Vùng chọn lẫn variant Unavailable: modal chỉ nhận variant Available, N trong banner chỉ đếm Available (2 Available + 2 Unavailable → 'Adding 2 variants...'), cột Variant status tính theo N đó. Dev gọi là giới hạn đã biết; chưa có PO xác nhận.",
+      "kb_refs": [
+        "KB-189"
+      ]
+    },
+    {
+      "statement": "[KNOWN_DEFECT BUG-262] Vùng chọn lẫn variant Unavailable: modal không có hint nào cho biết variant Unavailable bị bỏ qua. Nội dung/vị trí hint mong đợi chưa được chốt.",
+      "kb_refs": [
+        "KB-190"
+      ]
+    },
+    {
+      "statement": "[OBSERVED_CURRENT/LOW — không dùng làm expected] Modal nhiều variant phân trang 25 campaign/trang; select-all chỉ tick campaign của trang đang xem (30 campaign → chỉ 25 được tick). Dev gọi là giới hạn đã biết, không phải thiết kế đã chốt.",
+      "kb_refs": [
+        "KB-193"
+      ]
+    },
+    {
+      "statement": "[KNOWN_DEFECT BUG-263] Select-all là checkbox trần, không label/tooltip nêu phạm vi; sang trang 2 checkbox header vẫn hiện đã tick dù campaign trang 2 không được tick.",
+      "kb_refs": [
+        "KB-194"
+      ]
+    },
+    {
+      "statement": "[KNOWN_DEFECT BUG-261] Confirmation 'Add variants to campaigns' hiện câu 'Are you sure you want to add and mark 4 variants as available in selected campaigns?' — không nêu số campaign, không nói về variant inactive. Cả câu đang hiển thị lẫn mẫu câu trong tài liệu yêu cầu đều không dùng làm expected.",
+      "kb_refs": [
+        "KB-196"
+      ]
+    },
+    {
+      "statement": "[OBSERVED_CURRENT/LOW — quan sát phụ] Sau Add thành công modal vẫn mở, tick campaign được bỏ, cột Variant status cập nhật, campaign vừa đủ N/N chuyển checkbox disabled. Giữ hay đóng modal chưa được chốt.",
+      "kb_refs": [
+        "KB-198"
+      ]
+    },
+    {
+      "statement": "[KNOWN_DEFECT BUG-264] Sau Add thành công rồi đóng modal, vùng chọn ở bảng Variants không được clear (V1–V4 vẫn chọn, Delete selected vẫn enabled). Clear hay giữ là hành vi mong đợi chưa được chốt.",
+      "kb_refs": [
+        "KB-199"
+      ]
+    },
+    {
+      "statement": "[OBSERVED_CURRENT/LOW — không dùng làm expected] Bulk Add gửi một mutation insert chung qua POST /api/graphql cho mọi campaign được tick; không mô phỏng được lỗi riêng một campaign, nhánh lỗi một phần chưa kiểm. Cách gửi có thể đổi tuỳ hướng sửa BUG-265.",
+      "kb_refs": [
+        "KB-200"
+      ]
+    },
+    {
+      "statement": "[KNOWN_DEFECT BUG-265] Khi mutation insert chung bị lỗi, UI vẫn toast 'Success – Variants are added to selected campaigns', bỏ tick mọi campaign, modal vẫn mở, dữ liệu không được ghi, không có cảnh báo. Toast Success không đủ để kết luận Add đã ghi dữ liệu.",
+      "kb_refs": [
+        "KB-201"
+      ]
+    }
+  ],
+  "observed_validations": [],
+  "permissions": [
+    {
+      "statement": "Nguồn chỉ có role merchant-owner (store owner/staff); chưa biết role/plan khác có bị giới hạn bulk Add to campaigns hay không.",
+      "kb_refs": [
+        "KB-187",
+        "KB-197"
+      ]
+    }
+  ],
+  "surface_mapping": {
+    "portal": [
+      {
+        "item": "Product Base editor → bảng Variants: nút (+) 'Add to campaigns' trên từng dòng (disabled với variant Unavailable)",
+        "kb_refs": [
+          "KB-187",
+          "KB-188",
+          "KB-202"
+        ]
+      },
+      {
+        "item": "Modal 'Campaigns that use this product' chế độ nhiều variant: banner N variants, cột 'K/N available', checkbox campaign, select-all, nút '+ Add', phân trang 25/trang",
+        "kb_refs": [
+          "KB-187",
+          "KB-191",
+          "KB-192",
+          "KB-193",
+          "KB-194"
+        ]
+      },
+      {
+        "item": "Modal 'Campaigns that use this product' chế độ một variant: banner 'Adding this variant...', cột 'Available / Not available'",
+        "kb_refs": [
+          "KB-202"
+        ]
+      },
+      {
+        "item": "Confirmation modal 'Add variants to campaigns' (Add/Cancel)",
+        "kb_refs": [
+          "KB-195",
+          "KB-196"
+        ]
+      },
+      {
+        "item": "Toast 'Success – Variants are added to selected campaigns'",
+        "kb_refs": [
+          "KB-201"
+        ]
+      },
+      {
+        "item": "Campaign editor → danh sách variant của campaign; nút 'Update required'",
+        "kb_refs": [
+          "KB-197",
+          "KB-204"
+        ]
+      }
+    ],
+    "storefront": [],
+    "api": [
+      {
+        "item": "POST /api/graphql — mutation insert_campaign_variants (chỉ variant còn thiếu, một mutation chung cho mọi campaign được tick)",
+        "kb_refs": [
+          "KB-197",
+          "KB-200",
+          "KB-204"
+        ]
+      },
+      {
+        "item": "POST /api/graphql — mutation update_campaign_instances (đặt need_sync)",
+        "kb_refs": [
+          "KB-204"
+        ]
+      },
+      {
+        "item": "POST /api/graphql — query getData/get để reload sau Add",
+        "kb_refs": [
+          "KB-204"
+        ]
+      }
+    ],
+    "data": [
+      {
+        "item": "Variant của campaign (ghi qua insert_campaign_variants, trạng thái available, không trùng)",
+        "kb_refs": [
+          "KB-197",
+          "KB-204"
+        ]
+      },
+      {
+        "item": "Cờ need_sync của campaign instance (ghi qua update_campaign_instances)",
+        "kb_refs": [
+          "KB-204"
+        ]
+      }
+    ],
+    "code": []
+  },
+  "dependencies": [
+    {
+      "target_feature": "FEAT-05-variant-catalog",
+      "relation": "vùng chọn nhiều dòng (Ctrl-click/Shift-click) ở bảng Variants là đầu vào của bulk Add; vùng chọn còn lại sau Add làm Delete selected vẫn enabled",
+      "kb_refs": [
+        "KB-186",
+        "KB-187",
+        "KB-199"
+      ]
+    },
+    {
+      "target_feature": "FEAT-08-product-base-campaign-link",
+      "relation": "dùng chung tiêu đề modal 'Campaigns that use this product' với lối vào icon rocket (khác lối vào, khác nội dung); campaign sau bulk Add cần Update thủ công để variant mới vào dữ liệu sync",
+      "kb_refs": [
+        "KB-187",
+        "KB-092",
+        "KB-203",
+        "KB-204"
+      ]
+    }
+  ],
+  "risks": [
+    {
+      "risk": "Khi mutation insert lỗi, UI vẫn toast Success và bỏ tick mọi campaign trong khi dữ liệu không được ghi (BUG-265) — merchant tin đã thêm variant nhưng campaign không đổi.",
+      "severity": "HIGH",
+      "category": "false-success",
+      "kb_refs": [
+        "KB-201",
+        "KB-200"
+      ]
+    },
+    {
+      "risk": "Select-all chỉ áp cho trang đang xem nhưng không nêu phạm vi, và checkbox header ở trang 2 vẫn hiện đã tick (BUG-263) — merchant dễ tưởng đã thêm vào mọi campaign.",
+      "severity": "MEDIUM",
+      "category": "misleading-scope",
+      "kb_refs": [
+        "KB-193",
+        "KB-194"
+      ]
+    },
+    {
+      "risk": "Variant Unavailable trong vùng chọn bị bỏ qua im lặng, không hint (BUG-262) — merchant không biết số variant thực sự được thêm khác số dòng đã chọn.",
+      "severity": "MEDIUM",
+      "category": "silent-skip",
+      "kb_refs": [
+        "KB-189",
+        "KB-190"
+      ]
+    },
+    {
+      "risk": "Vùng chọn không được clear sau Add thành công (BUG-264) nên Delete selected vẫn enabled trên các dòng vừa thêm; Delete selected xoá ngay không dialog xác nhận (FEAT-05) — rủi ro xoá nhầm variant.",
+      "severity": "MEDIUM",
+      "category": "destructive-action-lingering-selection",
+      "kb_refs": [
+        "KB-199",
+        "KB-079"
+      ]
+    },
+    {
+      "risk": "Confirmation không nêu số campaign bị tác động (BUG-261) — merchant xác nhận mà không thấy quy mô thay đổi.",
+      "severity": "LOW",
+      "category": "copy-text",
+      "kb_refs": [
+        "KB-196"
+      ]
+    },
+    {
+      "risk": "Toàn bộ nguồn là một lượt chạy [AI] trên staging 2026-10-09, build hash không rõ, production chưa xác nhận; Testlane hiện ghi passed cho các case mà actualResult vẫn Fail — không dùng status Testlane để kết luận bug đã sửa.",
+      "severity": "MEDIUM",
+      "category": "evidence-freshness",
+      "kb_refs": [
+        "KB-190",
+        "KB-194",
+        "KB-196",
+        "KB-199",
+        "KB-201"
+      ]
+    }
+  ],
+  "freshness": {
+    "observed_at": "2026-10-30",
+    "source_observed_on": "2026-10-09"
+  },
+  "unknown_areas": [
+    {
+      "question": "Khi vùng chọn lẫn variant Unavailable, việc modal chỉ nhận variant Available và N chỉ đếm Available có phải hành vi đúng theo PO/business không?",
+      "why_it_matters": "KB-189 chỉ là quan sát (dev gọi là giới hạn đã biết); chưa có oracle để viết expected cho ca vùng chọn lẫn Unavailable.",
+      "oq_id": "OQ-product-base-017"
+    },
+    {
+      "question": "Khi toàn bộ vùng chọn là variant Unavailable thì bấm (+) / modal hành xử thế nào (RA Q1)?",
+      "why_it_matters": "Chưa có test case nào cho ca này (coverage gap); KB-188 chỉ nói (+) trên dòng Unavailable disabled, không nói khi mọi dòng trong vùng chọn đều Unavailable.",
+      "oq_id": "OQ-product-base-018"
+    },
+    {
+      "question": "BUG-262 (thiếu hint về variant Unavailable bị bỏ qua) đã sửa chưa, trên build nào, nội dung và vị trí hint cuối cùng là gì, và có đổi chữ banner 'Adding N variants...' không (RA Q11)?",
+      "why_it_matters": "Banner của KB-187 có thể đổi theo cách sửa; checklist cần biết expected của hint và banner.",
+      "oq_id": "OQ-product-base-019"
+    },
+    {
+      "question": "Select-all và Add chỉ áp cho 25 campaign của trang đang xem — PO có giữ phạm vi theo trang không?",
+      "why_it_matters": "KB-193 là giới hạn đã biết, không phải thiết kế chốt; ảnh hưởng trực tiếp oracle cho product base có >25 campaign.",
+      "oq_id": "OQ-product-base-020"
+    },
+    {
+      "question": "BUG-263 (select-all không label phạm vi, header checkbox sai ở trang 2) đã sửa chưa, label cuối cùng là gì?",
+      "why_it_matters": "Không có lần chạy lại có ngày; không viết được expected cho label/trạng thái header.",
+      "oq_id": "OQ-product-base-021"
+    },
+    {
+      "question": "Câu hỏi trong confirmation 'Add variants to campaigns' được chốt là gì (có nêu số campaign, có nói về variant inactive không), ai chốt? BUG-261 đã sửa chưa?",
+      "why_it_matters": "Cả câu đang hiển thị lẫn mẫu trong tài liệu yêu cầu đều không dùng làm expected (KB-196).",
+      "oq_id": "OQ-product-base-022"
+    },
+    {
+      "question": "Sau Add thành công, modal nên đóng hay giữ mở (RA Q6)?",
+      "why_it_matters": "KB-198 chỉ là quan sát phụ; expected của test case không kiểm trạng thái modal.",
+      "oq_id": "OQ-product-base-023"
+    },
+    {
+      "question": "Sau Add thành công và đóng modal, vùng chọn ở bảng Variants nên được clear hay giữ? BUG-264 đã sửa chưa, ai gỡ bug khỏi TC-TIB-5045?",
+      "why_it_matters": "KB-199 Fail 2026-10-09 không có lần chạy lại; vùng chọn còn sót kết hợp Delete selected không xác nhận có thể gây xoá nhầm.",
+      "oq_id": "OQ-product-base-024"
+    },
+    {
+      "question": "Một mutation insert chung cho mọi campaign có phải thiết kế không, và nhánh lỗi một phần (một số campaign ghi được, số khác lỗi — RA R9) có tồn tại không?",
+      "why_it_matters": "KB-200: không mô phỏng được lỗi riêng một campaign; nhánh lỗi một phần chưa kiểm (coverage gap), không viết được expected.",
+      "oq_id": "OQ-product-base-025"
+    },
+    {
+      "question": "Khi mutation insert lỗi UI phải báo thế nào? BUG-265 đã sửa chưa, trên build nào?",
+      "why_it_matters": "KB-201: hiện toast Success dù dữ liệu không ghi; cần oracle cho nhánh lỗi.",
+      "oq_id": "OQ-product-base-026"
+    },
+    {
+      "question": "Cột K/N có đếm cả variant đang tắt (inactive) trong campaign không, và Add có bật lại variant đang tắt không (RA R7/R8)?",
+      "why_it_matters": "Nguồn chỉ là lời kể RA (case liên quan rỗng/Blocked) nên normalizer không nạp; KB-191/KB-197 không phủ ca campaign có variant inactive.",
+      "oq_id": "OQ-product-base-027"
+    }
+  ],
+  "coverage_matrix": [
+    {
+      "feature_id": "FEAT-09-variant-add-to-campaigns",
+      "layer": "portal",
+      "role": "merchant-owner",
+      "state": "vùng chọn chỉ gồm variant Available",
+      "environment": "staging",
+      "covered": true,
+      "kb_refs": [
+        "KB-187",
+        "KB-191",
+        "KB-192",
+        "KB-195",
+        "KB-197"
+      ]
+    },
+    {
+      "feature_id": "FEAT-09-variant-add-to-campaigns",
+      "layer": "portal",
+      "role": "merchant-owner",
+      "state": "vùng chọn lẫn variant Unavailable",
+      "environment": "staging",
+      "covered": true,
+      "note": "chỉ OBSERVED_CURRENT/LOW, không có oracle",
+      "kb_refs": [
+        "KB-188",
+        "KB-189",
+        "KB-190"
+      ]
+    },
+    {
+      "feature_id": "FEAT-09-variant-add-to-campaigns",
+      "layer": "portal",
+      "role": "merchant-owner",
+      "state": "toàn bộ vùng chọn Unavailable",
+      "environment": "staging",
+      "covered": false,
+      "kb_refs": [
+        "KB-189"
+      ]
+    },
+    {
+      "feature_id": "FEAT-09-variant-add-to-campaigns",
+      "layer": "portal",
+      "role": "merchant-owner",
+      "state": "danh sách campaign > 1 trang",
+      "environment": "staging",
+      "covered": true,
+      "note": "chỉ OBSERVED_CURRENT/LOW",
+      "kb_refs": [
+        "KB-193",
+        "KB-194"
+      ]
+    },
+    {
+      "feature_id": "FEAT-09-variant-add-to-campaigns",
+      "layer": "portal",
+      "role": "merchant-owner",
+      "state": "(+) ngoài vùng chọn / không chọn dòng nào",
+      "environment": "staging",
+      "covered": true,
+      "kb_refs": [
+        "KB-202"
+      ]
+    },
+    {
+      "feature_id": "FEAT-09-variant-add-to-campaigns",
+      "layer": "portal",
+      "role": "merchant-owner",
+      "state": "campaign có variant inactive",
+      "environment": "staging",
+      "covered": false,
+      "kb_refs": []
+    },
+    {
+      "feature_id": "FEAT-09-variant-add-to-campaigns",
+      "layer": "api",
+      "role": "merchant-owner",
+      "state": "Add thành công",
+      "environment": "staging",
+      "covered": true,
+      "kb_refs": [
+        "KB-197",
+        "KB-204"
+      ]
+    },
+    {
+      "feature_id": "FEAT-09-variant-add-to-campaigns",
+      "layer": "api",
+      "role": "merchant-owner",
+      "state": "mutation lỗi toàn bộ",
+      "environment": "staging",
+      "covered": true,
+      "note": "chỉ OBSERVED_CURRENT/LOW, KNOWN_DEFECT",
+      "kb_refs": [
+        "KB-200",
+        "KB-201"
+      ]
+    },
+    {
+      "feature_id": "FEAT-09-variant-add-to-campaigns",
+      "layer": "api",
+      "role": "merchant-owner",
+      "state": "lỗi một phần (một số campaign)",
+      "environment": "staging",
+      "covered": false,
+      "kb_refs": [
+        "KB-200"
+      ]
+    },
+    {
+      "feature_id": "FEAT-09-variant-add-to-campaigns",
+      "layer": "data",
+      "role": "merchant-owner",
+      "state": "Add thành công",
+      "environment": "staging",
+      "covered": true,
+      "kb_refs": [
+        "KB-197",
+        "KB-204"
+      ]
+    },
+    {
+      "feature_id": "FEAT-09-variant-add-to-campaigns",
+      "layer": "storefront",
+      "role": "buyer",
+      "state": "sau Add + Update",
+      "environment": "staging",
+      "covered": false,
+      "note": "thuộc FEAT-08; store khoá mật khẩu",
+      "kb_refs": [
+        "KB-203"
+      ]
+    },
+    {
+      "feature_id": "FEAT-09-variant-add-to-campaigns",
+      "layer": "portal",
+      "role": "role khác merchant-owner",
+      "state": "bất kỳ",
+      "environment": "staging",
+      "covered": false,
+      "kb_refs": []
+    },
+    {
+      "feature_id": "FEAT-09-variant-add-to-campaigns",
+      "layer": "portal",
+      "role": "merchant-owner",
+      "state": "bất kỳ",
+      "environment": "production",
+      "covered": false,
+      "kb_refs": []
+    }
+  ],
+  "profile_conflicts": [],
+  "profile_relationships": [
+    {
+      "from": "FEAT-09-variant-add-to-campaigns",
+      "to": "FEAT-05-variant-catalog",
+      "relation": "depends_on — dùng vùng chọn nhiều dòng của bảng Variants làm đầu vào",
+      "kb_refs": [
+        "KB-186",
+        "KB-187"
+      ]
+    },
+    {
+      "from": "FEAT-09-variant-add-to-campaigns",
+      "to": "FEAT-08-product-base-campaign-link",
+      "relation": "triggers — bulk Add đặt need_sync, campaign cần Update thủ công để sync variant mới",
+      "kb_refs": [
+        "KB-204",
+        "KB-203"
+      ]
+    }
+  ]
+}

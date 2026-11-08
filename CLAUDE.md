@@ -3,9 +3,9 @@
 Repo sản xuất canonical QA context cho nhiều product. Đọc theo thứ tự:
 
 1. `contracts/qa-context-contract.md` — luật (kèm `ccr-protocol.md`, `supersede.md`, `gates.md`, `forbidden-fields.json`).
-2. `.claude/agents/qa-context-lifecycle-orchestrator.md` — điều phối; chi tiết theo mode ở `.claude/orchestrator/`.
+2. Chỉ orchestrator: `.claude/agents/otto.md` và đúng file mode trong `.claude/orchestrator/`. Worker chuyên môn đọc agent definition của mình, không đọc Otto.
 3. `config/products/<key>.json` + `config/products/<key>/explore-playbook.md` — khác biệt giữa các product (login, account, vocabulary). Tổng quan và setup của project nằm ở `knowledge/products/<key>/_product-guide.md`, cập nhật theo mỗi lần publish knowledge (`.claude/orchestrator/publish.md` §3); qikfiliate và teeinblue đã có guide, product khác chưa. Playbook của teeinblue vẫn giữ login và vocabulary vì explorer đọc theo số mục.
-4. `DECISIONS.md` — vì sao luật tồn tại, vi phạm tồn đọng đã biết.
+4. `DECISIONS.md` — chỉ tra section liên quan khi cần hiểu lý do luật hoặc legacy debt, không đọc toàn bộ mặc định.
 
 ## Quy tắc vận hành
 

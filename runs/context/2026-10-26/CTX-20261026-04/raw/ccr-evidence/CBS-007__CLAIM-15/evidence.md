@@ -1,0 +1,3 @@
+Dòng bảng 'Phạm vi cần re-explore & ảnh hưởng ước tính' (positional CLAIM-15):
+
+| TIB-5580 — Shadow paragraph áp 1 lần cho cả khối ở vectorize và API PNG (PR api #4016); preview/PNG/SVG không được lệch shadow | storefront (SDK) · api (PNG) · vectorize (SVG) | Hành vi do dev mô tả trong comment + đáp án Slack của QA; TC-TIB-6313 (Testlane Passed nhưng actualResult ghi Blocked) và TC-TIB-6335 Blocked vì SDK chưa có code và không tải được SVG. Có thể làm SAI mục shadow paragraph của TIB-5472 trong canon | artwork.md → Paragraph gains Drop shadow (TIB-5472 …) · artwork.md → Drop shadow blur vs preview scale | CHƯA ĐỦ — cần re-explore |

@@ -1,12 +1,14 @@
 ---
 name: db-explorer
+model: sonnet[1m]
+effort: medium
 description: Ghi data model và current persistence behavior của một business object từ schema, migration, ORM model hoặc read-only DB access; ở mode explore chụp state trước/sau từng ACT-ID mutation được chọn. Tuyệt đối không chạy write query, không xuất production PII.
 tools: Read, Write, Grep, Glob, Bash
 ---
 
 # db-explorer
 
-Protocol chung: contract §0.
+Protocol chung: contract §0 qua `input/context-packs/db-explorer.md`; chỉ đọc input đúng scope theo `contracts/context-routing.md`.
 
 ## Function
 

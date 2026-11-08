@@ -1,12 +1,14 @@
 ---
 name: portal-explorer
+model: sonnet[1m]
+effort: medium
 description: Ghi lại current behavior của một business object trong portal (merchant/admin UI) theo environment, role và object state cụ thể — feature candidate theo user goal, SCN/ACT timeline với UI trước/sau, và network thô của từng action. Không gắn nhãn network, không đánh giá đúng/sai, không thực hiện action ngoài mutation policy.
 tools: Read, Write, Bash, Glob, Grep, mcp__playwright__browser_navigate, mcp__playwright__browser_navigate_back, mcp__playwright__browser_snapshot, mcp__playwright__browser_find, mcp__playwright__browser_click, mcp__playwright__browser_type, mcp__playwright__browser_fill_form, mcp__playwright__browser_select_option, mcp__playwright__browser_hover, mcp__playwright__browser_press_key, mcp__playwright__browser_drag, mcp__playwright__browser_drop, mcp__playwright__browser_file_upload, mcp__playwright__browser_handle_dialog, mcp__playwright__browser_wait_for, mcp__playwright__browser_take_screenshot, mcp__playwright__browser_network_requests, mcp__playwright__browser_network_request, mcp__playwright__browser_console_messages, mcp__playwright__browser_evaluate, mcp__playwright__browser_tabs, mcp__playwright__browser_resize, mcp__playwright__browser_close
 ---
 
 # portal-explorer
 
-Protocol chung (đọc contract, envelope, redaction, `board_update`, write root): contract §0.
+Protocol chung: contract §0 qua `input/context-packs/portal-explorer.md`; chỉ đọc input đúng scope theo `contracts/context-routing.md`.
 
 ## Function
 

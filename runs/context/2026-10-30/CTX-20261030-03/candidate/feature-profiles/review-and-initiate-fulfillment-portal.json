@@ -1,0 +1,457 @@
+{
+  "schema_version": "1.0",
+  "artifact_type": "FeatureProfileCandidate",
+  "artifact_id": "FPC-CTX-20261030-03-review-and-initiate-fulfillment-portal",
+  "workflow_id": "CTX-20261030-03",
+  "producer": "feature-profile-builder",
+  "source_refs": [
+    "knowledge/products/teeinblue/order/features/review-and-initiate-fulfillment-portal/profile.json (base order v2, read-only)",
+    "candidate/product-kb/review-and-initiate-fulfillment-portal.json (KB-014..KB-024, KB-182, KB-183 carry-forward + KB-239 mới)"
+  ],
+  "upstream_artifact_ids": [
+    "KBC-CTX-20261030-03-order-review-and-initiate-fulfillment-portal"
+  ],
+  "status": "READY",
+  "confidence": "LOW",
+  "observations": [
+    "Carry-forward: profile base FEAT-ORDER-PORTAL-01 (order v2) chép nguyên văn mọi field (2 actors, 1 entry_point, 7 capabilities, 4 state_transitions, 1 confirmed_rule, 7 observed_behavior, observed_validations rỗng, 1 permission, surface_mapping, 3 dependencies, 5 risks, 12 unknown_areas index 0–11 kèm oq_id base, 15 coverage_matrix rows, profile_conflicts rỗng, 3 profile_relationships). coverage_matrix / profile_conflicts / profile_relationships chuyển lên mức payload (publish-strip đọc ở đó).",
+    "Delta: KB-239 (CONFIRMED_EXPECTED/MEDIUM, S3 test_case TC-TIB-7340) — +1 actor, +1 capability, +2 state_transitions, +1 confirmed_rule, +1 surface_mapping.portal, +1 surface_mapping.api, +1 dependency, +2 risks, +2 unknown_areas (index 12–13), +3 coverage_matrix rows, +3 profile_relationships.",
+    "Base tham chiếu KB-001 (object-level order/kb.json) và KB-011 (feature place-personalized-order-storefront) — không có trong shard này; giữ nguyên văn, không thêm tham chiếu mới.",
+    "Base surface_mapping và dependencies là mảng chuỗi; dòng mới giữ kiểu chuỗi, kb_id trong ngoặc cuối chuỗi để trace.",
+    "Profile-level last_updated của base ({2026-10-30, CBS-006}) bỏ khỏi candidate có chủ ý để publish-strip đóng dấu CBS-011 (profile bị chạm). freshness.source_observed_on cập nhật 2026-10-28; không ghi run_id vào freshness.",
+    "Thêm act_ids: [] vào mọi capability (mode CCR_INGEST; key bị strip khi publish).",
+    "KB-239 xếp vào feature này (không mint feature 'order-design-conditional-render' như CCR đề xuất) theo plan: base order v2 đã đặt print file theo visibility ở đây."
+  ],
+  "assumptions": [
+    "Mapping unknown_areas index mới (chỉ ở envelope): 12 → OPEN_ISSUE mới (KB-239 trên build sau merge 6 PR / production; BUG-430 đã fix hay chỉ không tái hiện) — normalizer không có draft OQ cho shard này; 13 → OPEN_ISSUE mới (PDF / emboss / shape-cut với điều kiện Hide).",
+    "Role actor mới dùng 'merchant-owner (store owner/staff, instance 520 nprice1)' theo scope KB-239; không gộp vào actor base CBS-006 để không sửa field base."
+  ],
+  "unknowns": [
+    "BUG-430 (print file order rỗng ở lượt đầu) chỉ được ghi là không tái hiện ở lượt retest; không có nguồn xác nhận đã fix.",
+    "Xem unknown_areas trong profile (index 12–13 mới)."
+  ],
+  "conflicts": [],
+  "blocking_issues": [],
+  "payload": {
+    "feature_profiles": [
+      {
+        "feature_id": "FEAT-ORDER-PORTAL-01",
+        "feature_key": "review-and-initiate-fulfillment-portal",
+        "name": "Review and initiate fulfillment for an incoming order",
+        "user_goal": "As a merchant (owner), review an order that has come in through the storefront, inspect its items/customization/status, and initiate the fulfillment review step.",
+        "actors": [
+          {
+            "role": "owner (Linh explorer, sub=273)",
+            "permission_observed": "Full observed access to orders list, order-details, item activity logs, fulfill dialog, and the change-status dropdown (view only, no transition executed). No other role/permission level (e.g. staff, limited/non-owner) was tested in this run, so no permission BOUNDARY has been observed — only what this one role can do.",
+            "kb_refs": ["KB-014", "KB-016", "KB-017", "KB-019", "KB-022", "KB-023"]
+          },
+          {
+            "role": "owner (store owner/staff, instance 520 nprice1)",
+            "permission_observed": "[MỚI, CBS-006] Đặt order Bogus từ campaign dùng artwork có Group ẩn, mở order detail và tải order design (PNG, PDF); đổi Design format của artwork sang PDF rồi trả lại PNG_RGB và sync campaign trong lượt chạy test.",
+            "kb_refs": ["KB-182", "KB-183"]
+          },
+          {
+            "role": "[MỚI, CBS-011] merchant-owner (store owner/staff, instance 520 nprice1)",
+            "permission_observed": "Mở order detail của order Bogus từ campaign có layer action Hide, xem View customization, preview customization, mockup và print file (order design PNG) của từng item trong lượt chạy test 2026-10-28. Không thử role khác.",
+            "kb_refs": ["KB-239"]
+          }
+        ],
+        "entry_points": [
+          {
+            "path": "portal Orders list (portal/orders) -> order-details (order #1002 / id 4322) -> 'Confirm & Send to fulfill' button",
+            "precondition": "Order must already be visible in the portal Orders list (GET /api/orders?by_teeinblue=1) — this precondition is NOT always guaranteed to hold; see risks[0] / OQ-order-001. There is no separate 'portal/fulfills' route: fulfillment review is only reachable via a specific order's detail page.",
+            "kb_refs": ["KB-014", "KB-024"]
+          }
+        ],
+        "capabilities": [
+          {
+            "name": "Browse and locate orders in the portal orders list",
+            "description": "Orders list defaults to date range 'Aug 14 - Sep 13', Store 'Any', TIB Status 'Any', backed by GET /api/orders?by_teeinblue=1&cursor=&per_page=25&sort=created_at&sort_type=desc. Search matches the internal order 'name' (e.g. '#1002') but does NOT match the Shopify checkout confirmation code (e.g. 'JTEL87JY0') even for a synced order — these are separate identifier namespaces in this system.",
+            "kb_refs": ["KB-014", "KB-015"],
+            "act_ids": []
+          },
+          {
+            "name": "Review order and order-item structure and details",
+            "description": "An Order contains one or more Order Items, each with its OWN status badge (independent from the order-level tib_status badge), its own campaign/variant/customization/design, and an attached POD service (e.g. Printify). For the single order observed: header shows '#1002 (#-4322)', tib_status badge 'ready', creation timestamp rendered in America/New_York; the order item ('#-6957') shows item-level status 'Ready', Shopify SKU distinct from Fulfilled SKU, Shopify fulfillment status empty, fulfillment service 'manual', a Customization block (View/Edit, never exercised), and Designs data (mockup, artwork name, printarea 'front' 12x18 at 3600x5400px — notably higher resolution than the on-screen preview). A separate 'Fulfillment Shipping method' panel (order/instance-level, distinct from the Shopify checkout shipping choice) showed 'No shipping method' configured. Notes/Customer/Shipping/Billing panels mirror the data entered at Shopify checkout.",
+            "kb_refs": ["KB-001", "KB-016", "KB-017", "KB-020", "KB-021"],
+            "act_ids": []
+          },
+          {
+            "name": "Cross-check order status between UI and API",
+            "description": "For the same order at the same point in time, the portal UI badge 'ready' corresponds to API field tib_status = integer 6 (REST GET /api/orders) and the same-named field exists on the GraphQL orders_by_pk query (field name only, no raw payload captured). This is the ONLY UI-label/integer pairing observed in this run; no other tib_status value has been seen.",
+            "kb_refs": ["KB-018"],
+            "act_ids": []
+          },
+          {
+            "name": "Review automatic item activity log",
+            "description": "The 'Item Activity Logs' dialog for an order-item shows a fully automatic event sequence with no manual merchant action: line item created -> generating a design -> design generated (with printarea/artwork/artwork-version identifiers) -> marked 'Ready to fulfill', all within ~22 seconds of order creation.",
+            "kb_refs": ["KB-019"],
+            "act_ids": []
+          },
+          {
+            "name": "Initiate fulfillment review via 'Confirm & Send to fulfill' — POD-disconnected instance only",
+            "description": "On an instance where the POD provider (Printify) is NOT connected, clicking 'Confirm & Send to fulfill' opens a REVIEW dialog (not an immediate submission) showing the line item/printareas/status/shipping address with a 'Close' action and a 'Connect' prompt for Printify — no submit/pay action is available. Only 2 read-only GraphQL re-fetches (orders_by_pk, order_item_activities) were observed around the click; no mutation and no network call to a POD provider occurred. THIS FINDING IS SCOPED STRICTLY TO THE POD-DISCONNECTED STATE and describes what happens BEFORE any real send-to-fulfill submission could occur — it says nothing about what happens once a POD account is connected (see dependencies/risks).",
+            "kb_refs": ["KB-022"],
+            "act_ids": []
+          },
+          {
+            "name": "View (not execute) order-item status change options",
+            "description": "The order-item-level 'Change status' dropdown lists 5 options (Ready, Sent, Fulfilled, Paused, Canceled). No option was selected in this run — this capability is limited to what the dropdown DISPLAYS; no transition, endpoint, or side effect has been observed.",
+            "kb_refs": ["KB-023"],
+            "act_ids": []
+          },
+          {
+            "name": "[MỚI, CBS-006] Nhận print file (order design) PNG/PDF đúng theo effective visibility của Group trong artwork",
+            "description": "CONFIRMED_EXPECTED/MEDIUM (KB-182, Testlane TC-TIB-6068, TC-TIB-6069 PASS, staging 2026-10-16, shipped UNKNOWN): order tạo từ artwork có Group ẩn cho print file (order design) — cả PNG và PDF — không có nội dung của Group, chỉ có layer ngoài Group, khớp canvas Artwork Editor và buyer preview. OBSERVED_CURRENT/LOW (KB-183): với Group 'Emb' ẩn trên Product Base không có cell layout emboss, print file PNG cũng chỉ có layer ngoài Group; layout emboss và shape-cut chưa kiểm được (TC-TIB-6071 Blocked, TC-TIB-6070 actualResult rỗng) — không suy hành vi emboss/shape-cut từ quan sát này.",
+            "kb_refs": ["KB-182", "KB-183"],
+            "act_ids": []
+          },
+          {
+            "name": "[MỚI, CBS-011] Print file, mockup và preview customization của order theo điều kiện Hide của layer",
+            "description": "CONFIRMED_EXPECTED/MEDIUM (KB-239, Testlane TC-TIB-7340 PASS, staging lượt retest 2026-10-28 với SDK app-v2.js Last-Modified 2026-10-28 03:01:11 GMT, trước khi 6 PR của TIB-5558 merge 2026-10-29, build hash không rõ, shipped UNKNOWN). Với order có item mà giá trị nguồn khớp điều kiện Hide, print file (order design PNG), preview customization và mockup của item đó không có layer bị Hide (print file 0 pixel đục của layer); item không khớp có layer với đúng chữ buyer đã nhập trên cả ba. Kết quả khớp cái buyer thấy trên storefront. Chỉ kiểm print file PNG, layout thường; PDF / emboss / shape-cut với điều kiện Hide chưa kiểm.",
+            "kb_refs": ["KB-239"],
+            "act_ids": []
+          }
+        ],
+        "state_transitions": [
+          {
+            "from": "orders list, default filters",
+            "to": "order-details view",
+            "trigger": "open/click order #1002 (id 4322)",
+            "condition": "order must already be present in the list result set",
+            "kb_refs": ["KB-014", "KB-016"]
+          },
+          {
+            "from": "order-details view (tib_status=ready)",
+            "to": "item activity log dialog open",
+            "trigger": "open 'Item Activity Logs' for order-item #6957",
+            "condition": "log entries are pre-existing/automatic, generated at order-creation time, not generated by opening the dialog",
+            "kb_refs": ["KB-019"]
+          },
+          {
+            "from": "order-details view, POD (Printify) NOT connected",
+            "to": "fulfill review dialog open (read-only, Connect prompt shown)",
+            "trigger": "click 'Confirm & Send to fulfill'",
+            "condition": "OBSERVED ONLY for POD-disconnected state; no submit action available; no mutation fired. The transition to an actual 'sent to fulfillment' state was NEVER reached or observed in this run, in either POD-connected or POD-disconnected branches.",
+            "kb_refs": ["KB-022"]
+          },
+          {
+            "from": "[MỚI, CBS-006] buyer đặt order từ campaign dùng artwork có Group ẩn (con giữ cờ ON)",
+            "to": "order có order design PNG (hoặc PDF khi Design format của artwork là PDF) chỉ chứa layer ngoài Group",
+            "trigger": "order được tạo và design được sinh",
+            "condition": "Đã kiểm PNG và PDF (layout thường, KB-182) và PNG khi Product Base không có layout emboss (KB-183); layout emboss / shape-cut chưa kiểm",
+            "kb_refs": ["KB-182", "KB-183"]
+          },
+          {
+            "from": "[MỚI, CBS-011] buyer đặt order với item có giá trị nguồn khớp điều kiện của layer action Hide",
+            "to": "order item có print file PNG, preview customization và mockup không có layer bị Hide",
+            "trigger": "order được tạo và design được sinh",
+            "condition": "CONFIRMED_EXPECTED/MEDIUM, staging, 1 lượt retest 2026-10-28 trước khi 6 PR merge; chỉ PNG, layout thường",
+            "kb_refs": ["KB-239"]
+          },
+          {
+            "from": "[MỚI, CBS-011] buyer đặt order với item có giá trị nguồn không khớp điều kiện Hide và đã nhập chữ cho layer",
+            "to": "order item có print file PNG, preview customization và mockup hiện layer với đúng chữ đã nhập",
+            "trigger": "order được tạo và design được sinh",
+            "condition": "CONFIRMED_EXPECTED/MEDIUM, staging, 1 lượt retest 2026-10-28 trước khi 6 PR merge; chỉ PNG, layout thường",
+            "kb_refs": ["KB-239"]
+          }
+        ],
+        "confirmed_rules": [
+          {
+            "rule": "[MỚI, CBS-006] Print file (order design) của order tạo từ artwork có Group ẩn — cả PNG và PDF — không có nội dung của Group, chỉ có layer ngoài Group, khớp canvas Artwork Editor và buyer preview.",
+            "knowledge_kind": "CONFIRMED_EXPECTED",
+            "confidence": "MEDIUM",
+            "scope": "staging (instance 520 / nprice1), owner; Jira TIB-5584 Done (6/6 PR merged), shipped UNKNOWN; lượt chạy 2026-10-16 trên build staging @ 2026-10-16 13:54, build hash không rõ; production chưa xác nhận",
+            "caveats": "Một artwork fixture (#5046, Group 'Name' ẩn, con giữ cờ ON) dựng qua MCP/API, chưa được PO/dev xác nhận là dữ liệu hợp lệ. PDF có được bằng cách đổi Design format của artwork sang PDF rồi sync campaign. Không áp cho layout emboss / shape-cut (KB-183). Lượt PASS chạy trước khi 3 PR còn OPEN merge; chưa chạy lại.",
+            "confirmation_ref": "Testlane TC-TIB-6068, TC-TIB-6069 PASS (task TIB-211, Jira TIB-5584), chạy 2026-10-16",
+            "kb_refs": ["KB-182"]
+          },
+          {
+            "rule": "[MỚI, CBS-011] Print file (order design PNG), preview customization và mockup của order áp điều kiện Hide giống storefront: item có giá trị nguồn khớp điều kiện Hide không có layer đó; item không khớp có layer với đúng chữ buyer đã nhập.",
+            "knowledge_kind": "CONFIRMED_EXPECTED",
+            "confidence": "MEDIUM",
+            "scope": "staging (instance 520 / nprice1), merchant-owner; Jira TIB-5558, lượt retest 2026-10-28 với SDK app-v2.js Last-Modified 2026-10-28 03:01:11 GMT, trước khi 6 PR merge 2026-10-29, build hash không rõ; shipped UNKNOWN; production chưa xác nhận",
+            "caveats": "Một lượt chạy, một order Bogus (2 item, 1 khớp / 1 không khớp), một layer text với 1 điều kiện. Chỉ print file PNG layout thường; PDF / emboss / shape-cut chưa kiểm. BUG-430 (print file order rỗng ở lượt đầu) chỉ được ghi là không tái hiện ở lượt này.",
+            "confirmation_ref": "Testlane TC-TIB-7340 PASS (task TIB-231, Jira TIB-5558), chạy 2026-10-28",
+            "kb_refs": ["KB-239"]
+          }
+        ],
+        "observed_behavior": [
+          {
+            "statement": "Order-level status badge and order-item-level status badge are independently tracked and can display different labels ('ready' vs 'Ready').",
+            "kb_refs": ["KB-001", "KB-017"]
+          },
+          {
+            "statement": "Order timestamps render in America/New_York regardless of the buyer's checkout timezone (UTC).",
+            "kb_refs": ["KB-016"]
+          },
+          {
+            "statement": "Design print resolution (3600x5400px) is substantially higher than the on-screen mockup preview.",
+            "kb_refs": ["KB-017"]
+          },
+          {
+            "statement": "Item activity log events fire automatically post-order-creation with no merchant action required.",
+            "kb_refs": ["KB-019"]
+          },
+          {
+            "statement": "'Confirm & Send to fulfill' does not immediately submit; it opens a review dialog first, at least in the POD-disconnected state observed.",
+            "kb_refs": ["KB-022"]
+          },
+          {
+            "statement": "There is no dedicated 'portal/fulfills' route; fulfillment review is reached only through a specific order's detail page.",
+            "kb_refs": ["KB-024"]
+          },
+          {
+            "statement": "[MỚI, CBS-006] Trên staging (instance 520 / nprice1), lượt chạy test của agent 2026-10-16: order từ artwork có Group 'Emb' ẩn (Product Base không có cell layout emboss) cho print file PNG chỉ có layer ngoài Group, không có layer của Group ẩn. Layout emboss và shape-cut chưa kiểm được: TC-TIB-6071 Blocked vì dữ liệu không có layout emboss, TC-TIB-6070 (shape cut) actualResult rỗng.",
+            "knowledge_kind": "OBSERVED_CURRENT",
+            "confidence": "LOW",
+            "observed_count": null,
+            "kb_refs": ["KB-183"]
+          }
+        ],
+        "observed_validations": [],
+        "permissions": [
+          {
+            "role": "owner (sub=273)",
+            "note": "Only this single role was exercised against every capability in this feature. No non-owner or restricted-permission role was tested, so no access boundary is known.",
+            "kb_refs": ["KB-014", "KB-016", "KB-022"]
+          }
+        ],
+        "surface_mapping": {
+          "portal": [
+            "Orders list",
+            "Order-details page",
+            "Item Activity Logs dialog",
+            "Confirm & Send to fulfill dialog",
+            "Change status dropdown",
+            "[MỚI, CBS-006] Order-details → tải order design (print file) PNG / PDF của order item (KB-182, KB-183)",
+            "[MỚI, CBS-011] Order-details → View customization, preview customization, mockup và print file PNG của từng item theo điều kiện Hide (KB-239)"
+          ],
+          "storefront": [],
+          "api": [
+            "GET /api/orders?by_teeinblue=1",
+            "GraphQL orders_by_pk",
+            "GraphQL order_item_activities (summary variant)",
+            "GraphQL order_item_activities (full variant)",
+            "GraphQL call observed at fulfill-click (read-only)",
+            "[MỚI, CBS-006] Render order design (print file PNG / PDF; layout emboss / shape-cut chưa kiểm) theo effective visibility của Group (KB-182, KB-183)",
+            "[MỚI, CBS-011] Render order design PNG, mockup và customization preview theo điều kiện Hide của layer (PDF / emboss / shape-cut chưa kiểm) (KB-239)"
+          ],
+          "data": [],
+          "code": []
+        },
+        "dependencies": [
+          "Depends on place-personalized-order-storefront successfully placing AND syncing an order into the portal — this handoff is not guaranteed reliable (see risks[0] / OQ-order-001).",
+          "The true behavior of 'Confirm & Send to fulfill' depends on POD (Printify) connection state. Only the POD-disconnected branch is known (KB-022); the POD-connected branch is an unresolved dependency for any test or automation that assumes 'no mutation is fired' generally.",
+          "[MỚI, CBS-006] Nội dung print file (order design) phụ thuộc quy tắc effective visibility của Group do object artwork sở hữu (feature group-layer-effective-visibility: layer chỉ render khi cờ của nó và mọi Group tổ tiên đều ON) và Design format của artwork (PNG/PDF) (KB-182, KB-183).",
+          "[MỚI, CBS-011] Nội dung print file, preview và mockup của order phụ thuộc cấu hình action Show/Hide và điều kiện của layer do object artwork sở hữu (feature conditional-setting-config) và kết quả ẩn/hiện mà buyer thấy trên storefront (sdk, feature storefront-buyer-facing) (KB-239)."
+        ],
+        "risks": [
+          {
+            "risk": "An order placed via storefront checkout may silently fail to appear in the portal Orders list, blocking this feature's entry point entirely.",
+            "detail": "Order JTEL87JY0 never appeared in GET /api/orders?by_teeinblue=1 across 90+ minutes, all TIB statuses, both stores, and a 30-day range. A later order (portal id 4322, used throughout this profile) DID appear, after the user claimed a webhook-config fix. That claim was NOT independently verified by this exploration (no dev/infra log access in this run) — it must be treated as an unverified user statement, not a confirmed fix. Resolution: UNRESOLVED, decidable only by orchestrator + context-quality-reviewer. Impact for this feature: a merchant may believe no order exists / lose track of a real order with no visible portal signal.",
+            "kb_refs": ["KB-014"],
+            "oq_ref": "OQ-order-001"
+          },
+          {
+            "risk": "'Confirm & Send to fulfill' behavior with a CONNECTED POD account (e.g. Printify) is completely unobserved.",
+            "detail": "KB-022's 'review dialog only, no mutation, no POD network call' finding is scoped strictly to the POD-DISCONNECTED state observed in this run. It must NOT be treated as a general safety property of this action. Once a POD account is connected, this click may trigger a real mutation and/or an outbound call to the POD provider (potentially a real production side effect) — this is unknown and unverified, not confirmed-safe.",
+            "kb_refs": ["KB-022"]
+          },
+          {
+            "risk": "'Change status' dropdown transitions and 'Bulk Fulfill' are entirely unexercised and may have unknown side effects (notifications, POD calls, irreversible state changes).",
+            "kb_refs": ["KB-023", "KB-024"]
+          },
+          {
+            "risk": "[MỚI, CBS-006] Print file của layout emboss / shape-cut khi artwork có Group ẩn hoàn toàn chưa kiểm (TC-TIB-6071 Blocked, TC-TIB-6070 rỗng).",
+            "detail": "Không được suy rule 'print file không có nội dung Group ẩn' (KB-182) sang layout emboss / shape-cut; nếu các layout này render khác, nhà in có thể nhận file sai mà không có check nào bắt được.",
+            "kb_refs": ["KB-183", "KB-182"]
+          },
+          {
+            "risk": "[MỚI, CBS-006] Rule print file theo Group ẩn (KB-182) chỉ được xác nhận bởi 1 lượt chạy test của agent trên staging 2026-10-16, trước khi 3 PR của TIB-5584 còn OPEN lúc đó merge; build hash không rõ, production chưa xác nhận; fixture 'Group ẩn + con visible ON' dựng qua MCP/API chưa được PO/dev xác nhận hợp lệ.",
+            "detail": "Không dùng làm expected cho production khi chưa re-verify; repair command đã chạy trên dữ liệu thật nên trạng thái fixture có thể không tái hiện được bằng thao tác UI.",
+            "kb_refs": ["KB-182", "KB-183"]
+          },
+          {
+            "risk": "[MỚI, CBS-011] Rule print file / preview / mockup theo điều kiện Hide (KB-239) chỉ có 1 lượt chạy test của agent trên staging 2026-10-28, trước khi 6 PR của TIB-5558 merge 2026-10-29; build hash không rõ, production chưa xác nhận.",
+            "detail": "BUG-430 (print file order rỗng ở lượt đầu) chỉ được ghi là không tái hiện ở lượt retest, không có xác nhận đã fix trên build nào. Không dùng làm expected cho production hoặc build sau merge khi chưa chạy lại TC-TIB-7340 có ngày + build.",
+            "kb_refs": ["KB-239"]
+          },
+          {
+            "risk": "[MỚI, CBS-011] Print file PDF và layout emboss / shape-cut với layer action Hide chưa kiểm.",
+            "detail": "KB-239 chỉ kiểm print file PNG layout thường; không suy rule sang PDF / emboss / shape-cut (tương tự giới hạn của KB-182/KB-183 với Group ẩn).",
+            "kb_refs": ["KB-239", "KB-183"]
+          }
+        ],
+        "freshness": {
+          "observed_at": "2026-10-30",
+          "source_observed_on": "2026-10-28"
+        },
+        "unknown_areas": [
+          {
+            "question": "Is the storefront->portal order sync now durably fixed, or could an order silently fail to appear again?",
+            "why_it_matters": "This feature's entry point assumes the order is already visible in the portal; if sync can silently fail, this whole feature becomes unreachable for the affected order with no error surfaced to the merchant."
+          },
+          {
+            "question": "What happens when 'Confirm & Send to fulfill' is clicked on an instance with Printify (or another POD) actually connected — does it fire a mutation, call the POD API, or create a real fulfillment/purchase order?",
+            "why_it_matters": "This is the single biggest gap for safe test/automation design: the only observed behavior (no mutation) is scoped to a state (POD disconnected) that real merchants using this feature for its actual purpose would not be in."
+          },
+          {
+            "question": "What are the full 'Change status' dropdown option effects (Ready/Sent/Fulfilled/Paused/Canceled) — target endpoint, allowed transitions, side effects (notifications, POD calls)?",
+            "why_it_matters": "Only the option LIST was seen; no transition was ever executed. Any regression checklist must not assume any transition is safe, reversible, or has no side effect."
+          },
+          {
+            "question": "What does 'Bulk Fulfill' (sidebar flyout item) do?",
+            "why_it_matters": "Never opened in this run. Its behavior is completely unknown and must not be inferred from the single-order 'Confirm & Send to fulfill' flow — it may operate at a different (higher-risk, multi-order) scope."
+          },
+          {
+            "question": "Does 'portal/fulfills' exist as any kind of route elsewhere in the app (e.g. under a different nav path not explored), or is order-details truly the only entry point?",
+            "why_it_matters": "Only the visible sidebar was checked in this run; absence of evidence is not proof of absence for every possible route."
+          },
+          {
+            "question": "What is the full tib_status enum and its integer<->label mapping, and what triggers each transition?",
+            "why_it_matters": "Only one value pair (ready/6) was observed for one order; do not build validation or transition tests assuming a known, exhaustive enum."
+          },
+          {
+            "question": "Does any non-owner / restricted-permission portal role see the same orders list, order-details, and fulfill/status actions as the owner (sub=273)?",
+            "why_it_matters": "No permission boundary has been tested; access-control regressions on this feature are currently untestable from this profile alone."
+          },
+          {
+            "question": "What is the true raw payload of GET /api/orders and GraphQL orders_by_pk for this order?",
+            "why_it_matters": "Field shapes are UI/name-only, not payload-verified — schema-level assertions should not be built on them yet."
+          },
+          {
+            "question": "What were the 3 unidentified network entries observed around the 'Confirm & Send to fulfill' click (out of 5 total, only 2 matched to known GraphQL operations)?",
+            "why_it_matters": "They were not confirmed benign/unrelated; an unidentified call near a fulfillment action deserves scrutiny before this action is treated as fully understood."
+          },
+          {
+            "question": "What do 'Edit customization' / 'View customization' actually do for the merchant?",
+            "why_it_matters": "Never exercised; unknown whether merchant edits here affect the design, the order, or trigger any downstream regeneration."
+          },
+          {
+            "question": "[MỚI, CBS-006] Print file của layout emboss và shape-cut cho order từ artwork có Group ẩn có loại bỏ nội dung của Group như layout thường không?",
+            "why_it_matters": "TC-TIB-6071 Blocked (Product Base dùng trong lượt chạy không có cell layout emboss), TC-TIB-6070 (shape cut) actualResult rỗng; cần chạy lại với Product Base có layout emboss/shape-cut trước khi viết check cho các layout này.",
+            "kb_refs": ["KB-183"],
+            "oq_type": "OPEN_ISSUE",
+            "oq_id": "OQ-order-018"
+          },
+          {
+            "question": "[MỚI, CBS-006] Rule print file PNG/PDF theo Group ẩn (TC-TIB-6068/6069) có giữ nguyên trên build staging sau khi toàn bộ 6 PR của TIB-5584 merge, và trên production khi TIB-5584 release không?",
+            "why_it_matters": "Lượt PASS duy nhất chạy trước khi 3 PR còn OPEN merge, build hash không rõ, shipped UNKNOWN; check print file theo Group ẩn chưa có nền xác nhận cho build hiện tại/production.",
+            "kb_refs": ["KB-182"],
+            "oq_type": "OPEN_ISSUE",
+            "oq_id": "OQ-order-019"
+          },
+          {
+            "question": "[MỚI, CBS-011] Print file / preview / mockup của order theo điều kiện Hide (TC-TIB-7340) có giữ nguyên trên build staging sau khi 6 PR của TIB-5558 merge (2026-10-29) và trên production khi TIB-5558 release không; BUG-430 (print file order rỗng ở lượt đầu) đã được fix trên build nào?",
+            "why_it_matters": "Lượt PASS duy nhất chạy trước khi 6 PR merge, build hash không rõ, shipped UNKNOWN; BUG-430 chỉ 'không tái hiện' ở lượt retest — check print file theo Hide chưa có nền xác nhận cho build hiện tại/production.",
+            "kb_refs": ["KB-239"],
+            "oq_type": "OPEN_ISSUE"
+          },
+          {
+            "question": "[MỚI, CBS-011] Print file PDF và layout emboss / shape-cut có loại bỏ layer bị Hide như print file PNG layout thường không?",
+            "why_it_matters": "KB-239 chỉ kiểm PNG layout thường; check cho PDF / emboss / shape-cut với điều kiện Hide không có oracle cho tới khi chạy.",
+            "kb_refs": ["KB-239"],
+            "oq_type": "OPEN_ISSUE"
+          }
+        ]
+      }
+    ],
+    "profile_relationships": [
+      {
+        "from_feature_id": "FEAT-ORDER-01",
+        "to_feature_id": "FEAT-ORDER-PORTAL-01",
+        "relationship": "upstream_dependency",
+        "description": "This feature's entry point (an order visible in the portal Orders list) depends on place-personalized-order-storefront's checkout-to-sync handoff, which is not guaranteed reliable — see OQ-order-001.",
+        "kb_refs": ["KB-011", "KB-014"]
+      },
+      {
+        "from_feature_id": "FEAT-ORDER-PORTAL-01",
+        "to_feature_id": "FEAT-22-group-layer-effective-visibility",
+        "to_feature_key": "group-layer-effective-visibility",
+        "relationship": "applies_rule_owned_by (cross-object: artwork)",
+        "description": "[MỚI, CBS-006] Print file (order design) PNG/PDF theo effective visibility của Group; quy tắc thuộc artwork (artwork KB-158). Layout emboss / shape-cut chưa kiểm.",
+        "kb_refs": ["KB-182", "KB-183"]
+      },
+      {
+        "from_feature_id": "FEAT-ORDER-PORTAL-01",
+        "to_feature_id": "FEAT-07-storefront-buyer-facing",
+        "to_feature_key": "storefront-buyer-facing",
+        "relationship": "corroborates (cross-object: sdk)",
+        "description": "[MỚI, CBS-006] Cùng test case TC-TIB-6068: print file PNG khớp buyer preview storefront (sdk KB-181) — ba bề mặt (editor canvas, buyer preview, print file) khớp nhau trên cùng fixture.",
+        "kb_refs": ["KB-182"]
+      },
+      {
+        "from_feature_id": "FEAT-ORDER-PORTAL-01",
+        "to_feature_id": "FEAT-08-conditional-setting-config",
+        "to_feature_key": "conditional-setting-config",
+        "relationship": "applies_rule_owned_by (cross-object: artwork)",
+        "description": "[MỚI, CBS-011] Print file / preview / mockup của order theo action Hide và điều kiện cấu hình ở artwork. FEAT-08 ở đây là feature của object artwork (khác sdk FEAT-08-product-page-settings-config).",
+        "kb_refs": ["KB-239"]
+      },
+      {
+        "from_feature_id": "FEAT-ORDER-PORTAL-01",
+        "to_feature_id": "FEAT-07-storefront-buyer-facing",
+        "to_feature_key": "storefront-buyer-facing",
+        "relationship": "corroborates (cross-object: sdk)",
+        "description": "[MỚI, CBS-011] TC-TIB-7340: kết quả ẩn/hiện layer Hide trên print file / preview / mockup của order khớp cái buyer thấy trên storefront (sdk KB-231).",
+        "kb_refs": ["KB-239"]
+      },
+      {
+        "from_feature_id": "FEAT-ORDER-01",
+        "to_feature_id": "FEAT-ORDER-PORTAL-01",
+        "relationship": "corroborates (same order)",
+        "description": "[MỚI, CBS-011] Cùng order Bogus (portal orders/4811): item có layer bị Hide không có giá trị trong View customization và print file (order KB-238), item không khớp in đủ (KB-239).",
+        "kb_refs": ["KB-239"]
+      }
+    ],
+    "coverage_matrix": [
+      {"feature_id": "FEAT-ORDER-PORTAL-01", "layer": "portal", "role": "owner (sub=273)", "state": "orders list, default filters", "environment": "staging", "covered": true},
+      {"feature_id": "FEAT-ORDER-PORTAL-01", "layer": "portal", "role": "owner (sub=273)", "state": "orders list search by internal name vs Shopify confirmation code", "environment": "staging", "covered": true},
+      {"feature_id": "FEAT-ORDER-PORTAL-01", "layer": "portal", "role": "owner (sub=273)", "state": "order-details (tib_status=ready, POD disconnected)", "environment": "staging", "covered": true},
+      {"feature_id": "FEAT-ORDER-PORTAL-01", "layer": "api", "role": "owner (sub=273)", "state": "orders list REST + order-details GraphQL field names", "environment": "staging", "covered": true},
+      {"feature_id": "FEAT-ORDER-PORTAL-01", "layer": "portal", "role": "owner (sub=273)", "state": "item activity log dialog", "environment": "staging", "covered": true},
+      {"feature_id": "FEAT-ORDER-PORTAL-01", "layer": "portal", "role": "owner (sub=273)", "state": "fulfill review dialog, POD disconnected", "environment": "staging", "covered": true},
+      {"feature_id": "FEAT-ORDER-PORTAL-01", "layer": "portal", "role": "owner (sub=273)", "state": "fulfill action, POD connected", "environment": "staging", "covered": false},
+      {"feature_id": "FEAT-ORDER-PORTAL-01", "layer": "portal", "role": "owner (sub=273)", "state": "change-status transition executed", "environment": "staging", "covered": false},
+      {"feature_id": "FEAT-ORDER-PORTAL-01", "layer": "portal", "role": "owner (sub=273)", "state": "Bulk Fulfill page opened", "environment": "staging", "covered": false},
+      {"feature_id": "FEAT-ORDER-PORTAL-01", "layer": "portal", "role": "non-owner / restricted permission", "state": "any", "environment": "staging", "covered": false},
+      {"feature_id": "FEAT-ORDER-PORTAL-01", "layer": "data", "role": "n/a", "state": "order / order-item DB rows", "environment": "staging", "covered": false},
+      {"feature_id": "FEAT-ORDER-PORTAL-01", "layer": "portal", "role": "owner (sub=273)", "state": "Edit/View customization exercised", "environment": "staging", "covered": false},
+      {"feature_id": "FEAT-ORDER-PORTAL-01", "layer": "api+portal", "role": "owner (instance 520 nprice1)", "state": "[MỚI, CBS-006] print file PNG + PDF, artwork có Group ẩn, layout thường; PNG khi Product Base không có layout emboss", "environment": "staging", "covered": true, "kb_refs": ["KB-182", "KB-183"], "basis": "KB-182 CONFIRMED_EXPECTED/MEDIUM; KB-183 OBSERVED_CURRENT/LOW; 1 lượt chạy 2026-10-16"},
+      {"feature_id": "FEAT-ORDER-PORTAL-01", "layer": "api", "role": "owner", "state": "[MỚI, CBS-006] print file layout emboss / shape-cut, artwork có Group ẩn", "environment": "staging", "covered": false, "kb_refs": ["KB-183"]},
+      {"feature_id": "FEAT-ORDER-PORTAL-01", "layer": "api", "role": "any", "state": "[MỚI, CBS-006] print file theo Group ẩn trên build sau merge đủ PR / release", "environment": "production", "covered": false, "kb_refs": ["KB-182"], "basis": "shipped UNKNOWN"},
+      {"feature_id": "FEAT-ORDER-PORTAL-01", "layer": "api+portal", "role": "merchant-owner (instance 520 nprice1)", "state": "[MỚI, CBS-011] print file PNG + preview customization + mockup, item khớp / không khớp điều kiện Hide, layout thường", "environment": "staging", "covered": true, "kb_refs": ["KB-239"], "basis": "CONFIRMED_EXPECTED/MEDIUM; 1 lượt retest 2026-10-28, trước khi 6 PR merge"},
+      {"feature_id": "FEAT-ORDER-PORTAL-01", "layer": "api", "role": "merchant-owner", "state": "[MỚI, CBS-011] print file PDF / layout emboss / shape-cut với layer action Hide", "environment": "staging", "covered": false, "kb_refs": ["KB-239"]},
+      {"feature_id": "FEAT-ORDER-PORTAL-01", "layer": "api", "role": "any", "state": "[MỚI, CBS-011] print file / preview / mockup theo điều kiện Hide trên build sau merge 6 PR / release", "environment": "production", "covered": false, "kb_refs": ["KB-239"], "basis": "shipped UNKNOWN"}
+    ],
+    "unassigned_kb_items": [],
+    "profile_conflicts": [],
+    "profile_change_summary": [
+      {"change": "ADDED", "field": "actors[2]", "kb_refs": ["KB-239"]},
+      {"change": "ADDED", "field": "capabilities[7]", "kb_refs": ["KB-239"]},
+      {"change": "ADDED", "field": "state_transitions[4..5]", "kb_refs": ["KB-239"]},
+      {"change": "ADDED", "field": "confirmed_rules[1]", "kb_refs": ["KB-239"]},
+      {"change": "ADDED", "field": "surface_mapping.portal[6], surface_mapping.api[6]", "kb_refs": ["KB-239"]},
+      {"change": "ADDED", "field": "dependencies[3]", "kb_refs": ["KB-239"]},
+      {"change": "ADDED", "field": "risks[5..6]", "kb_refs": ["KB-239", "KB-183"]},
+      {"change": "ADDED", "field": "unknown_areas[12..13]", "kb_refs": ["KB-239"]},
+      {"change": "ADDED", "field": "coverage_matrix (+3 rows)", "kb_refs": ["KB-239"]},
+      {"change": "ADDED", "field": "profile_relationships[3..5]", "kb_refs": ["KB-239"]},
+      {"change": "MODIFIED", "field": "freshness.source_observed_on 2026-10-16 → 2026-10-28", "kb_refs": ["KB-239"]},
+      {"change": "UNCHANGED", "field": "mọi field base còn lại (carry-forward nguyên văn)", "kb_refs": []}
+    ],
+    "kb_trace_complete": true
+  },
+  "gate": {
+    "gate": "C4",
+    "decision": "CONDITIONAL_PASS",
+    "blocking_findings": [],
+    "conditions": [
+      "Index 12–13 là OPEN_ISSUE mới, chưa có draft OQ từ normalizer — orchestrator compile nếu cần.",
+      "KB-239 shipped UNKNOWN, chạy trước khi 6 PR merge — confirmed_rule mới chỉ áp cho staging, print file PNG layout thường, tới khi re-verify."
+    ],
+    "allowed_next_steps": ["qa-checklist-builder", "knowledge-diff-analyzer"]
+  }
+}

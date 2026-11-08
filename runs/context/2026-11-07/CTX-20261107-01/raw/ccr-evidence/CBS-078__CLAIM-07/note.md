@@ -1,0 +1,3 @@
+Claim S0, không nạp. Block CCR không có người xác nhận, chỉ có dòng tóm tắt của audit.
+Agent đọc Jira TIB-5516 ngày 2026-11-07: tiêu đề "Improve: reduce the number of requests sent to the server", status Done, update cuối 2026-10-20. Sáu comment không có câu nào nói file users/<merchant> là public hay ownership check bị bypass bằng URL CDN tuyệt đối. #53844 (chauptm, 2026-10-08) ghi url mask dạng users/... phải thuộc merchant hiện tại; #53942 (chauptm, 2026-10-09) ghi endpoint photo-border-masks đã bị gỡ. Dòng audit có thể đã lỗi thời.
+Host cdn.ownego.com chưa được xác nhận theo brief, không dùng làm oracle.

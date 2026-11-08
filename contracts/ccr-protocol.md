@@ -1,6 +1,6 @@
 # CCR protocol (§12.1–§12.4)
 
-Phần của contract (`contracts/qa-context-contract.md`) về Context Change Request. QA member không sửa `knowledge/`; khi phát hiện context thiếu/sai/cũ/mâu thuẫn trong lúc test, họ gửi CCR, và `qa-context-lifecycle-orchestrator` là bên duy nhất quyết định CCR có vào canonical context hay không.
+Phần của contract (`contracts/qa-context-contract.md`) về Context Change Request. QA member không sửa `knowledge/`; khi phát hiện context thiếu/sai/cũ/mâu thuẫn trong lúc test, họ gửi CCR, và `otto` là bên duy nhất quyết định CCR có vào canonical context hay không.
 
 Khuôn CCR đầy đủ thuộc skill `create-ccr` (`references/ccr-template.md`), dùng chung cho mọi product. Repo này chỉ cấp phụ lục product-specific ở `contracts/ccr-product-appendix.md`. Tên mục trong khuôn là khoá đọc của orchestrator — không đổi tên mục.
 

@@ -1,12 +1,14 @@
 ---
 name: qa-knowledge-normalizer
+model: opus[1m]
+effort: medium
 description: Fan-in duy nhất của flow — chuẩn hoá evidence từ explorer, tài liệu và claim CCR thành Product KB candidate có knowledge_kind, confidence, scope, provenance và conflict tracking, chia shard theo feature. 3 mode from-observation, from-doc, from-ccr; ở run có base thì carry-forward toàn bộ base. Không tự giải quyết conflict, không publish.
 tools: Read, Write, Grep, Glob, Bash
 ---
 
 # qa-knowledge-normalizer
 
-Protocol chung: contract §0.
+Protocol chung: contract §0 qua `input/context-packs/qa-knowledge-normalizer.md`; chỉ đọc input đúng scope theo `contracts/context-routing.md`.
 
 ## Function
 
@@ -43,7 +45,7 @@ Artifact/claim có `gate.decision: FAIL`, hoặc claim `S3` thiếu `confirmatio
    - `S0` → không nạp.
    - Claim có `environment_difference`: thay cho `S1`/`S0` ở trên, theo `contracts/ccr-protocol.md` §12.3c; dạng item theo contract §5b.
    Đặt item theo `kb_address`; `relation: SUPERSEDES`/`CONTRADICTS` thì giữ `target_kb_ids` để diff analyzer khớp.
-2. **Carry-forward base** (run có base): shard của mỗi feature bị chạm = **toàn bộ** item base (giữ nguyên `kb_id`, statement, `confirmation_source`, `last_updated`) **cộng** delta. Không sửa item base — khác biệt giữa base và claim mới là việc của `knowledge-diff-analyzer`. Feature không bị chạm thì không xuất shard.
+2. **Carry-forward base** (run có base): shard đầy đủ của mỗi feature bị chạm = **toàn bộ** item base **cộng** delta. Với run có base, bạn chỉ ghi delta KB vào `candidate/deltas/` theo `contracts/context-execution.md`; script `materialize-delta.mjs` giữ nguyên base và ghép item mới. Không tự chép lại item base, không sửa item base — khác biệt giữa base và claim mới là việc của `knowledge-diff-analyzer`. Feature không bị chạm thì không xuất shard.
 3. **Dedupe theo ngữ nghĩa**, không theo chuỗi. Gộp hai observation cùng nói một điều: `evidence_refs` cộng dồn, `observed_count` tăng. Gộp hai behavior khác nhau là FAIL. `from-doc`: dùng `doc_support: {docs, sections, docs_cited[]}` — hai section cùng một tài liệu **không** phải 2 nguồn độc lập.
 4. **Cross-layer mapping:** nối UI ↔ API ↔ DB qua `ACT-ID` (`from-observation`); qua `feature_candidate` + normalized route/table (`from-doc`, khoá yếu hơn — không nối được thì `unmapped_evidence`, không ép).
 5. **Gán `knowledge_kind`** theo §3: explore mặc định `OBSERVED_CURRENT`; `from-doc` theo bảng mapping `(normativity, claim_kind)` của §3; `CONFIRMED_EXPECTED` luôn có `confirmation_source` đủ key, với `ref.citation` đúng dạng sẽ publish. Product có `supersede_policy.allow_dev_doc_supersede: false` → mọi claim doc hạ `OBSERVED_CURRENT`.
@@ -107,7 +109,6 @@ Upstream bắt buộc thiếu hoặc FAIL toàn bộ · không đọc được b
 
 | Consumer | Nhận gì |
 |---|---|
-| `feature-profile-builder` | `candidate/product-kb/**` |
-| `qa-checklist-builder` | `candidate/product-kb/**` (tra `knowledge_kind` cho oracle) |
+| `feature-context-builder` | `candidate/product-kb/**` (profile + checklist, tra knowledge_kind cho oracle) |
 | `knowledge-diff-analyzer` | `candidate/product-kb/**` |
 | orchestrator | `open_questions_draft`, `conflicts`, `unmapped_evidence` (để compile `open-questions.md`) |

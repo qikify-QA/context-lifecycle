@@ -1,0 +1,3 @@
+Trích từ Jira TIB-5510 comment #56209, phatnt (dev), 2026-11-02, đọc qua MCP 2026-11-06, đã bỏ thẻ định dạng.
+
+Đã bổ sung 2 cấu hình dịch mới vào Portal tại mục: Portal › Settings › Product Page Content / Translations › Addon Charge addon_unavailable_error (Error message when adding an unavailable add-on to cart): Vị trí: Thông báo lỗi chung xuất hiện dưới form / nút ATC khi khách bấm Add to Cart. Default (EN): "The selected add-on is currently unavailable. Please choose another option or contact store support." addon_unavailable_message (Error message on unavailable add-on option): Vị trí: Dòng thông báo đỏ xuất hiện ngay dưới/cạnh option add-on bị lỗi trên form. Default (EN): "The selected add-on is currently unavailable."

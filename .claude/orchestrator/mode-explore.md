@@ -15,9 +15,8 @@ Khi brief explorer runtime, luôn đưa: đường dẫn playbook (`explore.play
 | 6 | `code-config-explorer` | CHỈ khi có câu hỏi cụ thể + repo + revision |
 | 7 | gate **C2** | |
 | 8 | `qa-knowledge-normalizer` mode `from-observation` | → C3; run có base thì carry-forward |
-| 9 | `feature-profile-builder` | → C4 |
-| 10 | `qa-checklist-builder` | → C5 |
-| 11 | `knowledge-diff-analyzer` | CHỈ khi object đã có base (re-bootstrap, `REFRESH`, `RECONCILE`); bootstrap lần đầu thì không spawn |
-| 12 | publish | `.claude/orchestrator/publish.md` |
+| 9 | `feature-context-builder` (profile → checklist, cùng worker) | → C4 rồi C5 |
+| 10 | `knowledge-diff-analyzer` | CHỈ khi object đã có base (re-bootstrap, `REFRESH`, `RECONCILE`); bootstrap lần đầu thì không spawn |
+| 11 | publish | `.claude/orchestrator/publish.md` |
 
 `RECONCILE`: mục tiêu là các `conflict_group` đang mở; explore hẹp đúng hai phía của conflict và không tự đóng conflict — kết quả vẫn qua diff + reviewer.
