@@ -68,4 +68,4 @@ Done khi: mọi gate áp dụng có kết quả trong `review/verdict.json`; `pu
 
 ## Script (luôn dùng, không làm tay)
 
-`products.mjs` · `intake.mjs` · `dedup.mjs` · `new-run.mjs` · `lock.mjs acquire|verify|release` · `freeze-docs.mjs` · `materialize-delta.mjs` · `validate-run.mjs` · `publish-strip.mjs` · `audit-preview.mjs` · `publish-apply.mjs` · `copy-shared.mjs`. Exit 2 của lock/publish = `DEFERRED` (`locked_by_run` / `lock_lost`), không phải `CONFLICT`; exit 1 = đọc JSON output, đừng đoán.
+`products.mjs` · `intake.mjs` · `dedup.mjs` · `new-run.mjs` · `lock.mjs acquire|verify|release` · `freeze-docs.mjs` · `materialize-delta.mjs` · `validate-run.mjs` · `publish-strip.mjs` · `audit-preview.mjs` · `publish-apply.mjs` · `copy-shared.mjs` · `review-delta.mjs`. Exit 2 của lock/publish = `DEFERRED` (`locked_by_run` / `lock_lost`), không phải `CONFLICT`; exit 1 = đọc JSON output, đừng đoán.

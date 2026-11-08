@@ -107,6 +107,42 @@ export async function copyProductFiles(baseDir, out) {
   }
 }
 
+/**
+ * Profile published. Các phần coverage_matrix/profile_conflicts/profile_relationships ưu tiên giá trị nằm
+ * trong chính profile (profile dựng từ delta giữ chúng ở đó); chỉ khi profile không có field thì mới lấy ở
+ * cấp payload (artifact dựng đầy đủ kiểu cũ). Lấy sai nguồn làm rỗng các phần này khi publish-apply ghi đè file.
+ */
+export function publishProfile(profile, payload, { oqAssign = {}, lastUpdated } = {}) {
+  const byFeature = (list) => (list ?? []).filter((x) => !x.feature_id || x.feature_id === profile.feature_id);
+  const own = (key, fallback) => (Array.isArray(profile[key]) ? profile[key] : fallback);
+  const uaOq = oqAssign[profile.feature_key]?.unknown_areas ?? {};
+  return stripForbidden({
+    ...profile,
+    unknown_areas: (profile.unknown_areas ?? []).map((u, i) => (uaOq[i] ? { ...u, oq_id: uaOq[i] } : u)),
+    last_updated: profile.last_updated ?? lastUpdated,
+    coverage_matrix: own("coverage_matrix", byFeature(payload.coverage_matrix)),
+    profile_conflicts: own("profile_conflicts", byFeature(payload.profile_conflicts)),
+    profile_relationships: own("profile_relationships", payload.profile_relationships ?? [])
+  });
+}
+
+/** Checklist published; cùng nguyên tắc ưu tiên field nằm trong chính checklist. */
+export function publishChecklist(cl, payload, { objectKey, oqAssign = {}, lastUpdated } = {}) {
+  const byFeature = (list) => (list ?? []).filter((x) => !x.feature_id || x.feature_id === cl.feature_id);
+  const own = (key, fallback) => (Array.isArray(cl[key]) ? cl[key] : fallback);
+  const chkOq = oqAssign[cl.feature_key]?.checks ?? {};
+  return stripForbidden({
+    feature_id: cl.feature_id,
+    feature_key: cl.feature_key,
+    object_id: objectKey,
+    checklist_version: cl.checklist_version,
+    checks: (cl.checks ?? []).map((c) => (chkOq[c.check_id] ? { ...c, oq_id: chkOq[c.check_id] } : c)),
+    coverage_by_feature_and_risk: own("coverage_by_feature_and_risk", byFeature(payload.coverage_by_feature_and_risk)),
+    excluded_dimensions: own("excluded_dimensions", payload.excluded_dimensions ?? []),
+    last_updated: cl.last_updated ?? lastUpdated
+  });
+}
+
 async function main() {
   const args = parseArgs();
   if (typeof args.run !== "string") {
@@ -178,17 +214,8 @@ async function main() {
         problems.push(`profile ${profile.feature_key}: không có KB shard tương ứng nên không biết object`);
         continue;
       }
-      const byFeature = (list) => (list ?? []).filter((x) => !x.feature_id || x.feature_id === profile.feature_id);
       const rel = path.join(object, "features", profile.feature_key, "profile.json");
-      const uaOq = oqAssign[profile.feature_key]?.unknown_areas ?? {};
-      await writeJson(path.join(out, rel), stripForbidden({
-        ...profile,
-        unknown_areas: (profile.unknown_areas ?? []).map((u, i) => (uaOq[i] ? { ...u, oq_id: uaOq[i] } : u)),
-        last_updated: profile.last_updated ?? lastUpdated,
-        coverage_matrix: byFeature(payload.coverage_matrix),
-        profile_conflicts: byFeature(payload.profile_conflicts),
-        profile_relationships: payload.profile_relationships ?? []
-      }));
+      await writeJson(path.join(out, rel), publishProfile(profile, payload, { oqAssign, lastUpdated }));
       written.push(rel);
     }
   }
@@ -202,19 +229,8 @@ async function main() {
         problems.push(`checklist ${cl.feature_key}: không có KB shard tương ứng nên không biết object`);
         continue;
       }
-      const byFeature = (list) => (list ?? []).filter((x) => !x.feature_id || x.feature_id === cl.feature_id);
       const rel = path.join(object, "checklists", `${cl.feature_key}.json`);
-      const chkOq = oqAssign[cl.feature_key]?.checks ?? {};
-      await writeJson(path.join(out, rel), stripForbidden({
-        feature_id: cl.feature_id,
-        feature_key: cl.feature_key,
-        object_id: object,
-        checklist_version: cl.checklist_version,
-        checks: (cl.checks ?? []).map((c) => (chkOq[c.check_id] ? { ...c, oq_id: chkOq[c.check_id] } : c)),
-        coverage_by_feature_and_risk: byFeature(payload.coverage_by_feature_and_risk),
-        excluded_dimensions: payload.excluded_dimensions ?? [],
-        last_updated: cl.last_updated ?? lastUpdated
-      }));
+      await writeJson(path.join(out, rel), publishChecklist(cl, payload, { objectKey: object, oqAssign, lastUpdated }));
       written.push(rel);
     }
   }

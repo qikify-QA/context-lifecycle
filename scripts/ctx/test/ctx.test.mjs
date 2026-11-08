@@ -8,7 +8,7 @@ import path from "node:path";
 import { acquireAll, verifyAll, releaseAll } from "../../lib/locks.mjs";
 import { stripForbidden, scanText, confirmationSourceProblems } from "../../lib/forbidden-fields.mjs";
 import { createRun } from "../new-run.mjs";
-import { publishKbItem, applySupersedes, publishConfirmationSource, copyProductFiles } from "../publish-strip.mjs";
+import { publishKbItem, applySupersedes, publishConfirmationSource, copyProductFiles, publishProfile, publishChecklist } from "../publish-strip.mjs";
 import { scanSecrets } from "../freeze-docs.mjs";
 import { mergeRegistry } from "../publish-apply.mjs";
 import { copySharedToPreview, planSharedFiles } from "../../lib/shared-files.mjs";
@@ -412,4 +412,51 @@ test("release: chỉ PR đã merge mới thành released, kèm merge SHA", async
   const { released, pending } = await resolveReleases(records, async (u) => states[u], "ctx-1");
   assert.deepEqual(released, [{ proposal_id: "CBS-1", release: { status: "released", pr: "u1", sha: "abc", tag: "ctx-1" } }]);
   assert.deepEqual(pending, [{ pr: "u2", state: "OPEN", proposals: ["CBS-2"] }]);
+});
+
+test("publish-strip: profile/checklist dựng từ delta giữ coverage, conflict, relationship, excluded_dimensions của chính nó", () => {
+  const profile = { feature_id: "F1", feature_key: "f", coverage_matrix: [{ a: 1 }, { a: 2 }], profile_conflicts: [{ c: 1 }], profile_relationships: [{ r: 1 }], unknown_areas: [] };
+  const out = publishProfile(profile, {}, { lastUpdated: { date: "2026-01-01" } });
+  assert.equal(out.coverage_matrix.length, 2);
+  assert.equal(out.profile_conflicts.length, 1);
+  assert.equal(out.profile_relationships.length, 1);
+  const cl = { feature_id: "F1", feature_key: "f", checklist_version: 3, checks: [{ check_id: "CHK-1" }], coverage_by_feature_and_risk: [{ x: 1 }], excluded_dimensions: [{ d: 1 }] };
+  const oc = publishChecklist(cl, {}, { objectKey: "o", oqAssign: { f: { checks: { "CHK-1": "OQ-o-001" } } } });
+  assert.equal(oc.coverage_by_feature_and_risk.length, 1);
+  assert.equal(oc.excluded_dimensions.length, 1);
+  assert.equal(oc.checks[0].oq_id, "OQ-o-001");
+});
+
+test("publish-strip: artifact kiểu cũ (field ở cấp payload) vẫn lọc theo feature_id", () => {
+  const profile = { feature_id: "F1", feature_key: "f" };
+  const payload = { coverage_matrix: [{ feature_id: "F1" }, { feature_id: "F2" }], profile_conflicts: [{ feature_id: "F2" }], profile_relationships: [{ r: 1 }] };
+  const out = publishProfile(profile, payload, {});
+  assert.equal(out.coverage_matrix.length, 1);
+  assert.equal(out.profile_conflicts.length, 0);
+  assert.equal(out.profile_relationships.length, 1);
+  const oc = publishChecklist({ feature_id: "F1", feature_key: "f", checks: [] }, { coverage_by_feature_and_risk: [{ feature_id: "F1" }, { feature_id: "F2" }], excluded_dimensions: [{ d: 1 }] }, { objectKey: "o" });
+  assert.equal(oc.coverage_by_feature_and_risk.length, 1);
+  assert.equal(oc.excluded_dimensions.length, 1);
+});
+
+test("review-delta: so hash với snapshot, nêu file đổi/thêm/xoá; chưa có snapshot thì phải review đầy đủ", async () => {
+  const { hashRun, compare } = await import("../review-delta.mjs");
+  const dir = await makeRun({
+    "input/ccr-fastpath-plan.json": { a: 1 },
+    "candidate/product-kb/f.json": { kb: 1 },
+    "review/verdict.json": { v: 1 }
+  });
+  const before = await hashRun(dir);
+  assert.deepEqual(Object.keys(before).sort(), ["candidate/product-kb/f.json", "input/ccr-fastpath-plan.json"]);
+  const { writeFile, rm } = await import("node:fs/promises");
+  await writeFile(path.join(dir, "candidate/product-kb/f.json"), JSON.stringify({ kb: 2 }));
+  await writeFile(path.join(dir, "candidate/g.json"), "{}");
+  await rm(path.join(dir, "input/ccr-fastpath-plan.json"));
+  await writeFile(path.join(dir, "review/verdict.json"), JSON.stringify({ v: 2 }));
+  assert.deepEqual(compare(before, await hashRun(dir)), {
+    full: false,
+    changed: ["candidate/product-kb/f.json"],
+    added: ["candidate/g.json"],
+    removed: ["input/ccr-fastpath-plan.json"]
+  });
 });
