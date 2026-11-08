@@ -1,6 +1,6 @@
 # QA Context Contract
 
-Luật chung cho mọi agent của QA context builder. Mọi subagent đọc file này trước khi làm bất cứ việc gì.
+Luật chung cho mọi agent của QA context builder. Mọi agent đọc context pack được trích từ file này theo vai trò trước khi làm việc; không nạp toàn bộ contract mặc định.
 
 File này nói **luật là gì**. `DECISIONS.md` ở root nói **vì sao** và giữ các vi phạm tồn đọng đã biết — đọc nó trước khi nới hoặc bỏ một luật ở đây.
 
@@ -21,7 +21,7 @@ Khác biệt giữa các product (environment, explorer được phép, cách lo
 
 Áp cho mọi agent; agent definition không lặp lại mục này.
 
-- **Thứ tự đọc:** contract này → `run-manifest.json` (mode đã settle) → `input/bootstrap-request.json` → input riêng của agent.
+- **Thứ tự đọc:** `input/context-packs/<agent>.md` (agenda sinh bằng `context-pack.mjs`, xem `contracts/context-routing.md`) → `run-manifest.json` (mode đã settle) → `input/bootstrap-request.json` → đúng input được giao. Pack trích nguyên văn luật từ nguồn chuẩn, không phải bản tóm tắt thay luật. Chỉ mở thêm section khi task cần, ghi lý do trong handoff.
 - **Write root:** chỉ ghi dưới `runs/context/<YYYY-MM-DD>/<CTX-RUN-ID>/`, đúng thư mục ghi trong agent definition (§5).
 - **Envelope:** mọi artifact bọc trong Artifact Envelope (§1).
 - **Shape:** artifact chính có JSON Schema ở `contracts/schemas/` (field bắt buộc + enum; field thêm được phép). Orchestrator chạy `scripts/ctx/validate-run.mjs` sau mỗi bước; luật có điều kiện giữa field (vd `CONFIRMED_EXPECTED` ⇒ có `confirmation_source`) nằm trong script đó.
@@ -40,7 +40,7 @@ Khác biệt giữa các product (environment, explorer được phép, cách lo
 
 ## 1. Artifact Envelope
 
-Mọi subagent nhận và trả đúng envelope này. `payload` là phần riêng của từng agent.
+Artifact đầy đủ trên đĩa dùng envelope này. Response handoff chỉ trả receipt ngắn theo `contracts/context-execution.md`, không lặp envelope/payload. `payload` là phần riêng của từng agent.
 
 ```json
 {
@@ -206,7 +206,7 @@ CTX-RUN-ID -> DOCSET-ID -> DOC-ID -> DSEC-ID -> CLAIM-ID
 | `APIOP-ID` | api-explorer (explore) · doc-ingest-explorer (doc) | `APIOP-<nnn>` · `APIOP-<doc-nn>-<nnn>` | `APIOP-001` · `APIOP-02-001` |
 | `ENT-ID` | db-explorer (explore) · doc-ingest-explorer (doc) | `ENT-<nnn>` · `ENT-<doc-nn>-<nnn>` | `ENT-003` · `ENT-02-003` |
 | `DBDELTA-ID` | db-explorer | `DB-<act>-<nn>` | `DB-01-02-003-01` |
-| `CHK-ID` | qa-checklist-builder | `CHK-<nnn>` (theo feature) | `CHK-001` |
+| `CHK-ID` | feature-context-builder | `CHK-<nnn>` (theo feature) | `CHK-001` |
 | `OQ-ID` | orchestrator (lúc compile `open-questions.md`) | `OQ-<object-key>-<nnn>` | `OQ-order-014` |
 | `DOCSET-ID` | orchestrator (lúc C0) | `DOCSET-<CTX-RUN-ID>` | `DOCSET-CTX-20260930-01` |
 | `DOC-ID` | orchestrator (lúc C0), theo thứ tự `doc_sources[]` | `DOC-<nn>` | `DOC-01` |
@@ -221,7 +221,7 @@ API và DB evidence BẮT BUỘC map về `ACT-ID` (mode explore) hoặc `DSEC-I
 
 `SCN-ID`, `ACT-ID`, `OBS-ID`, `SF-OBS-ID`, `SF-ACT-ID`, `DBDELTA-ID` là định danh của **quan sát**. Ở `DOC_BOOTSTRAP`/`CCR_INGEST` chúng **KHÔNG được sinh** — sinh ra là gate FAIL. Feature Profile và Checklist ở mode doc để `act_ids: []`.
 
-**Mỗi mode chỉ có đúng một bên mint `FEATURE-ID`.** Mode explore: `portal-explorer` (vì `SCN-ID` nhúng số feature). Mode doc và `CCR_INGEST`: orchestrator mint từ `feature_key` mà scope-planner (hoặc CCR) đề xuất, **trước khi** dispatch agent tiếp theo — `FEAT-<nn>-<slug>` với `nn` là số kế tiếp còn trống của object. Normalizer, feature-profile-builder và checklist-builder không mint, chỉ dùng lại. `FEATURE-ID` là định danh trong run; định danh ổn định qua các version là `feature_key` (tên thư mục `features/<feature-key>/`) — feature đã có trong base thì giữ nguyên `feature_key` của base.
+**Mỗi mode chỉ có đúng một bên mint `FEATURE-ID`.** Mode explore: `portal-explorer` (vì `SCN-ID` nhúng số feature). Mode doc và `CCR_INGEST`: orchestrator mint từ `feature_key` mà scope-planner (hoặc CCR) đề xuất, **trước khi** dispatch agent tiếp theo — `FEAT-<nn>-<slug>` với `nn` là số kế tiếp còn trống của object. Normalizer và feature-context-builder không mint, chỉ dùng lại. `FEATURE-ID` là định danh trong run; định danh ổn định qua các version là `feature_key` (tên thư mục `features/<feature-key>/`) — feature đã có trong base thì giữ nguyên `feature_key` của base.
 
 `DBDELTA-ID` không có tương đương ở mode doc. Tài liệu mô tả hệ quả ghi dữ liệu là một `CLAIM-ID` với `claim_kind: side_effect`.
 
@@ -232,8 +232,8 @@ API và DB evidence BẮT BUỘC map về `ACT-ID` (mode explore) hoặc `DSEC-I
 ## 5. Write scope
 
 - Subagent CHỈ ghi vào `runs/context/<YYYY-MM-DD>/<CTX-RUN-ID>/`, theo thư mục được cấp trong agent definition.
-- KHÔNG subagent nào được ghi vào `knowledge/`. Chỉ `qa-context-lifecycle-orchestrator` publish (`scripts/ctx/publish-apply.mjs`), và CHỈ khi **cả 2** điều kiện đúng: (a) reviewer trả `publish_allowed: true`, **và** (b) lock của mọi object bị ảnh hưởng vẫn thuộc `ctx_run_id` của chính run này (§16). Thiếu (b) → DỪNG, không ghi `knowledge/`, `DEFERRED` + `reason: lock_lost`.
-- **Thứ tự bắt buộc: checklist-builder → `knowledge-diff-analyzer` (khi có base) → publish strip → reviewer → publish.** Publish strip (`scripts/ctx/publish-strip.mjs`) đọc candidate gốc và sinh `candidate/publish-preview/` theo đúng layout `knowledge/products/<product>/` và đúng schema §5a, đồng thời áp `resolution: SUPERSEDE` của diff (§12.5). Preview là bản **y hệt** sẽ được copy vào `knowledge/`. Candidate gốc giữ nguyên envelope/evidence, không bị sửa.
+- KHÔNG subagent nào được ghi vào `knowledge/`. Chỉ `otto` publish (`scripts/ctx/publish-apply.mjs`), và CHỈ khi **cả 2** điều kiện đúng: (a) reviewer trả `publish_allowed: true`, **và** (b) lock của mọi object bị ảnh hưởng vẫn thuộc `ctx_run_id` của chính run này (§16). Thiếu (b) → DỪNG, không ghi `knowledge/`, `DEFERRED` + `reason: lock_lost`.
+- **Thứ tự bắt buộc: feature-context-builder → `knowledge-diff-analyzer` (khi có base) → publish strip → reviewer → publish.** Publish strip (`scripts/ctx/publish-strip.mjs`) đọc candidate gốc và sinh `candidate/publish-preview/` theo đúng layout `knowledge/products/<product>/` và đúng schema §5a, đồng thời áp `resolution: SUPERSEDE` của diff (§12.5). Preview là bản **y hệt** sẽ được copy vào `knowledge/`. Candidate gốc giữ nguyên envelope/evidence, không bị sửa.
 - Sau strip, orchestrator cập nhật file prose trong preview (`feature-summary.md`, `open-questions.md`, `CHANGELOG.md`, `_registry.json`, `_product-guide.md`, `_env.example`). Reviewer chạy C1–C5 trên candidate gốc và C6 trên preview (`scripts/ctx/audit-preview.mjs`). Publish copy nguyên preview sang `knowledge/` (merge: file không có trong preview giữ nguyên), không strip lại.
 - Không sửa file của agent khác. Cần dữ liệu bước trước thì đọc, đừng ghi đè.
 
@@ -383,7 +383,7 @@ Entry mẫu: `{"oq_id": "OQ-order-014", "type": "CONFLICT", "feature_id": "order
 
 Guide, `_env.example` và `_flows/` chỉ ghi tên biến env: không ghi giá trị, id account, id instance, tên store. Store nào dùng cho việc gì thì viết theo tên biến. Account guard và phạm vi store của explorer chỉ nằm ở explore playbook, không áp dụng cho người test hằng ngày.
 
-**Không phải setup:** rule nghiệp vụ, ngưỡng, công thức, thông báo lỗi (KB) · expected result, test condition (checklist) · câu hỏi chưa rõ, conflict (`open-questions.md`) · bug không cản trở việc setup (Testlane) · lịch sử thay đổi (`CHANGELOG.md`). Bug chặn việc dựng data thì có tính, chỉ ghi phần cần biết để đi vòng. Feature mới chỉ đổi hành vi thì không có setup mới, chỉ thêm dòng vào bản đồ feature của guide. Thông tin setup trong guide chưa chắc chắn vẫn ghi, kèm nhãn nguồn hoặc `[?]`.
+**Không phải setup:** rule nghiệp vụ, ngưỡng, công thức, thông báo lỗi (KB) · expected result, test condition (checklist) · câu hỏi chưa rõ, conflict (`open-questions.md`) · bug không cản trở việc setup (Testlane) · lịch sử thay đổi (`CHANGELOG.md`). Bug chặn việc dựng data thì có tính, chỉ ghi phần cần biết để đi vòng. Feature mới chỉ đổi hành vi thì không có setup mới và không đổi guide. Thông tin setup trong guide chưa chắc chắn vẫn ghi, kèm nhãn nguồn hoặc `[?]`.
 
 **Khác biệt môi trường** là việc một feature hoạt động hoặc được test khác nhau giữa môi trường test và production. Mỗi khác biệt là một dòng ở `environment_differences` trong `profile.json` của feature, trace về đúng một KB item:
 
@@ -407,7 +407,7 @@ KB item của khác biệt: `topic: "environment_difference"`, `tags` chứa `ty
 | Có gì, ở đâu, test được không? | `_product-guide.md` | Bước, selector, request, expected |
 | Làm thế nào? | `_flows/<chủ đề>.md` | Rule nghiệp vụ, giá trị ảnh chụp theo ngày, id |
 
-**`_product-guide.md`** là bản đồ, mọi bước đều đọc, nên ≤ 10 KB. Khuôn: `contracts/templates/product-guide.template.md`.
+**`_product-guide.md`** là bản đồ, mọi bước đều đọc, tối đa 10 KB. Bản đồ dừng ở mức object: guide không liệt kê feature key, danh sách feature của object nằm ở `<object>/feature-summary.md`. Ngoại lệ duy nhất là bảng index khác biệt môi trường (§5b). Khuôn: `contracts/templates/product-guide.template.md`.
 
 **`_flows/`** là cách thao tác đã verify, chỉ đọc đúng file theo chủ đề. `README.md` là index. Guide, flow và `_env.example` đổi đi qua khối C của CCR.
 
@@ -512,7 +512,7 @@ Mode được phép của từng product nằm ở `config/products/<key>.json` 
 | Supersede (§12.5) | không | được phép (nếu config bật) | được phép (nếu config bật) | không |
 | Carry-forward base | — | khi có base | **có** | **có** |
 
-**Carry-forward base:** ở run có base, normalizer/feature-profile-builder/checklist-builder xuất shard của feature bị chạm = **toàn bộ** nội dung base (giữ nguyên `kb_id`, `check_id`, `last_updated`) cộng phần thay đổi. Publish copy cả file, nên item vắng khỏi shard là bị xoá khỏi `knowledge/`. Feature không bị chạm không xuất hiện trong candidate và giữ nguyên trong `knowledge/`.
+**Carry-forward base:** ở run có base, normalizer/feature-context-builder xuất shard của feature bị chạm = **toàn bộ** nội dung base (giữ nguyên `kb_id`, `check_id`, `last_updated`) cộng phần thay đổi. Publish copy cả file, nên item vắng khỏi shard là bị xoá khỏi `knowledge/`. Feature không bị chạm không xuất hiện trong candidate và giữ nguyên trong `knowledge/`.
 
 **Mode được đọc DUY NHẤT từ `run-manifest.json.mode`** — giá trị đã settle ở Gate C0.5, kèm `mode_settled_at`. `input/bootstrap-request.json.mode` chỉ là giá trị provisional. Không agent nào suy mode từ artifact trên đĩa. Một run `ZERO_DOC_BOOTSTRAP` có portal capture lỗi **KHÔNG** được tự hạ xuống `DOC_BOOTSTRAP` để đi qua gate — đó là `BLOCKED`. `raw/` rỗng ở mode doc là đúng.
 
@@ -522,13 +522,12 @@ Mode được phép của từng product nằm ở `config/products/<key>.json` 
 
 | Agent | Vai trò |
 |---|---|
-| `qa-context-lifecycle-orchestrator` | Điều phối run, mint ID, chạy script tất định, publish |
+| `otto` | Điều phối run, mint ID, chạy script tất định, publish |
 | `qa-context-scope-planner` | Phân rã scope (BROAD/DOC) |
 | `portal-explorer` · `storefront-explorer` · `api-explorer` · `db-explorer` · `code-config-explorer` | Evidence runtime |
 | `doc-ingest-explorer` | Evidence tài liệu |
 | `qa-knowledge-normalizer` | Fan-in duy nhất → Product KB candidate |
-| `feature-profile-builder` | KB → Feature Profile |
-| `qa-checklist-builder` | Profile → Regression Checklist |
+| `feature-context-builder` | KB → Feature Profile (C4) → Regression Checklist (C5), cùng context |
 | `knowledge-diff-analyzer` | Candidate vs base: diff, resolution, blast radius |
 | `context-quality-reviewer` | Gate độc lập trước publish |
 

@@ -1,11 +1,13 @@
 ---
-name: qa-context-lifecycle-orchestrator
+name: otto
+model: sonnet[1m]
+effort: medium
 description: Điều phối QA Context Lifecycle cho mọi product trong config/products — bootstrap (explore hoặc từ tài liệu), xử lý Context Change Request từ Proposal trên QA Hub, review độc lập, rồi publish canonical context có version vào knowledge/. Dùng khi cần tạo, làm mới hoặc cập nhật QA context dùng chung cho một product/object. KHÔNG dùng để kết luận PASS/FAIL cho một ticket hằng ngày.
 ---
 
-# qa-context-lifecycle-orchestrator
+# otto — orchestrator
 
-Protocol chung: contract §0. Bạn là bên thực thi contract (`contracts/qa-context-contract.md` + `ccr-protocol.md` + `supersede.md` + `gates.md`) — đọc chúng trước tiên.
+Protocol chung: contract §0. Đọc `contracts/context-routing.md`, rồi sinh và đọc context pack vai trò `otto` cho mode hiện tại. Không nạp tất cả contract từ đầu.
 
 ## Function
 
@@ -25,6 +27,10 @@ Protocol chung: contract §0. Bạn là bên thực thi contract (`contracts/qa-
 | Cấp `CTX-RUN-ID` + cây thư mục + `run-manifest.json` | `node scripts/ctx/new-run.mjs --product <p> --mode <M> [--object <o>] [--proposal CBS-n] [--label "<vài từ>"]` |
 | Lock object | `node scripts/ctx/lock.mjs acquire\|verify\|release --run <id> --product <p> --objects a,b [--proposal CBS-n]` |
 | Đóng băng tài liệu (sau khi bạn đã fetch + redact) | `node scripts/ctx/freeze-docs.mjs --run <id>` |
+| Sinh luật theo vai trò | `node scripts/ctx/context-pack.mjs --run <id> --agent <name>` |
+| Index JSON lớn / đọc đúng pointer | `node scripts/ctx/context-index.mjs --run <id> --file <workspace-path> [--pointer <p> --sha256 <hash>]` |
+| Materialize delta (KB/profile/checklist) | `node scripts/ctx/materialize-delta.mjs --run <id> --file <delta-relative-path>` |
+| Kiểm dung lượng context | `node scripts/ctx/context-metrics.mjs --run <id>` |
 | Validate artifact sau mỗi bước của subagent | `node scripts/ctx/validate-run.mjs --run <id> --stage <manifest\|ccr-plan\|doc\|kb\|profile\|checklist\|diff\|verdict>` |
 | Publish strip + áp `resolution` | `node scripts/ctx/publish-strip.mjs --run <id> [--ccr-ref CBS-n]` |
 | Audit preview (C6 cơ học) | `node scripts/ctx/audit-preview.mjs --run <id>` |
@@ -59,14 +65,14 @@ Mode chỉ đọc từ `run-manifest.json.mode`. Không suy mode từ artifact t
 ## Thứ tự chung của mọi mode
 
 ```text
-[explorer / doc-ingest] → normalizer → feature-profile-builder → qa-checklist-builder
+[explorer / doc-ingest] → normalizer → feature-context-builder (profile → C4 → checklist → C5)
    → knowledge-diff-analyzer (khi có base) → compile OQ → publish-strip → cập nhật prose trong preview
    → context-quality-reviewer → publish-apply → phản hồi Proposal → release lock
 ```
 
-Explorer độc lập chạy song song được; normalizer là điểm fan-in duy nhất. Subagent chỉ ghi trong thư mục run của mình (§5).
+Explorer độc lập chạy song song được; normalizer là điểm fan-in duy nhất. Subagent chỉ ghi trong thư mục run của mình (§5). Dispatch theo `contracts/context-execution.md`: worker chỉ nhận scope, input/output paths và context pack; kết quả về Otto là receipt ngắn, không phải nội dung artifact.
 
-**Sau mỗi subagent trả kết quả**, chạy `validate-run.mjs --stage <stage của agent đó>` (schema ở `contracts/schemas/`). Lỗi → retry đúng agent đó với danh sách lỗi, trước khi sang bước sau; không đẩy artifact sai shape xuống downstream. Trước reviewer, chạy `validate-run.mjs` không `--stage` một lần cho toàn run.
+**Sau mỗi subagent trả kết quả**, materialize delta nếu có (`materialize-delta.mjs`), rồi chạy `validate-run.mjs --stage <stage của agent đó>` (schema ở `contracts/schemas/`). Lỗi → retry đúng agent đó với danh sách lỗi, trước khi sang bước sau; không đẩy artifact sai shape xuống downstream. Trước reviewer, chạy `validate-run.mjs` không `--stage` một lần cho toàn run.
 
 ## Retry — sửa nhánh, không chạy lại flow
 
@@ -74,7 +80,8 @@ Explorer độc lập chạy song song được; normalizer là điểm fan-in d
 |---|---|
 | API mapping lỗi / thiếu capture | retry `api-explorer`, hoặc `portal-explorer` cho đúng `ACT-ID` thiếu; giữ nguyên bundle còn lại |
 | C1-DOC FAIL ở một doc | retry `doc-ingest-explorer` cho đúng `DOC-ID` đó |
-| Checklist lỗi | retry từ `qa-checklist-builder`, không explore lại |
+| Checklist lỗi | retry `feature-context-builder` với `stage: checklist`; giữ profile đã đạt C4, không explore lại |
+| Profile lỗi | retry `feature-context-builder` với `stage: all`; C4 xong mới tạo lại checklist của scope đó |
 | Reviewer trả `rework_targets` | dispatch đúng subagent + scope đó, rồi chạy lại từ bước sau nó |
 | DB không truy cập được | ghi limitation; không block nếu DB không phải evidence bắt buộc |
 | Storefront chưa quan sát | chỉ block khi feature được tuyên bố có buyer-facing effect |

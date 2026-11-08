@@ -5,7 +5,7 @@ Object đã publish (có base), CCR mang claim `S3`/`S1`. **0 explorer.** Chạy
 | # | Bước | Điều kiện |
 |---|---|---|
 | 1 | `qa-knowledge-normalizer` mode `from-ccr` | → C3. Shard của feature bị chạm = toàn bộ base + delta (carry-forward) |
-| 2 | `feature-profile-builder` → `qa-checklist-builder` | → C4, C5; base + delta |
+| 2 | `feature-context-builder` (profile → checklist) | → C4, C5; base + delta |
 | 3 | `knowledge-diff-analyzer` | **LUÔN**; `NOT_APPLICABLE` là gate FAIL |
 | 4 | publish | `.claude/orchestrator/publish.md` — `publish-strip.mjs` áp `SUPERSEDE` khi product có `supersede_policy.enabled: true`; 6 blocker của §12.5 STEP 6 là bất khả xâm phạm |
 

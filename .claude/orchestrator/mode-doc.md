@@ -8,13 +8,12 @@ Không portal, không credential, không environment runtime. Mục lục tài l
 | 2 | `node scripts/ctx/freeze-docs.mjs --run <id>` | exit 1 = C0 FAIL (thiếu version/generated_at/file); exit 2 = còn secret/PII → redact lại, chạy lại |
 | 3 | gate **C0** biến thể doc | thiếu `doc_sources[]` → FAIL, không chuyển sang explore |
 | 4 | `qa-context-scope-planner` | LUÔN, kể cả 1 object |
-| 5 | mint `FEATURE-ID` cho từng `feature_candidates[]`, ghi lại vào `input/scope-plan.json`; lock mọi object của plan | bạn tự làm; `lock.mjs acquire` exit 2 → `CONFLICT` |
+| 5 | mint `FEATURE-ID` cho từng `feature_candidates[]`, ghi lại vào `input/scope-plan.json`; lock mọi object của plan | bạn tự làm; `lock.mjs acquire` exit 2 → `DEFERRED` + `reason: locked_by_run` |
 | 6 | `doc-ingest-explorer` | 1 instance cho MỖI `DOC-ID`, song song |
 | 7 | gate **C1-DOC**, **C2-DOC** | FAIL → retry đúng `DOC-ID` đó, `keep_intact` doc khác |
 | 8 | `qa-knowledge-normalizer` mode `from-doc` | → C3; shard theo `feature_key` đã mint |
-| 9 | `feature-profile-builder` | → C4; `observed_validations[]` rỗng |
-| 10 | `qa-checklist-builder` | → C5 (phanh `derivation`) |
-| 11 | `knowledge-diff-analyzer` | CHỈ khi object đã có base |
-| 12 | publish | `.claude/orchestrator/publish.md` |
+| 9 | `feature-context-builder` (profile → checklist, cùng worker) | → C4 rồi C5; DOC_BOOTSTRAP: observed_validations rỗng, phanh derivation áp đầy đủ |
+| 10 | `knowledge-diff-analyzer` | CHỈ khi object đã có base |
+| 11 | publish | `.claude/orchestrator/publish.md` |
 
 `generated_from_commit: null` → ghi vào `unknowns` rằng `authored_on` của mọi claim là `generated_at`, nên KB này supersede được bởi CCR mới hơn nhưng không supersede ngược được (§12.5).

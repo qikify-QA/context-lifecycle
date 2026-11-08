@@ -11,9 +11,11 @@ Không dùng guide làm expected result. Không ghi giá trị credential, id, t
 ## 1. Product
 <luồng chính 3-6 bước, thuật ngữ cốt lõi>
 
-## 2. Object và feature
-| Object | Phạm vi | Không thuộc | Feature |
-|---|---|---|---|
+## 2. Object
+Từ khoá ticket sang object: `_registry.json`. Feature của object: `<object>/feature-summary.md`. Không liệt kê feature key ở đây.
+
+| Object | Phạm vi | Không thuộc |
+|---|---|---|
 
 ## 3. Môi trường
 <host production để dừng lại>

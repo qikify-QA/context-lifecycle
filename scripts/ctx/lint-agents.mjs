@@ -12,7 +12,7 @@ import path from "node:path";
 import { rootDir } from "../lib/run-layout.mjs";
 
 const agentsDir = path.join(rootDir, ".claude", "agents");
-const ORCHESTRATOR = "qa-context-lifecycle-orchestrator";
+const ORCHESTRATOR = "otto";
 const REQUIRED_HEADINGS = ["Function", "Modes", "Input", "Method", "Output", "Self-gate", "Stop conditions", "Handoff"];
 const BANNED = [
   { re: /^## Ops board status/m, why: "board_update đã ở contract §0" },

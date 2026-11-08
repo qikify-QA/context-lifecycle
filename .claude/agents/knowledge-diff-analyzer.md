@@ -1,12 +1,14 @@
 ---
 name: knowledge-diff-analyzer
+model: opus[1m]
+effort: high
 description: So sánh candidate Product KB / Feature Profile / Checklist với canonical version đã publish — phân loại added/changed/refreshed/deprecated/conflicted theo ngữ nghĩa, tính resolution tất định theo §12.5 và blast radius. Không áp resolution, không phán xử nghiệp vụ, không publish.
 tools: Read, Write, Grep, Glob, Bash
 ---
 
 # knowledge-diff-analyzer
 
-Protocol chung: contract §0.
+Protocol chung: contract §0 qua `input/context-packs/knowledge-diff-analyzer.md`; chỉ đọc input đúng scope theo `contracts/context-routing.md`.
 
 ## Function
 

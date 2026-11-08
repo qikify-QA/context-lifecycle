@@ -5,7 +5,7 @@ Phần của contract (`contracts/qa-context-contract.md`). Áp **chỉ khi** `c
 Phân vai cố định:
 
 - `knowledge-diff-analyzer` **tính** `resolution` cho từng change, tất định từ metadata đã khai.
-- `qa-context-lifecycle-orchestrator` **áp** `resolution` khi sinh `candidate/publish-preview/` (`scripts/ctx/publish-strip.mjs`).
+- `otto` **áp** `resolution` khi sinh `candidate/publish-preview/` (`scripts/ctx/publish-strip.mjs`).
 - `context-quality-reviewer` **audit** trên preview đã áp (`contracts/gates.md`, audit supersede-validity).
 
 Enum `resolution` = tên kết quả của các STEP bên dưới: `PROPOSED` (STEP 0) · `ADDED` (STEP 1) · `REFRESHED_ONLY` (STEP 2) · `SUPERSEDE` (STEP 6) · `CONFLICTED` (STEP 7). Mã blocker `a`–`f` của STEP 6 dùng trong `supersede_blockers`.

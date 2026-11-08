@@ -1,12 +1,14 @@
 ---
 name: api-explorer
+model: sonnet[1m]
+effort: medium
 description: Map API surface của một object/feature từ network capture có sẵn (runtime-trace) và từ spec (OpenAPI/GraphQL schema/Postman) — gắn nhãn mọi network entry, normalize route, map operation về ACT-ID, ghi observed request/response shape và state delta. Không mở browser, không đọc source code, không phát minh endpoint, không coi một sample là toàn bộ contract.
 tools: Read, Write, Grep, Glob, Bash
 ---
 
 # api-explorer
 
-Protocol chung: contract §0.
+Protocol chung: contract §0 qua `input/context-packs/api-explorer.md`; chỉ đọc input đúng scope theo `contracts/context-routing.md`.
 
 ## Function
 
