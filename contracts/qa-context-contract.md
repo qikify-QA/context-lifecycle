@@ -81,7 +81,7 @@ Artifact đầy đủ trên đĩa dùng envelope này. Response handoff chỉ tr
 | `CONFIRMED_EXPECTED` | Có nguồn thẩm quyền xác nhận đây là hành vi đúng, và mang `confirmation_source` |
 | `OBSERVED_CURRENT` | Đã quan sát trực tiếp trên env/role/state này, tại thời điểm này |
 | `INFERRED` | Suy ra từ evidence, chưa xác nhận |
-| `PROPOSED` | Đề xuất, chưa có evidence |
+| `PROPOSED` | Đề xuất, chưa có evidence. Item từ rule QA có chủ (`S2`, `ccr-protocol.md` §12.3a) mang `qa_rule_ref` và có OQ `NEEDS_CONFIRMATION` đi kèm |
 
 **Chỉ `qa-knowledge-normalizer` gán `knowledge_kind`.** Explorer ghi `basis: observed | documented | inferred` cho từng observation; normalizer quyết kind.
 
@@ -120,6 +120,8 @@ Enum `confirmation_source.type` — đúng 4 giá trị:
 | `dev_doc` | Tài liệu dev sinh từ source code, changelog/release note do dev viết, hoặc PR/commit diff — kèm locator + link + `authored_on` + trích nguyên văn |
 | `po_dev_confirm` | PO, Dev hoặc QA xác nhận trực tiếp, trích dẫn **nguyên văn** + ngày + ticket. Có link thì kèm link. Comment mơ hồ không tính |
 | `test_case` | Test case đã chạy và PASS đúng hành vi đang xét (id + ngày chạy + build ≥ bản có thay đổi) |
+
+**`qa_rule_ref`** (chỉ item `PROPOSED`, không đi cùng `confirmation_source`): `{code, owner_role, recorded_on, locator}` — mã rule trong kho QA, vai trò sở hữu (không tên cá nhân), ngày ghi nhận, nơi mở lại được. Rule QA có chủ chưa phải xác nhận của PO/Dev nên không là oracle `STRONG`; muốn lên `CONFIRMED_EXPECTED` cần nguồn thuộc enum trên.
 
 Jira ticket **trần** (không kèm doc/changelog/diff/quote/test-case) KHÔNG đủ — vẫn là `OBSERVED_CURRENT`. Ticket **kèm** dev doc hoặc PR diff thì đủ, và type là `dev_doc`.
 
@@ -256,7 +258,7 @@ inputs/bootstrap-drafts/                             (bootstrap-request soạn s
 
 knowledge/
 ├── manifest.json                                  (index cho consumer, sinh bằng script)
-├── _open-issues/consolidated-open-questions.md    (tổng hợp theo product, chỉ đọc)
+├── _open-issues/consolidated-open-questions.md    (mục lục OQ theo product/object, chỉ đọc)
 └── products/<product-key>/
     ├── _registry.json                     (alias registry, 1 file/product)
     ├── _product-kb.json                   (OPTIONAL — mức product: vocabulary, actor, ranh giới hệ thống)
@@ -348,7 +350,7 @@ Entry mẫu: `{"oq_id": "OQ-order-014", "type": "CONFLICT", "feature_id": "order
 
 **Mỗi entry PHẢI bọc trong một khối ```` ```json ````.** Parser (`scripts/lib/open-questions.mjs`) đọc được cả entry không fence, nhưng audit coi entry ngoài fence là BLOCKING — fence là quy ước để người đọc và máy đọc cùng thấy một thứ.
 
-`knowledge/_open-issues/consolidated-open-questions.md` là bản tổng hợp theo product, sinh bởi `generate-manifest.mjs` từ các file object-level — không phải nơi tạo/sửa `oq_id`.
+`knowledge/_open-issues/consolidated-open-questions.md` là mục lục (số lượng theo loại + link) theo product/object, sinh bởi `generate-manifest.mjs` từ các file object-level — không chép nội dung OQ và không phải nơi tạo/sửa `oq_id`. `_open-issues/` không chứa file viết tay: OQ nào cũng thuộc một object và có `oq_id` (DECISIONS 2.35).
 
 ## 5b. Setup và khác biệt môi trường
 

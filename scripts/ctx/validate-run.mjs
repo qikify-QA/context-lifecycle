@@ -44,6 +44,12 @@ const RULES = {
       } else if (c.confirmation_source) {
         out.push({ path: at, problem: `claim ${c.strength} không được có confirmation_source` });
       }
+      if (c.strength === "S2") {
+        const q = c.qa_rule_ref;
+        for (const k of ["code", "owner_role", "recorded_on", "locator"]) if (!q?.[k]) out.push({ path: `${at}.qa_rule_ref.${k}`, problem: "claim S2 thiếu qa_rule_ref đủ 4 field (§12.3a)" });
+      } else if (c.qa_rule_ref) {
+        out.push({ path: at, problem: `claim ${c.strength} không được có qa_rule_ref` });
+      }
       return out;
     }),
   kb: (body, ctx) => {
@@ -69,6 +75,12 @@ const RULES = {
         }
       } else if (cs && it.knowledge_kind) {
         out.push({ path: at, problem: `${it.knowledge_kind} không được có confirmation_source (§3)` });
+      }
+      const qr = it.qa_rule_ref;
+      if (it.knowledge_kind === "PROPOSED" && !carried) {
+        for (const k of ["code", "owner_role", "recorded_on", "locator"]) if (!qr?.[k]) out.push({ path: `${at}.qa_rule_ref.${k}`, problem: "PROPOSED mới thiếu qa_rule_ref (§3)" });
+      } else if (qr && it.knowledge_kind !== "PROPOSED") {
+        out.push({ path: at, problem: `${it.knowledge_kind} không được có qa_rule_ref (§3)` });
       }
       if (it.status === "KNOWN_DEFECT" && it.knowledge_kind !== "OBSERVED_CURRENT") out.push({ path: at, problem: "KNOWN_DEFECT phải là OBSERVED_CURRENT (§3)" });
       if (it.status === "UNRESOLVED" && !it.conflict_group) out.push({ path: at, problem: "UNRESOLVED thiếu conflict_group (§5a)" });

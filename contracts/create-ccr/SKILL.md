@@ -32,6 +32,7 @@ Khuôn: `references/ccr-template.md`, luôn dùng cho mọi product. Phần đ�
 ## Luật điền
 
 - **Nguồn (khối A, D):** ghi đúng 1 loại. Có cả câu trả lời PO/Dev và test case thì chọn `po_dev_confirm`, ghi test case ở Locator. `po_dev_confirm`: PO, Dev hoặc QA là người thật xác nhận trực tiếp, kèm trích nguyên văn và ngày; lời tóm tắt của agent không tính. `test_case`: id, PASS, ngày chạy, build, kèm **căn cứ expected** (ticket, comment, spec, câu trả lời PO/Dev mà expected dựa vào). Expected do QA hoặc agent tự suy ra thì ghi "KHÔNG CÓ". `dev_doc`, `spec_doc`: tên, version, ngày, mục. Còn lại là `KHÔNG CÓ NGUỒN`: claim không nạp vào KB, trừ claim khối B.
+- **`QA_RULE`:** rule QA có từ trước, không gắn task hay nguồn. Điền mã rule, vai trò sở hữu, ngày ghi nhận, nơi mở lại được, và trích nguyên văn. Chỉ là đề xuất (`PROPOSED`) kèm câu hỏi cho Dev/PO, không là expected đã xác nhận. Rule mà sai gây mất dữ liệu, tiền hoặc quyền thì chạy thành test case Testlane và gửi bằng `test_case`.
 - **Trích nguyên văn** là câu gốc, không diễn giải: sau khi publish chỉ nội dung trong CCR còn lại.
 - **Ngày nguồn** là ngày viết hoặc ngày comment, không phải ngày resolve ticket. Không rõ thì ghi "không rõ".
 - **Comment kỹ thuật** như "Ready to test", "Resolution: Done" không phải xác nhận.

@@ -33,6 +33,7 @@ Artifact/claim có `gate.decision: FAIL`, hoặc claim `S3` thiếu `confirmatio
 
 1. Đọc mọi input của mode. `from-ccr` theo `strength`:
    - `S3` → `CONFIRMED_EXPECTED`, chép nguyên `confirmation_source` từ plan.
+   - `S2` → `PROPOSED`, `confidence: LOW`, `qa_rule_ref` copy từ claim, không `confirmation_source`, kèm 1 OQ draft `NEEDS_CONFIRMATION` hỏi Dev/PO trỏ về `kb_id`. Không là oracle `STRONG` (feature-builder).
    - `S1` → `OBSERVED_CURRENT`, `confidence: LOW`, không `confirmation_source`, kèm 1 OQ draft `NEEDS_CONFIRMATION` trỏ về `kb_id`.
    - `S0` → không nạp.
    - Claim có `environment_difference`: thay cho `S1`/`S0` ở trên, theo `contracts/ccr-protocol.md` §12.3c; dạng item theo contract §5b.

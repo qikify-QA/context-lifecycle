@@ -27,19 +27,21 @@ function sourceKey(cs) {
   return ref ? `${cs.type}:${norm(ref)}` : null;
 }
 
+const claimKey = (c) => sourceKey(c.confirmation_source) ?? (c.qa_rule_ref?.code ? `qa_rule:${norm(c.qa_rule_ref.code)}` : null);
+
 /** So claim của `plan` với các plan khác. Trả { duplicates, covered_by_open_question }. */
 export function findDuplicates(plan, others, openKbIds = new Set()) {
   const duplicates = [];
   const covered = [];
   for (const claim of plan.claims ?? []) {
     const targets = new Set(claim.target_kb_ids ?? []);
-    const src = sourceKey(claim.confirmation_source);
+    const src = claimKey(claim);
     for (const other of others) {
       if (other.product !== plan.product_key || other.object !== plan.object_key) continue;
       for (const oc of other.plan.claims ?? []) {
         const basis = [];
         if ((oc.target_kb_ids ?? []).some((id) => targets.has(id))) basis.push("same_target_kb_ids");
-        if (src && src === sourceKey(oc.confirmation_source)) basis.push("same_confirmation_source");
+        if (src && src === claimKey(oc)) basis.push("same_confirmation_source");
         if (basis.length) {
           duplicates.push({ claim_key: claim.claim_key, duplicate_of: { proposal_id: other.plan.proposal_id ?? null, run_id: other.runId, claim_key: oc.claim_key, status: other.status }, basis });
         }

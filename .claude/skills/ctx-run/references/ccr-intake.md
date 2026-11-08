@@ -38,7 +38,7 @@ CCR chỉ có khối C, hoặc khối D toàn `KHÔNG CÒN ÁP DỤNG`: không t
 ## 3. Gate C0.5 — Source Strength
 
 1. Mỗi block khối A, dòng khối B, block khối D (trừ `KHÔNG CÒN ÁP DỤNG`) là một claim. Thiếu cột `Claim ID` → `CLAIM-01..n` theo thứ tự dòng, `claim_id_source: "positional"`.
-2. Gán `S3` / `S1` / `S0` theo `contracts/ccr-protocol.md` §12.3a, đọc nguồn trong block của claim. Với `S3`, điền `confirmation_source.ref.citation` đúng dạng sẽ publish (§3).
+2. Gán `S3` / `S2` / `S1` / `S0` theo `contracts/ccr-protocol.md` §12.3a, đọc nguồn trong block của claim. Với `S3`, điền `confirmation_source.ref.citation` đúng dạng sẽ publish (§3). Với `S2`, điền `qa_rule_ref` (§3).
 3. Copy evidence từng claim vào `raw/ccr-evidence/<claim_key>/`; toàn văn Proposal vào `raw/ccr-evidence/_ccr-full-content.md`.
 4. Ghi `input/ccr-fastpath-plan.json` đúng schema §12.3a.
 5. `node scripts/ctx/dedup.mjs --run <id>`: claim trùng → bỏ khỏi plan và ghi vào `results`; mọi claim trùng → `REJECTED` + `reason: duplicate_of`, dừng.

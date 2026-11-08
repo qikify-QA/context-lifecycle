@@ -22,6 +22,7 @@ export const FORBIDDEN_KEY_PREFIXES = spec.json_key_prefixes;
 export const PUBLISHED_KB_ITEM_KEYS = spec.published_kb_item_keys;
 export const PUBLISHED_SCOPE_KEYS = spec.published_scope_keys;
 export const PUBLISHED_CONFIRMATION_SOURCE_KEYS = spec.published_confirmation_source_keys;
+export const PUBLISHED_QA_RULE_REF_KEYS = spec.published_qa_rule_ref_keys;
 
 const escape = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 

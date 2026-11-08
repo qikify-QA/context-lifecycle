@@ -96,6 +96,15 @@ test("publish: KB item theo allowlist, confirmation_source đúng 4 key", () => 
   assert.ok(confirmationSourceProblems(publishConfirmationSource({ type: "dev_doc", ref: "docs/a.md", derivation: "prose" })).length >= 2);
 });
 
+test("publish: qa_rule_ref chỉ giữ 4 key, dedup bắt trùng theo mã rule", async () => {
+  const item = publishKbItem(kbItem({ knowledge_kind: "PROPOSED", qa_rule_ref: { code: "FACT-6", owner_role: "QA lead", recorded_on: "2026-08-01", locator: "qa/facts.md#FACT-6", note: "x" } }), "2026-11-08");
+  assert.deepEqual(Object.keys(item.qa_rule_ref).sort(), ["code", "locator", "owner_role", "recorded_on"]);
+  const { findDuplicates } = await import("../dedup.mjs");
+  const plan = { product_key: "p", object_key: "o", claims: [{ claim_key: "A__CLAIM-01", strength: "S2", qa_rule_ref: { code: "FACT-6" } }] };
+  const other = { product: "p", object: "o", runId: "R", status: "PUBLISHED", plan: { proposal_id: "B", claims: [{ claim_key: "B__CLAIM-01", qa_rule_ref: { code: "fact-6" } }] } };
+  assert.equal(findDuplicates(plan, [other]).duplicates.length, 1);
+});
+
 test("publish: item carry-forward giữ last_updated của base", () => {
   const base = publishKbItem({ kb_id: "KB-1", statement: "s", last_updated: { date: "2026-09-01", ccr_ref: "CBS-1" } }, { date: "2026-10-11", ccr_ref: "CBS-9" });
   assert.deepEqual(base.last_updated, { date: "2026-09-01", ccr_ref: "CBS-1" });
@@ -174,10 +183,12 @@ test("validate-run: bắt lỗi shape và luật có điều kiện", async () =
         kbItem({ knowledge_kind: "CONFIRMED_EXPECTED" }),
         kbItem({ kb_id: "KB-2", scope: { environment: "staging" } }),
         kbItem({ kb_id: "KB-3", knowledge_kind: "CONFIRMED_EXPECTED", confirmation_source: { type: "dev_doc", ref: { locator: "x" } } }),
+        kbItem({ kb_id: "KB-5", knowledge_kind: "PROPOSED" }),
+        kbItem({ kb_id: "KB-6", knowledge_kind: "INFERRED", qa_rule_ref: { code: "FACT-1", owner_role: "QA", recorded_on: "2026-08-01", locator: "x" } }),
         kbItem({ kb_id: "KB-4", knowledge_kind: "CONFIRMED_EXPECTED", last_updated: { date: "2026-09-15", ccr_ref: "bootstrap" } })
       ]
     }),
-    "input/ccr-fastpath-plan.json": { proposal_id: "CBS-1", claims: [{ claim_id: "CLAIM-01", claim_key: "CBS-1__CLAIM-01", strength: "S3" }] },
+    "input/ccr-fastpath-plan.json": { proposal_id: "CBS-1", claims: [{ claim_id: "CLAIM-01", claim_key: "CBS-1__CLAIM-01", strength: "S3" }, { claim_id: "CLAIM-02", claim_key: "CBS-1__CLAIM-02", strength: "S2" }] },
     "review/verdict.json": env({ decision: "APPROVED", publish_allowed: true, gate_results: [{ gate: "C3", status: "FAIL" }] })
   });
   const problems = (await validateRun(dir)).errors.map((e) => e.problem);
@@ -190,6 +201,9 @@ test("validate-run: bắt lỗi shape và luật có điều kiện", async () =
     /thiếu authored_on/,
     /dev_doc thiếu derivation/,
     /claim S3 thiếu confirmation_source/,
+    /claim S2 thiếu qa_rule_ref/,
+    /PROPOSED mới thiếu qa_rule_ref/,
+    /INFERRED không được có qa_rule_ref/,
     /true trong khi gate FAIL/
   ]) assert.ok(problems.some((p) => expected.test(p)), `thiếu lỗi ${expected}`);
 });

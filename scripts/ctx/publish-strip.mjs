@@ -25,7 +25,8 @@ import {
   stripForbidden,
   PUBLISHED_KB_ITEM_KEYS,
   PUBLISHED_SCOPE_KEYS,
-  PUBLISHED_CONFIRMATION_SOURCE_KEYS
+  PUBLISHED_CONFIRMATION_SOURCE_KEYS,
+  PUBLISHED_QA_RULE_REF_KEYS
 } from "../lib/forbidden-fields.mjs";
 
 const PROSE_FILES = ["feature-summary.md", "open-questions.md", "CHANGELOG.md"];
@@ -47,6 +48,7 @@ export function publishKbItem(item, lastUpdated) {
     const v = item[key];
     if (v === undefined || v === null) continue;
     if (key === "scope") out.scope = Object.fromEntries(PUBLISHED_SCOPE_KEYS.filter((k) => k in v).map((k) => [k, v[k]]));
+    else if (key === "qa_rule_ref") out.qa_rule_ref = Object.fromEntries(PUBLISHED_QA_RULE_REF_KEYS.filter((k) => k in v).map((k) => [k, v[k]]));
     else if (key === "confirmation_source") out.confirmation_source = publishConfirmationSource(v);
     else out[key] = v;
   }
@@ -118,7 +120,11 @@ export function publishProfile(profile, payload, { oqAssign = {}, lastUpdated } 
   const uaOq = oqAssign[profile.feature_key]?.unknown_areas ?? {};
   return stripForbidden({
     ...profile,
-    unknown_areas: (profile.unknown_areas ?? []).map((u, i) => (uaOq[i] ? { ...u, oq_id: uaOq[i] } : u)),
+    unknown_areas: (profile.unknown_areas ?? []).map((u, i) => {
+      if (!uaOq[i]) return u;
+      const fix = (t) => (typeof t === "string" ? t.replace(/OQ-DRAFT-[\w-]+/g, uaOq[i]) : t);
+      return { ...u, question: fix(u.question), why_it_matters: fix(u.why_it_matters), oq_id: uaOq[i] };
+    }),
     last_updated: profile.last_updated ?? lastUpdated,
     coverage_matrix: own("coverage_matrix", byFeature(payload.coverage_matrix)),
     profile_conflicts: own("profile_conflicts", byFeature(payload.profile_conflicts)),
@@ -136,7 +142,12 @@ export function publishChecklist(cl, payload, { objectKey, oqAssign = {}, lastUp
     feature_key: cl.feature_key,
     object_id: objectKey,
     checklist_version: cl.checklist_version,
-    checks: (cl.checks ?? []).map((c) => (chkOq[c.check_id] ? { ...c, oq_id: chkOq[c.check_id] } : c)),
+    // Đã có oq_id thì bỏ open_question_draft: draft_id (OQ-DRAFT-…) là ID cục bộ của run, không được lọt vào knowledge.
+    checks: (cl.checks ?? []).map((c) => {
+      if (!chkOq[c.check_id]) return c;
+      const { open_question_draft: _draft, ...rest } = c;
+      return { ...rest, oq_id: chkOq[c.check_id] };
+    }),
     coverage_by_feature_and_risk: own("coverage_by_feature_and_risk", byFeature(payload.coverage_by_feature_and_risk)),
     excluded_dimensions: own("excluded_dimensions", payload.excluded_dimensions ?? []),
     last_updated: cl.last_updated ?? lastUpdated
