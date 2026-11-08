@@ -376,6 +376,6 @@ Guide teeinblue vượt 10 KB (10,6 KB) sau CBS-096, qikfiliate 9,97 KB. Mục "
 
 Operator chốt: guide chỉ liệt kê object (phạm vi, không thuộc), trỏ sang `feature-summary.md` cho feature. Feature mới không đổi guide. Bảng index khác biệt môi trường ở mục 4 vẫn giữ feature key như 2.24. Giới hạn đổi từ "nên" thành "tối đa 10 KB". Đánh đổi: muốn biết object có feature nào phải mở thêm một file; consumer chọn feature key bằng script riêng nên không bị ảnh hưởng.
 
-### 2.31 Agenda, rule chunks và runtime theo vai trò (2026-11-07)
+### 2.32 Agenda, rule chunks và runtime theo vai trò (2026-11-07)
 
 Mẫu 24 transcript sub-agent của repo chỉ thấy Opus; có worker đọc lại pack/KB không giới hạn range. Pack monolithic được thay bằng agenda + rule chunks nguyên văn dùng hash chung; JSON có index phân trang và reader theo pointer giới hạn output. Default Claude repo là Sonnet 1M/medium, normalizer dùng Opus/medium, diff và reviewer Opus/high; agent khác Sonnet/medium. Window compact repo 650k, cap theo model thực. Không đổi cấu hình Codex/global hay giả định mọi model/runtime có 1M. Checkpoint giữ trạng thái sau compact; không đọc lại toàn bộ run. Chưa có A/B token usage, nên chưa chốt tỷ lệ tiết kiệm.
