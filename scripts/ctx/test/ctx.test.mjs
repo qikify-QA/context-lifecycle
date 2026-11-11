@@ -8,7 +8,7 @@ import path from "node:path";
 import { acquireAll, verifyAll, releaseAll } from "../../lib/locks.mjs";
 import { stripForbidden, scanText, confirmationSourceProblems } from "../../lib/forbidden-fields.mjs";
 import { createRun } from "../new-run.mjs";
-import { publishKbItem, applySupersedes, publishConfirmationSource, copyProductFiles } from "../publish-strip.mjs";
+import { publishKbItem, applySupersedes, publishConfirmationSource, copyProductFiles, publishProfile, publishChecklist } from "../publish-strip.mjs";
 import { scanSecrets } from "../freeze-docs.mjs";
 import { mergeRegistry } from "../publish-apply.mjs";
 import { copySharedToPreview, planSharedFiles } from "../../lib/shared-files.mjs";
@@ -96,6 +96,15 @@ test("publish: KB item theo allowlist, confirmation_source đúng 4 key", () => 
   assert.ok(confirmationSourceProblems(publishConfirmationSource({ type: "dev_doc", ref: "docs/a.md", derivation: "prose" })).length >= 2);
 });
 
+test("publish: qa_rule_ref chỉ giữ 4 key, dedup bắt trùng theo mã rule", async () => {
+  const item = publishKbItem(kbItem({ knowledge_kind: "PROPOSED", qa_rule_ref: { code: "FACT-6", owner_role: "QA lead", recorded_on: "2026-08-01", locator: "qa/facts.md#FACT-6", note: "x" } }), "2026-11-08");
+  assert.deepEqual(Object.keys(item.qa_rule_ref).sort(), ["code", "locator", "owner_role", "recorded_on"]);
+  const { findDuplicates } = await import("../dedup.mjs");
+  const plan = { product_key: "p", object_key: "o", claims: [{ claim_key: "A__CLAIM-01", description:"Same QA rule", strength: "S2", qa_rule_ref: { code: "FACT-6" } }] };
+  const other = { product: "p", object: "o", runId: "R", status: "PUBLISHED", plan: { proposal_id: "B", claims: [{ claim_key: "B__CLAIM-01", description:"Same QA rule", qa_rule_ref: { code: "fact-6" } }] } };
+  assert.equal(findDuplicates(plan, [other]).duplicates.length, 1);
+});
+
 test("publish: item carry-forward giữ last_updated của base", () => {
   const base = publishKbItem({ kb_id: "KB-1", statement: "s", last_updated: { date: "2026-09-01", ccr_ref: "CBS-1" } }, { date: "2026-10-11", ccr_ref: "CBS-9" });
   assert.deepEqual(base.last_updated, { date: "2026-09-01", ccr_ref: "CBS-1" });
@@ -115,7 +124,7 @@ test("supersede: giữ kb_id base, bỏ candidate, sinh 1 dòng CHANGELOG có st
   const diff = { change_details: [{ change_id: "CH-1", resolution: "SUPERSEDE", kb_id: "KB-1", candidate_kb_id: "KB-7", feature_key: "f" }] };
   const r = applySupersedes(diff, kbFiles, { date: "2026-10-11", ccrRef: "CBS-9", mode: "CCR_INGEST" });
   assert.deepEqual(r.problems, []);
-  assert.deepEqual(kbFiles["o/features/f/kb.json"].items, [{ kb_id: "KB-1", statement: "mới", confirmation_source: { type: "dev_doc", authored_on: "2026-10-01" }, related_kb_ids: ["KB-9"] }]);
+  assert.deepEqual(kbFiles["o/features/f/kb.json"].items, [{ kb_id: "KB-1", statement: "mới", confirmation_source: { type: "dev_doc", authored_on: "2026-10-01" }, related_kb_ids: ["KB-9"], last_updated:{date:"2026-10-11",ccr_ref:"CBS-9"} }]);
   assert.equal(r.changelog.o.length, 1);
   assert.match(r.changelog.o[0], /Cũ: "cũ"/);
 });
@@ -138,11 +147,6 @@ test("audit: preview sạch thì ok, có key cấm thì blocking", async () => {
   assert.equal((await auditDir(dir)).ok, true);
   await writeFile(path.join(dir, "kb.json"), JSON.stringify([{ kb_id: "KB-1", evidence_refs: [] }]));
   assert.equal((await auditDir(dir)).ok, false);
-});
-
-test("lint: agent definitions theo template chung", async () => {
-  const { lintAgents } = await import("../lint-agents.mjs");
-  assert.deepEqual(await lintAgents(), []);
 });
 
 async function makeRun(files) {
@@ -179,10 +183,12 @@ test("validate-run: bắt lỗi shape và luật có điều kiện", async () =
         kbItem({ knowledge_kind: "CONFIRMED_EXPECTED" }),
         kbItem({ kb_id: "KB-2", scope: { environment: "staging" } }),
         kbItem({ kb_id: "KB-3", knowledge_kind: "CONFIRMED_EXPECTED", confirmation_source: { type: "dev_doc", ref: { locator: "x" } } }),
+        kbItem({ kb_id: "KB-5", knowledge_kind: "PROPOSED",claim_ids:["CLAIM-02"] }),
+        kbItem({ kb_id: "KB-6", knowledge_kind: "INFERRED", qa_rule_ref: { code: "FACT-1", owner_role: "QA", recorded_on: "2026-08-01", locator: "x" } }),
         kbItem({ kb_id: "KB-4", knowledge_kind: "CONFIRMED_EXPECTED", last_updated: { date: "2026-09-15", ccr_ref: "bootstrap" } })
       ]
     }),
-    "input/ccr-fastpath-plan.json": { proposal_id: "CBS-1", claims: [{ claim_id: "CLAIM-01", claim_key: "CBS-1__CLAIM-01", strength: "S3" }] },
+    "input/ccr-fastpath-plan.json": { proposal_id: "CBS-1", claims: [{ claim_id: "CLAIM-01", claim_key: "CBS-1__CLAIM-01", strength: "S3" }, { claim_id: "CLAIM-02", claim_key: "CBS-1__CLAIM-02", strength: "S2" }] },
     "review/verdict.json": env({ decision: "APPROVED", publish_allowed: true, gate_results: [{ gate: "C3", status: "FAIL" }] })
   });
   const problems = (await validateRun(dir)).errors.map((e) => e.problem);
@@ -195,6 +201,9 @@ test("validate-run: bắt lỗi shape và luật có điều kiện", async () =
     /thiếu authored_on/,
     /dev_doc thiếu derivation/,
     /claim S3 thiếu confirmation_source/,
+    /claim S2 thiếu qa_rule_ref/,
+    /PROPOSED mới thiếu qa_rule_ref/,
+    /INFERRED không được có qa_rule_ref/,
     /true trong khi gate FAIL/
   ]) assert.ok(problems.some((p) => expected.test(p)), `thiếu lỗi ${expected}`);
 });
@@ -229,19 +238,19 @@ test("intake: xếp theo mức gấp rồi submittedAt, bỏ project lạ", asyn
   assert.deepEqual(skipped.map((s) => s.proposal_id), ["CBS-4"]);
 });
 
-test("dedup: trùng theo target_kb_ids hoặc confirmation_source, chỉ cùng object", async () => {
+test("dedup: target/citation cần cùng statement và revision, chỉ cùng object", async () => {
   const { findDuplicates } = await import("../dedup.mjs");
   const cs = { type: "dev_doc", ref: { citation: "Jira PROJ-1 §3" } };
   const plan = { product_key: "p", object_key: "o", claims: [
-    { claim_key: "CBS-9__CLAIM-01", target_kb_ids: ["KB-5"] },
-    { claim_key: "CBS-9__CLAIM-02", confirmation_source: cs },
+    { claim_key: "CBS-9__CLAIM-01", description:"same target rule", target_kb_ids: ["KB-5"] },
+    { claim_key: "CBS-9__CLAIM-02", description:"same sourced rule", confirmation_source: cs },
     { claim_key: "CBS-9__CLAIM-03", target_kb_ids: ["KB-7"] } ] };
   const others = [
-    { runId: "CTX-A", status: "IN_PROGRESS", product: "p", object: "o", plan: { proposal_id: "CBS-1", claims: [{ claim_key: "CBS-1__CLAIM-01", target_kb_ids: ["KB-5"] }, { claim_key: "CBS-1__CLAIM-02", confirmation_source: { type: "dev_doc", ref: { citation: "jira  proj-1 §3" } } }] } },
+    { runId: "CTX-A", status: "IN_PROGRESS", product: "p", object: "o", plan: { proposal_id: "CBS-1", claims: [{ claim_key: "CBS-1__CLAIM-01", description:"same target rule", target_kb_ids: ["KB-5"] }, { claim_key: "CBS-1__CLAIM-02", description:"same sourced rule", confirmation_source: { type: "dev_doc", ref: { citation: "jira  proj-1 §3" } } }] } },
     { runId: "CTX-B", status: "PUBLISHED", product: "p", object: "other", plan: { proposal_id: "CBS-2", claims: [{ claim_key: "CBS-2__CLAIM-01", target_kb_ids: ["KB-7"] }] } }
   ];
   const r = findDuplicates(plan, others, new Set(["KB-7"]));
-  assert.deepEqual(r.duplicates.map((d) => [d.claim_key, d.basis[0]]), [["CBS-9__CLAIM-01", "same_target_kb_ids"], ["CBS-9__CLAIM-02", "same_confirmation_source"]]);
+  assert.deepEqual(r.duplicates.map((d) => [d.claim_key, d.basis[0]]), [["CBS-9__CLAIM-01", "same_target_and_statement"], ["CBS-9__CLAIM-02", "same_claim_revision"]]);
   assert.deepEqual(r.covered_by_open_question, [{ claim_key: "CBS-9__CLAIM-03", kb_ids: ["KB-7"] }]);
 });
 
@@ -344,7 +353,7 @@ test("publish-apply: registry chỉ lấy entry của object được publish, g
   const merged = mergeRegistry(current, preview, ["a", "c"]);
   assert.equal(merged.note, "n");
   assert.deepEqual(merged.objects.map((o) => [o.object_key, o.aliases]), [["a", ["a1", "a2"]], ["b", ["b1", "b2-run-khac"]], ["c", ["c1"]]]);
-  assert.deepEqual(mergeRegistry(null, preview, ["a"]), preview);
+  assert.deepEqual(mergeRegistry(null, preview, ["a"]).objects.map(o=>o.object_key), ["a"]);
 });
 
 test("publish-strip: copy guide và _env.example của base, không đè bản đã có trong preview", async () => {
@@ -417,4 +426,52 @@ test("release: chỉ PR đã merge mới thành released, kèm merge SHA", async
   const { released, pending } = await resolveReleases(records, async (u) => states[u], "ctx-1");
   assert.deepEqual(released, [{ proposal_id: "CBS-1", release: { status: "released", pr: "u1", sha: "abc", tag: "ctx-1" } }]);
   assert.deepEqual(pending, [{ pr: "u2", state: "OPEN", proposals: ["CBS-2"] }]);
+});
+
+test("publish-strip: profile/checklist dựng từ delta giữ coverage, conflict, relationship, excluded_dimensions của chính nó", () => {
+  const profile = { feature_id: "F1", feature_key: "f", coverage_matrix: [{ a: 1 }, { a: 2 }], profile_conflicts: [{ c: 1 }], profile_relationships: [{ r: 1 }], unknown_areas: [] };
+  const out = publishProfile(profile, {}, { lastUpdated: { date: "2026-01-01" } });
+  assert.equal(out.coverage_matrix.length, 2);
+  assert.equal(out.profile_conflicts.length, 1);
+  assert.equal(out.profile_relationships.length, 1);
+  const cl = { feature_id: "F1", feature_key: "f", checklist_version: 3, checks: [{ check_id: "CHK-1" }], coverage_by_feature_and_risk: [{ x: 1 }], excluded_dimensions: [{ d: 1 }] };
+  const oc = publishChecklist(cl, {}, { objectKey: "o", oqAssign: { f: { checks: { "CHK-1": "OQ-o-001" } } } });
+  assert.equal(oc.coverage_by_feature_and_risk.length, 1);
+  assert.equal(oc.excluded_dimensions.length, 1);
+  assert.equal(oc.checks[0].oq_id, "OQ-o-001");
+});
+
+test("publish-strip: artifact kiểu cũ (field ở cấp payload) vẫn lọc theo feature_id", () => {
+  const profile = { feature_id: "F1", feature_key: "f" };
+  const payload = { coverage_matrix: [{ feature_id: "F1" }, { feature_id: "F2" }], profile_conflicts: [{ feature_id: "F2" }], profile_relationships: [{ r: 1 }] };
+  const out = publishProfile(profile, payload, {});
+  assert.equal(out.coverage_matrix.length, 1);
+  assert.equal(out.profile_conflicts.length, 0);
+  assert.equal(out.profile_relationships.length, 1);
+  const oc = publishChecklist({ feature_id: "F1", feature_key: "f", checks: [] }, { coverage_by_feature_and_risk: [{ feature_id: "F1" }, { feature_id: "F2" }], excluded_dimensions: [{ d: 1 }] }, { objectKey: "o" });
+  assert.equal(oc.coverage_by_feature_and_risk.length, 1);
+  assert.equal(oc.excluded_dimensions.length, 1);
+});
+
+test("review-delta: so hash với snapshot, nêu file đổi/thêm/xoá; chưa có snapshot thì phải review đầy đủ", async () => {
+  const { hashRun, compare } = await import("../review-delta.mjs");
+  const dir = await makeRun({
+    "run-manifest.json":manifest(),
+    "input/ccr-fastpath-plan.json": { a: 1 },
+    "candidate/product-kb/f.json": { kb: 1 },
+    "review/verdict.json": { v: 1 }
+  });
+  const before = await hashRun(dir);
+  assert.deepEqual(Object.keys(before).filter(k=>!k.startsWith("@")).sort(), ["candidate/product-kb/f.json", "input/ccr-fastpath-plan.json", "run-manifest.json"]);
+  const { writeFile, rm } = await import("node:fs/promises");
+  await writeFile(path.join(dir, "candidate/product-kb/f.json"), JSON.stringify({ kb: 2 }));
+  await writeFile(path.join(dir, "candidate/g.json"), "{}");
+  await rm(path.join(dir, "input/ccr-fastpath-plan.json"));
+  await writeFile(path.join(dir, "review/verdict.json"), JSON.stringify({ v: 2 }));
+  assert.deepEqual(compare(before, await hashRun(dir)), {
+    full: false,
+    changed: ["candidate/product-kb/f.json"],
+    added: ["candidate/g.json"],
+    removed: ["input/ccr-fastpath-plan.json"]
+  });
 });

@@ -1,3 +1,0 @@
-Dòng bảng 'Phạm vi cần re-explore & ảnh hưởng ước tính' (positional CLAIM-01):
-
-| TIB-5606 — rainbow single-line, font script, căn phải: Locate Artwork và Order Design PNG đủ ký tự, khớp SDK preview | portal (campaign editor → Locate artwork) · api (PNG renderer Order Design) | đã PASS trên staging nhưng bằng Dancing Script, chưa trên production | artwork.md → Color Sequence | ĐỦ TIN CẬY (test case PASS TC-TIB-6638 2026-10-22 staging [AI]; TC-TIB-6639 2026-10-22 staging [AI] — build: staging @ 2026-10-22 14:20 — sau lần TIB-5606 giao QA cuối (2026-10-21); build hash: không rõ (QA không có quyền repo)) |

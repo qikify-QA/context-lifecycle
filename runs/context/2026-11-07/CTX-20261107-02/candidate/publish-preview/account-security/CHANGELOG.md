@@ -1,7 +1,0 @@
-# CHANGELOG — Account & Security
-
-- 2026-11-06 — bootstrap — Tạo object từ quan sát trên staging, role merchant-owner: 3 feature (`portal-login-paths`, `confirm-password-dialog`, `staff-security-status`), 15 KB item đều `OBSERVED_CURRENT`/`LOW`, 12 check `BASELINE`, 31 open question. `confirm-password-dialog` chỉ có quan sát phủ định và checklist rỗng vì dialog chưa quan sát được. Explorer không chủ động ghi gì ngoài một lần login hợp lệ; các POST tự phát sau login chưa xác định, xem OQ-account-security-015.
-- 2026-11-07 — CBS-080 — Thêm 4 feature từ lời dev ở Jira, chưa quan sát: `social-login` (KB-022 đến KB-029 và KB-038, 14 check), `hasura-permission` (KB-033 đến KB-036, 4 check), `acting-user-organisation` (KB-021, 3 check), `billing-webhook` (KB-037, 2 check). Các item là `CONFIRMED_EXPECTED`/`MEDIUM`, trừ KB-025 và KB-038 là `OBSERVED_CURRENT`/`LOW` với status `KNOWN_DEFECT` theo lời dev.
-- 2026-11-07 — CBS-080 — `confirm-password-dialog`: thêm KB-016 đến KB-020 và 13 check từ lời dev; dialog vẫn chưa quan sát được, KB-010 đến KB-012 không đổi.
-- 2026-11-07 — CBS-080 — `staff-security-status`: thêm KB-030, KB-032 (`CONFIRMED_EXPECTED`/`MEDIUM`) và KB-031 (`PROPOSED`/`LOW`, chờ OQ-account-security-057) về quy tắc chip, và 6 check; KB-013 đến KB-015 và 3 check cũ không đổi.
-- 2026-11-07 — CBS-080 — Thêm OQ-account-security-032 đến OQ-account-security-057. OQ-account-security-001, 016, 019, 026, 027, 028 thêm phần đã có lời dev. Không có open question nào được đóng; OQ-account-security-025 về multi-store giữ nguyên.

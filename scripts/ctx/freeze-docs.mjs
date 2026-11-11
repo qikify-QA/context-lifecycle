@@ -33,7 +33,7 @@ const SECRET_PATTERNS = [
 export function scanSecrets(text) {
   const hits = [];
   for (const { name, re, keep } of SECRET_PATTERNS) {
-    for (const m of text.match(re) || []) if (!keep?.(m)) hits.push({ name, sample: m.slice(0, 12) + "…" });
+    for (const m of text.match(re) || []) if (!keep?.(m)) hits.push({ name });
   }
   return hits;
 }
@@ -97,10 +97,11 @@ async function main() {
   const manifest = { ...previous, schema_version: "1.0", product: request.product_key ?? request.product, docs };
   await writeJson(paths.docManifest, manifest);
 
-  const result = { ok: c0.length === 0 && (secrets.length === 0 || args["allow-pii-warnings"] === true), docs: docs.length, c0_problems: c0, secret_hits: secrets };
+  const blockingSecrets=secrets.filter(hit=>hit.name!=="email"||args["allow-pii-warnings"]!==true);
+  const result = { ok: c0.length === 0 && blockingSecrets.length === 0, docs: docs.length, c0_problems: c0, secret_hits: secrets };
   console.log(JSON.stringify(result, null, 2));
   if (c0.length) process.exit(1);
-  if (secrets.length && args["allow-pii-warnings"] !== true) process.exit(2);
+  if (blockingSecrets.length) process.exit(2);
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) main().catch((e) => {

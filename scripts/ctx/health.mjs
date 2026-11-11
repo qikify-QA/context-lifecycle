@@ -2,7 +2,7 @@
 // Sức khoẻ context theo product/object, tính từ knowledge/ lúc chạy (không ghi file).
 //
 //   node scripts/ctx/health.mjs            # bảng tóm tắt
-//   node scripts/ctx/health.mjs --json     # đầy đủ, dạng JSON (ops-board /api/health dùng cùng hàm)
+//   node scripts/ctx/health.mjs --json     # đầy đủ, dạng JSON
 //   node scripts/ctx/health.mjs --flagged  # chỉ object có cờ
 
 import { parseArgs } from "../lib/fs-utils.mjs";

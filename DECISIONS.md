@@ -379,3 +379,17 @@ Operator chốt: guide chỉ liệt kê object (phạm vi, không thuộc), tr�
 ### 2.32 Agenda, rule chunks và runtime theo vai trò (2026-11-07)
 
 Mẫu 24 transcript sub-agent của repo chỉ thấy Opus; có worker đọc lại pack/KB không giới hạn range. Pack monolithic được thay bằng agenda + rule chunks nguyên văn dùng hash chung; JSON có index phân trang và reader theo pointer giới hạn output. Default Claude repo là Sonnet 1M/medium, normalizer dùng Opus/medium, diff và reviewer Opus/high; agent khác Sonnet/medium. Window compact repo 650k, cap theo model thực. Không đổi cấu hình Codex/global hay giả định mọi model/runtime có 1M. Checkpoint giữ trạng thái sau compact; không đọc lại toàn bộ run. Chưa có A/B token usage, nên chưa chốt tỷ lệ tiết kiệm.
+
+### 2.33 Bỏ agent definition và orchestrator, chuyển sang skill (2026-11-08)
+
+Claude Code native đã chọn model/effort theo lời gọi và spawn subagent không cần định nghĩa sẵn, nên 12 agent definition, Otto và các file `mode-*` chỉ còn là lớp bọc quanh luật. Luật giữ nguyên, chuyển thành reference của 4 skill (`ctx-run`, `ctx-evidence`, `ctx-build`, `ctx-review`) cộng `pick-model`. Bỏ cơ chế pack/agenda/index/metrics và `config/context-policy.json` (skill nạp reference theo nhu cầu), bỏ `lint-agents`, bỏ `ops-board` (giữ `npm run health`). Delta/carry-forward giữ nguyên (`.claude/skills/ctx-build/references/delta.md`). `runs/context/` ra khỏi git trừ manifest và verdict; history chưa viết lại. Chưa làm: bước build theo feature song song, bước derive/`index.jsonl`, codemod run-id còn sót trong `knowledge/` (qa-knowledge PR riêng), lock heartbeat.
+
+### 2.34 Review vòng 2+ chỉ kiểm phần đổi; publish-strip lấy field trong chính profile (2026-11-08)
+
+Chạy thử CBS-034/CBS-035 bằng skill mới: ba vòng review đều chạy lại toàn bộ gate, tốn 423 nghìn token (hơn một nửa tổng subagent). Thêm `scripts/ctx/review-delta.mjs` (so hash với snapshot sau mỗi verdict); skill `ctx-review` vòng 2+ chỉ kiểm finding BLOCKING/MAJOR cũ, gate bị phần đổi chạm (kể cả phía sau) và C6 đầy đủ. Đổi plan hoặc evidence thì review đầy đủ như vòng 1. Cũng sửa `publish-strip.mjs`: profile/checklist dựng từ delta giữ `coverage_matrix`, `profile_conflicts`, `profile_relationships`, `coverage_by_feature_and_risk`, `excluded_dimensions` ở chính artifact, bản cũ chỉ đọc cấp payload nên làm rỗng khi publish (chưa gây hại: 0/321 profile đã publish bị rỗng).
+
+### 2.35 Bậc S2 "rule QA có chủ" và `_open-issues` không còn file viết tay (2026-11-08)
+
+Một số CCR lấy từ rule QA đã có từ trước, không gắn task hay nguồn Dev/PO, nên bị xếp S0 và trả `NEEDS_INFO` (CBS-035). Thêm bậc `S2` giữa S3 và S1 (`ccr-protocol.md` §12.3a): rule có nguyên văn, mã rule, vai trò sở hữu, ngày ghi nhận và nơi mở lại được thì nạp thành KB `PROPOSED` mang `qa_rule_ref` (contract §3) kèm OQ `NEEDS_CONFIRMATION` hỏi Dev/PO. Không có `confirmation_source`, không là oracle `STRONG`, không supersede; lên `CONFIRMED_EXPECTED` khi một CCR sau mang nguồn S3. Rule P1 (mất dữ liệu, tiền, quyền) phải chạy thành test case Testlane và gửi như S3. Dedup bắt trùng theo mã rule. Khuôn `create-ccr` thêm loại nguồn `QA_RULE`.
+
+`knowledge/_open-issues/` trước đây có ba file viết tay (tháng 9) mang đường dẫn run, ID `CTX-`/`ACT-`/`MIS-`/`SEC-` và dữ liệu instance, trái §5a, không có `oq_id` nên không resolve được. Nội dung đã đối chiếu với canon: mục đã có thì bỏ, mục còn thiếu chuyển thành OQ của object. `consolidated-open-questions.md` đổi từ bản chép 3.402 OQ (1,3 MB, ghi đè mỗi lần publish) thành mục lục số lượng theo product/object kèm link.

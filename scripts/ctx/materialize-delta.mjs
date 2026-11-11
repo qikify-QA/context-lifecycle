@@ -4,7 +4,7 @@ import { createHash } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { isDeepStrictEqual } from 'node:util';
-import { parseArgs, readJson, writeJson } from '../lib/fs-utils.mjs';
+import { parseArgs, readJson, readJsonOr, writeJson } from '../lib/fs-utils.mjs';
 import { resolveRunDir, knowledgeProductsDir } from '../lib/run-layout.mjs';
 export const sha256 = text => createHash('sha256').update(text).digest('hex');
 const safeKey = value => typeof value === 'string' && /^[a-zA-Z0-9][a-zA-Z0-9_-]*$/.test(value);
@@ -81,6 +81,10 @@ export async function materialize(runDir, delta, { knowledgeDir = knowledgeProdu
   }
   const folder = { kb:'product-kb', profile:'feature-profiles', checklist:'checklists' }[stage];
   const file = path.join(runDir,'candidate',folder,`${feature ?? `_object-level.${object}`}.json`);
+  const prior=await readJsonOr(file,null);
+  if(prior){const priorObject=prior.scope_identity?.object??prior.payload?.kb_context?.object_id??prior.payload?.kb_context?.object_key??prior.payload?.feature_profiles?.[0]?.object_id??prior.payload?.checklists?.[0]?.object_id??manifest.object_target?.object_key;
+    if(priorObject && priorObject!==object)throw new Error("candidate_scope_collision: split multi-object runs or use distinct feature keys");}
+  output.scope_identity={product:manifest.product,object,feature};
   await writeJson(file,output);
   return { ok:true, stage, output:file, base_sha256:hash };
 }

@@ -1,4 +1,4 @@
-// Đường dẫn trong một run (contract §5) — một nơi duy nhất cho scripts và ops-board.
+// Đường dẫn trong một run (contract §5) — một nơi duy nhất cho scripts.
 
 import path from "node:path";
 import { fileURLToPath } from "node:url";

@@ -31,7 +31,6 @@ npm install
 
 ```bash
 npm test                   # test các script tất định (scripts/ctx/)
-npm run ops-board          # bảng theo dõi run + view "Context health": http://127.0.0.1:4177
 npm run health             # sức khoẻ context theo product/object (tính từ knowledge/, không ghi file)
 npm run products           # product ACTIVE + MCP server + playbook
 npm run portal-auth        # login portal staging (teeinblue), ghi playwright/.auth/owner.json
@@ -46,9 +45,9 @@ node scripts/publish-knowledge.mjs --tag                # sau khi PR merge: tag 
 
 ## Nhặt CCR
 
-Board không đẩy sự kiện nên kéo Proposal sang In Progress chưa làm gì cả. Operator mở Claude Code ở repo này và chạy `/process-ccr` sau khi kéo card và một lần cuối ngày làm việc. Lệnh xử lý mọi Proposal đang In Progress của các product ACTIVE. Sau đó phát hành theo `.claude/orchestrator/publish.md` mục 7.
+Board không đẩy sự kiện nên kéo Proposal sang In Progress chưa làm gì cả. Operator mở Claude Code ở repo này và chạy `/process-ccr` sau khi kéo card và một lần cuối ngày làm việc. Lệnh xử lý mọi Proposal đang In Progress của các product ACTIVE. Sau đó phát hành theo `.claude/skills/ctx-run/references/publish.md` mục 7.
 
-Việc của orchestrator trong một run (run-id, lock, đóng băng doc, strip, audit, publish) đều là script trong `scripts/ctx/` — xem bảng ở `.claude/agents/otto.md`.
+Việc của orchestrator trong một run (run-id, lock, đóng băng doc, strip, audit, publish) đều là script trong `scripts/ctx/` — xem skill `.claude/skills/ctx-run/SKILL.md`.
 
 ## Đọc gì trước
 
@@ -58,7 +57,7 @@ Việc của orchestrator trong một run (run-id, lock, đóng băng doc, strip
 
 ## Quy tắc không được phá
 
-- **Chỉ `otto` ghi `knowledge/`**, qua `scripts/ctx/publish-apply.mjs`, chỉ sau khi reviewer cho phép và lock còn thuộc run. Subagent ghi vào `runs/context/<date>/<CTX-RUN-ID>/`.
+- **Chỉ orchestrator (skill `ctx-run`) ghi `knowledge/`**, qua `scripts/ctx/publish-apply.mjs`, chỉ sau khi reviewer cho phép và lock còn thuộc run. Subagent ghi vào `runs/context/<date>/<CTX-RUN-ID>/`.
 - **`knowledge/` tự chứa hoàn toàn (§5a).** Không field nào trỏ vào `runs/`, tài liệu dev hay thư mục ngoài gói publish.
 - **Đừng xoá `runs/` tuỳ ý** — chỉ qua `npm run prune`, vì evidence gốc cần cho open question chưa giải quyết (§15).
 - **Không biến `OBSERVED_CURRENT` thành `CONFIRMED_EXPECTED`** nếu không có nguồn thẩm quyền.
@@ -75,13 +74,11 @@ Việc của orchestrator trong một run (run-id, lock, đóng băng doc, strip
 ## Cấu trúc
 
 ```
-.claude/agents/          12 agent: orchestrator + planner + 6 explorer + normalizer + 1 builder + diff + reviewer
-.claude/orchestrator/    điều phối theo mode + nhận CCR + publish (orchestrator đọc khi cần)
+.claude/skills/          ctx-run (điều phối + nhận CCR + publish) · ctx-evidence · ctx-build · ctx-review · pick-model
 contracts/               contract, CCR protocol, supersede, gates, forbidden-fields.json, templates, tài liệu cho consumer
 config/products/         config + schema + explore playbook theo product
 scripts/                 manifest, publish, prune, sync-appendix
 scripts/ctx/             script tất định của một run + test
-ops-board/               bảng theo dõi run (local)
 tools/portal-auth/       Playwright login helper cho explorer
 inputs/                  file CCR chạy tay, bootstrap-request soạn sẵn
 runs/context/            evidence + artifact từng run

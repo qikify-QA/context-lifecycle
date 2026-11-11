@@ -7,6 +7,10 @@
 //
 // In JSON { ctx_run_id, run_dir } ra stdout. Exit 1 khi input sai.
 
+import { randomUUID } from "node:crypto";
+import { acquireAll, releaseAll } from "../lib/locks.mjs";
+import { readdir } from "node:fs/promises";
+import { readJsonOr } from "../lib/fs-utils.mjs";
 import { mkdir } from "node:fs/promises";
 import path from "node:path";
 import { getProduct } from "../lib/product-config.mjs";
@@ -14,7 +18,7 @@ import { parseArgs, writeJson, today } from "../lib/fs-utils.mjs";
 import { runsContextDir, RUN_SUBDIRS, runPaths } from "../lib/run-layout.mjs";
 
 /** Tạo thư mục run mới dưới `base`. Tách ra để test được. */
-export async function createRun({ product, mode, objectKey = null, proposalId = null, label = null, date = today(), base = runsContextDir }) {
+async function createRunUnlocked({ product, mode, objectKey = null, proposalId = null, label = null, date = today(), base = runsContextDir }) {
   const dateDir = path.join(base, date);
   await mkdir(dateDir, { recursive: true });
   const compact = date.replaceAll("-", "");
@@ -45,6 +49,26 @@ export async function createRun({ product, mode, objectKey = null, proposalId = 
     return { ctx_run_id: id, run_dir: runDir };
   }
   throw new Error(`hết số run cho ngày ${date}`);
+}
+
+export async function createRun(options){
+ const base=options.base??runsContextDir;
+ if(!options.proposalId)return createRunUnlocked(options);
+ const guard={dir:path.join(base,'.intake-locks'),ctxRunId:`intake-${randomUUID()}`,ttlSeconds:60};
+ const locked=await acquireAll(['intake'],guard);if(!locked.ok)throw new Error('proposal_intake_busy');
+ try{
+  for(const date of await readdir(base,{withFileTypes:true})){
+   if(!date.isDirectory()||!/^\d{4}-\d{2}-\d{2}$/.test(date.name))continue;
+   for(const run of await readdir(path.join(base,date.name),{withFileTypes:true})){
+    if(!run.isDirectory())continue;
+    const m=await readJsonOr(path.join(base,date.name,run.name,'run-manifest.json'),null);
+    if(m?.product===options.product&&m?.source?.proposal_id===options.proposalId&&['IN_PROGRESS','REWORK_REQUIRED','PUBLISHED'].includes(m.status)){
+     const e=new Error(`proposal_already_claimed: ${run.name} (${m.status}); resume or report existing outcome, do not finish DEFERRED`);e.code='PROPOSAL_CLAIMED';throw e;
+    }
+   }
+  }
+  return await createRunUnlocked(options);
+ }finally{await releaseAll(['intake'],guard);}
 }
 
 async function main() {
@@ -80,5 +104,5 @@ async function main() {
 
 if (import.meta.url === `file://${process.argv[1]}`) main().catch((e) => {
   console.error(e.message || e);
-  process.exit(1);
+  process.exit(e.code==='PROPOSAL_CLAIMED'?3:1);
 });

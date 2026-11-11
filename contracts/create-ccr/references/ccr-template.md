@@ -24,10 +24,11 @@ BR, hành vi mới hoặc đổi. Một block cho mỗi claim.
 - **Quan hệ với canon:** `<<< ADD | SUPERSEDES <kb_id> | CONTRADICTS <kb_id> | UNKNOWN >>>`
 - **Scope:** `<<< role, surface >>>`
 - **Đã ship:** `<<< SHIPPED | NOT_SHIPPED | UNKNOWN >>>`
-- **Loại nguồn:** `<<< po_dev_confirm | test_case | dev_doc | spec_doc | KHÔNG CÓ NGUỒN >>>`
+- **Loại nguồn:** `<<< po_dev_confirm | test_case | dev_doc | spec_doc | QA_RULE | KHÔNG CÓ NGUỒN >>>`
 - **Người xác nhận, ngày nguồn:** `<<< PO | Dev | QA, YYYY-MM-DD >>>`
 - **Locator:** `<<< comment, TC, PR, link nếu có >>>`
 - **Căn cứ expected:** `<<< chỉ khi nguồn là test_case: ticket, comment, spec hoặc câu trả lời PO/Dev mà expected của case dựa vào; không có thì "KHÔNG CÓ" >>>`
+- **Rule QA có chủ:** `<<< chỉ khi loại nguồn là QA_RULE: mã rule trong kho QA, vai trò sở hữu (không tên cá nhân), ngày ghi nhận, đường dẫn hoặc link mở lại được. Thiếu một trong bốn thì ghi "KHÔNG CÓ NGUỒN" >>>`
 - **Trích nguyên văn:**
   ```
   <<< câu gốc, không diễn giải >>>

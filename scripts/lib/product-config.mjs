@@ -5,7 +5,7 @@
 // tập file có status: "ACTIVE".
 //
 // Consumer: scripts/generate-manifest.mjs, scripts/sync-appendix.mjs, scripts/ctx/*,
-// ops-board/server.mjs. Một nguồn, không nhiều bản copy-paste.
+// scripts khác. Một nguồn, không nhiều bản copy-paste.
 //
 // Config ACTIVE được validate theo config/products/_schema.json ngay lúc load —
 // config sai là throw, không im lặng chạy với giá trị đoán.
@@ -31,7 +31,7 @@ export async function loadProducts() {
     names = (await readdir(configDir)).filter((n) => n.endsWith(".json") && !n.startsWith("_"));
   } catch {
     // Chưa có config/products/ — trả rỗng thay vì throw, để consumer tự quyết
-    // (generate-manifest cảnh báo, ops-board hiện "unknown").
+    // (generate-manifest cảnh báo).
     cache = [];
     return cache;
   }
@@ -99,7 +99,7 @@ export async function getProductByProjectId(projectId) {
 
 /**
  * Chỉ trả về product_key khi có ĐÚNG MỘT product ACTIVE.
- * Dùng cho fallback ở ops-board: với 1 product thì hành vi y như default cũ,
+ * Dùng cho fallback: với 1 product thì hành vi y như default cũ,
  * với >1 product thì trả null — thà hiện "unknown" còn hơn dán nhãn sai
  * product rồi đi đọc feature-summary.md của một object thuộc product khác.
  */

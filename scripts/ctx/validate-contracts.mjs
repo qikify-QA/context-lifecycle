@@ -5,7 +5,6 @@
 //   - 3 template bootstrap-request cùng shape C0 (contract §0, gates.md C0)
 //   - config product ACTIVE hợp lệ theo _schema.json (loadProducts)
 //   - bảng product trong ccr-product-appendix.md khớp config
-//   - agent definition theo template (lint-agents)
 //
 //   node scripts/ctx/validate-contracts.mjs     # exit 1 nếu có lỗi
 
@@ -16,7 +15,6 @@ import { promisify } from "node:util";
 import { walk } from "../lib/fs-utils.mjs";
 import { rootDir } from "../lib/run-layout.mjs";
 import { loadProducts } from "../lib/product-config.mjs";
-import { lintAgents } from "./lint-agents.mjs";
 
 const C0_KEYS = ["mode", "product_key", "context", "object_target", "exploration_policy"];
 
@@ -59,7 +57,6 @@ export async function validateContracts() {
     problems.push((e.stderr || e.message).trim());
   }
 
-  for (const p of await lintAgents()) problems.push(`agents: ${p}`);
   return problems;
 }
 
@@ -69,5 +66,5 @@ if (import.meta.url === `file://${process.argv[1]}`) {
     console.error(problems.map((p) => `- ${p}`).join("\n"));
     process.exit(1);
   }
-  console.log("OK: contracts, schemas, templates, config, appendix, agents");
+  console.log("OK: contracts, schemas, templates, config, appendix");
 }

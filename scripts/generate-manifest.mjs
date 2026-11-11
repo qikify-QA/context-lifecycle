@@ -5,10 +5,9 @@
 // Không có manifest thì consumer phải quét cả cây mới biết có gì, và không có
 // cách nào biết một object đang thiếu block publish hay version bị lệch.
 //
-// Cũng sinh lại knowledge/_open-issues/consolidated-open-questions.md — bản tổng hợp
-// theo product, gộp mọi open-questions.md theo object (§5a). Tầng object-level mới là
-// nguồn thật (oq_id được tạo/sửa ở đó); file consolidated CHỈ ĐỌC, luôn bị ghi đè lại
-// toàn bộ ở đây để 2 tầng không bao giờ lệch nhau do sửa tay.
+// Cũng sinh lại knowledge/_open-issues/consolidated-open-questions.md — mục lục số lượng
+// open question theo product/object kèm link (§5a). Tầng object-level mới là nguồn thật
+// (oq_id được tạo/sửa ở đó); file này CHỈ ĐỌC, không chép nội dung OQ, luôn bị ghi đè lại.
 //
 // LƯU Ý (§5a): không field nào trong knowledge/ được phép chứa run_id/ctx_run_id/act_id/
 // evidence_refs/... — script này KHÔNG đọc và KHÔNG ghi ctx_run_id vào manifest.json dù
@@ -26,10 +25,12 @@ import {
   staleAfterDays,
   consumerLabel
 } from "./lib/product-config.mjs";
+import { oracleSummary } from "./lib/authority.mjs";
 import { extractOpenQuestions, findUnfencedEntries } from "./lib/open-questions.mjs";
 import { readChangelogRefs } from "./lib/changelog.mjs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { isDeepStrictEqual } from "node:util";
 
 const rootDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const knowledgeDir = path.join(rootDir, "knowledge");
@@ -219,11 +220,7 @@ async function describeObject(productKey, objectKey, staleDays = STALE_AFTER_DAY
 
   if (candidates.length) {
     const confirmed = candidates.filter((c) => c.knowledge_kind === "CONFIRMED_EXPECTED").length;
-    entry.kb_items = {
-      total: candidates.length,
-      confirmed_expected: confirmed,
-      usable_as_oracle: confirmed > 0
-    };
+    entry.kb_items = oracleSummary(candidates);
     if (confirmed === 0) {
       entry.issues.push("0 item CONFIRMED_EXPECTED — chỉ dùng cho regression discovery, không dùng làm expected result");
     }
@@ -246,17 +243,19 @@ async function describeObject(productKey, objectKey, staleDays = STALE_AFTER_DAY
 // Đây là cách đáng tin cậy để lấy dữ liệu có cấu trúc (oq_id/type/summary/...) ra khỏi
 // file — không cố parse markdown/prose tự do. Heading chỉ để người đọc lướt nhanh, JSON
 // trong fence mới là nguồn dữ liệu thật được đọc ở đây.
-// Parser sống ở scripts/lib/open-questions.mjs — dùng CHUNG với ops-board.
+// Parser sống ở scripts/lib/open-questions.mjs.
 
-// Regenerate knowledge/_open-issues/consolidated-open-questions.md từ toàn bộ
-// open-questions.md theo object (§5a) — file này CHỈ ĐỌC, luôn bị ghi đè hoàn toàn ở
-// đây, không sửa tay để 2 tầng (object-level nguồn thật vs consolidated tổng hợp)
-// không bao giờ lệch nhau.
+// Regenerate knowledge/_open-issues/consolidated-open-questions.md: MỤC LỤC các open question
+// theo product/object (số lượng theo loại + link tới open-questions.md của object). Nội dung
+// từng OQ chỉ nằm ở file object-level (§5a) — không chép lại ở đây, để file nhỏ và mỗi lần
+// publish chỉ đổi vài dòng. File này CHỈ ĐỌC, luôn bị ghi đè hoàn toàn.
 async function buildConsolidatedOpenQuestions(products) {
-  const objectSections = [];
-  let totalEntries = 0;
+  const sections = [];
+  const total = { CONFLICT: 0, NEEDS_CONFIRMATION: 0, OPEN_ISSUE: 0 };
+  let objectCount = 0;
 
   for (const product of products) {
+    const rows = [];
     for (const obj of product.objects) {
       const file = path.join(productsDir, product.product_key, obj.object_key, "open-questions.md");
       if (!(await exists(file))) continue;
@@ -265,51 +264,30 @@ async function buildConsolidatedOpenQuestions(products) {
       const unfenced = findUnfencedEntries(text);
       if (unfenced.length) console.warn(`WARN ${product.product_key}/${obj.object_key}/open-questions.md: entry ngoài fence \`\`\`json (§5a): ${unfenced.join(", ")}`);
       if (!entries.length) continue;
-      totalEntries += entries.length;
-
-      const byType = new Map();
-      for (const e of entries) {
-        const type = OQ_TYPE_ORDER.includes(e.type) ? e.type : "OPEN_ISSUE";
-        if (!byType.has(type)) byType.set(type, []);
-        byType.get(type).push(e);
-      }
-      for (const list of byType.values()) list.sort((a, b) => String(a.oq_id).localeCompare(String(b.oq_id)));
-
-      const lines = [];
-      lines.push(`## ${obj.object_key} (\`knowledge/products/${product.product_key}/${obj.object_key}/open-questions.md\`) — ${entries.length} mục\n`);
-      for (const type of OQ_TYPE_ORDER) {
-        const list = byType.get(type);
-        if (!list || !list.length) continue;
-        lines.push(`### ${OQ_TYPE_LABEL[type]}\n`);
-        for (const e of list) {
-          const featurePart = e.feature_id ? ` (feature: ${e.feature_id})` : "";
-          lines.push(`- **[${e.oq_id}]**${featurePart} ${e.summary ?? "(thiếu summary)"}`);
-          if (type === "CONFLICT") {
-            if (e.side_a) lines.push(`    - Phía A: ${e.side_a}`);
-            if (e.side_b) lines.push(`    - Phía B: ${e.side_b}`);
-          }
-        }
-        lines.push("");
-      }
-      objectSections.push(lines.join("\n"));
+      const n = { CONFLICT: 0, NEEDS_CONFIRMATION: 0, OPEN_ISSUE: 0 };
+      for (const e of entries) n[OQ_TYPE_ORDER.includes(e.type) ? e.type : "OPEN_ISSUE"]++;
+      for (const t of OQ_TYPE_ORDER) total[t] += n[t];
+      objectCount++;
+      rows.push(`| [${obj.object_key}](../products/${product.product_key}/${obj.object_key}/open-questions.md) | ${n.CONFLICT} | ${n.NEEDS_CONFIRMATION} | ${n.OPEN_ISSUE} | ${entries.length} |`);
     }
+    if (!rows.length) continue;
+    sections.push([`## ${product.consumer_label ?? product.product_key}\n`, "| Object | Conflict | Cần xác nhận | Open issue | Tổng |", "|---|---:|---:|---:|---:|", ...rows, ""].join("\n"));
   }
 
+  const sum = total.CONFLICT + total.NEEDS_CONFIRMATION + total.OPEN_ISSUE;
   const header = [
-    `# Open Questions tổng hợp — ${products.map((p) => p.consumer_label ?? p.product_key).join(" · ")}`,
+    "# Mục lục Open Questions",
     "",
-    "File này được SINH TỰ ĐỘNG bởi `scripts/generate-manifest.mjs` từ toàn bộ " +
-      "`open-questions.md` theo object (§5a của contract) — KHÔNG sửa tay ở đây. " +
-      "Cần thêm/sửa/resolve 1 open question thì sửa ở file object-level tương ứng rồi " +
-      "chạy lại script; sửa trực tiếp ở đây sẽ bị ghi đè mất ở lần chạy sau.",
+    "File này được SINH TỰ ĐỘNG bởi `scripts/generate-manifest.mjs` từ `open-questions.md` của từng object (§5a) — KHÔNG sửa tay. " +
+      "Nội dung từng câu hỏi nằm ở file của object (link ở cột Object); thêm/sửa/resolve ở đó rồi chạy lại script.",
     "",
-    totalEntries
-      ? `Tổng: ${totalEntries} open question đang mở trên ${objectSections.length} object.`
+    sum
+      ? `Tổng: ${sum} open question đang mở trên ${objectCount} object (${total.CONFLICT} conflict · ${total.NEEDS_CONFIRMATION} cần xác nhận · ${total.OPEN_ISSUE} open issue).`
       : "Không có open question nào đang mở.",
     ""
   ].join("\n");
 
-  return `${header}\n${objectSections.join("\n")}`.trimEnd() + "\n";
+  return `${header}\n${sections.join("\n")}`.trimEnd() + "\n";
 }
 
 async function main() {
@@ -359,7 +337,7 @@ async function main() {
       objects
     };
     // knowledge/products/<key>/ mà không có config/products/<key>.json là FAIL:
-    // từ đây trở xuống mọi consumer (manifest, publish, ops-board) sẽ phải ĐOÁN
+    // từ đây trở xuống mọi consumer (manifest, publish) sẽ phải ĐOÁN
     // ngưỡng freshness, environment và project_id của product này.
     if (!cfg) {
       entry.config_missing = true;
@@ -397,7 +375,7 @@ async function main() {
       date: r.date,
       mode: r.mode,
       published_context_version:
-        allObjects.find((o) => o.object_key === r.object_key)?.published_context_version ?? null
+        products.find(p=>p.product_key===r.product_key)?.objects.find((o) => o.object_key === r.object_key)?.published_context_version ?? null
     }));
   const resolvedRefs = [...byRef.values()]
     .sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0))
@@ -483,7 +461,12 @@ async function main() {
       console.error(`\nFAIL: ${blocking.length} object chưa publish được: ${blocking.map((o) => o.object_key).join(", ")}`);
       process.exit(1);
     }
-    console.log("OK: mọi object đều có block publish hợp lệ");
+    const saved=JSON.parse(await readFile(path.join(knowledgeDir,'manifest.json'),'utf8'));
+    const {generated_at:_savedDate,...savedContent}=saved;
+    const {generated_at:_newDate,...expectedContent}=manifest;
+    if(!isDeepStrictEqual(savedContent,expectedContent))throw new Error('manifest.json is stale: regenerate before release');
+    if(await readFile(consolidatedFile,'utf8')!==await buildConsolidatedOpenQuestions(products))throw new Error('consolidated-open-questions.md is stale: regenerate before release');
+    console.log("OK: publish metadata, manifest và OQ index khớp dữ liệu hiện tại");
     return;
   }
 

@@ -1,4 +1,4 @@
-// Tiện ích file dùng chung cho scripts/ và ops-board/.
+// Tiện ích file dùng chung cho scripts//.
 
 import { readFile, writeFile, readdir, stat, mkdir } from "node:fs/promises";
 import path from "node:path";

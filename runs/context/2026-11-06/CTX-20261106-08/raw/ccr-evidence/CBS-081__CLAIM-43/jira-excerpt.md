@@ -1,3 +1,0 @@
-Trích từ Jira TIB-5510 comment #55732, phatnt (dev), 2026-10-27, đọc qua MCP 2026-11-06, đã bỏ thẻ định dạng.
-
-Dữ liệu add-on là Page-load Snapshot (được nạp tại thời điểm load trang). Không có cơ chế đồng bộ real-time ngầm nếu giữ nguyên tab. Điều kiện tiên quyết: Sau khi thao tác trên Shopify Admin, Buyer bắt buộc phải Reload (F5) lại trang sản phẩm thì SDK mới nhận dữ liệu mới từ Liquid/Metafield của Shopify để chặn hoặc cho phép ATC. Nếu không reload trang cũ: Từ Có hàng -> Hết hàng/Draft: Khách bấm ATC sẽ bị Shopify API từ chối (422) hoặc bị Lớp 2 (Checkout Function) chặn đứng tại Checkout. Từ Hết hàng -> Có hàng: SDK ở tab cũ vẫn giữ cờ unavailable và chặn ATC cho đến khi khách F5 lại trang.

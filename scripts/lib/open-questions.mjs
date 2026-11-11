@@ -1,9 +1,9 @@
 // Parser duy nhất cho open-questions.md (contract §5a, §12.3b).
 //
 // Trước đây có HAI parser cho cùng một file và chúng không giống nhau:
-//   - ops-board/server.mjs        : quét brace-balanced, chấp mọi wrapper
+//   - (không còn consumer khác)
 //   - scripts/generate-manifest.mjs: đòi fence ```json
-// Hệ quả: một entry viết không có fence sẽ HIỆN trên ops-board nhưng MẤT khỏi
+// Hệ quả: một entry viết không có fence sẽ được đọc ở nơi này nhưng MẤT khỏi
 // consolidated-open-questions.md — tức mất khỏi đúng bản được gửi cho PO/Dev.
 // Đó là loại lệch âm thầm nên chỉ có một implementation.
 //
@@ -17,8 +17,11 @@ export function extractOpenQuestions(text) {
   if (!text) return entries;
   for (let i = 0; i < text.length; i++) {
     if (text[i] !== "{") continue;
-    let depth = 0;
+    let depth = 0, quoted = false, escaped = false;
     for (let j = i; j < text.length; j++) {
+      const ch = text[j];
+      if (quoted) { if (escaped) escaped = false; else if (ch === "\\") escaped = true; else if (ch === '"') quoted = false; continue; }
+      if (ch === '"') { quoted = true; continue; }
       if (text[j] === "{") depth++;
       else if (text[j] === "}") {
         depth--;
