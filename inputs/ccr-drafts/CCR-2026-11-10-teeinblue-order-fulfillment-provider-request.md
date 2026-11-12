@@ -214,7 +214,7 @@ Nguồn gốc chung: các claim lấy từ knowledge QA local (product_facts.md)
 - **OQ:** CONFLICT — Dev có chủ ý bỏ `id` và thêm `state: null` trong payload Create Order gửi PosterFlow không, và shape nào là chuẩn? Side A: ví dụ dev (TIB-4778 comment 51328, 2026-09-18) có `id` và không có `state` / Side B: BUG-05 (order thật từ 2026-10-05) không có `id`, 3/4 có `shipping_address.state: null`. — Người trả lời: Dev.
 - **Trích nguyên văn:**
   ```
-  Jira TIB-4778 comment 51328 (huyenntk, 2026-09-18), mục 'Create order' — ví dụ request: {"id": [đã bỏ id], "reference_order_id": "#3304x", "test_order": true, "shipping_address": {…}, "line_items": [{"quantity": 1, "variant_sku": "…", "print_areas": [{"key": "front", "url": "…"}]}, …], "shipment_notification_url": "https://staging-api.teeinblue.com/api/webhook/general?order_token=…"} · Response: {"id": "123456", "status": "success", "reference_order_id": "TT123456"}
+  Jira TIB-4778 comment 51328 (huyenntk, 2026-09-18), mục 'Create order' — ví dụ request: {"id": [đã bỏ id], "reference_order_id": "#3304x", "test_order": true, "shipping_address": {…}, "line_items": [{"quantity": 1, "variant_sku": "…", "print_areas": [{"key": "front", "url": "…"}]}, …], "shipment_notification_url": "https://staging-api.teeinblue.com/api/webhook/general?order_token=..."} · Response: {"id": "123456", "status": "success", "reference_order_id": "TT123456"}
   BUG-05 (QA-3365, re-check 2026-10-06): 4/4 order thật từ 2026-10-05 trở đi đều KHÔNG còn `id` ở request_data, và 3/4 có thêm `state: null` trong shipping_address dù oracle orders.shipping_address không có key này — QA dismissed BUG-05 2026-10-07 (không ảnh hưởng gửi fulfill request).
   ```
 
@@ -285,6 +285,6 @@ Nguồn gốc chung: các claim lấy từ knowledge QA local (product_facts.md)
 - **OQ:** NEEDS_CONFIRMATION — TC-31 kết luận "N/A theo điều kiện" nhưng tick ✅: có xác nhận được shipment_notification_url luôn do TIB tự sinh và webhook tự cập nhật tracking đúng không (TC-21 bị skip, chỉ quan sát PosterFlow)? — Người trả lời: Dev.
 - **Trích nguyên văn:**
   ```
-  - [FACT-088] **Webhook `shipment_notification_url` dùng chung endpoint `/api/webhook/general?user_id=<id>&token=<32-hex>&order_token=<ulid>`** (xác nhận lại 2026-10-06, QA-3365 TC-31 — trước đó chỉ quan sát thấy `order_token`, giờ URL thật đã có đủ `user_id`+`token` đúng mô tả dev) — field luôn TIB tự sinh per-request, không phải input staff/merchant cấu hình được (không có ô nhập nào trên `/fulfillments/posterflow`).
+  - [FACT-088] **Webhook `shipment_notification_url` dùng chung endpoint `/api/webhook/general` với query `user_id` (id), `token` (32-hex), `order_token` (ULID)** (xác nhận lại 2026-10-06, QA-3365 TC-31 — trước đó chỉ quan sát thấy `order_token`, giờ URL thật đã có đủ `user_id`+`token` đúng mô tả dev) — field luôn TIB tự sinh per-request, không phải input staff/merchant cấu hình được (không có ô nhập nào trên `/fulfillments/posterflow`).
   result_QA-3365_lane2-gha_auto_2026-10-08.md TC-31: input/textarea trên trang settings PosterFlow = [] · TC-31 kết luận N/A theo đúng điều kiện ghi trong TC gốc: field KHÔNG staff/merchant-configurable (TIB tự sinh per-order)
   ```
