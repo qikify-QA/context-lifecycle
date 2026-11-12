@@ -50,7 +50,7 @@ const RULES = {
       }
       if (c.strength === "S2") {
         const q = c.qa_rule_ref;
-        for (const k of ["code", "owner_role", "recorded_on", "locator", "quote"]) if (!q?.[k]) out.push({ path: `${at}.qa_rule_ref.${k}`, problem: "claim S2 thiếu qa_rule_ref đủ 4 field (§12.3a)" });
+        for (const k of ["owner_role", "recorded_on", "locator", "quote"]) if (!q?.[k]) out.push({ path: `${at}.qa_rule_ref.${k}`, problem: "claim S2 thiếu qa_rule_ref (owner_role, recorded_on, locator, quote; code tuỳ chọn — §12.3a)" });
       } else if (c.qa_rule_ref) {
         out.push({ path: at, problem: `claim ${c.strength} không được có qa_rule_ref` });
       }

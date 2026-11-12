@@ -121,7 +121,9 @@ Enum `confirmation_source.type` — đúng 4 giá trị:
 | `po_dev_confirm` | PO, Dev hoặc QA xác nhận trực tiếp, trích dẫn **nguyên văn** + ngày + ticket. Có link thì kèm link. Comment mơ hồ không tính |
 | `test_case` | Test case đã chạy và PASS đúng hành vi đang xét (id + ngày chạy + build ≥ bản có thay đổi) |
 
-**`qa_rule_ref`** (chỉ item `PROPOSED`, không đi cùng `confirmation_source`): `{code, owner_role, recorded_on, locator}` — mã rule trong kho QA, vai trò sở hữu (không tên cá nhân), ngày ghi nhận, nơi mở lại được. Rule QA có chủ chưa phải xác nhận của PO/Dev nên không là oracle `STRONG`; muốn lên `CONFIRMED_EXPECTED` cần nguồn thuộc enum trên.
+**Rule spec-hub** (đọc qua `mcp__spec-hub__ask` hoặc `mcp__spec-hub__feature`) có `sure: green` hoặc `purple` thì tính là `po_dev_confirm` (chủ repo chốt 2026-11-12). `ref` phải có project, feature id, rule id, version của feature, `log_id` của lần ask nếu có, và trích **nguyên văn** câu `rule`, không tóm tắt. `authored_on` là ngày đọc rule. Rule `yellow` thành `INFERRED` + `confidence: LOW` + OQ `NEEDS_CONFIRMATION`. Rule `red` không nạp, chỉ thành OQ. Item đã publish dạng `PROPOSED` mang `qa_rule_ref` mã `spec-hub:*` chỉ lên `CONFIRMED_EXPECTED` qua một run, không sửa tay. `dev_doc` giữ nguyên luật hiện có.
+
+**`qa_rule_ref`** (chỉ item `PROPOSED`, không đi cùng `confirmation_source`): `{code, owner_role, recorded_on, locator}` — mã rule nếu có, vai trò sở hữu (không tên cá nhân), ngày ghi nhận, Proposal/task nơi rule được ghi (không cần đường dẫn repo QA, `ccr-protocol.md` §12.3a). Rule QA có chủ chưa phải xác nhận của PO/Dev nên không là oracle `STRONG`; muốn lên `CONFIRMED_EXPECTED` cần nguồn thuộc enum trên.
 
 Jira ticket **trần** (không kèm doc/changelog/diff/quote/test-case) KHÔNG đủ — vẫn là `OBSERVED_CURRENT`. Ticket **kèm** dev doc hoặc PR diff thì đủ, và type là `dev_doc`.
 
