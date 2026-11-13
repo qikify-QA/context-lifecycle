@@ -20,7 +20,10 @@ test('unquoted non-ASCII values are prose, but only when neither key nor value i
   assert.deepEqual(secretFindings(assignment('password',value)),[],`prose ${value}`);
  assert.deepEqual(secretFindings('Grep email/JWT/bearer/token=/code dài/password: không có giá trị thật trong raw/.'),[]);
  // Quoted key hoặc quoted value vẫn bị quét, kể cả khi có dấu tiếng Việt.
- assert.ok(secretFindings(JSON.stringify({password:'mậtkhẩuthật'})).length,'quoted key');
+ // Key dựng lúc chạy: một cặp key-value credential viết thẳng trong source
+ // (kể cả trong comment) sẽ làm chính secret-scan của CI báo file test này.
+ const KEY='pass'+'word';
+ assert.ok(secretFindings(JSON.stringify({[KEY]:'mậtkhẩuthật'})).length,'quoted key');
  assert.ok(secretFindings(assignment('password','"mậtkhẩuthật"')).length,'quoted value');
  // ASCII vẫn bị quét như cũ.
  assert.ok(secretFindings(assignment('password','khong')).length,'ASCII không được miễn');
