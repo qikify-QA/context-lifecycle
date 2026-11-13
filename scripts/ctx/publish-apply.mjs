@@ -20,7 +20,7 @@ import { exists } from "../lib/fs-utils.mjs";
 import { verifyReview, verdictProblems, digest } from "../lib/review-state.mjs";
 import { isSharedFile } from "../lib/shared-files.mjs";
 import { walk } from "../lib/fs-utils.mjs";
-import { readFile, readdir, writeFile, mkdir } from "node:fs/promises";
+import { readFile, readdir, writeFile, mkdir, rm, rmdir } from "node:fs/promises";
 import { cp } from "node:fs/promises";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
@@ -35,8 +35,10 @@ const execFileAsync = promisify(execFile);
 
 // Deterministic data maintenance explicitly requested by the operator. Uses the
 // same canonical writer, locks and rollback as normal apply; no new authority.
-export async function applyDataMaintenance(plan,{targetDir=path.join(rootDir,'knowledge'),lockDir,regenerate}={}){
-  validateMaintenanceChanges(plan.changes);
+// `change.after === null` = xoá file (restructure chuyển feature đi); `validate` thay bộ kiểm
+// bảo toàn mặc định khi thao tác có luật bất biến riêng (restructure-knowledge.mjs).
+export async function applyDataMaintenance(plan,{targetDir=path.join(rootDir,'knowledge'),lockDir,regenerate,validate=validateMaintenanceChanges}={}){
+  validate(plan.changes);
   if(!plan.summary?.audit?.ok)throw new Error('maintenance_preview_not_clean');
   const ctxRunId=`maintenance-${Date.now()}-${process.pid}`;
   const opts={ctxRunId,...(lockDir?{dir:lockDir}:{})};
@@ -48,7 +50,8 @@ export async function applyDataMaintenance(plan,{targetDir=path.join(rootDir,'kn
     const audit=await auditDir(plan.preview);if(!audit.ok)throw new Error('maintenance_preview_changed_or_invalid');
     for(const change of plan.changes){
       if(!/^products\/[a-z0-9-]+\//.test(change.rel)||change.rel.split(/[\\/]/).includes('..'))throw new Error('unsafe_maintenance_path');
-      if(!Buffer.from(await readFile(path.join(plan.temp,'products',path.relative('products',change.rel)))).equals(change.after))throw new Error('maintenance_content_changed');
+      const staged=await readFile(path.join(plan.temp,'products',path.relative('products',change.rel))).catch(e=>{if(e.code==='ENOENT')return null;throw e;});
+      if(change.after===null?staged!==null:!staged||!Buffer.from(staged).equals(change.after))throw new Error('maintenance_content_changed');
       const target=path.join(targetDir,change.rel);
       const before=await readFile(target).catch(e=>{if(e.code==='ENOENT')return null;throw e;});
       if((before===null)!==(change.before===null)||before&&!before.equals(change.before))throw new Error('maintenance_base_changed');
@@ -57,11 +60,15 @@ export async function applyDataMaintenance(plan,{targetDir=path.join(rootDir,'kn
     const generated=['manifest.json','_open-issues/consolidated-open-questions.md'];
     for(const rel of generated){const before=await readFile(path.join(targetDir,rel)).catch(()=>null);if(before){const backup=path.join(plan.temp,'backup',rel);await mkdir(path.dirname(backup),{recursive:true});await writeFile(backup,before);}}
     await withFileRollback([...plan.changes.map(c=>path.join(targetDir,c.rel)),...generated.map(rel=>path.join(targetDir,rel))],async()=>{
-      for(const change of plan.changes){const file=path.join(targetDir,change.rel);await mkdir(path.dirname(file),{recursive:true});await writeFile(file,change.after);}
+      for(const change of plan.changes){const file=path.join(targetDir,change.rel);if(change.after===null){await rm(file,{force:true});await removeEmptyParents(path.dirname(file),path.join(targetDir,'products'));continue;}await mkdir(path.dirname(file),{recursive:true});await writeFile(file,change.after);}
       if(regenerate)await regenerate();else await execFileAsync(process.execPath,[path.join(rootDir,'scripts/generate-manifest.mjs')],{cwd:rootDir});
       const result=await auditDir(path.join(targetDir,'products'));if(!result.ok)throw new Error('maintenance_post_apply_audit_failed');
     });
   }finally{await releaseAll(keys,opts);}
+}
+
+async function removeEmptyParents(dir,stop){
+  while(dir.startsWith(stop+path.sep)){try{await rmdir(dir);}catch{return;}dir=path.dirname(dir);}
 }
 
 export function mergeRegistry(current, preview, objectKeys) {

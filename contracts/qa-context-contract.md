@@ -288,6 +288,35 @@ knowledge/
 | **object** (`<object-key>/kb.json`) | boundary-set xuyên nhiều sub-type, hạ tầng cross-cutting, định danh object |
 | **feature** (`features/<key>/kb.json`) | hành vi theo user goal — phần lớn KB item |
 
+### Độ hạt object/feature (2026-11-12)
+
+Consumer tìm theo: alias trong `_registry.json` → object → `feature-summary.md` → đọc trọn một feature. Vì vậy object phải trùng danh từ người test dùng, và feature phải đủ nhỏ để đọc một lần.
+
+- **Object = một entity (aggregate) nghiệp vụ**, đặt tên theo danh từ trong ticket. Có doc domain-entities thì lấy entity từ đó; entity con cùng vòng đời gộp vào entity cha. Màn admin/surface **không** làm object riêng: chúng là feature (hoặc KB `scope.role=admin`) của entity mà màn đó thao tác, tên màn đưa vào alias. Object hạ tầng chỉ khi không entity nào sở hữu (request auth, webhook, queue).
+- **Feature = một user goal, cỡ một heading H2 của doc.** Không chẻ nhỏ hơn một heading.
+
+| Đơn vị | Nên | Cảnh báo | Phải xử lý |
+|---|---|---|---|
+| KB / feature | 8–40 | > 40 | > 60 → tách feature; < 5 → gộp |
+| feature / object | 3–8 | > 10 | > 12 → tách object |
+| KB / object | ≤ 250 | > 250 | > 350 → tách object |
+| `feature-summary.md` | ≤ 10 KiB | > 10 KiB | rút về dạng mục lục |
+
+Ngưỡng là cảnh báo (`scripts/ctx/health.mjs`), không chặn publish; vượt ngưỡng mà giữ nguyên thì ghi lý do trong scope-plan.
+
+**Tách feature** — áp trục theo thứ tự, lấy trục đầu tiên chia được 2–4 nhóm cỡ 8–40 KB, gom theo `topic` của KB item: (1) goal con (H2/H3); (2) pha vòng đời: cấu hình → áp dụng/runtime → báo cáo; (3) actor, chỉ khi mỗi actor có ≥ 15 KB riêng, còn lại dùng `scope.role`. Cấm tách theo `knowledge_kind`, file doc, endpoint/table, môi trường, hay happy path/edge case (edge case đi cùng luật nó làm ngoại lệ). Item dùng chung cho mọi nhóm lên `<object>/kb.json`.
+
+**Tách object** theo dạng: entity có entity con vòng đời riêng → mỗi entity con một object · nhóm gom chung (object-level KB ≈ 0) → mỗi feature về entity sở hữu nó · object theo surface → giải thể, feature về entity object, phần chỉ-admin thành một object vận hành · nhiều feature nhỏ của một entity → tách theo thành phần con của entity.
+
+**Gộp:** feature < 5 KB vào feature anh em có goal gần nhất; object 1 feature < 30 KB cùng entity với object khác thì gộp.
+
+**Giữ định danh khi tách/gộp/chuyển** (làm bằng `scripts/ctx/restructure-knowledge.mjs`, không làm tay):
+- `kb_id` không đổi; reference được viết lại dạng `object/feature#KB-ID`. Hai item cùng `kb_id` rơi vào một feature → dừng.
+- Mảnh lớn nhất giữ `feature_key` cũ; key cũ của feature bị chuyển/gộp và object bị giải thể thành alias trong `_registry.json`.
+- Check đi theo KB oracle của nó; `check_id` trùng trong checklist đích được đánh số tiếp và ghi `previous_check_id`. Tổng KB và tổng check không đổi.
+- OQ đi theo feature/KB/check; chuyển sang object khác thì mint `OQ-<object mới>-nnn` kèm `supersedes`, mọi `oq_id` tham chiếu được viết lại.
+- Object bị đổi tăng `published_context_version`, ghi dòng `CHANGELOG` (`restructure-<date>`) và sinh lại `feature-summary.md` dạng mục lục.
+
 `kb.json` ở mọi tầng LUÔN là một mảng JSON phẳng các KB item. `publish-meta.json` là file duy nhất mang version/ngày publish/mode của object.
 
 ## 5a. Schema `knowledge/` — tự chứa hoàn toàn
@@ -482,7 +511,7 @@ Evidence ref chỉ tồn tại trong `runs/`; không được copy sang `knowled
 | `BROAD_BOOTSTRAP` | Nhiều object/role/module — scope-planner chạy trước | ≥1 runtime |
 | `DOC_BOOTSTRAP` | Có bộ tài liệu nhưng KHÔNG có quyền truy cập runtime. Toàn bộ knowledge đến từ tài liệu. LUÔN spawn scope-planner và `doc-ingest-explorer`; không spawn explorer runtime | **0** |
 | `INCREMENTAL_UPDATE` | Chỉ feature/dependency bị ảnh hưởng, và **có explore hẹp thật** | ≥1 |
-| `CCR_INGEST` | Object đã publish (có base), CCR mang nguồn `S3`/`S1` (§12.3a). Chuẩn hoá thẳng vào KB, **0 explorer**. Mode mặc định cho CCR | **0** |
+| `CCR_INGEST` | CCR mang nguồn `S3`/`S1` (§12.3a), vào object đã publish hoặc object mới do CCR khai (base rỗng, `contracts/ccr-protocol.md` §12.1 bước 5). Chuẩn hoá thẳng vào KB, **0 explorer**. Mode mặc định cho CCR | **0** |
 | `REFRESH` | Xác minh lại knowledge cũ | ≥1 |
 | `RECONCILE` | Xử lý evidence mâu thuẫn | ≥1 |
 | `KNOWLEDGE_RESTRUCTURE` | Mode lịch sử: chỉ đổi cấu trúc file `knowledge/`, không đổi nội dung. Không dùng cho run mới | 0 |
@@ -494,7 +523,7 @@ Mode được phép của từng product nằm ở `config/products/<key>.json` 
 | | `ZERO_DOC_BOOTSTRAP` | `DOC_BOOTSTRAP` | `CCR_INGEST` | `INCREMENTAL_UPDATE` |
 |---|---|---|---|---|
 | Nguồn sự thật | quan sát runtime | văn bản tài liệu | nguồn trong CCR | quan sát hẹp |
-| Base version | không cần | không cần | **bắt buộc có** | bắt buộc có |
+| Base version | không cần | không cần | có, hoặc base rỗng khi CCR tạo object mới | bắt buộc có |
 | Input chính | `object_target` (URL/ID thật) | `doc_sources[]` | Proposal + `claim_id` | `object_target` |
 | Scope-planner | không chạy | **LUÔN** chạy | không | không |
 | Explorer được phép | theo `allowed_explorers` | chỉ `doc-ingest-explorer` | không | theo `allowed_explorers`, scope hẹp |
@@ -505,7 +534,7 @@ Mode được phép của từng product nằm ở `config/products/<key>.json` 
 | Gate C1/C2 | C1/C2 | C1-DOC/C2-DOC | C1-DOC/C2-DOC (biến thể CCR) | C1/C2 |
 | `knowledge-diff-analyzer` | chỉ khi object đã có base | chỉ khi object đã có base | **LUÔN** | **LUÔN** |
 | Supersede (§12.5) | không | được phép (nếu config bật) | được phép (nếu config bật) | không |
-| Carry-forward base | — | khi có base | **có** | **có** |
+| Carry-forward base | — | khi có base | **có** (trừ object mới) | **có** |
 
 **Carry-forward base:** ở run có base, normalizer/feature-context-builder xuất shard của feature bị chạm = **toàn bộ** nội dung base (giữ nguyên `kb_id`, `check_id`, `last_updated`) cộng phần thay đổi. Publish copy cả file, nên item vắng khỏi shard là bị xoá khỏi `knowledge/`. Feature không bị chạm không xuất hiện trong candidate và giữ nguyên trong `knowledge/`.
 

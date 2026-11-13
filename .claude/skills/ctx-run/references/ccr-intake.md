@@ -16,8 +16,8 @@ Kéo card không tự đánh thức orchestrator: board không đẩy sự kiệ
 
 ## 2. Dựng run
 
-1. Resolve `object_key` qua `knowledge/products/<product>/_registry.json` của **đúng product đó** (§12.1 bước 5). Không resolve được → `update_context_board_proposal({ status: "blocked", results: { summary, open_questions: ["Phần đầu: ..."] } })`, dừng.
-2. Object phải đã có base (`knowledge/products/<p>/<o>/publish-meta.json`). Chưa có → `DEFERRED` + `reason: object_has_no_base`, `action: "bootstrap_required"`, `object`, `scope` (lấy từ phần Thuộc / Không thuộc của CCR), và báo operator mở run bootstrap.
+1. Resolve `object_key` qua `knowledge/products/<product>/_registry.json` của **đúng product đó** (§12.1 bước 5). Chỉ block (`update_context_board_proposal({ status: "blocked", results: { summary, open_questions: ["Phần đầu: ..."] } })`) khi claim không khai object nào hoặc khớp nhiều object.
+2. Claim khai `MỚI: <slug>`, key không resolve được, hoặc object chưa có `publish-meta.json` → tạo object mới theo §12.1 bước 5: chuẩn hoá slug, kiểm trùng key/alias, rồi đi tiếp như object có base rỗng (không carry-forward; diff với base rỗng). Ghi `object_is_new: true` + phạm vi Thuộc/Không thuộc vào `input/bootstrap-request.json` (`object_target`) và nêu "object mới: `<key>`" trong `results.summary` lúc kết thúc.
 3. `node scripts/ctx/new-run.mjs --product <p> --mode CCR_INGEST --object <o> --proposal <CBS-n> --label "<vài từ gợi nhớ>"`.
    Exit 3 (`proposal_already_claimed`) → dùng run đã có hoặc báo outcome đã có; không tạo run mới và không ghi DEFERRED lên card đang được xử lý. Intake busy → retry sau, không đổi board.
 4. Ghi `input/bootstrap-request.json` theo `contracts/templates/bootstrap-request.ccr.json`.

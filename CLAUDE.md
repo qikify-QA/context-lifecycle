@@ -11,7 +11,7 @@ Repo sản xuất canonical QA context cho nhiều product. Đọc theo thứ t�
 
 - Mỗi luật chỉ nằm ở một file. Sửa luật thì sửa đúng file đó; skill/reference trỏ tới § của contract, không chép lại.
 - Skill/reference không chứa kiến thức riêng của product — đặt nó vào config hoặc playbook của product.
-- Việc tất định (run-id, lock, đóng băng doc, strip, audit, publish) dùng script trong `scripts/ctx/`, không làm tay. `npm test` sau khi sửa script.
+- Việc tất định (run-id, lock, đóng băng doc, strip, audit, publish, tách/gộp object-feature) dùng script trong `scripts/ctx/`, không làm tay. `npm test` sau khi sửa script.
 - Không ghi `knowledge/` ngoài `scripts/ctx/publish-apply.mjs`, trừ CCR không có claim (`.claude/skills/ctx-run/references/ccr-intake.md` §2b). Phát hành sang `qa-knowledge` chỉ qua PR (`publish-knowledge.mjs --pr`) và chỉ khi operator đồng ý; không bao giờ push thẳng hay ghi đè tag.
 - Không tự tạo/comment issue Jira hay nhắn kênh ngoài để "escalate" conflict — hỏi operator trước.
 - MCP server của QA Hub theo product nằm ở `qa_hub.mcp_server` — hiện mọi product dùng `testlane` (QA Hub production; tên cũ `qa-hub-production` là cùng một hệ thống, chốt 2026-10-31). Không có server tên `qa-hub`. Trigger CCR là Proposal được kéo sang In Progress trên QA Hub.

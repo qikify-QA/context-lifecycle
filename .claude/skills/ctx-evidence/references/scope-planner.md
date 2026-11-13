@@ -28,7 +28,7 @@ Lập kế hoạch phạm vi: coverage matrix object × role × state × layer, 
 ## Method
 
 1. Inventory module, object, role, state, dependency đã biết từ knowledge hiện có.
-2. **Chỉ `DOC_BOOTSTRAP` — phân rã từ tài liệu.** Đọc cấu trúc từng doc: cây heading (markdown), `tags` + nhóm `paths` (OpenAPI), nhóm table theo prefix/FK (schema dump). Đọc file overview/index/domain-entities trước nếu có. Đề xuất `object_candidates[]` và `feature_candidates[]`; **mỗi candidate cite ≥1 heading/section** bằng locator thô (heading path hoặc JSON pointer — chưa có `DSEC-ID` vì doc-ingest chạy sau). Cấm: feature mà mục lục không đỡ được · chẻ 1 heading thành nhiều feature cho trông kỹ · dùng danh sách endpoint/table làm danh sách feature.
+2. **Chỉ `DOC_BOOTSTRAP` — phân rã từ tài liệu.** Đọc cấu trúc từng doc: cây heading (markdown), `tags` + nhóm `paths` (OpenAPI), nhóm table theo prefix/FK (schema dump). Đọc file overview/index/domain-entities trước nếu có: `object_candidates` lấy từ entity, rồi mới map chương/file doc vào entity — chương doc không tự động là object, file doc không tự động là feature. Độ hạt và ngưỡng theo contract §5 "Độ hạt object/feature"; ước lượng số KB theo heading và ghi `size_note` cho candidate vượt ngưỡng mà vẫn giữ. Đề xuất `object_candidates[]` và `feature_candidates[]`; **mỗi candidate cite ≥1 heading/section** bằng locator thô (heading path hoặc JSON pointer — chưa có `DSEC-ID` vì doc-ingest chạy sau). Cấm: feature mà mục lục không đỡ được · chẻ 1 heading thành nhiều feature cho trông kỹ · dùng danh sách endpoint/table làm danh sách feature.
 3. Lập matrix object × role × state × layer; đánh dấu mỗi ô `KNOWN | MISSING | STALE | CONFLICTED`.
 4. Object nằm trong `locked_objects[]` → đưa vào `deferred_scope` với `reason: "locked_by_other_run"`, không đưa vào discovery unit.
 5. Chấm priority (`P1` mất dữ liệu/tiền/permission · `P2` chức năng chính · `P3` còn lại) theo criticality, usage, data risk, centrality. Ưu tiên scope nhỏ tạo nhiều giá trị trước.
@@ -45,7 +45,7 @@ Lập kế hoạch phạm vi: coverage matrix object × role × state × layer, 
     { "object_key": "", "role": "", "state": "", "layer": "portal|storefront|api|db|code",
       "status": "KNOWN|MISSING|STALE|CONFLICTED", "priority": "P1|P2|P3" } ],
   "doc_decomposition": {
-    "object_candidates": [ { "object_key": "", "label": "", "cited_sections": [ { "doc_id": "DOC-01", "locator": {} } ] } ],
+    "object_candidates": [ { "object_key": "", "label": "", "entity": "", "cited_sections": [ { "doc_id": "DOC-01", "locator": {} } ], "size_note": null } ],
     "feature_candidates": [ { "feature_key": "", "feature_id": null, "name": "", "user_goal_draft": "",
       "object_key": "", "cited_sections": [], "priority": "P1|P2|P3" } ] },
   "discovery_units": [
@@ -58,7 +58,7 @@ Lập kế hoạch phạm vi: coverage matrix object × role × state × layer, 
 
 ## Self-gate
 
-PASS khi mỗi gap P1 có discovery unit, target/access rõ, không unit nào unsafe. Object hoãn vì lock không tính là gap bỏ sót nếu đã ghi `deferred_scope`. FAIL khi target mơ hồ, discovery đòi quyền không có, plan rộng mà thiếu priority. `DOC_BOOTSTRAP` FAIL thêm khi: feature candidate không cite section nào · danh sách feature là bản sao 1:1 của endpoint/table · `doc_decomposition` rỗng trong khi `doc_sources[]` không rỗng.
+PASS khi mỗi gap P1 có discovery unit, target/access rõ, không unit nào unsafe. Object hoãn vì lock không tính là gap bỏ sót nếu đã ghi `deferred_scope`. FAIL khi target mơ hồ, discovery đòi quyền không có, plan rộng mà thiếu priority. `DOC_BOOTSTRAP` FAIL thêm khi: feature candidate không cite section nào · danh sách feature là bản sao 1:1 của endpoint/table · `doc_decomposition` rỗng trong khi `doc_sources[]` không rỗng · object candidate chỉ là tên màn/surface trong khi entity nó thao tác đã là object khác.
 
 ## Stop conditions
 

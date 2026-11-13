@@ -9,7 +9,31 @@ import { readChangelogRefs } from "./changelog.mjs";
 import { getProduct, staleAfterDays } from "./product-config.mjs";
 import { knowledgeProductsDir } from "./run-layout.mjs";
 
-const daysSince = (d) => (Number.isNaN(Date.parse(d)) ? null : Math.floor((Date.now() - Date.parse(d)) / 86400000));
+// Ngưỡng độ hạt — luật nằm ở contract §5 "Độ hạt object/feature"; đây chỉ là giá trị cảnh báo.
+export const SIZE_LIMITS = {
+  featureKbMax: 40, // > 40 KB item/feature → oversized_feature
+  featureKbMin: 5, // < 5 → undersized_feature
+  featuresPerObjectMax: 10, // > 10 → too_many_features
+  objectKbMax: 250, // > 250 → oversized_object
+  summaryBytesMax: 10 * 1024 // > 10 KiB → oversized_summary
+};
+
+/** Cờ kích thước từ số KB từng feature, số KB object-level và cỡ feature-summary.md. */
+export function sizeFlags({ featureKb = {}, objectKb = 0, summaryBytes = 0 }, limits = SIZE_LIMITS) {
+  const counts = Object.values(featureKb);
+  const total = objectKb + counts.reduce((a, b) => a + b, 0);
+  const flags = [];
+  if (counts.some((n) => n > limits.featureKbMax)) flags.push("oversized_feature");
+  if (counts.some((n) => n < limits.featureKbMin)) flags.push("undersized_feature");
+  if (counts.length > limits.featuresPerObjectMax) flags.push("too_many_features");
+  if (total > limits.objectKbMax) flags.push("oversized_object");
+  if (summaryBytes > limits.summaryBytesMax) flags.push("oversized_summary");
+  const oversized = Object.entries(featureKb).filter(([, n]) => n > limits.featureKbMax).map(([k, n]) => ({ feature_key: k, kb: n }));
+  const undersized = Object.entries(featureKb).filter(([, n]) => n < limits.featureKbMin).map(([k, n]) => ({ feature_key: k, kb: n }));
+  return { flags, oversized_features: oversized, undersized_features: undersized };
+}
+
+const daysSince =(d) => (Number.isNaN(Date.parse(d)) ? null : Math.floor((Date.now() - Date.parse(d)) / 86400000));
 
 /** Số liệu một object. `dir` = knowledge/products/<product>/<object>. */
 export async function objectHealth(dir, staleDays = 45) {
@@ -18,10 +42,17 @@ export async function objectHealth(dir, staleDays = 45) {
   let unresolved = 0;
   let knownDefects = 0;
   const oracle = { STRONG: 0, BASELINE: 0, NONE: 0 };
+  const featureKb = {};
+  let objectKb = 0;
   for (const file of await walk(dir)) {
     const name = path.basename(file);
     if (name === "kb.json") {
-      for (const it of (await readJsonOr(file, [])) ?? []) {
+      const items = (await readJsonOr(file, [])) ?? [];
+      const rel = path.relative(dir, file).split(path.sep);
+      // Tên có khoảng trắng là bản sao iCloud ("x 2"), không phải feature thật.
+      if (rel.length === 3 && rel[0] === "features" && !rel[1].includes(" ")) featureKb[rel[1]] = items.length;
+      else if (rel.length === 1) objectKb = items.length;
+      for (const it of items) {
         if (it.knowledge_kind in kinds) kinds[it.knowledge_kind]++;
         if (it.status === "UNRESOLVED") unresolved++;
         if (it.status === "KNOWN_DEFECT") knownDefects++;
@@ -47,6 +78,10 @@ export async function objectHealth(dir, staleDays = 45) {
   if (totalKb && kinds.CONFIRMED_EXPECTED === 0) flags.push("no_confirmed_expected");
   if (unresolved) flags.push("open_conflicts");
   if (totalChecks && oracle.STRONG / totalChecks < 0.2) flags.push("weak_oracle");
+  const summaryFile = path.join(dir, "feature-summary.md");
+  const summaryBytes = (await exists(summaryFile)) ? Buffer.byteLength(await readFile(summaryFile, "utf8")) : 0;
+  const size = sizeFlags({ featureKb, objectKb, summaryBytes });
+  flags.push(...size.flags);
   return {
     object_key: path.basename(dir),
     version: meta?.published_context_version ?? null,
@@ -58,6 +93,7 @@ export async function objectHealth(dir, staleDays = 45) {
     known_defects: knownDefects,
     open_questions: oq,
     checks: { total: totalChecks, ...oracle },
+    size: { features: Object.keys(featureKb).length, object_level_kb: objectKb, summary_bytes: summaryBytes, oversized_features: size.oversized_features, undersized_features: size.undersized_features },
     last_ccr: last ? { ccr_ref: last.ccr_ref, date: last.date } : null,
     flags
   };

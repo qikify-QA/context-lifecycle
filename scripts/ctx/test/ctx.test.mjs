@@ -343,7 +343,8 @@ test("context health: đếm KB/oracle/OQ/conflict và gắn cờ, không ghi fi
   assert.deepEqual(h.checks, { total: 2, STRONG: 0, BASELINE: 1, NONE: 1 });
   assert.deepEqual(h.open_questions, { CONFLICT: 1, NEEDS_CONFIRMATION: 1, OPEN_ISSUE: 0 });
   assert.deepEqual(h.last_ccr, { ccr_ref: "CBS-7", date: "2026-10-05" });
-  assert.deepEqual(h.flags.sort(), ["no_confirmed_expected", "open_conflicts", "stale", "weak_oracle"]);
+  assert.deepEqual(h.flags.sort(), ["no_confirmed_expected", "open_conflicts", "stale", "undersized_feature", "weak_oracle"]);
+  assert.deepEqual(h.size.undersized_features, [{ feature_key: "f", kb: 2 }]);
   assert.deepEqual((await readdir(dir, { recursive: true })).sort(), before);
 });
 

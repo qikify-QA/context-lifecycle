@@ -12,7 +12,7 @@ Semantic diff giữa candidate và base theo từng shard, cộng `resolution` c
 
 | Run mode | Chạy? |
 |---|---|
-| `CCR_INGEST`, `INCREMENTAL_UPDATE` | **LUÔN** — không tìm thấy base là gate FAIL |
+| `CCR_INGEST`, `INCREMENTAL_UPDATE` | **LUÔN** — object có base mà không đọc được base là gate FAIL; object mới do CCR tạo (`object_target.object_is_new: true`) chạy với base rỗng, mọi entry `ADDED` |
 | `REFRESH`, `RECONCILE` | LUÔN |
 | `ZERO_DOC_BOOTSTRAP`, `BROAD_BOOTSTRAP`, `DOC_BOOTSTRAP` | chỉ khi object đã có base (re-bootstrap); bootstrap lần đầu thì không được spawn |
 
