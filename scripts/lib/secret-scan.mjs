@@ -29,7 +29,12 @@ export function secretFindings(text,{envFile=false}={}){
   if(kind==='credential-assignment'){
    const quotedKey=/^[^:=]*["']\s*[:=]/.test(match[0]);
    const quotedValue=/[:=][ \t]*["']/.test(match[0]);
-   if(!quotedKey&&!quotedValue&&(/^(?:đã|chưa|mọi|về|các|gọi|lấy|đọc)$/i.test(value)||/^\d+\s+trigger/.test(text.slice(match.index+match[0].indexOf(':')+1).trim())))continue;
+   // Unquoted key AND unquoted value: "password: không có giá trị thật" is a
+   // reviewer's sentence, not an assignment. A credential value is always ASCII
+   // (tokens, keys and generated passwords are), so a value carrying a non-ASCII
+   // letter is prose. This replaces a hand-kept word list that had to grow for
+   // every new Vietnamese word a reviewer happened to write after a colon.
+   if(!quotedKey&&!quotedValue&&(/[^\x00-\x7F]/.test(value)||/^\d+\s+trigger/.test(text.slice(match.index+match[0].indexOf(':')+1).trim())))continue;
    if(!quotedValue&&/^`[A-Z][A-Z0-9_]*_(?:PASSWORD|PW|TOKEN|KEY)`[.;,]?$/.test(match[1]??''))continue;
    if(!quotedKey&&!quotedValue&&/^(?:GET|POST|PUT|PATCH|DELETE|HEAD|OPTIONS)$/.test(value)&&/^\s+được\b/u.test(text.slice(match.index+match[0].length)))continue;
   }

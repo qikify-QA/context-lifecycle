@@ -215,6 +215,9 @@ export function restructure(model, mapping, { product, date }) {
     return e;
   };
   const featureIdFor = (o, f) => {
+    // Product dùng feature_id = feature_key (không FEAT-nn, vd imagenhub): giữ quy ước đó.
+    const ids = [...object(o).features.values()].map((e) => e.profile?.feature_id).filter(Boolean);
+    if (ids.length && !ids.some((id) => /^FEAT-\d+/.test(id))) return f;
     const nums = [...object(o).features.values()].map((e) => Number(/^FEAT-(\d+)/.exec(e.profile?.feature_id ?? "")?.[1] ?? 0));
     return `FEAT-${String(Math.max(0, ...nums) + 1).padStart(2, "0")}-${f}`;
   };
@@ -385,6 +388,25 @@ export function restructure(model, mapping, { product, date }) {
       touched.add(op.from).add(op.to);
       note(op.from, op.to, moving.length);
       events.push({ kind: "object_kb_moved", from: op.from, to: op.to, kb: moving.length });
+    } else if (op.op === "object_kb_to_feature") {
+      // KB cấp object → feature mới trong chính object đó (object không còn "mồ côi" KB).
+      // Feature mới chỉ có profile tối thiểu (tên, user_goal, ref KB) và chưa có checklist.
+      const to = addr(op.to), src = object(to.o);
+      if (src.features.has(to.f)) throw new Error(`object_kb_to_feature: feature ${to.key} đã tồn tại`);
+      if (!op.name || !op.user_goal) throw new Error(`object_kb_to_feature ${to.key}: cần name và user_goal`);
+      const want = new Set(op.kb_ids ?? []);
+      const moving = src.kb.filter((it) => want.has(it.kb_id));
+      if (!moving.length || moving.length !== want.size) throw new Error(`object_kb_to_feature: không thấy đủ ${[...want].join(", ")} trong ${to.o}/kb.json`);
+      const sample = [...src.features.values()].find((e) => e.profile)?.profile ?? {};
+      const profile = Object.fromEntries(Object.entries(sample).map(([k, v]) => [k, Array.isArray(v) ? [] : v && typeof v === "object" ? {} : null]));
+      Object.assign(profile, { feature_id: featureIdFor(to.o, to.f), feature_key: to.f, name: op.name, user_goal: op.user_goal });
+      for (const it of moving) kbReloc.set(canonicalKbRef(to.o, null, it.kb_id), canonicalKbRef(to.o, to.f, it.kb_id));
+      profile.user_goal_kb_refs = moving.slice(0, 4).map((it) => canonicalKbRef(to.o, to.f, it.kb_id));
+      src.kb = src.kb.filter((it) => !want.has(it.kb_id));
+      src.features.set(to.f, { kb: moving, profile, checklist: null, moved: true, origin: [] });
+      src.kbMoved = true;
+      touched.add(to.o);
+      events.push({ kind: "object_kb_to_feature", to: to.key, kb: moving.length });
     } else if (op.op === "dissolve") removedAliasTo.set(op.object, op.alias_to ?? null);
     else throw new Error(`op không hỗ trợ: ${op.op}`);
   }
@@ -594,6 +616,19 @@ export async function restructureProduct(productDir, mapping, { date = today(), 
     }
   }
   if (model.productKb) for (const it of model.productKb) rewriteValue(it, spec, { object: "_product-level", protect: KB_PROTECTED });
+  // cross_object_refs {object_id, feature_key} trong KB cấp product: key tách rời, không có dạng "o/f".
+  if (model.productKb) {
+    const visit = (node) => {
+      if (Array.isArray(node)) return node.forEach(visit);
+      if (!node || typeof node !== "object") return;
+      if (typeof node.object_id === "string" && typeof node.feature_key === "string") {
+        const d = result.featureDest.get(`${node.object_id}/${node.feature_key}`);
+        if (d && d.key !== `${node.object_id}/${node.feature_key}`) (node.object_id = d.o), (node.feature_key = d.f);
+      }
+      Object.values(node).forEach(visit);
+    };
+    visit(model.productKb);
+  }
   const { oqReloc, plans } = moveOpenQuestions(model, original, result, spec);
   for (const obj of model.objects.values()) {
     for (const it of obj.kb) remapOqIds(it, oqReloc);
@@ -655,6 +690,7 @@ export async function restructureProduct(productDir, mapping, { date = today(), 
     const next = rewriteString(text, spec, { object: null });
     if (next !== text) await writeFile(file, next);
   }
+  if (model.productKb && !isDeepStrictEqual(model.productKb, original.productKb)) await writeFile(path.join(productDir, "_product-kb.json"), jsonText(model.productKb));
   for (const [rel, value] of writes) {
     const old = await readMaybe(path.join(productDir, rel));
     if (old !== null && isDeepStrictEqual(JSON.parse(old), value)) continue;
@@ -713,6 +749,9 @@ export async function restructureProduct(productDir, mapping, { date = today(), 
     const e = entryOf(o);
     for (const [f, fe] of obj.features) if (fe.moved && !e.aliases.includes(humanize(f))) e.aliases.push(humanize(f));
   }
+  // feature_keys của object có feature đổi chỗ: lấy lại từ layout mới.
+  if (registry.objects.some((e) => Array.isArray(e.feature_keys)))
+    for (const e of registry.objects) if (changedObjects.has(e.object_key) && model.objects.has(e.object_key)) e.feature_keys = [...model.objects.get(e.object_key).features.keys()].sort();
   if (!isDeepStrictEqual(registry, original.registry)) await writeFile(path.join(productDir, "_registry.json"), jsonText(registry));
 
   // Prose + version cho mọi object bị đổi.
@@ -741,8 +780,11 @@ export async function restructureProduct(productDir, mapping, { date = today(), 
   return { events: result.events, objects: [...changedObjects].sort(), removed: [...result.removed.keys()], totals: after, oq_reissued: oqReloc.size, oq_renames: Object.fromEntries(oqReloc), feature_ids: Object.fromEntries([...result.featReloc.values()].map((f) => [`${f.key} ${f.from}`, f.to])), stale: spec };
 }
 
-const KB_PROTECTED = new Set(["kb_id", "statement", "confirmation_source", "scope", "status", "knowledge_kind"]);
-const CHECK_PROTECTED = new Set(["check_id", "title", "steps", "precondition", "expected_result", "priority"]);
+// Field bảo vệ: định danh, nguồn, scope. `statement`, `title`, `steps`, `precondition`,
+// `expected_result` không bảo vệ khỏi rewrite: chỉ token reference (key, FEAT, KB) đổi,
+// còn lại giữ nguyên — validateRestructureChanges so với bản gốc đã chuẩn hoá cùng spec.
+const KB_PROTECTED = new Set(["kb_id", "confirmation_source", "scope", "status", "knowledge_kind"]);
+const CHECK_PROTECTED = new Set(["check_id", "priority"]);
 
 /** Spec cho rewrite + audit: KB key cũ → mới, feature key cũ → mới, FEAT id cũ → id cấp lại. */
 function staleSpec(original, result) {
@@ -771,10 +813,14 @@ export async function findStaleReferences(productDir, spec) {
       } catch {
         continue;
       }
-      for (const hit of staleInValue(value, spec, { object })) findings.push({ audit: "restructure-stale-reference", file: rel, path: hit.path, problem: `còn reference cũ ${hit.hits.join(", ")}` });
+      // alias là tên cũ có chủ đích (để tìm theo từ khoá), không phải reference.
+      for (const hit of staleInValue(value, spec, { object }).filter((h) => !(name === "_registry.json" && /\/aliases\/\d+$/.test(h.path)))) findings.push({ audit: "restructure-stale-reference", file: rel, path: hit.path, problem: `còn reference cũ ${hit.hits.join(", ")}` });
     } else if (name.endsWith(".md")) {
       const lines = text.split("\n");
+      let inAlias = false;
       lines.forEach((line, i) => {
+        if (/^#{1,6} /.test(line)) inAlias = /^## Tên cũ \(alias\)/.test(line);
+        if (inAlias && name === "feature-summary.md") return;
         const hits = staleHits(line, spec, { object });
         if (hits.length) findings.push({ audit: "restructure-stale-reference", file: rel, line: i + 1, problem: `còn reference cũ ${hits.join(", ")}` });
       });
@@ -810,15 +856,16 @@ function totals(model) {
 // ---------------------------------------------------------------- preview / apply
 
 /** Bất biến riêng cho restructure: không có file nào đổi nội dung KB/check, chỉ đổi vị trí. */
-export function validateRestructureChanges(changes) {
+export function validateRestructureChanges(changes, spec = null) {
+  const norm = (v) => (spec && !isEmptySpec(spec) && typeof v === "string" ? rewriteString(v, spec, {}) : v);
   const collect = (side) => {
     const kb = [], checks = [];
     for (const c of changes) {
       const buf = c[side];
       if (!buf || !c.rel.endsWith(".json")) continue;
       const v = JSON.parse(buf);
-      if (path.basename(c.rel) === "kb.json") for (const it of v) kb.push(JSON.stringify([it.kb_id, it.statement, it.confirmation_source ?? null, it.scope ?? null, it.status ?? null, it.knowledge_kind]));
-      else if (c.rel.includes("/checklists/")) for (const ch of v.checks ?? []) checks.push(JSON.stringify([ch.title, ch.steps ?? null, ch.precondition ?? null, ch.expected_result ?? null, ch.priority ?? null]));
+      if (path.basename(c.rel) === "kb.json") for (const it of v) kb.push(JSON.stringify([it.kb_id, norm(it.statement), it.confirmation_source ?? null, it.scope ?? null, it.status ?? null, it.knowledge_kind]));
+      else if (c.rel.includes("/checklists/")) for (const ch of v.checks ?? []) checks.push(JSON.stringify([norm(ch.title), (ch.steps ?? null) && JSON.parse(JSON.stringify(ch.steps), (k, x) => norm(x)), norm(ch.precondition ?? null), norm(ch.expected_result ?? null), ch.priority ?? null]));
     }
     return { kb: kb.sort(), checks: checks.sort() };
   };
@@ -849,7 +896,7 @@ export async function prepareRestructure(mapping, { knowledgeDir = path.join(roo
     if (!before || !before.equals(after)) changes.push({ rel, before, after });
   }
   for (const rel of Object.keys(baseline)) if (!seen.has(rel)) changes.push({ rel, before: await readFile(path.join(knowledgeDir, rel)), after: null });
-  validateRestructureChanges(changes);
+  validateRestructureChanges(changes, result.stale);
   const audit = await auditDir(preview);
   const stale = await findStaleReferences(path.join(preview, product), result.stale);
   if (stale.length) {
@@ -859,7 +906,7 @@ export async function prepareRestructure(mapping, { knowledgeDir = path.join(roo
   const { stale: _spec, ...rest } = result;
   const summary = { date, product, preview, changed_files: changes.length, deleted_files: changes.filter((c) => c.after === null).length, ...rest, audit };
   const objects = [...new Set([...result.objects, ...result.removed])].map((object) => ({ product, object }));
-  return { temp, preview, changes, summary, objects, baseline };
+  return { temp, preview, changes, summary, objects, baseline, validate: (c) => validateRestructureChanges(c, result.stale) };
 }
 
 async function main() {
@@ -896,7 +943,7 @@ async function main() {
     return;
   }
   if (args.apply === true) {
-    await applyDataMaintenance(plan, { validate: validateRestructureChanges });
+    await applyDataMaintenance(plan, { validate: plan.validate });
     console.log(JSON.stringify({ applied: true, backup: path.join(plan.temp, "backup") }));
   }
 }

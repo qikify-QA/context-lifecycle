@@ -584,14 +584,21 @@ Credential nằm trong `.env` ở project root, gitignored, chỉ đọc qua bi�
 
 **Lưu trữ:** `runs/context/` nằm ngoài git, trừ `run-manifest.json` và `review/verdict.json` (xem `.gitignore`). Evidence nặng (ảnh, network capture, doc đã redact) chỉ nằm trên đĩa của operator; mất nó chỉ ảnh hưởng việc quay lại evidence cho OQ còn mở, không ảnh hưởng `knowledge/`.
 
-Một run được phép xoá khi **cả 2** đúng:
+Giữ run **không phải** để chạy lại run đó — trả lời một open question luôn là một run **mới**. Giữ là để quay lại evidence thô (ảnh chụp, network capture, response body) mà `knowledge/` không chứa và staging không dựng lại được. Mức độ cần evidence thô khác nhau theo loại open question, nên luật chia ba mức:
 
-1. `run-manifest.json.status` là terminal (`PUBLISHED | BLOCKED | REJECTED | CONFLICT | DEFERRED`). `IN_PROGRESS` và `REWORK_REQUIRED` là trạng thái chưa terminal.
-2. Mọi `oq_id` trong `run-manifest.json.produced_open_questions` **không còn** trong `open-questions.md` tương ứng.
+| Mức | Điều kiện | Xoá gì |
+|---|---|---|
+| 1 | `status` terminal (`PUBLISHED | BLOCKED | REJECTED | CONFLICT | DEFERRED`) **và** mọi `oq_id` trong `produced_open_questions` không còn trong `open-questions.md` | Cả thư mục run |
+| 2 | `status` là `PUBLISHED` **và** mọi `oq_id` còn treo đều là `NEEDS_CONFIRMATION` | `raw/` và `candidate/` |
+| 3 | `status` là `PUBLISHED` **và** còn `oq_id` loại `CONFLICT` hoặc `OPEN_ISSUE` | `candidate/` |
+
+Mức 2: nhóm `NEEDS_CONFIRMATION` chờ Dev/PO trả lời kèm nguồn riêng của họ, evidence thô của run cũ hầu như không được mở lại. Mức 3: `CONFLICT` và `OPEN_ISSUE` là lúc cần biết QA đã thấy chính xác cái gì nên `raw/` phải giữ, còn `candidate/` chỉ là bản dựng trung gian đã được `publish-apply` chép sang `knowledge/`. Cả hai mức đều giữ `input/`, `run-manifest.json` và `review/`.
+
+Run **chưa publish** mà còn `oq_id` treo thì giữ nguyên mọi thứ: run loại này có thể được resume, và `candidate/` của nó là nơi duy nhất chứa phần việc chưa vào `knowledge/`. `IN_PROGRESS` và `REWORK_REQUIRED` là trạng thái chưa terminal, không bao giờ bị động tới.
 
 Khi một run sau resolve một open question: gỡ entry khỏi `open-questions.md`, thêm 1 dòng vào `CHANGELOG.md` ("Resolved OQ-xxx — ...").
 
-`scripts/prune-runs.mjs` liệt kê run đủ điều kiện; `--delete` xoá chúng. Không ai xoá tay `runs/context/**` mà bỏ qua 2 điều kiện trên. `inputs/` và `runs/_archive/` không nằm trong diện xoá.
+`scripts/prune-runs.mjs` liệt kê việc sẽ làm theo từng mức; `--delete` thực hiện. Không ai xoá tay `runs/context/**` mà bỏ qua bảng trên. `inputs/` và `runs/_archive/` không nằm trong diện xoá.
 
 ## 16. Concurrency lock (object)
 

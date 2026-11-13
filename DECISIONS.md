@@ -415,3 +415,9 @@ Trước đây CCR trỏ tới object chưa có trong registry bị `blocked` ("
 ### 2.40 Object mới từ CCR cần operator duyệt (2026-11-13)
 
 Sửa 2.39 sau một ngày: tự tạo object từ CCR quá rủi ro — key gõ sai hoặc tên khác cho cùng entity sẽ sinh object trùng, mà gộp lại sau đó phải đổi `oq_id` và reference. Chủ repo chốt: object mới không tự tạo; orchestrator dừng ở intake (trước khi tạo run, claim lock), đề xuất slug cùng ≤ 3 object có sẵn gần nhất và hỏi operator. Đồng ý thì chạy CCR với base rỗng như 2.39 (không cần bootstrap); chọn object có sẵn thì dùng nó; từ chối thì `NEEDS_INFO`. Không trả `blocked` cho người gửi khi đang chờ duyệt; lượt quét nền không ai trả lời thì bỏ qua Proposal, giữ `In Progress`. Gate C0 FAIL nếu object mới thiếu `new_object_approval` (`ccr-protocol.md` §12.1 bước 5). `object_has_no_base` vẫn bỏ.
+
+### 2.41 Áp dụng restructure cho 6 product và mở rộng script (2026-11-13)
+
+Đã `--apply` mapping cho teeinblue (artwork tách 4 object, thêm `sdk-genai`), mysbox (giải thể 5 object theo surface, tạo 10 object entity), qik-volume (tách `discount-offers` thành `quantity-break`, `multibuy`, `wholesale-pricing`; KB cấp object còn lại thành 3 feature), mailtro, duos, imagenhub. qikfiliate giữ nguyên. Mapping nằm ở `inputs/restructure-drafts/`. mysbox suy entity từ KB và registry, chưa đối chiếu dev doc trên QA Hub; KB-006/KB-015 đang ở `admin-ops` vì trùng `kb_id` ở object đích.
+
+Script đổi ba chỗ: (1) `statement`, `title`, `steps`, `precondition`, `expected_result` được viết lại token reference (key, FEAT, KB), còn lại giữ nguyên, và bước kiểm bất biến so với bản gốc đã chuẩn hoá cùng quy tắc; (2) ghi `_product-kb.json`, cập nhật `cross_object_refs` và `feature_keys` trong registry, audit bỏ qua alias; (3) op `object_kb_to_feature` tạo feature từ KB cấp object (profile tối thiểu, chưa có checklist), và quy ước `feature_id` = `feature_key` được giữ khi product dùng quy ước đó.
