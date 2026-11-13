@@ -149,12 +149,20 @@ test("preview is a dry run and its audit blocks on stale references left in prot
   assert.deepEqual(clean.summary.objects, ["a", "t"]);
   assert.equal(await text(root, "products/prod/a/features/tools/kb.json").then(() => "kept"), "kept");
 
-  // KB statement là field bảo vệ: không được viết lại, nên audit phải chặn
-  await write(root, "products/prod/a/features/other/kb.json", [item("KB-20", { statement: "xem a/tools#KB-10" }), item("KB-21")]);
+  // statement chỉ đổi token reference (không đổi chữ khác); audit sạch
+  await write(root, "products/prod/a/features/other/kb.json", [item("KB-20", { statement: "xem a/tools#KB-10 để biết thêm" }), item("KB-21")]);
+  const rewritten = await prepareRestructure(mapping(), { knowledgeDir: root, date });
+  assert.equal(rewritten.summary.audit.ok, true, JSON.stringify(rewritten.summary.audit.blocking));
+  const statement = JSON.parse(await readFile(path.join(rewritten.preview, "prod/a/features/other/kb.json"), "utf8"))[0].statement;
+  assert.doesNotMatch(statement, /a\/tools#KB-10/);
+  assert.match(statement, / để biết thêm$/);
+
+  // field định danh/nguồn vẫn bị bảo vệ: reference cũ ở đó phải bị audit chặn
+  await write(root, "products/prod/a/features/other/kb.json", [item("KB-20", { confirmation_source: { type: "dev_doc", ref: "a/tools#KB-10" } }), item("KB-21")]);
   const plan = await prepareRestructure(mapping(), { knowledgeDir: root, date });
   assert.equal(plan.summary.audit.ok, false);
   const stale = plan.summary.audit.blocking.filter((b) => b.audit === "restructure-stale-reference");
-  assert.deepEqual(stale.map((b) => [b.file, b.path]), [["a/features/other/kb.json", "/0/statement"]]);
+  assert.deepEqual(stale.map((b) => b.file), ["a/features/other/kb.json"]);
   assert.deepEqual(await findStaleReferences(path.join(plan.preview, "prod"), { kbReloc: new Map(), keys: [], feats: [] }), []);
 });
 
