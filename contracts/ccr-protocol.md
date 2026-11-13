@@ -19,6 +19,13 @@ Khuôn CCR đầy đủ thuộc skill `create-ccr` (`references/ccr-template.md`
 3. Dựng map `project_id → product_key`. Proposal có `projectId` không nằm trong map → bỏ qua, ghi log, không xử lý.
 4. Với mỗi Proposal: `get_proposal({ proposal_id })` → `{ id, projectId, sourceTaskId, filename, status, submittedBy, submittedAt, content, ... }`. `content` là text thô của file CCR tại thời điểm Submit; đọc nó theo cấu trúc mục của khuôn `create-ccr`. `sourceTaskId` chỉ để tham chiếu ngược.
 5. **Product trước, object sau:** product đã biết từ `project_id`; `object_key` resolve qua `knowledge/products/<product_key>/_registry.json` của **đúng product đó**. Hai product có thể dùng chung tên object (`order`, `product-base`), nên resolve ngược lại sẽ map sai.
+
+   **Object mới (từ 2026-11-12) — tự tạo, không block.** Claim khai `MỚI: <slug>`, hoặc khai key không resolve được trong registry, hoặc object có trong registry mà chưa có `publish-meta.json` → orchestrator tạo object ngay trong run CCR đó; không trả `NEEDS_INFO`/`DEFERRED`, không đòi bootstrap trước.
+   - Slug chuẩn hoá về kebab-case `[a-z0-9-]`, không bắt đầu bằng `_`, là tên entity theo contract §5 "Độ hạt object/feature" (không phải tên màn). Slug hoặc dạng có khoảng trắng của nó trùng key/alias của object đã có → dùng object đó, không tạo.
+   - Run vẫn là `CCR_INGEST` với **base rỗng**: không carry-forward, diff chạy với base rỗng (mọi entry `ADDED`), feature mint mới ở C0.5 bước 6. Claim lock object mới như mọi object (§16).
+   - Publish tạo đủ file object (`publish-meta.json` version 1, `kb.json` rỗng nếu không có object-level, `feature-summary.md`, `CHANGELOG.md`, `open-questions.md`) và entry `_registry.json`: label lấy từ phạm vi Thuộc của CCR, alias gồm slug và feature key.
+   - `results.summary` ghi "object mới: `<key>`" kèm phạm vi Thuộc/Không thuộc, để operator gộp lại bằng `scripts/ctx/restructure-knowledge.mjs` nếu nó trùng entity khác.
+   - Chỉ còn `NEEDS_INFO` "Phần đầu" khi claim không khai object nào, hoặc một claim khớp nhiều object.
 6. Thứ tự thử: `node scripts/ctx/intake.mjs --proposals <file>` xếp theo mức gấp (CCR mục 4.4) rồi `submittedAt`. Claim lock theo object (§16) → mỗi (product, object-set) là một run độc lập. Proposal không đụng cùng object chạy song song; Proposal claim lock sau nhận `DEFERRED` với `results.reason: "locked_by_run"` — **không** phải `CONFLICT`, vì đây không phải mâu thuẫn knowledge.
 
 **1 run = 1 Proposal = 1 product.** CCR chạm nhiều product → `NEEDS_INFO`: "Phần đầu (CCR chạm nhiều product: X, Y — tách thành 1 CCR mỗi product)".
@@ -41,7 +48,6 @@ Board chỉ có 5 outcome cố định, nên lý do chi tiết đi trong `result
 |---|---|---|---|
 | `locked_by_run` | `DEFERRED` | object đang bị run khác giữ lock lúc bắt đầu | `held_by: {ctx_run_id, proposal_id}` — kéo Proposal lại sau khi run kia xong |
 | `lock_lost` | `DEFERRED` | lock hết hạn/mất trước bước publish | `lock_problems` — chạy lại run |
-| `object_has_no_base` | `DEFERRED` | object chưa bootstrap nên chưa ingest CCR được | `action: "bootstrap_required"`, `object`, `scope` — operator mở run bootstrap, xong thì kéo Proposal lại |
 | `duplicate_of` | `REJECTED` | **mọi** claim trùng với CCR đang chạy hoặc đã publish (`dedup.mjs`) | `duplicate_of: [{proposal_id, claim_key}]` |
 | `awaiting_decision` | `DEFERRED` | cần người quyết (approval, `requires_human_decision`) | `approval_needed: [...]` |
 

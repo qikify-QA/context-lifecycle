@@ -18,7 +18,7 @@ Bảng sinh tự động từ cấu hình product (`node scripts/sync-appendix.m
 | `teeinblue` | Teeinblue | `TIB` | explore (portal-explorer, storefront-explorer, api-explorer, db-explorer, code-config-explorer) | `staging` | không — CCR mâu thuẫn canon luôn giữ cả hai phía |
 <!-- products:end -->
 
-`object_key` hợp lệ tra ở `products/<product_key>/_registry.json` trong repo knowledge. Không khớp cái nào thì mô tả bằng lời, **đừng bịa** key.
+`object_key` hợp lệ tra ở `products/<product_key>/_registry.json` trong repo knowledge. Không khớp cái nào thì ghi `MỚI: <slug>` kèm phạm vi Thuộc / Không thuộc — context builder tự tạo object mới và chạy CCR luôn, không block. Slug là tên entity nghiệp vụ (vd `shipping-profile`), không phải tên màn.
 
 Product phục vụ nhiều brand trên cùng codebase (vd qikfiliate): claim chỉ đúng cho một brand phải nói rõ brand nào — nó được ghi vào `scope.brand` thay vì publish như hành vi cốt lõi.
 
