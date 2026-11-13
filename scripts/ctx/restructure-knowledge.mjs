@@ -12,6 +12,7 @@
 //   "product": "teeinblue",
 //   "date": "2026-11-12",                                  (tuỳ chọn, mặc định hôm nay)
 //   "new_objects": { "artwork-editor": { "label": "Artwork editor — thao tác canvas" } },
+//   "existing_objects": { "mcp": { "aliases": ["mcp import artwork"] } },  (đích đã có: chỉ nhập alias)
 //   "operations": [
 //     { "op": "move",  "from": "artwork/layer-bulk-edit", "to": "artwork-editor/layer-bulk-edit" },
 //     { "op": "merge", "sources": ["artwork/psd-import", "artwork/mcp-artwork-tools"],
@@ -34,9 +35,10 @@ import { isDeepStrictEqual } from "node:util";
 import { walk, parseArgs, readJson, today } from "../lib/fs-utils.mjs";
 import { rootDir } from "../lib/run-layout.mjs";
 import { kbIndex, resolveKbRef, referenceFields, canonicalKbRef } from "../lib/kb-references.mjs";
-import { extractOpenQuestions } from "../lib/open-questions.mjs";
+import { extractOpenQuestions, patchOpenQuestions } from "../lib/open-questions.mjs";
 import { digest } from "../lib/review-state.mjs";
 import { auditDir } from "./audit-preview.mjs";
+import { rewriteValue, rewriteString, staleHits, staleInValue, isEmptySpec } from "../lib/restructure-refs.mjs";
 import { applyDataMaintenance } from "./publish-apply.mjs";
 
 const SLUG = /^[a-z0-9][a-z0-9-]*$/;
@@ -185,7 +187,12 @@ export function restructure(model, mapping, { product, date }) {
   const received = new Map(); // object cũ → Map(object mới → số KB)
   const removedAliasTo = new Map();
   const touched = new Set();
+  const featReloc = new Map(); // FEAT id đầy đủ cũ → { from, to, key: "o/f" cũ, object: object cũ }
   const newObjects = mapping.new_objects ?? {};
+  // Object đích đã có (vd được publish bởi run khác sau khi soạn mapping) phải khai
+  // trong existing_objects: tái dùng, giữ KB/OQ id, chỉ nhập alias — không lặng lẽ gộp.
+  for (const key of Object.keys(newObjects)) if (model.objects.has(key)) throw new Error(`object ${key} đã tồn tại — chuyển khai báo từ new_objects sang existing_objects`);
+  for (const key of Object.keys(mapping.existing_objects ?? {})) if (!model.objects.has(key)) throw new Error(`existing_objects: object ${key} không tồn tại — khai trong new_objects kèm label`);
 
   const object = (key, create = false) => {
     if (!SLUG.test(key) || key.startsWith("_")) throw new Error(`object_key không hợp lệ: ${key}`);
@@ -266,6 +273,10 @@ export function restructure(model, mapping, { product, date }) {
     }
     if (out.profile) {
       if (out.moved && (out.profile.feature_key !== dest.f || base.src.split("/")[0] !== dest.o)) out.profile.feature_id = featureIdFor(dest.o, dest.f);
+      for (const p of pieces) {
+        const old = p.partial ? null : p.entry.profile?.feature_id;
+        if (old && old !== out.profile.feature_id) featReloc.set(`${p.src.split("/")[0]}/${old}`, { from: old, to: out.profile.feature_id, key: p.src, object: p.src.split("/")[0] });
+      }
       out.profile.feature_key = dest.f;
       if (name) out.profile.name = name;
       if (user_goal) out.profile.user_goal = user_goal;
@@ -337,7 +348,11 @@ export function restructure(model, mapping, { product, date }) {
       }
       const entry = { kb: p.kb, profile, checklist, moved: true, origin: src.origin };
       place(p.dest, [{ src: from.key, entry, partial: true }], { name: p.name, user_goal: p.user_goal });
-      if (p.rest) featureDest.set(from.key, p.dest);
+      if (p.rest) {
+        featureDest.set(from.key, p.dest);
+        const old = src.profile?.feature_id, now = model.objects.get(p.dest.o).features.get(p.dest.f)?.profile?.feature_id;
+        if (old && now && old !== now) featReloc.set(`${from.o}/${old}`, { from: old, to: now, key: from.key, object: from.o });
+      }
       events.push({ kind: "split_part", from: from.key, to: p.dest.key, kb: p.kb.length, checks: p.checks.length });
     }
   }
@@ -388,74 +403,108 @@ export function restructure(model, mapping, { product, date }) {
   }
   for (const key of removed.keys()) model.objects.delete(key);
   for (const [, target] of removed) touched.add(target);
-  return { events, kbReloc, featureDest, checkDest, removed, touched };
+  return { events, kbReloc, featureDest, checkDest, removed, touched, featReloc };
 }
 
 // ---------------------------------------------------------------- open questions
 
-function moveOpenQuestions(model, original, result) {
+// Chỉ OQ dính tới mapping mới được xét lại: feature của nó bị chuyển/tách, object
+// của nó bị xoá, hoặc kb_ids/check_ids của nó trỏ vào thứ đã đổi vị trí. OQ khác giữ
+// nguyên feature_id, object và nội dung (không "bỏ phiếu" lại toàn product).
+function moveOpenQuestions(model, original, result, spec) {
   const { kbReloc, featureDest, checkDest, removed } = result;
   const oqReloc = new Map();
-  const changedOq = new Set();
   const featKeyOf = new Map(); // "o/FEAT-id" → feature key (theo layout gốc)
   for (const [o, obj] of original.objects) for (const [f, e] of obj.features) if (e.profile?.feature_id) featKeyOf.set(`${o}/${e.profile.feature_id}`, f);
   const oldKeys = new Map(); // "o#KB" → các key cũ trong object o
+  const addKey = (o, id, key) => (oldKeys.get(`${o}#${id}`) ?? oldKeys.set(`${o}#${id}`, []).get(`${o}#${id}`)).push(key);
   for (const [o, obj] of original.objects) {
-    for (const it of obj.kb) (oldKeys.get(`${o}#${it.kb_id}`) ?? oldKeys.set(`${o}#${it.kb_id}`, []).get(`${o}#${it.kb_id}`)).push(canonicalKbRef(o, null, it.kb_id));
-    for (const [f, e] of obj.features) for (const it of e.kb) (oldKeys.get(`${o}#${it.kb_id}`) ?? oldKeys.set(`${o}#${it.kb_id}`, []).get(`${o}#${it.kb_id}`)).push(canonicalKbRef(o, f, it.kb_id));
+    for (const it of obj.kb) addKey(o, it.kb_id, canonicalKbRef(o, null, it.kb_id));
+    for (const [f, e] of obj.features) for (const it of e.kb) addKey(o, it.kb_id, canonicalKbRef(o, f, it.kb_id));
   }
-  const split = (key) => {
+  const locOf = (key) => {
     const [o, rest] = key.split("/");
-    return { o, f: rest.split("#")[0] === "_object-level" ? null : rest.split("#")[0] };
+    const f = rest.split("#")[0];
+    return `${o}/${f === "_object-level" ? "" : f}`;
   };
   const outgoing = [];
   for (const [o, obj] of original.objects) {
     for (const q of obj.oqs) {
       const fk = featKeyOf.get(`${o}/${q.feature_id}`) ?? q.feature_id ?? null;
-      const votes = new Map();
-      for (const id of [q.kb_id, ...(q.kb_ids ?? [])].filter(Boolean)) {
+      const own = fk ? `${o}/${fk}` : null;
+      const refKey = (id) => {
         const keys = oldKeys.get(`${o}#${id}`) ?? [];
-        const key = keys.find((k) => k.startsWith(`${o}/${fk}#`)) ?? (keys.length === 1 ? keys[0] : null);
-        if (!key) continue;
-        const d = split(kbReloc.get(key) ?? key);
-        const v = `${d.o}/${d.f ?? ""}`;
-        votes.set(v, (votes.get(v) ?? 0) + 1);
+        return keys.find((k) => own && k.startsWith(`${own}#`)) ?? (keys.length === 1 ? keys[0] : null);
+      };
+      const refIds = [q.kb_id, ...(q.kb_ids ?? [])].filter((x) => typeof x === "string" && x);
+      const refs = refIds.map((id) => [id, refKey(id)]).filter(([, k]) => k);
+      const checkMoves = (q.check_ids ?? []).map((id) => [id, own ? checkDest.get(`${own}#${id}`) : null]).filter(([id, d]) => d && (d.key !== own || d.check_id !== id));
+      const ownDest = own ? featureDest.get(own) : null;
+      const involved = removed.has(o) || (ownDest && ownDest.key !== own) || refs.some(([, k]) => kbReloc.has(k)) || checkMoves.length > 0;
+      if (!involved) {
+        outgoing.push({ from: o, to: o, q, orig: q });
+        continue;
       }
+      // Phiếu chỉ từ KB của chính feature này hoặc KB đã đổi vị trí; KB của feature khác
+      // không bị mapping đụng tới không kéo OQ đi đâu.
+      const votes = new Map();
+      const vote = (v) => votes.set(v, (votes.get(v) ?? 0) + 1);
+      for (const [, k] of refs) if (kbReloc.has(k) || (own && k.startsWith(`${own}#`))) vote(locOf(kbReloc.get(k) ?? k));
       for (const id of q.check_ids ?? []) {
-        const d = checkDest.get(`${o}/${fk}#${id}`);
-        if (d) votes.set(`${d.o}/${d.f}`, (votes.get(`${d.o}/${d.f}`) ?? 0) + 1);
+        const d = own ? checkDest.get(`${own}#${id}`) : null;
+        if (d) vote(`${d.o}/${d.f}`);
       }
-      let dest = [...votes].sort((a, b) => b[1] - a[1])[0]?.[0];
-      if (!dest && fk) {
-        const d = featureDest.get(`${o}/${fk}`);
-        dest = d ? `${d.o}/${d.f}` : null;
-      }
-      const [dObj, dFeat] = dest ? dest.split("/") : [removed.get(o) ?? o, fk ?? ""];
+      const home = ownDest ? `${ownDest.o}/${ownDest.f}` : own ?? `${removed.get(o) ?? o}/`;
+      let dest = [...votes].sort((a, b) => b[1] - a[1] || (a[0] === home ? -1 : b[0] === home ? 1 : 0))[0]?.[0] ?? (own || removed.has(o) ? home : null);
+      const [dObj, dFeat] = dest ? dest.split("/") : [o, fk ?? ""];
       const next = { ...q };
       if (dFeat && (dFeat !== fk || dObj !== o)) next.feature_id = dFeat;
-      if (next.check_ids) next.check_ids = next.check_ids.map((id) => checkDest.get(`${o}/${fk}#${id}`)?.check_id ?? id);
-      outgoing.push({ from: o, to: dObj, q: next, changed: !isDeepStrictEqual(next, q) || dObj !== o });
+      if (next.check_ids) next.check_ids = next.check_ids.map((id) => (own ? checkDest.get(`${own}#${id}`)?.check_id : null) ?? id);
+      // kb_ids bare chỉ resolve trong object chứa OQ: KB nằm ở object/feature khác sau
+      // restructure thì ghi canonical ref.
+      const pin = (id) => {
+        const k = refKey(id);
+        if (!k || !kbReloc.has(k)) return id;
+        const nk = kbReloc.get(k);
+        return nk.startsWith(`${dObj}/`) ? id : nk;
+      };
+      if (typeof next.kb_id === "string") next.kb_id = pin(next.kb_id);
+      if (Array.isArray(next.kb_ids)) next.kb_ids = next.kb_ids.map(pin);
+      outgoing.push({ from: o, to: dObj, q: next, orig: q });
     }
   }
-  for (const obj of model.objects.values()) obj.oqs = [];
   const usedNumbers = new Map();
   for (const item of outgoing) if (item.from === item.to) (usedNumbers.get(item.to) ?? usedNumbers.set(item.to, new Set()).get(item.to)).add(item.q.oq_id);
   for (const item of outgoing) {
-    const target = model.objects.get(item.to);
-    if (item.from !== item.to) {
-      const prefix = `OQ-${item.to}-`;
-      const used = usedNumbers.get(item.to) ?? usedNumbers.set(item.to, new Set()).get(item.to);
-      const n = Math.max(0, ...[...used].filter((id) => id.startsWith(prefix)).map((id) => Number(id.slice(prefix.length))).filter(Number.isFinite)) + 1;
-      const id = prefix + String(n).padStart(3, "0");
-      used.add(id);
-      oqReloc.set(item.q.oq_id, id);
-      item.q = { ...item.q, oq_id: id, supersedes: item.q.oq_id };
-    }
-    if (item.changed) changedOq.add(item.from).add(item.to);
-    target.oqs.push(item.q);
+    if (item.from === item.to) continue;
+    const prefix = `OQ-${item.to}-`;
+    const used = usedNumbers.get(item.to) ?? usedNumbers.set(item.to, new Set()).get(item.to);
+    const n = Math.max(0, ...[...used].filter((id) => id.startsWith(prefix)).map((id) => Number(id.slice(prefix.length))).filter(Number.isFinite)) + 1;
+    const id = prefix + String(n).padStart(3, "0");
+    used.add(id);
+    oqReloc.set(item.q.oq_id, id);
+    item.q = { ...item.q, oq_id: id, supersedes: item.q.oq_id };
   }
-  for (const obj of model.objects.values()) for (const q of obj.oqs) if (q.related_oq_ids) q.related_oq_ids = q.related_oq_ids.map((id) => oqReloc.get(id) ?? id);
-  return { oqReloc, changedOq };
+  for (const item of outgoing) {
+    if (item.q.related_oq_ids?.some((id) => oqReloc.has(id))) item.q = { ...item.q, related_oq_ids: item.q.related_oq_ids.map((id) => oqReloc.get(id) ?? id) };
+    if (spec && !isEmptySpec(spec)) {
+      const q = clone(item.q);
+      if (rewriteValue(q, spec, { object: item.to, protect: new Set(["oq_id", "supersedes"]) })) item.q = q;
+    }
+  }
+  // Kế hoạch sửa open-questions.md theo object: bỏ / thay / nối thêm.
+  const plans = new Map();
+  const planOf = (o) => plans.get(o) ?? plans.set(o, { remove: new Set(), replace: new Map(), append: [] }).get(o);
+  for (const obj of model.objects.values()) obj.oqs = [];
+  for (const item of outgoing) {
+    const target = model.objects.get(item.to);
+    target.oqs.push(item.q);
+    if (item.from !== item.to) {
+      if (model.objects.has(item.from)) planOf(item.from).remove.add(item.orig.oq_id);
+      planOf(item.to).append.push(item.q);
+    } else if (!isDeepStrictEqual(item.q, item.orig)) planOf(item.to).replace.set(item.orig.oq_id, item.q);
+  }
+  return { oqReloc, plans };
 }
 
 function remapOqIds(value, oqReloc) {
@@ -533,7 +582,19 @@ export async function restructureProduct(productDir, mapping, { date = today(), 
   }
   if (model.productKb) releaseRefs(model.productKb, false, result.kbReloc, problems, "_product-kb.json");
   if (problems.length) throw new Error("restructure_reference_failed: " + problems.join("; "));
-  const { oqReloc, changedOq } = moveOpenQuestions(model, original, result);
+  // Reference ngoài các field KB-ref chuẩn (surface_mapping, cross_feature_kb_refs, …),
+  // feature_id lồng nhau và key cũ trong prose của profile/checklist: viết lại theo vị trí mới.
+  const spec = staleSpec(original, result);
+  for (const [o, obj] of model.objects) {
+    for (const it of obj.kb) rewriteValue(it, spec, { object: o, protect: KB_PROTECTED });
+    for (const e of obj.features.values()) {
+      for (const it of e.kb) rewriteValue(it, spec, { object: o, protect: KB_PROTECTED });
+      if (e.profile) rewriteValue(e.profile, spec, { object: o });
+      if (e.checklist) rewriteValue(e.checklist, spec, { object: o, protect: CHECK_PROTECTED });
+    }
+  }
+  if (model.productKb) for (const it of model.productKb) rewriteValue(it, spec, { object: "_product-level", protect: KB_PROTECTED });
+  const { oqReloc, plans } = moveOpenQuestions(model, original, result, spec);
   for (const obj of model.objects.values()) {
     for (const it of obj.kb) remapOqIds(it, oqReloc);
     for (const e of obj.features.values()) for (const v of [e.kb, e.profile, e.checklist]) if (v) remapOqIds(v, oqReloc);
@@ -569,7 +630,31 @@ export async function restructureProduct(productDir, mapping, { date = today(), 
       if (e.checklist) want(`${o}/checklists/${f}.json`, e.checklist);
     }
   }
-  const changedObjects = new Set([...result.touched, ...changedOq].filter((o) => model.objects.has(o)));
+  const oqText = new Map(); // object → nội dung open-questions.md mới
+  for (const [o, plan] of plans) {
+    const obj = model.objects.get(o);
+    if (!obj || (!plan.remove.size && !plan.replace.size && !plan.append.length)) continue;
+    const old = original.objects.has(o) ? await readMaybe(path.join(productDir, o, "open-questions.md")) : null;
+    oqText.set(o, (old !== null && patchOpenQuestions(old, { ...plan, final: obj.oqs })) || renderOpenQuestions(obj));
+  }
+  for (const [o, obj] of model.objects) if (!original.objects.has(o) && !oqText.has(o)) oqText.set(o, renderOpenQuestions(obj));
+  const changedObjects = new Set([...result.touched, ...oqText.keys()].filter((o) => model.objects.has(o)));
+  // Prose của object (feature-summary.md) nhắc key cũ: viết lại, object đó cũng tính là đổi.
+  for (const [o, obj] of model.objects) {
+    const next = rewriteString(obj.summary, spec, { object: o });
+    if (next !== obj.summary) {
+      obj.summary = next;
+      changedObjects.add(o);
+    }
+  }
+  // Tài liệu cấp product (_product-guide.md, _flows/*.md, …) — trừ CHANGELOG (lịch sử).
+  for (const file of await walk(productDir)) {
+    const rel = path.relative(productDir, file);
+    if (!rel.startsWith("_") || !rel.endsWith(".md") || path.basename(rel).includes(" ")) continue;
+    const text = await readFile(file, "utf8");
+    const next = rewriteString(text, spec, { object: null });
+    if (next !== text) await writeFile(file, next);
+  }
   for (const [rel, value] of writes) {
     const old = await readMaybe(path.join(productDir, rel));
     if (old !== null && isDeepStrictEqual(JSON.parse(old), value)) continue;
@@ -582,7 +667,7 @@ export async function restructureProduct(productDir, mapping, { date = today(), 
   for (const [o, obj] of original.objects) {
     for (const f of obj.features.keys()) {
       for (const rel of [`${o}/features/${f}/kb.json`, `${o}/features/${f}/profile.json`, `${o}/checklists/${f}.json`]) {
-        if (keep.has(rel)) continue;
+        if (keep.has(rel) || (await readMaybe(path.join(productDir, rel))) === null) continue;
         await rm(path.join(productDir, rel), { force: true });
         if (model.objects.has(o)) changedObjects.add(o);
       }
@@ -614,7 +699,7 @@ export async function restructureProduct(productDir, mapping, { date = today(), 
   }
   for (const e of result.events) if (e.kind === "feature_placed") movedAliases.set(humanize(e.to.split("/")[1]), e.to.split("/")[0]);
   // Tên của object mới và alias khai trong mapping thuộc về object mới, không còn ở object cũ.
-  for (const [o, spec] of Object.entries(mapping.new_objects ?? {})) {
+  for (const [o, spec] of [...Object.entries(mapping.new_objects ?? {}), ...Object.entries(mapping.existing_objects ?? {})]) {
     if (!model.objects.has(o)) continue;
     for (const a of [o, humanize(o), ...(spec.aliases ?? [])]) movedAliases.set(a, o);
   }
@@ -626,7 +711,7 @@ export async function restructureProduct(productDir, mapping, { date = today(), 
   for (const [o, obj] of model.objects) {
     if (!changedObjects.has(o)) continue;
     const e = entryOf(o);
-    for (const f of obj.features.keys()) if (!e.aliases.includes(humanize(f))) e.aliases.push(humanize(f));
+    for (const [f, fe] of obj.features) if (fe.moved && !e.aliases.includes(humanize(f))) e.aliases.push(humanize(f));
   }
   if (!isDeepStrictEqual(registry, original.registry)) await writeFile(path.join(productDir, "_registry.json"), jsonText(registry));
 
@@ -647,13 +732,55 @@ export async function restructureProduct(productDir, mapping, { date = today(), 
       lines[1] = `**Published context version:** ${meta.published_context_version}`;
       await writeFile(path.join(dir, "feature-summary.md"), lines.join("\n"));
     }
-    if (changedOq.has(o) || !original.objects.has(o)) await writeFile(path.join(dir, "open-questions.md"), renderOpenQuestions(obj));
+    if (oqText.has(o)) await writeFile(path.join(dir, "open-questions.md"), oqText.get(o));
     const moves = result.events.filter((e) => e.kind === "feature_placed" && (e.to.startsWith(`${o}/`) || e.from.some((s) => s.startsWith(`${o}/`))));
     const text = moves.map((e) => `${e.from.join(" + ")} → ${e.to}`).join("; ") || "cập nhật reference/OQ theo vị trí mới";
     const log = obj.changelog ?? `# CHANGELOG — ${o}\n`;
     await writeFile(path.join(dir, "CHANGELOG.md"), log.trimEnd() + `\n- ${date} (restructure-${date}) — Đổi cấu trúc theo contract §5 "Độ hạt object/feature": ${text}. Giữ nguyên kb_id, statement, nguồn và test steps; OQ chuyển object được mint id mới kèm \`supersedes\`.\n`);
   }
-  return { events: result.events, objects: [...changedObjects].sort(), removed: [...result.removed.keys()], totals: after, oq_reissued: oqReloc.size };
+  return { events: result.events, objects: [...changedObjects].sort(), removed: [...result.removed.keys()], totals: after, oq_reissued: oqReloc.size, oq_renames: Object.fromEntries(oqReloc), feature_ids: Object.fromEntries([...result.featReloc.values()].map((f) => [`${f.key} ${f.from}`, f.to])), stale: spec };
+}
+
+const KB_PROTECTED = new Set(["kb_id", "statement", "confirmation_source", "scope", "status", "knowledge_kind"]);
+const CHECK_PROTECTED = new Set(["check_id", "title", "steps", "precondition", "expected_result", "priority"]);
+
+/** Spec cho rewrite + audit: KB key cũ → mới, feature key cũ → mới, FEAT id cũ → id cấp lại. */
+function staleSpec(original, result) {
+  const keys = [];
+  for (const [from, d] of result.featureDest) if (from !== d.key) keys.push({ from, to: d.key });
+  const counts = new Map();
+  for (const obj of original.objects.values()) for (const e of obj.features.values()) if (e.profile?.feature_id) counts.set(e.profile.feature_id, (counts.get(e.profile.feature_id) ?? 0) + 1);
+  const feats = [...result.featReloc.values()].map((f) => ({ ...f, scope: counts.get(f.from) > 1 ? f.object : null }));
+  return { kbReloc: result.kbReloc, keys, feats };
+}
+
+/** Audit restructure: mọi reference còn trỏ vào key/KB/FEAT id cũ trong product (trừ CHANGELOG.md) là BLOCKING. */
+export async function findStaleReferences(productDir, spec) {
+  const findings = [];
+  if (!spec || isEmptySpec(spec)) return findings;
+  for (const file of await walk(productDir)) {
+    const rel = path.relative(productDir, file);
+    const name = path.basename(rel);
+    if (rel.split(path.sep).some((part) => part.includes(" ")) || name === "CHANGELOG.md") continue;
+    const object = rel.startsWith("_") ? null : rel.split(path.sep)[0];
+    const text = await readFile(file, "utf8");
+    if (name.endsWith(".json")) {
+      let value;
+      try {
+        value = JSON.parse(text);
+      } catch {
+        continue;
+      }
+      for (const hit of staleInValue(value, spec, { object })) findings.push({ audit: "restructure-stale-reference", file: rel, path: hit.path, problem: `còn reference cũ ${hit.hits.join(", ")}` });
+    } else if (name.endsWith(".md")) {
+      const lines = text.split("\n");
+      lines.forEach((line, i) => {
+        const hits = staleHits(line, spec, { object });
+        if (hits.length) findings.push({ audit: "restructure-stale-reference", file: rel, line: i + 1, problem: `còn reference cũ ${hits.join(", ")}` });
+      });
+    }
+  }
+  return findings;
 }
 
 /** Mode của object mới: khai trong mapping, nếu không thì mode của object gốc góp nhiều feature nhất. */
@@ -724,7 +851,13 @@ export async function prepareRestructure(mapping, { knowledgeDir = path.join(roo
   for (const rel of Object.keys(baseline)) if (!seen.has(rel)) changes.push({ rel, before: await readFile(path.join(knowledgeDir, rel)), after: null });
   validateRestructureChanges(changes);
   const audit = await auditDir(preview);
-  const summary = { date, product, preview, changed_files: changes.length, deleted_files: changes.filter((c) => c.after === null).length, ...result, audit };
+  const stale = await findStaleReferences(path.join(preview, product), result.stale);
+  if (stale.length) {
+    audit.blocking.push(...stale);
+    audit.ok = false;
+  }
+  const { stale: _spec, ...rest } = result;
+  const summary = { date, product, preview, changed_files: changes.length, deleted_files: changes.filter((c) => c.after === null).length, ...rest, audit };
   const objects = [...new Set([...result.objects, ...result.removed])].map((object) => ({ product, object }));
   return { temp, preview, changes, summary, objects, baseline };
 }
@@ -748,6 +881,8 @@ async function main() {
         removed_objects: s.removed,
         totals: s.totals,
         oq_reissued: s.oq_reissued,
+        oq_renames: s.oq_renames,
+        feature_ids: s.feature_ids,
         placed: s.events.filter((e) => e.kind === "feature_placed").map((e) => `${e.from.join(" + ")} → ${e.to} (KB ${e.kb}, check ${e.checks})`),
         audit_ok: s.audit.ok,
         blocking: s.audit.blocking.slice(0, 20)
