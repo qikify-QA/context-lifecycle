@@ -25,7 +25,7 @@ Phần của contract (`contracts/qa-context-contract.md`): gate nào áp ở mo
 
 **Doc (`DOC_BOOTSTRAP`):** `doc_sources[]` không rỗng; mỗi entry có `source` + `type` + `version` + `generated_at` + (`path` khi `source: local_path`, hoặc `qa_hub.{project_id, ...}` khi nguồn QA Hub) · `input/doc-manifest.json` có `sha256` cho từng doc · `product_key` khớp đúng 1 file config · `environment: "documented"` · `mutation_policy: "NO_MUTATION"`. `role` được phép `null` — khi đó mọi KB item mang `scope.role: "unspecified"` cộng 1 OQ `NEEDS_CONFIRMATION` mức object. Thiếu `doc_sources[]` → FAIL, không chuyển sang explore để cứu run.
 
-**CCR (`CCR_INGEST`):** `proposal_id` (hoặc file CCR chạy tay) + ≥1 claim có `claim_id` + `product_key` khớp đúng 1 file config + mỗi claim có object: resolve được qua `_registry.json`, hoặc là object mới hợp lệ (`contracts/ccr-protocol.md` §12.1 bước 5, base rỗng). Thiếu base không còn là lý do FAIL. Không đòi URL target. Environment không bao giờ là lý do FAIL (`contracts/ccr-protocol.md` §12.3).
+**CCR (`CCR_INGEST`):** `proposal_id` (hoặc file CCR chạy tay) + ≥1 claim có `claim_id` + `product_key` khớp đúng 1 file config + mỗi claim có object: resolve được qua `_registry.json`, hoặc là object mới đã được operator duyệt (`object_target.new_object_approval`, `contracts/ccr-protocol.md` §12.1 bước 5, base rỗng). Object mới chưa có duyệt là FAIL. Không đòi URL target. Environment không bao giờ là lý do FAIL (`contracts/ccr-protocol.md` §12.3).
 
 ## C1 Exploration evidence (mode explore)
 

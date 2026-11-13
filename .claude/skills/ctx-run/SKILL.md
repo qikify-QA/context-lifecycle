@@ -26,7 +26,7 @@ Main session chạy skill này, không có agent điều phối riêng. Luật �
 
 ## Hai làn
 
-**Làn CCR (mặc định)** — `CCR_INGEST`, 0 explorer, object đã có base hoặc object mới do CCR khai (base rỗng, tự tạo — `contracts/ccr-protocol.md` §12.1 bước 5):
+**Làn CCR (mặc định)** — `CCR_INGEST`, 0 explorer, object đã có base, hoặc object mới do CCR khai sau khi operator duyệt (base rỗng — `contracts/ccr-protocol.md` §12.1 bước 5):
 `ctx-build` (kb from-ccr → profile → checklist) → diff (luôn) → publish.
 
 **Làn bootstrap**:

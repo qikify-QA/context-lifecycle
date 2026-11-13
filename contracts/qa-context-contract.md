@@ -511,7 +511,7 @@ Evidence ref chỉ tồn tại trong `runs/`; không được copy sang `knowled
 | `BROAD_BOOTSTRAP` | Nhiều object/role/module — scope-planner chạy trước | ≥1 runtime |
 | `DOC_BOOTSTRAP` | Có bộ tài liệu nhưng KHÔNG có quyền truy cập runtime. Toàn bộ knowledge đến từ tài liệu. LUÔN spawn scope-planner và `doc-ingest-explorer`; không spawn explorer runtime | **0** |
 | `INCREMENTAL_UPDATE` | Chỉ feature/dependency bị ảnh hưởng, và **có explore hẹp thật** | ≥1 |
-| `CCR_INGEST` | CCR mang nguồn `S3`/`S1` (§12.3a), vào object đã publish hoặc object mới do CCR khai (base rỗng, `contracts/ccr-protocol.md` §12.1 bước 5). Chuẩn hoá thẳng vào KB, **0 explorer**. Mode mặc định cho CCR | **0** |
+| `CCR_INGEST` | CCR mang nguồn `S3`/`S1` (§12.3a), vào object đã publish, hoặc object mới do CCR khai và operator đã duyệt (base rỗng, `contracts/ccr-protocol.md` §12.1 bước 5). Chuẩn hoá thẳng vào KB, **0 explorer**. Mode mặc định cho CCR | **0** |
 | `REFRESH` | Xác minh lại knowledge cũ | ≥1 |
 | `RECONCILE` | Xử lý evidence mâu thuẫn | ≥1 |
 | `KNOWLEDGE_RESTRUCTURE` | Mode lịch sử: chỉ đổi cấu trúc file `knowledge/`, không đổi nội dung. Không dùng cho run mới | 0 |
@@ -523,7 +523,7 @@ Mode được phép của từng product nằm ở `config/products/<key>.json` 
 | | `ZERO_DOC_BOOTSTRAP` | `DOC_BOOTSTRAP` | `CCR_INGEST` | `INCREMENTAL_UPDATE` |
 |---|---|---|---|---|
 | Nguồn sự thật | quan sát runtime | văn bản tài liệu | nguồn trong CCR | quan sát hẹp |
-| Base version | không cần | không cần | có, hoặc base rỗng khi CCR tạo object mới | bắt buộc có |
+| Base version | không cần | không cần | có, hoặc base rỗng khi operator duyệt object mới | bắt buộc có |
 | Input chính | `object_target` (URL/ID thật) | `doc_sources[]` | Proposal + `claim_id` | `object_target` |
 | Scope-planner | không chạy | **LUÔN** chạy | không | không |
 | Explorer được phép | theo `allowed_explorers` | chỉ `doc-ingest-explorer` | không | theo `allowed_explorers`, scope hẹp |
